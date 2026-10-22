@@ -6,10 +6,12 @@
 //! throughput measurement starts here and climbs upward, so a regression or
 //! improvement is attributable to one layer before the layers above it are
 //! measured. The tests report `median_ms`, `decoded_gigabytes_per_second`,
-//! and the per-shape peak-reservation arithmetic (packed source plus
-//! decoded output); they assert measurement shape (finite,
-//! positive, exact element counts) and never assert throughput thresholds —
-//! the durable throughput ledger owns trend comparisons.
+//! and the decode call's peak active-memory growth (which must stay at the
+//! persisted output plus slack, because page admission prices the packed
+//! source once at load and the decode call prices the persisted output);
+//! they assert measurement shape (finite, positive, exact element counts)
+//! and never assert throughput thresholds — the durable throughput ledger
+//! owns trend comparisons.
 //!
 //! Run through an optimized build with `cargo test-jangtq2-decode-throughput`
 //! (see `.cargo/config.toml`): the decoder is memory-traffic bound, so
@@ -151,15 +153,30 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
     }
     let mut measured_durations_ms = Vec::with_capacity(MEASURED_ITERATIONS);
     let mut measured_peak_delta_bytes: Option<u64> = None;
+    // Active memory at the moment the peak counter is zeroed. MLX's
+    // reset_peak_memory sets the counter to zero rather than to the current
+    // active level, so a later raw reading is an absolute high-water that
+    // still contains this baseline; subtracting it turns the reading into
+    // the decode call's own growth. The baseline also neutralizes MLX's
+    // asynchronous buffer release: a dropped prior output can still be
+    // counted active when the counter resets (its release lands on a
+    // completion thread at an arbitrary later point), and such a stale
+    // output inside the baseline cancels against the same output inside
+    // the peak instead of masquerading as a decoder intermediate.
+    let mut active_memory_bytes_at_peak_reset: Option<u64> = None;
     for measured_iteration in 0..MEASURED_ITERATIONS {
         if measured_iteration == 0 {
-            // Peak-memory contract: the decoder must live inside the
-            // admission reserve (packed source plus persisted output). If a
-            // change reintroduces intermediate arrays, page admission would
+            // Peak-memory contract: one decode call must grow active memory
+            // by no more than the persisted output it returns. If a change
+            // reintroduces intermediate arrays, page admission would
             // under-reserve real serving: fail here instead.
             runtime
                 .reset_peak_memory()
                 .expect("the MLX peak-memory counter should reset");
+            active_memory_bytes_at_peak_reset = runtime
+                .memory_snapshot()
+                .ok()
+                .map(|memory_snapshot| memory_snapshot.active_memory_bytes() as u64);
         }
         let started_at = std::time::Instant::now();
         let decoded_weight = mlx_decode::decode_expert_weight_rows(
@@ -184,7 +201,10 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
             measured_peak_delta_bytes = runtime
                 .memory_snapshot()
                 .ok()
-                .map(|memory_snapshot| memory_snapshot.peak_memory_bytes() as u64);
+                .zip(active_memory_bytes_at_peak_reset)
+                .map(|(memory_snapshot, active_baseline_bytes)| {
+                    memory_snapshot.peak_memory_bytes() as u64 - active_baseline_bytes
+                });
         }
         measured_durations_ms.push(elapsed_ms);
         drop(decoded_weight);
@@ -205,22 +225,24 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
         "the decoded throughput must be a positive measurement"
     );
     if let Some(observed_peak_delta_bytes) = measured_peak_delta_bytes {
-        // The bound mirrors expert_page_peak_allocation_bytes for this page:
-        // packed sources plus the persisted output, with 20 percent slack for
-        // MLX-internal buffers the decoder cannot see. The Metal decoder has
-        // no workspace term, so any temporaries an MLX upgrade introduced
-        // would fail here before admission under-reserved real serving.
-        let packed_source_bytes =
-            (expert_count * output_rows * packed_words * std::mem::size_of::<u32>()) as u64;
+        // The bound is the decode call's own priced allocation: the persisted
+        // output. The packed source and row scales are already resident when
+        // the decode starts (they sit inside the subtracted baseline), just
+        // as page admission prices them once at page load rather than per
+        // decode. The 20 percent slack covers MLX-internal buffers the
+        // decoder cannot see (encoder residency, first-use level tables);
+        // the Metal decoder has no workspace term, so any temporaries an
+        // MLX upgrade introduced would fail here before admission
+        // under-reserved real serving.
         let persisted_output_bytes = decoded_element_count * std::mem::size_of::<u16>() as u64;
-        let bound_bytes = packed_source_bytes + persisted_output_bytes;
-        let bound_bytes_with_slack = bound_bytes + bound_bytes / 5;
+        let bound_bytes_with_slack =
+            persisted_output_bytes + persisted_output_bytes / 5;
         assert!(
             observed_peak_delta_bytes <= bound_bytes_with_slack,
-            "case={case_name} decode peaked at {observed_peak_delta_bytes} bytes, above the admission-bound-plus-slack {bound_bytes_with_slack}: the page decoder allocated intermediate arrays the admission contract does not price"
+            "case={case_name} decode grew active memory by {observed_peak_delta_bytes} bytes, above the persisted-output-plus-slack {bound_bytes_with_slack}: the page decoder allocated intermediate arrays the admission contract does not price"
         );
         eprintln!(
-            "[jangtq2-decode-perf:tier=operation] case={case_name} peak_delta_bytes={observed_peak_delta_bytes} admission_bound_bytes={bound_bytes}"
+            "[jangtq2-decode-perf:tier=operation] case={case_name} peak_growth_bytes={observed_peak_delta_bytes} persisted_output_bytes={persisted_output_bytes}"
         );
     }
     eprintln!(
