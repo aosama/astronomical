@@ -77,7 +77,7 @@ impl Qwen3_5EngineState {
                     .maximum_successful_prefill_chunk_tokens()
                     .unwrap_or(usize::MAX),
             );
-        let requested_prefill_chunk_end = configured_prompt_processing_chunk_end;
+        let mut requested_prefill_chunk_end = configured_prompt_processing_chunk_end;
         // Required publication is synchronous, so do not let one forward cross
         // multiple durable boundaries. A successful forward produces one exact
         // checkpoint, publishes it, and only then advances the request cursor.
@@ -113,7 +113,25 @@ impl Qwen3_5EngineState {
                     requested_prefill_chunk_end,
                     persistent_prompt_cache_block_token_count,
                 )
+            };
+            // The generation-start lookup never restores the final prompt token
+            // (the terminal forward needs it to produce the first logits), so a
+            // partial tail captured through that token could never be probed
+            // again. Stop the last full chunk one token short; the following
+            // single-token chunk seeds the first generated token from logits
+            // that are mathematically identical to an unclamped terminal pass.
+            let partial_tail_capture_end =
+                crate::persistent_prompt_cache_partial_tail_capture_end(
+                    prefill_end_exclusive,
+                    persistent_prompt_cache_block_token_count,
+                );
+            if requested_prefill_chunk_end == prefill_end_exclusive
+                && partial_tail_capture_end < prefill_end_exclusive
+                && prefill_start < partial_tail_capture_end
+            {
+                requested_prefill_chunk_end = partial_tail_capture_end;
             }
+            requested_prefill_chunk_end
         } else {
             requested_prefill_chunk_end
         };

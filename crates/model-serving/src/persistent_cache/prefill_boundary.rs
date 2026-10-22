@@ -46,6 +46,25 @@ pub fn persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
     completed_prefill_chunk_tokens
 }
 
+/// Returns the prefill end position a partial tail can be durably captured from.
+///
+/// The generation-start lookup never consumes the final prompt token: the
+/// terminal forward must process it to produce the first logits. A tail saved
+/// through that token could therefore never be probed again, so capture stops
+/// one token short — exactly the partial-tail probe's retained-suffix rule —
+/// and the single remaining token belongs to the normal prefill path.
+#[must_use]
+pub fn persistent_prompt_cache_partial_tail_capture_end(
+    prompt_token_count: usize,
+    persistent_prompt_cache_block_token_count: usize,
+) -> usize {
+    if prompt_token_count % persistent_prompt_cache_block_token_count == 0 {
+        prompt_token_count
+    } else {
+        prompt_token_count.saturating_sub(1)
+    }
+}
+
 /// Clamps an attempted cache-enabled prefill chunk so it can publish at most one
 /// mandatory persistent prompt-cache boundary.
 #[must_use]

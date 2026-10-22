@@ -63,3 +63,28 @@ fn should_clamp_cache_enabled_prefill_to_the_next_persistent_boundary() {
         );
     }
 }
+
+#[test]
+fn should_stop_tail_capture_one_token_short_of_a_partial_final_block() {
+    for (
+        prompt_token_count,
+        persistent_prompt_cache_block_token_count,
+        expected_tail_capture_end,
+    ) in [
+        (7_722, 3_328, 7_721),
+        (1, 3_328, 0),
+        (3_328, 3_328, 3_328),
+        (6_656, 3_328, 6_656),
+        (0, 3_328, 0),
+    ] {
+        assert_eq!(
+            expected_tail_capture_end,
+            super::persistent_prompt_cache_partial_tail_capture_end(
+                prompt_token_count,
+                persistent_prompt_cache_block_token_count,
+            ),
+            "tail capture end for a {prompt_token_count}-token prompt with \
+             {persistent_prompt_cache_block_token_count}-token blocks"
+        );
+    }
+}

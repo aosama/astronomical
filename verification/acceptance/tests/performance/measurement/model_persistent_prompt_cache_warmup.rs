@@ -107,10 +107,27 @@ async fn run_persistent_prompt_cache_warmup_e2e(
         saved_persistent_prompt_cache_disk_usage.byte_count > 0,
         "saved persistent prompt-cache blocks must occupy disk space"
     );
+    let mut saved_complete_block_token_counts =
+        saved_persistent_prompt_cache_disk_usage.sequence_state_token_counts.clone();
+    saved_complete_block_token_counts.sort_unstable();
+    // The most common declared token count is the model's block geometry;
+    // any file declaring fewer is the prompt's best-effort partial tail.
+    let persistent_prompt_cache_block_token_count = *saved_complete_block_token_counts
+        .last()
+        .expect("saved sequence-state files must declare a block token count");
+    let saved_complete_block_count = saved_complete_block_token_counts
+        .iter()
+        .filter(|declared_token_count| {
+            **declared_token_count == persistent_prompt_cache_block_token_count
+        })
+        .count();
     eprintln!(
-        "[persistent-prompt-cache-warmup] cold pass saved {} blocks ({} bytes) to SSD",
+        "[persistent-prompt-cache-warmup] cold pass saved {} blocks ({} bytes) to SSD: {} complete blocks of {} tokens plus {} partial-tail artifacts",
         saved_persistent_prompt_cache_disk_usage.block_count,
-        saved_persistent_prompt_cache_disk_usage.byte_count
+        saved_persistent_prompt_cache_disk_usage.byte_count,
+        saved_complete_block_count,
+        persistent_prompt_cache_block_token_count,
+        saved_persistent_prompt_cache_disk_usage.block_count - saved_complete_block_count,
     );
 
     let warm_worker_pass = run_worker_pass(
@@ -127,12 +144,15 @@ async fn run_persistent_prompt_cache_warmup_e2e(
     assert_persistent_prompt_cache_warmup(
         &cold_worker_pass.streaming_measurement,
         &warm_worker_pass.streaming_measurement,
-        saved_persistent_prompt_cache_disk_usage.block_count,
+        saved_complete_block_count,
+        persistent_prompt_cache_block_token_count,
     );
 
     let metrics_report = benchmark_report(
         &persistent_prompt_cache_warmup_case,
         machine_mlx_memory_ceiling_bytes,
+        saved_complete_block_count,
+        persistent_prompt_cache_block_token_count,
         saved_persistent_prompt_cache_disk_usage.block_count,
         saved_persistent_prompt_cache_disk_usage.byte_count,
         &cold_worker_pass,
@@ -145,22 +165,39 @@ async fn run_persistent_prompt_cache_warmup_e2e(
 fn assert_persistent_prompt_cache_warmup(
     cold_streaming_measurement: &StreamingMeasurement,
     warm_streaming_measurement: &StreamingMeasurement,
-    saved_persistent_prompt_cache_block_count: usize,
+    saved_complete_block_count: usize,
+    persistent_prompt_cache_block_token_count: usize,
 ) {
+    let warm_cached_token_count = warm_streaming_measurement.cached_token_count as usize;
+    let warm_uncached_token_count = warm_streaming_measurement.prompt_token_count as usize
+        - warm_cached_token_count;
+    eprintln!(
+        "[persistent-prompt-cache-warmup] warm restore reported {warm_cached_token_count} cached tokens of {} prompt tokens",
+        warm_streaming_measurement.prompt_token_count
+    );
     assert!(
-        warm_streaming_measurement.cached_token_count > 0,
+        warm_cached_token_count > 0,
         "the second request should restore cached blocks from SSD"
     );
+    // The restored extent must cover every complete block the cold pass
+    // persisted. It is not, in general, a multiple of the saved artifact
+    // count: a partial tail contributes a non-block-sized amount, and the
+    // final prompt token always stays on the prefill path.
     assert!(
-        warm_streaming_measurement.cached_token_count as usize
-            >= saved_persistent_prompt_cache_block_count,
-        "cached tokens should cover every saved persistent model-state block"
+        warm_cached_token_count >= saved_complete_block_count * persistent_prompt_cache_block_token_count,
+        "the warm request must restore every complete block saved by the cold request: \
+         restored {warm_cached_token_count} tokens, but {} saved complete blocks of \
+         {persistent_prompt_cache_block_token_count} tokens require at least {}",
+        saved_complete_block_count,
+        saved_complete_block_count * persistent_prompt_cache_block_token_count,
     );
-    assert_eq!(
-        warm_streaming_measurement.cached_token_count as usize
-            % saved_persistent_prompt_cache_block_count,
-        0,
-        "the warm request must restore every block saved by the cold request"
+    // Only the tail remainder of the prompt may stay uncached; anything
+    // larger means lookup stopped early and silently discarded blocks that
+    // the configured persistent-cache size still admits.
+    assert!(
+        warm_uncached_token_count <= persistent_prompt_cache_block_token_count,
+        "the warm request must leave at most one block of prompt work uncached: \
+         {warm_uncached_token_count} tokens remain after restoring {warm_cached_token_count}"
     );
     assert_eq!(
         cold_streaming_measurement.prompt_token_count,
@@ -179,6 +216,8 @@ fn assert_persistent_prompt_cache_warmup(
 fn benchmark_report(
     persistent_prompt_cache_warmup_case: &PersistentPromptCacheWarmupCase,
     machine_mlx_memory_ceiling_bytes: usize,
+    saved_complete_block_count: usize,
+    persistent_prompt_cache_block_token_count: usize,
     saved_persistent_prompt_cache_block_count: usize,
     saved_persistent_prompt_cache_byte_count: u64,
     cold_worker_pass: &WorkerPassMeasurement,
@@ -205,19 +244,14 @@ fn benchmark_report(
         .physical_footprint
         .peak_bytes
         .saturating_sub(warm_worker_pass.physical_footprint.peak_bytes);
-    let observed_block_token_count = warm_worker_pass
-        .streaming_measurement
-        .cached_token_count
-        .checked_div(u64::try_from(saved_persistent_prompt_cache_block_count).unwrap_or(1))
-        .unwrap_or(0);
-
     json!({
         "model": model_id(),
         "benchmark": persistent_prompt_cache_warmup_case.benchmark_name,
         "source_words": persistent_prompt_cache_warmup_case.source_word_count,
         "machine_mlx_memory_ceiling_bytes": machine_mlx_memory_ceiling_bytes,
         "persistent_prompt_cache": {
-            "observed_block_size_tokens": observed_block_token_count,
+            "block_size_tokens": persistent_prompt_cache_block_token_count,
+            "saved_complete_block_count": saved_complete_block_count,
             "saved_block_count": saved_persistent_prompt_cache_block_count,
             "saved_bytes": saved_persistent_prompt_cache_byte_count,
         },
