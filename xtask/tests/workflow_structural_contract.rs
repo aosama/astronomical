@@ -217,10 +217,11 @@ fn required_check_steps_keep_their_bounded_contracts() {
     );
     // The runtime-integration build script declares rerun-if-env-changed for
     // the progress file variable: exporting it in the compile step alone flips
-    // the build script fingerprint and recompiles runtime-integration and its
-    // dependents in every later cargo step of the job (a measured 25s rebuild
-    // before the hoist). The job-wide export above keeps the value constant,
-    // and the compile step must keep hands off so the flip cannot return.
+    // the build script fingerprint and re-runs the script in every later cargo
+    // step of the job (one of two measured-rebuild triggers; the other, a
+    // phantom rerun-if-changed path, is removed in that build script). The
+    // job-wide export above keeps the value constant, and the compile step
+    // must keep hands off so the flip cannot return.
     assert!(
         !compile_command.contains("export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
         "the compile step must not re-export the native build progress file variable"
