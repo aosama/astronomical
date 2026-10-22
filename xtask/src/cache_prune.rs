@@ -7,7 +7,7 @@ use std::process::Command;
 
 const CACHE_KEY_PREFIX: &str = "astronomical-v2-";
 /// native-build keeps two entries per ref class because the Xcode runner
-/// image flip-flops between compatibility identities and both must stay warm.
+/// image flip-flops between native build identities and both must stay warm.
 const NATIVE_BUILD_KEEP_COUNT: usize = 2;
 const DEFAULT_KEEP_COUNT: usize = 1;
 /// Size ceilings are family-scoped because only sccache generations ratchet
