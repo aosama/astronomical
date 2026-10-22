@@ -10,8 +10,8 @@ use std::process::Command;
 const ZERO_GIT_SHA: &str = "0000000000000000000000000000000000000000";
 
 /// Pathspecs mirroring native source-identity ownership plus the Rust
-/// toolchain (it participates in full hosted compatibility). Kept in sync
-/// with the identity policy in `astronomical-native-identity`.
+/// toolchain (it participates in the full hosted toolchain environment). Kept
+/// in sync with the identity policy in `astronomical-native-identity`.
 const NATIVE_INPUT_PATHSPECS: &[&str] = &[
     "crates/runtime-integration/build.rs",
     "crates/mlx-c-rust/build.rs",

@@ -1,6 +1,6 @@
 //! Cargo orchestration for Astronomical's pinned MLX and MLX-C runtime.
 //!
-//! Native products are compatibility-keyed outside `OUT_DIR` so release-version
+//! Native products are identity-keyed outside `OUT_DIR` so release-version
 //! changes do not rebuild MLX. Bindings remain in `OUT_DIR`, which preserves
 //! Cargo's ownership of generated Rust source. The native compilation itself
 //! lives in `build_native_compile.rs`, shared with the standalone native-build

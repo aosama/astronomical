@@ -35,7 +35,7 @@ fn resolve_header_directory() -> Result<PathBuf, String> {
         repository_root: &repository_root,
         profile: astronomical_native_identity::NativeBuildProfile::Core,
         scope: astronomical_native_identity::IdentityScope::SourceOnly,
-        overrides: astronomical_native_identity::probes::CompatibilityOverrides::none(),
+        overrides: astronomical_native_identity::probes::ToolchainOverrides::none(),
     };
     let identity = astronomical_native_identity::native_build_identity(&identity_request)
         .map_err(|error| format!("native identity fingerprint failed: {error}"))?;

@@ -2,7 +2,7 @@
 
 # Removes only retired complete native CMake trees from Cargo build-script
 # generations while holding Cargo's target lock. Generated bindings, linked
-# binaries, diagnostic symbols, and compatibility-keyed native products remain.
+# binaries, diagnostic symbols, and identity-keyed native products remain.
 
 set -eu
 

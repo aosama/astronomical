@@ -2,7 +2,7 @@
 //!
 //! Cargo package versions intentionally do not own this store. The build
 //! script regenerates Rust bindings in `OUT_DIR`, while expensive native
-//! products remain reusable until an actual native compatibility input changes.
+//! products remain reusable until an actual native toolchain input changes.
 
 use std::{
     error::Error,
