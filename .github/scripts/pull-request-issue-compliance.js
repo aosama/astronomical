@@ -287,18 +287,36 @@ async function validatePullRequestIssue({ pullRequestBody, repositoryFullName, l
         return loadedIssue;
     }
 
+    const warnings = [];
+    // A `#N` that resolves to a pull request is a GitHub cross-reference to
+    // sibling work, not a claim of issue provenance. Stacking notes such as
+    // "stacked on #1458" used to fail the whole check even when the body also
+    // carried a perfectly valid issue link, so pull-request-shaped references
+    // are skipped here (with an advisory warning) and the contract falls back
+    // to the remaining genuine issue references.
+    const issueReferences = [];
     for (const reference of references) {
         const referencedIssue = await loadIssueOnce(reference.issueNumber);
         if (referencedIssue.pull_request !== undefined) {
-            throw new Error(`#${reference.issueNumber} identifies a pull request, not an issue.`);
+            warnings.push(
+                `#${reference.issueNumber} on line ${reference.lineNumber + extraction.bodyLineOffset} references a pull request, not an issue; pull-request mentions do not count toward the issue-linkage contract.`,
+            );
+            continue;
         }
+        issueReferences.push(reference);
+    }
+    if (issueReferences.length === 0 && references.length > 0) {
+        const pullRequestNumbers = references.map((reference) => `#${reference.issueNumber}`).join(", ");
+        throw new Error(
+            `Every reference in the Linked issue section points at a pull request (${pullRequestNumbers}); the contract needs at least one issue reference such as \`Fixes #N\`.`,
+        );
     }
 
     // Closing references state merge-time behavior; context references and
     // umbrella-labeled bare mentions are meaningful relationships that must
     // not force a closing keyword onto a naturally written sentence
     // (issue #1450).
-    const referencedIssueNumbers = new Set(references.map((reference) => reference.issueNumber));
+    const referencedIssueNumbers = new Set(issueReferences.map((reference) => reference.issueNumber));
     const classifiedBareIssueNumbers = new Set();
     const promotedUmbrellaReferences = [];
     for (const bareMention of extraction.mentionedMentions) {
@@ -308,7 +326,13 @@ async function validatePullRequestIssue({ pullRequestBody, repositoryFullName, l
         }
         classifiedBareIssueNumbers.add(bareMention.issueNumber);
         const mentionedIssue = await loadIssueOnce(bareMention.issueNumber);
-        if (mentionedIssue.pull_request === undefined && isUmbrellaLikeIssue(mentionedIssue)) {
+        // A bare pull-request number is ordinary GitHub prose (a
+        // cross-reference to sibling work), so it is ignored exactly like a
+        // keyworded pull-request reference above.
+        if (mentionedIssue.pull_request !== undefined) {
+            continue;
+        }
+        if (isUmbrellaLikeIssue(mentionedIssue)) {
             promotedUmbrellaReferences.push({
                 relationship: "umbrella",
                 kind: "context",
@@ -324,8 +348,7 @@ async function validatePullRequestIssue({ pullRequestBody, repositoryFullName, l
     // anything at merge time, which usually signals a stale template or a
     // copy-pasted body; that is a warning, not a rejection, because the
     // linkage itself is still well-formed.
-    const warnings = [];
-    for (const reference of references) {
+    for (const reference of issueReferences) {
         if (reference.kind !== "closing") {
             continue;
         }
@@ -337,7 +360,7 @@ async function validatePullRequestIssue({ pullRequestBody, repositoryFullName, l
         }
     }
 
-    const linkedIssues = [...references, ...promotedUmbrellaReferences].map((reference) => ({
+    const linkedIssues = [...issueReferences, ...promotedUmbrellaReferences].map((reference) => ({
         issueNumber: reference.issueNumber,
         relationship: reference.relationship,
         kind: reference.kind,

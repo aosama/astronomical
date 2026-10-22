@@ -15,7 +15,13 @@ const publisherScript = publisherWorkflow.split(scriptMarker)[1]
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const executePublisher = new AsyncFunction("require", "process", "context", "github", "core", publisherScript);
 
-async function publishForBody(body, author = "contributor", eventName = "workflow_dispatch", issueOverrides = {}) {
+async function publishForBody(
+    body,
+    author = "contributor",
+    eventName = "workflow_dispatch",
+    issueOverrides = {},
+    issuesGetError = null,
+) {
     const statuses = [];
     const failures = [];
     const warnings = [];
@@ -36,15 +42,20 @@ async function publishForBody(body, author = "contributor", eventName = "workflo
                 }),
             },
             issues: {
-                get: async () => ({
-                    data: {
-                        number: 224,
-                        state: "open",
-                        html_url: "https://github.com/example/astronomical/issues/224",
-                        labels: [],
-                        ...issueOverrides,
-                    },
-                }),
+                get: async () => {
+                    if (issuesGetError !== null) {
+                        throw issuesGetError;
+                    }
+                    return {
+                        data: {
+                            number: 224,
+                            state: "open",
+                            html_url: "https://github.com/example/astronomical/issues/224",
+                            labels: [],
+                            ...issueOverrides,
+                        },
+                    };
+                },
             },
             repos: {
                 createCommitStatus: async (status) => { statuses.push(status); },
@@ -63,6 +74,7 @@ async function publishForBody(body, author = "contributor", eventName = "workflo
     }, context, github, {
         info: () => {},
         warning: (message) => { warnings.push(message); },
+        error: () => {},
         setFailed: (message) => { failures.push(message); },
     });
     return { statuses, failures, warnings };
@@ -114,8 +126,39 @@ test("surfaces stale closing-keyword warnings through core.warning without faili
     assert.match(warned.warnings[0], /already closed/);
 });
 
+test("defers instead of publishing failure when GitHub answers 5xx mid-validation", { timeout: 60_000 }, async () => {
+    const serviceUnavailableError = new Error("GitHub service unavailable");
+    serviceUnavailableError.status = 500;
+    const deferred = await publishForBody(
+        "## Linked issue\n\nFixes #224",
+        "contributor",
+        "workflow_dispatch",
+        {},
+        serviceUnavailableError,
+    );
+    assert.deepEqual(deferred.statuses, []);
+    assert.equal(deferred.failures.length, 1);
+    assert.match(deferred.failures[0], /Transient GitHub API error \(HTTP 500\)/);
+});
+
+test("defers on a 403 secondary rate limit the step retries never attempt", { timeout: 60_000 }, async () => {
+    const rateLimitError = new Error("Secondary rate limit reached");
+    rateLimitError.status = 403;
+    const deferred = await publishForBody(
+        "## Linked issue\n\nFixes #224",
+        "contributor",
+        "workflow_dispatch",
+        {},
+        rateLimitError,
+    );
+    assert.deepEqual(deferred.statuses, []);
+    assert.equal(deferred.failures.length, 1);
+    assert.match(deferred.failures[0], /Transient GitHub API error \(HTTP 403\)/);
+});
+
 test("publisher grants status publication without synthetic check-write permission", { timeout: 60_000 }, () => {
     assert.match(publisherWorkflow, /statuses: write/);
     assert.doesNotMatch(publisherWorkflow, /checks: write|github\.rest\.checks/);
     assert.match(publisherWorkflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+    assert.match(publisherWorkflow, /retries: 3/);
 });
