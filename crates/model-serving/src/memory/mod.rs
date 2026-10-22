@@ -64,7 +64,6 @@ mod phase;
 mod reclamation;
 mod recovery;
 pub(crate) mod residency;
-mod serving_ceiling;
 pub(crate) mod telemetry;
 mod utilization;
 mod vocabulary;
@@ -81,8 +80,6 @@ mod adaptive_ram_growth_observations_tests;
 mod memory_policy_tests;
 #[cfg(test)]
 mod reclamation_boundary_tests;
-#[cfg(test)]
-mod serving_memory_ceiling_tests;
 #[cfg(test)]
 mod telemetry_tests;
 
@@ -151,7 +148,7 @@ pub use residency::{
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_enact_planned_expert_release,
 };
-pub use serving_ceiling::{
+pub use astronomical_memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
     machine_ceiling_from_physical_ram_bytes,
 };
