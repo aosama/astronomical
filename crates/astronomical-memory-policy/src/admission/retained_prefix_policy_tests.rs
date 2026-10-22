@@ -1,4 +1,4 @@
-use crate::{RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements};
+use crate::admission::retained_prefix::{RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements};
 
 #[test]
 fn should_retain_an_adoptable_state_when_adoption_is_enabled() {

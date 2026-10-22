@@ -7,11 +7,11 @@
 //! typed `CompleteResidencyDecision` whose arithmetic the execution never
 //! re-derives.
 
-use crate::memory::{
-    ExpertMemoryAdmissionError, MemoryBoundary,
-    complete_residency_exceeds_ceiling_with_activation_headroom,
+use crate::reclamation::{
+    ExpertMemoryAdmissionError, complete_residency_exceeds_ceiling_with_activation_headroom,
     projected_active_memory_after_complete_expert_replacement,
 };
+use crate::vocabulary::MemoryBoundary;
 
 /// Exact ownership and headroom required by complete expert residency.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
