@@ -2,6 +2,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::image_input;
+use crate::openai_request_budget::{
+    MAX_OPENAI_IMAGE_PARTS_PER_REQUEST, MAX_OPENAI_INLINE_MEDIA_BYTES,
+};
 use crate::{OpenAiImageInput, OpenAiResponsesValidationError};
 
 /// Stateless input accepted by the local Responses endpoint.
@@ -233,17 +236,82 @@ impl OpenAiResponseInput {
                 if input_items.is_empty() {
                     return Err(OpenAiResponsesValidationError::EmptyInputItems);
                 }
-                input_items
-                    .into_iter()
-                    .map(OpenAiResponseInputItem::into_parts)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map(OpenAiResponseInputParts::Items)
+                // The image-count budget is checked before any base64 decode
+                // work, mirroring the chat endpoint's rejection ordering.
+                validate_image_part_count(
+                    input_items
+                        .iter()
+                        .map(OpenAiResponseInputItem::image_url_part_count)
+                        .sum(),
+                )?;
+                // Inline media accumulates across every user message so the
+                // portable media budget is per request, not per message.
+                let mut decoded_inline_media_bytes = 0usize;
+                let mut input_item_parts = Vec::with_capacity(input_items.len());
+                for input_item in input_items {
+                    let item_parts = input_item.into_parts()?;
+                    if let OpenAiResponseInputItemParts::UserMessage { images, .. } = &item_parts {
+                        for decoded_image in images {
+                            decoded_inline_media_bytes += decoded_image.decoded_bytes().len();
+                        }
+                    }
+                    input_item_parts.push(item_parts);
+                }
+                validate_inline_media_total(decoded_inline_media_bytes)?;
+                Ok(OpenAiResponseInputParts::Items(input_item_parts))
             }
         }
     }
 }
 
+fn validate_image_part_count(
+    image_part_count: usize,
+) -> Result<(), OpenAiResponsesValidationError> {
+    if image_part_count > MAX_OPENAI_IMAGE_PARTS_PER_REQUEST {
+        return Err(
+            OpenAiResponsesValidationError::ImagePartCountExceedsBudget {
+                actual_image_part_count: image_part_count,
+                maximum_image_part_count: MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+                excess_image_part_count: image_part_count - MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+            },
+        );
+    }
+    Ok(())
+}
+
+fn validate_inline_media_total(
+    decoded_inline_media_bytes: usize,
+) -> Result<(), OpenAiResponsesValidationError> {
+    if decoded_inline_media_bytes > MAX_OPENAI_INLINE_MEDIA_BYTES {
+        return Err(OpenAiResponsesValidationError::InlineMediaExceedsBudget {
+            actual_inline_media_bytes: decoded_inline_media_bytes,
+            maximum_inline_media_bytes: MAX_OPENAI_INLINE_MEDIA_BYTES,
+            excess_inline_media_bytes: decoded_inline_media_bytes - MAX_OPENAI_INLINE_MEDIA_BYTES,
+        });
+    }
+    Ok(())
+}
+
 impl OpenAiResponseInputItem {
+    /// Counts the image parts this input item carries.
+    ///
+    /// Only user message items can structurally carry image parts; the count
+    /// feeds the request-level portable image-count budget.
+    fn image_url_part_count(&self) -> usize {
+        let Self::Message(message_input) = self else {
+            return 0;
+        };
+        match &message_input.content {
+            OpenAiResponseMessageContent::Text(_) => 0,
+            OpenAiResponseMessageContent::Parts(content_parts) => content_parts
+                .iter()
+                .filter(|content_part| {
+                    matches!(content_part, OpenAiResponseContentPart::InputImage { .. })
+                })
+                .count(),
+        }
+    }
+
     fn into_parts(self) -> Result<OpenAiResponseInputItemParts, OpenAiResponsesValidationError> {
         match self {
             Self::Message(message) => message.into_parts(),

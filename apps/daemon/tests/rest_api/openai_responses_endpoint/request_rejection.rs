@@ -51,8 +51,8 @@ async fn should_return_too_many_requests_when_generation_capacity_is_active() {
 async fn should_return_payload_too_large_when_a_responses_request_exceeds_the_ipc_frame() {
     let application = build_application(ScriptedResponsesExecutor::with_start_error(
         GenerationStartError::RequestTooLarge {
-            actual_ipc_message_bytes: 33_554_433,
-            maximum_ipc_message_bytes: 33_554_432,
+            actual_ipc_message_bytes: MAX_IPC_FRAME_BYTES + 1,
+            maximum_ipc_message_bytes: MAX_IPC_FRAME_BYTES,
         },
     ));
 

@@ -14,6 +14,7 @@ mod openai_chat_translation;
 mod openai_embeddings;
 mod openai_image_generation;
 mod openai_models_endpoint;
+mod openai_request_body_budget;
 mod openai_responses_assembly;
 mod openai_responses_endpoint;
 mod openai_responses_stream;

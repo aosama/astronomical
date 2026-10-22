@@ -5,7 +5,9 @@ use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, GenerationStartError, WorkerHealthSnapshot,
     build_application, build_application_with_discovered_models,
 };
-use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatModelCapabilities, MAX_IPC_FRAME_BYTES,
+};
 use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
@@ -63,8 +65,8 @@ async fn should_return_payload_too_large_when_openai_chat_exceeds_the_ipc_frame(
     let response_text = post_chat_and_read_body(
         ReadyChatFailureExecutor {
             chat_start_error: GenerationStartError::RequestTooLarge {
-                actual_ipc_message_bytes: 33_554_433,
-                maximum_ipc_message_bytes: 33_554_432,
+                actual_ipc_message_bytes: MAX_IPC_FRAME_BYTES + 1,
+                maximum_ipc_message_bytes: MAX_IPC_FRAME_BYTES,
             },
         },
         r#"{"model":"astronomical/negative-chat-test-worker","messages":[{"role":"user","content":"describe the image"}],"stream":true}"#,
