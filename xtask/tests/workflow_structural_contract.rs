@@ -207,9 +207,23 @@ fn required_check_steps_keep_their_bounded_contracts() {
         compile_command.contains("--test rest_api_tests"),
         "offline compile omits rest_api_tests"
     );
+    let timing_step = find_step_by_name(
+        &verification_steps,
+        "Configure step timing attribution",
+    );
     assert!(
-        compile_command.contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
-        "native build progress file is not exported for CI tailing"
+        run_text_of(timing_step, "ci-timing").contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
+        "native build progress file is not exported job-wide before the first cargo step"
+    );
+    // The runtime-integration build script declares rerun-if-env-changed for
+    // the progress file variable: exporting it in the compile step alone flips
+    // the build script fingerprint and recompiles runtime-integration and its
+    // dependents in every later cargo step of the job (a measured 25s rebuild
+    // before the hoist). The job-wide export above keeps the value constant,
+    // and the compile step must keep hands off so the flip cannot return.
+    assert!(
+        !compile_command.contains("export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
+        "the compile step must not re-export the native build progress file variable"
     );
     assert!(
         compile_command.contains(r#"tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE""#),
