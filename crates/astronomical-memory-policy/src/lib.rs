@@ -20,6 +20,10 @@
 //! - `admission` — may this operation begin (`AllocationAdmissionDecision`,
 //!   `CompleteResidencyDecision`, context workspaces, retained-prefix
 //!   retention, rotating admission).
+//! - `expert_cache` — family-neutral decode residency: the irreducible unit
+//!   is one expert id in one sparse-layer slot; bytes are accounting
+//!   (`DecodeExpertCache`, `ResidentExpertWeight`,
+//!   `plan_previous_token_prefetch`).
 //! - `phase` — the one lifecycle phase type (`MemoryPhase`).
 //! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`,
 //!   `MemoryAdmissionDecision`): every rejection names its boundary.
@@ -45,6 +49,7 @@
 pub mod admission;
 pub mod budget;
 pub mod ceiling;
+pub mod expert_cache;
 pub mod geometry_floor;
 pub mod phase;
 pub mod reclamation;
@@ -52,6 +57,19 @@ pub mod residency;
 pub mod recovery;
 pub mod serving_ceiling;
 pub mod vocabulary;
+
+#[cfg(test)]
+mod adaptive_ram_growth_execution_profile_tests;
+#[cfg(test)]
+mod adaptive_ram_growth_guard_admission_tests;
+#[cfg(test)]
+mod adaptive_ram_growth_guard_reclamation_tests;
+#[cfg(test)]
+mod adaptive_ram_growth_observations_tests;
+#[cfg(test)]
+mod memory_policy_tests;
+#[cfg(test)]
+mod reclamation_boundary_tests;
 
 #[cfg(test)]
 mod serving_ceiling_tests;

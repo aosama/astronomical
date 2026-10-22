@@ -4,10 +4,11 @@
 //! active-memory release between observations (0.02). Probabilities are test-design
 //! estimates rather than measured production frequencies.
 
-use crate::{
+use crate::budget::adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
-    AdaptiveRamGrowthGuardError, MemoryPhase,
+    AdaptiveRamGrowthGuardError,
 };
+use crate::phase::MemoryPhase;
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);

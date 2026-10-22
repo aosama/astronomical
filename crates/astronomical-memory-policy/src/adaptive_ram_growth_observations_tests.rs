@@ -4,10 +4,10 @@
 //! readable: this file explains how completed forwards teach reusable transient
 //! evidence, while `adaptive_ram_growth_guard.rs` covers projection boundaries.
 
-use crate::{
+use crate::budget::adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
-    MemoryPhase,
 };
+use crate::phase::MemoryPhase;
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);

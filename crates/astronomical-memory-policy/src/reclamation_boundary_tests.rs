@@ -6,7 +6,7 @@
 //! must terminate in Reject instead of looping forever against retention
 //! that can no longer cover the deficit.
 
-use crate::{
+use crate::reclamation::{
     ExpertReclamationPlan, PagedExpertReclamationStep,
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure, next_paged_expert_reclamation_step,
