@@ -9,7 +9,7 @@
 //! itself uses, so a promotion demand can never disagree with the decision
 //! the replacement worker actually makes.
 
-use crate::{CompleteResidencyDecision, CompleteResidencyRequirements};
+use crate::admission::complete_residency::{CompleteResidencyDecision, CompleteResidencyRequirements};
 
 /// Startup residency selection facts for one loaded streaming model.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

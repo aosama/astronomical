@@ -7,9 +7,10 @@
 //! highest-coverage partials, and a zero budget streams everything instead of
 //! erroring.
 
-use crate::memory::residency::ExpertLayerGeometry;
-use crate::{
-    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError, MemoryPhase,
+use crate::residency::ExpertLayerGeometry;
+use crate::phase::MemoryPhase;
+use crate::residency::{
+    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError,
     RetainedExpertPageClass, plan_expert_residency,
 };
 

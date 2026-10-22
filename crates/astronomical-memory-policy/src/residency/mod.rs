@@ -56,7 +56,7 @@ pub use request_plan::{
     retained_resident_ceiling_after_budget_refresh,
 };
 
-use crate::memory::MemoryPhase;
+use crate::phase::MemoryPhase;
 use thiserror::Error;
 
 use validation::routed_floor_payload_bytes;
