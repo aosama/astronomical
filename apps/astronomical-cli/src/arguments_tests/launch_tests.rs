@@ -46,6 +46,17 @@ fn should_accept_unknown_tools_as_launch_arguments_not_usage() {
 }
 
 #[test]
+fn should_parse_launch_codex_with_a_model_flag() {
+    assert_eq!(
+        parse(&["launch", "codex", "--model", "library-chat-model"]).expect("codex with model"),
+        CliCommand::Launch(LaunchArguments {
+            tool_slug: Some("codex".to_owned()),
+            model_id: Some("library-chat-model".to_owned()),
+        })
+    );
+}
+
+#[test]
 fn should_reject_two_tool_names() {
     match parse(&["launch", "opencode", "pi"]) {
         Err(UsageError::MultipleTools) => {}

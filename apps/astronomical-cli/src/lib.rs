@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 pub mod arguments;
+pub mod codex;
 pub mod daemon_probe;
 pub mod doctor_command;
 pub mod embed;
