@@ -342,6 +342,10 @@ pub enum GeneratedToken {
     },
     /// One bounded native prefill chunk completed without producing a token yet.
     PrefillProgress {
+        /// Tokens processed by this chunk alone. The worker accumulates these
+        /// per-chunk deltas into the request-wide prefill cursor; returning a
+        /// cumulative count instead double-counts every earlier chunk and pins
+        /// the status surface at 100% long before prefill completes.
         processed_token_count: u32,
         elapsed_millis: u64,
         /// Time spent evaluating the model, excluding allocator cleanup and telemetry.
