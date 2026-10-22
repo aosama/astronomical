@@ -179,7 +179,7 @@ impl Qwen3_5Model {
                         &runtime,
                         performance_attribution,
                     )
-                    .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
+                    .is_custom_kernel_supported(CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM)
                     {
                         Some(qwen3_5_streaming::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
                     } else {
@@ -234,7 +234,7 @@ impl Qwen3_5Model {
             &runtime,
             performance_attribution,
         )
-        .is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaSequence)
+        .is_custom_kernel_supported(CustomMetalKernelFamily::GATED_DELTA_SEQUENCE)
         {
             Some(super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?)
         } else {
@@ -248,7 +248,7 @@ impl Qwen3_5Model {
                 &runtime,
                 performance_attribution,
             )
-            .is_custom_kernel_supported(CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint)
+            .is_custom_kernel_supported(CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT)
             {
                 Some(
                     super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel(
@@ -277,7 +277,7 @@ impl Qwen3_5Model {
             &runtime,
             performance_attribution,
         )
-        .is_custom_kernel_supported(CustomMetalKernelFamily::GdnDecodePrework)
+        .is_custom_kernel_supported(CustomMetalKernelFamily::GDN_DECODE_PREWORK)
         {
             Some(
                 super::gdn_decode_prework_kernel::qwen3_5_gdn_decode_prework_kernel(
@@ -462,7 +462,7 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
         return None;
     }
     if !kernel_capability::worker_process_kernel_capabilities(runtime, performance_attribution)
-        .is_custom_kernel_supported(CustomMetalKernelFamily::FusedJangtq2GatheredProjection)
+        .is_custom_kernel_supported(CustomMetalKernelFamily::FUSED_JANGTQ2_GATHERED_PROJECTION)
     {
         tracing::info!(
             "fused jangtq2 gathered projection kernel demoted to the materializing decoder for this worker process"

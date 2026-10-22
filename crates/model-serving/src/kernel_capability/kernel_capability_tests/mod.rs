@@ -16,6 +16,20 @@ use crate::{
     validate_probe_outputs,
 };
 
+// The capability owner is family-agnostic, so these opaque stand-in
+// identifiers exercise the registry semantics offline; the real family
+// constants live in each family's own direct-MLX probe module.
+const COUNTING_WEIGHTED_SUM_FAMILY: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("counting-weighted-sum");
+const COUNTING_GATED_DELTA_FAMILY: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("counting-gated-delta");
+const COUNTING_GDN_PREWORK_FAMILY: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("counting-gdn-prework");
+const COUNTING_EXPERT_DECODE_FAMILY: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("counting-expert-decode");
+const COUNTING_BOUNDARY_CHECKPOINT_FAMILY: CustomMetalKernelFamily =
+    CustomMetalKernelFamily::new("counting-boundary-checkpoint");
+
 struct CountingProbe {
     family: CustomMetalKernelFamily,
     outcome: Result<(), KernelCapabilityError>,
@@ -64,9 +78,9 @@ fn should_probe_every_family_once_and_reuse_verdicts_without_reprobing() {
         .expect("network denial could not be applied");
 
     let (weighted_sum_probe, weighted_sum_invocations) =
-        supported_probe_pair(CustomMetalKernelFamily::SortedExpertWeightedSum);
+        supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
     let (gated_delta_probe, gated_delta_invocations) =
-        supported_probe_pair(CustomMetalKernelFamily::GatedDeltaSequence);
+        supported_probe_pair(COUNTING_GATED_DELTA_FAMILY);
     let mut performance_attribution = PerformanceAttribution::disabled();
 
     let capabilities = WorkerKernelCapabilities::probe_custom_kernels(
@@ -75,19 +89,19 @@ fn should_probe_every_family_once_and_reuse_verdicts_without_reprobing() {
     );
 
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::SortedExpertWeightedSum),
+        capabilities.verdict(COUNTING_WEIGHTED_SUM_FAMILY),
         CustomKernelVerdict::Supported
     );
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::GatedDeltaSequence),
+        capabilities.verdict(COUNTING_GATED_DELTA_FAMILY),
         CustomKernelVerdict::Supported
     );
     assert!(
-        capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
+        capabilities.is_custom_kernel_supported(COUNTING_WEIGHTED_SUM_FAMILY)
     );
 
     for _ in 0..10 {
-        let _ = capabilities.verdict(CustomMetalKernelFamily::SortedExpertWeightedSum);
+        let _ = capabilities.verdict(COUNTING_WEIGHTED_SUM_FAMILY);
     }
 
     assert_eq!(
@@ -108,12 +122,12 @@ fn should_report_a_typed_compilation_reason_without_losing_other_families() {
         .expect("network denial could not be applied");
 
     let (failing_probe, failing_invocations) = CountingProbe::with_outcome(
-        CustomMetalKernelFamily::SortedExpertWeightedSum,
+        COUNTING_WEIGHTED_SUM_FAMILY,
         Err(KernelCapabilityError::Compilation {
             description: "the probe kernel source failed to compile".to_owned(),
         }),
     );
-    let (supported_probe, _) = supported_probe_pair(CustomMetalKernelFamily::GdnDecodePrework);
+    let (supported_probe, _) = supported_probe_pair(COUNTING_GDN_PREWORK_FAMILY);
     let mut performance_attribution = PerformanceAttribution::disabled();
 
     let capabilities = WorkerKernelCapabilities::probe_custom_kernels(
@@ -122,16 +136,16 @@ fn should_report_a_typed_compilation_reason_without_losing_other_families() {
     );
 
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::SortedExpertWeightedSum),
+        capabilities.verdict(COUNTING_WEIGHTED_SUM_FAMILY),
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Compilation {
             description: "the probe kernel source failed to compile".to_owned(),
         })
     );
     assert!(
-        !capabilities.is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
+        !capabilities.is_custom_kernel_supported(COUNTING_WEIGHTED_SUM_FAMILY)
     );
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::GdnDecodePrework),
+        capabilities.verdict(COUNTING_GDN_PREWORK_FAMILY),
         CustomKernelVerdict::Supported,
         "one unsupported family must never demote an independently supported family"
     );
@@ -144,13 +158,13 @@ fn should_distinguish_execution_failures_from_output_mismatches() {
         .expect("network denial could not be applied");
 
     let (execution_probe, _) = CountingProbe::with_outcome(
-        CustomMetalKernelFamily::GatedDeltaSequence,
+        COUNTING_GATED_DELTA_FAMILY,
         Err(KernelCapabilityError::Execution {
             description: "the bounded probe launch failed".to_owned(),
         }),
     );
     let (mismatch_probe, _) = CountingProbe::with_outcome(
-        CustomMetalKernelFamily::FusedQuantizedExpertDecode,
+        COUNTING_EXPERT_DECODE_FAMILY,
         Err(KernelCapabilityError::OutputMismatch {
             description: "probe output value 0 read 0.000000 but expected 133.000000".to_owned(),
         }),
@@ -163,13 +177,13 @@ fn should_distinguish_execution_failures_from_output_mismatches() {
     );
 
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::GatedDeltaSequence),
+        capabilities.verdict(COUNTING_GATED_DELTA_FAMILY),
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Execution {
             description: "the bounded probe launch failed".to_owned(),
         })
     );
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::FusedQuantizedExpertDecode),
+        capabilities.verdict(COUNTING_EXPERT_DECODE_FAMILY),
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
             description: "probe output value 0 read 0.000000 but expected 133.000000".to_owned(),
         })
@@ -182,7 +196,7 @@ fn should_fail_closed_for_a_family_that_was_never_probed() {
         .expect("network denial could not be applied");
 
     let (weighted_sum_probe, _) =
-        supported_probe_pair(CustomMetalKernelFamily::SortedExpertWeightedSum);
+        supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
     let mut performance_attribution = PerformanceAttribution::disabled();
 
     let capabilities = WorkerKernelCapabilities::probe_custom_kernels(
@@ -191,10 +205,47 @@ fn should_fail_closed_for_a_family_that_was_never_probed() {
     );
 
     assert_eq!(
-        capabilities.verdict(CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint),
+        capabilities.verdict(COUNTING_BOUNDARY_CHECKPOINT_FAMILY),
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Unprobed),
         "an unprobed family must never be assumed supported"
     );
+}
+
+#[test]
+#[should_panic(expected = "duplicate custom kernel family registry key")]
+fn should_refuse_a_duplicate_family_registry_key() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // Two probes claiming one registry key would let the later verdict stand
+    // in for the earlier family — a fail-open overwrite — so registration
+    // refuses the duplicate instead.
+    let (first_probe, _) = supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
+    let (second_probe, _) = supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
+    let mut performance_attribution = PerformanceAttribution::disabled();
+
+    let _ = WorkerKernelCapabilities::probe_custom_kernels(
+        &[&first_probe, &second_probe],
+        &mut performance_attribution,
+    );
+}
+
+#[test]
+#[should_panic(expected = "duplicate forced custom kernel family registry key")]
+fn should_refuse_a_duplicate_forced_family_registry_key() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let _ = WorkerKernelCapabilities::with_forced_verdicts_for_tests([
+        (
+            COUNTING_WEIGHTED_SUM_FAMILY,
+            CustomKernelVerdict::Supported,
+        ),
+        (
+            COUNTING_WEIGHTED_SUM_FAMILY,
+            CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Unprobed),
+        ),
+    ]);
 }
 
 #[test]

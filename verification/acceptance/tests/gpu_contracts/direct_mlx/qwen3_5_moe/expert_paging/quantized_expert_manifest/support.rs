@@ -67,5 +67,7 @@ pub(super) fn synthetic_layer_plan(layer_prefix: &str) -> QuantizedExpertLayerPl
         quantization_bits,
         quantization_group_size: quantization_group_size as i32,
         quantization_mode: QuantizationMode::Affine,
+        // Affine-quantized sources carry no jangtq2 codebook projections.
+        jangtq2_projection_rotations: Vec::new(),
     }
 }
