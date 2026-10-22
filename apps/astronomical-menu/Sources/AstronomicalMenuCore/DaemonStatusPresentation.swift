@@ -117,6 +117,15 @@ extension DaemonStatusDocument {
     }
     if progress.phase == "generation_preparation" { return "Preparing the first output" }
     let tokenCountTitle = "\(progress.completedUnitCount) / \(progress.totalUnitCount) tokens"
+    if progress.phase == "generation" {
+      // A request without an explicit output cap reports the endpoint's
+      // default budget (65,535), which makes "x / y tokens" read as a
+      // permanently near-zero bar; large budgets present as a plain count.
+      if progress.totalUnitCount >= 8_192 {
+        return "\(progress.completedUnitCount) tokens"
+      }
+      return tokenCountTitle
+    }
     return progress.phase == "generation"
       ? tokenCountTitle
       : "\(progress.completionPercentageTitle) · \(tokenCountTitle)"
