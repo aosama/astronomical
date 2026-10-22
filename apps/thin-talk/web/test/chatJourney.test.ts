@@ -4,50 +4,7 @@ import { installDom, installConfig, waitFor } from "./support/dom";
 import { FakeSessionHost } from "./support/fakeHost";
 import { FakeDaemon } from "./support/fakeDaemon";
 import { bootChatClient } from "../src/boot";
-
-const DAEMON_BASE_URL = "http://127.0.0.1:6733";
-
-interface Journey {
-  host: FakeSessionHost;
-  daemon: FakeDaemon;
-}
-
-/** Boots the real client wiring against the fake host and fake daemon.
- * Pass a previous journey to keep its host files across a fresh page —
- * the same persistence a relaunch of the real app would see. */
-function bootJourney(previous?: Journey): Journey {
-  installDom();
-  installConfig(DAEMON_BASE_URL);
-  const previousHost: FakeSessionHost | undefined = previous?.host;
-  const host = previousHost != null
-    ? previousHost
-    : new FakeSessionHost(
-      (callId, payload) => window.__thintalkBridge?.resolve(callId, payload),
-      (callId, message) => window.__thintalkBridge?.reject(callId, message),
-    );
-  host.install();
-  const previousDaemon: FakeDaemon | undefined = previous?.daemon;
-  const daemon = previousDaemon != null
-    ? previousDaemon
-    : new FakeDaemon({
-      daemonBaseURL: DAEMON_BASE_URL,
-      channel: "development",
-      stateDirectory: "~/.astronomical-dev",
-    });
-  daemon.install();
-  bootChatClient();
-  return { host, daemon };
-}
-
-function sendUserMessage(text: string): void {
-  const field = document.querySelector<HTMLTextAreaElement>("#composer-input");
-  assert.ok(field, "composer field exists");
-  field.value = text;
-  field.dispatchEvent(new window.Event("input", { bubbles: true }));
-  const sendButton = document.querySelector<HTMLButtonElement>('[data-testid="composer-send"]');
-  assert.ok(sendButton, "send button exists");
-  sendButton.dispatchEvent(new window.Event("click", { bubbles: true }));
-}
+import { DAEMON_BASE_URL, bootJourney, sendUserMessage, waitUntilReady } from "./support/journey";
 
 function renderedMessageTexts(): string[] {
   return [...document.querySelectorAll<HTMLElement>("#transcript article.message")].map(
@@ -60,14 +17,6 @@ function renderedMessageTexts(): string[] {
 
 function sidebarSessionCount(): number {
   return document.querySelectorAll<HTMLElement>("#session-list button").length;
-}
-
-/** The composer field enables once the load sequence has fully settled. */
-async function waitUntilReady(): Promise<void> {
-  await waitFor(() => {
-    const field = document.querySelector<HTMLTextAreaElement>("#composer-input");
-    return field !== null && !field.disabled;
-  }, "the composer to accept input");
 }
 
 test("a full chat journey: boot, send, stream, persist", async () => {
