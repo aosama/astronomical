@@ -77,7 +77,7 @@ impl Qwen3_5EngineState {
                     .maximum_successful_prefill_chunk_tokens()
                     .unwrap_or(usize::MAX),
             );
-        let mut requested_prefill_chunk_end = configured_prompt_processing_chunk_end;
+        let requested_prefill_chunk_end = configured_prompt_processing_chunk_end;
         // Required publication is synchronous, so do not let one forward cross
         // multiple durable boundaries. A successful forward produces one exact
         // checkpoint, publishes it, and only then advances the request cursor.
@@ -105,7 +105,10 @@ impl Qwen3_5EngineState {
                     persistent_prompt_cache_block_token_count,
                 )
                 .len();
-            if crossed_cache_boundary_count <= 1 {
+            // The durable-boundary clamp keeps at most one block publication
+            // per forward; the partial-tail clamp then stops the terminal
+            // chunk one token short so the captured tail stays probeable.
+            let mut clamped_prefill_chunk_end = if crossed_cache_boundary_count <= 1 {
                 requested_prefill_chunk_end
             } else {
                 persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
@@ -125,13 +128,13 @@ impl Qwen3_5EngineState {
                     prefill_end_exclusive,
                     persistent_prompt_cache_block_token_count,
                 );
-            if requested_prefill_chunk_end == prefill_end_exclusive
+            if clamped_prefill_chunk_end == prefill_end_exclusive
                 && partial_tail_capture_end < prefill_end_exclusive
                 && prefill_start < partial_tail_capture_end
             {
-                requested_prefill_chunk_end = partial_tail_capture_end;
+                clamped_prefill_chunk_end = partial_tail_capture_end;
             }
-            requested_prefill_chunk_end
+            clamped_prefill_chunk_end
         } else {
             requested_prefill_chunk_end
         };
