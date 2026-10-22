@@ -36,7 +36,7 @@ Historical Rust generations without an Astronomical ownership marker remain Carg
 
 ## Pull Requests
 
-- Link one or more existing Astronomical issues under `## Linked issue`; grouped forms such as `Fixes #N and #M` or `Closes #N, #M` are accepted, and every issue number mentioned must carry a canonical keyword. Use `Fixes #N`, `Closes #N`, or `Resolves #N` when merging should close the issue, and `Refs #N` when it should remain open. Pull requests are not valid substitutes for issues.
+- Link one or more existing Astronomical issues under `## Linked issue`; grouped forms such as `Fixes #N and #M` or `Closes #N, #M` are accepted. Use `Fixes #N`, `Closes #N`, or `Resolves #N` when merging should close the issue, `Refs #N` when it should remain open, and a context phrase such as `part of #N` (or a bare mention of an issue labeled `umbrella` or `epic`) for umbrella and tracking relationships that are real but not closing. Every issue number mentioned must carry one of these relationships; the compliance check reports the exact line of any bare mention with a suggested replacement, and warns when a closing keyword targets an already-closed issue. Pull requests are not valid substitutes for issues.
 - Explain the user-visible or engineering problem.
 - Describe the smallest implemented solution.
 - Include verification evidence.

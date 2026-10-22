@@ -15,9 +15,10 @@ const publisherScript = publisherWorkflow.split(scriptMarker)[1]
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const executePublisher = new AsyncFunction("require", "process", "context", "github", "core", publisherScript);
 
-async function publishForBody(body, author = "contributor", eventName = "workflow_dispatch") {
+async function publishForBody(body, author = "contributor", eventName = "workflow_dispatch", issueOverrides = {}) {
     const statuses = [];
     const failures = [];
+    const warnings = [];
     const context = {
         eventName,
         runId: 123,
@@ -40,6 +41,8 @@ async function publishForBody(body, author = "contributor", eventName = "workflo
                         number: 224,
                         state: "open",
                         html_url: "https://github.com/example/astronomical/issues/224",
+                        labels: [],
+                        ...issueOverrides,
                     },
                 }),
             },
@@ -59,9 +62,10 @@ async function publishForBody(body, author = "contributor", eventName = "workflo
         env: { GITHUB_WORKSPACE: repositoryRoot, GITHUB_SERVER_URL: "https://github.com" },
     }, context, github, {
         info: () => {},
+        warning: (message) => { warnings.push(message); },
         setFailed: (message) => { failures.push(message); },
     });
-    return { statuses, failures };
+    return { statuses, failures, warnings };
 }
 
 test("publishes current-head commit statuses after a body failure is corrected", { timeout: 60_000 }, async () => {
@@ -87,6 +91,27 @@ test("preserves the automated-author exemption through commit statuses", { timeo
     assert.equal(automated.statuses.length, 1);
     assert.equal(automated.statuses[0].state, "success");
     assert.deepEqual(automated.failures, []);
+});
+
+test("accepts an umbrella context reference without a closing keyword on it", { timeout: 60_000 }, async () => {
+    const accepted = await publishForBody("## Linked issue\n\nResolves #1426 (part of the #1428 umbrella)");
+    assert.equal(accepted.statuses[0].state, "success");
+    assert.equal(accepted.statuses[0].description, "Pull request links issue #1426");
+    assert.deepEqual(accepted.failures, []);
+    assert.deepEqual(accepted.warnings, []);
+});
+
+test("surfaces stale closing-keyword warnings through core.warning without failing", { timeout: 60_000 }, async () => {
+    const warned = await publishForBody(
+        "## Linked issue\n\nFixes #224",
+        "contributor",
+        "workflow_dispatch",
+        { state: "closed" },
+    );
+    assert.equal(warned.statuses[0].state, "success");
+    assert.deepEqual(warned.failures, []);
+    assert.equal(warned.warnings.length, 1);
+    assert.match(warned.warnings[0], /already closed/);
 });
 
 test("publisher grants status publication without synthetic check-write permission", { timeout: 60_000 }, () => {

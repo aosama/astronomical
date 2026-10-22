@@ -64,8 +64,9 @@ test("should validate linked issue provenance for the complete pull request jour
         relationship: "Fixes",
         issueUrl: issueUrlFor(224),
         linkedIssues: [
-            { issueNumber: 224, relationship: "Fixes", issueUrl: issueUrlFor(224) },
+            { issueNumber: 224, relationship: "Fixes", kind: "closing", issueUrl: issueUrlFor(224) },
         ],
+        warnings: [],
     });
 });
 
@@ -214,17 +215,21 @@ test("should deduplicate repeated references to the same issue and load it once"
     assert.equal(compliance.linkedIssues.length, 1);
 });
 
-test("should reject a bare issue mention that no keyword introduces", async () => {
+test("should reject a bare issue mention with the exact line and a suggested replacement", async () => {
     await assert.rejects(
         validateBody("## Linked issue\n\nFixes #224 while #225 remains open."),
-        /must reference at least one issue/,
+        (error) => {
+            assert.match(error.message, /#225 on line 3 has no keyword/);
+            assert.match(error.message, /did you mean "Refs #225"\?/);
+            return true;
+        },
     );
 });
 
 test("should reject a heading-less body mixing a keyword reference with a bare mention", async () => {
     await assert.rejects(
         validateBody("Fixes #224 while #225 remains open."),
-        /every issue number mentioned/,
+        /#225 on line 1 has no keyword/,
     );
 });
 
@@ -291,9 +296,10 @@ test("should accept several canonical references with the first as the primary l
         relationship: "Refs",
         issueUrl: issueUrlFor(983),
         linkedIssues: [
-            { issueNumber: 983, relationship: "Refs", issueUrl: issueUrlFor(983) },
-            { issueNumber: 1081, relationship: "Refs", issueUrl: issueUrlFor(1081) },
+            { issueNumber: 983, relationship: "Refs", kind: "reference", issueUrl: issueUrlFor(983) },
+            { issueNumber: 1081, relationship: "Refs", kind: "reference", issueUrl: issueUrlFor(1081) },
         ],
+        warnings: [],
     });
 });
 
@@ -362,4 +368,180 @@ test("should preserve unexpected GitHub failures", async () => {
         }),
         serviceError,
     );
+});
+
+test("should accept an umbrella context mention alongside a closing reference", async () => {
+    const compliance = await validateBody(
+        "## Linked issue\n\nResolves #1426 (part of the #1428 umbrella)",
+        {
+            loadIssue: async (issueNumber) => createIssue({
+                number: issueNumber,
+                html_url: issueUrlFor(issueNumber),
+            }),
+        },
+    );
+
+    assert.deepEqual(compliance.linkedIssues.map((linked) => linked.issueNumber), [1426, 1428]);
+    assert.deepEqual(compliance.linkedIssues.map((linked) => linked.kind), ["closing", "context"]);
+    assert.deepEqual(
+        compliance.linkedIssues.map((linked) => linked.relationship),
+        ["Resolves", "part of"],
+    );
+    assert.equal(compliance.issueNumber, 1426);
+    assert.deepEqual(compliance.warnings, []);
+});
+
+test("should accept a context-only linked issue section", async () => {
+    const compliance = await validateBody("## Linked issue\n\npart of #1428", {
+        loadIssue: async (issueNumber) => createIssue({
+            number: issueNumber,
+            html_url: issueUrlFor(issueNumber),
+        }),
+    });
+
+    assert.equal(compliance.issueNumber, 1428);
+    assert.equal(compliance.relationship, "part of");
+    assert.equal(compliance.linkedIssues[0].kind, "context");
+});
+
+test("should link every issue in a grouped context list", async () => {
+    const compliance = await validateBody("## Linked issue\n\npart of #1428 and #1429", {
+        loadIssue: async (issueNumber) => createIssue({
+            number: issueNumber,
+            html_url: issueUrlFor(issueNumber),
+        }),
+    });
+
+    assert.deepEqual(compliance.linkedIssues.map((linked) => linked.issueNumber), [1428, 1429]);
+    assert.deepEqual(compliance.linkedIssues.map((linked) => linked.kind), ["context", "context"]);
+});
+
+test("should accept each documented context phrase without case sensitivity", async () => {
+    for (const phrase of ["part of", "Tracked by", "works toward", "UMBRELLA", "epic", "See also"]) {
+        const compliance = await validateBody(`## Linked issue\n${phrase} #224`, {
+            loadIssue: async (issueNumber) => createIssue({
+                number: issueNumber,
+                html_url: issueUrlFor(issueNumber),
+            }),
+        });
+        assert.equal(compliance.linkedIssues[0].kind, "context", phrase);
+    }
+});
+
+test("should accept a bare mention of an umbrella-labeled issue", async () => {
+    const compliance = await validateBody("## Linked issue\n\nFixes #224 while #225 coordinates the work.", {
+        loadIssue: async (issueNumber) => createIssue({
+            number: issueNumber,
+            html_url: issueUrlFor(issueNumber),
+            labels: issueNumber === 225 ? [{ name: "umbrella" }] : [],
+        }),
+    });
+
+    assert.deepEqual(compliance.linkedIssues.map((linked) => linked.issueNumber), [224, 225]);
+    assert.equal(compliance.linkedIssues[1].kind, "context");
+    assert.equal(compliance.linkedIssues[1].relationship, "umbrella");
+    assert.equal(compliance.issueNumber, 224);
+});
+
+test("should accept a bare mention of an epic-labeled issue given as a plain label string", async () => {
+    const compliance = await validateBody("## Linked issue\n\nFixes #224 while #225 coordinates the work.", {
+        loadIssue: async (issueNumber) => createIssue({
+            number: issueNumber,
+            html_url: issueUrlFor(issueNumber),
+            labels: issueNumber === 225 ? ["epic"] : [],
+        }),
+    });
+
+    assert.deepEqual(compliance.linkedIssues.map((linked) => linked.issueNumber), [224, 225]);
+});
+
+test("should reject a bare mention of a plain issue even when other references exist", async () => {
+    await assert.rejects(
+        validateBody("## Linked issue\n\nFixes #224 while #225 remains open.", {
+            loadIssue: async (issueNumber) => createIssue({
+                number: issueNumber,
+                html_url: issueUrlFor(issueNumber),
+                labels: [],
+            }),
+        }),
+        /#225 on line 3 has no keyword/,
+    );
+});
+
+test("should prefer the first closing reference as primary even when a context reference comes first", async () => {
+    const compliance = await validateBody("## Linked issue\n\npart of #1428\nFixes #224", {
+        loadIssue: async (issueNumber) => createIssue({
+            number: issueNumber,
+            html_url: issueUrlFor(issueNumber),
+        }),
+    });
+
+    assert.equal(compliance.issueNumber, 224);
+    assert.equal(compliance.relationship, "Fixes");
+});
+
+test("should warn without failing when a closing keyword targets an already-closed issue", async () => {
+    const compliance = await validateBody("## Linked issue\n\nFixes #224", {
+        loadIssue: async () => createIssue({ state: "closed" }),
+    });
+
+    assert.equal(compliance.issueNumber, 224);
+    assert.equal(compliance.warnings.length, 1);
+    assert.match(compliance.warnings[0], /#224 on line 3/);
+    assert.match(compliance.warnings[0], /already closed/);
+});
+
+test("should not warn for context references to already-closed issues", async () => {
+    const compliance = await validateBody("## Linked issue\n\npart of #1428", {
+        loadIssue: async () => createIssue({ state: "closed" }),
+    });
+
+    assert.deepEqual(compliance.warnings, []);
+});
+
+test("should not warn when the non-closing Refs keyword targets an already-closed issue", async () => {
+    const compliance = await validateBody("## Linked issue\n\nRefs #224", {
+        loadIssue: async () => createIssue({ state: "closed" }),
+    });
+
+    assert.equal(compliance.linkedIssues[0].kind, "reference");
+    assert.deepEqual(compliance.warnings, []);
+});
+
+test("should reject an article between a closing keyword and its issue", async () => {
+    // GitHub's closing syntax requires the designator to follow the keyword
+    // directly; accepting `Fixes the #224` would publish success while the
+    // issue never auto-closes at merge time.
+    await assert.rejects(
+        validateBody("## Linked issue\n\nFixes the #224 regression"),
+        /must reference at least one issue/,
+    );
+    await assert.rejects(
+        validateBody("## Linked issue\n\nFixes that #224 regression"),
+        /must reference at least one issue/,
+    );
+});
+
+test("should report body-absolute line numbers across a stripped multi-line comment", async () => {
+    await assert.rejects(
+        validateBody("## Linked issue\n\n<!-- multi\nline\ncomment -->\nFixes #224 while #225 remains open"),
+        (error) => {
+            assert.match(error.message, /#225 on line 6 has no keyword/);
+            return true;
+        },
+    );
+});
+
+test("should report the designator's line when a grouped list wraps", async () => {
+    const compliance = await validateBody("## Linked issue\n\nFixes #224,\n#225", {
+        loadIssue: async (issueNumber) => createIssue({
+            number: issueNumber,
+            html_url: issueUrlFor(issueNumber),
+            state: "closed",
+        }),
+    });
+
+    assert.deepEqual(compliance.linkedIssues.map((linked) => linked.issueNumber), [224, 225]);
+    assert.match(compliance.warnings[0], /#224 on line 3/);
+    assert.match(compliance.warnings[1], /#225 on line 4/);
 });
