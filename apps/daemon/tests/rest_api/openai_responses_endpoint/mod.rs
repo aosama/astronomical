@@ -7,7 +7,7 @@ use astronomical_daemon::{
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatModelCapabilities,
+    ChatModelCapabilities, MAX_IPC_FRAME_BYTES,
 };
 use axum::{
     body::{Body, to_bytes},
