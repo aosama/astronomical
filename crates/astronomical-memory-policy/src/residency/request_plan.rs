@@ -9,7 +9,7 @@ use super::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertResidencyPlan, RetainedExpertPageClass,
 };
-use crate::memory::MemoryPhase;
+use crate::phase::MemoryPhase;
 
 /// Role of one sparse layer for the rest of this request's Prefill.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

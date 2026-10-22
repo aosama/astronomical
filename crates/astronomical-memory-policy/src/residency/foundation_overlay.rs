@@ -12,7 +12,7 @@ use super::{
     ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
     compare_partial_coverage, release_order,
 };
-use crate::memory::MemoryPhase;
+use crate::phase::MemoryPhase;
 
 pub(super) fn foundation_and_overlay_plan(
     phase: MemoryPhase,

@@ -1,7 +1,9 @@
-use crate::{
-    CompleteResidencyDecision, CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements,
-    MemoryBoundary, MlxRamBudgetModelGeometry,
+use crate::admission::complete_residency::{
+    CompleteResidencyDecision, CompleteResidencyRequirements,
 };
+use crate::budget::ram_values::MlxRamBudgetModelGeometry;
+use crate::residency::CompleteResidencyHeadroomBoundary;
+use crate::vocabulary::MemoryBoundary;
 
 fn sparse_geometry() -> MlxRamBudgetModelGeometry {
     MlxRamBudgetModelGeometry {

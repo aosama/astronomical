@@ -61,7 +61,6 @@ mod budget;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
 mod expert_cache;
-pub(crate) mod residency;
 pub(crate) mod telemetry;
 mod utilization;
 
@@ -137,7 +136,14 @@ pub use astronomical_memory_policy::reclamation::{
 pub use astronomical_memory_policy::recovery::{
     ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements,
 };
-pub use residency::{
+// The direct-MLX streaming planner (qwen3_5_streaming's gated
+// phase_aware_expert_residency) imports residency by module path
+// (`crate::memory::residency::ExpertLayerGeometry`), so the module stays
+// nameable here under the same feature gate, without widening the crate's
+// public surface.
+#[cfg(feature = "direct-mlx")]
+pub(crate) use astronomical_memory_policy::residency;
+pub use astronomical_memory_policy::residency::{
     CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerGeometry,
     ExpertLayerResidencyTarget, ExpertResidencyPlan, ExpertResidencyPlanError,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,

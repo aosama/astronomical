@@ -1,7 +1,9 @@
-use crate::memory::residency::ExpertLayerGeometry;
-use crate::{
-    AdaptiveRamGrowthExecutionProfile, CurrentExpertLayerResidency, ExpertLayerResidencyTarget,
-    ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryRequirements, MemoryPhase,
+use crate::residency::ExpertLayerGeometry;
+use crate::budget::adaptive_growth::AdaptiveRamGrowthExecutionProfile;
+use crate::phase::MemoryPhase;
+use crate::recovery::{ForwardRecoveryDecision, ForwardRecoveryRequirements};
+use crate::residency::{
+    CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
     decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,
     plan_expert_residency, publish_request_stable_residency_plan,
