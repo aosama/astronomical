@@ -17,6 +17,18 @@ use crate::sparse_experts::{
 };
 use astronomical_mlx_c_rust::MlxMetalKernel;
 
+impl CustomMetalKernelFamily {
+    /// Registry identifier of the sorted expert weighted-sum family. The
+    /// family owns this constant; the capability module stays agnostic.
+    pub const SORTED_EXPERT_WEIGHTED_SUM: Self = Self::new("sorted_expert_weighted_sum");
+}
+
+/// Supplies this family's probes for the once-per-process probe run. The
+/// worker registration list is the only central touch point.
+pub fn capability_probes(runtime: &MlxRuntime) -> Vec<Box<dyn CustomMetalKernelProbe + '_>> {
+    vec![Box::new(SortedExpertWeightedSumProbe::new(runtime))]
+}
+
 // Expected reduction of the fixed probe inputs, proven by the existing
 // direct-MLX sorted-reduction contracts: the inverse order maps token 0 to
 // sorted-output rows [150,151], [100,101], [140,141] with scores
@@ -37,7 +49,7 @@ impl<'runtime> SortedExpertWeightedSumProbe<'runtime> {
 
 impl CustomMetalKernelProbe for SortedExpertWeightedSumProbe<'_> {
     fn family(&self) -> CustomMetalKernelFamily {
-        CustomMetalKernelFamily::SortedExpertWeightedSum
+        CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM
     }
 
     fn probe(&self) -> Result<(), KernelCapabilityError> {

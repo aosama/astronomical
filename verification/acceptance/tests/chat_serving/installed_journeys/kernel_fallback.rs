@@ -68,9 +68,9 @@ async fn run_forced_fallback_romeo_continuation() {
     let retained_verdicts =
         worker_process_kernel_capabilities(&runtime, &mut PerformanceAttribution::disabled());
     for family in [
-        CustomMetalKernelFamily::SortedExpertWeightedSum,
-        CustomMetalKernelFamily::GatedDeltaSequence,
-        CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
+        CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
+        CustomMetalKernelFamily::GATED_DELTA_SEQUENCE,
+        CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT,
     ] {
         assert!(
             !retained_verdicts.is_custom_kernel_supported(family),
@@ -248,13 +248,13 @@ fn k2_forced_unsupported_capabilities() -> WorkerKernelCapabilities {
     let forced_demotion_description = "forced demotion for the K2 serving fallback journey";
     WorkerKernelCapabilities::with_forced_verdicts_for_tests([
         (
-            CustomMetalKernelFamily::SortedExpertWeightedSum,
+            CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
             CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Compilation {
                 description: forced_demotion_description.to_owned(),
             }),
         ),
         (
-            CustomMetalKernelFamily::FusedQuantizedExpertDecode,
+            CustomMetalKernelFamily::FUSED_QUANTIZED_EXPERT_DECODE,
             CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
                 description: forced_demotion_description.to_owned(),
             }),
