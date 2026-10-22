@@ -36,7 +36,10 @@ warnings = "deny"
 #
 # Lane vocabulary (issue #1208): "offline" names the property — sealed and
 # deterministic, no real network beyond localhost, no real model artifacts,
-# everything scripted. The offline lane runs each package's offline_tests
+# everything scripted. Loopback and Unix Domain Socket inter-process
+# communication are local, not network, so they stay inside the property:
+# the macOS seatbelt profile and the Linux network-namespace job enforce
+# exactly that boundary. The offline lane runs each package's offline_tests
 # binary AND its beside-source lib unit tests (--lib); the property-named
 # aliases from before the vocabulary campaign were retired with the
 # campaign's final batch.

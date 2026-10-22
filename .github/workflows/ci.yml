@@ -97,7 +97,19 @@ jobs:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     steps:
       - name: Configure step timing attribution
-        run: printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+        run: |
+          printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          # The runtime-integration build script declares rerun-if-env-changed
+          # for this variable, so exporting it in only the compile step flips
+          # the build script's fingerprint for every later cargo invocation and
+          # re-runs the script (one of two rebuild triggers fixed together:
+          # the other, a phantom rerun-if-changed path, is removed in that
+          # build script). Exporting it once here, before the first cargo step
+          # of the job, keeps every build-script run under an identical
+          # environment; the compile step still tails the file for live
+          # native-build progress.
+          printf 'ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=%s/astronomical-native-build-progress\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          : > "$RUNNER_TEMP/astronomical-native-build-progress"
       - name: Require successful change classification
         if: ${{ needs.detect-changes.result != 'success' }}
         run: |
@@ -285,40 +297,47 @@ jobs:
           # binary does not exist yet.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo run --quiet -p xtask -- install-verification-tools
+      # The committed notices file is a freshness contract exactly like
+      # Cargo.lock: human pull requests must carry the regenerated file, so
+      # the strict check fails this required check when it is stale.
+      # Dependency bots change Cargo.lock but cannot commit the regenerated
+      # notices, so their pull requests refresh the file in place — the build
+      # still bundles accurate notices — and the strict contract returns on
+      # the next human pull request.
       - name: Verify Rust dependency notices
+        if: ${{ github.event_name == 'pull_request' }}
         env:
-          EVENT_NAME: ${{ github.event_name }}
           PULL_REQUEST_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end dependency-notices' EXIT
-          scripts/ci/ci-step-timing.sh begin dependency-notices
+          trap 'scripts/ci/ci-step-timing.sh end dependency-notices-verify' EXIT
+          scripts/ci/ci-step-timing.sh begin dependency-notices-verify
           if cargo xtask notices --check; then
             printf '%s\n' '[rust-dependency-notices] status=current'
             exit 0
           fi
-          case "${EVENT_NAME}:${PULL_REQUEST_AUTHOR_LOGIN}" in
-            pull_request:*"[bot]")
-              # Dependency bots change Cargo.lock but cannot regenerate the
-              # committed notices file. Refresh it in place so this build
-              # bundles accurate notices; the strict contract stays on human
-              # pull requests.
+          case "${PULL_REQUEST_AUTHOR_LOGIN}" in
+            *"[bot]")
               printf '%s\n' "Automated dependency pull request: refreshing third-party/RUST_DEPENDENCY_NOTICES in place (bots cannot commit the regenerated file)."
               cargo xtask notices
               ;;
-            pull_request:*)
+            *)
               printf '%s\n' "Error: third-party/RUST_DEPENDENCY_NOTICES is stale; run cargo xtask notices and commit the result" >&2
               exit 1
               ;;
-            *)
-              # Default-branch pushes can carry a bot-merged dependency update
-              # whose committed notices file is one regeneration behind. The
-              # bundled app must never ship stale notices, so refresh in
-              # place; the next human pull request restores the committed
-              # copy through the strict pull-request lane.
-              printf '%s\n' "Default-branch build: refreshing third-party/RUST_DEPENDENCY_NOTICES in place."
-              cargo xtask notices
-              ;;
           esac
+        timeout-minutes: 2
+      # Default-branch and dispatch builds bundle the app, so they refresh
+      # the notices in place: a bot-merged dependency update can land one
+      # regeneration behind, and the bundle must never ship stale notices.
+      # The committed copy is restored through the strict pull-request lane
+      # above.
+      - name: Refresh Rust dependency notices for the bundled app
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end dependency-notices-refresh' EXIT
+          scripts/ci/ci-step-timing.sh begin dependency-notices-refresh
+          cargo xtask notices
+          printf '%s\n' '[rust-dependency-notices] status=refreshed-for-bundle'
         timeout-minutes: 2
       - name: Provision verified native dependencies
         id: native-archive-provisioning
@@ -364,7 +383,11 @@ jobs:
           # Cargo captures build-script stderr, so the native CMake rebuild would
           # otherwise be a silent multi-minute gap in this step's log. The build
           # script appends progress lines to this file and tail streams them live.
-          export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="$RUNNER_TEMP/astronomical-native-build-progress"
+          # The variable arrives from the job environment (configured with the
+          # step timing setup) so its value matches every cargo invocation in
+          # this job; exporting it here alone would invalidate the build script
+          # fingerprint of the next cargo step and force a from-scratch rebuild
+          # of runtime-integration and its dependents.
           : > "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
           tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
           progress_tail_pid=$!
@@ -406,13 +429,30 @@ jobs:
         timeout-minutes: 2
       # Physics proof for the lane's no-network property (issue #1333): the
       # same binaries re-run under a repository-owned seatbelt profile that
-      # denies every network operation. Binaries are warm from the step above,
-      # so this costs only execution time; a socket attempt aborts loudly.
+      # denies real networking while allowing the offline contract's local
+      # communication (loopback and Unix Domain Sockets; see the offline
+      # vocabulary in .cargo/config.toml). Binaries that apply the
+      # harness-internal network denial defer to this outer profile here —
+      # macOS forbids applying a second profile from inside one — and their
+      # stricter socket-free proof runs in the unsandboxed step above. The
+      # step is fail-closed: pipefail surfaces a failing sandboxed cargo, and
+      # the execution-parity assertion fails the check when the sandboxed run
+      # executed fewer test binaries than the unsandboxed step, because a
+      # silently skipped proof is worse than none.
       - name: Re-run offline lane tests under the network-denying seatbelt
         run: |
+          set -o pipefail
           trap 'scripts/ci/ci-step-timing.sh end offline-tests-seatbelt' EXIT
           scripts/ci/ci-step-timing.sh begin offline-tests-seatbelt
+          export ASTRONOMICAL_NETWORK_DENIAL_DEFERRED_TO_SEATBELT=1
           sandbox-exec -f scripts/ci/offline-sandbox.sb cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline-seatbelt.log"
+          unsandboxed_test_result_count="$(grep -c 'test result:' "$RUNNER_TEMP/test-logs/offline.log")"
+          sandboxed_test_result_count="$(grep -c 'test result:' "$RUNNER_TEMP/test-logs/offline-seatbelt.log")"
+          if [ "$sandboxed_test_result_count" -eq 0 ] || [ "$sandboxed_test_result_count" -ne "$unsandboxed_test_result_count" ]; then
+            printf '%s\n' "Error: the sandboxed offline lane executed $sandboxed_test_result_count of $unsandboxed_test_result_count test binaries; the no-network proof is incomplete" >&2
+            exit 1
+          fi
+          printf '[offline-tests-seatbelt] execution_parity=%s/%s\n' "$sandboxed_test_result_count" "$unsandboxed_test_result_count"
         timeout-minutes: 4
       - name: Run Library REST contracts
         run: |

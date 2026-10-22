@@ -1,9 +1,68 @@
 //! Wiring contracts between the build script and its progress and parallelism
 //! modules, asserted on the build script source the same way Cargo sees it.
 
+use std::path::Path;
+
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
 const NATIVE_BUILD_COMPILE_MODULE: &str = include_str!("../../build_native_compile.rs");
 const NATIVE_BUILD_PARALLELISM_MODULE: &str = include_str!("../../build_parallelism.rs");
+
+/// Collects the literal file and directory paths the build script watches
+/// through rerun-if-changed inside emit_native_source_rerun_contracts.
+/// Dynamic entries (the dependency cache directory and provisioned archive
+/// paths) are env-gated and intentionally excluded.
+fn watched_paths_from_rerun_contracts() -> Vec<String> {
+    let contracts_section_start = NATIVE_BUILD_SCRIPT
+        .find("fn emit_native_source_rerun_contracts")
+        .expect("the build script must keep its rerun contract emitter");
+    let contracts_section = &NATIVE_BUILD_SCRIPT[contracts_section_start..];
+    let mut watched_paths = Vec::new();
+    let mut cursor = 0;
+    while let Some(join_offset) = contracts_section[cursor..].find(".join(\"") {
+        let entry_start = cursor + join_offset + ".join(\"".len();
+        let entry_end = contracts_section[entry_start..]
+            .find('"')
+            .expect("unterminated join literal in the rerun contracts")
+            + entry_start;
+        let joined_path = &contracts_section[entry_start..entry_end];
+        // native_source_directory joins are rooted under native/, every other
+        // join in this function is rooted at the package directory, which is
+        // also the working directory of this test binary.
+        let receiver_start = contracts_section[..cursor + join_offset]
+            .rfind(|character: char| character == '.' || character.is_whitespace())
+            .expect("join literal without a receiver")
+            + 1;
+        let receiver = &contracts_section[receiver_start..cursor + join_offset];
+        if receiver == "native_source_directory" {
+            watched_paths.push(format!("native/{joined_path}"));
+        } else {
+            watched_paths.push(joined_path.to_owned());
+        }
+        cursor = entry_end;
+    }
+    watched_paths
+}
+
+#[test]
+fn should_watch_only_paths_that_exist() {
+    // A rerun-if-changed path that does not exist dirties the build script at
+    // every cargo freshness check: cargo reports the missing file, reruns the
+    // script, and rebuilds runtime-integration and its dependents in every
+    // later cargo invocation of the CI job — a measured 25s rebuild per step
+    // while a phantom build_bindings.rs watch was live.
+    let watched_paths = watched_paths_from_rerun_contracts();
+    assert!(
+        !watched_paths.is_empty(),
+        "the rerun contract watch list disappeared; the extraction or the contracts rotted"
+    );
+    for watched_path in &watched_paths {
+        assert!(
+            Path::new(watched_path).exists(),
+            "the build script watches {watched_path}, which does not exist; \
+             a phantom rerun-if-changed path dirties the build script on every cargo check"
+        );
+    }
+}
 
 #[test]
 fn should_stream_native_build_lifecycle_through_the_progress_recorder() {

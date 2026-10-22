@@ -207,9 +207,24 @@ fn required_check_steps_keep_their_bounded_contracts() {
         compile_command.contains("--test rest_api_tests"),
         "offline compile omits rest_api_tests"
     );
+    let timing_step = find_step_by_name(
+        &verification_steps,
+        "Configure step timing attribution",
+    );
     assert!(
-        compile_command.contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
-        "native build progress file is not exported for CI tailing"
+        run_text_of(timing_step, "ci-timing").contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
+        "native build progress file is not exported job-wide before the first cargo step"
+    );
+    // The runtime-integration build script declares rerun-if-env-changed for
+    // the progress file variable: exporting it in the compile step alone flips
+    // the build script fingerprint and re-runs the script in every later cargo
+    // step of the job (one of two measured-rebuild triggers; the other, a
+    // phantom rerun-if-changed path, is removed in that build script). The
+    // job-wide export above keeps the value constant, and the compile step
+    // must keep hands off so the flip cannot return.
+    assert!(
+        !compile_command.contains("export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
+        "the compile step must not re-export the native build progress file variable"
     );
     assert!(
         compile_command.contains(r#"tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE""#),
@@ -233,6 +248,62 @@ fn required_check_steps_keep_their_bounded_contracts() {
     assert!(
         run_text_of(swiftpm_timestamp_step, "swiftpm-timestamp").contains("touch -c"),
         "SwiftPM timestamp reuse does not touch restored artifacts"
+    );
+}
+
+#[test]
+fn offline_seatbelt_proof_is_fail_closed_and_contract_exact() {
+    // The macOS physics proof (issue #1333) may never pass while silently
+    // skipping its own work: pipefail keeps a failing sandboxed cargo red,
+    // the deferral marker routes the harness-internal denial to the outer
+    // profile (macOS forbids applying a second profile from inside one),
+    // and the execution-parity assertion fails the check when the sandboxed
+    // run executed fewer test binaries than the unsandboxed step.
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+
+    let seatbelt_step = find_step_by_name(
+        &verification_steps,
+        "Re-run offline lane tests under the network-denying seatbelt",
+    );
+    let seatbelt_text = run_text_of(seatbelt_step, "seatbelt-proof");
+    assert!(
+        seatbelt_text.contains("set -o pipefail"),
+        "the seatbelt proof can hide a failing sandboxed cargo behind tee"
+    );
+    assert!(
+        seatbelt_text.contains("ASTRONOMICAL_NETWORK_DENIAL_DEFERRED_TO_SEATBELT=1"),
+        "the seatbelt proof no longer defers the harness-internal network denial"
+    );
+    assert!(
+        seatbelt_text.contains("offline-sandbox.sb") && seatbelt_text.contains("execution_parity"),
+        "the seatbelt proof lost its profile or its execution-parity assertion"
+    );
+
+    // The dependency-notices lane separates verification from generation:
+    // pull requests carry the strict freshness contract (humans must commit
+    // the regenerated file; bots refresh in place because they cannot
+    // commit), and only default-branch and dispatch builds generate.
+    let verify_notices_step =
+        find_step_by_name(&verification_steps, "Verify Rust dependency notices");
+    assert!(
+        required_text(verify_notices_step, "if", "notices-verify-gate")
+            .contains("github.event_name == 'pull_request'"),
+        "the notices freshness contract left the pull-request lane"
+    );
+    assert!(
+        run_text_of(verify_notices_step, "notices-verify")
+            .contains("cargo xtask notices --check"),
+        "the pull-request notices step must verify, not generate"
+    );
+    let refresh_notices_step = find_step_by_name(
+        &verification_steps,
+        "Refresh Rust dependency notices for the bundled app",
+    );
+    assert!(
+        required_text(refresh_notices_step, "if", "notices-refresh-gate")
+            .contains("github.event_name != 'pull_request'"),
+        "notices generation runs outside default-branch and dispatch builds"
     );
 }
 

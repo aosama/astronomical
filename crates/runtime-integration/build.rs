@@ -115,7 +115,14 @@ fn emit_native_source_rerun_contracts(
 ) {
     for source_path in [
         manifest_directory.join("build.rs"),
-        manifest_directory.join("build_bindings.rs"),
+        // build_bindings.rs is deliberately absent: it was removed with the
+        // mlx-c-rust bindings skeleton, and a rerun-if-changed path that does
+        // not exist dirties this build script at EVERY cargo freshness check
+        // (cargo reports "the file is missing"), re-running the script and
+        // rebuilding runtime-integration and its dependents in every later
+        // cargo invocation — a measured 25s rebuild per CI step while the
+        // phantom watch was live. The offline wiring contract now fails if a
+        // watched path does not exist.
         manifest_directory.join("build_native_compile.rs"),
         manifest_directory.join("build_native_linking.rs"),
         manifest_directory.join("build_native_store.rs"),
