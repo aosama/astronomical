@@ -123,6 +123,13 @@ jobs:
                 },
               });
 
+              // Stale closing promises (a closing keyword on an
+              // already-closed issue) are advisory: the linkage itself is
+              // well-formed, so they annotate the run without failing it.
+              for (const complianceWarning of compliance.warnings) {
+                core.warning(complianceWarning);
+              }
+
               await publishComplianceStatus("success", `Pull request links issue #${compliance.issueNumber}`);
               core.info(
                 `[pr-issue-compliance] status=success issues=${compliance.linkedIssues.map((linked) => linked.issueNumber).join(",")}`,

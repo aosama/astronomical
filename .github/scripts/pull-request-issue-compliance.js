@@ -11,8 +11,11 @@ function isAutomatedPullRequest(pullRequestAuthorLogin) {
     return /\[bot\]$/i.test(authorLoginText);
 }
 
+// Blank out HTML comments while preserving every newline, so reported line
+// numbers stay body-absolute even when a comment spans several lines, and
+// commented-out references can never be scanned as prose.
 function removeHtmlComments(markdown) {
-    return markdown.replace(/<!--[\s\S]*?-->/g, "");
+    return markdown.replace(/<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\n]/g, ""));
 }
 
 function escapeRegExp(text) {
@@ -20,10 +23,41 @@ function escapeRegExp(text) {
 }
 
 // GitHub's documented closing-keyword set (case-insensitive, optional colon,
-// as in `Resolves: #42`) plus this repository's `Refs` for work that must
-// stay open after the pull request merges.
-const CLOSING_KEYWORD_PATTERN =
-    "close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved|refs";
+// as in `Resolves: #42`). Only these keywords make GitHub close an issue at
+// merge time, so only they claim closing semantics.
+const GITHUB_CLOSING_KEYWORD_PATTERN =
+    "close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved";
+// This repository additionally accepts `Refs` for work that must stay open
+// after the pull request merges. It shares the acceptance alternation but is
+// classified as its own `reference` kind below, so it never triggers the
+// stale-closing warning and never implies merge-time auto-close.
+const CLOSING_KEYWORD_PATTERN = `${GITHUB_CLOSING_KEYWORD_PATTERN}|refs`;
+const GITHUB_CLOSING_KEYWORD_ONLY_PATTERN =
+    new RegExp(`^(?:${GITHUB_CLOSING_KEYWORD_PATTERN})$`, "i");
+
+// Context phrases name relationships that are real but not closing: an
+// umbrella or epic that stays open after this pull request merges, a parent
+// that tracks this work, related context. GitHub only closes an issue through
+// a closing keyword, so requiring one on every `#N` forced writers to
+// rephrase natural sentences like `Resolves #1426 (part of the #1428
+// umbrella)`; a context phrase satisfies the linkage contract instead.
+const CONTEXT_KEYWORD_PATTERN =
+    "part of|tracked by|works toward|contributes to|belongs to|relates to|parent issue|umbrella|epic|see also";
+
+// A short article may sit between a context phrase and its designator, as in
+// `part of the #1428 umbrella`. The filler belongs to the context branch of
+// the reference pattern only: GitHub's closing syntax requires the designator
+// to follow the keyword directly, so widening `Fixes #N` with articles would
+// accept bodies GitHub will not auto-close.
+const CONTEXT_ARTICLE_FILLER_PATTERN = "(?:[ \\t]+(?:the|this|that|these|those))?";
+// A captured context relationship may carry the trailing article; trimming
+// keeps reported relationships as the bare phrases.
+const CONTEXT_ARTICLE_FILLER_TRIM_PATTERN = /[ \t]+(?:the|this|that|these|those)$/i;
+
+// Issues labeled `umbrella` or `epic` are coordination containers by
+// definition, so a bare mention of one already states the relationship and is
+// accepted as a context reference without any phrase.
+const UMBRELLA_LABEL_PATTERN = /^(?:umbrella|epic)$/i;
 
 // A designator is either `#N` or a same-repository issue URL, because GitHub
 // closes the issue through the URL exactly like the shorthand. Foreign-repo
@@ -36,7 +70,7 @@ function issueDesignatorPattern(repositoryFullName) {
 
 function createIssueReferencePattern(repositoryFullName) {
     return new RegExp(
-        `\\b(${CLOSING_KEYWORD_PATTERN}):?[ \\t]+(?:${issueDesignatorPattern(repositoryFullName)})`,
+        `\\b(${CLOSING_KEYWORD_PATTERN}|(?:${CONTEXT_KEYWORD_PATTERN})${CONTEXT_ARTICLE_FILLER_PATTERN}):?[ \\t]+(?:${issueDesignatorPattern(repositoryFullName)})`,
         "gi",
     );
 }
@@ -51,9 +85,42 @@ function createGroupedContinuationPattern(repositoryFullName) {
     );
 }
 
+// Line numbers are reported against the comment-stripped search text so a
+// failure can point at the exact offending reference instead of a whole-body
+// verdict (issue #1450).
+function createLineNumberLookup(searchText) {
+    const newlineIndexes = [];
+    for (let characterIndex = 0; characterIndex < searchText.length; characterIndex += 1) {
+        if (searchText[characterIndex] === "\n") {
+            newlineIndexes.push(characterIndex);
+        }
+    }
+    return function lineNumberAt(textIndex) {
+        let lowBound = 0;
+        let highBound = newlineIndexes.length;
+        while (lowBound < highBound) {
+            const middleIndex = Math.floor((lowBound + highBound) / 2);
+            if (newlineIndexes[middleIndex] < textIndex) {
+                lowBound = middleIndex + 1;
+            } else {
+                highBound = middleIndex;
+            }
+        }
+        return lowBound + 1;
+    };
+}
+
+function relationshipKind(relationshipText) {
+    if (GITHUB_CLOSING_KEYWORD_ONLY_PATTERN.test(relationshipText)) {
+        return "closing";
+    }
+    return relationshipText.toLowerCase() === "refs" ? "reference" : "context";
+}
+
 function findIssueReferences(searchText, repositoryFullName) {
     const referencePattern = createIssueReferencePattern(repositoryFullName);
     const groupedContinuationPattern = createGroupedContinuationPattern(repositoryFullName);
+    const lineNumberAt = createLineNumberLookup(searchText);
     const references = [];
     let searchStartIndex = 0;
 
@@ -64,14 +131,18 @@ function findIssueReferences(searchText, repositoryFullName) {
             break;
         }
 
-        const relationship = referenceMatch[1];
+        const rawRelationship = referenceMatch[1];
         // The designator pattern is an alternation, so exactly one of the two
         // capture groups matched.
         const referenceDesignatorText =
             referenceMatch[2] != null ? referenceMatch[2] : referenceMatch[3];
+        const relationship = rawRelationship.replace(CONTEXT_ARTICLE_FILLER_TRIM_PATTERN, "");
+        const referenceKind = relationshipKind(relationship);
         references.push({
             relationship,
+            kind: referenceKind,
             issueNumber: Number(referenceDesignatorText),
+            lineNumber: lineNumberAt(referenceMatch.index),
         });
         let groupEndIndex = referencePattern.lastIndex;
 
@@ -87,9 +158,16 @@ function findIssueReferences(searchText, repositoryFullName) {
             }
             const continuationDesignatorText =
                 continuationMatch[1] != null ? continuationMatch[1] : continuationMatch[2];
+            // The match starts at the `,`/`and` joiner, which can sit on the
+            // previous line when a grouped list wraps; the designator's own
+            // index is what the reported line number must point at.
+            const continuationDesignatorIndex =
+                continuationMatch.index + continuationMatch[0].length - continuationDesignatorText.length;
             references.push({
                 relationship,
+                kind: referenceKind,
                 issueNumber: Number(continuationDesignatorText),
+                lineNumber: lineNumberAt(continuationDesignatorIndex),
             });
             groupEndIndex = groupedContinuationPattern.lastIndex;
         }
@@ -113,17 +191,17 @@ function dedupeIssueReferences(references) {
 
 function findMentionedIssueNumbers(text) {
     const searchableText = text != null ? String(text) : "";
-    return [...new Set(
-        [...searchableText.matchAll(/#([1-9]\d*)\b/g)].map((match) => Number(match[1])),
-    )];
+    const lineNumberAt = createLineNumberLookup(searchableText);
+    return [...searchableText.matchAll(/#([1-9]\d*)\b/g)].map((match) => ({
+        issueNumber: Number(match[1]),
+        lineNumber: lineNumberAt(match.index),
+    }));
 }
 
 const SECTION_REFERENCE_FAILURE =
-    "The `## Linked issue` section must reference at least one issue, and every `#N` in the section must use a canonical keyword: `Fixes #N`, `Closes #N`, `Resolves #N`, or `Refs #N`. Grouped forms such as `Fixes #N and #M` are accepted.";
+    "The `## Linked issue` section must reference at least one issue, and every `#N` in the section must use a canonical closing keyword (`Fixes #N`, `Closes #N`, `Resolves #N`, `Refs #N`) or a context phrase (`part of #N`, `tracked by #N`, `umbrella #N`, `epic #N`). Grouped forms such as `Fixes #N and #M` are accepted.";
 const MISSING_SECTION_FAILURE =
-    "Add a `## Linked issue` section containing `Fixes #N` for implementation work or `Refs #N` for documentation, CI, and maintenance work; a bare `Fixes #N` line anywhere in the body is also accepted.";
-const AMBIGUOUS_BODY_FAILURE =
-    "Link every issue number mentioned in the pull request body with a canonical keyword: `Fixes #N`, `Closes #N`, `Resolves #N`, or `Refs #N`; grouped forms such as `Fixes #N and #M` are accepted.";
+    "Add a `## Linked issue` section containing `Fixes #N` for implementation work or `Refs #N` for documentation, CI, and maintenance work; context phrases such as `part of #N` are accepted when the issue stays open after this pull request merges; a bare `Fixes #N` line anywhere in the body is also accepted.";
 
 function extractLinkedIssue(pullRequestBody, repositoryFullName) {
     const bodyText = pullRequestBody != null ? String(pullRequestBody) : "";
@@ -151,57 +229,134 @@ function extractLinkedIssue(pullRequestBody, repositoryFullName) {
     }
 
     const commentsRemoved = removeHtmlComments(referenceSearchText);
-    const linkedReferences =
-        dedupeIssueReferences(findIssueReferences(commentsRemoved, repositoryFullName));
-    const referencedIssueNumbers = linkedReferences.map((reference) => reference.issueNumber);
-    // Every issue number mentioned in the searched text must carry a
-    // canonical keyword, so `Fixes #224 while #225 remains open` cannot
-    // smuggle an unlinked issue past the provenance contract. A slice
-    // legitimately touches several issues, so one or more canonical
-    // references are accepted and the first one is the primary linked issue.
-    const mentionedIssueNumbers = findMentionedIssueNumbers(commentsRemoved);
-    const everyMentionIsReferenced = mentionedIssueNumbers
-        .every((issueNumber) => referencedIssueNumbers.includes(issueNumber));
-    if (linkedReferences.length >= 1 && everyMentionIsReferenced) {
-        return linkedReferences;
+    const linkedReferences = findIssueReferences(commentsRemoved, repositoryFullName);
+    if (linkedReferences.length === 0) {
+        if (linkedIssueHeadingIndex !== -1) {
+            throw new Error(SECTION_REFERENCE_FAILURE);
+        }
+        throw new Error(MISSING_SECTION_FAILURE);
     }
-    if (linkedIssueHeadingIndex !== -1) {
-        throw new Error(SECTION_REFERENCE_FAILURE);
-    }
-    throw new Error(linkedReferences.length === 0 ? MISSING_SECTION_FAILURE : AMBIGUOUS_BODY_FAILURE);
+    return {
+        references: linkedReferences,
+        mentionedMentions: findMentionedIssueNumbers(commentsRemoved),
+        // Reported line numbers are body-absolute: the searched text starts
+        // one line after the heading, or at the body's first line when the
+        // heading is missing.
+        bodyLineOffset: linkedIssueHeadingIndex === -1 ? 0 : linkedIssueHeadingIndex + 1,
+    };
+}
+
+function issueLabelNames(loadedIssue) {
+    const labels = Array.isArray(loadedIssue?.labels) ? loadedIssue.labels : [];
+    return labels
+        .map((label) => (typeof label === "string" ? label : label?.name))
+        .filter((labelName) => typeof labelName === "string");
+}
+
+function isUmbrellaLikeIssue(loadedIssue) {
+    return issueLabelNames(loadedIssue).some((labelName) => UMBRELLA_LABEL_PATTERN.test(labelName));
+}
+
+function bareMentionFailure(bareMention, bodyLineOffset) {
+    const bodyLineNumber = bareMention.lineNumber + bodyLineOffset;
+    return [
+        `#${bareMention.issueNumber} on line ${bodyLineNumber} has no keyword — did you mean "Refs #${bareMention.issueNumber}"?`,
+        `A context phrase such as "part of #${bareMention.issueNumber}" also satisfies the contract when the issue stays open after this pull request merges.`,
+    ].join(" ");
 }
 
 async function validatePullRequestIssue({ pullRequestBody, repositoryFullName, loadIssue }) {
-    const linkedReferences = extractLinkedIssue(pullRequestBody, repositoryFullName);
+    const extraction = extractLinkedIssue(pullRequestBody, repositoryFullName);
+    const references = dedupeIssueReferences(extraction.references);
 
-    const issueUrlByIssueNumber = new Map();
-    for (const linkedReference of linkedReferences) {
-        let linkedIssue;
+    const loadedIssueByIssueNumber = new Map();
+    async function loadIssueOnce(issueNumber) {
+        if (loadedIssueByIssueNumber.has(issueNumber)) {
+            return loadedIssueByIssueNumber.get(issueNumber);
+        }
+        let loadedIssue;
         try {
-            linkedIssue = await loadIssue(linkedReference.issueNumber);
+            loadedIssue = await loadIssue(issueNumber);
         } catch (error) {
             if (error?.status === 404) {
-                throw new Error(`Issue #${linkedReference.issueNumber} does not exist in this repository.`);
+                throw new Error(`Issue #${issueNumber} does not exist in this repository.`);
             }
             throw error;
         }
-
-        if (linkedIssue.pull_request !== undefined) {
-            throw new Error(`#${linkedReference.issueNumber} identifies a pull request, not an issue.`);
-        }
-        issueUrlByIssueNumber.set(linkedReference.issueNumber, linkedIssue.html_url);
+        loadedIssueByIssueNumber.set(issueNumber, loadedIssue);
+        return loadedIssue;
     }
 
-    const linkedIssues = linkedReferences.map((linkedReference) => ({
-        issueNumber: linkedReference.issueNumber,
-        relationship: linkedReference.relationship,
-        issueUrl: issueUrlByIssueNumber.get(linkedReference.issueNumber),
+    for (const reference of references) {
+        const referencedIssue = await loadIssueOnce(reference.issueNumber);
+        if (referencedIssue.pull_request !== undefined) {
+            throw new Error(`#${reference.issueNumber} identifies a pull request, not an issue.`);
+        }
+    }
+
+    // Closing references state merge-time behavior; context references and
+    // umbrella-labeled bare mentions are meaningful relationships that must
+    // not force a closing keyword onto a naturally written sentence
+    // (issue #1450).
+    const referencedIssueNumbers = new Set(references.map((reference) => reference.issueNumber));
+    const classifiedBareIssueNumbers = new Set();
+    const promotedUmbrellaReferences = [];
+    for (const bareMention of extraction.mentionedMentions) {
+        if (referencedIssueNumbers.has(bareMention.issueNumber)
+            || classifiedBareIssueNumbers.has(bareMention.issueNumber)) {
+            continue;
+        }
+        classifiedBareIssueNumbers.add(bareMention.issueNumber);
+        const mentionedIssue = await loadIssueOnce(bareMention.issueNumber);
+        if (mentionedIssue.pull_request === undefined && isUmbrellaLikeIssue(mentionedIssue)) {
+            promotedUmbrellaReferences.push({
+                relationship: "umbrella",
+                kind: "context",
+                issueNumber: bareMention.issueNumber,
+                lineNumber: bareMention.lineNumber,
+            });
+            continue;
+        }
+        throw new Error(bareMentionFailure(bareMention, extraction.bodyLineOffset));
+    }
+
+    // A closing keyword pointed at an already-closed issue cannot close
+    // anything at merge time, which usually signals a stale template or a
+    // copy-pasted body; that is a warning, not a rejection, because the
+    // linkage itself is still well-formed.
+    const warnings = [];
+    for (const reference of references) {
+        if (reference.kind !== "closing") {
+            continue;
+        }
+        const referencedIssue = loadedIssueByIssueNumber.get(reference.issueNumber);
+        if (referencedIssue.state === "closed") {
+            warnings.push(
+                `#${reference.issueNumber} on line ${reference.lineNumber + extraction.bodyLineOffset} uses the closing keyword \`${reference.relationship}\`, but issue #${reference.issueNumber} is already closed; if this pull request does not close it, a context phrase such as "part of #${reference.issueNumber}" states the relationship without the stale closing promise.`,
+            );
+        }
+    }
+
+    const linkedIssues = [...references, ...promotedUmbrellaReferences].map((reference) => ({
+        issueNumber: reference.issueNumber,
+        relationship: reference.relationship,
+        kind: reference.kind,
+        issueUrl: loadedIssueByIssueNumber.get(reference.issueNumber).html_url,
     }));
+    // The primary linked issue is the first closing reference when one
+    // exists, because it names the issue this pull request actually closes;
+    // a `Refs` reference is next, and a context-only body still links its
+    // first issue for provenance.
+    const primaryLinkedIssue =
+        linkedIssues.find((linked) => linked.kind === "closing")
+        ?? linkedIssues.find((linked) => linked.kind === "reference")
+        ?? linkedIssues[0];
     return {
-        issueNumber: linkedIssues[0].issueNumber,
-        relationship: linkedIssues[0].relationship,
-        issueUrl: linkedIssues[0].issueUrl,
+        issueNumber: primaryLinkedIssue.issueNumber,
+        relationship: primaryLinkedIssue.relationship,
+        issueUrl: primaryLinkedIssue.issueUrl,
         linkedIssues,
+        warnings,
     };
 }
 
