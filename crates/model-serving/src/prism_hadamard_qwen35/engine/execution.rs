@@ -12,8 +12,12 @@ mod sampling;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_mlx_c_rust::MlxArray;
 
+use crate::PersistentPromptCacheBlockKey;
+use crate::PersistentPromptCacheDiskStore;
+use crate::PersistentPromptCacheDiskStoreConfig;
 use crate::Qwen3_5InferenceRequest;
 use crate::Qwen3_5ThinkingBudgetState;
+use crate::persistent_cache::PersistentPromptCacheCounters;
 use crate::prism_hadamard_qwen35::artifacts::ValidatedFoldedPack;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
@@ -27,6 +31,9 @@ pub struct PrismHadamardQwen35PendingStartup {
     pub allocator_cache_memory_limit_bytes: usize,
     pub maximum_context_tokens: u32,
     pub prompt_processing_chunk_tokens: u32,
+    pub prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+    pub configured_prompt_cache_block_token_count: Option<usize>,
+    pub prompt_cache_common_prefix_stride_blocks: u32,
     pub performance_attribution: PerformanceAttribution,
     pub performance_attribution_log: PerformanceAttributionLog,
     pub attribution_model_id: String,
@@ -43,6 +50,10 @@ pub struct PrismHadamardQwen35InferenceExecution {
     pub(super) minimum_ceiling_bytes: u64,
     pub(super) maximum_context_tokens: u32,
     prompt_processing_chunk_tokens: u32,
+    pub(super) persistent_prompt_cache: Option<std::sync::Arc<PersistentPromptCacheDiskStore>>,
+    pub(super) persistent_prompt_cache_disk_store_config:
+        Option<PersistentPromptCacheDiskStoreConfig>,
+    pub(super) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
     pub(super) performance_attribution_log: PerformanceAttributionLog,
     pub(super) attribution_model_id: Option<String>,
     pub(super) attribution_model_revision: Option<String>,
@@ -52,7 +63,16 @@ pub struct PrismHadamardQwen35InferenceExecution {
 pub(super) struct PrismHadamardQwen35ActiveGeneration {
     pub(super) request_id: RequestId,
     pub(super) remaining_output_tokens: u32,
+    /// The full prompt token ids, so capture can name blocks by their
+    /// absolute token range even after `remaining_prompt_token_ids` drains.
+    pub(super) prompt_token_ids: Vec<u32>,
     pub(super) remaining_prompt_token_ids: Vec<u32>,
+    /// Absolute count of prompt tokens the forward pass has already covered,
+    /// including any restored prefix.
+    pub(super) processed_prompt_token_count: u32,
+    /// The prompt-prefix token count the persistent cache restored; reported
+    /// as reused prompt work on every prefill progress event.
+    pub(super) cached_token_count: u32,
     pub(super) generation_state: StraightGenerationState,
     /// The next sampled token as a lazy `[1, 1]` device array whose graph
     /// is already submitted, or `None` once generation finished. Its value
@@ -65,6 +85,9 @@ pub(super) struct PrismHadamardQwen35ActiveGeneration {
     pub(super) thinking_budget: Qwen3_5ThinkingBudgetState,
     pub(super) structured_generation:
         Option<crate::structured_generation::StructuredTokenConstraint>,
+    /// The last block this generation durably published; the parent of the
+    /// next capture's key chain.
+    pub(super) last_published_block_key: Option<PersistentPromptCacheBlockKey>,
     pub(super) performance_attribution: PerformanceAttribution,
 }
 
@@ -96,6 +119,11 @@ impl PrismHadamardQwen35InferenceExecution {
         let allocator_cache_bytes = pending_startup.allocator_cache_memory_limit_bytes as u64;
         let maximum_context_tokens = pending_startup.maximum_context_tokens;
         let prompt_processing_chunk_tokens = pending_startup.prompt_processing_chunk_tokens.max(1);
+        let PrismHadamardQwen35PendingStartup {
+            prompt_cache_disk_store_config,
+            ..
+        } = &pending_startup;
+        let prompt_cache_disk_store_config = prompt_cache_disk_store_config.clone();
         Self {
             pending_startup: Some(pending_startup),
             model: None,
@@ -105,6 +133,9 @@ impl PrismHadamardQwen35InferenceExecution {
             minimum_ceiling_bytes: 1,
             maximum_context_tokens,
             prompt_processing_chunk_tokens,
+            persistent_prompt_cache: None,
+            persistent_prompt_cache_disk_store_config: prompt_cache_disk_store_config,
+            persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
             performance_attribution_log: PerformanceAttributionLog::disabled(),
             attribution_model_id: None,
             attribution_model_revision: None,

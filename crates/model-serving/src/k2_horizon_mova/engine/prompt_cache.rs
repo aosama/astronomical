@@ -16,8 +16,7 @@ use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
     PersistentPromptCacheDiskStoreConfig, PersistentPromptCacheModelContract,
-    PersistentPromptCacheModelContractError, PersistentPromptCachePrefixLookupResult,
-    PersistentPromptCachePublicationOutcome,
+    PersistentPromptCachePrefixLookupResult, PersistentPromptCachePublicationOutcome,
 };
 
 /// Opens the SSD store for one loaded K2 Horizon MoVA revision.
@@ -37,7 +36,7 @@ pub(super) fn open_prompt_cache_store(
                 reason: format!("K2 Horizon MoVA prompt-cache layout is invalid: {layout_error}"),
             }
         })?;
-    let model_contract = resolve_quota_bounded_prompt_cache_contract(
+    let model_contract = crate::persistent_cache::resolve_quota_bounded_prompt_cache_contract(
         model_id,
         model_revision,
         decoder_cache_layout,
@@ -61,46 +60,6 @@ pub(super) fn open_prompt_cache_store(
             reason: format!("K2 Horizon MoVA prompt-cache store could not open: {store_error}"),
         })?;
     Ok(Arc::new(persistent_prompt_cache))
-}
-
-fn resolve_quota_bounded_prompt_cache_contract(
-    model_id: &str,
-    model_revision: &str,
-    decoder_cache_layout: crate::DecoderCacheLayout,
-    model_maximum_context_token_count: usize,
-    effective_mlx_memory_ceiling_bytes: u64,
-    global_ssd_quota_bytes: u64,
-    configured_block_token_count: Option<usize>,
-    common_prefix_checkpoint_stride_blocks: u32,
-) -> Result<PersistentPromptCacheModelContract, PersistentPromptCacheModelContractError> {
-    let minimum_cacheable_context_token_count = configured_block_token_count.unwrap_or(1).max(1);
-    let mut cacheable_context_token_count = model_maximum_context_token_count;
-    loop {
-        match PersistentPromptCacheModelContract::resolve(
-            model_id.to_owned(),
-            model_revision.to_owned(),
-            decoder_cache_layout.clone(),
-            cacheable_context_token_count,
-            effective_mlx_memory_ceiling_bytes,
-            global_ssd_quota_bytes,
-            configured_block_token_count,
-            common_prefix_checkpoint_stride_blocks,
-        ) {
-            Ok(model_contract) => return Ok(model_contract),
-            Err(
-                quota_error @ (PersistentPromptCacheModelContractError::ConfiguredBlockChainExceedsSsdQuota { .. }
-                | PersistentPromptCacheModelContractError::BlockFilesExceedSsdQuota { .. }),
-            ) => {
-                let reduced_context_token_count = (cacheable_context_token_count / 2)
-                    .max(minimum_cacheable_context_token_count);
-                if reduced_context_token_count == cacheable_context_token_count {
-                    return Err(quota_error);
-                }
-                cacheable_context_token_count = reduced_context_token_count;
-            }
-            Err(contract_error) => return Err(contract_error),
-        }
-    }
 }
 
 pub(super) fn lookup_prompt_prefix(

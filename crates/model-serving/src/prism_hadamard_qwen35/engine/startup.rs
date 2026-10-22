@@ -5,7 +5,11 @@ use std::path::Path;
 
 use thiserror::Error;
 
+use astronomical_config::PromptCacheConfig;
+use astronomical_ipc_protocol::WorkerChunkingConfiguration;
+
 use crate::MlxInferenceEngine;
+use crate::PersistentPromptCacheDiskStoreConfig;
 use crate::Qwen3_5GenerationProcessor;
 use crate::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use crate::prism_hadamard_qwen35::engine::{
@@ -21,6 +25,9 @@ pub struct PrismHadamardQwen35ServingSettings {
     pub maximum_output_tokens: Option<u32>,
     pub prompt_processing_chunk_tokens: u32,
     pub enable_thinking: bool,
+    pub chunking: Option<WorkerChunkingConfiguration>,
+    pub persistent_prompt_cache_enabled: bool,
+    pub prompt_cache_config: Option<PromptCacheConfig>,
     pub performance_attribution_log_path: Option<std::path::PathBuf>,
 }
 
@@ -116,12 +123,48 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         }
         None => PerformanceAttributionLog::disabled(),
     };
+    let prompt_cache_disk_store_config = serving_settings
+        .prompt_cache_config
+        .as_ref()
+        .filter(|_| serving_settings.persistent_prompt_cache_enabled)
+        .map(|prompt_cache_config| {
+            let per_model_prompt_cache_config =
+                prompt_cache_config.for_model(&model_id, &model_revision);
+            PersistentPromptCacheDiskStoreConfig::new(
+                per_model_prompt_cache_config
+                    .active_model_prompt_cache_directory()
+                    .clone(),
+                per_model_prompt_cache_config
+                    .global_prompt_cache_root_directory()
+                    .clone(),
+                per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
+            )
+        });
+    // The durable cache block size and checkpoint stride are prompt-cache
+    // configuration, not the prefill chunk size: they are contract identity
+    // (the storage fingerprint embeds the block count) and must satisfy the
+    // layout's persistence alignment, which an arbitrary chunk size does not.
+    let configured_prompt_cache_block_token_count =
+        serving_settings.chunking.as_ref().and_then(|chunking| {
+            chunking
+                .prompt_cache_block_tokens
+                .map(|block_token_count| block_token_count as usize)
+        });
+    let prompt_cache_common_prefix_stride_blocks = serving_settings
+        .chunking
+        .as_ref()
+        .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks)
+        .unwrap_or(1)
+        .max(1);
     let pending_startup = PrismHadamardQwen35PendingStartup {
         validated_pack: pack,
         effective_mlx_memory_ceiling_bytes,
         allocator_cache_memory_limit_bytes,
         maximum_context_tokens: context_window,
         prompt_processing_chunk_tokens: serving_settings.prompt_processing_chunk_tokens,
+        prompt_cache_disk_store_config,
+        configured_prompt_cache_block_token_count,
+        prompt_cache_common_prefix_stride_blocks,
         performance_attribution,
         performance_attribution_log,
         attribution_model_id: model_id,
