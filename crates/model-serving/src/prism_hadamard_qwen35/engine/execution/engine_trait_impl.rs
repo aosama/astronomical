@@ -295,9 +295,10 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             });
         }
         self.take_active_and_record_generation_attribution();
+        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         Ok(GenerationFinalization::new(
             Some(ExpertMemoryMode::Resident),
-            None,
+            mlx_memory_telemetry,
             None,
         ))
     }
@@ -325,12 +326,13 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                     ),
                 })?;
         }
+        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         Ok(MlxMemoryLimitAdjustment::new(
             self.ceiling_bytes,
             self.allocator_cache_bytes,
             self.minimum_ceiling_bytes,
             ExpertMemoryMode::Resident,
-            None,
+            mlx_memory_telemetry,
         ))
     }
 }
