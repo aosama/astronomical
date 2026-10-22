@@ -69,7 +69,8 @@ pub fn persistent_prompt_cache_clamped_prefill_chunk_end(
             requested_prefill_chunk_end,
             persistent_prompt_cache_block_token_count,
         )
-        .len() <= 1
+        .len()
+            <= 1
         {
             requested_prefill_chunk_end
         } else {
