@@ -6,7 +6,7 @@
 //! vocabulary separates *what admission decided from* (the projection and the
 //! source of its reserve) from *how evidence is learned* (the guard).
 
-use crate::memory::ExpertReclamationPlan;
+use crate::reclamation::ExpertReclamationPlan;
 
 /// Which evidence level supplied a forward admission's transient reserve.
 ///

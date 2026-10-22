@@ -6,12 +6,13 @@
 //! legal or the request must fail. Reclamation arithmetic lives in
 //! `reclamation.rs`; this module only decides the retry path.
 
-use super::{
-    AdaptiveRamGrowthExecutionProfile, MemoryBoundary,
+use crate::budget::adaptive_growth::AdaptiveRamGrowthExecutionProfile;
+use crate::reclamation::{
     expert_reclamation_bytes_to_fit_fixed_forward,
     fixed_forward_workspace_after_allocation_failure,
     should_retry_fixed_forward_after_expert_reclamation,
 };
+use crate::vocabulary::MemoryBoundary;
 
 /// Stateless policy boundary used before and after the executor reclaims experts.
 pub struct ForwardRecoveryPolicy;

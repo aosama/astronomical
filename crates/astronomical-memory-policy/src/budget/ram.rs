@@ -42,7 +42,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::memory::MemoryPhase;
+use crate::phase::MemoryPhase;
 
 /// Bootstrap context-window reserve before any live measurement exists
 /// (1 GB on the user-facing sticker scale, 2³⁰ bytes).
@@ -54,7 +54,7 @@ pub(crate) const CONTEXT_TOKEN_BUCKET_WIDTH: u64 = 1_024;
 /// Extra safety margin applied on top of measured context-window need.
 const CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES: u64 = 64_000_000;
 
-use crate::memory::budget::ram_values::{
+use crate::budget::ram_values::{
     MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
 };
 
