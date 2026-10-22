@@ -28,40 +28,37 @@ pub mod sorted_expert_weighted_sum_probe;
 mod kernel_capability_tests;
 
 #[cfg(feature = "direct-mlx")]
-pub use fused_expert_decode_probe::FusedQuantizedExpertDecodeProbe;
-#[cfg(feature = "direct-mlx")]
-pub use fused_jangtq2_gathered_projection_probe::FusedJangtq2GatheredProjectionProbe;
-#[cfg(feature = "direct-mlx")]
-pub use gated_delta_probes::{
-    GatedDeltaBoundaryCheckpointProbe, GatedDeltaSequenceProbe, GdnDecodePreworkProbe,
-};
-#[cfg(feature = "direct-mlx")]
-pub use prism_hadamard_probes::PrismHadamardSignedRotationProbe;
-#[cfg(feature = "direct-mlx")]
 pub use sorted_expert_weighted_sum_probe::SortedExpertWeightedSumProbe;
 
-/// One Astronomical custom Metal kernel whose dispatch can fall back to a
-/// public MLX API. Kernel sources are fixed constants, so a verdict depends
-/// only on the GPU and operating system, never on the loaded model.
+/// Opaque identifier for one Astronomical custom Metal kernel family.
+///
+/// The identifier is deliberately family-agnostic: this module knows nothing
+/// about which families exist. Each family's own probe module defines its
+/// identifier as an associated constant and supplies its probes through one
+/// registration call at worker start, so adding a family kernel touches only
+/// that family's code. The wrapped string is the registry key verdicts are
+/// stored under and must be unique across families.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum CustomMetalKernelFamily {
-    /// Sorted mixture-of-experts weighted reduction, shared by Qwen families.
-    SortedExpertWeightedSum,
-    /// Fused single-token quantized expert decode for K2 Horizon MoVA.
-    FusedQuantizedExpertDecode,
-    /// Fused single-token jangtq2 codebook gathered projection: decode and
-    /// multiply straight from packed codes.
-    FusedJangtq2GatheredProjection,
-    /// Fused Qwen3.5 gated-delta sequence recurrence.
-    GatedDeltaSequence,
-    /// Boundary-checkpoint variant of the fused gated-delta recurrence.
-    GatedDeltaBoundaryCheckpoint,
-    /// Fused gated-delta decode prework: convolution window, conv1d, SiLU,
-    /// q/k/v split, RMS norms, and scalar scales in one launch.
-    GdnDecodePrework,
-    /// The folded ternary family's forward Hadamard rotation (float32 cast,
-    /// sign flip, block Hadamard, cast back) in one launch.
-    PrismHadamardSignedRotation,
+pub struct CustomMetalKernelFamily(&'static str);
+
+impl CustomMetalKernelFamily {
+    /// Creates the opaque identifier for one custom kernel family.
+    #[must_use]
+    pub const fn new(family_registry_key: &'static str) -> Self {
+        Self(family_registry_key)
+    }
+
+    /// Returns the stable registry key of this family.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        self.0
+    }
+}
+
+impl std::fmt::Display for CustomMetalKernelFamily {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
 }
 
 /// Why one custom kernel family cannot run on this GPU.
@@ -93,7 +90,8 @@ pub enum CustomKernelVerdict {
 ///
 /// Implementations compile the kernel and execute a representative launch on
 /// minimal inputs, validating the output against fixed deterministic expected
-/// values. The runtime binding lives inside each implementation so offline /// tests can drive the capability owner with fake probes.
+/// values. The runtime binding lives inside each implementation so offline
+/// tests can drive the capability owner with fake probes.
 pub trait CustomMetalKernelProbe {
     fn family(&self) -> CustomMetalKernelFamily;
 
@@ -182,7 +180,15 @@ impl WorkerKernelCapabilities {
                     }),
                 },
             );
-            verdicts.insert(probe.family(), verdict);
+            // A colliding registry key would silently let one family's
+            // verdict stand in for another's — a fail-open outcome that
+            // defeats the fail-closed rule — so registration refuses it.
+            if verdicts.insert(probe.family(), verdict).is_some() {
+                panic!(
+                    "duplicate custom kernel family registry key: {}",
+                    probe.family()
+                );
+            }
         }
         Self { verdicts }
     }
@@ -212,8 +218,14 @@ impl WorkerKernelCapabilities {
     pub fn with_forced_verdicts_for_tests(
         forced_verdicts: impl IntoIterator<Item = (CustomMetalKernelFamily, CustomKernelVerdict)>,
     ) -> Self {
+        let mut verdict_map = HashMap::new();
+        for (family, verdict) in forced_verdicts {
+            if verdict_map.insert(family, verdict).is_some() {
+                panic!("duplicate forced custom kernel family registry key: {family}");
+            }
+        }
         Self {
-            verdicts: forced_verdicts.into_iter().collect(),
+            verdicts: verdict_map,
         }
     }
 }
@@ -262,24 +274,21 @@ pub fn worker_process_kernel_capabilities(
         if let Some(forced_verdicts) = FORCED_WORKER_VERDICTS_FOR_TESTS.get() {
             return forced_verdicts.clone();
         }
-        let sorted_expert_weighted_sum_probe = SortedExpertWeightedSumProbe::new(runtime);
-        let fused_expert_decode_probe = FusedQuantizedExpertDecodeProbe::new(runtime);
-        let fused_jangtq2_gathered_projection_probe =
-            FusedJangtq2GatheredProjectionProbe::new(runtime);
-        let gated_delta_probe = GatedDeltaSequenceProbe::new(runtime);
-        let gated_delta_checkpoint_probe = GatedDeltaBoundaryCheckpointProbe::new(runtime);
-        let gdn_decode_prework_probe = GdnDecodePreworkProbe::new(runtime);
-        let prism_hadamard_signed_rotation_probe = PrismHadamardSignedRotationProbe::new(runtime);
+        // One registration line per family: each family module owns its
+        // identifier constants and its probes, and this list only wires
+        // those supplies into the once-per-process probe run.
+        let mut family_probes: Vec<Box<dyn CustomMetalKernelProbe + '_>> = Vec::new();
+        family_probes.extend(sorted_expert_weighted_sum_probe::capability_probes(runtime));
+        family_probes.extend(fused_expert_decode_probe::capability_probes(runtime));
+        family_probes.extend(fused_jangtq2_gathered_projection_probe::capability_probes(
+            runtime,
+        ));
+        family_probes.extend(gated_delta_probes::capability_probes(runtime));
+        family_probes.extend(prism_hadamard_probes::capability_probes(runtime));
+        let family_probe_references: Vec<&dyn CustomMetalKernelProbe> =
+            family_probes.iter().map(|probe| probe.as_ref()).collect();
         WorkerKernelCapabilities::probe_custom_kernels(
-            &[
-                &sorted_expert_weighted_sum_probe,
-                &fused_expert_decode_probe,
-                &fused_jangtq2_gathered_projection_probe,
-                &gated_delta_probe,
-                &gated_delta_checkpoint_probe,
-                &gdn_decode_prework_probe,
-                &prism_hadamard_signed_rotation_probe,
-            ],
+            &family_probe_references,
             performance_attribution,
         )
     })

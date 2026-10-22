@@ -53,7 +53,7 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
     let forced_demotion_description = "forced demotion for the serving fallback journey";
     astronomical_model_serving::WorkerKernelCapabilities::with_forced_verdicts_for_tests([
         (
-            CustomMetalKernelFamily::SortedExpertWeightedSum,
+            CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
             CustomKernelVerdict::Unsupported(
                 astronomical_model_serving::KernelUnsupportedReason::Compilation {
                     description: forced_demotion_description.to_owned(),
@@ -61,7 +61,7 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
             ),
         ),
         (
-            CustomMetalKernelFamily::GatedDeltaSequence,
+            CustomMetalKernelFamily::GATED_DELTA_SEQUENCE,
             CustomKernelVerdict::Unsupported(
                 astronomical_model_serving::KernelUnsupportedReason::Execution {
                     description: forced_demotion_description.to_owned(),
@@ -69,7 +69,7 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
             ),
         ),
         (
-            CustomMetalKernelFamily::GatedDeltaBoundaryCheckpoint,
+            CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT,
             CustomKernelVerdict::Unsupported(
                 astronomical_model_serving::KernelUnsupportedReason::OutputMismatch {
                     description: forced_demotion_description.to_owned(),

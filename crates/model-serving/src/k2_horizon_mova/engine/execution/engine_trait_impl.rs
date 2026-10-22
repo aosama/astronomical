@@ -77,7 +77,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
         let kernel_capabilities =
             crate::worker_process_kernel_capabilities(&runtime, &mut performance_attribution);
         let sorted_expert_reduction_kernel = if kernel_capabilities
-            .is_custom_kernel_supported(CustomMetalKernelFamily::SortedExpertWeightedSum)
+            .is_custom_kernel_supported(CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM)
         {
             Some(crate::sorted_expert_weighted_sum_kernel().map_err(|error| {
                 InferenceEngineError::Fatal {
@@ -91,7 +91,7 @@ impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
         };
         let fused_expert_decode_kernels = if pending.fused_expert_decode_enabled
             && kernel_capabilities
-                .is_custom_kernel_supported(CustomMetalKernelFamily::FusedQuantizedExpertDecode)
+                .is_custom_kernel_supported(CustomMetalKernelFamily::FUSED_QUANTIZED_EXPERT_DECODE)
         {
             Some(
                 FusedExpertDecodeKernels::new().map_err(|error| InferenceEngineError::Fatal {
