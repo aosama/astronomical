@@ -83,6 +83,9 @@ base64.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 fs4.workspace = true
+# Resolution-only dependency: it pins the idna Unicode backend for the
+# reqwest → url → idna chain above; see the workspace entry (issue #606).
+idna_adapter.workspace = true
 image.workspace = true
 libc.workspace = true
 reqwest.workspace = true
