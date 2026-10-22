@@ -84,7 +84,7 @@ export function bootChatClient(): AppShell {
   });
 
   const sidebar = new SidebarView({
-    newChatButton: requireElement<HTMLButtonElement>("#new-chat"),
+    newChatButton: requireElement<HTMLButtonElement>('[data-testid="sidebar-new-chat"]'),
     sessionList: requireElement<HTMLElement>("#session-list"),
     onSelect: (id) => void controller.openSession(id),
     onNewChat: () => void controller.newChat(),

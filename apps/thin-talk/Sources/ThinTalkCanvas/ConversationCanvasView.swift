@@ -17,6 +17,11 @@ import WebKit
 /// a silent host.
 @MainActor
 public final class ConversationCanvasView: NSView {
+  /// The accessibility identifier of the hosted web view, so automation and
+  /// assistive technology can anchor on the canvas itself before locating the
+  /// controls inside the web shell (issue 752).
+  nonisolated public static let canvasAccessibilityIdentifier = "conversation-canvas"
+
   private let webDirectory: URL
   private let assetRegistry: TranscriptAssetRegistry
   private let sessionFileStore: SessionFileStore
@@ -87,6 +92,7 @@ public final class ConversationCanvasView: NSView {
     let webview = WKWebView(frame: bounds, configuration: configuration)
     webview.navigationDelegate = coordinator
     webview.autoresizingMask = [.width, .height]
+    webview.setAccessibilityIdentifier(Self.canvasAccessibilityIdentifier)
     addSubview(webview)
     webView = webview
 
