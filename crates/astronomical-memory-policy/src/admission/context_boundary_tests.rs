@@ -6,11 +6,12 @@
 //! and a projection that retention cannot cover must reject with the exact
 //! shortfall instead of demanding a reclamation that cannot succeed.
 
-use crate::{
-    ContextAdmissionRequirements, MemoryAdmissionDecision, MemoryBoundary,
-    VISIBLE_ANSWER_RESERVE_TOKENS, bounded_output_reservation_token_count,
-    retained_expert_payload_capacity_bytes, safe_minimum_active_memory_ceiling_bytes,
+use crate::admission::allocation::retained_expert_payload_capacity_bytes;
+use crate::admission::context::{
+    ContextAdmissionRequirements, VISIBLE_ANSWER_RESERVE_TOKENS,
+    bounded_output_reservation_token_count, safe_minimum_active_memory_ceiling_bytes,
 };
+use crate::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
 
 fn requirements_for_current_state(
     current_active_memory_bytes: usize,

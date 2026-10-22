@@ -17,6 +17,9 @@
 //!
 //! # Module map
 //!
+//! - `admission` — may this operation begin (`AllocationAdmissionDecision`,
+//!   `CompleteResidencyDecision`, context workspaces, retained-prefix
+//!   retention, rotating admission).
 //! - `phase` — the one lifecycle phase type (`MemoryPhase`).
 //! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`,
 //!   `MemoryAdmissionDecision`): every rejection names its boundary.
@@ -36,6 +39,7 @@
 //! - `serving_ceiling` — resolution of the effective MLX memory ceiling from
 //!   configuration and the machine bound.
 
+pub mod admission;
 pub mod budget;
 pub mod ceiling;
 pub mod geometry_floor;

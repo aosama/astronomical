@@ -6,7 +6,7 @@
 //! persistent/temporary accounting that prefill, persistent-cache restore,
 //! and complete-resident seating charge.
 
-use crate::memory::{MemoryAdmissionDecision, MemoryBoundary};
+use crate::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
 
 /// Visible-answer KV reserve beyond the thinking allowance, in tokens.
 ///
