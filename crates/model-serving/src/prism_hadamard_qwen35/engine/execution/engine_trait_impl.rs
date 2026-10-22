@@ -28,7 +28,6 @@ use crate::MlxMemoryLimitAdjustment;
 use crate::MlxMemoryTelemetry;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
-use crate::inference_engine::contract::PreparedInferenceRequest;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
@@ -481,12 +480,12 @@ impl PrismHadamardQwen35InferenceExecution {
             active.pending_sampled_token =
                 successor_stays_pending(active.remaining_output_tokens).then_some(first_token);
         }
+        // The worker accumulates per-chunk deltas into the request-wide
+        // prefill cursor, so this must stay the chunk's own token count — a
+        // cumulative count double-counts every earlier chunk and pins the
+        // status surface at 100% while most of the prompt is still processing.
         Ok(GeneratedToken::PrefillProgress {
-            processed_token_count: active
-                .request
-                .prompt_token_count()
-                .saturating_sub(active.remaining_prompt_token_ids.len())
-                as u32,
+            processed_token_count: chunk_length as u32,
             elapsed_millis,
             forward_prefill_chunk_elapsed_millis: elapsed_millis,
             completed_prefill_chunk_tokens: chunk_length as u32,
