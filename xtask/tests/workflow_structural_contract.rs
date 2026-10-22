@@ -280,21 +280,23 @@ fn offline_seatbelt_proof_is_fail_closed_and_contract_exact() {
         "the seatbelt proof lost its profile or its execution-parity assertion"
     );
 
-    // The dependency-notices lane separates verification from generation:
-    // pull requests carry the strict freshness contract (humans must commit
-    // the regenerated file; bots refresh in place because they cannot
-    // commit), and only default-branch and dispatch builds generate.
-    let verify_notices_step =
-        find_step_by_name(&verification_steps, "Verify Rust dependency notices");
+    // The dependency-notices lane is main-only: pull requests run no
+    // notices work (the freshness gate repeatedly failed pull requests
+    // whose authors had not regenerated locally, and freshness of the
+    // committed copy is repository hygiene, not a property of the change
+    // under review), while default-branch and dispatch builds regenerate
+    // so the bundled app never ships stale notices. The verify step must
+    // not come back silently.
+    let verification_step_names: Vec<&str> = verification_steps
+        .iter()
+        .filter_map(|step| step.get("name").and_then(|value| value.as_str()))
+        .collect();
     assert!(
-        required_text(verify_notices_step, "if", "notices-verify-gate")
-            .contains("github.event_name == 'pull_request'"),
-        "the notices freshness contract left the pull-request lane"
-    );
-    assert!(
-        run_text_of(verify_notices_step, "notices-verify")
-            .contains("cargo xtask notices --check"),
-        "the pull-request notices step must verify, not generate"
+        !verification_step_names
+            .iter()
+            .any(|&step_name| step_name.contains("dependency notices")
+                && !step_name.contains("for the bundled app")),
+        "a dependency-notices step outside the bundled-app refresh crept back into the pull-request lane"
     );
     let refresh_notices_step = find_step_by_name(
         &verification_steps,
@@ -303,7 +305,7 @@ fn offline_seatbelt_proof_is_fail_closed_and_contract_exact() {
     assert!(
         required_text(refresh_notices_step, "if", "notices-refresh-gate")
             .contains("github.event_name != 'pull_request'"),
-        "notices generation runs outside default-branch and dispatch builds"
+        "notices generation runs inside pull-request builds"
     );
 }
 
