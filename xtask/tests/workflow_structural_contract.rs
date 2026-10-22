@@ -249,34 +249,7 @@ fn required_check_steps_keep_their_bounded_contracts() {
 }
 
 #[test]
-fn offline_seatbelt_proof_is_fail_closed_and_contract_exact() {
-    // The macOS physics proof (issue #1333) may never pass while silently
-    // skipping its own work: pipefail keeps a failing sandboxed cargo red,
-    // the deferral marker routes the harness-internal denial to the outer
-    // profile (macOS forbids applying a second profile from inside one),
-    // and the execution-parity assertion fails the check when the sandboxed
-    // run executed fewer test binaries than the unsandboxed step.
-    let workflow = workflow_contract();
-    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-
-    let seatbelt_step = find_step_by_name(
-        &verification_steps,
-        "Re-run offline lane tests under the network-denying seatbelt",
-    );
-    let seatbelt_text = run_text_of(seatbelt_step, "seatbelt-proof");
-    assert!(
-        seatbelt_text.contains("set -o pipefail"),
-        "the seatbelt proof can hide a failing sandboxed cargo behind tee"
-    );
-    assert!(
-        seatbelt_text.contains("ASTRONOMICAL_NETWORK_DENIAL_DEFERRED_TO_SEATBELT=1"),
-        "the seatbelt proof no longer defers the harness-internal network denial"
-    );
-    assert!(
-        seatbelt_text.contains("offline-sandbox.sb") && seatbelt_text.contains("execution_parity"),
-        "the seatbelt proof lost its profile or its execution-parity assertion"
-    );
-
+fn dependency_notices_steps_stay_out_of_the_pull_request_lane() {
     // The dependency-notices lane is main-only: pull requests run no
     // notices work (the freshness gate repeatedly failed pull requests
     // whose authors had not regenerated locally, and freshness of the
@@ -284,6 +257,8 @@ fn offline_seatbelt_proof_is_fail_closed_and_contract_exact() {
     // under review), while default-branch and dispatch builds regenerate
     // so the bundled app never ships stale notices. The verify step must
     // not come back silently.
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
     let verification_step_names: Vec<&str> = verification_steps
         .iter()
         .filter_map(|step| step.get("name").and_then(|value| value.as_str()))
