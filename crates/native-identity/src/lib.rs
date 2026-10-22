@@ -1,4 +1,4 @@
-//! Native build identity: the compatibility fingerprint shared by the Cargo
+//! Native build identity: the fingerprint shared by the Cargo
 //! build scripts, the standalone native-build tool, and CI cache keys.
 //!
 //! Ownership rationale: this logic previously lived in a POSIX shell script
@@ -17,11 +17,12 @@ mod probes_tests;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use probes::CompatibilityOverrides;
+use probes::ToolchainOverrides;
 
 /// The identity manifest format revision. The format itself (tab-separated
-/// schema/profile/source/compatibility lines) is unchanged from the shell
-/// era; bump only when line grammar changes.
+/// schema/profile/source/toolchain lines) is unchanged from the shell era;
+/// bump only when line grammar changes. The toolchain section's historical
+/// `compatibility` line label is hashed bytes, so the label itself stays.
 const MANIFEST_SCHEMA_VERSION: u32 = 2;
 
 /// Source-identity pathspecs: every input that determines the native
@@ -30,7 +31,7 @@ const MANIFEST_SCHEMA_VERSION: u32 = 2;
 /// excluded because they are executors, not policy: edits to progress
 /// logging, parallelism resolution, or store plumbing must not force a full
 /// CMake rebuild. Every artifact-affecting cmake argument is already
-/// fingerprinted through the compatibility probes, the profile, and the
+/// fingerprinted through the toolchain probes, the profile, and the
 /// third-party files; a change to cmake invocation semantics must bump
 /// `crates/runtime-integration/native-build-store-schema-version` instead.
 pub const SOURCE_IDENTITY_PATHSPECS: &[&str] = &[
@@ -67,7 +68,7 @@ impl NativeBuildProfile {
 }
 
 /// Whether the identity covers only tracked sources or the full hosted
-/// compatibility environment. Source-only stays portable so lightweight
+/// toolchain environment. Source-only stays portable so lightweight
 /// contexts (bindgen header provisioning) can coordinate without a
 /// toolchain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,7 +87,7 @@ pub struct FingerprintRequest<'a> {
     pub scope: IdentityScope,
     /// Toolchain identity overrides (fixture determinism) and the full-mode
     /// target triple. `None` entries mean "probe the real toolchain".
-    pub overrides: CompatibilityOverrides,
+    pub overrides: ToolchainOverrides,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -147,7 +148,8 @@ impl std::fmt::Display for NativeIdentityError {
 
 /// Computes the 64-hex-character native build identity. The manifest is
 /// assembled in a fixed order (schema, profile, sorted source digests, then
-/// compatibility lines) so the digest is reproducible byte-for-byte.
+/// the toolchain lines under their historical `compatibility` label) so the
+/// digest is reproducible byte-for-byte.
 pub fn native_build_identity(
     request: &FingerprintRequest<'_>,
 ) -> Result<String, NativeIdentityError> {
@@ -188,7 +190,7 @@ pub fn native_build_identity_with_probe_values(
     }
 
     let probe_values = if request.scope == IdentityScope::Full {
-        let captured_values = probes::compatibility_probe_values(request)?;
+        let captured_values = probes::toolchain_probe_values(request)?;
         manifest.push_str(&probes::manifest_lines_from_probe_values(&captured_values));
         captured_values
     } else {

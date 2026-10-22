@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::digest_bytes;
-use crate::probes::{ProbeValue, compatibility_manifest_lines, compatibility_probe_values};
+use crate::probes::{ProbeValue, toolchain_manifest_lines, toolchain_probe_values};
 use crate::{FingerprintRequest, IdentityScope, NativeBuildProfile};
 
 fn overridden_request() -> FingerprintRequest<'static> {
@@ -11,7 +11,7 @@ fn overridden_request() -> FingerprintRequest<'static> {
         repository_root: Path::new("/"),
         profile: NativeBuildProfile::Core,
         scope: IdentityScope::Full,
-        overrides: crate::probes::CompatibilityOverrides {
+        overrides: crate::probes::ToolchainOverrides {
             xcode: Some("Xcode 26.0 Build 17A1".to_owned()),
             sdk: Some("version=15.4\nbuild=24A123".to_owned()),
             clang: Some("version=17.0.0\ntarget=arm64-apple-darwin24".to_owned()),
@@ -25,7 +25,7 @@ fn overridden_request() -> FingerprintRequest<'static> {
 
 #[test]
 fn probe_values_carry_the_fixed_order_and_override_flag() {
-    let probe_values = compatibility_probe_values(&overridden_request()).unwrap();
+    let probe_values = toolchain_probe_values(&overridden_request()).unwrap();
     let names: Vec<&str> = probe_values.iter().map(|entry| entry.name).collect();
     assert_eq!(
         names,
@@ -57,8 +57,8 @@ fn probe_values_carry_the_fixed_order_and_override_flag() {
 
 #[test]
 fn manifest_lines_digest_exactly_the_reported_probe_values() {
-    let probe_values = compatibility_probe_values(&overridden_request()).unwrap();
-    let manifest_lines = compatibility_manifest_lines(&overridden_request()).unwrap();
+    let probe_values = toolchain_probe_values(&overridden_request()).unwrap();
+    let manifest_lines = toolchain_manifest_lines(&overridden_request()).unwrap();
     let mut manifest_lines_iter = manifest_lines.lines();
     for probe_entry in &probe_values {
         let manifest_line = manifest_lines_iter.next().unwrap();
@@ -81,7 +81,7 @@ fn manifest_lines_digest_exactly_the_reported_probe_values() {
 
 #[test]
 fn probe_values_preserve_the_digest_semantics_of_composite_probes() {
-    let probe_values = compatibility_probe_values(&overridden_request()).unwrap();
+    let probe_values = toolchain_probe_values(&overridden_request()).unwrap();
     let sdk_entry = &probe_values[3];
     assert_eq!(
         sdk_entry.value, "version=15.4\nbuild=24A123\n",
@@ -94,7 +94,7 @@ fn probe_values_preserve_the_digest_semantics_of_composite_probes() {
 // predictable for flap forensics.
 #[test]
 fn probe_value_shapes_stay_single_line_flattenable() {
-    let probe_values: Vec<ProbeValue> = compatibility_probe_values(&overridden_request()).unwrap();
+    let probe_values: Vec<ProbeValue> = toolchain_probe_values(&overridden_request()).unwrap();
     for probe_entry in &probe_values {
         assert!(
             !probe_entry.value.contains('\r'),

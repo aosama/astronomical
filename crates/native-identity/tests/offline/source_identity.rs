@@ -3,7 +3,7 @@
 //! than a beside-source unit test (real filesystem, no network, no model
 //! artifacts).
 
-use astronomical_native_identity::probes::CompatibilityOverrides;
+use astronomical_native_identity::probes::ToolchainOverrides;
 use astronomical_native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity,
 };
@@ -25,14 +25,14 @@ fn source_only_identity_is_stable_and_self_covering() {
         repository_root: &repository_root,
         profile: NativeBuildProfile::Core,
         scope: IdentityScope::SourceOnly,
-        overrides: CompatibilityOverrides::none(),
+        overrides: ToolchainOverrides::none(),
     })
     .unwrap();
     let second_identity = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
         profile: NativeBuildProfile::Core,
         scope: IdentityScope::SourceOnly,
-        overrides: CompatibilityOverrides::none(),
+        overrides: ToolchainOverrides::none(),
     })
     .unwrap();
     assert_eq!(first_identity, second_identity);
@@ -51,14 +51,14 @@ fn profile_choice_changes_the_identity() {
         repository_root: &repository_root,
         profile: NativeBuildProfile::Core,
         scope: IdentityScope::SourceOnly,
-        overrides: CompatibilityOverrides::none(),
+        overrides: ToolchainOverrides::none(),
     })
     .unwrap();
     let memory_contract_identity = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
         profile: NativeBuildProfile::CoreMemoryContract,
         scope: IdentityScope::SourceOnly,
-        overrides: CompatibilityOverrides::none(),
+        overrides: ToolchainOverrides::none(),
     })
     .unwrap();
     assert_ne!(core_identity, memory_contract_identity);

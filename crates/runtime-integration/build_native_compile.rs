@@ -89,9 +89,9 @@ pub fn resolve_native_build_identity(
         repository_root,
         profile,
         scope: astronomical_native_identity::IdentityScope::Full,
-        overrides: astronomical_native_identity::probes::CompatibilityOverrides {
+        overrides: astronomical_native_identity::probes::ToolchainOverrides {
             target_triple: Some(target_triple.to_owned()),
-            ..astronomical_native_identity::probes::CompatibilityOverrides::none()
+            ..astronomical_native_identity::probes::ToolchainOverrides::none()
         },
     };
     astronomical_native_identity::native_build_identity(&identity_request)

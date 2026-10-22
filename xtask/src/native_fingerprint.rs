@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use astronomical_native_identity::probes::{CompatibilityOverrides, ProbeValue};
+use astronomical_native_identity::probes::{ProbeValue, ToolchainOverrides};
 use astronomical_native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity_with_probe_values,
 };
@@ -61,7 +61,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         // The historical environment contract stays: fixture overrides and
         // CI-provided target triples flow through the same variables the
         // shell era defined.
-        overrides: CompatibilityOverrides::from_environment(),
+        overrides: ToolchainOverrides::from_environment(),
     };
     let (identity, probe_values) =
         native_build_identity_with_probe_values(&request).map_err(|error| error.to_string())?;
