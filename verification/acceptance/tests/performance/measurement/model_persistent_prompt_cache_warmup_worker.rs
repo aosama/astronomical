@@ -78,10 +78,17 @@ struct CompletedTokenCounts {
     prompt_token_count: u64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(super) struct PersistentPromptCacheDiskUsage {
     pub(super) block_count: usize,
     pub(super) byte_count: u64,
+    /// Token count declared by each saved sequence-state file, in directory order.
+    ///
+    /// Complete blocks declare the model's block token count; a partial tail
+    /// declares fewer. The benchmark needs this split because the restored
+    /// token extent is "every complete block plus an optional partial tail",
+    /// which is never a multiple of the saved artifact count.
+    pub(super) sequence_state_token_counts: Vec<usize>,
 }
 
 pub(super) struct WorkerPassMeasurement {
@@ -201,19 +208,48 @@ pub(super) fn static_source_document(source_document: &str) -> String {
 pub(super) fn persistent_prompt_cache_disk_usage(
     persistent_prompt_cache_directory: &Path,
 ) -> PersistentPromptCacheDiskUsage {
-    let (block_count, byte_count) =
+    let (block_count, byte_count, sequence_state_token_counts) =
         persistent_prompt_cache_safetensors_disk_usage(persistent_prompt_cache_directory);
     PersistentPromptCacheDiskUsage {
         block_count,
         byte_count,
+        sequence_state_token_counts,
     }
+}
+
+/// Reads one safetensors file's JSON header metadata without touching the payload.
+///
+/// The persistent prompt-cache writer stamps `block_token_count` into every
+/// state file's metadata (the same bounded header the startup scan validates),
+/// so eight length bytes plus the JSON header are enough to classify a saved
+/// artifact as a complete block or a partial tail.
+fn sequence_state_header_token_count(sequence_state_file_path: &Path) -> Option<usize> {
+    let mut sequence_state_file = fs::File::open(sequence_state_file_path).ok()?;
+    let mut header_length_bytes = [0_u8; 8];
+    std::io::Read::read_exact(&mut sequence_state_file, &mut header_length_bytes).ok()?;
+    let header_byte_count =
+        u64::from_le_bytes(header_length_bytes).try_into().ok()?;
+    let mut header_json_bytes = vec![0_u8; header_byte_count];
+    std::io::Read::read_exact(&mut sequence_state_file, &mut header_json_bytes).ok()?;
+    let header_json: serde_json::Value = serde_json::from_slice(&header_json_bytes).ok()?;
+    // The safetensors container convention places writer metadata under
+    // `__metadata__`; accept the plain key too in case the writer changes.
+    let header_metadata = header_json
+        .get("__metadata__")
+        .or_else(|| header_json.get("metadata"))?;
+    header_metadata
+        .get("block_token_count")?
+        .as_str()?
+        .parse::<usize>()
+        .ok()
 }
 
 fn persistent_prompt_cache_safetensors_disk_usage(
     persistent_prompt_cache_directory: &Path,
-) -> (usize, u64) {
+) -> (usize, u64, Vec<usize>) {
     let mut kv_block_file_count = 0_usize;
     let mut safetensors_byte_count = 0_u64;
+    let mut sequence_state_token_counts = Vec::new();
     let mut pending_directories = vec![persistent_prompt_cache_directory.to_path_buf()];
     while let Some(directory_path) = pending_directories.pop() {
         for directory_entry in fs::read_dir(&directory_path)
@@ -235,6 +271,11 @@ fn persistent_prompt_cache_safetensors_disk_usage(
                     .is_some_and(|file_name| file_name == "sequence.safetensors")
                 {
                     kv_block_file_count += 1;
+                    if let Some(header_token_count) =
+                        sequence_state_header_token_count(&cache_entry_path)
+                    {
+                        sequence_state_token_counts.push(header_token_count);
+                    }
                 }
                 safetensors_byte_count += directory_entry
                     .metadata()
@@ -243,7 +284,11 @@ fn persistent_prompt_cache_safetensors_disk_usage(
             }
         }
     }
-    (kv_block_file_count, safetensors_byte_count)
+    (
+        kv_block_file_count,
+        safetensors_byte_count,
+        sequence_state_token_counts,
+    )
 }
 
 async fn wait_until_idle(worker_handle: &WorkerHandle) {
@@ -293,11 +338,18 @@ async fn measure_worker_summarization(
             tool_choice: ChatToolChoice::None,
             settings: ChatGenerationSettings {
                 max_output_tokens: persistent_prompt_cache_warmup_case.maximum_output_tokens,
-                temperature_thousandths: None,
+                // Greedy decoding keeps the cold and warm passes deterministic,
+                // which is what the generated-output equality assertion proves:
+                // cache restoration must preserve the exact cold-pass output.
+                temperature_thousandths: Some(0),
                 top_p_thousandths: None,
                 repetition_penalty_thousandths: None,
                 seed: None,
-                thinking_budget: Some(256),
+                // The 50K/100K scaling cases budget a single output token to
+                // isolate prefill work; that budget cannot also fit a thinking
+                // allowance plus its transition tokens, so those cases opt out.
+                thinking_budget: (persistent_prompt_cache_warmup_case.maximum_output_tokens > 1)
+                    .then_some(256),
             },
             structured_generation: None,
         })
