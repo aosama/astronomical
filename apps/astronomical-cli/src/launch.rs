@@ -11,12 +11,13 @@ use std::{
 
 use crate::{
     arguments::LaunchArguments,
+    codex::{CODEX_HOME_VARIABLE, codex_process_home},
     errors::LaunchError,
     http::get_loopback_json,
     models::chat_models_from_models_document,
     opencode::{OPENCODE_CONFIG_CONTENT_VARIABLE, opencode_config_content},
     prompt::{select_chat_model, warn_if_context_window_is_narrow},
-    tools::resolve_launch_tool,
+    tools::{LaunchToolKind, resolve_launch_tool},
 };
 
 const STATUS_PATH: &str = "/v1/status";
@@ -68,15 +69,32 @@ pub fn prepare_launch(
         launch_dependencies.stdin,
         launch_dependencies.stderr,
     )?;
-    warn_if_context_window_is_narrow(&selected_chat_model, launch_dependencies.stderr);
-    let config_content = opencode_config_content(chosen_bind_address, &selected_chat_model)
-        .map_err(|serialize_error| {
-            tracing::debug!(error = %serialize_error, "OpenCode config could not be serialized");
-            LaunchError::OpenCodeConfigFailed
-        })?;
+    warn_if_context_window_is_narrow(
+        resolved_launch_tool.display_name,
+        &selected_chat_model,
+        launch_dependencies.stderr,
+    );
+    let extra_environment = match resolved_launch_tool.kind {
+        LaunchToolKind::OpenCode => {
+            let config_content = opencode_config_content(chosen_bind_address, &selected_chat_model)
+                .map_err(|serialize_error| {
+                    tracing::debug!(error = %serialize_error, "OpenCode config could not be serialized");
+                    LaunchError::OpenCodeConfigFailed
+                })?;
+            vec![(OPENCODE_CONFIG_CONTENT_VARIABLE.to_owned(), config_content)]
+        }
+        LaunchToolKind::Codex => {
+            let codex_home = codex_process_home(chosen_bind_address, &selected_chat_model)
+                .map_err(|codex_home_error| {
+                    tracing::debug!(error = %codex_home_error, "Codex CODEX_HOME could not be created");
+                    LaunchError::CodexConfigFailed
+                })?;
+            vec![(CODEX_HOME_VARIABLE.to_owned(), codex_home)]
+        }
+    };
     Ok(PreparedLaunch {
         program: resolved_launch_tool.program,
-        extra_environment: vec![(OPENCODE_CONFIG_CONTENT_VARIABLE.to_owned(), config_content)],
+        extra_environment,
     })
 }
 

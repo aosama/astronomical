@@ -18,7 +18,9 @@ pub enum LaunchError {
     NoChatModels,
     #[error("Install OpenCode: curl -fsSL https://opencode.ai/install | bash")]
     OpenCodeMissing,
-    #[error("Unknown tool {requested_tool}. Try: astronomical launch opencode")]
+    #[error("Install Codex CLI: npm install -g @openai/codex")]
+    CodexMissing,
+    #[error("Unknown tool {requested_tool}. Supported tools: opencode, codex")]
     UnknownTool { requested_tool: String },
     #[error("Choose a model with --model; several chat models are in the Library.")]
     ModelPickerRequired,
@@ -28,6 +30,8 @@ pub enum LaunchError {
     InvalidModelSelection,
     #[error("could not prepare OpenCode config.")]
     OpenCodeConfigFailed,
+    #[error("could not prepare the Codex session configuration.")]
+    CodexConfigFailed,
     #[error("failed to start {program:?}: {cause}")]
     ToolStartFailed { program: PathBuf, cause: String },
 }
