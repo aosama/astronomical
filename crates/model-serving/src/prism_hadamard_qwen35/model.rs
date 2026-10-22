@@ -109,7 +109,7 @@ impl PrismHadamardTextModel {
             &mut PerformanceAttribution::disabled(),
         );
         let gated_delta_kernel = if kernel_capabilities
-            .is_custom_kernel_supported(crate::CustomMetalKernelFamily::GatedDeltaSequence)
+            .is_custom_kernel_supported(crate::CustomMetalKernelFamily::GATED_DELTA_SEQUENCE)
         {
             Some(
                 crate::qwen3_5_core::model_math::gated_delta_sequence::qwen3_5_gated_delta_kernel()
@@ -123,7 +123,7 @@ impl PrismHadamardTextModel {
         };
         let hadamard_block_size = pack.hadamard_contract().block_size();
         let fused_rotation_kernel = if kernel_capabilities
-            .is_custom_kernel_supported(crate::CustomMetalKernelFamily::PrismHadamardSignedRotation)
+            .is_custom_kernel_supported(crate::CustomMetalKernelFamily::PRISM_HADAMARD_SIGNED_ROTATION)
             && signed_rotation_kernel::is_signed_rotation_eligible(hadamard_block_size)
         {
             Some(
