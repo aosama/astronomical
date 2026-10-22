@@ -102,10 +102,10 @@ jobs:
           # The runtime-integration build script declares rerun-if-env-changed
           # for this variable, so exporting it in only the compile step flips
           # the build script's fingerprint for every later cargo invocation and
-          # recompiles runtime-integration and its dependents from scratch (a
-          # measured 25s rebuild inside the offline-tests step before this was
-          # hoisted). Exporting it once here, before the first cargo step of
-          # the job, keeps every build-script run under an identical
+          # re-runs the script (one of two rebuild triggers fixed together:
+          # the other, a phantom rerun-if-changed path, is removed in that
+          # build script). Exporting it once here, before the first cargo step
+          # of the job, keeps every build-script run under an identical
           # environment; the compile step still tails the file for live
           # native-build progress.
           printf 'ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE=%s/astronomical-native-build-progress\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
