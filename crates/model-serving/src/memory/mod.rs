@@ -84,6 +84,9 @@ pub use admission::{
 pub(crate) use admission::{
     log_context_admission_projection, log_generation_context_workspace_reservation,
 };
+pub use astronomical_memory_policy::ceiling::{
+    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
+};
 pub use budget::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
@@ -96,9 +99,6 @@ pub use budget::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
-pub use astronomical_memory_policy::ceiling::{
-    MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
-};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
 pub use expert_cache::{
@@ -108,10 +108,6 @@ pub use expert_cache::{
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
 // direct-MLX admission callers and the offline artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
-#[cfg(any(feature = "direct-mlx", test))]
-pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use expert_cache::source_expert_page_payload_bytes;
 pub use astronomical_memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
 pub use astronomical_memory_policy::phase::MemoryPhase;
 pub use astronomical_memory_policy::reclamation::{
@@ -126,6 +122,10 @@ pub use astronomical_memory_policy::reclamation::{
 pub use astronomical_memory_policy::recovery::{
     ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements,
 };
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use expert_cache::source_expert_page_payload_bytes;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays
@@ -149,5 +149,5 @@ pub use astronomical_memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
     machine_ceiling_from_physical_ram_bytes,
 };
-pub use utilization::MemoryCeilingUtilization;
 pub use astronomical_memory_policy::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
+pub use utilization::MemoryCeilingUtilization;

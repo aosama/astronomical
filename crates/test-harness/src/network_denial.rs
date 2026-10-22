@@ -134,9 +134,7 @@ const DEFERRAL_MARKER_VARIABLE: &str = "ASTRONOMICAL_NETWORK_DENIAL_DEFERRED_TO_
 pub fn ensure_network_denied() -> Result<(), String> {
     DENIAL_APPLICATION.call_once(|| {
         let outcome = if deferral_marker_present() {
-            eprintln!(
-                "[network-denial] status=deferred reason=outer_seatbelt_profile_active"
-            );
+            eprintln!("[network-denial] status=deferred reason=outer_seatbelt_profile_active");
             Ok(())
         } else {
             seatbelt::platform_apply()

@@ -207,10 +207,7 @@ fn required_check_steps_keep_their_bounded_contracts() {
         compile_command.contains("--test rest_api_tests"),
         "offline compile omits rest_api_tests"
     );
-    let timing_step = find_step_by_name(
-        &verification_steps,
-        "Configure step timing attribution",
-    );
+    let timing_step = find_step_by_name(&verification_steps, "Configure step timing attribution");
     assert!(
         run_text_of(timing_step, "ci-timing").contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
         "native build progress file is not exported job-wide before the first cargo step"

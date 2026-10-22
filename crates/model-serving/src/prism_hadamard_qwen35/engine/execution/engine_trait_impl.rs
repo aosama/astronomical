@@ -25,13 +25,13 @@ use crate::GenerationFinalization;
 use crate::InferenceEngineError;
 use crate::MlxInferenceExecution;
 use crate::MlxMemoryLimitAdjustment;
+use crate::MlxMemoryTelemetry;
 use crate::PerformanceAttribution;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end;
-use crate::MlxMemoryTelemetry;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::PrismStateSlotLayout;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
@@ -428,12 +428,9 @@ impl PrismHadamardQwen35InferenceExecution {
             u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()?;
         let peak_memory_bytes = u64::try_from(memory_snapshot.peak_memory_bytes()).ok()?;
         let model_core_payload_bytes = model.pack().total_payload_bytes();
-        let context_state_payload_bytes = self
-            .active
-            .as_ref()
-            .map_or(0, |active_generation| {
-                active_generation.generation_state.payload_byte_count()
-            });
+        let context_state_payload_bytes = self.active.as_ref().map_or(0, |active_generation| {
+            active_generation.generation_state.payload_byte_count()
+        });
         let active_memory_breakdown = MlxActiveMemoryBreakdown::reconcile(
             active_memory_bytes,
             0,

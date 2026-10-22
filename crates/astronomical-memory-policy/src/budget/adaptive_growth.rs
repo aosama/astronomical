@@ -25,11 +25,11 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use crate::phase::MemoryPhase;
 use crate::budget::adaptive_growth_projection::{
     AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
     scale_transient_to_token_count,
 };
+use crate::phase::MemoryPhase;
 
 /// Separates complete-residency forwards from forwards that use expert paging.
 ///
