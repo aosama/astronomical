@@ -164,7 +164,7 @@ jobs:
             astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
       # Runs after the registry restore so the xtask compile below reuses the
       # cached dependency downloads instead of hitting crates.io cold.
-      - name: Resolve native compatibility identity
+      - name: Compute the native build identity cache key
         id: native-build-identity
         shell: bash
         env:

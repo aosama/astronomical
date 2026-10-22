@@ -76,7 +76,7 @@ fn should_refuse_a_symbolic_link_at_the_retired_native_output_boundary() {
 }
 
 #[test]
-fn should_control_the_compiler_and_sdk_that_define_native_compatibility() {
+fn should_control_the_compiler_and_sdk_that_define_the_native_toolchain() {
     for required_configuration in [
         "-DCMAKE_C_COMPILER=",
         "-DCMAKE_CXX_COMPILER=",
@@ -86,7 +86,7 @@ fn should_control_the_compiler_and_sdk_that_define_native_compatibility() {
     ] {
         assert!(
             NATIVE_BUILD_COMPILATION.contains(required_configuration),
-            "the native build must control compatibility input {required_configuration}"
+            "the native build must control toolchain input {required_configuration}"
         );
     }
 }

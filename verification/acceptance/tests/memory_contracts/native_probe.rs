@@ -37,7 +37,7 @@ fn resolve_native_probe_executable_path() -> PathBuf {
         scope: astronomical_native_identity::IdentityScope::Full,
         // The probe inherits the historical environment contract: fixture
         // overrides flow through the same variables the CI steps define.
-        overrides: astronomical_native_identity::probes::CompatibilityOverrides::from_environment(),
+        overrides: astronomical_native_identity::probes::ToolchainOverrides::from_environment(),
     };
     let native_identity = astronomical_native_identity::native_build_identity(&identity_request)
         .unwrap_or_else(|error| panic!("the native build identity failed for the probe: {error}"));
