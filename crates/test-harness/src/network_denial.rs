@@ -16,6 +16,14 @@
 //! implicit in every harness macro: integration journeys that genuinely
 //! exercise real unix-socket transport use plain `#[tokio::test]` functions
 //! and must keep their sockets.
+//!
+//! The macOS proof is layered with the CI seatbelt step: the step re-runs
+//! the whole lane inside an outer `sandbox-exec` profile that denies real
+//! networking (loopback and Unix Domain Sockets stay allowed, per the
+//! offline vocabulary), and this in-process denial defers there because
+//! macOS rejects applying a profile from inside one. Each binary that opts
+//! into this denial is still proven completely socket-free by the
+//! unsandboxed offline-tests step of the same CI job.
 
 use std::sync::Once;
 use std::sync::OnceLock;
@@ -105,12 +113,34 @@ mod seatbelt {
     }
 }
 
+/// Environment marker exported only by the CI seatbelt step: the whole lane
+/// is already running inside an outer `sandbox-exec` profile there, and
+/// macOS forbids applying a second profile from inside one (`sandbox_init`
+/// returns EPERM), so the in-process denial defers to the outer profile,
+/// which already denies every real network operation.
+const DEFERRAL_MARKER_VARIABLE: &str = "ASTRONOMICAL_NETWORK_DENIAL_DEFERRED_TO_SEATBELT";
+
 /// Applies network denial to this test process exactly once and reports
 /// whether the property now holds. Concurrent callers block until the first
 /// application finishes and then observe the same outcome.
+///
+/// Under the CI seatbelt step (the deferral marker set) this returns Ok
+/// without applying the in-process profile: the outer profile enforces the
+/// no-real-network property for the whole lane, including loopback and
+/// Unix Domain Socket allowances the offline contract sanctions. The
+/// stricter socket-free proof for binaries that opt into this denial still
+/// runs in the unsandboxed offline-tests step of the same CI job, so each
+/// proof executes in the one run where it can physically exist.
 pub fn ensure_network_denied() -> Result<(), String> {
     DENIAL_APPLICATION.call_once(|| {
-        let outcome = seatbelt::platform_apply();
+        let outcome = if deferral_marker_present() {
+            eprintln!(
+                "[network-denial] status=deferred reason=outer_seatbelt_profile_active"
+            );
+            Ok(())
+        } else {
+            seatbelt::platform_apply()
+        };
         DENIAL_OUTCOME
             .set(outcome)
             .expect("only the Once applies denial");
@@ -119,4 +149,8 @@ pub fn ensure_network_denied() -> Result<(), String> {
         .get()
         .expect("the Once has completed")
         .clone()
+}
+
+fn deferral_marker_present() -> bool {
+    std::env::var_os(DEFERRAL_MARKER_VARIABLE).is_some_and(|marker_value| marker_value == "1")
 }
