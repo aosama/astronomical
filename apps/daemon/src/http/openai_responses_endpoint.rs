@@ -5,7 +5,7 @@ use astronomical_config::ModelCapabilities;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_rest_contract::{
     OpenAiErrorResponse, OpenAiResponseRequestConfiguration, OpenAiResponseStreamEvent,
-    OpenAiResponsesRequest,
+    OpenAiResponsesRequest, OpenAiResponsesValidationError,
 };
 use axum::{
     Json,
@@ -42,7 +42,7 @@ pub(crate) async fn create_response(
     let request_parts = match responses_request.into_parts() {
         Ok(request_parts) => request_parts,
         Err(validation_error) => {
-            return invalid_request_response(validation_error.to_string(), None, "invalid_request");
+            return responses_validation_rejection_response(validation_error);
         }
     };
     // Policy resolution and queue admission must observe one side of a worker replacement.
@@ -379,6 +379,26 @@ fn invalid_request_response(
         )),
     )
         .into_response()
+}
+
+/// Renders a Responses contract rejection as HTTP 413 when it is a
+/// portable-budget rejection, keeping the OpenAI-shaped error code on the same
+/// `request_too_large` path the IPC frame overflow uses.
+fn responses_validation_rejection_response(
+    validation_error: OpenAiResponsesValidationError,
+) -> Response {
+    if validation_error.is_request_too_large() {
+        return (
+            StatusCode::PAYLOAD_TOO_LARGE,
+            Json(OpenAiErrorResponse::invalid_request(
+                validation_error.to_string(),
+                None,
+                Some("request_too_large"),
+            )),
+        )
+            .into_response();
+    }
+    invalid_request_response(validation_error.to_string(), None, "invalid_request")
 }
 
 fn worker_unavailable_response() -> Response {
