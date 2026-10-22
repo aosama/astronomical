@@ -8,9 +8,6 @@
 #[cfg(feature = "direct-mlx")]
 mod live_allocation;
 
-#[cfg(test)]
-mod mlx_ram_budget_admission_workspace_tests;
-
 #[cfg(feature = "direct-mlx")]
 pub use live_allocation::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 pub use astronomical_memory_policy::budget::{

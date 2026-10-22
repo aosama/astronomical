@@ -1,14 +1,20 @@
-use crate::{
-    AdaptiveRamGrowthExecutionProfile, AllocationAdmissionDecision, AllocationAdmissionObservation,
-    CompleteResidencyDecision, CompleteResidencyRequirements, ContextAdmissionRequirements,
-    ExpertMemoryMode, ForwardRecoveryDecision, ForwardRecoveryRequirements,
-    MemoryAdmissionDecision, MemoryBoundary, MemoryCeilingChangeDecision,
-    MemoryCeilingChangeRequirements, classify_expert_memory_mode,
-    complete_residency_exceeds_ceiling_with_activation_headroom,
-    persistent_context_restore_workspace_bytes, request_context_temporary_workspace_bytes,
+use crate::admission::allocation::{AllocationAdmissionDecision, AllocationAdmissionObservation};
+use crate::admission::complete_residency::{
+    CompleteResidencyDecision, CompleteResidencyRequirements,
+};
+use crate::admission::context::{
+    ContextAdmissionRequirements, persistent_context_restore_workspace_bytes,
+    request_context_temporary_workspace_bytes,
     seated_complete_expert_request_peak_active_memory_bytes,
     seated_complete_expert_request_temporary_workspace_bytes,
 };
+use crate::budget::adaptive_growth::AdaptiveRamGrowthExecutionProfile;
+use crate::ceiling::{MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements};
+use crate::reclamation::complete_residency_exceeds_ceiling_with_activation_headroom;
+use crate::recovery::{ForwardRecoveryDecision, ForwardRecoveryRequirements};
+use crate::residency::classify_expert_memory_mode;
+use crate::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
+use astronomical_ipc_protocol::ExpertMemoryMode;
 
 #[test]
 fn should_identify_the_allocation_boundary_and_required_shortfall() {

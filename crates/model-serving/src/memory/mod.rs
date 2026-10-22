@@ -30,7 +30,9 @@
 //!   `ReleasePartial`, `ReleaseCompleteForExactDeficit`).
 //! - **2 page classes** — `StableCompleteLayer` and `ElasticRoutedExperts`,
 //!   the eviction-priority classes for retained *prefill* pages.
-//! - **Decode expert cache** — `expert_cache/decode`: the unit is one expert
+//! - **Decode expert cache** — `DecodeExpertCache` and friends (in
+//!   `astronomical-memory-policy::expert_cache::decode`, re-exported here):
+//!   the unit is one expert
 //!   id, never a layer pin. Families supply `ResidentExpertWeight`.
 //!
 //! # The naming constitution
@@ -64,18 +66,6 @@ mod expert_cache;
 pub(crate) mod telemetry;
 mod utilization;
 
-#[cfg(test)]
-mod adaptive_ram_growth_execution_profile_tests;
-#[cfg(test)]
-mod adaptive_ram_growth_guard_admission_tests;
-#[cfg(test)]
-mod adaptive_ram_growth_guard_reclamation_tests;
-#[cfg(test)]
-mod adaptive_ram_growth_observations_tests;
-#[cfg(test)]
-mod memory_policy_tests;
-#[cfg(test)]
-mod reclamation_boundary_tests;
 #[cfg(test)]
 mod telemetry_tests;
 
