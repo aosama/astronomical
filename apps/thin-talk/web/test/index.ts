@@ -9,4 +9,5 @@ import "./sessionBridge.test";
 import "./sessionDocument.test";
 import "./sessionPreferences.test";
 import "./chatJourney.test";
+import "./stableIdentifierContract.test";
 import "./previewBridgeShim.test";

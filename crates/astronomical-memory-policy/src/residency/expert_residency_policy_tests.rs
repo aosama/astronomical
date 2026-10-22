@@ -1,7 +1,7 @@
-use crate::residency::ExpertLayerGeometry;
 use crate::budget::adaptive_growth::AdaptiveRamGrowthExecutionProfile;
 use crate::phase::MemoryPhase;
 use crate::recovery::{ForwardRecoveryDecision, ForwardRecoveryRequirements};
+use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
     CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError,
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
