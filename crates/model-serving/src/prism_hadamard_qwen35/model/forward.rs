@@ -173,6 +173,30 @@ impl StraightGenerationState {
         self.sequence_position_offset
     }
 
+    /// Host-side byte estimate of every retained state array, matching the
+    /// payload accounting the decoder-cache state types publish. The memory
+    /// telemetry breakdown uses it as the live-context owner share.
+    pub(crate) fn payload_byte_count(&self) -> u64 {
+        let convolution_state_payload_bytes = self
+            .convolution_states
+            .iter()
+            .map(|convolution_state| convolution_state.payload_byte_count())
+            .fold(0_u64, u64::saturating_add);
+        let recurrent_state_payload_bytes = self
+            .recurrent_states
+            .iter()
+            .map(|recurrent_state| recurrent_state.payload_byte_count())
+            .fold(0_u64, u64::saturating_add);
+        let key_value_state_payload_bytes = self
+            .key_value_states
+            .iter()
+            .map(|key_value_state| key_value_state.payload_byte_count())
+            .fold(0_u64, u64::saturating_add);
+        convolution_state_payload_bytes
+            .saturating_add(recurrent_state_payload_bytes)
+            .saturating_add(key_value_state_payload_bytes)
+    }
+
     /// Advances the covered position by `token_count` without running a
     /// forward, for probes that drive one layer at a time.
     pub(crate) const fn advance_position(&mut self, token_count: i32) {
