@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use crate::jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
+use astronomical_jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
 use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 use crate::qwen3_5_core::configuration::config_validation::{
     Qwen3_5ConfigError, validate_exact_value,
@@ -39,7 +39,7 @@ pub enum ModuleWeightCodec {
     /// `float16` scale per expert row and an activation-side rotation.
     Jangtq2CodebookQuantized {
         /// The rotation the decode path must apply to activations.
-        rotation: crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     },
 }
 
@@ -100,7 +100,7 @@ impl OptiQQuantizationProfile {
     #[must_use]
     pub const fn jangtq2_codebook(
         bits: u32,
-        rotation: crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
     ) -> Self {
         Self {
             bits,

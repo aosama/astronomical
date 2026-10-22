@@ -33,9 +33,49 @@ fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
             vec!["astronomical-mlx-c-rust"],
             "normal",
         ),
+        // The jangtq2 family crate clean of the serving crate: the one-way
+        // edge the family-crate rule exists to hold.
+        (
+            "astronomical-jangtq2-qwen35",
+            vec!["astronomical-mlx-c-rust"],
+            "normal",
+        ),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert!(violations.is_empty());
+}
+
+#[test]
+fn should_detect_a_direct_family_to_serving_dependency() {
+    // The family crate depending back on the serving crate would rebuild the
+    // serving crate on every family edit, defeating the extraction.
+    let metadata_json_text = metadata_document_for(&[
+        ("astronomical-memory-policy", vec!["serde_json"], "normal"),
+        ("astronomical-mlx-c-rust", Vec::new(), "normal"),
+        (
+            "astronomical-model-serving",
+            vec![
+                "astronomical-mlx-c-rust",
+                "astronomical-jangtq2-qwen35",
+            ],
+            "normal",
+        ),
+        (
+            "astronomical-jangtq2-qwen35",
+            vec!["astronomical-model-serving"],
+            "normal",
+        ),
+    ]);
+    let violations = architecture_violations(&metadata_json_text).unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].rule_name, "family-crate-without-serving");
+    assert_eq!(
+        violations[0].dependency_chain,
+        vec![
+            "astronomical-jangtq2-qwen35",
+            "astronomical-model-serving"
+        ]
+    );
 }
 
 #[test]
@@ -49,6 +89,8 @@ fn should_detect_a_direct_forbidden_dependency() {
             "normal",
         ),
         ("astronomical-mlx-c-rust", Vec::new(), "normal"),
+        ("astronomical-model-serving", Vec::new(), "normal"),
+        ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
@@ -74,6 +116,8 @@ fn should_detect_a_transitive_forbidden_dependency() {
             "normal",
         ),
         ("astronomical-mlx-c-rust", Vec::new(), "normal"),
+        ("astronomical-model-serving", Vec::new(), "normal"),
+        ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert_eq!(violations.len(), 1);
@@ -97,6 +141,8 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
                 breach_kind,
             ),
             ("astronomical-mlx-c-rust", Vec::new(), "normal"),
+            ("astronomical-model-serving", Vec::new(), "normal"),
+            ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
         ]);
         let violations = architecture_violations(&metadata_json_text).unwrap();
         assert_eq!(

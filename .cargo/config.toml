@@ -60,11 +60,11 @@ warnings = "deny"
 # fails the lane instead of rotting until release day.
 # test-offline-and-rest: both offline-property lanes together; run this
 # before committing.
-test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test offline_tests"
+test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test offline_tests"
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 test-app-builder = "test -p xtask --test offline_app_builder_journeys"
-test-offline-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-rest-contract --lib --test offline_tests --test rest_api_tests"
+test-offline-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-rest-contract --lib --test offline_tests --test rest_api_tests"
 # Quantization lanes (the OptiQ port in crates/quantization). The crate's
 # unit tests and offline journeys (allocator parity against the Python
 # reference, taxonomy, calibration, artifact round trips) ride in the
@@ -184,17 +184,20 @@ test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --
 # every offline lane runs without any model artifact. The lane builds the
 # direct-mlx library test binary (the tests themselves need no graphics
 # processor) so it shares an artifact variant with the other jangtq2 lanes
-# instead of adding a default-feature test binary to the local edit loop;
-# the filter names the plan contract module so the ignored throughput
-# measurements in the same binary never run here.
+# instead of adding a default-feature test binary to the local edit loop.
+# The plan contract lives in this crate's qwen3_5_core artifact module —
+# it validates the standard-family plan surface against a jangtq2 bundle —
+# while the family's own throughput lane lives in
+# astronomical-jangtq2-qwen35 (issue #1427).
 test-jangtq2-plan = "test --no-fail-fast -p astronomical-model-serving --features direct-mlx --lib quantized_expert_layer_plan -- --ignored --nocapture"
 # test-jangtq2-decode-throughput: the bottom tier of the jangtq2 performance
 # pyramid — the codebook decode kernels themselves, measured on the graphics
 # processor with real page shapes (top-8 decode pages and complete-layer
-# prefill pages). Optimized build by rule: the decoder is memory-traffic bound
-# and debug numbers understate every ratio. Serial by rule: graphics-processor
-# tests never run in parallel.
-test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-model-serving --features direct-mlx --lib decode_throughput -- --ignored --nocapture --test-threads=1"
+# prefill pages). Runs in the family crate (astronomical-jangtq2-qwen35,
+# issue #1427): the decoder is memory-traffic bound and debug numbers
+# understate every ratio, so the optimized build is part of the alias.
+# Serial by rule: graphics-processor tests never run in parallel.
+test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib decode_throughput -- --ignored --nocapture --test-threads=1"
 # test-jangtq2-serving-throughput: the top tier of the jangtq2 performance
 # pyramid — serving prompt-processing and decode throughput of the real 122B
 # bundle over the daemon IPC boundary (warmup 500/50, measured 10,000/500,

@@ -184,7 +184,7 @@ fn should_plan_stacked_jangtq2_codebook_projections_from_float16_row_scales() {
         );
         assert_eq!(
             jangtq2_layer_plan.jangtq2_rotation_for_projection(projection_name),
-            Some(crate::jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32)
+            Some(astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32)
         );
         assert_eq!(
             projection_parameter_names(&jangtq2_layer_plan, projection_name),

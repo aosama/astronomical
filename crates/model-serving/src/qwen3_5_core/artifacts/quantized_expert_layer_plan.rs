@@ -296,8 +296,8 @@ pub(crate) fn projection_storage_contract(
             });
         };
         let jangtq2_codebook_entry =
-            crate::jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry::Codebook {
-                mode: crate::jangtq2_qwen35::configuration::Jangtq2CodebookMode,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry::Codebook {
+                mode: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookMode,
                 bits: projection_quantization_profile.bits,
                 rotation,
             };
@@ -474,8 +474,8 @@ fn validate_projection_codebook_geometry(
     };
     let bit_width = u32::try_from(bit_width).map_err(|_| ExpertManifestError::InvalidBits)?;
     let codebook_override_entry =
-        crate::jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry::Codebook {
-            mode: crate::jangtq2_qwen35::configuration::Jangtq2CodebookMode,
+        astronomical_jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry::Codebook {
+            mode: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookMode,
             bits: bit_width,
             rotation,
         };
@@ -497,13 +497,13 @@ fn validate_projection_codebook_geometry(
             qwen3_5_config.expert_intermediate_size(),
         )
     };
-    let module_geometry = crate::jangtq2_qwen35::artifacts::Jangtq2ModuleGeometry {
+    let module_geometry = astronomical_jangtq2_qwen35::artifacts::Jangtq2ModuleGeometry {
         input_width,
         output_width,
         expert_count: qwen3_5_config.expert_count(),
         affine_group_size: qwen3_5_config.default_quantization_group_size(),
     };
-    let codebook_tensor_inventory = crate::jangtq2_qwen35::artifacts::tensor_inventory_for_module(
+    let codebook_tensor_inventory = astronomical_jangtq2_qwen35::artifacts::tensor_inventory_for_module(
         module_name,
         &codebook_override_entry,
         &module_geometry,
