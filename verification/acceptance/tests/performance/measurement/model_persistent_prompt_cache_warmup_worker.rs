@@ -227,8 +227,7 @@ fn sequence_state_header_token_count(sequence_state_file_path: &Path) -> Option<
     let mut sequence_state_file = fs::File::open(sequence_state_file_path).ok()?;
     let mut header_length_bytes = [0_u8; 8];
     std::io::Read::read_exact(&mut sequence_state_file, &mut header_length_bytes).ok()?;
-    let header_byte_count =
-        u64::from_le_bytes(header_length_bytes).try_into().ok()?;
+    let header_byte_count = u64::from_le_bytes(header_length_bytes).try_into().ok()?;
     let mut header_json_bytes = vec![0_u8; header_byte_count];
     std::io::Read::read_exact(&mut sequence_state_file, &mut header_json_bytes).ok()?;
     let header_json: serde_json::Value = serde_json::from_slice(&header_json_bytes).ok()?;

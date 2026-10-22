@@ -230,8 +230,9 @@ async fn should_probe_fused_quantized_expert_decode_capability() {
     let mut attribution = PerformanceAttribution::disabled();
     let capabilities =
         astronomical_model_serving::worker_process_kernel_capabilities(&runtime, &mut attribution);
-    let verdict = capabilities
-        .verdict(astronomical_model_serving::CustomMetalKernelFamily::FUSED_QUANTIZED_EXPERT_DECODE);
+    let verdict = capabilities.verdict(
+        astronomical_model_serving::CustomMetalKernelFamily::FUSED_QUANTIZED_EXPERT_DECODE,
+    );
     eprintln!("fused capability verdict: {verdict:?}");
     assert!(matches!(
         verdict,

@@ -107,8 +107,9 @@ async fn run_persistent_prompt_cache_warmup_e2e(
         saved_persistent_prompt_cache_disk_usage.byte_count > 0,
         "saved persistent prompt-cache blocks must occupy disk space"
     );
-    let mut saved_complete_block_token_counts =
-        saved_persistent_prompt_cache_disk_usage.sequence_state_token_counts.clone();
+    let mut saved_complete_block_token_counts = saved_persistent_prompt_cache_disk_usage
+        .sequence_state_token_counts
+        .clone();
     saved_complete_block_token_counts.sort_unstable();
     // The largest declared token count is the model's block geometry; any
     // file declaring fewer is the prompt's best-effort partial tail.
@@ -178,8 +179,8 @@ fn assert_persistent_prompt_cache_warmup(
     saved_partial_tail_token_count: usize,
 ) {
     let warm_cached_token_count = warm_streaming_measurement.cached_token_count as usize;
-    let warm_uncached_token_count = warm_streaming_measurement.prompt_token_count as usize
-        - warm_cached_token_count;
+    let warm_uncached_token_count =
+        warm_streaming_measurement.prompt_token_count as usize - warm_cached_token_count;
     eprintln!(
         "[persistent-prompt-cache-warmup] warm restore reported {warm_cached_token_count} cached tokens of {} prompt tokens",
         warm_streaming_measurement.prompt_token_count
@@ -193,7 +194,8 @@ fn assert_persistent_prompt_cache_warmup(
     // count: a partial tail contributes a non-block-sized amount, and the
     // final prompt token always stays on the prefill path.
     assert!(
-        warm_cached_token_count >= saved_complete_block_count * persistent_prompt_cache_block_token_count,
+        warm_cached_token_count
+            >= saved_complete_block_count * persistent_prompt_cache_block_token_count,
         "the warm request must restore every complete block saved by the cold request: \
          restored {warm_cached_token_count} tokens, but {} saved complete blocks of \
          {persistent_prompt_cache_block_token_count} tokens require at least {}",

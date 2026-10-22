@@ -1,4 +1,6 @@
-use crate::budget::adaptive_growth::{AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard};
+use crate::budget::adaptive_growth::{
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+};
 
 #[test]
 fn should_reserve_transient_headroom_for_unseen_prefill_contexts() {

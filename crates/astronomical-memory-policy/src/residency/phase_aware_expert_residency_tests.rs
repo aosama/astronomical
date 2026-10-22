@@ -1,5 +1,5 @@
-use crate::residency::ExpertLayerGeometry;
 use crate::phase::MemoryPhase;
+use crate::residency::ExpertLayerGeometry;
 use crate::residency::{
     CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlanError,
     RetainedExpertPageClass, complete_layer_indexes_required_before_decode, plan_expert_residency,
