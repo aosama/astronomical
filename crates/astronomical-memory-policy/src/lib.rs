@@ -24,6 +24,11 @@
 //!   is one expert id in one sparse-layer slot; bytes are accounting
 //!   (`DecodeExpertCache`, `ResidentExpertWeight`,
 //!   `plan_previous_token_prefetch`).
+//! - `expert_paging` — pure expert-paging support arithmetic: the
+//!   safetensors header parsing (`safetensors_header`, over `safetensors`
+//!   and `strict_json`) and the expert weight memory-cache statistics. The
+//!   quantized expert manifests stay in `astronomical-model-serving` — they
+//!   embed model-family configuration types.
 //! - `phase` — the one lifecycle phase type (`MemoryPhase`).
 //! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`,
 //!   `MemoryAdmissionDecision`): every rejection names its boundary.
@@ -50,12 +55,15 @@ pub mod admission;
 pub mod budget;
 pub mod ceiling;
 pub mod expert_cache;
+pub mod expert_paging;
 pub mod geometry_floor;
 pub mod phase;
 pub mod reclamation;
 pub mod residency;
 pub mod recovery;
+pub mod safetensors;
 pub mod serving_ceiling;
+pub mod strict_json;
 pub mod vocabulary;
 
 #[cfg(test)]

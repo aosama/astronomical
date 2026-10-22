@@ -4,11 +4,11 @@ use serde::de::{Error as _, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use serde_json::{Map, Number, Value};
 
-pub(crate) const DUPLICATE_JSON_FIELD_MARKER: &str = "duplicate JSON object field";
+pub const DUPLICATE_JSON_FIELD_MARKER: &str = "duplicate JSON object field";
 const MAXIMUM_DUPLICATE_FIELD_CHARACTERS: usize = 256;
 
 /// Recursive JSON value that rejects a repeated object key before replacement can occur.
-pub(crate) struct DuplicateAwareJsonValue(pub(crate) Value);
+pub struct DuplicateAwareJsonValue(pub Value);
 
 impl<'de> Deserialize<'de> for DuplicateAwareJsonValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
