@@ -25,10 +25,12 @@ use crate::GenerationFinalization;
 use crate::InferenceEngineError;
 use crate::MlxInferenceExecution;
 use crate::MlxMemoryLimitAdjustment;
+use crate::MlxMemoryTelemetry;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
 use crate::inference_engine::contract::PreparedInferenceRequest;
 use crate::inference_engine::load_result::EngineLoadResult;
+use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
 use crate::sampling_seed;
@@ -163,6 +165,9 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "folded-ternary model is not loaded".to_owned(),
             })?;
+        // Sampled before the active-generation borrow; the one-step-old read
+        // still moves with real decode work and keeps the status surface live.
+        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         let active = self
             .active
             .as_mut()
@@ -234,7 +239,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 token_id: selected_token_id,
                 is_reasoning_token,
                 expert_memory_mode: Some(ExpertMemoryMode::Resident),
-                mlx_memory_telemetry: None,
+                mlx_memory_telemetry,
                 first_decode_forward_elapsed_millis: None,
                 generation_finalization: None,
             });
@@ -256,10 +261,16 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
             token_id: selected_token_id,
             is_reasoning_token,
             expert_memory_mode: Some(ExpertMemoryMode::Resident),
-            mlx_memory_telemetry: None,
+            mlx_memory_telemetry,
             first_decode_forward_elapsed_millis: None,
             generation_finalization: None,
         })
+    }
+
+    fn collect_mlx_memory_telemetry(
+        &self,
+    ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
+        Ok(self.collect_current_mlx_memory_telemetry())
     }
 
     fn inject_input_tokens(
@@ -325,6 +336,48 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
 }
 
 impl PrismHadamardQwen35InferenceExecution {
+    /// Samples the current MLX memory footprint for the status surface.
+    ///
+    /// The dense folded-ternary model owns its whole weight payload, so the
+    /// breakdown attributes active memory to the model core first and the
+    /// live generation state second; there is no expert owner.
+    pub(super) fn collect_current_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
+        let model = self.model.as_ref()?;
+        let memory_snapshot = match model.runtime.memory_snapshot() {
+            Ok(memory_snapshot) => memory_snapshot,
+            Err(memory_snapshot_error) => {
+                tracing::warn!(
+                    error = %memory_snapshot_error,
+                    "folded-ternary execution could not sample current MLX memory"
+                );
+                return None;
+            }
+        };
+        let active_memory_bytes = u64::try_from(memory_snapshot.active_memory_bytes()).ok()?;
+        let allocator_cache_memory_bytes =
+            u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()?;
+        let peak_memory_bytes = u64::try_from(memory_snapshot.peak_memory_bytes()).ok()?;
+        let model_core_payload_bytes = model.pack().total_payload_bytes();
+        let context_state_payload_bytes = self
+            .active
+            .as_ref()
+            .map_or(0, |active_generation| {
+                active_generation.generation_state.payload_byte_count()
+            });
+        let active_memory_breakdown = MlxActiveMemoryBreakdown::reconcile(
+            active_memory_bytes,
+            0,
+            model_core_payload_bytes,
+            context_state_payload_bytes,
+        );
+        Some(MlxMemoryTelemetry::new(
+            active_memory_bytes,
+            allocator_cache_memory_bytes,
+            peak_memory_bytes,
+            active_memory_breakdown,
+        ))
+    }
+
     /// Advances one bounded prompt-processing chunk through the straight
     /// forward pass and reports prefill progress to the worker.
     fn prefill_next_chunk(
@@ -338,6 +391,9 @@ impl PrismHadamardQwen35InferenceExecution {
             .ok_or_else(|| InferenceEngineError::Fatal {
                 reason: "folded-ternary model is not loaded".to_owned(),
             })?;
+        // Sampled before the active-generation borrow; chunk boundaries are
+        // far enough apart that one-chunk-old memory reads stay honest.
+        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry();
         let active = self
             .active
             .as_mut()
@@ -432,7 +488,7 @@ impl PrismHadamardQwen35InferenceExecution {
             elapsed_millis,
             forward_prefill_chunk_elapsed_millis: elapsed_millis,
             completed_prefill_chunk_tokens: chunk_length as u32,
-            mlx_memory_telemetry: None,
+            mlx_memory_telemetry,
             expert_residency_telemetry: None,
             expert_memory_mode: Some(ExpertMemoryMode::Resident),
             prompt_work_reuse: WorkerPromptWorkReuse {
