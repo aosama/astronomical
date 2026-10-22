@@ -1,3 +1,12 @@
+//! Storage-transition cells of the pinned prompt-cache interaction matrix.
+//!
+//! One cell runs per process, selected by
+//! `ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL`. The journey fails
+//! closed when the variable is unset or names an unknown cell, so an
+//! unselected default can never silently run the wrong transition. The cells
+//! are `fixed-live-reuse`, `fixed-worker-restart`, and
+//! `fixed-deleted-while-live`; run all three, one process each.
+
 use std::{fs, time::Duration};
 
 use astronomical_ipc_protocol::RequestId;

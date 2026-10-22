@@ -8,10 +8,10 @@
 #
 # The plain shared-target invocation is deliberate: mlx-feature check
 # artifacts on the shared target are precedented by the memory-contract
-# compile gate recorded in cargo-commands-for-testing.md, and a disposable
-# target would pay a cold compile on every refresh. The 600-second
-# compile-class budget exists because a cold mlx-feature compile can exceed
-# the 120-second test-class timeout.
+# compile gate (the check-mlx-memory-contract alias in .cargo/config.toml),
+# and a disposable target would pay a cold compile on every refresh. The
+# 600-second compile-class budget exists because a cold mlx-feature compile
+# can exceed the 120-second test-class timeout.
 
 set -eu
 
