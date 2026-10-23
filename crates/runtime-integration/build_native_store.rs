@@ -1,8 +1,9 @@
 //! Compatibility-keyed publication of the pinned MLX native runtime.
 //!
-//! Cargo package versions intentionally do not own this store. The build
-//! script regenerates Rust bindings in `OUT_DIR`, while expensive native
-//! products remain reusable until an actual native toolchain input changes.
+//! Cargo package versions intentionally do not own this store. The
+//! mlx-c-rust build script regenerates Rust bindings in its own `OUT_DIR`,
+//! while expensive native products remain reusable until an actual native
+//! toolchain input changes.
 
 use std::{
     error::Error,

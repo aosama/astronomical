@@ -205,16 +205,17 @@ mod should_word_the_gate_error {
             "the only surviving removal path for stale generations is cargo clean: {gate_error_text}"
         );
         assert!(
-            gate_error_text.contains("the build script clears the current generation automatically"),
-            "the message must distinguish the automatic current-generation path: {gate_error_text}"
-        );
-        assert!(
             gate_error_text.contains("#1486"),
             "the message should point at the tracking issue: {gate_error_text}"
         );
         assert!(
             !gate_error_text.contains("scripts/"),
             "the shell cleaner is retired; no script path may resurface: {gate_error_text}"
+        );
+        assert!(
+            !gate_error_text.contains("automatically"),
+            "the build-script auto-clear was retired in #1486 Phase 2; the message \
+             must not promise a remedy that no longer exists: {gate_error_text}"
         );
     }
 }
