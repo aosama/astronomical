@@ -1,14 +1,15 @@
 //! Cargo orchestration for Astronomical's pinned MLX and MLX-C runtime.
 //!
 //! Native products are identity-keyed outside `OUT_DIR` so release-version
-//! changes do not rebuild MLX. Bindings remain in `OUT_DIR`, which preserves
-//! Cargo's ownership of generated Rust source. The native compilation itself
-//! lives in `build_native_compile.rs`, shared with the standalone native-build
-//! tool so pre-warmed builds and in-Cargo builds stay identical.
+//! changes do not rebuild MLX. The generated Rust bindings live in the
+//! `OUT_DIR` of `crates/mlx-c-rust`'s own build script, which preserves
+//! Cargo's ownership of generated source; this script never writes there.
+//! The native compilation itself lives in `build_native_compile.rs`, shared
+//! with the standalone native-build tool so pre-warmed builds and in-Cargo
+//! builds stay identical.
 
 use std::{env, error::Error, path::Path, time::Instant};
 
-mod build_legacy_native_output;
 mod build_native_compile;
 mod build_native_linking;
 mod build_native_store;
@@ -34,7 +35,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let manifest_directory = required_path_variable("CARGO_MANIFEST_DIR")?;
-    let output_directory = required_path_variable("OUT_DIR")?;
     let native_build_progress = NativeBuildProgress::from_environment()
         .map_err(|message| -> Box<dyn Error> { message.into() })?;
     native_build_progress.record_build_start(&native_parallel_job_count());
@@ -65,7 +65,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             &native_build_progress,
         )
     })?;
-    build_legacy_native_output::remove_legacy_cargo_native_build_directory(&output_directory)?;
     write_native_build_status(&native_build_artifacts)?;
     native_build_progress.record_build_completion(
         native_build_artifacts.was_built(),
