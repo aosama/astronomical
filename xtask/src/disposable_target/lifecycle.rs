@@ -113,7 +113,10 @@ pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourne
         &format!(
             "start target_directory={} rustc_wrapper={} started_at={}",
             disposable_journey.target_directory.display(),
-            disposable_journey.selected_rustc_wrapper.as_deref().unwrap_or("none"),
+            disposable_journey
+                .selected_rustc_wrapper
+                .as_deref()
+                .unwrap_or("none"),
             local_timestamp()
         ),
         false,
@@ -127,7 +130,10 @@ pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourne
         .current_dir(&disposable_journey.repository_root)
         .env("CARGO_TARGET_DIR", &disposable_journey.target_directory)
         .env("ASTRONOMICAL_CARGO_TARGET_LIFECYCLE", "disposable")
-        .env("ASTRONOMICAL_CARGO_TARGET_LANE", &disposable_journey.lane_name)
+        .env(
+            "ASTRONOMICAL_CARGO_TARGET_LANE",
+            &disposable_journey.lane_name,
+        )
         .env(
             DISPOSABLE_REPOSITORY_ROOT_ENV,
             disposable_journey
@@ -227,7 +233,11 @@ impl DisposableJourney {
             revents: 0,
         };
         let ready_count = unsafe {
-            libc::poll(&mut poll_descriptor, 1, POLL_INTERVAL.as_millis() as libc::c_int)
+            libc::poll(
+                &mut poll_descriptor,
+                1,
+                POLL_INTERVAL.as_millis() as libc::c_int,
+            )
         };
         if ready_count <= 0 {
             return None;
@@ -309,17 +319,14 @@ impl DisposableJourney {
         );
         signal_edge::signal_process_group(process_group_id, libc::SIGTERM);
         let mut grace_seconds_remaining = CHILD_TERMINATION_GRACE_SECONDS;
-        while signal_edge::process_group_is_alive(process_group_id) && grace_seconds_remaining > 0
-        {
+        while signal_edge::process_group_is_alive(process_group_id) && grace_seconds_remaining > 0 {
             std::thread::sleep(Duration::from_secs(1));
             grace_seconds_remaining -= 1;
         }
         if signal_edge::process_group_is_alive(process_group_id) {
             lifecycle_line(
                 &self.lane_name,
-                &format!(
-                    "kill-escalation grace_seconds={CHILD_TERMINATION_GRACE_SECONDS}"
-                ),
+                &format!("kill-escalation grace_seconds={CHILD_TERMINATION_GRACE_SECONDS}"),
                 true,
             );
             signal_edge::signal_process_group(process_group_id, libc::SIGKILL);

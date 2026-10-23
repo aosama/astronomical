@@ -66,8 +66,14 @@ impl SignalPipe {
         }
         SIGNAL_PIPE_WRITE_FD.store(pipe_fds[1], Ordering::SeqCst);
         for (signal_number, handler) in [
-            (libc::SIGHUP, handle_hangup as *const () as libc::sighandler_t),
-            (libc::SIGINT, handle_interrupt as *const () as libc::sighandler_t),
+            (
+                libc::SIGHUP,
+                handle_hangup as *const () as libc::sighandler_t,
+            ),
+            (
+                libc::SIGINT,
+                handle_interrupt as *const () as libc::sighandler_t,
+            ),
             (
                 libc::SIGTERM,
                 handle_terminate as *const () as libc::sighandler_t,
@@ -81,7 +87,9 @@ impl SignalPipe {
                 libc::sigaction(signal_number, &handler_action, std::ptr::null_mut());
             }
         }
-        Some(SignalPipe { read_fd: pipe_fds[0] })
+        Some(SignalPipe {
+            read_fd: pipe_fds[0],
+        })
     }
 }
 

@@ -62,7 +62,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
     "../../../../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"

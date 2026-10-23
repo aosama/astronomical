@@ -10,7 +10,7 @@ use super::layer::{
     build_causal_padding_mask, forward_decoder_layer_attention, forward_decoder_layer_feed_forward,
 };
 use super::weights::{EXECUTED_LAYER_COUNT, Flux2KleinTextWeights, HIDDEN_WIDTH};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const CONDITIONING_WIDTH: i32 = 7_680;
 const HIDDEN_STATE_TAPS: [usize; 3] = [9, 18, 27];

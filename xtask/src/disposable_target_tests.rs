@@ -2,14 +2,17 @@
 //! typed port of the retired `scripts/run-in-disposable-cargo-target.sh`.
 
 use crate::disposable_target::{
-    allocated_bytes_from_du_output, exit_code_from_status, is_valid_lane_name,
+    UsageError, allocated_bytes_from_du_output, exit_code_from_status, is_valid_lane_name,
     lane_root_string_is_acceptable, marker_identity, parse_arguments, select_rustc_wrapper,
-    UsageError,
 };
 
 fn lane_arguments(lane_name: &str, command: &[&str]) -> Vec<String> {
     let mut arguments = vec!["--lane".to_owned(), lane_name.to_owned(), "--".to_owned()];
-    arguments.extend(command.iter().map(|command_part| (*command_part).to_owned()));
+    arguments.extend(
+        command
+            .iter()
+            .map(|command_part| (*command_part).to_owned()),
+    );
     arguments
 }
 
@@ -64,9 +67,11 @@ mod should_parse_arguments {
 
     #[test]
     fn should_accept_lane_separator_and_command() {
-        let journey =
-            parse_arguments(&lane_arguments("app-release", &["scripts/internal/x.sh", "--flag"]))
-                .expect("a well-formed invocation should parse");
+        let journey = parse_arguments(&lane_arguments(
+            "app-release",
+            &["scripts/internal/x.sh", "--flag"],
+        ))
+        .expect("a well-formed invocation should parse");
         assert_eq!(journey.lane_name, "app-release");
         assert_eq!(journey.command, ["scripts/internal/x.sh", "--flag"]);
     }
@@ -213,10 +218,7 @@ mod should_select_rustc_wrapper {
 
     #[test]
     fn should_fall_back_to_sccache_only_when_available() {
-        assert_eq!(
-            select_rustc_wrapper(None, true),
-            Some("sccache".to_owned())
-        );
+        assert_eq!(select_rustc_wrapper(None, true), Some("sccache".to_owned()));
         assert_eq!(select_rustc_wrapper(None, false), None);
     }
 }

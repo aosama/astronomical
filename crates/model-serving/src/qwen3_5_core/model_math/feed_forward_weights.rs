@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use super::decoder_layer_weights::Qwen3_5AffineWeights;
 use super::error::Qwen3_5ExecutionError;

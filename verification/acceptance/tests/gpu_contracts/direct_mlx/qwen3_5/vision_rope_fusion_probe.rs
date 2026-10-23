@@ -10,8 +10,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 use tokio::time::timeout;
 
 const HEAD_COUNT: i32 = 16;
@@ -212,11 +212,7 @@ fn composed_vision_rope(
         .expect("the composed rope should restore the input dtype")
 }
 
-fn bf16_array(
-    runtime: &MlxRuntime,
-    values: &[f32],
-    shape: &[i32],
-) -> astronomical_mlx_c_rust::MlxArray {
+fn bf16_array(runtime: &MlxRuntime, values: &[f32], shape: &[i32]) -> mlx_c_rust::MlxArray {
     runtime
         .astype(
             &runtime
@@ -227,11 +223,7 @@ fn bf16_array(
         .expect("the array should cast to bfloat16")
 }
 
-fn f32_array(
-    runtime: &MlxRuntime,
-    values: &[f32],
-    shape: &[i32],
-) -> astronomical_mlx_c_rust::MlxArray {
+fn f32_array(runtime: &MlxRuntime, values: &[f32], shape: &[i32]) -> mlx_c_rust::MlxArray {
     runtime
         .array_from_f32(values, shape)
         .expect("the float32 array should be valid")

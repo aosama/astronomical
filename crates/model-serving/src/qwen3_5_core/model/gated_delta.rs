@@ -1,5 +1,5 @@
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::MlxArray;
 
 use super::base::Qwen3_5ModelBase;
 use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};

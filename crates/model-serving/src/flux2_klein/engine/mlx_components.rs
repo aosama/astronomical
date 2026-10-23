@@ -44,7 +44,7 @@ use super::{
     Flux2KleinTokenizer,
 };
 use super::{Flux2KleinComponentLoad, Flux2KleinEngineComponents};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const TRANSFORMER_BLOCKS_PER_CANCELLATION_GROUP: usize = 1;
 const TEXT_ENCODER_LAYERS_PER_CANCELLATION_GROUP: usize = 1;

@@ -14,7 +14,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Set after the first capture attempt so at most one prefill chunk is traced.
 static METAL_CAPTURE_ATTEMPTED: AtomicBool = AtomicBool::new(false);

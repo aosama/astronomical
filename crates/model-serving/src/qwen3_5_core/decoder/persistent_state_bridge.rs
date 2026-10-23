@@ -1,7 +1,7 @@
 use super::RequestDecoderStateStack;
 use crate::DecoderCacheState;
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::MlxArray;
 use std::collections::HashMap;
 /// Bridges persistent prompt-cache block tensors and the live in-memory
 /// request decoder state. The in-memory owners decide how restored tensors

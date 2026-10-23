@@ -1,16 +1,16 @@
 //! MLX gathered execution against one Rust-streamed expert layer.
 
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::MlxArray;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
-use astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::sparse_experts::{
     ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
 };
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
+use astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 
 use super::super::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
 use super::cached_plus_streamed_page_route;
@@ -160,17 +160,15 @@ impl Qwen3_5Model {
             // Both projections use the same input and transform, so build
             // one rotated tensor and share it instead of repeating the
             // blockwise Hadamard work for gate and up independently.
-            Some(
-                performance_attribution.measure_operation(
-                    PerformanceOperation::Jangtq2ActivationRotationHadamard32,
-                    |_| {
-                        astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
-                            &self.runtime,
-                            expert_inputs,
-                        )
-                    },
-                )?,
-            )
+            Some(performance_attribution.measure_operation(
+                PerformanceOperation::Jangtq2ActivationRotationHadamard32,
+                |_| {
+                    astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                        &self.runtime,
+                        expert_inputs,
+                    )
+                },
+            )?)
         } else {
             None
         };
@@ -251,17 +249,15 @@ impl Qwen3_5Model {
         let rotated_activation_owner = match activation_rotation {
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => {
-                Some(
-                    performance_attribution.measure_operation(
-                        PerformanceOperation::Jangtq2ActivationRotationHadamard32,
-                        |_| {
-                            astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
-                                &self.runtime,
-                                activations,
-                            )
-                        },
-                    )?,
-                )
+                Some(performance_attribution.measure_operation(
+                    PerformanceOperation::Jangtq2ActivationRotationHadamard32,
+                    |_| {
+                        astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                            &self.runtime,
+                            activations,
+                        )
+                    },
+                )?)
             }
         };
         let projection_activations = rotated_activation_owner.as_ref().unwrap_or(activations);
@@ -327,7 +323,8 @@ impl Qwen3_5Model {
                 let decoded_element_count = (packed_shape[0] as u64)
                     .saturating_mul(packed_shape[1] as u64)
                     .saturating_mul(
-                        (packed_shape[2] as u64).saturating_mul(32) / u64::from(*codebook_bit_width),
+                        (packed_shape[2] as u64).saturating_mul(32)
+                            / u64::from(*codebook_bit_width),
                     );
                 performance_attribution.record_counter(
                     PerformanceCounter::Jangtq2CodebookDecodedOutputByteCount,

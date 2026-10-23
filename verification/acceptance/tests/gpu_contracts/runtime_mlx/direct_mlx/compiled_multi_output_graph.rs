@@ -1,4 +1,4 @@
-use astronomical_mlx_c_rust::{
+use mlx_c_rust::{
     MlxCompiledMultiOutputGraph, MlxStream, array_from_vector, graph_output_array, raw,
     set_graph_output_vector,
 };

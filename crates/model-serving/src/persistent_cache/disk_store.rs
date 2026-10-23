@@ -21,8 +21,8 @@ use super::disk_store_index::PersistentPromptCacheDiskStoreIndex;
 use super::disk_store_scan;
 use super::model_contract::PersistentPromptCacheModelContract;
 use super::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
+use mlx_c_rust::MlxArray;
 use std::collections::HashMap;
 
 const BLOCKS_DIRECTORY_NAME: &str = "blocks";

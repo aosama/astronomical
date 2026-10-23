@@ -18,8 +18,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::{MlxArray, MlxDtype};
 use tokio::time::timeout;
 
 const TOKEN_COUNT: i32 = 8_192;
@@ -79,7 +79,7 @@ async fn probe_elementwise_chains() {
     runtime
         .evaluate_arrays(&[&input, &rolling_state, &weight])
         .expect("the probe operands should evaluate");
-    let compiled_elementwise_graphs = astronomical_mlx_c_rust::MlxCompiledElementwiseGraphs::new()
+    let compiled_elementwise_graphs = mlx_c_rust::MlxCompiledElementwiseGraphs::new()
         .expect("the compiled elementwise graphs should build");
 
     let probes: Vec<(&str, Box<dyn Fn() -> MlxArray + '_>)> = vec![

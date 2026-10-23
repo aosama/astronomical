@@ -22,11 +22,11 @@
 use super::super::codebook;
 #[cfg(feature = "direct-mlx")]
 use super::super::mlx_decode;
-#[cfg(feature = "direct-mlx")]
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::MlxMemoryLimits;
 #[cfg(feature = "direct-mlx")]
 use astronomical_runtime_integration::MlxRuntime;
+#[cfg(feature = "direct-mlx")]
+use mlx_c_rust::{MlxArray, MlxDtype};
 #[cfg(feature = "direct-mlx")]
 use serial_test::serial;
 

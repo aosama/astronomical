@@ -6,7 +6,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 #[derive(Clone, Copy)]
 pub(crate) struct RotaryGeometry {

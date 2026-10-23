@@ -15,7 +15,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21EngineError;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 /// The artifact's affine quantization: 4-bit values in groups of 64 input channels.
 pub(in crate::qwen_image_21) const QUANT_GROUP_SIZE: usize = 64;

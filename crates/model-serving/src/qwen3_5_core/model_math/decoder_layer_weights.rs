@@ -2,7 +2,7 @@ use astronomical_runtime_integration::MlxRuntimeError;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// One pre-bound affine module used directly by Qwen3.5 execution.
 ///

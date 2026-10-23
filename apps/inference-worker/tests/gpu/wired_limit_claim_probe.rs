@@ -33,10 +33,10 @@
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, set_wired_limit};
 use astronomical_runtime_integration::{
     MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
+use mlx_c_rust::{MlxArray, MlxDtype, set_wired_limit};
 use serial_test::serial;
 
 const RUN_PROBE_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_RUN_WIRED_CLAIM_PROBE";

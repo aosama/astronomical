@@ -29,12 +29,12 @@ use super::error::K2HorizonMoVAExecutionError;
 
 mod kernel_sources;
 
-use astronomical_mlx_c_rust::{
-    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
-};
 use kernel_sources::{
     FUSED_DECODE_KERNEL_HEADER, ROUTED_DOWN_KERNEL_SOURCE, ROUTED_GATE_UP_KERNEL_SOURCE,
     VALUE_EXPERT_KERNEL_SOURCE,
+};
+use mlx_c_rust::{
+    MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
 
 const QUANTIZED_DECODE_GROUP_SIZE: i32 = 64;

@@ -1,5 +1,5 @@
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::MlxArray;
 
 const CONVOLUTION_STATE_OPERATION: &str = "roll the in-memory convolution rolling buffer";
 
@@ -84,7 +84,7 @@ impl ConvolutionState {
     pub fn current_or_zero(
         &self,
         runtime: &MlxRuntime,
-        activation_dtype: astronomical_mlx_c_rust::MlxDtype,
+        activation_dtype: mlx_c_rust::MlxDtype,
     ) -> Result<MlxArray, MlxRuntimeError> {
         let rolling_buffer_tokens = self.linear_convolution_kernel_dimension.saturating_sub(1);
         let zero_buffer_shape = [1, rolling_buffer_tokens, self.linear_convolution_dimension];

@@ -49,8 +49,7 @@ impl DisposableSandbox {
             std::fs::create_dir_all(parent_directory)
                 .expect("the executable's parent directory should be creatable");
         }
-        std::fs::write(&executable_path, body)
-            .expect("the sandbox executable should be writable");
+        std::fs::write(&executable_path, body).expect("the sandbox executable should be writable");
         make_executable(&executable_path);
         executable_path
     }
@@ -104,7 +103,11 @@ pub(crate) fn journey_log_text(journey_output: &Output) -> String {
     combined_log_text
 }
 
-pub(crate) fn run_journey(sandbox: &DisposableSandbox, lane_name: &str, command: &Path) -> (Output, String) {
+pub(crate) fn run_journey(
+    sandbox: &DisposableSandbox,
+    lane_name: &str,
+    command: &Path,
+) -> (Output, String) {
     let journey_output = sanitized_runner_command(sandbox)
         .arg("--lane")
         .arg(lane_name)

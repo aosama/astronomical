@@ -44,7 +44,7 @@
 //! `cargo test-jangtq2-decode-throughput` (the filter matches this module's
 //! `..._throughput` names).
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernel};
+use mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernel};
 use serial_test::serial;
 
 use super::super::codebook;

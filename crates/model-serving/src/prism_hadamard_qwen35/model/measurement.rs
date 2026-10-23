@@ -9,7 +9,7 @@
 //! forward runs, on the same retained weights and compiled graphs, so a
 //! measurement here is a measurement of the serving path.
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use super::forward::StraightGenerationState;
 use super::weights::DecoderLayerAttentionWeights;

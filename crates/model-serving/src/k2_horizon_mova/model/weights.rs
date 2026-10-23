@@ -9,7 +9,7 @@ use crate::k2_horizon_mova::expert_geometry::K2HorizonMoVASparseLayerExpertPaylo
 use super::affine::K2HorizonMoVAAffineLinear;
 use super::error::K2HorizonMoVAExecutionError;
 use super::weight_binding;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub struct K2HorizonMoVADenseAttentionWeights {

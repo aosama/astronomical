@@ -19,9 +19,7 @@ use super::weights::{
     K2HorizonMoVADenseAttentionWeights, K2HorizonMoVADenseMlpWeights, K2HorizonMoVALayerWeights,
     K2HorizonMoVAMoVAAttentionWeights, K2HorizonMoVASparseMlpWeights,
 };
-use astronomical_mlx_c_rust::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel,
-};
+use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 
 /// One decoder layer's KV owner: full-precision or quantized slabs.
 pub enum K2HorizonMoVAKvState {

@@ -18,7 +18,7 @@ use super::blocks::BlockContext;
 use super::preparation;
 use super::preparation::QwenImage21TransformerRequest;
 use super::weights::{HEAD_COUNT, HEAD_WIDTH, QwenImage21TransformerWeights};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// The reviewed artifact's block count (`num_layers`).
 const BLOCK_COUNT: usize = 32;

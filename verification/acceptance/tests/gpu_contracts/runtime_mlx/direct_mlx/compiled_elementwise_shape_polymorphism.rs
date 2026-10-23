@@ -5,7 +5,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use crate::common::runtime_test_support::{
     assert_bfloat16_arrays_match, assert_f32_close, runtime, stable_softplus_reference,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 
 const FEATURE_DIMENSION: i32 = 4;
 

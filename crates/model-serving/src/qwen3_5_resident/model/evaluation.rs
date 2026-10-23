@@ -1,4 +1,4 @@
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 

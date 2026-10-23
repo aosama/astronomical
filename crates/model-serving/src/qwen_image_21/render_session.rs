@@ -26,7 +26,7 @@ use crate::qwen_image_21::{
     normalize_empty_prompt, render_t2i_prompt_template, resolve_generation_dimensions,
     special_tokens,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Where a session is in the reference's render sequence.
 enum RenderPhase {

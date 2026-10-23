@@ -3,13 +3,13 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_quantization::bit_width::{BitWidth, GroupSize};
 use astronomical_quantization::error::QuantizationError;
 use astronomical_quantization::module_inventory::QuantizableModuleDescriptor;
 use astronomical_quantization::sensitivity::{
     CalibrationForwardSample, ModuleRestoreToken, SensitivityProbeModel,
 };
+use mlx_c_rust::MlxArray;
 
 use crate::qwen3_5_resident::Qwen3_5ResidentModel;
 

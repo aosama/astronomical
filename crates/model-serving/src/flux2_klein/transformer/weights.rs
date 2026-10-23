@@ -8,7 +8,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 #[derive(Debug)]
 enum TransformerTensorSource {

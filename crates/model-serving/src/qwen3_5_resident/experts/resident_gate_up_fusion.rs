@@ -18,7 +18,7 @@ use crate::qwen3_5_core::artifacts::{QuantizationMode, QuantizedExpertLayerPlan}
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::expert_gate_up_fusion::fuse_compatible_expert_gate_up_projections;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Resident gate/up ownership selected from startup-validated source geometry.
 #[derive(Debug)]

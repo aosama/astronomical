@@ -2,8 +2,9 @@
 //!
 //! Native products are identity-keyed outside `OUT_DIR` so release-version
 //! changes do not rebuild MLX. The generated Rust bindings live in the
-//! `OUT_DIR` of `crates/mlx-c-rust`'s own build script, which preserves
-//! Cargo's ownership of generated source; this script never writes there.
+//! `OUT_DIR` of the published `mlx-c-rust` crate's build script (resolved
+//! from the cargo registry), which preserves Cargo's ownership of generated
+//! source; this script never writes there.
 //! The native compilation itself lives in `build_native_compile.rs`, shared
 //! with the standalone native-build tool so pre-warmed builds and in-Cargo
 //! builds stay identical.

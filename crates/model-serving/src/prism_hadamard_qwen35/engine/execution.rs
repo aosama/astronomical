@@ -10,7 +10,7 @@ mod input_injection;
 mod sampling;
 
 use astronomical_ipc_protocol::RequestId;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::PersistentPromptCacheBlockKey;
 use crate::PersistentPromptCacheDiskStore;

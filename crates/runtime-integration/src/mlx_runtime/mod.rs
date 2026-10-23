@@ -10,7 +10,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 
 use crate::MlxMemoryLimits;
-use astronomical_mlx_c_rust::MlxBindingsContext;
+use mlx_c_rust::MlxBindingsContext;
 
 pub(crate) use error_handling::check_status;
 pub use error_handling::classify_mlx_error;
