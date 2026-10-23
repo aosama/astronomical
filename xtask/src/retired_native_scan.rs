@@ -1,9 +1,11 @@
 //! `cargo xtask scan-retired-native-output` — the read-only Phase 0 probe
 //! for issue #1486: counts the retired complete CMake native-output
-//! directories that still linger in Cargo targets and cache checkouts, so
-//! the retirement of `scripts/clean-retired-cargo-native-output.sh` (Phase
-//! 1) and of the transitional build-script cleanup (Phase 2) is gated by a
-//! measurement instead of a guess. The probe never removes anything.
+//! directories that still linger in Cargo targets and cache checkouts.
+//! Phase 1 (retiring the shell cleaner and its contract) landed behind this
+//! probe's zero-count gate; the probe now guards Phase 2, the eventual
+//! removal of the transitional build-script cleanup in
+//! `crates/runtime-integration/build_legacy_native_output.rs`. The probe
+//! never removes anything.
 
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
@@ -183,10 +185,10 @@ fn run_scan(
             return ExitCode::from(1);
         }
         let scan_root_path = PathBuf::from(scan_root);
-        // Canonicalize before the refusal check so spelling variants of the
-        // filesystem root ("/.", "//", symlinked roots) cannot bypass it,
-        // exactly how the shell cleaner resolves its target first. The
-        // canonical form also keys the duplicate-root deduplication below.
+        // Canonicalize before the refusal check: Path does not normalize, so
+        // spelling variants of the filesystem root ("/.", "//", symlinked
+        // roots) would otherwise bypass the string comparison. The canonical
+        // form also keys the duplicate-root deduplication below.
         let Ok(canonical_scan_root) = scan_root_path.canonicalize() else {
             print_output_line(
                 &format!(
@@ -209,8 +211,8 @@ fn run_scan(
         }
         if canonical_scan_roots.contains(&canonical_scan_root) {
             // An overlapping or repeated scan root would count the same
-            // retired directories twice; the shell cleaner deduplicates its
-            // candidates through a set for the same reason.
+            // retired directories twice; the set keyed on the canonical
+            // form is the deduplication authority.
             continue;
         }
         canonical_scan_roots.push(canonical_scan_root);
@@ -220,7 +222,7 @@ fn run_scan(
     let mut next_progress_at = scan_started_at + PROGRESS_INTERVAL;
     // Global totals key candidates canonically so overlapping scan roots
     // can never count one physical retired directory twice in the summary
-    // the Phase 1 gate reads.
+    // the retirement gate reads.
     let mut counted_retired_canonical_paths: BTreeSet<PathBuf> = BTreeSet::new();
     let mut total_retired_bytes: u64 = 0;
     let mut total_retired_directories: u64 = 0;
@@ -270,16 +272,22 @@ fn run_scan(
         false,
     );
     if fail_on_found && total_retired_directories > 0 {
-        print_output_line(
-            &format!(
-                "Error: {total_retired_directories} retired native-output directories remain; \
-                 run scripts/clean-retired-cargo-native-output.sh --apply to remove them"
-            ),
-            true,
-        );
+        print_output_line(&gate_error_message(total_retired_directories), true);
         return ExitCode::from(1);
     }
     ExitCode::SUCCESS
+}
+
+/// The operator guidance a tripped `--fail-on-found` gate prints: the
+/// surviving removal paths are the build script's automatic clearing of the
+/// current generation plus a deliberate whole-target `cargo clean` for
+/// stale generations (see CONTRIBUTING.md and issue #1486).
+pub(crate) fn gate_error_message(retired_directory_count: u64) -> String {
+    format!(
+        "Error: {retired_directory_count} retired native-output directories remain; \
+         remove them with a deliberate whole-target `cargo clean` (the build script \
+         clears the current generation automatically; see issue #1486)"
+    )
 }
 
 fn print_output_line(output_text: &str, to_standard_error: bool) {
@@ -354,7 +362,7 @@ pub(crate) fn scan_root_for_retired_candidates(
         let Ok(directory_entries) = std::fs::read_dir(&visited_directory) else {
             // A permission-denied subtree must shrink the measurement
             // visibly rather than silently, so the summary carries the
-            // count and the Phase 1 gate can distrust a scan with holes.
+            // count and the retirement gate can distrust a scan with holes.
             unreadable_directories += 1;
             continue;
         };
@@ -391,11 +399,11 @@ pub(crate) fn scan_root_for_retired_candidates(
     }
 }
 
-/// Total allocated storage (st_blocks × 512, the same accounting the shell
-/// cleaner uses) for one retired directory and its subtree. Unlike `du`,
-/// a hard-linked inode reachable through several directory entries is
+/// Total allocated storage (st_blocks × 512, the same accounting `du -sk`
+/// reports) for one retired directory and its subtree. Unlike `du`, a
+/// hard-linked inode reachable through several directory entries is
 /// counted once per entry; for retired CMake output that difference is
-/// noise, and the shell cleaner shares it.
+/// noise, and the measurement only ever compares counts with themselves.
 pub(crate) fn allocated_bytes_under(retired_directory: &Path) -> u64 {
     use std::os::unix::fs::MetadataExt;
     let mut total_allocated_bytes = std::fs::symlink_metadata(retired_directory)
