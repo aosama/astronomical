@@ -12,16 +12,16 @@ mod expert_pager_construction;
 #[cfg(feature = "direct-mlx")]
 mod paged_expert_weights;
 #[cfg(feature = "direct-mlx")]
-mod retained_expert_cache;
-#[cfg(feature = "direct-mlx")]
 mod retained_page_payload;
 pub mod route_observation;
+#[cfg(feature = "direct-mlx")]
+mod warm_expert_slot_table_cache;
 
 #[cfg(feature = "direct-mlx")]
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 #[cfg(feature = "direct-mlx")]
-pub(crate) use retained_expert_cache::RetainedExpertCache;
-#[cfg(feature = "direct-mlx")]
-pub(crate) use retained_expert_cache::RoutedExpertCoverage;
-#[cfg(feature = "direct-mlx")]
 pub(crate) use retained_page_payload::retained_expert_layer_page_payload_bytes;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use warm_expert_slot_table_cache::RoutedExpertCoverage;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use warm_expert_slot_table_cache::WarmExpertSlotTableCache;

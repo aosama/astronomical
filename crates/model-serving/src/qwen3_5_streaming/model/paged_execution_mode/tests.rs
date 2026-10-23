@@ -1,8 +1,8 @@
-use super::Qwen3_5MoEPagedPrefillExecutionMode;
+use super::Qwen3_5MoEPagedExecutionMode;
 
 #[test]
 fn should_resolve_multi_token_routes_before_executing_each_paged_layer() {
-    let production_mode = Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault;
+    let production_mode = Qwen3_5MoEPagedExecutionMode::ProductionDefault;
 
     for prefill_token_count in [2, 512, 1_024, 2_048, 4_096] {
         assert!(
@@ -15,15 +15,14 @@ fn should_resolve_multi_token_routes_before_executing_each_paged_layer() {
 #[test]
 fn should_defer_only_the_one_token_production_decode_route() {
     assert!(
-        Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
+        Qwen3_5MoEPagedExecutionMode::ProductionDefault.should_defer_host_route_materialization(1)
+    );
+    assert!(
+        !Qwen3_5MoEPagedExecutionMode::CompactPromptDiagnostic
             .should_defer_host_route_materialization(1)
     );
     assert!(
-        !Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic
-            .should_defer_host_route_materialization(1)
-    );
-    assert!(
-        !Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic
+        !Qwen3_5MoEPagedExecutionMode::TokenLocalDiagnostic
             .should_defer_host_route_materialization(1)
     );
 }

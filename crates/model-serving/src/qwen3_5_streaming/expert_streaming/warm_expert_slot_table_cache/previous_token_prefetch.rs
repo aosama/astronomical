@@ -5,11 +5,11 @@
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::RetainedExpertCache;
-use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
-use crate::qwen3_5_streaming::expert_paging::retained_expert_cache::RoutedExpertCoverage;
+use super::WarmExpertSlotTableCache;
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
+use crate::qwen3_5_streaming::expert_streaming::warm_expert_slot_table_cache::RoutedExpertCoverage;
 
-impl RetainedExpertCache {
+impl WarmExpertSlotTableCache {
     /// Writes streamed experts into leftover slots only. Occupied slots stay.
     pub fn insert_into_free_slots_only(
         &mut self,

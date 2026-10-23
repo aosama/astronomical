@@ -11,8 +11,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
 };
 use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5MoEPagedPrefillExecutionMode, Qwen3_5StreamingModel,
-    Qwen3_5Tokenizer,
+    Qwen3_5ArtifactValidator, Qwen3_5MoEPagedExecutionMode, Qwen3_5StreamingModel, Qwen3_5Tokenizer,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -34,7 +33,7 @@ async fn run_compact_multi_token_forward_comparison() {
         "compact_multi_token_prompt_prepared",
         "automatic_compact_diagnostic",
         "automatic_standard_reference",
-        Some(Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic),
+        Some(Qwen3_5MoEPagedExecutionMode::CompactPromptDiagnostic),
         MAXIMUM_EXPECTED_AUTOMATIC_PREFILL_ABSOLUTE_LOGIT_DELTA,
     )
     .await;
@@ -45,7 +44,7 @@ async fn run_automatic_prefill_comparison(
     progress_phase_label: &'static str,
     candidate_prefill_path_label: &'static str,
     reference_prefill_path_label: &'static str,
-    paged_prefill_execution_mode: Option<Qwen3_5MoEPagedPrefillExecutionMode>,
+    paged_execution_mode: Option<Qwen3_5MoEPagedExecutionMode>,
     maximum_expected_absolute_logit_delta: f32,
 ) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
@@ -58,7 +57,7 @@ async fn run_automatic_prefill_comparison(
         prompt_token_ids,
         candidate_prefill_path_label,
         test_started_at,
-        paged_prefill_execution_mode,
+        paged_execution_mode,
     )
     .await;
     let reference_prefill_snapshot = run_prefill_snapshot(
@@ -185,7 +184,7 @@ pub(crate) async fn run_prefill_snapshot(
     prompt_token_ids: &[u32],
     prefill_path_label: &'static str,
     test_started_at: Instant,
-    paged_prefill_execution_mode: Option<Qwen3_5MoEPagedPrefillExecutionMode>,
+    paged_execution_mode: Option<Qwen3_5MoEPagedExecutionMode>,
 ) -> PrefillSnapshot {
     assert!(
         test_started_at.elapsed() < PREFILL_COMPARISON_TIMEOUT,
@@ -222,13 +221,13 @@ pub(crate) async fn run_prefill_snapshot(
     );
     let mut request_decoder_state = crate::common::standard_request_decoder_state(&config);
     let prefill_started_at = Instant::now();
-    let final_position_logits = match paged_prefill_execution_mode {
-        Some(paged_prefill_execution_mode) => qwen3_5_model
-            .forward_chunk_with_paged_prefill_execution_mode_for_tests(
+    let final_position_logits = match paged_execution_mode {
+        Some(paged_execution_mode) => qwen3_5_model
+            .forward_chunk_with_paged_execution_mode_for_tests(
                 prompt_token_ids,
                 0,
                 &mut request_decoder_state,
-                paged_prefill_execution_mode,
+                paged_execution_mode,
             ),
         None => qwen3_5_model.forward_chunk(prompt_token_ids, 0, &mut request_decoder_state),
     }

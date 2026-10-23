@@ -8,10 +8,10 @@
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use super::RetainedExpertCache;
+use super::WarmExpertSlotTableCache;
 use crate::expert_paging::ExpertWeightPage;
 
-impl RetainedExpertCache {
+impl WarmExpertSlotTableCache {
     /// Writes queued miss experts into their layer tables after GPU evaluation
     /// and returns how many experts were newly written.
     pub fn flush_pending_inserts(&mut self, runtime: &MlxRuntime) -> Result<u64, MlxRuntimeError> {

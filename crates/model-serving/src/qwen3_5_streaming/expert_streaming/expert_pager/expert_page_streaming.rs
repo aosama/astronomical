@@ -14,7 +14,7 @@ use crate::expert_paging::{
     QuantizedExpertPageManifest, build_quantized_expert_page_manifest_from_plan,
     load_quantized_expert_page,
 };
-use crate::qwen3_5_streaming::expert_paging::paged_expert_weights;
+use crate::qwen3_5_streaming::expert_streaming::paged_expert_weights;
 
 /// Request dimensions needed to attribute one source plan without retaining routes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,7 +25,7 @@ pub(crate) struct Qwen3_5ExpertStreamingRequestShape {
 
 impl Qwen3_5ExpertPager {
     /// Loads the exact expert IDs selected by Rust for this forward.
-    pub(crate) fn load_rust_streamed_experts(
+    pub(crate) fn stream_selected_expert_page_from_ssd(
         &self,
         runtime: &astronomical_runtime_integration::MlxRuntime,
         layer_index: usize,

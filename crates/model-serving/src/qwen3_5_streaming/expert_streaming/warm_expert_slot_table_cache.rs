@@ -12,7 +12,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use crate::expert_paging::{
     ExpertWeightPage, QuantizedExpertPageManifest, RetainedExpertReclamation,
 };
-use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 
 use slot_writes::RetainedReferenceOk;
 
@@ -27,7 +27,7 @@ mod slot_writes;
 mod memory_behavior_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
-mod retained_expert_cache_tests;
+mod warm_expert_slot_table_cache_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod slot_writes_tests;
@@ -77,7 +77,7 @@ struct PendingSlotInsert {
 
 /// RAM-resident expert slot tables keyed by decoder index.
 #[derive(Debug)]
-pub struct RetainedExpertCache {
+pub struct WarmExpertSlotTableCache {
     tables_by_layer: Vec<Option<ExpertSlotTable>>,
     pending_inserts: Vec<PendingSlotInsert>,
     expert_demand_counts_by_layer: Vec<Vec<u64>>,
@@ -97,7 +97,7 @@ pub struct RetainedExpertCache {
     prefetch_payload_bytes: u64,
 }
 
-impl RetainedExpertCache {
+impl WarmExpertSlotTableCache {
     #[must_use]
     pub fn new(layer_count: usize) -> Self {
         Self {
@@ -119,10 +119,14 @@ impl RetainedExpertCache {
         }
     }
 
-    /// Returns the preallocated weights and a slot-indexed manifest for a hit.
+    /// Returns the warm table's preallocated weights and a slot-indexed
+    /// manifest, but only when every requested expert is seated — an
+    /// all-or-nothing coverage contract. A single missing expert yields
+    /// `None`, leaving mixed coverage to the caller (the decode dispatch in
+    /// `forward.rs` splits it through the cached-plus-streamed route).
     /// The gather path uses slot ids derived from `page_slot_by_global_expert_id`.
     #[must_use]
-    pub fn packed_page(
+    pub fn full_coverage_page(
         &self,
         layer_index: usize,
         expert_ids: &[usize],

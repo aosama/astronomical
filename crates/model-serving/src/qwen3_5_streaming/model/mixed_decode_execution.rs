@@ -12,10 +12,10 @@ use astronomical_runtime_integration::MlxRuntime;
 use super::paged_execution::RoutedExpertAssignmentOutputs;
 use crate::expert_paging::ExpertPageRoutePartition;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_streaming::expert_paging::RoutedExpertCoverage;
-use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5ExpertPager;
-use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
-use crate::qwen3_5_streaming::model::Qwen3_5MoEPagedPrefillExecutionMode;
+use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5ExpertPager;
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
+use crate::qwen3_5_streaming::model::Qwen3_5MoEPagedExecutionMode;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model::cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;
 use crate::qwen3_5_streaming::model::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
@@ -166,7 +166,7 @@ impl Qwen3_5Model {
         route_order_expert_ids: &[usize],
         route_coverage: &RoutedExpertCoverage,
         expert_capacity: usize,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         should_use_compiled_elementwise_graphs: bool,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -189,8 +189,7 @@ impl Qwen3_5Model {
                 layer_index,
                 1,
                 missing_expert_ids,
-                paged_prefill_execution_mode
-                    == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 performance_attribution,
             )?;
         let route_partition =

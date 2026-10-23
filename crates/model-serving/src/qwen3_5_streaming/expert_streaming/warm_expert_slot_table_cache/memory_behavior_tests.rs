@@ -2,7 +2,7 @@
 //! invariants that survive growth and eviction cycles, and the MLX graph-pin
 //! guarantees of the warm-table write paths.
 
-use super::retained_expert_cache_tests::{
+use super::warm_expert_slot_table_cache_tests::{
     EXPERT_CAPACITY, STREAMED_PER_EXPERT_PAYLOAD_BYTES, WARM_SLOT_COUNT,
     streamed_weights_for_expert_count, test_runtime,
 };
@@ -18,7 +18,7 @@ use serial_test::serial;
 #[serial]
 fn should_keep_payload_accounting_exact_across_growth_and_eviction() {
     let runtime = test_runtime();
-    let mut cache = RetainedExpertCache::new(1);
+    let mut cache = WarmExpertSlotTableCache::new(1);
     cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
     let routed_expert_set_by_token: [Vec<usize>; 8] = [
         vec![1, 2],
@@ -114,7 +114,7 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
                 astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
         }
     };
-    let mut cache = RetainedExpertCache::new(1);
+    let mut cache = WarmExpertSlotTableCache::new(1);
     cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
     // Other suite tests share the process-global runtime; sample this test's
     // own baseline after settling the allocator so only its allocations count.

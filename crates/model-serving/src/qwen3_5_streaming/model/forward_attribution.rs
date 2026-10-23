@@ -3,7 +3,7 @@
 use mlx_c_rust::MlxArray;
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
+use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecutionMode};
 
 use super::Qwen3_5Model;
 use super::forward_contract;
@@ -119,7 +119,7 @@ impl Qwen3_5Model {
             starting_position_tokens,
             request_decoder_state,
             boundary_checkpoint_collector,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+            Qwen3_5MoEPagedExecutionMode::ProductionDefault,
             performance_attribution,
         )?);
         Ok(consumed_visual_embedding_count)
@@ -201,7 +201,7 @@ impl Qwen3_5Model {
                 starting_position_tokens,
                 request_decoder_state,
                 None,
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 performance_attribution,
             )?;
             let graph_elapsed = graph_started_at.elapsed();
@@ -264,7 +264,7 @@ impl Qwen3_5Model {
                 starting_position_tokens,
                 request_decoder_state,
                 Some(&mut boundary_checkpoint_collector),
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 performance_attribution,
             )?;
             match self.evaluate_decoder_state_for_paged_route_resolution(
@@ -314,7 +314,7 @@ impl Qwen3_5Model {
                 starting_position_tokens,
                 request_decoder_state,
                 Some(&mut boundary_checkpoint_collector),
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 performance_attribution,
             )?;
             match self.evaluate_terminal_prefill_state_with_performance_attribution(
@@ -361,7 +361,7 @@ impl Qwen3_5Model {
                 token_ids.len() as i32,
                 starting_position_tokens,
                 request_decoder_state,
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 performance_attribution,
             )?;
             match self.evaluate_forward_state_with_performance_attribution(

@@ -548,7 +548,7 @@ pub use qwen3_5_resident::{
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_streaming::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5MoECachedPlusStreamedPageRoute,
-    Qwen3_5MoEPagedPrefillExecutionMode, build_source_manifests, contiguous_selected_runs,
+    Qwen3_5MoEPagedExecutionMode, build_source_manifests, contiguous_selected_runs,
     qwen3_5_moe_combine_experts, qwen3_5_moe_combine_partial_route_outputs_for_tests,
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,

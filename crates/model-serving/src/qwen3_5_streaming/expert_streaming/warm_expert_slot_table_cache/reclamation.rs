@@ -8,9 +8,9 @@ use mlx_c_rust::MlxArray;
 use crate::expert_paging::{ExpertWeightMemoryCacheStatistics, RetainedExpertReclamation};
 use crate::memory::RetainedExpertPageClass;
 
-use super::RetainedExpertCache;
+use super::WarmExpertSlotTableCache;
 
-impl RetainedExpertCache {
+impl WarmExpertSlotTableCache {
     pub fn limit_for_request_pressure(&mut self, reclamation_target_bytes: u64) -> bool {
         let pressure_maximum = self
             .resident_payload_bytes
