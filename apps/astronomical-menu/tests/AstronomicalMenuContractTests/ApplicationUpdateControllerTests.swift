@@ -88,7 +88,10 @@ final class AppStoreUpdateControllerTests: XCTestCase {
 
 @MainActor
 final class SparkleUnbundledUpdateControllerTests: XCTestCase {
-  private static let userDefaultsSuiteName = "AstronomicalMenuContractTests.unbundledSparkle"
+  // XCTest's tearDown override runs nonisolated, so the immutable Sendable
+  // suite name must be nonisolated to stay reachable from it without an
+  // actor-isolation warning (which the strict Swift build treats as an error).
+  private nonisolated static let userDefaultsSuiteName = "AstronomicalMenuContractTests.unbundledSparkle"
 
   override func tearDown() {
     UserDefaults.standard.removePersistentDomain(forName: Self.userDefaultsSuiteName)

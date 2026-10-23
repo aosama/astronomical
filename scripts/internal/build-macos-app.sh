@@ -324,8 +324,12 @@ main() {
     fi
     printf '  building Thin Talk web assets (bundle.js/bundle.css)\n'
     (cd "${repository_root}/apps/thin-talk/web" && npm ci && npm run build)
+    # -Xswiftc -warnings-as-errors mirrors the repository's Rust rule that
+    # warnings are defects: any Swift warning must fail the app build here
+    # and in GitHub Actions rather than survive into the signed bundle.
     swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu" \
-        --product "$menu_swift_product"
+        --product "$menu_swift_product" \
+        -Xswiftc -warnings-as-errors
     finish_phase "success"
 
     # ── Phase 4: Assemble and sign app bundle ────────────────────────────
