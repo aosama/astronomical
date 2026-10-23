@@ -19,11 +19,11 @@ mod forward;
 mod mixed_decode_execution;
 mod paged_execution;
 #[cfg(feature = "direct-mlx")]
+mod paged_execution_mode;
+#[cfg(feature = "direct-mlx")]
 mod paged_route_resolution;
 #[cfg(feature = "direct-mlx")]
 mod phase_aware_expert_residency;
-#[cfg(feature = "direct-mlx")]
-mod prefill_execution_mode;
 #[cfg(feature = "direct-mlx")]
 mod read_through_residency;
 #[cfg(feature = "direct-mlx")]
@@ -95,13 +95,13 @@ pub use mixed_decode_execution::qwen3_5_moe_combine_partial_route_outputs_for_te
 #[cfg(feature = "direct-mlx")]
 pub use output_combination::qwen3_5_moe_combine_experts;
 #[cfg(feature = "direct-mlx")]
+pub use paged_execution_mode::Qwen3_5MoEPagedExecutionMode;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use paged_route_resolution::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
 };
 #[cfg(feature = "direct-mlx")]
 pub(crate) use phase_aware_expert_residency::record_expert_reclamation_attribution;
-#[cfg(feature = "direct-mlx")]
-pub use prefill_execution_mode::Qwen3_5MoEPagedPrefillExecutionMode;
 #[cfg(feature = "direct-mlx")]
 pub use routing::{
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,

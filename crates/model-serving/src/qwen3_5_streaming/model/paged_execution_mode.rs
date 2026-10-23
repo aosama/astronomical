@@ -1,11 +1,15 @@
 #[cfg(test)]
 mod tests;
 
-/// Selects the paged MoE execution path for multi-token target forwards.
+/// Selects the paged MoE execution path for target forwards, prefill and decode alike.
 ///
-/// Diagnostic variants remain explicit test seams rather than runtime settings.
+/// `ProductionDefault` is the only production variant: it governs multi-token
+/// prefill chunks and single-token decode forwards, including the decode-time
+/// warm-table use in `forward.rs`. The diagnostic variants remain explicit
+/// test seams rather than runtime settings and force non-production prefill
+/// paths only.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Qwen3_5MoEPagedPrefillExecutionMode {
+pub enum Qwen3_5MoEPagedExecutionMode {
     /// Uses adaptive direct layer pages for normal inference.
     ProductionDefault,
     /// Executes sparse MoE separately for each prompt token through the decode cache.
@@ -14,7 +18,7 @@ pub enum Qwen3_5MoEPagedPrefillExecutionMode {
     CompactPromptDiagnostic,
 }
 
-impl Qwen3_5MoEPagedPrefillExecutionMode {
+impl Qwen3_5MoEPagedExecutionMode {
     /// Returns whether this forward may execute before exact routes are host-visible.
     ///
     /// One-token production decode benefits from validating its small hot route

@@ -27,11 +27,11 @@ use super::slot_writes::{
     RetainedReferenceOk, create_warm_table_weights, materialize_and_detach_table_weights,
     write_expert_into_slot,
 };
-use super::{ExpertSlotTable, RetainedExpertCache};
+use super::{ExpertSlotTable, WarmExpertSlotTableCache};
 use crate::expert_paging::ExpertWeightPage;
-use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 
-impl RetainedExpertCache {
+impl WarmExpertSlotTableCache {
     /// Inserts streamed experts into the layer's slot table. The first insert
     /// adopts the streamed page as-is so the table holds exactly the routed
     /// experts; later inserts grow the table (doubling, bounded by the policy

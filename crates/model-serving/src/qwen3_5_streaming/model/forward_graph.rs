@@ -1,6 +1,6 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
-use crate::qwen3_5_streaming::Qwen3_5MoEPagedPrefillExecutionMode;
+use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5Model;
@@ -55,7 +55,7 @@ impl Qwen3_5Model {
             starting_position_tokens,
             request_decoder_state,
             None,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+            Qwen3_5MoEPagedExecutionMode::ProductionDefault,
             &mut disabled_performance_attribution,
         )?;
         self.evaluate_forward_state(target_forward_output.final_logits(), request_decoder_state)?;
@@ -70,7 +70,7 @@ impl Qwen3_5Model {
         token_count: i32,
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         Ok(self
@@ -80,7 +80,7 @@ impl Qwen3_5Model {
                 starting_position_tokens,
                 request_decoder_state,
                 None,
-                paged_prefill_execution_mode,
+                paged_execution_mode,
                 performance_attribution,
             )?
             .final_logits)
@@ -100,7 +100,7 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
         drop(
@@ -111,7 +111,7 @@ impl Qwen3_5Model {
                 None,
                 request_decoder_state,
                 boundary_checkpoint_collector,
-                paged_prefill_execution_mode,
+                paged_execution_mode,
                 performance_attribution,
                 false,
             )?,
@@ -127,7 +127,7 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         self.build_target_forward_graph_with_position_offsets(
@@ -136,7 +136,7 @@ impl Qwen3_5Model {
             None,
             request_decoder_state,
             boundary_checkpoint_collector,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             performance_attribution,
         )
     }
@@ -150,7 +150,7 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         let token_count = super::forward_contract::validate_forward_input(
@@ -180,7 +180,7 @@ impl Qwen3_5Model {
             token_position_offsets,
             request_decoder_state,
             boundary_checkpoint_collector,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             performance_attribution,
             true,
         )
@@ -195,7 +195,7 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         self.build_target_forward_graph_from_token_indices_with_position_offsets(
@@ -205,7 +205,7 @@ impl Qwen3_5Model {
             None,
             request_decoder_state,
             boundary_checkpoint_collector,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             performance_attribution,
             true,
         )
@@ -221,7 +221,7 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
@@ -233,7 +233,7 @@ impl Qwen3_5Model {
             token_position_offsets,
             request_decoder_state,
             boundary_checkpoint_collector,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             performance_attribution,
             should_materialize_vocabulary_logits,
         )
@@ -248,7 +248,7 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         Ok(self
@@ -258,7 +258,7 @@ impl Qwen3_5Model {
                 starting_position_tokens,
                 request_decoder_state,
                 boundary_checkpoint_collector,
-                paged_prefill_execution_mode,
+                paged_execution_mode,
                 performance_attribution,
             )?
             .final_logits)
@@ -273,7 +273,7 @@ impl Qwen3_5Model {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
         self.build_target_forward_graph_from_embeddings_with_position_offsets(
@@ -283,7 +283,7 @@ impl Qwen3_5Model {
             None,
             request_decoder_state,
             boundary_checkpoint_collector,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             performance_attribution,
             true,
         )
@@ -299,7 +299,7 @@ impl Qwen3_5Model {
         mut boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
         should_materialize_vocabulary_logits: bool,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
@@ -356,7 +356,7 @@ impl Qwen3_5Model {
                 layer_model_state,
                 token_position_offsets,
                 boundary_checkpoint_collector.as_deref_mut(),
-                paged_prefill_execution_mode,
+                paged_execution_mode,
                 performance_attribution,
             )?;
             if graph_submission_layer_interval > 0

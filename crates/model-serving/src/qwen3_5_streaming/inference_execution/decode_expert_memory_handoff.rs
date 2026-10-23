@@ -198,7 +198,7 @@ pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
                 .and_then(|layer_plan| {
                     let expert_capacity = layer_plan.expert_capacity;
                     let per_expert_payload_bytes =
-                        crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
+                        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
                             layer_plan,
                             1,
                         )
@@ -314,7 +314,7 @@ fn enforce_decode_warm_slot_floor(
         model.expert_pager.as_ref().and_then(|expert_pager| {
             let first_layer_plan = expert_pager.layer_plans().first()?;
             let per_expert_payload_bytes =
-                crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
+                crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
                     first_layer_plan,
                     1,
                 )
@@ -390,7 +390,7 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
     };
     let expert_capacity = first_layer_plan.expert_capacity;
     let Some(per_expert_payload_bytes) =
-        crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
+        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
             first_layer_plan,
             1,
         )
@@ -448,7 +448,7 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
             continue;
         };
         let Some(complete_layer_payload_bytes) =
-            crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes(
+            crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
                 layer_plan,
                 layer_plan.expert_capacity,
             )

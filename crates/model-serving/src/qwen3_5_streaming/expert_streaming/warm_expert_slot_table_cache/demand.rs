@@ -7,9 +7,9 @@
 
 use crate::memory::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 
-use super::RetainedExpertCache;
+use super::WarmExpertSlotTableCache;
 
-impl RetainedExpertCache {
+impl WarmExpertSlotTableCache {
     pub fn record_expert_demand(
         &mut self,
         layer_index: usize,

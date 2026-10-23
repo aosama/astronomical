@@ -3,8 +3,8 @@
 use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::memory::residency::ExpertLayerGeometry;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_streaming::expert_paging::expert_pager::ExpertPagingError;
-use crate::qwen3_5_streaming::expert_paging::retained_expert_layer_page_payload_bytes;
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::ExpertPagingError;
+use crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes;
 use crate::{
     ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution, PerformanceCounter,
     PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,

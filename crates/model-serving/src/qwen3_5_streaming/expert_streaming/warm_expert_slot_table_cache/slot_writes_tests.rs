@@ -3,8 +3,8 @@
 //! copy), a row write moves exactly one expert's codes and scales, and the
 //! writer refuses representation and bit-width mismatches.
 
-use super::retained_expert_cache_tests::test_runtime;
 use super::slot_writes::{create_warm_table_weights, write_expert_into_slot};
+use super::warm_expert_slot_table_cache_tests::test_runtime;
 use super::*;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use astronomical_runtime_integration::MlxRuntime;
@@ -152,7 +152,8 @@ fn should_write_one_expert_row_of_codes_and_scales_into_a_slot() {
 #[serial]
 fn should_reject_writing_a_packed_codebook_row_into_a_native_table() {
     let runtime = test_runtime();
-    let native = super::retained_expert_cache_tests::streamed_weights_for_expert_count(&runtime, 2);
+    let native =
+        super::warm_expert_slot_table_cache_tests::streamed_weights_for_expert_count(&runtime, 2);
     let mut native_table = create_warm_table_weights(&runtime, &native, 2)
         .expect("the native warm table should be created");
     let packed = packed_codebook_page(&runtime, 2, TWO_BIT_WIDTH);

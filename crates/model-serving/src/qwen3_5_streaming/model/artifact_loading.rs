@@ -188,9 +188,10 @@ impl Qwen3_5Model {
                         );
                         None
                     };
-                let retained_experts = RefCell::new(
-                    crate::qwen3_5_streaming::RetainedExpertCache::new(expert_pager.layer_count()),
-                );
+                let retained_experts =
+                    RefCell::new(crate::qwen3_5_streaming::WarmExpertSlotTableCache::new(
+                        expert_pager.layer_count(),
+                    ));
                 (
                     Some(expert_pager),
                     Some(retained_experts),

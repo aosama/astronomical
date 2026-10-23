@@ -16,7 +16,7 @@ use mlx_c_rust::MlxArray;
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::route_observation::ObservedExpertRoute;
-use crate::qwen3_5_streaming::expert_paging::route_observation::{
+use crate::qwen3_5_streaming::expert_streaming::route_observation::{
     RouteObservationRecord, RouteObservationRing, sorted_unique_layer_routed_expert_ids,
 };
 use crate::qwen3_5_streaming::model::Qwen3_5Model;

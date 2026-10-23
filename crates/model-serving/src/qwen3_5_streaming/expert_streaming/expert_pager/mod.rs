@@ -1,11 +1,11 @@
 //! Rust-owned Qwen expert streaming and resident-promotion source metadata.
 
-mod rust_expert_streaming;
+mod expert_page_streaming;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod expert_subset_tests;
 
-pub(crate) use rust_expert_streaming::Qwen3_5ExpertStreamingRequestShape;
+pub(crate) use expert_page_streaming::Qwen3_5ExpertStreamingRequestShape;
 
 use std::cell::Cell;
 use std::fs::File;
