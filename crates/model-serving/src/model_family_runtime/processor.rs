@@ -2,7 +2,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, WorkerEvent,
 };
 
-use crate::{K2HorizonMoVAGenerationProcessor, Qwen3_5GenerationProcessor};
+use crate::Qwen3_5GenerationProcessor;
 
 use super::{ModelFamilyInferenceRequest, ModelFamilyRequestOutput};
 use crate::model_generation_processor::ModelGeneratedTokenTranslation;
@@ -13,7 +13,6 @@ use crate::model_generation_processor::PreparedModelGeneration;
 /// Family-tagged prompt and output processor used by EngineBackedWorker.
 pub enum ModelFamilyGenerationProcessor {
     Qwen3_5(Qwen3_5GenerationProcessor),
-    K2HorizonMoVA(K2HorizonMoVAGenerationProcessor),
     /// The folded ternary family reuses the Qwen3.5 text processor: the pack
     /// speaks the same chat dialect over its own tokenizer.
     PrismHadamardQwen35(Qwen3_5GenerationProcessor),
@@ -26,7 +25,6 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     fn ready_event(&self) -> WorkerEvent {
         match self {
             Self::Qwen3_5(processor) => processor.ready_event(),
-            Self::K2HorizonMoVA(processor) => processor.ready_event(),
             Self::PrismHadamardQwen35(processor) => processor.ready_event(),
         }
     }
@@ -47,16 +45,6 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
                         ModelFamilyRequestOutput::Qwen3_5(prepared_generation.request_output),
                     )
                 }),
-            Self::K2HorizonMoVA(processor) => processor
-                .prepare_chat_generation(chat_generation_command)
-                .map(|prepared_generation| {
-                    PreparedModelGeneration::new(
-                        ModelFamilyInferenceRequest::K2HorizonMoVA(
-                            prepared_generation.inference_request,
-                        ),
-                        ModelFamilyRequestOutput::K2HorizonMoVA(prepared_generation.request_output),
-                    )
-                }),
             Self::PrismHadamardQwen35(processor) => processor
                 .prepare_chat_generation(chat_generation_command)
                 .map(|prepared_generation| {
@@ -75,9 +63,6 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
     fn is_end_of_sequence_token(&self, generated_token_id: u32) -> bool {
         match self {
             Self::Qwen3_5(processor) => processor.is_end_of_sequence_token(generated_token_id),
-            Self::K2HorizonMoVA(processor) => {
-                processor.is_end_of_sequence_token(generated_token_id)
-            }
             Self::PrismHadamardQwen35(processor) => {
                 processor.is_end_of_sequence_token(generated_token_id)
             }
@@ -93,10 +78,6 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             (Self::Qwen3_5(processor), ModelFamilyRequestOutput::Qwen3_5(request_output)) => {
                 processor.translate_generated_token(request_output, generated_token_id)
             }
-            (
-                Self::K2HorizonMoVA(processor),
-                ModelFamilyRequestOutput::K2HorizonMoVA(request_output),
-            ) => processor.translate_generated_token(request_output, generated_token_id),
             (
                 Self::PrismHadamardQwen35(processor),
                 ModelFamilyRequestOutput::PrismHadamardQwen35(request_output),
@@ -115,10 +96,6 @@ impl ModelGenerationProcessor for ModelFamilyGenerationProcessor {
             (Self::Qwen3_5(processor), ModelFamilyRequestOutput::Qwen3_5(request_output)) => {
                 processor.finish_request_output(request_output)
             }
-            (
-                Self::K2HorizonMoVA(processor),
-                ModelFamilyRequestOutput::K2HorizonMoVA(request_output),
-            ) => processor.finish_request_output(request_output),
             (
                 Self::PrismHadamardQwen35(processor),
                 ModelFamilyRequestOutput::PrismHadamardQwen35(request_output),

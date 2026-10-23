@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 pub(crate) use astronomical_test_harness::fixtures::{
-    e2e_test_model_ids, flux2_klein_model_id, k2_horizon_mova_model_id, large_sparse_moe_model_id,
+    e2e_test_model_ids, flux2_klein_model_id, large_sparse_moe_model_id,
     required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
 };
 
@@ -48,7 +48,7 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
 -> astronomical_model_serving::WorkerKernelCapabilities {
     // Every family the Qwen3.5 loader consults is demoted with a distinct
     // unsupported reason so one serving request exercises each fallback
-    // route; the K2-only fused expert decode stays unprobed and fail-closed.
+    // route.
     use astronomical_model_serving::{CustomKernelVerdict, CustomMetalKernelFamily};
     let forced_demotion_description = "forced demotion for the serving fallback journey";
     astronomical_model_serving::WorkerKernelCapabilities::with_forced_verdicts_for_tests([

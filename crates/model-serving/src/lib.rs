@@ -29,8 +29,6 @@ pub(crate) mod image_generation_engine;
 
 pub(crate) mod inference_engine;
 
-pub(crate) mod k2_horizon_mova;
-
 mod kernel_capability;
 
 pub(crate) mod memory;
@@ -179,33 +177,11 @@ pub use inference_engine::{
     MlxInferenceEngine, MlxInferenceExecution,
 };
 
-pub use k2_horizon_mova::K2HorizonMoVAServingSettings;
-
-#[cfg(feature = "direct-mlx")]
-pub use k2_horizon_mova::{
-    FusedExpertDecodeKernels, K2HorizonMoVAAffineLinear, K2HorizonMoVAEngine,
-    K2HorizonMoVAInferenceExecution, K2HorizonMoVAKvState, K2HorizonMoVAStartupError,
-    gathered_fused_swiglu, gathered_value_experts, initialize_k2_horizon_mova_execution,
-    initialize_k2_horizon_mova_execution_with_serving_settings, initialize_k2_horizon_mova_model,
-    initialize_k2_horizon_mova_model_with_serving_settings,
-};
-
 #[cfg(feature = "direct-mlx")]
 pub use prism_hadamard_qwen35::engine::{
     PrismHadamardQwen35Engine, PrismHadamardQwen35InferenceExecution,
     PrismHadamardQwen35ServingSettings, PrismHadamardQwen35StartupError,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
-};
-
-pub use k2_horizon_mova::{
-    K2HorizonMoVAAffineProfile, K2HorizonMoVAArtifactValidationError,
-    K2HorizonMoVAAttentionGateFunc, K2HorizonMoVAConfig, K2HorizonMoVAConfigError,
-    K2HorizonMoVAExpertGeometryError, K2HorizonMoVAGenerationProcessor,
-    K2HorizonMoVAInferenceRequest, K2HorizonMoVAPromptRenderer, K2HorizonMoVAQuantizationContract,
-    K2HorizonMoVARequestOutput, K2HorizonMoVAShardIndex, K2HorizonMoVAThinkingBudgetError,
-    K2HorizonMoVATokenizer, K2HorizonMoVATokenizerError, ValidatedK2HorizonMoVAArtifact,
-    expected_stacked_affine_tensor_names, k2_horizon_mova_decoder_cache_layout,
-    k2_horizon_mova_expert_layer_geometries, resolve_k2_horizon_mova_thinking_budget,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -228,19 +204,19 @@ pub use memory::{
     AdaptiveRamGrowthTransientReserveSource, AllocationAdmissionDecision,
     AllocationAdmissionObservation, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
     CompleteResidencyDecision, CompleteResidencyHeadroomBoundary, CompleteResidencyRequirements,
-    ContextAdmissionRequirements, CurrentExpertLayerResidency,
-    ExpertLayerResidencyTarget, ExpertMemoryAdmissionError, ExpertReclamationPlan,
-    ExpertResidencyPlan, ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryPolicy,
+    ContextAdmissionRequirements, CurrentExpertLayerResidency, ExpertLayerResidencyTarget,
+    ExpertMemoryAdmissionError, ExpertReclamationPlan, ExpertResidencyPlan,
+    ExpertResidencyPlanError, ForwardRecoveryDecision, ForwardRecoveryPolicy,
     ForwardRecoveryRequirements, MeasuredExpertLayerPayload, MemoryAdmissionDecision,
     MemoryBoundary, MemoryCeilingChangeDecision, MemoryCeilingChangeRequirements,
     MemoryCeilingUtilization, MemoryPhase, MlxRamBudget, MlxRamBudgetError,
     MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
     PagedExpertReclamationStep, RamBudgetGeometryError, RequestExpertLayerRole,
-    RequestExpertResidency, RetainedExpertPageClass,
-    RetainedPrefixRetentionDecision, RetainedPrefixRetentionRequirements, RotatingAdmissionError,
-    StreamingStartupResidencyFacts, VISIBLE_ANSWER_RESERVE_TOKENS,
-    bounded_output_reservation_token_count, classify_expert_memory_mode,
-    combined_persistent_growth_bytes, complete_layer_indexes_required_before_decode,
+    RequestExpertResidency, RetainedExpertPageClass, RetainedPrefixRetentionDecision,
+    RetainedPrefixRetentionRequirements, RotatingAdmissionError, StreamingStartupResidencyFacts,
+    VISIBLE_ANSWER_RESERVE_TOKENS, bounded_output_reservation_token_count,
+    classify_expert_memory_mode, combined_persistent_growth_bytes,
+    complete_layer_indexes_required_before_decode,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     decode_warm_floor_eviction_indexes, effective_mlx_memory_ceiling_after_wired_claim,
     effective_mlx_memory_ceiling_bytes, expert_reclamation_bytes_to_fit_fixed_forward,
@@ -359,10 +335,6 @@ pub use crate::inference_engine::contract::{
 };
 
 pub use crate::inference_engine::load_result::EngineLoadResult;
-
-pub use crate::k2_horizon_mova::artifacts::dialect::K2HorizonMoVAWeightDialect;
-
-pub use crate::k2_horizon_mova::artifacts::validator::K2HorizonMoVAArtifactValidator;
 
 pub use crate::memory::telemetry::{
     MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry,

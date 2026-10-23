@@ -94,7 +94,6 @@ impl ResolvedConfigurationGeneration {
 fn model_family_identity(model_family: ModelFamily) -> &'static str {
     match model_family {
         ModelFamily::Qwen3_5 => "qwen3_5",
-        ModelFamily::K2HorizonMoVA => "k2_horizon_mova",
         ModelFamily::PrismHadamardQwen35 => "prism_hadamard_qwen35",
         ModelFamily::Flux2Klein => "flux2_klein",
         ModelFamily::QwenImage21 => "qwen_image_21",

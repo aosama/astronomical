@@ -69,9 +69,6 @@ pub enum DownloadCatalogFamily {
     /// The wire name matches the discovery model_type, which has no underscore.
     #[serde(rename = "modernbert")]
     ModernBert,
-    /// Wire name matches discovery `model_type` (`k2_horizon_mova`, not split MoVA).
-    #[serde(rename = "k2_horizon_mova")]
-    K2HorizonMoVA,
     /// Wire name matches the folded ternary pack's `model_type`.
     #[serde(rename = "prism_hadamard_qwen35")]
     PrismHadamardQwen35,
@@ -85,7 +82,6 @@ impl DownloadCatalogFamily {
             Self::Flux2Klein => "flux2_klein",
             Self::QwenImage21 => "qwen_image_21",
             Self::ModernBert => "modernbert",
-            Self::K2HorizonMoVA => "k2_horizon_mova",
             Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
         }
     }

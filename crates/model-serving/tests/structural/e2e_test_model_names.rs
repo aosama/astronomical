@@ -5,7 +5,6 @@ fn should_load_a_discovered_leaf_model_id_for_every_e2e_test_role() {
         astronomical_test_harness::fixtures::resident_sparse_moe_model_id(),
         astronomical_test_harness::fixtures::small_dense_model_id(),
         astronomical_test_harness::fixtures::flux2_klein_model_id(),
-        astronomical_test_harness::fixtures::k2_horizon_mova_model_id(),
     ];
     assert_eq!(
         e2e_test_model_ids,
