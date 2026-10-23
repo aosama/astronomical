@@ -30,10 +30,6 @@
 //!   `ReleasePartial`, `ReleaseCompleteForExactDeficit`).
 //! - **2 page classes** — `StableCompleteLayer` and `ElasticRoutedExperts`,
 //!   the eviction-priority classes for retained *prefill* pages.
-//! - **Decode expert cache** — `DecodeExpertCache` and friends (in
-//!   `astronomical-memory-policy::expert_cache::decode`, re-exported here):
-//!   the unit is one expert
-//!   id, never a layer pin. Families supply `ResidentExpertWeight`.
 //!
 //! # The naming constitution
 //!
@@ -101,10 +97,6 @@ pub use budget::{
 pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
-pub use expert_cache::{
-    DecodeExpertCache, PreviousTokenPrefetchCandidate, PreviousTokenPrefetchLayerCapacity,
-    PreviousTokenPrefetchPlan, ResidentExpertWeight, plan_previous_token_prefetch,
-};
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
 // direct-MLX admission callers and the offline artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
