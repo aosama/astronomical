@@ -195,11 +195,15 @@ test-jangtq2-plan = "test --no-fail-fast -p astronomical-model-serving --feature
 # test-jangtq2-decode-throughput: the bottom tier of the jangtq2 performance
 # pyramid — the codebook decode kernels themselves, measured on the graphics
 # processor with real page shapes (top-8 decode pages and complete-layer
-# prefill pages). Runs in the family crate (astronomical-jangtq2-qwen35,
-# issue #1427): the decoder is memory-traffic bound and debug numbers
-# understate every ratio, so the optimized build is part of the alias.
+# prefill pages), plus the tier-0 prefill prototype (dequantize-in-register
+# gathered matmul with the Hadamard-32 rotation folded in) compared against
+# the materializing decode plus gather_mm baseline at the pinned chunk shape.
+# Runs in the family crate (astronomical-jangtq2-qwen35, issue #1427): the
+# decoder is memory-traffic bound and debug numbers understate every ratio,
+# so the optimized build is part of the alias. The `throughput` filter
+# matches both the decode-throughput tests and the prefill prototype tests.
 # Serial by rule: graphics-processor tests never run in parallel.
-test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib decode_throughput -- --ignored --nocapture --test-threads=1"
+test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib throughput -- --ignored --nocapture --test-threads=1"
 # test-jangtq2-serving-throughput: the top tier of the jangtq2 performance
 # pyramid — serving prompt-processing and decode throughput of the real 122B
 # bundle over the daemon IPC boundary (warmup 500/50, measured 10,000/500,

@@ -161,9 +161,14 @@ impl Qwen3_5Model {
             // one rotated tensor and share it instead of repeating the
             // blockwise Hadamard work for gate and up independently.
             Some(
-                astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
-                    &self.runtime,
-                    expert_inputs,
+                performance_attribution.measure_operation(
+                    PerformanceOperation::Jangtq2ActivationRotationHadamard32,
+                    |_| {
+                        astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                            &self.runtime,
+                            expert_inputs,
+                        )
+                    },
                 )?,
             )
         } else {
@@ -245,12 +250,19 @@ impl Qwen3_5Model {
         };
         let rotated_activation_owner = match activation_rotation {
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
-            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => Some(
-                astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
-                    &self.runtime,
-                    activations,
-                )?,
-            ),
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => {
+                Some(
+                    performance_attribution.measure_operation(
+                        PerformanceOperation::Jangtq2ActivationRotationHadamard32,
+                        |_| {
+                            astronomical_jangtq2_qwen35::mlx_decode::rotate_activations_hadamard32(
+                                &self.runtime,
+                                activations,
+                            )
+                        },
+                    )?,
+                )
+            }
         };
         let projection_activations = rotated_activation_owner.as_ref().unwrap_or(activations);
         match affine_weights {
@@ -308,6 +320,19 @@ impl Qwen3_5Model {
                         )
                     },
                 )?;
+                let packed_shape = packed_code_words.shape();
+                // The decoded bfloat16 volume is the round-trip cost the fused
+                // prefill matmul exists to remove; pricing it per forward makes
+                // chunk-size amortization visible in every request's record.
+                let decoded_element_count = (packed_shape[0] as u64)
+                    .saturating_mul(packed_shape[1] as u64)
+                    .saturating_mul(
+                        (packed_shape[2] as u64).saturating_mul(32) / u64::from(*codebook_bit_width),
+                    );
+                performance_attribution.record_counter(
+                    PerformanceCounter::Jangtq2CodebookDecodedOutputByteCount,
+                    decoded_element_count.saturating_mul(std::mem::size_of::<u16>() as u64),
+                );
                 let transposed_weights =
                     self.runtime.transpose_axes(&decoded_weight, &[0, 2, 1])?;
                 Ok(gather_expert_projection(
