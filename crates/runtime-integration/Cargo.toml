@@ -17,10 +17,11 @@ mlx-memory-contract-probe = ["mlx"]
 unsafe_code = "allow"
 unused_must_use = "deny"
 
-# astronomical-mlx-c-fork is a dependency only of the mlx-feature coverage
-# contract test binary (required-features gates it); Cargo cannot express an
-# optional dev-dependency, so the manifest lint stays allowed here rather
-# than dragging the graphics-processor build into the offline lane.
+# astronomical-mlx-c-fork is consumed only by the mlx-feature coverage
+# contract (the feature enables the crate; the contract test target carries
+# required-features). Cargo cannot express an optional dev-dependency, so
+# the manifest lint stays allowed here rather than dragging the
+# graphics-processor build into the offline lane.
 [lints.cargo]
 unused_dependencies = "allow"
 

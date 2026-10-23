@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 
 # Refreshes crates/mlx-c-fork/COVERAGE_INVENTORY.md from live data: the
-# provisioned pinned MLX-C headers and the bridge inventory the published mlx-c-rust and astronomical-mlx-c-fork crates
-# build script just compiled. The artifact is the human-reviewable record
+# provisioned pinned MLX-C headers and the merged bridge inventory of the
+# published mlx-c-rust crate plus the astronomical-mlx-c-fork delta. The
+# artifact is the human-reviewable record
 # behind the coverage contract; the contract test fails on drift and names
 # this script as the refresh command.
 #
