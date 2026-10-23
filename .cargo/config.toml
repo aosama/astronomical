@@ -43,13 +43,6 @@ warnings = "deny"
 # binary AND its beside-source lib unit tests (--lib); the property-named
 # aliases from before the vocabulary campaign were retired with the
 # campaign's final batch.
-# Every alias that links the native stack needs the mlx-c-rust prefix
-# override exported first, or the crate's link ladder resolves its own stock
-# shared pair instead of the patched static pair from the native build
-# store: export MLX_C_RUST_MLX_C_PREFIX="$(cargo xtask native-store-entry
-# --profile core)" after scripts/ci/prewarm-native-build.sh has published an
-# entry (continuous integration exports the same value into its job
-# environment; see third-party/README.md, "Bump-and-release process").
 # test-offline: every package's offline_tests binary plus lib unit tests.
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
 # test-e2e: the root whole-product journeys (verification/e2e) that spawn the real
