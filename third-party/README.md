@@ -170,7 +170,10 @@ To bump a pinned dependency:
 ## Bindgen headers and the C surface diff
 
 The MLX-C binding surface spans two crates. The published `mlx-c-rust`
-crate (crates.io, versioned against the MLX-C release it binds) owns the
+crate (crates.io, versioned against the MLX release line its bindings
+target — the 0.32.3 line matches the pinned MLX v0.32.3; the earlier
+0.7.0-alpha spelling tracked the MLX-C release and was yanked upstream)
+owns the
 raw bindgen declarations over its vendored stock headers, the
 captured-error translation, the owned handle types, the per-worker bindings
 context, and every operation wrapper family; it never invokes CMake.
