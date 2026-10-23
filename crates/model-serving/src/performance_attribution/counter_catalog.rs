@@ -117,13 +117,19 @@ pub enum PerformanceCounter {
     AdmissionReservePhaseScaledSourceCount,
     /// Admission decisions composed from the all-phase maximum (#691).
     AdmissionReserveGlobalMaximumSourceCount,
+    /// Total bfloat16 bytes the jangtq2 codebook page decoder materialized
+    /// for multi-token forwards. Divided by the page-decode operation's
+    /// elapsed time it yields the decoder's effective output bandwidth, and
+    /// compared across chunk sizes it shows how the decode round trip
+    /// amortizes (or fails to) over prompt tokens.
+    Jangtq2CodebookDecodedOutputByteCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
     /// Number of distinct counters the enabled report storage reserves.
-    pub const COUNT: usize = Self::AdmissionReserveGlobalMaximumSourceCount as usize + 1;
+    pub const COUNT: usize = Self::Jangtq2CodebookDecodedOutputByteCount as usize + 1;
     /// Every counter in declaration order, so report serialization can pair a
     /// counter with its stored value by position without an allocation.
     pub const ALL: [Self; Self::COUNT] = [
@@ -197,6 +203,7 @@ impl PerformanceCounter {
         Self::AdmissionReserveExactContextSourceCount,
         Self::AdmissionReservePhaseScaledSourceCount,
         Self::AdmissionReserveGlobalMaximumSourceCount,
+        Self::Jangtq2CodebookDecodedOutputByteCount,
     ];
 
     /// Stable report identifier for this counter.
@@ -349,6 +356,9 @@ impl PerformanceCounter {
             }
             Self::AdmissionReserveGlobalMaximumSourceCount => {
                 "admission_reserve_global_maximum_source_count"
+            }
+            Self::Jangtq2CodebookDecodedOutputByteCount => {
+                "jangtq2_codebook_decoded_output_byte_count"
             }
         }
     }
