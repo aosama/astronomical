@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crate::retired_native_scan::{
-    allocated_bytes_under, is_retired_candidate_directory, parse_scan_arguments,
-    scan_root_for_retired_candidates, scan_root_is_refused, ScanArguments,
+    allocated_bytes_under, gate_error_message, is_retired_candidate_directory,
+    parse_scan_arguments, scan_root_for_retired_candidates, scan_root_is_refused,
+    ScanArguments,
 };
 
 fn owned(arguments: &[&str]) -> Vec<String> {
@@ -189,6 +190,32 @@ mod should_refuse_dangerous_scan_roots {
     fn should_accept_ordinary_directories() {
         assert!(!scan_root_is_refused("/private/tmp/target"));
         assert!(!scan_root_is_refused("./target"));
+    }
+}
+
+mod should_word_the_gate_error {
+    use super::*;
+
+    #[test]
+    fn should_name_the_count_the_clean_guidance_and_the_tracking_issue() {
+        let gate_error_text = gate_error_message(3);
+        assert!(gate_error_text.starts_with("Error: 3 retired native-output directories remain"));
+        assert!(
+            gate_error_text.contains("`cargo clean`"),
+            "the only surviving removal path for stale generations is cargo clean: {gate_error_text}"
+        );
+        assert!(
+            gate_error_text.contains("the build script clears the current generation automatically"),
+            "the message must distinguish the automatic current-generation path: {gate_error_text}"
+        );
+        assert!(
+            gate_error_text.contains("#1486"),
+            "the message should point at the tracking issue: {gate_error_text}"
+        );
+        assert!(
+            !gate_error_text.contains("scripts/"),
+            "the shell cleaner is retired; no script path may resurface: {gate_error_text}"
+        );
     }
 }
 
