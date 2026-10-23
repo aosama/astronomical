@@ -14,13 +14,11 @@ const LARGE_SPARSE_MOE_ROLE: &str = "large_sparse_moe";
 const RESIDENT_SPARSE_MOE_ROLE: &str = "resident_sparse_moe";
 const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
-const K2_HORIZON_MOVA_ROLE: &str = "k2_horizon_mova";
-const E2E_TEST_MODEL_ROLES: [&str; 5] = [
+const E2E_TEST_MODEL_ROLES: [&str; 4] = [
     LARGE_SPARSE_MOE_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
     SMALL_DENSE_ROLE,
     FLUX2_KLEIN_ROLE,
-    K2_HORIZON_MOVA_ROLE,
 ];
 
 fn e2e_test_model_names() -> &'static BTreeMap<String, String> {
@@ -84,17 +82,12 @@ pub(crate) fn flux2_klein_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_ROLE)
 }
 
-pub(crate) fn k2_horizon_mova_model_id() -> &'static str {
-    model_id_for_role(K2_HORIZON_MOVA_ROLE)
-}
-
-pub(crate) fn e2e_test_model_ids() -> [&'static str; 5] {
+pub(crate) fn e2e_test_model_ids() -> [&'static str; 4] {
     [
         large_sparse_moe_model_id(),
         resident_sparse_moe_model_id(),
         small_dense_model_id(),
         flux2_klein_model_id(),
-        k2_horizon_mova_model_id(),
     ]
 }
 

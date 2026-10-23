@@ -42,7 +42,7 @@ fn should_reject_duplicate_or_oversized_family_configuration_before_dispatch() {
         .expect("duplicate family directory should be created");
     fs::write(
         duplicate_model_directory.join("config.json"),
-        br#"{"model_type":"k2_horizon_mova","model_type":"qwen3_5"}"#,
+        br#"{"model_type":"prism_hadamard_qwen35","model_type":"qwen3_5"}"#,
     )
     .expect("duplicate family config should be written");
 

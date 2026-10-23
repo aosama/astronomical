@@ -78,55 +78,8 @@ pub fn scheduler_config_json() -> Vec<u8> {
     .expect("the scheduler config should serialize")
 }
 
-// k2_horizon_mova artifact documents
-pub fn family_member_config_json(
-    hidden_layers: usize,
-    mlp_only_layers: &[usize],
-    num_experts: usize,
-    mova_num_experts: usize,
-) -> String {
-    serde_json::json!({
-        "model_type": "k2_horizon_mova",
-        "architectures": ["K2HorizonForCausalLM"],
-        "hidden_size": 16,
-        "num_hidden_layers": hidden_layers,
-        "intermediate_size": 32,
-        "moe_intermediate_size": 8,
-        "num_attention_heads": 4,
-        "num_key_value_heads": 2,
-        "head_dim": 4,
-        "vocab_size": 32,
-        "max_position_embeddings": 128,
-        "num_experts": num_experts,
-        "num_experts_per_tok": num_experts.min(2),
-        "mova_num_experts": mova_num_experts,
-        "mova_num_experts_per_tok": mova_num_experts.min(1),
-        "num_shared_experts": 1,
-        "decoder_sparse_step": 1,
-        "mlp_only_layers": mlp_only_layers,
-        "rms_norm_eps": 1e-6,
-        "layernorm_num_groups": 2,
-        "rope_parameters": { "rope_theta": 10_000.0, "rope_type": "default" },
-        "attention_bias": false,
-        "moe_gate_bias": true,
-        "attention_gate_func": "softplus",
-        "norm_topk_prob": true,
-        "router_score_func": "sigmoid",
-        "router_scaling_factor": 2.5,
-        "tie_word_embeddings": false,
-        "eos_token_id": [1, 2],
-        "bos_token_id": 0,
-        "quantization": {
-            "group_size": 64,
-            "bits": 4,
-            "mode": "affine"
-        }
-    })
-    .to_string()
-}
-
 pub use e2e_test_model_names::{
-    e2e_test_model_ids, flux2_klein_model_id, k2_horizon_mova_model_id, large_sparse_moe_model_id,
+    e2e_test_model_ids, flux2_klein_model_id, large_sparse_moe_model_id,
     required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
 };
 

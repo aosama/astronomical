@@ -14,7 +14,6 @@ mod classified_artifacts;
 mod effective_models;
 mod flux2_klein;
 mod flux2_klein_documents;
-mod k2_horizon_mova;
 mod model_family;
 mod modernbert;
 mod prism_hadamard_qwen35;
