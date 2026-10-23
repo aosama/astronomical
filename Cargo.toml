@@ -58,10 +58,16 @@ version = "0.2.80"
 # The crate is versioned against the MLX release its bindings target (the
 # 0.32.4 line matches the pinned MLX v0.32.4; the earlier 0.7.0-alpha.1
 # spelling tracked the MLX-C release and was yanked upstream in favor of
-# this MLX-congruent scheme). The Astronomical fork delta (the patched
-# mlx_array_detach symbol) lives in the local astronomical-mlx-c-fork
-# crate; bump this dependency together with the third-party MLX/MLX-C pins.
-mlx-c-rust = "0.32.4-alpha.1"
+# this MLX-congruent scheme). The dependency is bindings-only by way of
+# default-features = false: the crate's `link` feature (its discovery
+# ladder and its own native pair) stays off, so it emits no link
+# directives and runtime-integration owns the linker — the Astronomical
+# pair is patched, and the ladder's stock pair must never be selected
+# (upstream aosama/mlx-c-rust#19 introduced this mode for exactly that
+# consumer class). The Astronomical fork delta (the patched mlx_array_detach
+# symbol) lives in the local astronomical-mlx-c-fork crate; bump this
+# dependency together with the third-party MLX/MLX-C pins.
+mlx-c-rust = { version = "0.32.4-alpha.2", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
 base64 = "0.23"
 bytes = "1"

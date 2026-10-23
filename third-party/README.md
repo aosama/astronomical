@@ -159,16 +159,20 @@ To bump a pinned dependency:
    first native build of the new pin, diff the C header surface itself with
    the bindgen header provisioning (see the next section); header-level
    differences found there explain almost every binding-level difference
-   before any compile runs. Since the crate's 0.32.4 line its build script
-   also emits its own link flags through a discovery ladder; the ladder's
-   default resolves the crate's own stock shared pair, which is both the
-   wrong libraries (the Astronomical pair carries the patches above) and,
-   in dylib form, an unresolvable load path for consumer binaries. Export
-   `MLX_C_RUST_MLX_C_PREFIX` to the store entry printed by
-   `cargo xtask native-store-entry --profile core` before any workspace
-   build — continuous integration does this in its native-build step, and
-   `scripts/ci/prewarm-native-build.sh` prints the same instruction after
-   publishing an entry.
+   before any compile runs. Since the crate's 0.32.4 line, its build script
+   can also emit its own link flags through a `link` feature's discovery
+   ladder, whose default rung resolves the crate's own stock shared pair —
+   the wrong libraries for a patched fork. The workspace therefore depends
+   bindings-only (`default-features = false`): the crate emits zero link
+   directives and runtime-integration owns the linker end to end. That mode
+   arrived in the crate's 0.32.4-alpha.2 release (upstream
+   aosama/mlx-c-rust#19); keep the dependency declaration pinned to it.
+   One lockfile property rides along with the crate: its build dependency
+   bindgen declares a wildcard `syn = ">=2, <4"` range but only compiles
+   against the syn 3 line, so the lockfile pairs bindgen with `syn 3.0.3`.
+   A broad `cargo update` can silently re-resolve that edge onto the syn 2
+   entry already in the graph and fail deep inside bindgen; a crate bump
+   that turns the edge must set it back.
  5. Run the offline lanes, then invoke each real-model acceptance Cargo
    command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
