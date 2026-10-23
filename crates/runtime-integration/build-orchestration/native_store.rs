@@ -1,9 +1,40 @@
 //! Compatibility-keyed publication of the pinned MLX native runtime.
 //!
+//! # Why a store outside Cargo's `target/`
+//!
 //! Cargo package versions intentionally do not own this store. The
-//! mlx-c-rust build script regenerates Rust bindings in its own `OUT_DIR`,
+//! `mlx-c-rust` build script regenerates Rust bindings in its own `OUT_DIR`,
 //! while expensive native products remain reusable until an actual native
-//! toolchain input changes.
+//! toolchain input changes — a Rust-only edit must never rebuild MLX, and a
+//! new checkout or worktree on the same machine must reuse the same warm
+//! entry.
+//!
+//! # Store layout
+//!
+//! ```text
+//! <root>/v<schema>/entries/<64-hex identity>/   published payloads
+//! <root>/v<schema>/locks/<identity>.lock        exclusive per-identity locks
+//! <root>/v<schema>/staging/<id>.<pid>.<nonce>/  in-progress builds
+//! ```
+//!
+//! The schema directory version (`native-build-store-schema-version`, a
+//! fingerprinted input) fences every entry whenever the layout or validation
+//! semantics change: bump it and old entries are simply never looked at
+//! again.
+//!
+//! # The publication protocol
+//!
+//! Reuse is validated, never trusted: an entry counts only if it is a real
+//! directory whose completion marker matches its identity, whose SHA-256
+//! manifest matches the payload byte-for-byte, and whose profile's products
+//! are all present. A failing entry is removed and rebuilt. A fresh build
+//! happens in a staging directory, is fully synced to disk, is validated,
+//! and only then atomically becomes the entry via rename — an interrupted
+//! build can therefore never leave a half-published entry that a later run
+//! would mistake for reusable.
+//!
+//! Concurrency is per-identity: one builder holds the lock file (with
+//! progress heartbeats while waiting), other identities build in parallel.
 
 use std::{
     error::Error,
@@ -14,7 +45,10 @@ use std::{
 };
 
 use fs4::TryLockError;
-#[path = "build_native_store_manifest.rs"]
+// Included by explicit path (not a plain `mod`) because this file itself is
+// loaded through `#[path]` from three roots; a bare `mod` would resolve
+// relative to whichever includer compiled it.
+#[path = "native_store_manifest.rs"]
 mod manifest;
 
 use manifest::{
@@ -22,10 +56,17 @@ use manifest::{
     validate_entry, write_manifest, write_synced_file,
 };
 
+/// Bumped whenever the store layout or validation semantics change; see the
+/// module documentation. Content is an unsigned integer in the file beside
+/// this module.
 const STORE_SCHEMA_VERSION_TEXT: &str = include_str!("native-build-store-schema-version");
 const LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 const LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 
+/// Which optional native products a profile builds and publishes.
+///
+/// `core` is the serving product; `core+memory-contract` adds the explicit
+/// allocator memory-contract probe binary used by the acceptance lanes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeBuildProfile {
     should_build_memory_contract_probe: bool,
@@ -48,6 +89,10 @@ impl NativeBuildProfile {
         self.should_build_memory_contract_probe
     }
 
+    /// The identity-library spelling of this profile
+    /// (`core` or `core+memory-contract`); shared with
+    /// `astronomical-native-identity` so both sides agree on the manifest
+    /// and command-line vocabulary.
     pub fn identity_name(self) -> &'static str {
         if self.should_build_memory_contract_probe {
             "core+memory-contract"
@@ -69,6 +114,7 @@ impl NativeBuildProfile {
     }
 }
 
+/// One identity-keyed view of the machine-wide native build store.
 pub struct NativeBuildStore {
     root_directory: PathBuf,
     native_identity: String,
@@ -76,6 +122,15 @@ pub struct NativeBuildStore {
 }
 
 impl NativeBuildStore {
+    /// Validates the store root, schema version, and identity spelling.
+    ///
+    /// # Errors
+    ///
+    /// Rejects relative roots (the store is machine-global and must be
+    /// unambiguous), malformed schema versions, and identities that are not
+    /// exactly 64 lowercase hexadecimal characters — the digest format the
+    /// identity library produces; anything else would create entry
+    /// directories that no later run could find again.
     pub fn new(
         root_directory: &Path,
         native_identity: &str,
@@ -97,12 +152,21 @@ impl NativeBuildStore {
         })
     }
 
+    /// The published entry directory for this store's identity.
     pub fn entry_directory(&self) -> PathBuf {
         self.schema_directory()
             .join("entries")
             .join(&self.native_identity)
     }
 
+    /// Reuses the published entry for this identity, or builds and publishes
+    /// one under the exclusive identity lock.
+    ///
+    /// `native_builder` receives the CMake build directory to populate; its
+    /// return value decides publication (the builder is the same shared
+    /// `native_compile::build_pinned_native_runtime` in every caller).
+    /// Status lines (`reused`/`building`/`published`/`corrupt`) land on
+    /// stderr for build logs.
     pub fn resolve_or_build<F>(
         &self,
         native_builder: F,
@@ -180,14 +244,16 @@ impl NativeBuildStore {
         Ok(())
     }
 
+    /// Takes the per-identity exclusive lock, waiting with progress logs.
+    ///
+    /// The lock file is created without truncation: it carries no content,
+    /// but truncating while another process holds the lock would race that
+    /// holder's view of the file.
     fn acquire_identity_lock(&self) -> Result<File, Box<dyn Error>> {
         let lock_file_path = self
             .schema_directory()
             .join("locks")
             .join(format!("{}.lock", self.native_identity));
-        // A lock file carries no content worth keeping, but truncating it
-        // while another process holds the lock would race that holder's
-        // view of the file, so the open never truncates.
         let lock_file = OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -215,6 +281,7 @@ impl NativeBuildStore {
         }
     }
 
+    /// Unique per-invocation staging directory (identity, process id, nonce).
     fn create_staging_directory(&self) -> Result<PathBuf, Box<dyn Error>> {
         let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let staging_directory = self.schema_directory().join("staging").join(format!(
@@ -227,6 +294,13 @@ impl NativeBuildStore {
         Ok(staging_directory)
     }
 
+    /// Copies the reusable products out of the CMake tree, syncs them to
+    /// disk, writes the integrity manifest and completion marker, and
+    /// atomically renames the payload into place as the entry.
+    ///
+    /// Symlinks are rejected everywhere (see the manifest module) so a
+    /// compromised cache cannot smuggle products from elsewhere on the
+    /// machine into a build input.
     fn publish_entry(
         &self,
         staging_directory: &Path,
@@ -259,6 +333,9 @@ impl NativeBuildStore {
                 &payload_directory.join("bin/mlx_memory_contract_probe"),
             )?;
         }
+        // Durability before visibility: everything is synced before the
+        // rename makes the entry discoverable, so a crash cannot publish an
+        // entry whose bytes never reached the disk.
         sync_directory_tree(&payload_directory)?;
         write_manifest(
             &payload_directory,
@@ -277,6 +354,8 @@ impl NativeBuildStore {
                 .parent()
                 .ok_or("native entry directory has no parent")?,
         )?;
+        // Validate what was published, not what was staged: the entry is
+        // what the next run will consume.
         validate_entry(
             &entry_directory,
             &self.native_identity,
@@ -301,6 +380,7 @@ fn validate_store_schema_version() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// A published entry as consumed by linking and status reporting.
 #[derive(Debug)]
 pub struct NativeBuildArtifacts {
     entry_directory: PathBuf,
@@ -321,6 +401,8 @@ impl NativeBuildArtifacts {
         }
     }
 
+    /// Whether this run produced the entry (`true`) or reused it (`false`);
+    /// the CI status file reports exactly this bit.
     pub const fn was_built(&self) -> bool {
         self.was_built
     }
@@ -337,6 +419,7 @@ impl NativeBuildArtifacts {
         self.entry_directory.join("share/mlx/mlx.metallib")
     }
 
+    /// Present only for the `core+memory-contract` profile.
     pub fn memory_contract_probe_path(&self) -> Option<PathBuf> {
         self.native_build_profile
             .should_build_memory_contract_probe()
@@ -355,6 +438,8 @@ fn validate_native_identity(native_identity: &str) -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
+/// Staging cleanup is best-effort: a failed build must still report its real
+/// error, so cleanup failures are logged, never propagated.
 fn remove_staging_directory(staging_directory: &Path) {
     if let Err(cleanup_error) = fs::remove_dir_all(staging_directory) {
         eprintln!(
@@ -364,6 +449,11 @@ fn remove_staging_directory(staging_directory: &Path) {
     }
 }
 
+/// Removes a corrupt entry without following symlinks.
+///
+/// If an attacker or accident left a *symlink* at the entry path, it is
+/// unlinked as a file — never followed — so "cleanup" cannot delete whatever
+/// the link points at.
 fn remove_entry_without_following_symlinks(entry_path: &Path) -> Result<(), Box<dyn Error>> {
     let entry_metadata = fs::symlink_metadata(entry_path)?;
     if entry_metadata.is_dir() && !entry_metadata.file_type().is_symlink() {

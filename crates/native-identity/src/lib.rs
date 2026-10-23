@@ -27,16 +27,17 @@ const MANIFEST_SCHEMA_VERSION: u32 = 2;
 
 /// Source-identity pathspecs: every input that determines the native
 /// artifact's bytes. The Rust build-orchestration sources (`build.rs` and
-/// its `build_*` modules) and the `xtask` CLI executor are deliberately
+/// the modules under `crates/runtime-integration/build-orchestration/`) and
+/// the `xtask` CLI executor are deliberately
 /// excluded because they are executors, not policy: edits to progress
 /// logging, parallelism resolution, or store plumbing must not force a full
 /// CMake rebuild. Every artifact-affecting cmake argument is already
 /// fingerprinted through the toolchain probes, the profile, and the
 /// third-party files; a change to cmake invocation semantics must bump
-/// `crates/runtime-integration/native-build-store-schema-version` instead.
+/// `crates/runtime-integration/build-orchestration/native-build-store-schema-version` instead.
 pub const SOURCE_IDENTITY_PATHSPECS: &[&str] = &[
     "crates/native-identity/src",
-    "crates/runtime-integration/native-build-store-schema-version",
+    "crates/runtime-integration/build-orchestration/native-build-store-schema-version",
     "crates/runtime-integration/native",
     "third-party/native-dependency-manifest.cmake",
     "third-party/pins",

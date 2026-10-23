@@ -1,3 +1,26 @@
+//! MLX reader backed by one retained read-only file descriptor.
+//!
+//! # Why reads are deliberately serialized
+//!
+//! A representative model-loading probe *regressed* when positional reads ran
+//! concurrently on this reader: the file's page-in behavior under macOS made
+//! parallel positional reads slower than serialized ones for ordinary weight
+//! loading. The cursor mutex therefore doubles as the file-read mutex —
+//! sequential and positional reads share it, so all descriptor traffic is
+//! serialized by design. (Large *expert-page* reads are a different workload;
+//! those flow through the bounded reader, whose concurrency module measured
+//! that parallelism there does pay.)
+//!
+//! # The vtable lifetime contract
+//!
+//! The boxed [`FileReaderState`] is handed to MLX-C through
+//! `mlx_io_reader_new`; MLX retains it and invokes the vtable callbacks —
+//! potentially from any thread evaluating lazy arrays — until the final
+//! reader handle is released, at which point `reader_free` drops the box
+//! exactly once. The `Drop` impl on [`OwnedFileReader`] releases the MLX
+//! handle; MLX in turn invokes `reader_free`. Never drop the box from Rust
+//! directly.
+
 use std::{
     ffi::{c_char, c_int, c_void},
     fs::File,
@@ -8,16 +31,25 @@ use std::{
     },
 };
 
-use crate::{MlxRuntimeError, PositionalFileReadMetrics};
+use crate::{MlxRuntimeError, safetensors::read_metrics::PositionalFileReadMetrics};
 use mlx_c_rust::raw;
 
+/// Label MLX-C can surface for this reader in diagnostics.
 const READER_LABEL: &[u8] = b"validated descriptor-backed weights\0";
 
 /// MLX reader backed by one retained read-only file descriptor.
+///
+/// The handle is moved into loading results (see `lazy_map`) so the
+/// descriptor outlives the loading call for as long as arrays can still
+/// trigger reads.
 #[derive(Debug)]
 pub(super) struct OwnedFileReader(pub(super) raw::mlx_io_reader);
 
 impl OwnedFileReader {
+    /// Wraps a caller-owned read-only file as an MLX reader.
+    ///
+    /// Takes the `File` by value: ownership of the descriptor must move into
+    /// the boxed state, because closing it early would break lazy reads.
     pub(super) fn new(
         weights_file: File,
         positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
@@ -63,10 +95,16 @@ impl Drop for OwnedFileReader {
     }
 }
 
+/// Shared callback state behind the vtable.
 #[derive(Debug)]
 struct FileReaderState {
     file: File,
+    /// Guards both the logical cursor and physical reads: positional reads
+    /// deliberately share this mutex (see the module documentation).
     cursor_and_file_read_mutex: Mutex<FileReaderCursor>,
+    /// Latched on the first failure; every later callback reports "not good"
+    /// so MLX fails the dependent operation instead of proceeding with
+    /// partially-read bytes.
     is_good: AtomicBool,
     positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 }
@@ -121,6 +159,8 @@ unsafe extern "C" fn reader_seek(descriptor: *mut c_void, offset: i64, whence: c
     // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
     let seek_succeeded = unsafe {
         with_reader_cursor(descriptor, |reader_state, reader_cursor| {
+            // Arithmetic in i128 so a malicious or corrupt (offset, whence)
+            // combination is validated before it can wrap the u64 cursor.
             let base_position_bytes = match whence {
                 libc::SEEK_SET => 0_i128,
                 libc::SEEK_CUR => i128::from(reader_cursor.position_bytes),
@@ -234,6 +274,8 @@ unsafe extern "C" fn reader_read_at_offset(
     .unwrap_or(0)
 }
 
+/// Writes are rejected, not ignored: acknowledging a write on a read-only
+/// weights descriptor would let a caller believe mutated state reached disk.
 unsafe extern "C" fn reader_write_is_unsupported(
     descriptor: *mut c_void,
     _source: *const c_char,
@@ -292,6 +334,11 @@ unsafe fn with_reader_cursor<Output>(
     }
 }
 
+/// Performs one exact positional read into MLX-provided storage.
+///
+/// `read_exact_at` (not `read_at`) so a short read fails the callback — the
+/// v0.7.0 wrapper validates returned counts, and handing MLX a partially
+/// filled buffer would be memory-unsafe, not merely incorrect.
 fn read_exact_at(
     file: &File,
     destination: *mut c_char,

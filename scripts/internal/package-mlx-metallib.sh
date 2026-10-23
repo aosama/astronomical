@@ -10,7 +10,7 @@ resolve_packaged_mlx_metallib_source() {
         printf '%s\n' "$ASTRONOMICAL_MLX_METALLIB_PATH"
         return 0
     fi
-    schema_version_file="${repository_root}/crates/runtime-integration/native-build-store-schema-version"
+    schema_version_file="${repository_root}/crates/runtime-integration/build-orchestration/native-build-store-schema-version"
     [ -s "$schema_version_file" ] || {
         print_error "native build store schema version is unavailable: ${schema_version_file}"
         return 1

@@ -22,8 +22,8 @@ astronomical-native-identity = { path = "../native-identity" }
 # cargo-machete reports all three dependencies above as unused because its
 # text search only scans this package's directory, while the code that uses
 # them is compiled in through `#[path]` module includes whose files live
-# under crates/runtime-integration/ (see src/lib.rs and the nested include
-# in build_native_store.rs). Keep this ignore list in sync with that
-# include chain.
+# under crates/runtime-integration/build-orchestration/ (see src/lib.rs and
+# the nested include in native_store.rs). Keep this ignore list in sync with
+# that include chain.
 [package.metadata.cargo-machete]
 ignored = ["astronomical-native-identity", "fs4", "sha2"]

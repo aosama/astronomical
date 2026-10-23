@@ -1,3 +1,10 @@
+//! Beside-source unit tests for the allocator-cache reclaim threshold policy.
+//!
+//! The threshold boundary (exactly-at-threshold counts as reclaimable) is the
+//! contract the prefill cadence depends on; these tests pin it so a future
+//! refactor of the comparison cannot quietly change the reclamation
+//! behavior.
+
 use crate::mlx_runtime_types::{
     ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES, allocator_cache_exceeds_reclaim_threshold,
 };

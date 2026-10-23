@@ -40,15 +40,16 @@
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
 - SSD Cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.
-- MOST IMPORTANTLY performance tests must start at the lower most part of the callstack and more tests upwards through the call stack.
+- MOST IMPORTANTLY performance tests must start at the lowermost part of the call stack and move tests upwards through the call stack.
 
 ## Release Scripts Folder
 
-- All **Release releated scripts** must live are under "<repo-root>/scripts/release" , they will help you through the release process.
+- All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process.
 
 ## Repository Tooling Lives In xtask
 
 - `<repo-root>/xtask` exists so that repository tooling (CI reporting such as the tier pyramid, verification glue such as the source-size and citation checks, third-party notices, the native build fingerprint and dependency bootstrap, change-scope classification, and cache pruning and saving) is typed, unit-tested Rust invoked as `cargo xtask <command>` instead of untested shell, with each subcommand keeping the output lines and exit codes of the shell tool it replaced so hooks and CI steps survive unchanged. Whenever you add or change such tooling, put it in xtask as a new or extended subcommand with its tests and document the invocation in the `xtask` alias comment of `.cargo/config.toml`; reserve shell for the release scripts under `scripts/release`, the thin CI wrappers that call xtask, and the tooling contracts that must run before any Rust build exists.
+- This repo prefers <repo-root>/xtask convention versus shell scripts, shell scripts are highly discouraged and the repo is moving off of shell scripts and reducing their usage.
 
 ## Verification Suites Live Under verification
 

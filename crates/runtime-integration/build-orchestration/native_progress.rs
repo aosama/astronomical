@@ -1,15 +1,34 @@
 //! Live progress reporting for the pinned native runtime build.
 //!
-//! Cargo captures build-script stderr, so the multi-minute CMake phases are
-//! invisible in hosted CI logs until they finish. When
-//! `ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE` names a file, this module appends
-//! one progress line per lifecycle event there, letting a `tail -f` in the CI
-//! step stream the silent stretch into the job log as it happens.
+//! # The problem this solves
 //!
-//! Progress reporting is best-effort telemetry: write failures are ignored so
-//! reporting can never fail a build, while a misconfigured relative path is
-//! rejected eagerly because a silently disabled stream would hide exactly the
-//! slow phases this module exists to expose.
+//! Cargo captures build-script stderr, so the multi-minute CMake phases are
+//! invisible in hosted CI (Continuous Integration) logs until they finish —
+//! and a hosted runner's job-level timeout kills a silent build with no
+//! evidence of where the time went. When
+//! `ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE` names a file, this module
+//! appends one progress line per lifecycle event there, letting a `tail -f`
+//! in the CI step stream the silent stretch into the job log as it happens.
+//!
+//! # The design constraints
+//!
+//! - **Best-effort telemetry**: write failures are ignored so reporting can
+//!   never fail a build, while a misconfigured relative path is rejected
+//!   eagerly because a silently disabled stream would hide exactly the slow
+//!   phases this module exists to expose.
+//! - **Heartbeats, not polling**: each operation owns a lightweight thread
+//!   that emits a `status=running` line every 30 seconds — long enough that
+//!   a healthy CMake phase is not flooded, short enough that a silent
+//!   stretch never exceeds one heartbeat gap in a hosted log. The heartbeat
+//!   stops (sender dropped, thread joined) before the final outcome line is
+//!   written, so no late "running" line can land after completion.
+//!
+//! # Line vocabulary
+//!
+//! Every line is prefixed `[native-build-progress]` and carries
+//! `key=value` fields: `status=start`, `operation=<name> status=start`,
+//! `... status=running elapsed_seconds=…`, `... status=success|failed`,
+//! and the closing `status=complete outcome=built|reused`.
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -18,6 +37,7 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+/// Environment variable naming the progress file; unset disables reporting.
 pub const NATIVE_BUILD_PROGRESS_FILE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE";
 
 // Long enough that a healthy CMake phase is not flooded, short enough that a
@@ -26,6 +46,8 @@ const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 
 const PROGRESS_LINE_PREFIX: &str = "[native-build-progress]";
 
+/// The whole-build recorder: opens the stream with `status=start` and
+/// closes it with `status=complete`.
 pub struct NativeBuildProgress {
     progress_file_path: Option<PathBuf>,
     heartbeat_interval: Duration,
@@ -44,6 +66,14 @@ impl NativeBuildProgress {
         }
     }
 
+    /// Enables reporting to `progress_file_path`.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a relative path: build scripts run with varying working
+    /// directories, and a relative progress file would silently land
+    /// somewhere the CI step never looks — the exact failure this module
+    /// exists to prevent.
     pub fn from_file_path(progress_file_path: PathBuf) -> Result<Self, String> {
         if !progress_file_path.is_absolute() {
             return Err(format!(
@@ -76,6 +106,8 @@ impl NativeBuildProgress {
         self.append_line(&format!("status=start parallel_jobs={parallel_job_count}"));
     }
 
+    /// Starts one operation's progress span and returns its handle; see
+    /// [`NativeBuildOperationProgress`].
     pub fn begin_operation(&self, operation_name: &str) -> NativeBuildOperationProgress {
         let Some(progress_file_path) = &self.progress_file_path else {
             return NativeBuildOperationProgress::inactive();
@@ -103,6 +135,11 @@ impl NativeBuildProgress {
     }
 }
 
+/// One operation's progress span, from `status=start` to `status=<outcome>`.
+///
+/// `complete` consumes the span and stops the heartbeat; `Drop` stops the
+/// heartbeat alone, so an early-return (an operation that never reaches
+/// `complete`) still never leaks a running heartbeat into later output.
 pub struct NativeBuildOperationProgress {
     progress_file_path: Option<PathBuf>,
     operation_name: String,
@@ -171,6 +208,7 @@ impl Drop for NativeBuildOperationProgress {
     }
 }
 
+/// Background heartbeat: emits `status=running` lines until stopped.
 struct HeartbeatThread {
     stop_sender: Option<mpsc::Sender<()>>,
     join_handle: Option<JoinHandle<()>>,

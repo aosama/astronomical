@@ -18,11 +18,11 @@ const NATIVE_INPUT_PATHSPECS: &[&str] = &[
     // deletion itself; the live build script now lives in the published
     // mlx-c-rust crate outside this repository.
     "crates/mlx-c-rust/build.rs",
-    "crates/runtime-integration/build_native_linking.rs",
-    "crates/runtime-integration/build_native_store.rs",
-    "crates/runtime-integration/build_native_store_manifest.rs",
-    "crates/runtime-integration/build_native_compile.rs",
-    "crates/runtime-integration/native-build-store-schema-version",
+    "crates/runtime-integration/build-orchestration/native_linking.rs",
+    "crates/runtime-integration/build-orchestration/native_store.rs",
+    "crates/runtime-integration/build-orchestration/native_store_manifest.rs",
+    "crates/runtime-integration/build-orchestration/native_compile.rs",
+    "crates/runtime-integration/build-orchestration/native-build-store-schema-version",
     "crates/runtime-integration/native",
     "crates/native-identity/src",
     "third-party/native-dependency-manifest.cmake",

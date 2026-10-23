@@ -1,7 +1,21 @@
 //! Integrity manifest and filesystem operations for native store entries.
 //!
-//! Publication rejects symlinks and hashes every reusable product so a partial
-//! cache restore or interrupted write cannot become executable build input.
+//! # The threat this module closes
+//!
+//! A native store entry becomes *executable build input* — its archives are
+//! linked into the worker. Publication therefore rejects symlinks everywhere
+//! and hashes every reusable product, so a partial cache restore, an
+//! interrupted write, or a tampered file cannot become build input:
+//! validation replays the manifest (SHA-256 + size per file) against the
+//! payload and any mismatch fails the entry as corrupt (the store then
+//! removes and rebuilds it).
+//!
+//! # Durability helpers
+//!
+//! Every publication write path funnels through [`write_synced_file`] /
+//! [`copy_required_file`] / [`sync_directory_tree`], which `sync_all` files
+//! and directories before the caller makes them visible — see the protocol
+//! notes in `native_store.rs`.
 
 use std::{
     error::Error,
@@ -14,6 +28,14 @@ use sha2::{Digest, Sha256};
 
 use super::NativeBuildProfile;
 
+/// Full-entry validation: real directory, matching completion marker,
+/// well-formed manifest header, payload matching the manifest byte-for-byte,
+/// and all products the profile promises.
+///
+/// # Errors
+///
+/// Any check failure returns a descriptive error; the caller treats the
+/// entry as corrupt and rebuilds it.
 pub(super) fn validate_entry(
     entry_directory: &Path,
     native_identity: &str,
@@ -28,6 +50,8 @@ pub(super) fn validate_entry(
     let manifest_path = entry_directory.join("manifest.sha256");
     require_regular_file(&manifest_path, "native entry manifest")?;
     let manifest_text = fs::read_to_string(&manifest_path)?;
+    // The header (schema, identity, profile) fences entries from an
+    // incompatible store generation even if the directory moved.
     let expected_prefix = format!(
         "schema={}\nidentity={native_identity}\nprofile={}\n",
         super::store_schema_version(),
@@ -42,6 +66,8 @@ pub(super) fn validate_entry(
     require_profile_products(entry_directory, native_build_profile)
 }
 
+/// Writes the entry manifest: compatibility header plus one
+/// `<sha256>\t<size>\t<relative path>` line per payload file.
 pub(super) fn write_manifest(
     payload_directory: &Path,
     native_identity: &str,
@@ -59,6 +85,10 @@ pub(super) fn write_manifest(
     )
 }
 
+/// Recursive copy that refuses symlinks on both sides of every entry.
+///
+/// Used for the MLX header tree, where a link would poison the include path
+/// of every dependent compile.
 pub(super) fn copy_directory_without_symlinks(
     source_directory: &Path,
     destination_directory: &Path,
@@ -92,6 +122,7 @@ pub(super) fn copy_directory_without_symlinks(
     Ok(())
 }
 
+/// Copies one required regular file and syncs it to disk.
 pub(super) fn copy_required_file(
     source_path: &Path,
     destination_path: &Path,
@@ -106,6 +137,8 @@ pub(super) fn copy_required_file(
     Ok(())
 }
 
+/// Writes a file and syncs it; used for marker and manifest files whose
+/// visibility must imply durability.
 pub(super) fn write_synced_file(file_path: &Path, file_bytes: &[u8]) -> Result<(), Box<dyn Error>> {
     let mut output_file = File::create(file_path)?;
     output_file.write_all(file_bytes)?;
@@ -113,11 +146,15 @@ pub(super) fn write_synced_file(file_path: &Path, file_bytes: &[u8]) -> Result<(
     Ok(())
 }
 
+/// Syncs one directory entry (its metadata) so renames and creations under
+/// it survive a crash.
 pub(super) fn sync_directory(directory_path: &Path) -> Result<(), Box<dyn Error>> {
     File::open(directory_path)?.sync_all()?;
     Ok(())
 }
 
+/// Recursively validates (no symlinks, only regular files and directories)
+/// and syncs a whole published tree bottom-up.
 pub(super) fn sync_directory_tree(directory_path: &Path) -> Result<(), Box<dyn Error>> {
     require_regular_directory(directory_path, "native publication directory")?;
     for directory_entry_result in fs::read_dir(directory_path)? {
@@ -144,6 +181,7 @@ pub(super) fn sync_directory_tree(directory_path: &Path) -> Result<(), Box<dyn E
     sync_directory(directory_path)
 }
 
+/// Asserts the products a profile promises are present as regular files.
 fn require_profile_products(
     entry_directory: &Path,
     native_build_profile: NativeBuildProfile,
@@ -165,12 +203,19 @@ fn require_profile_products(
     Ok(())
 }
 
+/// Builds the sorted `<sha256>\t<size>\t<path>` body for a payload tree.
+///
+/// Paths are sorted so the manifest is reproducible regardless of directory
+/// iteration order; tab/newline separators are rejected inside paths so the
+/// manifest stays line-addressable.
 fn payload_manifest_text(payload_directory: &Path) -> Result<String, Box<dyn Error>> {
     let mut payload_paths = Vec::new();
     collect_payload_paths(payload_directory, payload_directory, &mut payload_paths)?;
     payload_paths.sort();
     let mut manifest_text = String::new();
     for relative_path in payload_paths {
+        // The manifest and marker are written after hashing; excluding them
+        // here keeps the manifest a pure statement about payload products.
         if relative_path == Path::new("manifest.sha256") || relative_path == Path::new("complete") {
             continue;
         }
@@ -192,6 +237,8 @@ fn payload_manifest_text(payload_directory: &Path) -> Result<String, Box<dyn Err
     Ok(manifest_text)
 }
 
+/// Walks the payload tree collecting relative paths, refusing symlinks and
+/// non-regular entries with the same policy as publication.
 fn collect_payload_paths(
     payload_root: &Path,
     current_directory: &Path,
@@ -225,6 +272,8 @@ fn collect_payload_paths(
     Ok(())
 }
 
+/// Rejects paths that could escape the entry (`..`, absolute components):
+/// the manifest must only ever describe files inside the payload.
 fn validate_relative_payload_path(relative_path: &Path) -> Result<(), Box<dyn Error>> {
     if relative_path.is_absolute()
         || relative_path
@@ -243,6 +292,8 @@ fn validate_relative_payload_path(relative_path: &Path) -> Result<(), Box<dyn Er
 fn require_regular_file(file_path: &Path, description: &str) -> Result<(), Box<dyn Error>> {
     let file_metadata = fs::symlink_metadata(file_path)
         .map_err(|source| format!("missing {description} at {}: {source}", file_path.display()))?;
+    // Symlinks are explicitly rejected alongside non-files: a link to a
+    // regular file would pass `is_file` on `metadata()` but must not count.
     if !file_metadata.is_file() || file_metadata.file_type().is_symlink() {
         return Err(format!(
             "{description} is not a regular file: {}",
@@ -273,6 +324,8 @@ fn require_regular_directory(
     Ok(())
 }
 
+/// Streams a file through SHA-256 with a fixed buffer; native archives are
+/// hundreds of megabytes and must never be slurped whole.
 fn sha256_file_hex(file_path: &Path) -> Result<String, Box<dyn Error>> {
     let mut source_file = File::open(file_path)?;
     let mut digest = Sha256::new();
