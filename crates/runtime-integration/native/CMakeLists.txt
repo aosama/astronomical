@@ -22,7 +22,7 @@ cmake_minimum_required(VERSION 3.24)
 project(astronomical_runtime_integration LANGUAGES C CXX)
 
 include(FetchContent)
-include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-v0.32.3.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-v0.32.4.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-c-v0.7.0.cmake")
 find_program(PATCH_EXECUTABLE patch REQUIRED)
 
@@ -98,7 +98,10 @@ FetchContent_Declare(json URL "${ASTRONOMICAL_JSON_SOURCE_ARCHIVE}" URL_HASH "SH
 FetchContent_Declare(fmt URL "${ASTRONOMICAL_FMT_SOURCE_ARCHIVE}" URL_HASH "SHA256=${ASTRONOMICAL_FMT_SOURCE_ARCHIVE_SHA256}")
 # Every patch in the two PATCH_COMMAND lists below is documented with its
 # purpose and retirement condition in the patch registry of
-# third-party/README.md.
+# third-party/README.md. The jit-qmv-template-arity patch retired at the
+# v0.32.4 bump: upstream's partial-row qmv fast-kernel restructure declares
+# the full template arity on every qmv/qmv_fast template, which is the
+# defect the patch carried.
 FetchContent_Declare(
     mlx
     URL "${ASTRONOMICAL_MLX_SOURCE_ARCHIVE}"
@@ -106,34 +109,30 @@ FetchContent_Declare(
     PATCH_COMMAND
         "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-stable-prefill-split-k.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.4-stable-prefill-split-k.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-nax-qmm-tile-variants.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.4-nax-qmm-tile-variants.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-jit-qmv-template-arity.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.4-jit-sdpa-dsplit-template-arity.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-jit-sdpa-dsplit-template-arity.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.4-astronomical-active-memory-ceiling.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
         COMMAND "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-astronomical-active-memory-ceiling.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-        COMMAND "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.3-streaming-safetensors-writer.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.4-streaming-safetensors-writer.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 # The pinned mlx-c v0.7.0 release absorbed the four MLX 0.32.x version-gap
 # compatibility bridges and the app-bundle Metal library path override
 # (mlx_metal_set_metallib_path) that our v0.6.0 pin carried as local patch
 # files. One bridge remains: mlx-c v0.7.0 was authored against MLX v0.32.2,
-# while the pinned MLX v0.32.3 release inserts a global_scale parameter into
+# while the pinned MLX carries, since v0.32.3, a global_scale parameter in
 # gather_qmm that the v0.7.0 C API does not expose.
 FetchContent_Declare(
     mlx_c
@@ -142,7 +141,7 @@ FetchContent_Declare(
     PATCH_COMMAND
         "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.7.0-mlx-0.32.3-gather-qmm-global-scale-compatibility.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.7.0-mlx-0.32.4-gather-qmm-global-scale-compatibility.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
     COMMAND
         "${CMAKE_COMMAND}"
