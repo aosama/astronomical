@@ -70,18 +70,6 @@ pub fn configure_rust_linking(
     println!("cargo:rustc-link-lib=static=mlxc");
     println!("cargo:rustc-link-lib=static=mlx");
     println!("cargo:rustc-link-lib=dylib=c++");
-    // The mlx-c-rust link ladder (0.32.4 line) bundles the pinned static
-    // archives into its rlib when MLX_C_RUST_MLX_C_PREFIX points at this
-    // store entry. That bundling changes the link line Cargo composes for
-    // THIS package's own test targets: the dylib=c++ directive above stops
-    // reaching them and every C++ runtime symbol the bundled objects
-    // reference goes undefined (the mlx-c coverage lane is the observed
-    // case). A build script's rustc-link-arg reaches only this package's
-    // own targets — exactly the affected set — while dependents keep
-    // receiving the directive above through normal propagation, so the
-    // explicit flag below restores those test links without touching any
-    // downstream link line.
-    println!("cargo:rustc-link-arg=-lc++");
     // The exact framework set the pinned MLX Metal backend links against.
     // MLX pulls each of these directly; omitting one fails only at final
     // binary link time, far from its cause, so the set stays explicit here.
