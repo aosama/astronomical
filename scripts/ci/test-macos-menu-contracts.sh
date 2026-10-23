@@ -18,8 +18,13 @@ main() {
     export GIT_CONFIG_KEY_0=credential.helper
     export GIT_CONFIG_VALUE_0=
 
+    # -Xswiftc -warnings-as-errors mirrors the repository's Rust rule that
+    # warnings are defects: a Swift warning in the menu package must fail
+    # this contract step locally and in GitHub Actions instead of scrolling
+    # past in the log.
     perl -e 'alarm shift; exec @ARGV' "$TEST_TIMEOUT_SECONDS" \
-        swift test --package-path "${repository_root}/apps/astronomical-menu"
+        swift test --package-path "${repository_root}/apps/astronomical-menu" \
+        -Xswiftc -warnings-as-errors
 
     finished_at_seconds="$(date +%s)"
     elapsed_seconds=$((finished_at_seconds - started_at_seconds))

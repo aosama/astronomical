@@ -169,7 +169,10 @@ run_inner_acceptance() {
 
     start_step "resolve-sparkle-tools"
     swift package resolve --package-path "${repository_root}/apps/astronomical-menu"
-    swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu"
+    # -Xswiftc -warnings-as-errors mirrors the repository's Rust rule that
+    # warnings are defects, on the release path too.
+    swift build --configuration release --package-path "${repository_root}/apps/astronomical-menu" \
+        -Xswiftc -warnings-as-errors
     sparkle_checkout="${repository_root}/apps/astronomical-menu/.build/checkouts/Sparkle"
     sparkle_framework="${repository_root}/apps/astronomical-menu/.build/release/Sparkle.framework"
     appcast_tool="${repository_root}/apps/astronomical-menu/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"

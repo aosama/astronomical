@@ -680,7 +680,10 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end thin-talk-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin thin-talk-contracts
           set -o pipefail
-          swift test --package-path apps/thin-talk 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk.log"
+          # -Xswiftc -warnings-as-errors mirrors the repository's Rust rule
+          # that warnings are defects: a Swift warning must fail this step
+          # instead of scrolling past the log.
+          swift test --package-path apps/thin-talk -Xswiftc -warnings-as-errors 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk.log"
         timeout-minutes: 6
       # The packaging publication contracts (DMG, notarization, App Store
       # pkg, installer promotion) are offline sandbox journeys like the
