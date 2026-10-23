@@ -8,7 +8,7 @@
 //! # The marker contract
 //!
 //! The patched native allocator (see
-//! `third-party/patches/mlx-0.32.3-astronomical-active-memory-ceiling.patch`)
+//! `third-party/patches/mlx-0.32.4-astronomical-active-memory-ceiling.patch`)
 //! rejects an allocation that would push active memory past the ceiling by
 //! reporting an error whose description embeds the stable marker
 //! `ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED` followed by three
