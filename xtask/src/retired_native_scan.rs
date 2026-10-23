@@ -1,11 +1,12 @@
-//! `cargo xtask scan-retired-native-output` — the read-only Phase 0 probe
-//! for issue #1486: counts the retired complete CMake native-output
+//! `cargo xtask scan-retired-native-output` — the read-only probe for
+//! issue #1486: counts the retired complete CMake native-output
 //! directories that still linger in Cargo targets and cache checkouts.
-//! Phase 1 (retiring the shell cleaner and its contract) landed behind this
-//! probe's zero-count gate; the probe now guards Phase 2, the eventual
-//! removal of the transitional build-script cleanup in
-//! `crates/runtime-integration/build_legacy_native_output.rs`. The probe
-//! never removes anything.
+//! Both retirement phases landed behind this probe's zero-count gate
+//! (Phase 1: the shell cleaner and its contract; Phase 2: the transitional
+//! build-script cleanup, formerly
+//! `crates/runtime-integration/build_legacy_native_output.rs`). The probe
+//! now stands as the permanent verification that the layout never
+//! returns. It never removes anything.
 
 use std::collections::BTreeSet;
 use std::ffi::OsStr;
@@ -278,15 +279,16 @@ fn run_scan(
     ExitCode::SUCCESS
 }
 
-/// The operator guidance a tripped `--fail-on-found` gate prints: the
-/// surviving removal paths are the build script's automatic clearing of the
-/// current generation plus a deliberate whole-target `cargo clean` for
-/// stale generations (see CONTRIBUTING.md and issue #1486).
+/// The operator guidance a tripped `--fail-on-found` gate prints: with the
+/// transitional build-script cleanup retired (issue #1486 Phase 2), the
+/// only surviving remedies are a deliberate whole-target `cargo clean` for
+/// stale generations and the build script's own identity-keyed rebuild for
+/// the current one (see CONTRIBUTING.md).
 pub(crate) fn gate_error_message(retired_directory_count: u64) -> String {
     format!(
         "Error: {retired_directory_count} retired native-output directories remain; \
-         remove them with a deliberate whole-target `cargo clean` (the build script \
-         clears the current generation automatically; see issue #1486)"
+         remove them with a deliberate whole-target `cargo clean` (see issue #1486 \
+         and CONTRIBUTING.md)"
     )
 }
 
