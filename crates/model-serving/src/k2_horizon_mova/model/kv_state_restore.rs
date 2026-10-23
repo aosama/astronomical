@@ -4,7 +4,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decoder::K2HorizonMoVAKvState;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 impl K2HorizonMoVAKvState {
     /// Seats the restored K/V by concatenating every block slice along the

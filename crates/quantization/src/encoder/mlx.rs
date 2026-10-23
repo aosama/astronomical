@@ -19,8 +19,8 @@
 //!   Metal kernel instead of seven array passes; measure before fusing, and
 //!   keep the reference encoder as the correctness oracle for any kernel.
 
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::MlxArray;
 
 use crate::bit_width::{BitWidth, GroupSize};
 use crate::error::QuantizationError;

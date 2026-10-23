@@ -27,7 +27,7 @@ use astronomical_model_serving::{
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::qwen_image_21;
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 const TRANSFORMER_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 
@@ -43,7 +43,7 @@ const TEXT_TOKEN_COUNT: usize = 41;
 const TEXT_EMBEDDING_WIDTH: usize = QWEN_IMAGE_21_TEXT_EMBEDDING_WIDTH;
 
 /// Deterministic, spatially varying packed latents `(1, 64, 64)`.
-fn journey_latents(runtime: &MlxRuntime) -> astronomical_mlx_c_rust::MlxArray {
+fn journey_latents(runtime: &MlxRuntime) -> mlx_c_rust::MlxArray {
     let position_count = TARGET_TOKENS * LATENT_CHANNEL_COUNT;
     let latent_values: Vec<f32> = (0..position_count)
         .map(|index| ((index % 251) as f32 / 251.0 - 0.5) * 6.0)
@@ -61,7 +61,7 @@ fn journey_latents(runtime: &MlxRuntime) -> astronomical_mlx_c_rust::MlxArray {
 
 /// Deterministic synthetic text embeddings `(1, 41, 4096)` standing in for the Qwen3-VL encoder
 /// output until that slice lands.
-fn journey_text_embeddings(runtime: &MlxRuntime) -> astronomical_mlx_c_rust::MlxArray {
+fn journey_text_embeddings(runtime: &MlxRuntime) -> mlx_c_rust::MlxArray {
     let position_count = TEXT_TOKEN_COUNT * TEXT_EMBEDDING_WIDTH;
     let embedding_values: Vec<f32> = (0..position_count)
         .map(|index| ((index % 509) as f32 / 509.0 - 0.5) * 2.0)
@@ -79,8 +79,8 @@ fn journey_text_embeddings(runtime: &MlxRuntime) -> astronomical_mlx_c_rust::Mlx
 
 /// A text-only request: no condition images, one 8×8 target, no padding.
 fn journey_request<'a>(
-    latents: &'a astronomical_mlx_c_rust::MlxArray,
-    text_embeddings: &'a astronomical_mlx_c_rust::MlxArray,
+    latents: &'a mlx_c_rust::MlxArray,
+    text_embeddings: &'a mlx_c_rust::MlxArray,
     timesteps: &'a [f32],
 ) -> QwenImage21TransformerRequest<'a> {
     QwenImage21TransformerRequest {

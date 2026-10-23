@@ -14,9 +14,7 @@ use super::error::K2HorizonMoVAExecutionError;
 use super::fused_expert_decode::FusedExpertDecodeKernels;
 use super::ops;
 use super::weights::K2HorizonMoVAWeights;
-use astronomical_mlx_c_rust::{
-    MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel,
-};
+use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 
 pub struct K2HorizonMoVAModel {
     pub runtime: MlxRuntime,

@@ -1,6 +1,6 @@
 //! Request sampling policy and structured-token constraints for folded-ternary output.
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use super::PrismHadamardQwen35ActiveGeneration;
 use crate::InferenceEngineError;

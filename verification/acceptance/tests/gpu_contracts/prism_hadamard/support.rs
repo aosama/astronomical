@@ -9,10 +9,10 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_model_serving::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use astronomical_model_serving::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::MlxArray;
 
 /// The environment variable pointing at the installed folded pack root (the
 /// Hugging Face snapshot directory containing `config.json`,

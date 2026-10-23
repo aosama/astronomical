@@ -2,7 +2,7 @@
 //! residency-forked field (expert pager, retained experts, residency plans,
 //! route observation) and the paged execution entry points.
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use std::cell::{Cell, RefCell};
 

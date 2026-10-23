@@ -23,11 +23,11 @@
 //! capability probe and the fixture-pack unit test both check this equality
 //! bit for bit, and the upstream parity journey is the end-to-end witness.
 
-use astronomical_mlx_c_rust::{
+use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::{
     MlxArray, MlxCError, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput,
     MlxMetalKernelTemplateArgument,
 };
-use astronomical_runtime_integration::MlxRuntime;
 
 /// MLX's largest butterfly radix and its device read width; the block must
 /// be at least one radix wide so every pass uses the same radix MLX uses.

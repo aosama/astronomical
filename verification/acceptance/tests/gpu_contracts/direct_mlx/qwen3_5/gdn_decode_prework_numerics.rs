@@ -26,7 +26,7 @@ use tokio::time::timeout;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs, MlxDtype};
 
 const KEY_HEAD_COUNT: i32 = 16;
 const VALUE_HEAD_COUNT: i32 = 32;
@@ -305,7 +305,7 @@ async fn compare_compiled_decay_with_composed_chain() {
 async fn prepare_runtime_and_kernel() -> (
     MlxRuntime,
     MlxCompiledElementwiseGraphs,
-    astronomical_mlx_c_rust::MlxMetalKernel,
+    mlx_c_rust::MlxMetalKernel,
 ) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(

@@ -14,6 +14,9 @@ const ZERO_GIT_SHA: &str = "0000000000000000000000000000000000000000";
 /// in sync with the identity policy in `astronomical-native-identity`.
 const NATIVE_INPUT_PATHSPECS: &[&str] = &[
     "crates/runtime-integration/build.rs",
+    // Kept for transition classification: the path matches the bridge
+    // deletion itself; the live build script now lives in the published
+    // mlx-c-rust crate outside this repository.
     "crates/mlx-c-rust/build.rs",
     "crates/runtime-integration/build_native_linking.rs",
     "crates/runtime-integration/build_native_store.rs",

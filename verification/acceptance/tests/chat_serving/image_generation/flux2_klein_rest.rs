@@ -25,11 +25,11 @@ use super::flux2_klein_rest_support::{
 use crate::serving_acceptance::chat::openai_rest::{
     assert_successful_streaming_chat_response, post_chat_completion,
 };
-use astronomical_mlx_c_rust::MlxDtype;
 use astronomical_test_harness::flux_reference_oracle::{
     BFL_SOURCE_REVISION, DIFFUSERS_SOURCE_REVISION, ExpectedFluxReference, FluxReferenceOracle,
     sha256_hex,
 };
+use mlx_c_rust::MlxDtype;
 
 /// The independent reference bundle must be produced outside Astronomical and
 /// located through this operator-provided path.

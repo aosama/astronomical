@@ -1,7 +1,7 @@
 use std::fs::{File, OpenOptions};
 
-use astronomical_mlx_c_rust::MlxDtype;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::MlxDtype;
 
 #[test]
 fn should_write_unequal_noncontiguous_views_with_one_largest_tensor_workspace() {

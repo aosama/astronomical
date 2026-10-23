@@ -21,7 +21,7 @@ use super::mid_block::QwenImage21VaeMidBlock;
 use super::rms_norm::QwenImage21VaeRmsNorm;
 use super::tensor_shape;
 use super::up_block::QwenImage21VaeResidualUpBlock;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Latent channels entering the decoder (`z_dim`, after `post_quant_conv`). The transformer emits
 /// the same width, so both sides read the one geometry constant rather than restating 64.

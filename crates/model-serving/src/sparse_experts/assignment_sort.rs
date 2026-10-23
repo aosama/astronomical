@@ -6,7 +6,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::error::SparseExpertError;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 const OPERATION: &str = "sort stacked expert assignments";
 

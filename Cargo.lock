@@ -45,7 +45,7 @@ dependencies = [
  "astronomical-daemon",
  "astronomical-inference-worker",
  "astronomical-ipc-protocol",
- "astronomical-mlx-c-rust",
+ "astronomical-mlx-c-fork",
  "astronomical-model-serving",
  "astronomical-native-identity",
  "astronomical-quantization",
@@ -56,6 +56,7 @@ dependencies = [
  "base64 0.23.1",
  "futures-util",
  "image",
+ "mlx-c-rust",
  "serde",
  "serde_json",
  "serial_test",
@@ -151,7 +152,6 @@ dependencies = [
  "astronomical-config",
  "astronomical-daemon",
  "astronomical-ipc-protocol",
- "astronomical-mlx-c-rust",
  "astronomical-model-serving",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
@@ -160,6 +160,7 @@ dependencies = [
  "base64 0.23.1",
  "futures-util",
  "image",
+ "mlx-c-rust",
  "serde",
  "serde_json",
  "serial_test",
@@ -195,8 +196,9 @@ dependencies = [
 name = "astronomical-jangtq2-qwen35"
 version = "0.2.80"
 dependencies = [
- "astronomical-mlx-c-rust",
+ "astronomical-mlx-c-fork",
  "astronomical-runtime-integration",
+ "mlx-c-rust",
  "serde",
  "serde_json",
  "serial_test",
@@ -215,12 +217,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "astronomical-mlx-c-rust"
+name = "astronomical-mlx-c-fork"
 version = "0.2.80"
 dependencies = [
- "astronomical-native-identity",
- "bindgen",
- "thiserror",
+ "mlx-c-rust",
 ]
 
 [[package]]
@@ -231,12 +231,13 @@ dependencies = [
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
  "astronomical-memory-policy",
- "astronomical-mlx-c-rust",
+ "astronomical-mlx-c-fork",
  "astronomical-quantization",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
  "image",
  "libc",
+ "mlx-c-rust",
  "regex-automata",
  "safetensors",
  "serde",
@@ -272,9 +273,9 @@ dependencies = [
 name = "astronomical-quantization"
 version = "0.2.80"
 dependencies = [
- "astronomical-mlx-c-rust",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
+ "mlx-c-rust",
  "safetensors",
  "serde",
  "serde_json",
@@ -300,11 +301,12 @@ dependencies = [
 name = "astronomical-runtime-integration"
 version = "0.2.80"
 dependencies = [
- "astronomical-mlx-c-rust",
+ "astronomical-mlx-c-fork",
  "astronomical-native-identity",
  "astronomical-test-harness",
  "fs4",
  "libc",
+ "mlx-c-rust",
  "sha2",
  "tempfile",
  "thiserror",
@@ -1419,6 +1421,17 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mlx-c-rust"
+version = "0.7.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74da8b850229f7d69514629503d7055f14d85bc0793b98a04087a1c06777d779"
+dependencies = [
+ "bindgen",
+ "pkg-config",
+ "thiserror",
 ]
 
 [[package]]

@@ -18,10 +18,11 @@ default = []
 # tensor inventory, golden vectors) builds and tests in the offline lane
 # without any of this, so a contract change never rebuilds the graphics-
 # processor world.
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-rust"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-c-rust", "dep:astronomical-mlx-c-fork"]
 
 [dependencies]
-astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
+mlx-c-rust = { workspace = true, optional = true }
+astronomical-mlx-c-fork = { path = "../mlx-c-fork", optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 serde.workspace = true
 serde_json.workspace = true

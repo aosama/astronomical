@@ -30,7 +30,7 @@ use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
     qwen3_5_moe::frozen_ornith_1_0_config_bytes,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const EXPERT_CAPACITY: usize = 2;
 const OUTPUT_DIMENSION: usize = 4;
@@ -145,7 +145,7 @@ fn test_runtime() -> MlxRuntime {
 }
 
 /// Evaluates one array to its exact host representation for comparison.
-fn evaluated_values(runtime: &MlxRuntime, array: &astronomical_mlx_c_rust::MlxArray) -> Vec<f64> {
+fn evaluated_values(runtime: &MlxRuntime, array: &mlx_c_rust::MlxArray) -> Vec<f64> {
     match array.dtype() {
         MlxDtype::UInt32 => array
             .to_vec_u32()

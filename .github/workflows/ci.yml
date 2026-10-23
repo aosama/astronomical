@@ -773,9 +773,9 @@ jobs:
       - name: Sync pinned toolchain
         run: rustup show
       # The Linux-buildable subset only: runtime-integration's build script
-      # probes the xcode identity and mlx-c-rust needs the native dependency
-      # cache, so the macOS-first crates cannot compile on this runner. The
-      # macOS offline verification job above owns the full lane.
+      # probes the xcode identity, so the macOS-first crates cannot compile
+      # on this runner. The macOS offline verification job above owns the
+      # full lane.
       - name: Fetch and build the Linux-buildable offline crates
         run: |
           cargo fetch --locked

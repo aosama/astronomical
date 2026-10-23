@@ -7,7 +7,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 #[tokio::test]
 async fn should_match_generated_rope_with_default_custom_denominators() {

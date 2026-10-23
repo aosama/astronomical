@@ -138,9 +138,10 @@ audit-unused-public-bins = "clippy --workspace --bins -- -A clippy::all -D dead_
 # count as referenced, and zero-caller `pub(crate)` items reachable through
 # the module chain from the crate root are invisible to rustc's dead-code
 # pass). The verdict is always `git grep -wn "<name>" -- '*.rs'` across every
-# tracked source file. `crates/mlx-c-rust` is exempt from dead-surface
-# cleanup by policy: its bridge is complete rather than selective (see that
-# crate's lib.rs documentation).
+# tracked source file. The bridge crates are exempt from dead-surface
+# cleanup by policy: the published `mlx-c-rust` bridge is complete rather
+# than selective (see that crate's repository), and `astronomical-mlx-c-fork`
+# carries the fork surface regardless of caller count.
 audit-unused-public-workspace = "workspace-unused-pub"
 # Acceptance lanes (issue #1198 workstream 8): one alias per GPU lane, so the
 # packages, features, targets, and the GPU serial rule (`--test-threads=1`)

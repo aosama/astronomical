@@ -9,7 +9,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::STATE_DIMENSION_TOKEN_AXIS;
 use super::append_only_attention_state_operations;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 const QUANTIZED_STATE_OPERATION: &str = "update the in-memory quantized full-attention KV state";
 

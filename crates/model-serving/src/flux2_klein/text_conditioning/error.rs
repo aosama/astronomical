@@ -48,8 +48,8 @@ pub(crate) enum Flux2KleinTextConditioningError {
 }
 
 #[cfg(feature = "direct-mlx")]
-impl From<astronomical_mlx_c_rust::MlxCError> for Flux2KleinTextConditioningError {
-    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+impl From<mlx_c_rust::MlxCError> for Flux2KleinTextConditioningError {
+    fn from(captured_error: mlx_c_rust::MlxCError) -> Self {
         astronomical_runtime_integration::MlxRuntimeError::from(captured_error).into()
     }
 }

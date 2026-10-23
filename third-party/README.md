@@ -144,13 +144,20 @@ To bump a pinned dependency:
    template-arity patches, also run the direct-MLX attention lane: the
    wide-head-dimension test there exercises the JIT generator paths in
    seconds.
-4. Reconcile the Rust FFI surface: bindings are bindgen-generated at build
-   time from the provisioned headers via the allowlist in
-   `crates/mlx-c-rust/build.rs`. Diff the generated surface, update the
-   allowlist and call sites, and leave zero compiler warnings. Before the first native build of the new pin, diff the C header
-   surface itself with the bindgen header provisioning (see the next
-   section); header-level differences found there explain almost every
-   binding-level difference before any compile runs.
+4. Reconcile the Rust FFI surface: the bridge is the published
+   `mlx-c-rust` crate (crates.io), which bindgen-generates from its own
+   vendored stock MLX-C headers at build time. Bump the workspace
+   `mlx-c-rust` dependency to the release matching the new pin, reconcile
+   call sites against its surface, and check the fork delta: the pinned
+   patch set adds exactly one C symbol (`mlx_array_detach`, owned by
+   `crates/mlx-c-fork`); a new patch that adds more symbols must extend
+   that crate and its `FORK_BRIDGED_FUNCTIONS`. The coverage contract
+   (run by `scripts/generate-mlx-c-coverage-inventory.sh`) fails on any
+   unbridged, stale, or unjustified symbol across both crates. Before the
+   first native build of the new pin, diff the C header surface itself with
+   the bindgen header provisioning (see the next section); header-level
+   differences found there explain almost every binding-level difference
+   before any compile runs.
  5. Run the offline lanes, then invoke each real-model acceptance Cargo
    command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
@@ -162,14 +169,17 @@ To bump a pinned dependency:
 
 ## Bindgen headers and the C surface diff
 
-The MLX-C binding surface spans two crates. `crates/mlx-c-rust` owns the
-raw bindgen declarations, the captured-error translation, the owned handle
-types, the per-worker bindings context, and every operation wrapper family;
-it builds from the provisioned headers only and never invokes CMake.
+The MLX-C binding surface spans two crates. The published `mlx-c-rust`
+crate (crates.io, versioned against the MLX-C release it binds) owns the
+raw bindgen declarations over its vendored stock headers, the
+captured-error translation, the owned handle types, the per-worker bindings
+context, and every operation wrapper family; it never invokes CMake.
+`crates/mlx-c-fork` owns the Astronomical patch delta over that stock
+surface — today the single `mlx_array_detach` symbol.
 `crates/runtime-integration` owns the Astronomical policy over that
 boundary — memory-limit enforcement, metallib resolution and verification,
 the safetensors vtable policies, and native build orchestration — and links
-the bindings crate against the pinned native image.
+both bridge crates against the pinned patched native image.
 
 `scripts/provision-bindgen-headers.sh` extracts the pinned MLX and MLX-C
 archives from the verified native dependency cache and applies the same patch

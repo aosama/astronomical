@@ -4,10 +4,10 @@
 //! source-size budget; the kernel source is a pure string constant and the
 //! launcher is the only bridge between fixture tensors and the launch.
 
-use astronomical_mlx_c_rust::{
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// One threadgroup owns one expert and one block of output rows; 64 rows
 /// divides every projection width of the family (1024 and 3072).

@@ -4,7 +4,7 @@ use crate::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
     allocator_cache_exceeds_reclaim_threshold,
 };
-use astronomical_mlx_c_rust::{
+use mlx_c_rust::{
     clear_allocator_cache, reset_peak_memory, set_cache_limit, set_memory_limit, synchronize,
 };
 
@@ -43,18 +43,17 @@ impl MlxRuntime {
 
     /// Reads the active allocator limit currently enforced by MLX.
     pub fn configured_memory_limit_bytes(&self) -> Result<usize, MlxRuntimeError> {
-        astronomical_mlx_c_rust::memory_limit_bytes().map_err(MlxRuntimeError::from)
+        mlx_c_rust::memory_limit_bytes().map_err(MlxRuntimeError::from)
     }
 
     /// Samples process-local MLX allocator bytes.
     pub fn memory_snapshot(&self) -> Result<MlxMemorySnapshot, MlxRuntimeError> {
         Ok(MlxMemorySnapshot {
-            active_memory_bytes: astronomical_mlx_c_rust::active_memory_bytes()
+            active_memory_bytes: mlx_c_rust::active_memory_bytes()
                 .map_err(MlxRuntimeError::from)?,
-            allocator_cache_memory_bytes: astronomical_mlx_c_rust::cache_memory_bytes()
+            allocator_cache_memory_bytes: mlx_c_rust::cache_memory_bytes()
                 .map_err(MlxRuntimeError::from)?,
-            peak_memory_bytes: astronomical_mlx_c_rust::peak_memory_bytes()
-                .map_err(MlxRuntimeError::from)?,
+            peak_memory_bytes: mlx_c_rust::peak_memory_bytes().map_err(MlxRuntimeError::from)?,
         })
     }
 

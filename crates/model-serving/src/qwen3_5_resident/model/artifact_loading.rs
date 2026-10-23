@@ -20,7 +20,7 @@ use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
 };
-use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
+use mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
 
 impl Qwen3_5ResidentModel {
     /// Loads a model without diagnostic performance attribution.

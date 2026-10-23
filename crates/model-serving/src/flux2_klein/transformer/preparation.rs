@@ -4,7 +4,7 @@ use super::Flux2KleinTransformerError;
 use super::blocks::{DoubleStreamState, ModulationSet};
 use super::execution::{Flux2KleinForwardState, Flux2KleinTransformer, ForwardBlockState};
 use super::math;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 #[derive(Clone, Copy)]
 pub struct Flux2KleinTransformerInputs<'a> {

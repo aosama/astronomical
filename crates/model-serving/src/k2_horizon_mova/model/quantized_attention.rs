@@ -11,7 +11,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use crate::k2_horizon_mova::configuration::K2HorizonMoVAConfig;
 
 use super::error::K2HorizonMoVAExecutionError;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 pub(super) fn quantized_scaled_dot_product_attention(
     runtime: &MlxRuntime,

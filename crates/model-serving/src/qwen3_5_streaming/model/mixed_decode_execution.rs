@@ -21,7 +21,7 @@ use crate::qwen3_5_streaming::model::cached_plus_streamed_page_route::Qwen3_5MoE
 use crate::qwen3_5_streaming::model::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::qwen3_5_streaming::model::routing;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Reshapes one partial route side to the batched assignment layout the gather
 /// consumes. The route builder emits compact one-dimensional arrays; the

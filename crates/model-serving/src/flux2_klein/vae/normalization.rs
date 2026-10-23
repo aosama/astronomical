@@ -4,7 +4,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::Flux2KleinVaeError;
 use super::convolution;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const GROUP_NORM_EPSILON: f32 = 1e-6;
 const GROUP_COUNT: usize = 32;

@@ -9,7 +9,7 @@ use super::super::{
     Flux2KleinMemoryGeometry, Flux2KleinPackedLatentLayout, ValidatedFlux2KleinArtifact,
 };
 use super::FLUX2_KLEIN_CONDITIONING_SEQUENCE_LENGTH;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 const MAXIMUM_IMAGE_EDGE_PIXELS: u32 = 1_024;
 pub(super) fn official_capabilities() -> ImageGenerationCapabilities {

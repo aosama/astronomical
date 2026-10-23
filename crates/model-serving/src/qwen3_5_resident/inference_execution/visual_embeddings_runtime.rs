@@ -5,7 +5,7 @@ use crate::PerformanceAttribution;
 use crate::qwen3_5_core::vision::VisualEmbeddingEngineContext;
 use crate::qwen3_5_core::vision::resolve_visual_embeddings_for_processed_images as resolve_shared_visual_embeddings;
 use astronomical_ipc_protocol::RequestId;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_core::vision::{Qwen3_5ProcessedImage, Qwen3_5VisualEmbeddingSuffixPlan};

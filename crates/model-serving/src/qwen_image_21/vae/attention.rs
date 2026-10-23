@@ -10,7 +10,7 @@ use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;
 use super::rms_norm::QwenImage21VaeRmsNorm;
 use super::tensor_shape;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct QwenImage21VaeAttentionBlock {

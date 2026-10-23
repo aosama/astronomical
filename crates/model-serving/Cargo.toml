@@ -12,7 +12,7 @@ workspace = true
 
 [features]
 default = []
-direct-mlx = ["dep:astronomical-runtime-integration", "dep:astronomical-mlx-c-rust", "dep:astronomical-quantization", "astronomical-jangtq2-qwen35/direct-mlx"]
+direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-c-rust", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-jangtq2-qwen35/direct-mlx"]
 
 [dependencies]
 astronomical-config = { path = "../config" }
@@ -40,7 +40,8 @@ astronomical-jangtq2-qwen35 = { path = "../astronomical-jangtq2-qwen35" }
 # the offline artifact round-trip test reaches it as a dev-dependency.
 astronomical-quantization = { path = "../quantization", optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
-astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
+mlx-c-rust = { workspace = true, optional = true }
+astronomical-mlx-c-fork = { path = "../mlx-c-fork", optional = true }
 image.workspace = true
 libc.workspace = true
 regex-automata = "0.4"

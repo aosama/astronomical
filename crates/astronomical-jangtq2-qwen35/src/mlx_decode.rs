@@ -24,10 +24,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use astronomical_mlx_c_rust::{
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::codebook;
 use super::hadamard32;
@@ -226,12 +226,12 @@ fn materialize_and_detach_jangtq2_array(
     array: &MlxArray,
 ) -> Result<(), MlxRuntimeError> {
     runtime.evaluate_arrays(&[array])?;
-    array
-        .detach()
-        .map_err(|error| MlxRuntimeError::RuntimeOperation {
+    astronomical_mlx_c_fork::detach_array(array).map_err(|error| {
+        MlxRuntimeError::RuntimeOperation {
             operation: "detach a jangtq2 array",
             description: error.to_string(),
-        })
+        }
+    })
 }
 
 /// Applies the blockwise normalized Hadamard-32 to an activation's final axis.

@@ -7,10 +7,10 @@ use std::{
     time::Instant,
 };
 
-use astronomical_mlx_c_rust::MlxDtype;
 use astronomical_runtime_integration::{
     BoundedReadInterval, MlxMemoryLimits, MlxRuntime, MlxRuntimeError, PositionalFileReadMetrics,
 };
+use mlx_c_rust::MlxDtype;
 
 const ACTIVE_MEMORY_LIMIT_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 256 * 1024 * 1024;

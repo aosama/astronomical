@@ -10,7 +10,7 @@ use crate::qwen_image_21::mlx_math;
 use super::weights::{
     HEAD_WIDTH, KEY_VALUE_HEAD_COUNT, QUERY_HEAD_COUNT, QwenImage21TextEncoderLayerWeights,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// The Qwen RMSNorm epsilon (`rms_norm_eps`).
 pub(super) const RMS_NORM_EPSILON: f32 = 0.000_001;

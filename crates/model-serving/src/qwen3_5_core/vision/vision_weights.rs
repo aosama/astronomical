@@ -7,7 +7,7 @@ use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantiza
 use crate::{TensorDtype, TensorProfile};
 
 use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 #[cfg(test)]
 mod tests;

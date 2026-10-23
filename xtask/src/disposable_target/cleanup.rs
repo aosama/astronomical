@@ -8,8 +8,8 @@
 
 use std::io::Read;
 use std::process::{Command, Stdio};
-use std::sync::mpsc::TryRecvError;
 use std::sync::Mutex;
+use std::sync::mpsc::TryRecvError;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -77,8 +77,7 @@ impl DisposableJourney {
             lifecycle_line(&self.lane_name, "already-removed elapsed_seconds=0", false);
             return Ok(());
         }
-        if let Err(refusal_message) =
-            validate_owned_target(&self.target_directory, &self.lane_name)
+        if let Err(refusal_message) = validate_owned_target(&self.target_directory, &self.lane_name)
         {
             self.is_cleanup_pending = false;
             print_error(&refusal_message);
@@ -119,8 +118,7 @@ impl DisposableJourney {
             return Err(());
         }
         self.target_directory = removal_target_directory;
-        if let Err(refusal_message) =
-            validate_owned_target(&self.target_directory, &self.lane_name)
+        if let Err(refusal_message) = validate_owned_target(&self.target_directory, &self.lane_name)
         {
             self.is_cleanup_pending = false;
             print_error(&refusal_message);
@@ -254,8 +252,7 @@ impl DisposableJourney {
         });
         self.removal_result_receiver = Some(removal_result_receiver);
         self.cleanup_operation = CleanupOperationName::Removing;
-        self.cleanup_progress_reporter =
-            Some(ProgressReporter::start(&self.lane_name, "removing"));
+        self.cleanup_progress_reporter = Some(ProgressReporter::start(&self.lane_name, "removing"));
 
         loop {
             if let Some(received_signal) = self.poll_received_signal() {

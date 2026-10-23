@@ -87,14 +87,19 @@ fn parse_pinned_surface(header_directory: &std::path::Path) -> Result<HeaderSurf
     Ok(surface)
 }
 
-/// The bridge inventory the mlx-c-rust build script emitted.
+/// The bridge inventory the published stock crate emitted at build time,
+/// merged with the Astronomical fork symbols bridged by
+/// `astronomical-mlx-c-fork` — the provisioned patched headers declare the
+/// fork additions, so the completeness proof must span both crates.
 fn compiled_bridge_inventory() -> BridgeInventory {
     BridgeInventory {
-        functions: astronomical_mlx_c_rust::raw::BRIDGED_FUNCTIONS
+        functions: mlx_c_rust::raw::BRIDGED_FUNCTIONS
             .iter()
-            .map(|name| (*name).to_owned())
+            .copied()
+            .chain(astronomical_mlx_c_fork::FORK_BRIDGED_FUNCTIONS)
+            .map(str::to_owned)
             .collect(),
-        types: astronomical_mlx_c_rust::raw::BRIDGED_TYPES
+        types: mlx_c_rust::raw::BRIDGED_TYPES
             .iter()
             .map(|name| (*name).to_owned())
             .collect(),
@@ -151,7 +156,7 @@ fn render_inventory(surface: &HeaderSurface, bridged: &BridgeInventory) -> Strin
 }
 
 fn inventory_artifact_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mlx-c-rust/COVERAGE_INVENTORY.md")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../mlx-c-fork/COVERAGE_INVENTORY.md")
 }
 
 #[test]

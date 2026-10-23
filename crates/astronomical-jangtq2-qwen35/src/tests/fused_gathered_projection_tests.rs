@@ -9,8 +9,8 @@
 //! page shape, the pair it replaces on the decode path. Every test is
 //! `#[serial]` because MLX graphics-processor tests never run in parallel.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 use super::super::codebook;

@@ -1,5 +1,5 @@
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const GATED_DELTA_RECURRENT_OPERATION: &str =
     "fetch or allocate the in-memory gated-delta recurrent state";

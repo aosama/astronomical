@@ -3,7 +3,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::expert_paging::{ExpertPageRoutePartition, QuantizedExpertPageManifest};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 const BUILD_CACHED_PLUS_STREAMED_PAGE_ROUTE_OPERATION: &str =
     "build Qwen3.5-MoE cached-plus-streamed expert page route";

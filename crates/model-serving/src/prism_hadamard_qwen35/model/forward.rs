@@ -10,8 +10,8 @@
 //! machinery (chunked prefill boundaries, fused decode prework, expert
 //! paging), which the parity milestone does not exercise.
 
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntimeError;
+use mlx_c_rust::MlxArray;
 
 use crate::{ConvolutionState, FullAttentionKeyValueState, GatedDeltaRecurrentState};
 
@@ -395,7 +395,7 @@ impl super::PrismHadamardTextModel {
     pub(crate) fn embed_tokens(
         &self,
         token_indices: &MlxArray,
-    ) -> Result<MlxArray, astronomical_mlx_c_rust::MlxCError> {
+    ) -> Result<MlxArray, mlx_c_rust::MlxCError> {
         let hidden_width = self.pack.config().text().hidden_size as i32;
         let rotation = self.weights.rotation(hidden_width)?;
         self.weights

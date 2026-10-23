@@ -3,7 +3,7 @@ use std::time::Instant;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const WARMUP_ITERATIONS: usize = 4;
 const MEASUREMENT_ITERATIONS: usize = 5;

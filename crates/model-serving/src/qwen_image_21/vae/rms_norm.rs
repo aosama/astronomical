@@ -12,7 +12,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21VaeError;
 use super::tensor_shape;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 /// `torch.nn.functional.normalize` clamps the L2 norm at this floor before dividing.
 const NORMALIZE_L2_FLOOR: f32 = 0.000_000_000_001;

@@ -5,7 +5,7 @@
 //! boundaries explicit provides one restart-safe attention output for chunk
 //! recovery.
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AttentionWeights;
