@@ -1,3 +1,15 @@
+# Applies one repository-owned patch to an already-extracted native
+# dependency, idempotently.
+#
+# Why a marker file: FetchContent re-runs PATCH_COMMAND on reconfiguration,
+# but `patch` refuses to apply an already-applied diff. Hashing the patch
+# file into the marker name means editing a patch re-applies it (the marker
+# no longer matches), while reconfiguring with the same patch set is free.
+#
+# Why --forward --batch: never interactive, never reverse-apply. A genuine
+# conflict means the extracted archive no longer matches the patch's
+# expectations, and the failure message tells the operator to discard the
+# staged build rather than hand-merge generated source state.
 if(NOT DEFINED PATCH_EXECUTABLE OR "${PATCH_EXECUTABLE}" STREQUAL "")
     message(FATAL_ERROR "PATCH_EXECUTABLE is required")
 endif()

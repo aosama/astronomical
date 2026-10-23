@@ -1,12 +1,36 @@
+//! Bounded in-memory safetensors serialization.
+//!
+//! # Why both writers exist
+//!
+//! The descriptor writer persists multi-gigabyte captures straight to disk;
+//! this writer serves the opposite niche — captures small enough (or
+//! budgeted enough) to live in memory, such as block transactions the
+//! persistent cache composes and hands to a non-MLX writer thread. Giving
+//! MLX a memory sink lets that hand-off happen while MLX arrays and runtime
+//! state stay confined to their owner thread, as the thread-affinity
+//! contract of the runtime requires.
+//!
+//! # The typed byte budget
+//!
+//! [`MlxRuntime::serialize_safetensors_with_maximum_byte_count`] enforces a
+//! caller-declared capacity. Native callbacks cannot fail mid-write with a
+//! typed error, so an over-budget write is acknowledged to MLX (keeping
+//! native serialization deterministic) while the state latches the attempted
+//! size; the final `into_bytes` then reports the typed
+//! [`MlxRuntimeError::SafetensorsSerializationLimitExceeded`] with both the
+//! attempted and permitted byte counts. This is the same error-latching
+//! pattern the descriptor writer uses for input/output failures.
+
 use std::ffi::{c_char, c_int, c_void};
 use std::sync::Mutex;
 
 use crate::mlx_runtime;
-use crate::mlx_safetensors_writer;
-use crate::mlx_safetensors_writer::{OwnedMetadataMap, OwnedTensorMap};
+use crate::safetensors::file_writer;
+use crate::safetensors::name_maps::{OwnedMetadataMap, OwnedTensorMap};
 use crate::{MlxRuntime, MlxRuntimeError};
 use mlx_c_rust::{MlxArray, raw};
 
+/// Label MLX-C can surface for this writer in diagnostics.
 const MEMORY_WRITER_LABEL: &[u8] = b"bounded in-memory safetensors output\0";
 
 impl MlxRuntime {
@@ -14,6 +38,10 @@ impl MlxRuntime {
     ///
     /// The caller can transfer the returned bytes to a non-MLX writer thread;
     /// MLX arrays and runtime state remain confined to their owner thread.
+    ///
+    /// Unbounded variant: see
+    /// [`serialize_safetensors_with_maximum_byte_count`] for the budgeted
+    /// form the persistent cache actually uses.
     pub fn serialize_safetensors(
         &self,
         named_arrays: &[(&str, &MlxArray)],
@@ -27,6 +55,13 @@ impl MlxRuntime {
     }
 
     /// Serializes named arrays without exceeding Rust-owned output capacity.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MlxRuntimeError::SafetensorsSerializationLimitExceeded`]
+    /// when the capture would exceed `maximum_serialized_byte_count` —
+    /// reported after native serialization completes, from the latched
+    /// attempt, so the typed error carries the exact attempted size.
     pub fn serialize_safetensors_with_maximum_byte_count(
         &self,
         named_arrays: &[(&str, &MlxArray)],
@@ -34,7 +69,7 @@ impl MlxRuntime {
         maximum_serialized_byte_count: usize,
     ) -> Result<Vec<u8>, MlxRuntimeError> {
         if named_arrays.is_empty() {
-            return Err(mlx_safetensors_writer::writer_error(
+            return Err(file_writer::writer_error(
                 "serialize safetensors",
                 "at least one named array is required",
             ));
@@ -84,7 +119,7 @@ impl OwnedMemoryWriter {
             unsafe {
                 drop(Box::from_raw(writer_state));
             }
-            return Err(mlx_safetensors_writer::writer_error(
+            return Err(file_writer::writer_error(
                 "allocate an MLX memory writer",
                 "MLX returned an empty handle",
             ));
@@ -95,7 +130,11 @@ impl OwnedMemoryWriter {
         })
     }
 
+    /// Converts latched callback state into the typed Rust result: the
+    /// over-budget attempt, any good-flag failure, or the serialized bytes.
     fn into_bytes(self) -> Result<Vec<u8>, MlxRuntimeError> {
+        // SAFETY: `raw_writer` is alive, so `memory_writer_free` has not yet
+        // run and the state pointer is valid.
         let writer_mutex = unsafe { &*self.writer_state };
         let mut writer_state = writer_mutex
             .lock()
@@ -108,7 +147,7 @@ impl OwnedMemoryWriter {
             });
         }
         if !writer_state.is_good {
-            return Err(mlx_safetensors_writer::writer_error(
+            return Err(file_writer::writer_error(
                 "serialize safetensors into bounded memory",
                 "the memory writer reported a failure",
             ));
@@ -154,6 +193,8 @@ unsafe extern "C" fn memory_writer_seek(
     whence: c_int,
 ) -> c_int {
     // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    // MLX seeks during serialization layout passes; SEEK_END anchors at the
+    // bytes written so far, which is this writer's whole "file".
     let seek_succeeded = unsafe {
         with_memory_writer_state(descriptor, |writer_state| {
             let base_position_bytes = match whence {
@@ -181,6 +222,8 @@ unsafe extern "C" fn memory_writer_seek(
     if seek_succeeded { 0 } else { -1 }
 }
 
+/// Reads on the output sink are structurally unsupported; a zero count makes
+/// the v0.7.0 C++ wrapper fail the call loudly.
 unsafe extern "C" fn memory_writer_read_is_unsupported(
     descriptor: *mut c_void,
     _destination: *mut c_char,
@@ -189,7 +232,6 @@ unsafe extern "C" fn memory_writer_read_is_unsupported(
     unsafe {
         with_memory_writer_state(descriptor, |writer_state| writer_state.is_good = false);
     }
-    // Zero processed bytes makes the v0.7.0 C++ wrapper reject the read.
     0
 }
 
@@ -232,6 +274,8 @@ unsafe extern "C" fn memory_writer_write(
                 writer_state.is_good = false;
                 return Some(byte_count);
             }
+            // Seeks may position past the current end; grow with zeros so
+            // every index up to the write end is addressable, then copy.
             if write_end_bytes > writer_state.output_bytes.len() {
                 writer_state.output_bytes.resize(write_end_bytes, 0);
             }

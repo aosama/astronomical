@@ -4,8 +4,10 @@
 use std::path::Path;
 
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
-const NATIVE_BUILD_COMPILE_MODULE: &str = include_str!("../../build_native_compile.rs");
-const NATIVE_BUILD_PARALLELISM_MODULE: &str = include_str!("../../build_parallelism.rs");
+const NATIVE_BUILD_COMPILE_MODULE: &str =
+    include_str!("../../build-orchestration/native_compile.rs");
+const NATIVE_BUILD_PARALLELISM_MODULE: &str =
+    include_str!("../../build-orchestration/native_parallelism.rs");
 
 /// Collects the literal file and directory paths the build script watches
 /// through rerun-if-changed inside emit_native_source_rerun_contracts.

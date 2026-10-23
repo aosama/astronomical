@@ -1,7 +1,36 @@
+//! Lock-free aggregate of positional file reads performed by lazy MLX arrays.
+//!
+//! # Why these counters exist
+//!
+//! The custom readers serve bytes into MLX lazily, so "how much did loading
+//! this model actually read, and did the reads parallelize?" is invisible
+//! without instrumentation. The snapshot feeds:
+//!
+//! - the performance-attribution counters in `model-serving` (expert paging
+//!   input/output visibility),
+//! - the streaming-latency acceptance journeys, and
+//! - ad-hoc diagnosis of paged prefill wall time.
+//!
+//! # Design choices
+//!
+//! - **Lock-free atomics with `Relaxed` ordering** — every reader thread
+//!   increments these from inside C callbacks where blocking is unacceptable,
+//!   and the counters are monotone aggregates: a torn multi-counter read at
+//!   most mixes two adjacent samples, which no consumer is sensitive to.
+//! - **Measurement without synchronization** — a snapshot deliberately does
+//!   not drain the graphics-processor stream; it samples what has completed,
+//!   keeping telemetry cheap enough for per-request attribution.
+//! - **Documented limits** — these count *logical* reads issued by the
+//!   vtable; macOS may satisfy them from the file cache, so they are not
+//!   proof of equal physical SSD (Solid-State Drive) traffic.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 /// Lock-free aggregate of positional file reads performed by lazy MLX arrays.
+///
+/// Share one instance across readers by wrapping it in an `Arc`; every
+/// method is thread-safe.
 #[derive(Debug, Default)]
 pub struct PositionalFileReadMetrics {
     active_read_count: AtomicU64,
@@ -25,6 +54,11 @@ pub struct PositionalFileReadMetricsSnapshot {
 }
 
 impl PositionalFileReadMetrics {
+    /// Captures the current aggregate counters.
+    ///
+    /// Consistent per-field but not cross-field atomic: fields are read in
+    /// sequence, so two fields can straddle an in-flight read. Consumers
+    /// aggregate over whole requests, where this skew is noise.
     #[must_use]
     pub fn snapshot(&self) -> PositionalFileReadMetricsSnapshot {
         PositionalFileReadMetricsSnapshot {
@@ -43,6 +77,13 @@ impl PositionalFileReadMetrics {
         }
     }
 
+    /// Measures one read operation, updating every counter around it.
+    ///
+    /// Used only by the readers in this module family: the wrapper records
+    /// concurrency (current and peak), then call count, byte count on
+    /// success, total and maximum elapsed time, and failures. The boolean
+    /// result of the wrapped operation passes through untouched so callers
+    /// keep their own failure semantics.
     pub(crate) fn measure_read(
         &self,
         byte_count: usize,
