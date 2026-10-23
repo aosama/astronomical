@@ -14,8 +14,8 @@
 use std::{fs, path::Path};
 
 use astronomical_model_serving::{
-    CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    CompleteResidencyHeadroomBoundary, MemoryPhase, MlxRamBudget, MlxRamBudgetModelGeometry,
+    Qwen3_5ArtifactValidator, mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -33,6 +33,11 @@ use crate::support::{
 };
 
 const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
+/// The daemon expands every whole-GB ceiling input at 2^30 bytes per GB
+/// (the marketed-gigabyte convention); all GB arithmetic in this journey
+/// must use the same unit or the pending/effective echoes mismatch the
+/// expectations by roughly seven percent.
+const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
 const FIXED_PREFILL_CHUNK_SIZE_TOKENS: u32 = 2_048;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
 const QUEUED_GENERATION_MAXIMUM_OUTPUT_TOKENS: u32 = 128;
@@ -60,14 +65,28 @@ async fn run_queued_demotion_journey() {
     let model_directory = configured_installed_model_directory_by_id(model_id);
     let artifact_payload_bytes = artifact_payload_bytes(&model_directory);
     let residency_geometry = measure_sparse_artifact_residency_geometry(&model_directory);
+    // The resident start must purchase the request-time prefill activation
+    // workspace on top of the startup residency terms — the same bootstrap
+    // RAM budget arithmetic as the resident engine-selection journey; see
+    // that journey for the full rationale (issue #1297 / #1508).
+    let bootstrap_ram_budget = MlxRamBudget::new(
+        residency_geometry.complete_residency_with_headroom_bytes,
+        residency_geometry.model_geometry,
+    )
+    .expect("the resident artifact geometry should compose a bootstrap RAM budget");
+    let prefill_activation_workspace_bytes = bootstrap_ram_budget.activation_headroom_bytes(
+        MemoryPhase::Prefill,
+        u64::from(FIXED_PREFILL_CHUNK_SIZE_TOKENS),
+    );
     let resident_memory_ceiling_bytes = residency_geometry
         .complete_residency_with_headroom_bytes
-        .saturating_add(BEHAVIOR_PROMPT_CONTEXT_BYTES);
+        .saturating_add(BEHAVIOR_PROMPT_CONTEXT_BYTES)
+        .saturating_add(prefill_activation_workspace_bytes);
     assert!(
         resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
         "the queued-demotion acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
     );
-    let lowered_ceiling_bytes = floor_to_whole_gigabytes(
+    let lowered_ceiling_bytes = floor_to_whole_marketed_gigabytes(
         artifact_payload_bytes.saturating_sub(DEMOTION_MARGIN_BELOW_ARTIFACT_BYTES),
     );
     assert!(
@@ -114,7 +133,7 @@ async fn run_queued_demotion_journey() {
         .expect("the baseline generation should start before the ceiling is queued");
 
     wait_for_active_generation(server_address).await;
-    let lowered_ceiling_gb = lowered_ceiling_bytes / 1_000_000_000;
+    let lowered_ceiling_gb = lowered_ceiling_bytes / BYTES_PER_MARKETED_GIGABYTE;
     let queued_ceiling_document = put_json_endpoint_expecting_status(
         server_address,
         "/v1/config/maximum-mlx-memory",
@@ -182,6 +201,8 @@ const DEMOTION_MARGIN_BELOW_ARTIFACT_BYTES: u64 = 4_000_000_000;
 
 struct SparseArtifactResidencyGeometry {
     complete_residency_with_headroom_bytes: u64,
+    /// The measured geometry the request-time activation reserve composes from.
+    model_geometry: MlxRamBudgetModelGeometry,
 }
 
 fn measure_sparse_artifact_residency_geometry(
@@ -201,6 +222,7 @@ fn measure_sparse_artifact_residency_geometry(
         complete_residency_with_headroom_bytes: complete_residency_boundary
             .static_complete_residency_bytes
             .saturating_add(complete_residency_boundary.required_headroom_bytes),
+        model_geometry,
     }
 }
 
@@ -211,8 +233,11 @@ fn artifact_payload_bytes(model_directory: &Path) -> u64 {
     validated_artifact.total_payload_bytes()
 }
 
-fn floor_to_whole_gigabytes(byte_count: u64) -> u64 {
-    (byte_count / 1_000_000_000) * 1_000_000_000
+/// Floors to a whole marketed gigabyte (2^30 bytes): the unit the daemon
+/// re-expands whole-GB ceiling inputs at, so the floored target and the
+/// daemon's effective echo compare exactly.
+fn floor_to_whole_marketed_gigabytes(byte_count: u64) -> u64 {
+    (byte_count / BYTES_PER_MARKETED_GIGABYTE) * BYTES_PER_MARKETED_GIGABYTE
 }
 
 fn write_acceptance_config(
@@ -229,7 +254,7 @@ fn write_acceptance_config(
         "schema_version": 1,
         "runtime": {
             "model_directories": [acceptance_model_scan_root(model_directory)],
-            "maximum_mlx_memory_gb": mlx_memory_ceiling_bytes.div_ceil(1_000_000_000),
+            "maximum_mlx_memory_gb": mlx_memory_ceiling_bytes.div_ceil(BYTES_PER_MARKETED_GIGABYTE),
         },
         "prompt_cache": {"enabled": false},
         "diagnostics": {"performance_attribution_enabled": true},
