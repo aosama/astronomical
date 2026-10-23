@@ -13,7 +13,7 @@ use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use super::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentExpertWeights, Qwen3_5ResidentGateUpWeights,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 type ResidentSourceTensorKey = (PathBuf, String);
 type ResidentSourceTensorMap = HashMap<ResidentSourceTensorKey, MlxArray>;

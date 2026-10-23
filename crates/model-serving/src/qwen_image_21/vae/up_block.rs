@@ -19,7 +19,7 @@ use super::QwenImage21VaeError;
 use super::convolution::QwenImage21VaeSpatialConv;
 use super::resnet::QwenImage21VaeResnetBlock;
 use super::tensor_shape;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Nearest-neighbor replication factor per spatial axis (`factor_s` in the reference).
 const SPATIAL_UPSAMPLE_FACTOR: usize = 2;

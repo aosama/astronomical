@@ -9,7 +9,7 @@
 //! them; keeping them in `convolution.rs` made a convolution module the owner of VAE-wide
 //! validation.
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use super::QwenImage21VaeError;
 

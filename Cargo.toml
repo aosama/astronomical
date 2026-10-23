@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "crates/mlx-c-rust",
+    "crates/mlx-c-fork",
     "apps/astronomical-cli",
     "apps/inference-worker",
     "apps/daemon",
@@ -20,7 +20,7 @@ members = [
     "xtask",
 ]
 default-members = [
-    "crates/mlx-c-rust",
+    "crates/mlx-c-fork",
     "apps/astronomical-cli",
     "apps/inference-worker",
     "apps/daemon",
@@ -54,6 +54,12 @@ rust-version = "1.101"
 version = "0.2.80"
 
 [workspace.dependencies]
+# The complete stock MLX-C bridge, published to crates.io as mlx-c-rust and
+# versioned against the MLX-C release it binds. The Astronomical fork delta
+# (the patched mlx_array_detach symbol) lives in the local
+# astronomical-mlx-c-fork crate; bump this dependency together with the
+# third-party MLX/MLX-C pins.
+mlx-c-rust = "0.7.0-alpha.1"
 axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "query", "tokio"] }
 base64 = "0.23"
 bytes = "1"

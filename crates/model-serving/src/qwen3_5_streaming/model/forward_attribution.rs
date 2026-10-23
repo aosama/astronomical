@@ -1,6 +1,6 @@
 //! Request-owned performance-attribution forwarding for Qwen3.5 MLX graphs.
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::PerformanceAttribution;
 use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};

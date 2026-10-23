@@ -1,5 +1,5 @@
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::MlxArray;
 use serial_test::serial;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;

@@ -13,8 +13,8 @@
 mod disposable_journey_support;
 
 use disposable_journey_support::process::{
-    LIFECYCLE_MARKER_NAME, du_kibibytes, exit_status_code, process_is_alive, send_terminate,
-    arm_termination_watchdog, sccache_is_on_path,
+    LIFECYCLE_MARKER_NAME, arm_termination_watchdog, du_kibibytes, exit_status_code,
+    process_is_alive, sccache_is_on_path, send_terminate,
 };
 use disposable_journey_support::sandbox::{
     DisposableSandbox, assert_lane_root_is_empty, assert_path_is_absent, canonicalized,
@@ -28,8 +28,7 @@ use std::process::Stdio;
 fn should_complete_journey_from_external_directory_and_remove_owned_target() {
     let sandbox = DisposableSandbox::install();
     let record_path = sandbox.root_directory.join("target-record");
-    let fixture_path =
-        sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
+    let fixture_path = sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
     let mut command_builder = sanitized_runner_command(&sandbox);
     command_builder
         .env("RUSTC_WRAPPER", "")
@@ -54,17 +53,22 @@ fn should_complete_journey_from_external_directory_and_remove_owned_target() {
         recorded_target.starts_with(&expected_lane_prefix),
         "disposable Cargo target escaped its lane root: {recorded_target}"
     );
-    let recorded_working_directory = file_text(&sandbox.root_directory.join("target-record.working-directory"))
-        .trim()
-        .to_owned();
+    let recorded_working_directory = file_text(
+        &sandbox
+            .root_directory
+            .join("target-record.working-directory"),
+    )
+    .trim()
+    .to_owned();
     assert_eq!(
         recorded_working_directory,
         canonicalized(&sandbox.repository_directory).to_string_lossy(),
         "the disposable command must run from the repository root"
     );
-    let recorded_rustc_wrapper = file_text(&sandbox.root_directory.join("target-record.rustc-wrapper"))
-        .trim()
-        .to_owned();
+    let recorded_rustc_wrapper =
+        file_text(&sandbox.root_directory.join("target-record.rustc-wrapper"))
+            .trim()
+            .to_owned();
     let expected_rustc_wrapper = if sccache_is_on_path() {
         "sccache"
     } else {
@@ -88,8 +92,7 @@ fn should_complete_journey_from_external_directory_and_remove_owned_target() {
 fn should_use_canonical_default_temporary_root_when_lane_root_is_unset() {
     let sandbox = DisposableSandbox::install();
     let record_path = sandbox.root_directory.join("default-root-record");
-    let fixture_path =
-        sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
+    let fixture_path = sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
     let mut command_builder = sanitized_runner_command(&sandbox);
     command_builder
         .env_remove("ASTRONOMICAL_CARGO_LANE_ROOT")
@@ -149,11 +152,8 @@ fn should_build_a_real_cargo_package_and_not_reuse_targets_across_version_churn(
         ),
     );
 
-    let (first_journey, first_log) = run_journey(
-        &sandbox,
-        "version-churn",
-        &build_and_record_fixture_path,
-    );
+    let (first_journey, first_log) =
+        run_journey(&sandbox, "version-churn", &build_and_record_fixture_path);
     assert!(
         first_journey.status.success(),
         "first journey log:\n{first_log}"
@@ -167,11 +167,8 @@ fn should_build_a_real_cargo_package_and_not_reuse_targets_across_version_churn(
     );
 
     write_manifest("0.2.11");
-    let (second_journey, second_log) = run_journey(
-        &sandbox,
-        "version-churn",
-        &build_and_record_fixture_path,
-    );
+    let (second_journey, second_log) =
+        run_journey(&sandbox, "version-churn", &build_and_record_fixture_path);
     assert!(
         second_journey.status.success(),
         "second journey log:\n{second_log}"
@@ -205,8 +202,7 @@ fn should_keep_steady_state_storage_bounded_across_journeys() {
     let baseline_allocated_kibibytes = du_kibibytes(&bounded_storage_root);
 
     let record_path = sandbox.root_directory.join("bounded-target-record");
-    let fixture_path =
-        sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
+    let fixture_path = sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
     for _ in 0..2 {
         let mut command_builder = sanitized_runner_command(&sandbox);
         command_builder
@@ -491,8 +487,7 @@ fn should_refuse_cleanup_through_an_unowned_symlink() {
         Path::new(&replaced_target).is_symlink(),
         "the symlink refusal fixture did not replace the owned target"
     );
-    std::fs::remove_file(&replaced_target)
-        .expect("the replacement symlink should be removable");
+    std::fs::remove_file(&replaced_target).expect("the replacement symlink should be removable");
     assert_lane_root_is_empty(&sandbox.lane_root_directory);
 }
 
@@ -534,8 +529,7 @@ fn should_retain_one_owned_target_when_measurement_is_interrupted() {
     };
     let _ = du_shim_path;
     let record_path = sandbox.root_directory.join("signal-target-record");
-    let fixture_path =
-        sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
+    let fixture_path = sandbox.write_executable("capture-fixture.sh", &capture_fixture_body());
     let mut command_builder = sanitized_runner_command(&sandbox);
     command_builder
         .arg("--lane")
@@ -602,7 +596,9 @@ fn should_retain_one_owned_target_when_measurement_is_interrupted() {
     );
     let retained_target_directory = &retained_target_directories[0];
     assert!(
-        retained_target_directory.join(LIFECYCLE_MARKER_NAME).is_file(),
+        retained_target_directory
+            .join(LIFECYCLE_MARKER_NAME)
+            .is_file(),
         "the retained target must keep its lifecycle marker"
     );
     let _ = std::fs::remove_dir_all(retained_target_directory);

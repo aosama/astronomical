@@ -6,7 +6,7 @@
 //! evaluating arrays, so cache serialization and memory admission describe the
 //! tensors the production graph actually creates.
 
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 use crate::decoder_cache::DecoderCacheTensorDtype;
 use crate::expert_paging::{QuantizationMode, QuantizedExpertLayerPlan, SafetensorsDtype};

@@ -17,7 +17,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::blocks;
 use super::blocks::EncoderBlockContext;
 use super::weights::{HEAD_WIDTH, LAYER_COUNT, QwenImage21TextEncoderWeights};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 pub struct QwenImage21TextEncoder {
     weights: QwenImage21TextEncoderWeights,

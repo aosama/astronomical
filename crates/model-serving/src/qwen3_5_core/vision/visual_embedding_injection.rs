@@ -9,7 +9,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::Qwen3_5ExecutionError;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Replaces image-pad token embeddings in one prefill chunk with ordered visual embeddings.
 pub fn qwen3_5_inject_visual_embeddings(

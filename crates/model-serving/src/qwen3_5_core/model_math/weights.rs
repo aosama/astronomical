@@ -20,7 +20,7 @@ use super::{
     error::Qwen3_5ExecutionError,
     feed_forward_weights,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Strict typed ownership for the indexed executable Qwen3.5 language shards.
 #[derive(Debug)]

@@ -20,7 +20,7 @@ use super::disk_store_file::{
     remove_cache_owned_directory_or_confirm_absent, validate_current_file_header,
 };
 use super::disk_store_index::TrackedPersistentPromptCacheBlock;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PersistentPromptCachePublicationOutcome {

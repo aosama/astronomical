@@ -23,7 +23,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use tokenizers::Tokenizer;
 
 use crate::common::qwen_image_21;
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 const ENCODER_JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 

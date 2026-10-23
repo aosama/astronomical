@@ -20,7 +20,7 @@ use crate::expert_paging::{
 };
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::{MlxAllocationAdmission, MlxAllocationAdmissionError};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Typed failures during expert streaming and resident-source handling.
 #[derive(Debug, Error)]

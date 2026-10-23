@@ -6,8 +6,8 @@
 //! row scale, float64 dot product), so a wrong GPU result — including the
 //! all-zeros signature of a silently dropped dispatch — fails the verdict.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 use super::{
     CustomMetalKernelFamily, CustomMetalKernelProbe, KernelCapabilityError, validate_probe_outputs,

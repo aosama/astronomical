@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use super::persistent_state_bridge::PersistentPromptCacheStateBridgeError;
 use super::request_state::RequestDecoderStateStack;
 use crate::decoder_cache::DecoderCacheState;
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::MlxArray;
 
 const FULL_ATTENTION_TOKEN_AXIS: usize = 2;
 

@@ -6,7 +6,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::Qwen3_5Model;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 /// Target-model graph outputs retained for specialized consumers.
 pub struct Qwen3_5TargetForwardOutput {

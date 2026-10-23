@@ -108,7 +108,8 @@ astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }
-astronomical-mlx-c-rust = { path = "../../crates/mlx-c-rust" }
+astronomical-mlx-c-fork = { path = "../../crates/mlx-c-fork" }
+mlx-c-rust.workspace = true
 astronomical-native-identity = { path = "../../crates/native-identity" }
 astronomical-quantization = { path = "../../crates/quantization", features = ["direct-mlx"] }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }

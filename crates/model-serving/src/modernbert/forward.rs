@@ -11,7 +11,7 @@ use astronomical_ipc_protocol::EmbeddingsFailureReason;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError, MlxSafetensors};
 
 use crate::modernbert::configuration::ModernBertConfiguration;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const QUANTIZED_WEIGHTS_TAIL: &str = ".weight";
 const QUANTIZED_SCALES_TAIL: &str = ".scales";

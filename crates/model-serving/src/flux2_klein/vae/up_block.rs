@@ -3,7 +3,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinVaeError, Flux2KleinVaeResnetBlock};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct Flux2KleinVaeUpBlock {

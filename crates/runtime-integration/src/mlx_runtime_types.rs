@@ -151,8 +151,8 @@ pub enum MlxRuntimeError {
 }
 
 #[cfg(feature = "mlx")]
-impl From<astronomical_mlx_c_rust::MlxCError> for MlxRuntimeError {
-    fn from(captured_error: astronomical_mlx_c_rust::MlxCError) -> Self {
+impl From<mlx_c_rust::MlxCError> for MlxRuntimeError {
+    fn from(captured_error: mlx_c_rust::MlxCError) -> Self {
         // Classification happens at this conversion so every captured MLX-C
         // failure crossing into the runtime boundary — regardless of which
         // layer observed it — is tested against the allocator patch's active

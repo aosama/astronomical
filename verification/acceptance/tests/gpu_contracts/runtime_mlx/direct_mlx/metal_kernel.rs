@@ -1,7 +1,7 @@
 //! Direct GPU contracts for Astronomical's owned MLX custom Metal-kernel boundary.
 
 use crate::common::runtime_test_support;
-use astronomical_mlx_c_rust::{MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
+use mlx_c_rust::{MlxDtype, MlxMetalKernel, MlxMetalKernelOutput};
 
 #[test]
 fn should_apply_a_custom_metal_kernel_to_an_mlx_array() {

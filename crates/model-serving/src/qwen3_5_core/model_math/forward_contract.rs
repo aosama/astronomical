@@ -2,7 +2,7 @@ use super::error;
 use super::error::Qwen3_5ExecutionError;
 use crate::DecoderCacheState;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(crate) fn forward_state_arrays<'state>(
     output: &'state MlxArray,

@@ -29,10 +29,10 @@
 //! `exp` intrinsic a separately-compiled launch does not reproduce bit-for-bit,
 //! so float16 falls back to the composed path rather than risk diverging bits.
 
-use astronomical_mlx_c_rust::{
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 /// Rolling convolution rows retained across steps: conv kernel size minus one.
 const KEPT_STATE_ROW_COUNT: i32 = 3;

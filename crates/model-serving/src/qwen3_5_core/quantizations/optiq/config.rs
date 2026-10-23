@@ -2,11 +2,11 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use astronomical_jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
 use crate::qwen3_5_core::configuration::Qwen3_5FeedForwardArchitecture;
 use crate::qwen3_5_core::configuration::config_validation::{
     Qwen3_5ConfigError, validate_exact_value,
 };
+use astronomical_jangtq2_qwen35::configuration::Jangtq2WeightOverrideEntry;
 
 const EXPECTED_QUANTIZATION_MODE: &str = "affine";
 

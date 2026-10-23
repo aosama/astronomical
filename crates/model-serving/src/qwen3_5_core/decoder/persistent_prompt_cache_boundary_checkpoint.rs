@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntimeError;
+use mlx_c_rust::MlxArray;
 
 const BOUNDARY_CHECKPOINT_COLLECTOR_OPERATION: &str =
     "collect Qwen3.5 persistent prompt-cache boundary state";

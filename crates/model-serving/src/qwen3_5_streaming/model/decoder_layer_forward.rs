@@ -2,7 +2,7 @@
 //! the residual sandwich that forks by feed-forward architecture (dense MLP
 //! versus routed mixture-of-experts with expert paging).
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::qwen3_5_core::model::Qwen3_5DecoderLayerAttentionOutput;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{

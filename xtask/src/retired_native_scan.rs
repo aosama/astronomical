@@ -245,7 +245,10 @@ fn run_scan(
         );
         for retired_directory in &scan_summary.retired_directories {
             print_output_line(
-                &format!("[retired-native-scan] found path={}", retired_directory.display()),
+                &format!(
+                    "[retired-native-scan] found path={}",
+                    retired_directory.display()
+                ),
                 false,
             );
         }

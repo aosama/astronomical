@@ -6,9 +6,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crate::retired_native_scan::{
-    allocated_bytes_under, gate_error_message, is_retired_candidate_directory,
+    ScanArguments, allocated_bytes_under, gate_error_message, is_retired_candidate_directory,
     parse_scan_arguments, scan_root_for_retired_candidates, scan_root_is_refused,
-    ScanArguments,
 };
 
 fn owned(arguments: &[&str]) -> Vec<String> {
@@ -21,7 +20,9 @@ fn owned(arguments: &[&str]) -> Vec<String> {
 fn generation_out_directory(root: &Path, generation_suffix: &str) -> PathBuf {
     root.join("debug")
         .join("build")
-        .join(format!("astronomical-runtime-integration-{generation_suffix}"))
+        .join(format!(
+            "astronomical-runtime-integration-{generation_suffix}"
+        ))
         .join("out")
 }
 
@@ -105,8 +106,14 @@ mod should_parse_scan_arguments {
 
     #[test]
     fn should_treat_help_as_success_not_as_a_usage_error() {
-        assert_eq!(parse_scan_arguments(&owned(&["--help"])), ScanArguments::PrintHelp);
-        assert_eq!(parse_scan_arguments(&owned(&["-h"])), ScanArguments::PrintHelp);
+        assert_eq!(
+            parse_scan_arguments(&owned(&["--help"])),
+            ScanArguments::PrintHelp
+        );
+        assert_eq!(
+            parse_scan_arguments(&owned(&["-h"])),
+            ScanArguments::PrintHelp
+        );
     }
 }
 
@@ -250,13 +257,17 @@ mod should_walk_targets_and_collect_candidates {
             .expect("the legacy fixture should be creatable");
         fs::write(legacy_directory.join("build.ninja"), "fixture\n")
             .expect("the legacy fixture file should be writable");
-        let removal_directory = out_directory.join(".mlx-c-runtime-build.astronomical-removing-9-0");
+        let removal_directory =
+            out_directory.join(".mlx-c-runtime-build.astronomical-removing-9-0");
         fs::create_dir_all(&removal_directory).expect("the removal fixture should be creatable");
         let misplaced_directory = root_directory.join("debug/mlx-c-runtime-build");
         fs::create_dir_all(&misplaced_directory).expect("the decoy should be creatable");
         let symlink_decoy_target = root_directory.join("elsewhere");
         fs::create_dir_all(&symlink_decoy_target).expect("the symlink target should be creatable");
-        let _ = std::os::unix::fs::symlink(&symlink_decoy_target, out_directory.join("mlx-c-runtime-build-link"));
+        let _ = std::os::unix::fs::symlink(
+            &symlink_decoy_target,
+            out_directory.join("mlx-c-runtime-build-link"),
+        );
         fs::create_dir_all(root_directory.join("debug/incremental"))
             .expect("the ordinary noise should be creatable");
         ScanFixture {
@@ -277,7 +288,10 @@ mod should_walk_targets_and_collect_candidates {
         );
         assert_eq!(
             scan_summary.retired_directories,
-            vec![fixture.removal_directory.clone(), fixture.legacy_directory.clone()],
+            vec![
+                fixture.removal_directory.clone(),
+                fixture.legacy_directory.clone()
+            ],
             "exactly the two structural candidates should be found, sorted"
         );
         assert!(
@@ -359,8 +373,11 @@ mod should_measure_allocated_bytes {
             0,
             "an empty directory carries no allocated blocks on APFS"
         );
-        fs::write(retired_directory.join("artifact.data"), "fixture contents\n")
-            .expect("the fixture file should be writable");
+        fs::write(
+            retired_directory.join("artifact.data"),
+            "fixture contents\n",
+        )
+        .expect("the fixture file should be writable");
         assert!(
             allocated_bytes_under(&retired_directory) > 0,
             "one file should register allocated blocks"

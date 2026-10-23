@@ -10,7 +10,7 @@ use crate::PerformanceAttribution;
 use super::Qwen3_5ResidentModel;
 use super::forward_contract;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Qwen3_5ResidentModel {
     pub(crate) fn build_forward_chunk_with_performance_attribution(

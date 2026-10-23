@@ -16,7 +16,7 @@ use crate::qwen_image_21::mlx_math::QuantizedLinear;
 use super::blocks::{
     QwenImage21AttentionWeights, QwenImage21BlockWeights, QwenImage21FeedForwardWeights,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Hidden width everywhere: `num_attention_heads × attention_head_dim`.
 pub(super) const HIDDEN_WIDTH: usize = 4096;

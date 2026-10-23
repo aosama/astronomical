@@ -13,7 +13,7 @@ use astronomical_ipc_protocol::{
     WorkerPersistentPromptCacheStartupCleanupCategory,
     WorkerPersistentPromptCacheStartupCleanupEvidence,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;

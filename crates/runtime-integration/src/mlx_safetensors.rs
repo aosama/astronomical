@@ -10,7 +10,7 @@ use crate::{
     mlx_runtime::check_status,
     positional_file_read_metrics::PositionalFileReadMetrics,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxStream, raw};
+use mlx_c_rust::{MlxArray, MlxStream, raw};
 
 /// One virtual interval mapping payload offsets to source file reads.
 #[derive(Clone, Debug)]

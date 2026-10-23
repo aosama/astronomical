@@ -5,7 +5,7 @@ use crate::mlx_runtime;
 use crate::mlx_safetensors_writer;
 use crate::mlx_safetensors_writer::{OwnedMetadataMap, OwnedTensorMap};
 use crate::{MlxRuntime, MlxRuntimeError};
-use astronomical_mlx_c_rust::{MlxArray, raw};
+use mlx_c_rust::{MlxArray, raw};
 
 const MEMORY_WRITER_LABEL: &[u8] = b"bounded in-memory safetensors output\0";
 

@@ -10,7 +10,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::super::Flux2KleinResidencyMode;
 use super::error::Flux2KleinTextConditioningError;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) const HIDDEN_WIDTH: i32 = 2_560;
 pub(super) const INTERMEDIATE_WIDTH: i32 = 9_728;

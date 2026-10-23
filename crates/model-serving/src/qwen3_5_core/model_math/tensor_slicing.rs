@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::error::Qwen3_5ExecutionError;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 pub(crate) fn slice_last_dimension(
     runtime: &MlxRuntime,

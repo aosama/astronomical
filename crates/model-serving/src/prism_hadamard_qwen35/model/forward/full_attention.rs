@@ -6,7 +6,7 @@
 //! gated-query split, q/k RMS norms, RoPE, append-only KV state, and the
 //! shared attention step with the learned output gate.
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::qwen3_5_core::model::full_attention::qwen3_5_full_attention_step;
 

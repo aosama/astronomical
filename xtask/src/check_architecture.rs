@@ -31,8 +31,14 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-bindings",
         source_crate: "astronomical-memory-policy",
-        forbidden_crate: "astronomical-mlx-c-rust",
+        forbidden_crate: "mlx-c-rust",
         rationale: "the memory policy crate must build and test in the offline lane without ever pulling in the serving crate or its graphics-processor tests",
+    },
+    ForbiddenDependencyRule {
+        rule_name: "policy-without-mlx-fork-bindings",
+        source_crate: "astronomical-memory-policy",
+        forbidden_crate: "astronomical-mlx-c-fork",
+        rationale: "the fork extension carries the same graphics-processor linkage as the stock bridge, so the memory policy crate must stay free of it too",
     },
     // The jangtq2 family crate (issue #1427) owns the weight contract end
     // to end; the serving integration (page loading, slot writes, dispatch)

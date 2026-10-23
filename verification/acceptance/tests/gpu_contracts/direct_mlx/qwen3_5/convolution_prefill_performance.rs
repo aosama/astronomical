@@ -9,9 +9,9 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_model_serving::ConvolutionState;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::{MlxArray, MlxDtype};
 use tokio::time::timeout;
 
 const TOKEN_COUNT: i32 = 2048;

@@ -503,15 +503,16 @@ fn validate_projection_codebook_geometry(
         expert_count: qwen3_5_config.expert_count(),
         affine_group_size: qwen3_5_config.default_quantization_group_size(),
     };
-    let codebook_tensor_inventory = astronomical_jangtq2_qwen35::artifacts::tensor_inventory_for_module(
-        module_name,
-        &codebook_override_entry,
-        &module_geometry,
-    )
-    .map_err(|source| ExpertManifestError::Jangtq2Contract {
-        module_name: module_name.to_owned(),
-        source,
-    })?;
+    let codebook_tensor_inventory =
+        astronomical_jangtq2_qwen35::artifacts::tensor_inventory_for_module(
+            module_name,
+            &codebook_override_entry,
+            &module_geometry,
+        )
+        .map_err(|source| ExpertManifestError::Jangtq2Contract {
+            module_name: module_name.to_owned(),
+            source,
+        })?;
     for (source_tensor, expected_tensor) in [
         (
             packed_source,

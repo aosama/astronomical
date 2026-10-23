@@ -3,7 +3,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use super::append_only_attention_state_operations::{
     active_view, build_updated_storage, full_attention_error, projected_capacity_tokens,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 pub(super) const STATE_DIMENSION_TOKEN_AXIS: usize = 2;
 pub(super) const FULL_ATTENTION_OPERATION: &str = "update the in-memory full-attention KV state";

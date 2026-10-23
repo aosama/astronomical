@@ -11,7 +11,7 @@ use crate::common::qwen3_5_moe;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 pub(super) fn open_persistent_prompt_cache_disk_store(
     persistent_prompt_cache_directory: &tempfile::TempDir,

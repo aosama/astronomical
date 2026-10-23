@@ -1,5 +1,5 @@
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 

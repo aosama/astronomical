@@ -10,18 +10,26 @@ version.workspace = true
 
 [features]
 default = []
-mlx = ["dep:astronomical-mlx-c-rust", "dep:libc", "dep:sha2"]
+mlx = ["dep:mlx-c-rust", "dep:astronomical-mlx-c-fork", "dep:libc", "dep:sha2"]
 mlx-memory-contract-probe = ["mlx"]
 
 [lints.rust]
 unsafe_code = "allow"
 unused_must_use = "deny"
 
+# astronomical-mlx-c-fork is a dependency only of the mlx-feature coverage
+# contract test binary (required-features gates it); Cargo cannot express an
+# optional dev-dependency, so the manifest lint stays allowed here rather
+# than dragging the graphics-processor build into the offline lane.
+[lints.cargo]
+unused_dependencies = "allow"
+
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 
 [dependencies]
-astronomical-mlx-c-rust = { path = "../mlx-c-rust", optional = true }
+mlx-c-rust = { workspace = true, optional = true }
+astronomical-mlx-c-fork = { path = "../mlx-c-fork", optional = true }
 libc = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 thiserror.workspace = true

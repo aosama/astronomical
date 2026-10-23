@@ -6,11 +6,11 @@
 //! is applied unconditionally inside the packed projection types — there is
 //! no branch anywhere in this path that could skip it.
 
-use astronomical_mlx_c_rust::{
+use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use mlx_c_rust::{
     MlxArray, MlxCompiledDualHeadNorm, MlxCompiledElementwiseGraphs,
     MlxCompiledGatedDeltaRateActivation, MlxCompiledSwiGlu, MlxMetalKernel,
 };
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::PerformanceAttribution;
 
@@ -164,7 +164,7 @@ impl PrismHadamardTextModel {
     pub(crate) fn rotate(
         &self,
         activations: &MlxArray,
-    ) -> Result<fwht::RotatedActivations, astronomical_mlx_c_rust::MlxCError> {
+    ) -> Result<fwht::RotatedActivations, mlx_c_rust::MlxCError> {
         self.weights.rotate(
             &self.runtime,
             &self.compiled_elementwise_graphs,
@@ -297,7 +297,7 @@ pub enum PrismHadamardModelError {
     #[error("folded pack hadamard contract refused")]
     Hadamard(#[from] HadamardContractError),
     #[error("folded pack weight casting failed: {0}")]
-    WeightCasting(#[source] astronomical_mlx_c_rust::MlxCError),
+    WeightCasting(#[source] mlx_c_rust::MlxCError),
     #[error("folded pack safetensors loading failed: {0}")]
     SafetensorsLoading(#[source] astronomical_runtime_integration::MlxRuntimeError),
     #[error("folded pack tensor lookup failed for {tensor_name:?}: {source}")]
@@ -309,7 +309,7 @@ pub enum PrismHadamardModelError {
     #[error("folded pack weight slicing failed: {description}")]
     WeightSlicing { description: String },
     #[error("folded pack forward pass failed: {0}")]
-    Forward(#[source] astronomical_mlx_c_rust::MlxCError),
+    Forward(#[source] mlx_c_rust::MlxCError),
     #[error("folded pack forward-pass runtime state failed: {0}")]
     ForwardRuntime(#[source] astronomical_runtime_integration::MlxRuntimeError),
     #[error("folded pack declares unsupported layer type {layer_type:?}")]
