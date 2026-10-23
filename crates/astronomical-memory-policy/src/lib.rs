@@ -20,10 +20,6 @@
 //! - `admission` — may this operation begin (`AllocationAdmissionDecision`,
 //!   `CompleteResidencyDecision`, context workspaces, retained-prefix
 //!   retention, rotating admission).
-//! - `expert_cache` — family-neutral decode residency: the irreducible unit
-//!   is one expert id in one sparse-layer slot; bytes are accounting
-//!   (`DecodeExpertCache`, `ResidentExpertWeight`,
-//!   `plan_previous_token_prefetch`).
 //! - `expert_paging` — pure expert-paging support arithmetic: the
 //!   safetensors header parsing (`safetensors_header`, over `safetensors`
 //!   and `strict_json`) and the expert weight memory-cache statistics. The
@@ -54,7 +50,6 @@
 pub mod admission;
 pub mod budget;
 pub mod ceiling;
-pub mod expert_cache;
 pub mod expert_paging;
 pub mod geometry_floor;
 pub mod phase;
