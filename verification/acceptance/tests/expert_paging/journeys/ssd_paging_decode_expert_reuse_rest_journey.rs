@@ -182,14 +182,19 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
     // --- Measured assertion 8: decode warming grows with decode evidence
     // (issue #512). The handoff sizes warm tables before any decode forward
     // exists, against the conservative no-evidence fallback; every completed
-    // decode forward re-sizes them. The during-generation expert payload must
-    // therefore exceed the post-prefill seated payload by a real margin
-    // instead of churning at the handoff size. ---
+    // decode forward re-sizes them. The handoff seating happens inside the
+    // first decode advance (announced in the generation phase with its own
+    // snapshot, by design — prompt processing detaches its streamed pages
+    // per chunk), so the seated baseline is the FIRST sample of the
+    // generation window (the first *recorded* sample: the sampler drops
+    // zero and non-increasing values), and the during-generation payload
+    // must exceed it by a real margin instead of churning at the handoff
+    // size. ---
     let seated_expert_payload_bytes = memory_evidence
-        .retained_expert_payload_bytes
-        .last()
+        .generation_expert_payload_bytes
+        .first()
         .copied()
-        .expect("prompt processing must observe the seated expert payload");
+        .expect("generation must observe the handoff-seated expert payload");
     let peak_generation_expert_payload_bytes = memory_evidence
         .generation_expert_payload_bytes
         .iter()
@@ -235,10 +240,13 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
     let route_observation_stored_record_count =
         reuse_counters.route_observation_stored_record_count;
 
-    // Diagnostic output: useful for debugging but not asserted.
+    // Diagnostic output: useful for debugging but not asserted. The prompt
+    // window records nothing by design (streamed pages detach per chunk), so
+    // a zero here is the expected healthy value; a nonzero value would mean
+    // prefill started retaining expert payload.
     let expert_source_read_bytes = generation_expert_source_read_bytes(isolated_worker_home.path());
     let decode_streamed_layer_indices = decode_streamed_layer_indices(isolated_worker_home.path());
-    let retained_expert_payload_increments = memory_evidence.retained_expert_payload_bytes.len();
+    let prompt_window_payload_increments = memory_evidence.retained_expert_payload_bytes.len();
     eprintln!(
         "[ssd-paging-decode-expert-reuse] status=success \
          prompt_tokens={PROMPT_TOKEN_COUNT} \
@@ -275,7 +283,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
          mem_owner_overrun_gb={:.2} \
          decode_warming_growth_gb={:.2} \
          decode_streamed_layer_count={} \
-         retained_payload_increments={} \
+         prompt_window_payload_increments={} \
          average_prefill_tok_per_second={average_prefill_tokens_per_second:.2} \
          average_generation_tok_per_second={average_generation_tokens_per_second:.2} \
          output_characters={}",
@@ -296,7 +304,7 @@ async fn run_ssd_paging_decode_expert_reuse_journey() {
         reuse_counters.memory_ceiling_utilization_owner_overrun_bytes as f64 / 1e9,
         decode_warming_growth_bytes as f64 / 1e9,
         decode_streamed_layer_indices.len(),
-        retained_expert_payload_increments,
+        prompt_window_payload_increments,
         completed_stream.model_text.len(),
     );
     preserve_memory_utilization_evidence(
