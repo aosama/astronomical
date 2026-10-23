@@ -342,6 +342,17 @@ jobs:
             printf '%s\n' 'Error: native build status was not published' >&2
             exit 1
           }
+          # The mlx-c-rust link ladder (crate 0.32.4 line) emits its own link
+          # flags and would resolve its own stock shared pair — both the wrong
+          # libraries (this build carries the Astronomical patches) and, in
+          # dylib form, an unresolvable load path. Exporting the store entry
+          # published above steers the ladder at the patched static pair. The
+          # export happens here, before the first workspace Cargo step, so
+          # every later build composes the same link line; the command
+          # resolves the entry the workspace build itself links, reusing the
+          # prewarm's entry and building one only if the store lacks it.
+          printf 'MLX_C_RUST_MLX_C_PREFIX=%s\n' \
+            "$(cargo xtask native-store-entry --profile core)" >> "$GITHUB_ENV"
           native_build_status="$(tr -d '[:space:]' < "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE")"
           case "$native_build_status" in
             built) printf 'was_built=true\n' >> "$GITHUB_OUTPUT" ;;

@@ -21,10 +21,23 @@ astronomical-native-identity = { path = "../crates/native-identity" }
 libc.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+# The included native build-orchestration modules lock native build store
+# entries with fs4 (mirroring the standalone native build tool's dependency
+# note; see the cargo-machete ignore list below). sha2 is already xtask's
+# own dependency through the bootstrap and notices commands.
+fs4.workspace = true
 
 [dev-dependencies]
 astronomical-test-harness = { path = "../crates/test-harness" }
 serde_yaml = "0.9"
+
+# cargo-machete reports fs4 as unused because its text search only scans
+# this package's directory, while the code that uses it is compiled in
+# through #[path] module includes whose files live under
+# crates/runtime-integration/build-orchestration/ (see src/main.rs). Keep
+# this ignore list in sync with that include chain.
+[package.metadata.cargo-machete]
+ignored = ["fs4"]
 
 [[test]]
 name = "offline_gh_shim_journeys"
