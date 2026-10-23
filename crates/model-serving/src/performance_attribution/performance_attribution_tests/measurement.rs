@@ -1,5 +1,42 @@
 use super::*;
 
+/// Report serialization pairs `PerformanceOperation::ALL` with the fixed
+/// enabled storage by position, exactly as the counter catalog does, so a
+/// catalog entry out of declaration order (or one that never reached `ALL`)
+/// mislabels one operation's timing and drops another. The final-variant pin
+/// mirrors the counter guard: a mid-enum insertion like
+/// `Jangtq2ActivationRotationHadamard32` shifts later discriminants without
+/// breaking anything today, but a future edit that appends a variant and
+/// forgets `COUNT`'s derivation would leave it unaddressable.
+#[test]
+fn should_keep_operation_catalog_positions_aligned_with_report_storage() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    assert_eq!(
+        PerformanceOperation::ALL.len(),
+        PerformanceOperation::COUNT,
+        "the enumerated operation catalog must cover the whole reserved storage"
+    );
+
+    for (declaration_position, performance_operation) in
+        PerformanceOperation::ALL.into_iter().enumerate()
+    {
+        assert_eq!(
+            performance_operation as usize,
+            declaration_position,
+            "catalog position {declaration_position} must store its own value: {}",
+            performance_operation.identifier()
+        );
+    }
+
+    assert_eq!(
+        PerformanceOperation::ResidentToStreamingRetry as usize,
+        PerformanceOperation::COUNT - 1,
+        "the final variant must stay the storage bound; take COUNT from any newly appended variant"
+    );
+}
+
 #[test]
 fn should_keep_the_disabled_attribution_handle_pointer_sized() {
     astronomical_test_harness::ensure_network_denied()

@@ -89,6 +89,11 @@ pub enum PerformanceOperation {
     /// A multi-token forward decoding one jangtq2 codebook page to a
     /// transient bfloat16 copy before `gather_mm`.
     Jangtq2CodebookPageDecode,
+    /// One blockwise Hadamard-32 rotation of expert-bound activations,
+    /// graph construction plus its synchronous evaluation (the rotation
+    /// materializes and detaches, so it owns real graphics-processor time
+    /// that no other operation would otherwise attribute).
+    Jangtq2ActivationRotationHadamard32,
     DecodeSamplingSpan,
     AttentionForwardSpan,
     SlidingWindowMaskConstruction,
@@ -225,6 +230,7 @@ impl PerformanceOperation {
         Self::DecodeFusedRoutedExpertDecode,
         Self::DecodeFusedJangtq2GatheredProjection,
         Self::Jangtq2CodebookPageDecode,
+        Self::Jangtq2ActivationRotationHadamard32,
         Self::DecodeSamplingSpan,
         Self::AttentionForwardSpan,
         Self::SlidingWindowMaskConstruction,
@@ -433,6 +439,7 @@ impl PerformanceOperation {
                 "decode_fused_jangtq2_gathered_projection"
             }
             Self::Jangtq2CodebookPageDecode => "jangtq2_codebook_page_decode",
+            Self::Jangtq2ActivationRotationHadamard32 => "jangtq2_activation_rotation_hadamard32",
             Self::DecodeSamplingSpan => "decode_sampling_span",
             Self::AttentionForwardSpan => "attention_forward_span",
             Self::SlidingWindowMaskConstruction => "sliding_window_mask_construction",
