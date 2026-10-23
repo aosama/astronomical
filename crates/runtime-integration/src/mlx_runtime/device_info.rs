@@ -1,3 +1,31 @@
+//! Reads Metal's advertised recommended GPU working-set size through MLX-C.
+//!
+//! # Diagnostic-only by policy
+//!
+//! Nothing in the memory policy consumes this recommendation — the machine
+//! ceiling is physical RAM minus the operating-system reserve, resolved by
+//! the worker. This probe exists so measurements and probes can report what
+//! the device *advertises* (a machine-independent fact) rather than a
+//! hardcoded model or laptop value, and reading it changes neither kernel
+//! settings nor the MLX process residency set.
+//!
+//! The one production consumer is the worker's wired-residency claim
+//! (`apps/inference-worker/src/worker_startup.rs`): Metal rejects wired-limit
+//! claims above the recommended working set, so the recommendation is the
+//! absolute wiring ceiling even on machines where the configured memory
+//! ceiling sits higher. Capping the claim at the recommendation keeps the
+//! wired budget and the serving ceiling in lockstep — the divergence between
+//! those two numbers was the 2026-10-16 fatal gap recorded in issue #1297.
+//!
+//! # Why this runs standalone, without an [`MlxRuntime`]
+//!
+//! The wired-residency claim happens in worker startup *before* any engine
+//! constructs a runtime, so the probe performs the minimal native
+//! initialization itself: it ensures the error handler and Metallib path are
+//! installed (both idempotent — see `error_classification` and `metallib`)
+//! and then queries device info through raw MLX-C handles it owns for the
+//! duration of the call.
+
 use std::ffi::c_char;
 
 use crate::{
@@ -6,17 +34,19 @@ use crate::{
 };
 use mlx_c_rust::raw;
 
+/// The Metal device-info key for the recommended working-set size, as a
+/// NUL-terminated byte string ready for the C boundary.
 const MAXIMUM_RECOMMENDED_WORKING_SET_SIZE_DEVICE_INFO_KEY: &[u8] =
     b"max_recommended_working_set_size\0";
 
 /// Reads Metal's effective recommended GPU working-set size through MLX-C.
 ///
-/// Diagnostic surface only: nothing in the memory policy consumes the
-/// recommendation — the machine ceiling is physical RAM minus the
-/// operating-system reserve, resolved by the worker. Probes and
-/// measurements use this number to report what the device advertises,
-/// which is not a hardcoded model or laptop value, and reading it changes
-/// neither kernel settings nor the MLX process residency set.
+/// # Errors
+///
+/// - [`MlxRuntimeError::InvalidMetallibPath`] when no valid metallib can be
+///   resolved (this probe may be the first native call in the process).
+/// - [`MlxRuntimeError::RuntimeOperation`] when the device does not expose
+///   the key (status 2), reports a zero working set, or the query fails.
 pub fn maximum_recommended_gpu_working_set_size_bytes() -> Result<usize, MlxRuntimeError> {
     mlx_c_rust::install_non_terminating_error_handler();
     let metallib_path = configured_metallib_path()?;
@@ -48,6 +78,9 @@ pub fn maximum_recommended_gpu_working_set_size_bytes() -> Result<usize, MlxRunt
                 .cast::<c_char>(),
         )
     };
+    // MLX-C reports "key not present" as status 2; distinguishing it from a
+    // generic failure keeps the error actionable on machines whose Metal
+    // implementation omits the key.
     if working_set_status == 2 {
         return Err(MlxRuntimeError::RuntimeOperation {
             operation: "read MLX GPU recommended working set",
@@ -66,6 +99,7 @@ pub fn maximum_recommended_gpu_working_set_size_bytes() -> Result<usize, MlxRunt
     Ok(maximum_recommended_working_set_size_bytes)
 }
 
+/// RAII owner for a raw MLX device handle.
 struct OwnedMlxDevice(raw::mlx_device);
 
 impl Drop for OwnedMlxDevice {
@@ -78,6 +112,7 @@ impl Drop for OwnedMlxDevice {
     }
 }
 
+/// RAII owner for a raw MLX device-info handle.
 struct OwnedMlxDeviceInfo(raw::mlx_device_info);
 
 impl Drop for OwnedMlxDeviceInfo {

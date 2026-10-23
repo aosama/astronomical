@@ -10,10 +10,19 @@ version.workspace = true
 
 [features]
 default = []
+# `mlx` links the pinned, patched native MLX image (see build.rs and
+# build-orchestration/) and enables every runtime module that touches it.
+# The two ungated modules (mlx_metallib_path, mlx_runtime_types) keep the
+# crate useful on machines without the native build.
 mlx = ["dep:mlx-c-rust", "dep:astronomical-mlx-c-fork", "dep:libc", "dep:sha2"]
+# Adds the allocator memory-contract probe binary to the native profile;
+# see native/tests/mlx_memory_contract_probe.cpp.
 mlx-memory-contract-probe = ["mlx"]
 
 [lints.rust]
+# The whole point of this crate is to contain the product's unsafe MLX-C
+# surface; every unsafe block carries a SAFETY argument and every raw C
+# handle has exactly one RAII owner.
 unsafe_code = "allow"
 unused_must_use = "deny"
 
@@ -29,13 +38,18 @@ unused_dependencies = "allow"
 all = { level = "warn", priority = -1 }
 
 [dependencies]
+# The published stock MLX-C bindings (operations, types, raw FFI surface).
 mlx-c-rust = { workspace = true, optional = true }
+# The Astronomical fork delta over the stock surface (the patched native
+# symbols, currently exactly one: mlx_array_detach). Kept separate from the
+# stock crate so the stock crate stays vanilla and publishable.
 astronomical-mlx-c-fork = { path = "../mlx-c-fork", optional = true }
 libc = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [build-dependencies]
+# The build script and the modules it includes from build-orchestration/.
 fs4.workspace = true
 sha2.workspace = true
 astronomical-native-identity = { path = "../native-identity" }
@@ -47,6 +61,9 @@ fs4.workspace = true
 sha2.workspace = true
 tempfile = "=3.27.0"
 
+# The live MLX-C coverage contract: the provisioned pinned headers and the
+# compiled bridge inventory (stock crate plus the fork's symbols) must agree
+# exactly. Requires the mlx feature, so it never builds in the offline lane.
 [[test]]
 name = "mlx_c_coverage_contract_tests"
 required-features = ["mlx"]

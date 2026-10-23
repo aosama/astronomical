@@ -4,11 +4,29 @@
 //! module adds what only Astronomical knows: which descriptions name the
 //! active memory ceiling enforced by the allocator patch, and how they become
 //! typed capacity errors that the worker can recover from.
+//!
+//! # The marker contract
+//!
+//! The patched native allocator (see
+//! `third-party/patches/mlx-0.32.3-astronomical-active-memory-ceiling.patch`)
+//! rejects an allocation that would push active memory past the ceiling by
+//! reporting an error whose description embeds the stable marker
+//! `ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED` followed by three
+//! `key=value` fields. Parsing that marker here is what converts a fatal
+//! allocation failure into the recoverable
+//! [`MlxRuntimeError::ActiveMemoryLimitExceeded`] that the engines' adaptive
+//! prefill logic depends on. Lose this classification and a request that
+//! should shrink its chunk and retry instead kills the worker.
 
 use std::sync::Mutex;
 
 use crate::MlxRuntimeError;
 
+/// Classifies a captured MLX-C failure into the Astronomical error taxonomy.
+///
+/// The active-memory-ceiling marker is checked first; anything else becomes a
+/// plain [`MlxRuntimeError::RuntimeOperation`] preserving the operation name
+/// and the native description verbatim.
 pub fn classify_mlx_error(operation: &'static str, description: String) -> MlxRuntimeError {
     parse_active_memory_limit_error(&description).unwrap_or(MlxRuntimeError::RuntimeOperation {
         operation,
@@ -16,10 +34,21 @@ pub fn classify_mlx_error(operation: &'static str, description: String) -> MlxRu
     })
 }
 
+/// Status-code check shared by every fallible MLX-C call in this crate.
+///
+/// Delegates to the published crate's checker (which consults the captured
+/// error channel installed at initialization) and funnels the result through
+/// the `From` conversion so the classifier above sees every failure.
 pub(crate) fn check_status(status: i32, operation: &'static str) -> Result<(), MlxRuntimeError> {
     mlx_c_rust::check_status(status, operation).map_err(MlxRuntimeError::from)
 }
 
+/// Extracts the typed active-memory-ceiling error from a native description.
+///
+/// Returns `None` for any description the parser does not fully understand —
+/// a partial parse must degrade to the generic operation error rather than
+/// report invented numbers, because the recovery arithmetic consumes these
+/// byte values.
 fn parse_active_memory_limit_error(description: &str) -> Option<MlxRuntimeError> {
     const ERROR_MARKER: &str = "ASTRONOMICAL_MLX_ACTIVE_MEMORY_LIMIT_EXCEEDED";
     // Native C and C++ boundaries add operation context before the shared
@@ -53,6 +82,8 @@ fn parse_active_memory_limit_error(description: &str) -> Option<MlxRuntimeError>
             "allowed_bytes" if allowed_active_memory_bytes.is_none() => {
                 allowed_active_memory_bytes = field_text.parse().ok();
             }
+            // An unknown field means the contract changed; refuse the parse
+            // instead of guessing which numbers mean what.
             _ => return None,
         }
     }
@@ -63,6 +94,13 @@ fn parse_active_memory_limit_error(description: &str) -> Option<MlxRuntimeError>
     })
 }
 
+/// Locks a mutex while tolerating a poisoned state.
+///
+/// Every mutex in this module guards process-global MLX policy, and a panic
+/// while holding one leaves the *native* state intact and knowable — the
+/// poison only means a Rust-side observer bailed mid-read. Recovering the
+/// lock beats propagating the poison, which would cascade into unrelated
+/// operations failing forever after one panic.
 pub(super) fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex
         .lock()

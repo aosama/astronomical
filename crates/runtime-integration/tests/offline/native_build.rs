@@ -1,7 +1,7 @@
 //! Structural and filesystem contracts for native configuration that Cargo cannot infer.
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
-const NATIVE_BUILD_COMPILATION: &str = include_str!("../../build_native_compile.rs");
+const NATIVE_BUILD_COMPILATION: &str = include_str!("../../build-orchestration/native_compile.rs");
 
 // The bindgen-allowlist completeness contract that lived here moved with the
 // bridge into the published mlx-c-rust crate; the live coverage contract

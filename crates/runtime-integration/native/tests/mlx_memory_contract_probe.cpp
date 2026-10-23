@@ -1,3 +1,26 @@
+// The explicit MLX allocator memory-contract probe.
+//
+// Purpose: the Astronomical memory policy in
+// crates/runtime-integration/src/mlx_runtime/memory_policy.rs makes claims
+// about patched-MLX allocator behavior (cache limits, peak reset, lazy
+// evaluation boundaries, allocation-pressure reclamation, and the
+// active-memory ceiling's rejection semantics with its one-percent transient
+// allowance). Those claims are enforced by native C++ code inside MLX, so
+// they can only be proven against the real allocator — from outside Rust.
+//
+// This binary is that proof. It is built only for the
+// `core+memory-contract` native profile, published into the native build
+// store as `bin/mlx_memory_contract_probe`, exposed to Rust through the
+// ASTRONOMICAL_MLX_MEMORY_CONTRACT_PROBE compile-time environment value,
+// and spawned by the acceptance memory-contract lanes
+// (`cargo test-mlx-memory`), which parse the `[mlx-memory-contract]
+// phase=...` lines and assert the phase outcomes. Each `require_*` function
+// below is one contract phase; `main` runs them in dependency order (the
+// early phases establish the counter vocabulary the later phases rely on).
+//
+// Failure semantics: any violated expectation throws; the nonzero exit and
+// the last printed phase identify the broken contract.
+
 #include <cstddef>
 #include <cstdlib>
 #include <exception>

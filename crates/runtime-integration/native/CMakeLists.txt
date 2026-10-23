@@ -1,3 +1,22 @@
+# The pinned native runtime build for Astronomical.
+#
+# Architecture in one paragraph: this project does NOT fetch MLX from the
+# network. Five verified source archives (MLX, MLX-C, metal-cpp,
+# nlohmann/json, fmt) are provisioned ahead of time by
+# `cargo xtask bootstrap-native-dependencies` into a machine-wide cache,
+# referenced here by absolute path, and re-verified by SHA-256 at configure
+# time (require_pinned_archive below) so a corrupted or swapped archive
+# fails loudly before any compile. MLX and MLX-C are then patched with the
+# repository-owned patch set under third-party/patches (each patch's purpose
+# and retirement condition are documented in third-party/README.md) and
+# built as one static, Release-mode, arm64-only image.
+#
+# Consumers: the Cargo build script (build-orchestration/native_compile.rs)
+# and the standalone native-build tool drive this file identically; the
+# products are published into the identity-keyed native build store
+# (build-orchestration/native_store.rs). This file is a fingerprinted native
+# identity input — a comment or code change here re-keys the store entry and
+# rebuilds the native runtime by design.
 cmake_minimum_required(VERSION 3.24)
 
 project(astronomical_runtime_integration LANGUAGES C CXX)

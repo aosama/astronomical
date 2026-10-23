@@ -1,12 +1,36 @@
 //! Rust ownership and callback bridge for MLX's descriptor-backed writer.
 //!
-//! Prompt-cache state can be many gigabytes. Serializing it into one Rust byte
-//! vector would temporarily duplicate the complete capture. This bridge instead
-//! gives MLX one retained writable descriptor, allowing MLX to materialize and
-//! write one tensor at a time while Rust retains explicit file and error ownership.
+//! # Why a descriptor instead of bytes
+//!
+//! Prompt-cache state can be many gigabytes. Serializing it into one Rust
+//! byte vector would temporarily duplicate the complete capture. This bridge
+//! instead gives MLX one retained writable descriptor, allowing MLX to
+//! materialize and write one tensor at a time while Rust retains explicit
+//! file and error ownership.
+//!
+//! # The error-latching pattern
+//!
+//! Native callbacks cannot return Rust `Result`, so an input/output failure
+//! inside a callback is latched into [`FileWriterState::first_io_error`] and
+//! the callback reports the failure to MLX through its return count.
+//! [`OwnedFileWriter::finish`] is the single synchronization point that
+//! restores ordinary Rust error propagation: it replays the first latched
+//! error (the earliest failure usually identifies the root cause; later
+//! callbacks may keep running after `good()` turns false, so overwriting
+//! that evidence would hide it) and makes the file durable with `sync_all`.
+//! Success of [`MlxRuntime::save_safetensors`] therefore means native
+//! serialization *and* descriptor input/output *and* the durability sync all
+//! succeeded.
+//!
+//! # Lifetime contract
+//!
+//! `writer_free` owns and releases the boxed state when MLX releases the
+//! writer handle; the Rust-side `Drop` on [`OwnedFileWriter`] releases the
+//! MLX handle. The raw state pointer stored beside the handle is used only
+//! by `finish`, strictly before `Drop` runs.
 
 use std::{
-    ffi::{CString, c_char, c_int, c_void},
+    ffi::{c_char, c_int, c_void},
     fs::File,
     os::unix::fs::FileExt,
     sync::Mutex,
@@ -15,20 +39,33 @@ use std::{
 use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
 use mlx_c_rust::{MlxArray, raw};
 
+use super::name_maps::{OwnedMetadataMap, OwnedTensorMap};
+
+/// Label MLX-C can surface for this writer in diagnostics.
 const WRITER_LABEL: &[u8] = b"retained descriptor-backed safetensors output\0";
 
+/// Summary of one successful descriptor-backed save.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MlxSafetensorsWriteOutcome {
     written_byte_count: u64,
 }
 
 impl MlxSafetensorsWriteOutcome {
+    /// Bytes the callbacks actually placed on the descriptor. Persistent
+    /// store sizing decisions consume this number, not the callers' own
+    /// estimate of the capture.
     #[must_use]
     pub const fn written_byte_count(self) -> u64 {
         self.written_byte_count
     }
 }
 
+/// Failures of a descriptor-backed save, split by owner.
+///
+/// [`MlxSafetensorsWriterError::DescriptorIo`] means the filesystem side
+/// failed (the latched first error); [`MlxSafetensorsWriterError::Native`]
+/// means MLX-C rejected the serialization itself. The split tells the
+/// caller whether retrying on the same descriptor can help.
 #[derive(Debug, thiserror::Error)]
 pub enum MlxSafetensorsWriterError {
     #[error("safetensors descriptor I/O failed")]
@@ -49,6 +86,14 @@ impl MlxRuntime {
     /// This call is synchronous: tensor/map references and the descriptor remain
     /// live until native serialization returns and the file has been synchronized.
     /// Success therefore means native serialization and descriptor I/O both succeeded.
+    ///
+    /// # Errors
+    ///
+    /// Descriptor input/output problems surface as
+    /// [`MlxSafetensorsWriterError::DescriptorIo`] (reported first — a
+    /// callback usually holds the more concrete filesystem cause of a
+    /// native failure); native serialization failures surface as
+    /// [`MlxSafetensorsWriterError::Native`].
     pub fn save_safetensors(
         &self,
         output_file: File,
@@ -83,83 +128,6 @@ impl MlxRuntime {
             .map_err(|source| MlxSafetensorsWriterError::DescriptorIo { source })?;
         native_save_result.map_err(|source| MlxSafetensorsWriterError::Native { source })?;
         Ok(MlxSafetensorsWriteOutcome { written_byte_count })
-    }
-}
-
-pub(crate) struct OwnedTensorMap(pub(crate) raw::mlx_map_string_to_array);
-
-impl OwnedTensorMap {
-    pub(crate) fn from_entries(
-        named_arrays: &[(&str, &MlxArray)],
-    ) -> Result<Self, MlxRuntimeError> {
-        // SAFETY: The returned handle enters RAII ownership immediately.
-        let tensor_map = unsafe { raw::mlx_map_string_to_array_new() };
-        if tensor_map.ctx.is_null() {
-            return Err(writer_error(
-                "allocate an MLX tensor map",
-                "MLX returned an empty handle",
-            ));
-        }
-        // Enter RAII ownership before inserting anything so an invalid later
-        // name or failed insert still releases the native map exactly once.
-        let owned_map = Self(tensor_map);
-        for (tensor_name, tensor) in named_arrays {
-            let tensor_name = checked_c_string(tensor_name, "insert a safetensors tensor name")?;
-            // SAFETY: The map and tensor are live; MLX copies the key and retains array ownership.
-            let insert_status = unsafe {
-                raw::mlx_map_string_to_array_insert(owned_map.0, tensor_name.as_ptr(), tensor.raw())
-            };
-            check_status(insert_status, "insert a safetensors tensor")?;
-        }
-        Ok(owned_map)
-    }
-}
-
-impl Drop for OwnedTensorMap {
-    fn drop(&mut self) {
-        // SAFETY: This owner releases its live map exactly once.
-        unsafe {
-            raw::mlx_map_string_to_array_free(self.0);
-        }
-    }
-}
-
-pub(crate) struct OwnedMetadataMap(pub(crate) raw::mlx_map_string_to_string);
-
-impl OwnedMetadataMap {
-    pub(crate) fn from_entries(metadata_entries: &[(&str, &str)]) -> Result<Self, MlxRuntimeError> {
-        // SAFETY: The returned handle enters RAII ownership immediately.
-        let metadata_map = unsafe { raw::mlx_map_string_to_string_new() };
-        if metadata_map.ctx.is_null() {
-            return Err(writer_error(
-                "allocate an MLX metadata map",
-                "MLX returned an empty handle",
-            ));
-        }
-        let owned_map = Self(metadata_map);
-        for (metadata_name, metadata_value) in metadata_entries {
-            let metadata_name = checked_c_string(metadata_name, "insert a metadata name")?;
-            let metadata_value = checked_c_string(metadata_value, "insert a metadata value")?;
-            // SAFETY: The map is live and MLX copies both strings during this call.
-            let insert_status = unsafe {
-                raw::mlx_map_string_to_string_insert(
-                    owned_map.0,
-                    metadata_name.as_ptr(),
-                    metadata_value.as_ptr(),
-                )
-            };
-            check_status(insert_status, "insert safetensors metadata")?;
-        }
-        Ok(owned_map)
-    }
-}
-
-impl Drop for OwnedMetadataMap {
-    fn drop(&mut self) {
-        // SAFETY: This owner releases its live map exactly once.
-        unsafe {
-            raw::mlx_map_string_to_string_free(self.0);
-        }
     }
 }
 
@@ -208,10 +176,11 @@ impl OwnedFileWriter {
         })
     }
 
+    /// The error-and-durability synchronization point; see the module
+    /// documentation for the full contract.
     fn finish(&self) -> Result<u64, std::io::Error> {
-        // Native callbacks cannot return Rust `Result`. They latch the first I/O
-        // error in shared state; this is the synchronization point that restores
-        // ordinary Rust error propagation and makes file contents durable.
+        // SAFETY: `raw_writer` is alive, so MLX has not yet invoked
+        // `writer_free` and the state pointer is valid.
         let writer_mutex = unsafe { &*self.writer_state };
         let mut writer_state = writer_mutex
             .lock()
@@ -322,6 +291,9 @@ unsafe extern "C" fn writer_seek(descriptor: *mut c_void, offset: i64, whence: c
     if seek_succeeded { 0 } else { -1 }
 }
 
+/// Reads on the write-only output descriptor are rejected outright rather
+/// than acknowledged: the v0.7.0 C++ wrapper fails the call on a zero count,
+/// which is the loud outcome a caller mixing up descriptors needs.
 unsafe extern "C" fn writer_read_is_unsupported(
     descriptor: *mut c_void,
     _destination: *mut c_char,
@@ -462,13 +434,17 @@ unsafe fn with_writer_state<Output>(
     Some(operation(&mut writer_state))
 }
 
+/// Loops a positional write to completion.
+///
+/// `write_at` may legally perform a short write. Looping until this
+/// callback's complete byte range reaches disk keeps the v0.7.0
+/// returned-count contract honest, and rejecting zero progress avoids a
+/// spin on a descriptor that can never advance.
 fn write_all_at(
     output_file: &File,
     mut source_bytes: &[u8],
     mut offset_bytes: u64,
 ) -> std::io::Result<()> {
-    // `write_at` may legally perform a short write. Loop until this callback's
-    // complete byte range reaches disk, and reject zero progress to avoid a spin.
     while !source_bytes.is_empty() {
         let written_byte_count = output_file.write_at(source_bytes, offset_bytes)?;
         if written_byte_count == 0 {
@@ -485,10 +461,10 @@ fn write_all_at(
     Ok(())
 }
 
-fn checked_c_string(text: &str, operation: &'static str) -> Result<CString, MlxRuntimeError> {
-    CString::new(text).map_err(|_| writer_error(operation, "text contains an interior NUL byte"))
-}
-
+/// Shared constructor for plain operation failures in the writer family.
+///
+/// `pub(crate)` so the in-memory writer (a sibling engine, not a sub-part of
+/// this one) can produce identical wording for identical conditions.
 pub(crate) fn writer_error(
     operation: &'static str,
     description: impl Into<String>,

@@ -1,4 +1,33 @@
 //! Presents validated source-file intervals as one virtual SafeTensors payload to MLX.
+//!
+//! # The mechanism, end to end
+//!
+//! An expert-page manifest (built in `model-serving`) knows the exact byte
+//! ranges of a shard that belong to the router-selected experts. Asking the
+//! ordinary loader to open the whole shard would turn a top-K decode miss
+//! into a whole-shard load. Instead:
+//!
+//! 1. The caller builds a **synthetic safetensors header** naming only the
+//!    selected tensors, with offsets rebased into a compact *virtual*
+//!    payload space.
+//! 2. This reader presents `[synthetic header | virtual payload]` as one
+//!    contiguous stream to MLX. Header bytes are served from memory; payload
+//!    bytes are translated through the interval table into exact
+//!    positional reads of the real file.
+//! 3. Validation at construction guarantees the virtual payload has no
+//!    holes (virtual contiguity), no duplicated source bytes
+//!    (non-overlap), and exact declared size — a malformed manifest fails
+//!    before MLX sees a single byte.
+//!
+//! The result is lazy arrays over exactly the selected expert rows; gaps and
+//! unselected experts are never part of any request.
+//!
+//! # Lifetime contract
+//!
+//! Same as the descriptor reader: MLX owns the boxed
+//! [`BoundedMultiRangeReaderState`] through the vtable and releases it via
+//! `bounded_reader_free` when the last lazy array releases the reader. The
+//! loading result keeps a holder alive for that window (see `lazy_map`).
 
 use std::{
     ffi::{c_char, c_int, c_void},
@@ -9,19 +38,21 @@ use std::{
     },
 };
 
-use crate::{
-    MlxRuntimeError, PositionalFileReadMetrics,
-    mlx_bounded_safetensors_read_concurrency::read_source_interval,
-    mlx_safetensors::BoundedReadInterval,
-};
+use crate::{MlxRuntimeError, safetensors::read_metrics::PositionalFileReadMetrics};
 use mlx_c_rust::raw;
 
+use super::bounded_range_read_concurrency::read_source_interval;
+use super::lazy_map::BoundedReadInterval;
+
+/// Label MLX-C can surface for this reader in diagnostics.
 const BOUNDED_READER_LABEL: &[u8] = b"bounded multi-range expert page reader\0";
 
 /// Internal state for the bounded multi-range reader.
 pub(super) struct BoundedMultiRangeReaderState {
     source_file: File,
     synthetic_header_bytes: Vec<u8>,
+    /// Sorted by virtual payload offset; the binary search in
+    /// `read_payload_at_offset` relies on that ordering.
     intervals: Vec<BoundedReadInterval>,
     total_payload_bytes: u64,
     cursor: Mutex<BoundedReaderCursor>,
@@ -34,6 +65,20 @@ struct BoundedReaderCursor {
 }
 
 impl BoundedMultiRangeReaderState {
+    /// Validates the interval table and constructs the reader state.
+    ///
+    /// # Errors
+    ///
+    /// Three structural checks, each with a concrete failure mode it
+    /// prevents:
+    ///
+    /// - **source overlap** — the same source bytes mapped twice would let
+    ///   two virtual regions race the same file positions;
+    /// - **virtual contiguity** — a hole would hand MLX zeros for tensor
+    ///   data with no error anywhere;
+    /// - **exact payload coverage** — a mismatch with the declared
+    ///   `total_payload_bytes` means the synthetic header and the interval
+    ///   table disagree, so one of them is stale.
     pub(super) fn new(
         source_file: File,
         synthetic_header_bytes: Vec<u8>,
@@ -41,6 +86,8 @@ impl BoundedMultiRangeReaderState {
         total_payload_bytes: u64,
         expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Self, MlxRuntimeError> {
+        // Overlap is judged on source offsets, sorted independently of the
+        // virtual ordering stored below.
         let mut intervals_sorted_by_source = intervals.clone();
         intervals_sorted_by_source.sort_by_key(|interval| interval.source_file_offset);
         for adjacent_intervals in intervals_sorted_by_source.windows(2) {
@@ -88,14 +135,17 @@ impl BoundedMultiRangeReaderState {
         })
     }
 
+    /// Size of the stream MLX sees: synthetic header plus virtual payload.
     fn total_virtual_size(&self) -> u64 {
         self.synthetic_header_bytes.len() as u64 + self.total_payload_bytes
     }
 }
 
+/// The constructed reader handle, not yet surrendered to MLX-C.
 pub(super) struct OwnedBoundedMultiRangeReader(pub(super) raw::mlx_io_reader);
 
 impl OwnedBoundedMultiRangeReader {
+    /// Hands the boxed state to MLX-C behind a fresh reader handle.
     pub(super) fn new(reader_state: BoundedMultiRangeReaderState) -> Result<Self, MlxRuntimeError> {
         let descriptor = Box::into_raw(Box::new(reader_state)).cast::<c_void>();
         let reader_vtable = raw::mlx_io_vtable {
@@ -129,6 +179,11 @@ impl OwnedBoundedMultiRangeReader {
     }
 }
 
+/// A second handle to the same MLX reader, used only to keep it alive.
+///
+/// MLX-C readers are reference-counted; the loading result holds one
+/// reference so the vtable state survives as long as the returned lazy
+/// arrays might still read.
 pub(super) struct OwnedBoundedMultiRangeReaderHolder(pub(super) raw::mlx_io_reader);
 
 impl Drop for OwnedBoundedMultiRangeReaderHolder {
@@ -181,6 +236,9 @@ unsafe extern "C" fn bounded_reader_seek(
                 .cursor
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // i128 arithmetic validates (offset, whence) before any u64 write;
+            // note SEEK_END is anchored at the *virtual* size, not the source
+            // file size — MLX must never learn the real shard is larger.
             let base_position_bytes = match whence {
                 libc::SEEK_SET => 0_i128,
                 libc::SEEK_CUR => i128::from(reader_cursor.position_bytes),
@@ -256,6 +314,11 @@ unsafe extern "C" fn bounded_reader_read_at_offset(
     .unwrap_or(0)
 }
 
+/// Serves `byte_count` virtual bytes at `offset_bytes`, header first.
+///
+/// A read may straddle the header/payload boundary; the two-phase copy below
+/// serves the header remainder from memory and immediately continues into
+/// payload bytes so the caller still receives exactly `bytes_to_read`.
 fn read_virtual_bytes(
     reader_state: &BoundedMultiRangeReaderState,
     destination: *mut c_char,
@@ -310,6 +373,8 @@ fn read_virtual_bytes(
     bytes_to_read
 }
 
+/// Writes are structurally impossible on a virtual payload: there is no
+/// backing store that could honor them.
 unsafe extern "C" fn bounded_reader_write_is_unsupported(
     descriptor: *mut c_void,
     _source: *const c_char,
@@ -354,6 +419,14 @@ unsafe fn with_bounded_reader_state<Output>(
     Some(operation(reader_state))
 }
 
+/// Translates one contiguous virtual-payload span into source-file reads.
+///
+/// Walks interval by interval: a binary search finds the interval containing
+/// the current offset, the overlap is read positionally (through the
+/// concurrency-limited path), and the walk repeats until the span is
+/// satisfied. Any offset that lands between intervals — impossible after
+/// construction validation, but defensive here — fails the reader rather
+/// than inventing bytes.
 fn read_payload_at_offset(
     reader_state: &BoundedMultiRangeReaderState,
     destination: &mut [u8],
