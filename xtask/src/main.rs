@@ -29,6 +29,9 @@ mod native_fingerprint;
 mod notices;
 #[cfg(test)]
 mod notices_tests;
+mod retired_native_scan;
+#[cfg(test)]
+mod retired_native_scan_tests;
 #[cfg(test)]
 mod sccache_save_tests;
 mod source_size;
@@ -72,6 +75,9 @@ fn main() -> ExitCode {
     };
     match arguments.first().map(String::as_str) {
         Some("disposable-target") => disposable_target::run(&resolve_root(), &arguments[1..]),
+        Some("scan-retired-native-output") => {
+            retired_native_scan::run(&resolve_root(), &arguments[1..])
+        }
         Some("tier-pyramid") => run_command(tier_pyramid::run(
             &resolve_root(),
             arguments.contains(&"--update-baseline".to_owned()),
@@ -97,7 +103,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract [root] | classify-scope | check-architecture | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract [root] | classify-scope | check-architecture | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
