@@ -136,13 +136,16 @@ sign_code_object() {
 
 main() {
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
-    # Re-exec through the disposable-target runner: the app build runs several
-    # cargo invocations that must share one owned release CARGO_TARGET_DIR, so
-    # the runner owns the whole script and this guard skips re-nesting.
+    # Re-exec through the disposable-target runner (cargo xtask
+    # disposable-target, the typed port of the retired shell runner): the
+    # app build runs several cargo invocations that must share one owned
+    # release CARGO_TARGET_DIR, so the runner owns the whole script and
+    # this guard skips re-nesting.
     if [ "${ASTRONOMICAL_CARGO_TARGET_LIFECYCLE:-}" != "disposable" ]; then
-        exec "${repository_root}/scripts/run-in-disposable-cargo-target.sh" \
+        (CDPATH='' cd -- "${repository_root}" && exec cargo xtask disposable-target \
             --lane app-release -- \
-            "${repository_root}/scripts/internal/build-macos-app.sh" "$@"
+            "${repository_root}/scripts/internal/build-macos-app.sh" "$@")
+        exit $?
     fi
     [ -n "${CARGO_TARGET_DIR:-}" ] || {
         print_error "disposable app build is missing CARGO_TARGET_DIR"

@@ -89,7 +89,9 @@ test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance -
 # [--repo owner/name]`, `cargo xtask save-sccache <primary-cache-key>`,
 # `cargo xtask install-verification-tools
 # [--prefix DIR]`, `cargo xtask bootstrap-native-dependencies
-# [--cache-dir ABSOLUTE_PATH] [--verify]`.
+# [--cache-dir ABSOLUTE_PATH] [--verify]`, and `cargo xtask
+# disposable-target --lane NAME -- COMMAND [ARGUMENT ...]` (the typed port
+# of the retired scripts/run-in-disposable-cargo-target.sh).
 xtask = "run -p xtask --"
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —

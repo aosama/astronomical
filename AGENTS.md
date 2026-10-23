@@ -1,5 +1,7 @@
 # Instructions for the Astronomical Project
 
+- Try to have code files not exceed around 600 lines of code give or take.
+
 ## Never Hardwire Local Developer Environment Into the Codebase
 
 - Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, acceptance artifacts, documentation, GitHub content, or agent instructions.

@@ -66,11 +66,6 @@ impl AppBuilderSandbox {
                 "scripts/internal/package-mlx-metallib.sh",
                 false,
             ),
-            (
-                "scripts/run-in-disposable-cargo-target.sh",
-                "scripts/run-in-disposable-cargo-target.sh",
-                true,
-            ),
         ] {
             let source_path = repository_source_root.join(source_relative_path);
             let destination_path = repository_directory.join(sandbox_relative_path);
@@ -145,6 +140,10 @@ impl AppBuilderSandbox {
         // build: it records the disposable CARGO_TARGET_DIR the runner owns
         // and materializes stub release binaries inside it, so the builder's
         // copy steps find exactly what a real build would have produced.
+        // `cargo xtask disposable-target` re-execs the real runner binary
+        // pinned to the sandbox repository, so the journey exercises the
+        // genuine lifecycle (marker, handoff, measurement, removal) instead
+        // of a shell emulation of it.
         self.write_shim(
             "cargo",
             &format!(
@@ -155,6 +154,10 @@ impl AppBuilderSandbox {
                  \x20   exit 0\n\
                  fi\n\
                  if [ \"${{1:-}}\" = \"xtask\" ]; then\n\
+                 \x20   if [ \"${{2:-}}\" = \"disposable-target\" ]; then\n\
+                 \x20       shift\n\
+                 \x20       exec \"{xtask_binary}\" --repository-root \"{sandbox_repository}\" \"$@\"\n\
+                 \x20   fi\n\
                  \x20   exit 0\n\
                  fi\n\
                  cargo_target_directory=\"${{CARGO_TARGET_DIR:?disposable Cargo target is required}}\"\n\
@@ -172,6 +175,8 @@ impl AppBuilderSandbox {
                  printf '%s\\n' '#!/bin/sh' '[ \"$1\" = \"--version\" ] && {{ printf \"%s\\n\" \"0.0.0\"; exit 0; }}' 'exit 0' > \"${{cargo_release_directory}}/astronomical\"\n\
                  chmod +x \"${{cargo_release_directory}}/astronomicald\" \"${{cargo_release_directory}}/astronomical-inference-worker\" \"${{cargo_release_directory}}/astronomical\"\n",
                 cargo_log = self.cargo_arguments_log.display(),
+                xtask_binary = env!("CARGO_BIN_EXE_xtask"),
+                sandbox_repository = self.repository_directory.display(),
             ),
         );
         self.write_shim(

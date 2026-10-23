@@ -438,7 +438,6 @@ jobs:
           scripts/ci/ci-step-timing.sh begin repository-contracts
           export PATH="$PWD/scripts/ci:$PATH"
           verification/tooling_contracts/test-cargo-citation-contract.sh
-          verification/tooling_contracts/test-cargo-artifact-lifecycle-contract.sh
           verification/tooling_contracts/test-channel-isolation-checker-contract.sh
           verification/tooling_contracts/test-source-size-check.sh
           scripts/ci/tests/test-report-tier-pyramid-contract.sh
