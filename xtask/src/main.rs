@@ -26,6 +26,27 @@ mod native_dependency_manifest;
 #[cfg(test)]
 mod native_dependency_manifest_tests;
 mod native_fingerprint;
+// The four shared build-orchestration modules are included by `#[path]`
+// from the runtime-integration tree exactly the way the standalone native
+// build tool includes them (its lib.rs documents the multi-includer rule:
+// sibling module names must stay identical so the shared modules can reach
+// each other through `crate::` paths). Unlike that tool — a library crate,
+// where public items never warn — this binary crate would flag every
+// shared item its commands do not use, so each include carries a scoped
+// dead-code allow: the unused surface belongs to the other includers.
+#[path = "../../crates/runtime-integration/build-orchestration/native_compile.rs"]
+#[allow(dead_code)]
+mod native_compile;
+#[path = "../../crates/runtime-integration/build-orchestration/native_parallelism.rs"]
+#[allow(dead_code)]
+mod native_parallelism;
+#[path = "../../crates/runtime-integration/build-orchestration/native_progress.rs"]
+#[allow(dead_code)]
+mod native_progress;
+#[path = "../../crates/runtime-integration/build-orchestration/native_store.rs"]
+#[allow(dead_code)]
+mod native_store;
+mod native_store_entry;
 mod notices;
 #[cfg(test)]
 mod notices_tests;
@@ -85,6 +106,9 @@ fn main() -> ExitCode {
         )),
         Some("native-fingerprint") => {
             run_command(native_fingerprint::run(&resolve_root(), &arguments[1..]))
+        }
+        Some("native-store-entry") => {
+            run_command(native_store_entry::run(&resolve_root(), &arguments[1..]))
         }
         Some("classify-scope") => run_command(classify_scope::run(&resolve_root())),
         Some("check-architecture") => run_command(check_architecture::run(&resolve_root())),

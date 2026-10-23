@@ -5,9 +5,9 @@ diff --git a/mlx/c/ops.cpp b/mlx/c/ops.cpp
              (bits.has_value ? std::make_optional<int>(bits.value)
                              : std::nullopt),
              std::string(mode),
-+            // The pinned MLX v0.32.3 release inserts global_scale
-+            // before sorted_indices; the C API does not expose it, so forward
-+            // the upstream default.
++            // The pinned MLX line carries, since v0.32.3, a global_scale
++            // parameter before sorted_indices; the C API does not expose
++            // it, so forward the upstream default.
 +            std::nullopt,
              sorted_indices,
              mlx_stream_get_(s)));

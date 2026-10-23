@@ -15,11 +15,11 @@ never resolves an upstream repository live.
 
 | Dependency | Pinned version | Upstream ref | Pin file | Class |
 | --- | --- | --- | --- | --- |
-| MLX | 0.32.3 | release tag `v0.32.3` (commit `64ea011cb`) | `pins/mlx-v0.32.3.cmake` | core runtime |
+| MLX | 0.32.4 | release tag `v0.32.4` (commit `36969c094`) | `pins/mlx-v0.32.4.cmake` | core runtime |
 | MLX-C | 0.7.0 | release tag `v0.7.0` (commit `a341b4925`) | `pins/mlx-c-v0.7.0.cmake` | C-ABI bridge |
-| metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.3.cmake` | MLX transitive |
-| nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.3.cmake` | MLX transitive |
-| fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.3.cmake` | MLX transitive |
+| metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
+| nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
+| fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
 
 metal-cpp, nlohmann/json, and fmt are source dependencies that MLX's own
 CMake declares through FetchContent. Astronomical pre-declares them with
@@ -30,7 +30,7 @@ the network.
 The pin files are canonical for digests and URLs; the current values are
 recorded here for review:
 
-- MLX `v0.32.3`: `https://github.com/ml-explore/mlx/archive/64ea011cb65f14d9ce2737e60db9a4ae91ed7441.tar.gz` — SHA-256 `428070f9b74ab39b5f65ae90a0a409c14b1a7a75911d041864788bfbdb9f7ef0`
+- MLX `v0.32.4`: `https://github.com/ml-explore/mlx/archive/36969c094354086e15d2a327a9c50feb20b9cf11.tar.gz` — SHA-256 `391b1e41414cddebe7a4fb5c55bf193ea5edd70e26adcfb0e1d6a5e5e86ec34a`
 - MLX-C `v0.7.0`: `https://github.com/ml-explore/mlx-c/archive/a341b4925024b88b2c593468f16e12f5e17315da.tar.gz` — SHA-256 `4424dd3f6225708d111b691be4041bba9bc6da09719ae8d32e6900744852c7f6`
 - metal-cpp `26`: `https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip` — SHA-256 `4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4`
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
@@ -49,8 +49,8 @@ build path: the pin files are the only place a version, URL, or digest
 appears, and every other build file consumes them through CMake variables.
 
 The one intentional offset in the tree is between the two Astronomical-facing
-pins themselves: MLX-C v0.7.0 was authored against MLX v0.32.2, one minor
-release behind the pinned MLX v0.32.3. That gap is bridged by the single
+pins themselves: MLX-C v0.7.0 was authored against MLX v0.32.2, two patch
+releases behind the pinned MLX v0.32.4. That gap is bridged by the single
 compatibility patch listed below and is re-evaluated at every MLX-C bump.
 
 ## Patch registry
@@ -63,7 +63,7 @@ each pin bump and retired the moment the pinned upstream tree contains the
 equivalent behavior; each patch's rationale and evidence are
 recorded inline in this registry below.
 
-MLX patches (`mlx-0.32.3-*.patch`):
+MLX patches (`mlx-0.32.4-*.patch`):
 
 - `astronomical-active-memory-ceiling` — Astronomical feature. Gives the
   Metal allocator an enforced active-memory ceiling with a distinct error
@@ -81,11 +81,13 @@ MLX patches (`mlx-0.32.3-*.patch`):
   tile candidates for the NAX quantized matmul, ported from the OMLX
   project's Qwen3.5 prefill kernels. Retires if upstream grows an equivalent
   shape-driven tile set.
-- `jit-qmv-template-arity` — upstream defect fix (JIT builds only). The
-  quantized `qmv` JIT generator forwards one template argument more than the
-  kernel templates accept, which aborts at runtime. Retires when an MLX
-  release passes the correct arity; re-check at every bump by removing the
-  patch and compiling.
+- `jit-qmv-template-arity` — retired at the v0.32.4 bump. Upstream's
+  partial-row qmv fast-kernel restructure (the `partial_rows` template
+  parameter and the unconditional `results_per_simdgroup` arity) declares
+  the full template arity on every `qmv`/`qmv_fast` template, which is the
+  defect the patch carried; the retirement was verified by inspecting the
+  template declarations in the v0.32.4 archive and compiling without the
+  patch.
 - `jit-sdpa-dsplit-template-arity` — upstream defect fix (JIT builds only,
   new at the v0.32.3 tag). `get_steel_attention_nax_kernel` forwards the
   `bv` template argument to `attention_nax_dsplit`, whose template has no
@@ -100,9 +102,9 @@ MLX patches (`mlx-0.32.3-*.patch`):
 
 MLX-C patches (`mlx-c-0.7.0-*.patch`):
 
-- `mlx-0.32.3-gather-qmm-global-scale-compatibility` — the only compatibility
-  bridge in the tree. MLX v0.32.3 inserts a `global_scale` parameter into
-  `gather_qmm` before `sorted_indices`; the MLX-C v0.7.0 C API does not
+- `mlx-0.32.4-gather-qmm-global-scale-compatibility` — the only compatibility
+  bridge in the tree. MLX carries, since v0.32.3, a `global_scale` parameter
+  in `gather_qmm` before `sorted_indices`; the MLX-C v0.7.0 C API does not
   expose it, so the patch forwards the upstream default. Retires at the
   first MLX-C release authored against MLX 0.32.3 or newer.
 
@@ -157,7 +159,16 @@ To bump a pinned dependency:
    first native build of the new pin, diff the C header surface itself with
    the bindgen header provisioning (see the next section); header-level
    differences found there explain almost every binding-level difference
-   before any compile runs.
+   before any compile runs. Since the crate's 0.32.4 line its build script
+   also emits its own link flags through a discovery ladder; the ladder's
+   default resolves the crate's own stock shared pair, which is both the
+   wrong libraries (the Astronomical pair carries the patches above) and,
+   in dylib form, an unresolvable load path for consumer binaries. Export
+   `MLX_C_RUST_MLX_C_PREFIX` to the store entry printed by
+   `cargo xtask native-store-entry --profile core` before any workspace
+   build — continuous integration does this in its native-build step, and
+   `scripts/ci/prewarm-native-build.sh` prints the same instruction after
+   publishing an entry.
  5. Run the offline lanes, then invoke each real-model acceptance Cargo
    command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
@@ -171,7 +182,7 @@ To bump a pinned dependency:
 
 The MLX-C binding surface spans two crates. The published `mlx-c-rust`
 crate (crates.io, versioned against the MLX release line its bindings
-target — the 0.32.3 line matches the pinned MLX v0.32.3; the earlier
+target — the 0.32.4 line matches the pinned MLX v0.32.4; the earlier
 0.7.0-alpha spelling tracked the MLX-C release and was yanked upstream)
 owns the
 raw bindgen declarations over its vendored stock headers, the

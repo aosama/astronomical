@@ -122,6 +122,11 @@ done
 prewarm_elapsed_seconds=$(( $(date +%s) - prewarm_started_at ))
 if [ "${native_build_exit_code}" -eq 0 ]; then
     print_status "status=success elapsed_seconds=${prewarm_elapsed_seconds}"
+    # A shell script cannot export into its caller, so workspace builds that
+    # link the native stack still need the mlx-c-rust prefix override; point
+    # the reader at the one command that resolves it (continuous integration
+    # wires the same command into its job environment).
+    print_status 'set MLX_C_RUST_MLX_C_PREFIX="$(cargo xtask native-store-entry --profile core)" for workspace builds (the mlx-c-rust link ladder must resolve the patched static pair)'
 else
     print_status "status=failed exit_code=${native_build_exit_code} elapsed_seconds=${prewarm_elapsed_seconds}"
 fi

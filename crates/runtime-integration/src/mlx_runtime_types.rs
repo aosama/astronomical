@@ -91,7 +91,7 @@ impl MlxMemoryLimits {
     /// Returns the active-memory ceiling plus the approved one-percent transient allowance.
     ///
     /// The patched native allocator (see
-    /// `third-party/patches/mlx-0.32.3-astronomical-active-memory-ceiling.patch`)
+    /// `third-party/patches/mlx-0.32.4-astronomical-active-memory-ceiling.patch`)
     /// tolerates this small overshoot before rejecting an allocation, because
     /// graph evaluation routinely needs one transient scratch buffer slightly
     /// above the steady-state ceiling; the error report it emits then carries
