@@ -1,12 +1,34 @@
 //! Pinned native runtime compilation shared by the Cargo build script and the
 //! standalone native-build tool.
 //!
+//! # The sharing mechanism
+//!
 //! Both entry points include this module through `#[path]`, so it must stay
 //! free of `cargo:` directives and reach its sibling build modules only
 //! through `crate::` paths that every includer declares. Like the other build
 //! orchestration sources, this file is excluded from the native identity
 //! fingerprint: semantic CMake changes require bumping
-//! `native-build-store-schema-version` instead.
+//! `native-build-store-schema-version` instead — progress-logging or
+//! parallelism edits here must not invalidate anyone's native store entry.
+//!
+//! # The toolchain is fully controlled, never ambient
+//!
+//! The configure command pins the compilers, the SDK (Software Development
+//! Kit), the architecture, and the build type, and
+//! [`remove_uncontrolled_native_environment`] strips every ambient compiler
+//! variable before CMake runs. Rationale: the native identity fingerprints
+//! the toolchain it *probes*; if ambient `CC`/`CFLAGS`/`SDKROOT` could leak
+//! into the actual build, the produced bytes would depend on state the
+//! fingerprint never saw, and store reuse would serve mismatched artifacts.
+//!
+//! # Why the environment is also the input channel
+//!
+//! Archive locations and the dependency cache arrive through the
+//! `ASTRONOMICAL_*` environment variables below (populated by
+//! `cargo xtask bootstrap-native-dependencies` and hosted CI), because build
+//! scripts cannot receive structured arguments. The CMake side re-verifies
+//! every archive's SHA-256 (see `native/CMakeLists.txt`), so a corrupted or
+//! swapped archive fails the build even if the environment pointed at it.
 
 use std::{
     env,
@@ -17,14 +39,19 @@ use std::{
     process::Command,
 };
 
-use crate::build_native_store::{NativeBuildArtifacts, NativeBuildProfile};
-use crate::build_parallelism;
-use crate::build_progress::NativeBuildProgress;
+use crate::native_parallelism;
+use crate::native_progress::NativeBuildProgress;
+use crate::native_store::{NativeBuildArtifacts, NativeBuildProfile};
 
+/// Consulted so the CMake compile can share sccache with Cargo without any
+/// other wrapper silently changing compiler semantics.
 pub const RUSTC_WRAPPER_VARIABLE: &str = "RUSTC_WRAPPER";
 pub const NATIVE_DEPENDENCY_CACHE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
 pub const NATIVE_BUILD_STORE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_STORE_DIR";
 pub const NATIVE_BUILD_STATUS_FILE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE";
+/// The five verified source archives the pinned native build consumes. Each
+/// has a matching `-D<variable>=<path>` CMake definition; see
+/// `native/CMakeLists.txt` for the SHA-256 pins.
 pub const NATIVE_ARCHIVE_VARIABLES: [&str; 5] = [
     "ASTRONOMICAL_MLX_SOURCE_ARCHIVE",
     "ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE",
@@ -73,6 +100,14 @@ impl NativeRuntimeBuildInputs {
     }
 }
 
+/// Resolves the native build identity for a build of `native_build_profile`
+/// on `target_triple`.
+///
+/// The identity library lives in `crates/native-identity`; this wrapper is
+/// the single choke point both build paths (Cargo build script and
+/// standalone tool) share, which is what guarantees they key the *same*
+/// store entry. Overrides stay absent by construction: a production build
+/// must always fingerprint the toolchain that CMake actually uses.
 pub fn resolve_native_build_identity(
     repository_root: &Path,
     native_build_profile: &str,
@@ -81,10 +116,8 @@ pub fn resolve_native_build_identity(
     let profile =
         astronomical_native_identity::NativeBuildProfile::from_profile_text(native_build_profile)
             .map_err(|error| error.to_string())?;
-    // Overrides stay absent by construction: a production build must always
-    // fingerprint the toolchain that CMake actually uses. The standalone
-    // native-build tool states its triple here because it has no Cargo
-    // context, and the identity stays identical in both paths.
+    // The standalone native-build tool states its triple here because it has
+    // no Cargo context; the identity stays identical in both paths.
     let identity_request = astronomical_native_identity::FingerprintRequest {
         repository_root,
         profile,
@@ -98,6 +131,11 @@ pub fn resolve_native_build_identity(
         .map_err(|error| format!("native build identity failed: {error}").into())
 }
 
+/// Selects the machine-wide store root.
+///
+/// An explicit `ASTRONOMICAL_NATIVE_BUILD_STORE_DIR` wins; the default lives
+/// under the user's cache directory so multiple checkouts and worktrees share
+/// one warm store instead of rebuilding MLX per checkout.
 pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
     let store_directory = env::var_os(NATIVE_BUILD_STORE_VARIABLE)
         .map(PathBuf::from)
@@ -121,6 +159,13 @@ pub fn native_build_store_directory() -> Result<PathBuf, Box<dyn Error>> {
     Ok(store_directory)
 }
 
+/// Configures and builds the pinned MLX/MLX-C native runtime with CMake.
+///
+/// Sequence: configure (compilers, SDK, arm64, Release, sanitized
+/// environment, archive locations, optional probe target) → build the
+/// `mlxc` aggregate target → optionally build the memory-contract probe
+/// binary. Every command reports through the progress recorder so hosted CI
+/// can watch the silent multi-minute stretches.
 pub fn build_pinned_native_runtime(
     native_source_directory: &Path,
     native_build_directory: &Path,
@@ -129,6 +174,8 @@ pub fn build_pinned_native_runtime(
     native_build_progress: &NativeBuildProgress,
 ) -> Result<(), Box<dyn Error>> {
     let mut configure_command = Command::new("cmake");
+    // Resolve the toolchain through xcrun rather than trusting PATH so the
+    // compilers are the ones the identity's toolchain probes measured.
     let clang_compiler_path = discover_xcrun_path(&["--find", "clang"])?;
     let clang_cxx_compiler_path = discover_xcrun_path(&["--find", "clang++"])?;
     let macos_sdk_path = discover_xcrun_path(&["--sdk", "macosx", "--show-sdk-path"])?;
@@ -208,6 +255,10 @@ pub fn build_pinned_native_runtime(
     Ok(())
 }
 
+/// Forwards the resolved archive locations (or their explicit absence) to
+/// CMake. `-U` un-definitions matter as much as definitions: a stale
+/// CMakeCache from an earlier configuration must not silently keep pointing
+/// at a moved archive.
 fn append_native_archive_configuration(
     configure_command: &mut Command,
     native_build_inputs: &NativeRuntimeBuildInputs,
@@ -232,6 +283,8 @@ fn append_native_archive_configuration(
     }
 }
 
+/// Writes the one-word build status (`built` or `reused`) for CI steps that
+/// must distinguish a fresh compile from a store hit.
 pub fn write_native_build_status(
     native_build_artifacts: &NativeBuildArtifacts,
 ) -> Result<(), Box<dyn Error>> {
@@ -293,6 +346,8 @@ pub fn detect_host_target_triple() -> Result<String, Box<dyn Error>> {
     Err("rustc --version --verbose did not report a host triple".into())
 }
 
+/// Default location of the provisioned dependency cache shared by every
+/// checkout on the machine.
 fn native_dependency_cache_directory() -> Option<PathBuf> {
     env::var_os(NATIVE_DEPENDENCY_CACHE_VARIABLE)
         .map(PathBuf::from)
@@ -322,6 +377,12 @@ fn discover_xcrun_path(arguments: &[&str]) -> Result<PathBuf, Box<dyn Error>> {
     Ok(resolved_path)
 }
 
+/// Strips ambient compiler/toolchain variables from a CMake invocation.
+///
+/// These variables change native output bytes without changing anything the
+/// native identity fingerprints; removing them keeps the produced artifact a
+/// pure function of the pinned, probed toolchain. A missing variable is
+/// simply absent — no error, because unset is the normal, controlled state.
 fn remove_uncontrolled_native_environment(command: &mut Command) {
     for environment_variable in [
         "ARCHFLAGS",
@@ -343,9 +404,10 @@ fn remove_uncontrolled_native_environment(command: &mut Command) {
     }
 }
 
+/// Resolves the native parallel job count through the shared policy module.
 pub fn native_parallel_job_count() -> String {
-    build_parallelism::resolve_native_parallel_job_count(
-        env::var(build_parallelism::NATIVE_BUILD_JOBS_VARIABLE)
+    native_parallelism::resolve_native_parallel_job_count(
+        env::var(native_parallelism::NATIVE_BUILD_JOBS_VARIABLE)
             .ok()
             .as_deref(),
         env::var("CARGO_BUILD_JOBS").ok().as_deref(),
@@ -356,6 +418,13 @@ pub fn native_parallel_job_count() -> String {
     )
 }
 
+/// Forwards sccache as the CMake compiler launcher when Cargo itself is
+/// wrapped by it.
+///
+/// Only sccache qualifies: it is compile-cache-transparent (same bytes).
+/// Any other `RUSTC_WRAPPER` is ignored rather than forwarded, because an
+/// arbitrary wrapper could rewrite compilations in ways the fingerprinted
+/// toolchain never promised.
 fn sccache_compiler_launcher_path() -> Option<PathBuf> {
     let rustc_wrapper_path = env::var_os(RUSTC_WRAPPER_VARIABLE).map(PathBuf::from)?;
     let wrapper_file_name = rustc_wrapper_path.file_name()?.to_str()?;
@@ -366,6 +435,9 @@ fn cmake_boolean(boolean_value: bool) -> &'static str {
     if boolean_value { "ON" } else { "OFF" }
 }
 
+/// Runs one native operation with lifecycle progress and a timing-rich
+/// failure message (the elapsed time distinguishes a fast configuration
+/// error from a mid-compile one).
 fn run_command(
     command: &mut Command,
     operation: &str,

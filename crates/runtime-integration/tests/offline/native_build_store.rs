@@ -15,10 +15,10 @@ use std::{
     time::Duration,
 };
 
-#[path = "../../build_native_store.rs"]
-mod build_native_store;
+#[path = "../../build-orchestration/native_store.rs"]
+mod native_store;
 
-use build_native_store::{NativeBuildProfile, NativeBuildStore};
+use native_store::{NativeBuildProfile, NativeBuildStore};
 
 const CORE_NATIVE_IDENTITY: &str =
     "1111111111111111111111111111111111111111111111111111111111111111";

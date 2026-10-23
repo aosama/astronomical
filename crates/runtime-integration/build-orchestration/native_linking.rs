@@ -2,6 +2,28 @@
 //!
 //! Keeping this separate from native compilation makes the Cargo owner small
 //! while retaining one explicit inventory of Apple frameworks and archives.
+//!
+//! # The complete link recipe lives here and only here
+//!
+//! Everything the Rust linker needs from the native build — the two static
+//! archives, the C++ runtime, the six Apple frameworks, and the Clang
+//! compiler-rt archive — is declared in [`configure_rust_linking`]. When a
+//! future native dependency needs a new framework, this function is the only
+//! place to change.
+//!
+//! # The Metallib trust chain
+//!
+//! The build-produced Metallib is hashed here at build time and injected as
+//! three compile-time environment values
+//! (`ASTRONOMICAL_MLX_METALLIB_{PATH,SIZE_BYTES,SHA256}`). The runtime's
+//! validation (`src/mlx_runtime/metallib.rs`) compares every candidate at
+//! process start against those values — a closed loop: the bytes the build
+//! produced are the only bytes the process will load.
+//!
+//! The same function also copies the Metallib beside the cargo target
+//! profile directory (see [`publish_metallib_beside_cargo_target`]) so an
+//! unpackaged `cargo run` resolves a kernel archive without an environment
+//! override.
 
 use std::{
     env,
@@ -14,8 +36,15 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
-use crate::build_native_store::NativeBuildArtifacts;
+use crate::native_store::NativeBuildArtifacts;
 
+/// Emits every `cargo:` directive needed to link and run against a store entry.
+///
+/// # Errors
+///
+/// Fails when any required product is missing from the published entry (a
+/// corrupt store that slipped past validation) or when the Clang runtime
+/// directory cannot be resolved.
 pub fn configure_rust_linking(
     native_build_artifacts: &NativeBuildArtifacts,
 ) -> Result<(), Box<dyn Error>> {
@@ -41,6 +70,9 @@ pub fn configure_rust_linking(
     println!("cargo:rustc-link-lib=static=mlxc");
     println!("cargo:rustc-link-lib=static=mlx");
     println!("cargo:rustc-link-lib=dylib=c++");
+    // The exact framework set the pinned MLX Metal backend links against.
+    // MLX pulls each of these directly; omitting one fails only at final
+    // binary link time, far from its cause, so the set stays explicit here.
     for framework_name in [
         "Metal",
         "Foundation",
@@ -51,6 +83,8 @@ pub fn configure_rust_linking(
     ] {
         println!("cargo:rustc-link-lib=framework={framework_name}");
     }
+    // MLX's C++ sources reference compiler-rt symbols (for example memory
+    // intrinsics); the static link needs the archive explicitly.
     let clang_runtime_directory = discover_clang_runtime_directory()?;
     require_file(
         &clang_runtime_directory.join("libclang_rt.osx.a"),
@@ -76,6 +110,7 @@ pub fn configure_rust_linking(
     Ok(())
 }
 
+/// Locates the Clang runtime archive directory through the active toolchain.
 fn discover_clang_runtime_directory() -> Result<PathBuf, Box<dyn Error>> {
     let clang_runtime_output = Command::new("xcrun")
         .args(["clang", "--print-runtime-dir"])
@@ -98,6 +133,8 @@ fn require_file(file_path: &Path, description: &str) -> Result<(), Box<dyn Error
     Ok(())
 }
 
+/// Streams a file through SHA-256 with a fixed buffer; the Metallib is tens
+/// of megabytes and must not be slurped whole to be hashed.
 fn sha256_file_hex(file_path: &Path) -> Result<String, Box<dyn Error>> {
     let mut source_file = File::open(file_path)?;
     let mut digest = Sha256::new();

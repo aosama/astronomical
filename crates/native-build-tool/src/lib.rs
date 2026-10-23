@@ -6,20 +6,24 @@
 //! so a later Cargo build finds the native build store warm and skips CMake
 //! entirely.
 //!
+//! # The sharing mechanism
+//!
 //! The build modules are included by `#[path]` from the runtime-integration
 //! crate rather than through a dependency, so `cargo run` builds only this
 //! tiny crate and never the runtime-integration dependency tree. The included
-//! modules reference each other through `crate::` paths, so every module that
-//! `build_native_compile` needs must be declared here.
+//! modules reference each other through `crate::` paths, so every module
+//! that `native_compile` needs must be declared here with the same module
+//! names the other includers use (see `runtime-integration/build.rs` for the
+//! canonical module map).
 
-#[path = "../../runtime-integration/build_native_compile.rs"]
-pub mod build_native_compile;
-#[path = "../../runtime-integration/build_native_store.rs"]
-pub mod build_native_store;
-#[path = "../../runtime-integration/build_parallelism.rs"]
-pub mod build_parallelism;
-#[path = "../../runtime-integration/build_progress.rs"]
-pub mod build_progress;
+#[path = "../../runtime-integration/build-orchestration/native_compile.rs"]
+pub mod native_compile;
+#[path = "../../runtime-integration/build-orchestration/native_parallelism.rs"]
+pub mod native_parallelism;
+#[path = "../../runtime-integration/build-orchestration/native_progress.rs"]
+pub mod native_progress;
+#[path = "../../runtime-integration/build-orchestration/native_store.rs"]
+pub mod native_store;
 
 use std::{
     error::Error,
@@ -27,24 +31,25 @@ use std::{
     time::{Duration, Instant},
 };
 
-use build_native_compile::{
+use native_compile::{
     NativeRuntimeBuildInputs, build_pinned_native_runtime, detect_host_target_triple,
     native_build_store_directory, native_parallel_job_count, resolve_native_build_identity,
     write_native_build_status,
 };
-use build_native_store::NativeBuildStore;
-use build_progress::NativeBuildProgress;
+use native_progress::NativeBuildProgress;
+use native_store::NativeBuildStore;
 
 pub const NATIVE_BUILD_TOOL_PREFIX: &str = "[native-build-tool]";
 
+/// Parsed command-line arguments for one standalone native build.
 #[derive(Debug)]
 pub struct NativeBuildToolArguments {
-    native_build_profile: build_native_store::NativeBuildProfile,
+    native_build_profile: native_store::NativeBuildProfile,
     repository_root: PathBuf,
 }
 
 impl NativeBuildToolArguments {
-    pub fn native_build_profile(&self) -> build_native_store::NativeBuildProfile {
+    pub fn native_build_profile(&self) -> native_store::NativeBuildProfile {
         self.native_build_profile
     }
 
@@ -104,15 +109,13 @@ pub fn parse_arguments(arguments: &[String]) -> Result<NativeBuildToolArguments,
             repository_root_path.display()
         ));
     }
-    let native_build_profile = build_native_store::NativeBuildProfile::from_identity_name(
-        &profile_name,
-    )
-    .ok_or_else(|| {
-        format!(
-            "unsupported native build profile: {profile_name} (supported profiles: core, \
+    let native_build_profile = native_store::NativeBuildProfile::from_identity_name(&profile_name)
+        .ok_or_else(|| {
+            format!(
+                "unsupported native build profile: {profile_name} (supported profiles: core, \
                      core+memory-contract)"
-        )
-    })?;
+            )
+        })?;
     Ok(NativeBuildToolArguments {
         native_build_profile,
         repository_root: repository_root_path,
@@ -129,6 +132,9 @@ pub fn run_native_build(
     let native_source_directory = arguments
         .repository_root()
         .join("crates/runtime-integration/native");
+    // No Cargo context here, so the host triple is detected from rustc and
+    // stated explicitly to the identity request — producing exactly the
+    // identity the Cargo build script will later look up.
     let target_triple = detect_host_target_triple()?;
     let native_build_identity = resolve_native_build_identity(
         arguments.repository_root(),
