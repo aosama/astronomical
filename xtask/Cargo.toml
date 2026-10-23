@@ -16,6 +16,9 @@ workspace = true
 
 [dependencies]
 astronomical-native-identity = { path = "../crates/native-identity" }
+# Signal handlers, process-group signaling, access(2), and localtime_r for
+# the disposable-target lifecycle runner: the one sanctioned unsafe edge.
+libc.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 
@@ -38,6 +41,14 @@ path = "tests/offline_bootstrap_journeys.rs"
 [[test]]
 name = "offline_app_builder_journeys"
 path = "tests/offline_app_builder_journeys.rs"
+
+[[test]]
+name = "offline_disposable_target_journeys"
+path = "tests/offline_disposable_target_journeys.rs"
+
+[[test]]
+name = "disposable_target_retirement_contract"
+path = "tests/disposable_target_retirement_contract.rs"
 
 [[test]]
 name = "workflow_structural_contract"

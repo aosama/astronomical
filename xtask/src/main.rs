@@ -16,6 +16,9 @@ mod check_architecture_tests;
 mod classify_scope;
 #[cfg(test)]
 mod classify_scope_tests;
+mod disposable_target;
+#[cfg(test)]
+mod disposable_target_tests;
 mod install_verification_tools;
 #[cfg(test)]
 mod install_verification_tools_tests;
@@ -40,43 +43,61 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let mut arguments: Vec<String> = std::env::args().skip(1).collect();
-    let mut repository_root = resolve_repository_root();
+    // The repository root is resolved lazily, after any caller-supplied
+    // --repository-root and the disposable journey's exported root are
+    // honored: subcommands invoked from outside a workspace checkout (the
+    // disposable-target journeys run from temporary sandboxes) must not
+    // depend on walking up from the working directory.
+    let mut repository_root_override: Option<std::path::PathBuf> = None;
     if let Some(root_position) = arguments
         .iter()
         .position(|argument| argument == "--repository-root")
     {
         if let Some(root_path) = arguments.get(root_position + 1) {
-            repository_root = std::path::PathBuf::from(root_path);
+            repository_root_override = Some(std::path::PathBuf::from(root_path));
             arguments.drain(root_position..=root_position + 1);
         }
     }
+    if repository_root_override.is_none() {
+        if let Ok(journey_root) =
+            std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV)
+        {
+            if !journey_root.is_empty() {
+                repository_root_override = Some(std::path::PathBuf::from(journey_root));
+            }
+        }
+    }
+    let resolve_root = move || {
+        repository_root_override.unwrap_or_else(resolve_repository_root)
+    };
     match arguments.first().map(String::as_str) {
+        Some("disposable-target") => disposable_target::run(&resolve_root(), &arguments[1..]),
         Some("tier-pyramid") => run_command(tier_pyramid::run(
-            &repository_root,
+            &resolve_root(),
             arguments.contains(&"--update-baseline".to_owned()),
         )),
-        Some("source-size") => run_command(source_size::run(&repository_root, &arguments[1..])),
+        Some("source-size") => run_command(source_size::run(&resolve_root(), &arguments[1..])),
         Some("notices") => run_command(notices::run(
-            &repository_root,
+            &resolve_root(),
             arguments.contains(&"--check".to_owned()),
         )),
         Some("native-fingerprint") => {
-            run_command(native_fingerprint::run(&repository_root, &arguments[1..]))
+            run_command(native_fingerprint::run(&resolve_root(), &arguments[1..]))
         }
-        Some("classify-scope") => run_command(classify_scope::run(&repository_root)),
-        Some("check-architecture") => run_command(check_architecture::run(&repository_root)),
+        Some("classify-scope") => run_command(classify_scope::run(&resolve_root())),
+        Some("check-architecture") => run_command(check_architecture::run(&resolve_root())),
         Some("prune-caches") => run_command(cache_prune::run(arguments[1..].iter().cloned())),
         Some("save-sccache") => run_command(sccache_save::run(&arguments[1..])),
         Some("install-verification-tools") => run_command(install_verification_tools::run(
             arguments[1..].iter().cloned(),
         )),
         Some("bootstrap-native-dependencies") => run_command(bootstrap_native_dependencies::run(
-            &repository_root,
+            &resolve_root(),
             &arguments[1..],
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract [root] | classify-scope | check-architecture | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract [root] | classify-scope | check-architecture | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }

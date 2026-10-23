@@ -14,8 +14,8 @@ This folder contains scripts invoked by GitHub Actions workflows or actions. Kee
 
 The tier-pyramid, source-size, dependency-notices, native-fingerprint,
 change-classification, architecture-checking, cache-pruning,
-sccache-save-gate, verification-tool-installer, and
-native-dependency-bootstrap tooling moved
+sccache-save-gate, verification-tool-installer,
+native-dependency-bootstrap, and disposable-target-lifecycle tooling moved
 into the `xtask` workspace crate:
 `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask source-size
 [--staged] [root]`, `cargo xtask notices [--check]`, `cargo xtask
@@ -24,8 +24,9 @@ native-fingerprint [--source-only] [--explain] --profile core|core+memory-contra
 `cargo xtask prune-caches
 [--dry-run] [--repo owner/name]`, `cargo xtask save-sccache
 <primary-cache-key>`, `cargo xtask install-verification-tools [--prefix
-DIR]`, and `cargo xtask bootstrap-native-dependencies [--cache-dir
-ABSOLUTE_PATH] [--verify]` (see `.cargo/config.toml`). The native identity
+DIR]`, `cargo xtask bootstrap-native-dependencies [--cache-dir
+ABSOLUTE_PATH] [--verify]`, and `cargo xtask disposable-target --lane NAME
+-- COMMAND [ARGUMENT ...]` (see `.cargo/config.toml`). The native identity
 policy itself lives in
 the `astronomical-native-identity` crate (`crates/native-identity`),
 consumed in-process by the Cargo build scripts.
