@@ -3,8 +3,8 @@
 use std::{fs, path::Path, time::Duration};
 
 use astronomical_model_serving::{
-    CompleteResidencyHeadroomBoundary, Qwen3_5ArtifactValidator,
-    mlx_ram_budget_model_geometry_from_validated_artifact,
+    CompleteResidencyHeadroomBoundary, MemoryPhase, MlxRamBudget, MlxRamBudgetModelGeometry,
+    Qwen3_5ArtifactValidator, mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 use futures_util::StreamExt;
 use serde_json::{Value, json};
@@ -48,9 +48,36 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
         );
         let prompt_context_bytes =
             context_memory_reservation_bytes(&model_directory, SMALL_PROMPT_TOKEN_COUNT + 2);
+        // The ceiling must also purchase the request-time prefill activation
+        // workspace. Startup residency admission charges only the coexisting
+        // transient inside `complete_residency_with_headroom_bytes`, while
+        // every request's context admission additionally reserves the chunk's
+        // activation working set on top of the seated snapshot (issue #1297:
+        // 2048-token chunks transiently hold 2.0-2.27 GB a zero-workspace
+        // projection never sees, and a resident request near the ceiling is
+        // deliberately demoted to streaming instead of executing fatally).
+        // A ceiling without this term selects resident at startup and then
+        // invisible-retries into streaming on the very first request. The
+        // term is computed through the same bootstrap RAM budget the fresh
+        // worker plans with, so the journey cannot drift from the policy
+        // again (issue #1508). The equality holds because the first request
+        // meets an evidence-free budget — the resident engine runs no load
+        // warmup, so the static three-layer floor governs; a future warmup
+        // forward would make the worker's learned charge the max() and this
+        // journey would fail loud here.
+        let bootstrap_ram_budget = MlxRamBudget::new(
+            residency_geometry.complete_residency_with_headroom_bytes,
+            residency_geometry.model_geometry,
+        )
+        .expect("the resident artifact geometry should compose a bootstrap RAM budget");
+        let prefill_activation_workspace_bytes = bootstrap_ram_budget.activation_headroom_bytes(
+            MemoryPhase::Prefill,
+            u64::from(FIXED_PREFILL_CHUNK_SIZE_TOKENS),
+        );
         let resident_memory_ceiling_bytes = residency_geometry
             .complete_residency_with_headroom_bytes
-            .saturating_add(prompt_context_bytes);
+            .saturating_add(prompt_context_bytes)
+            .saturating_add(prefill_activation_workspace_bytes);
         assert!(
             resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
             "the resident acceptance cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
@@ -313,6 +340,9 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
 
 struct SparseArtifactResidencyGeometry {
     complete_residency_with_headroom_bytes: u64,
+    /// The measured geometry the RAM budget (and therefore the request-time
+    /// activation reserve) is composed from.
+    model_geometry: MlxRamBudgetModelGeometry,
 }
 
 fn measure_sparse_artifact_residency_geometry(
@@ -332,6 +362,7 @@ fn measure_sparse_artifact_residency_geometry(
         complete_residency_with_headroom_bytes: complete_residency_boundary
             .static_complete_residency_bytes
             .saturating_add(complete_residency_boundary.required_headroom_bytes),
+        model_geometry,
     }
 }
 
