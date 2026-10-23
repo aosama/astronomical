@@ -18,8 +18,7 @@ fn should_pin_profiles_alias_rules_and_the_retired_runner_absence() {
     let workspace_manifest_text = file_text(&repository_root.join("Cargo.toml"));
     for profile_name in ["dev", "test"] {
         assert!(
-            workspace_manifest_text
-                .contains(&format!("[profile.{profile_name}]")),
+            workspace_manifest_text.contains(&format!("[profile.{profile_name}]")),
             "the workspace manifest should keep its {profile_name} profile"
         );
     }
@@ -73,7 +72,10 @@ fn should_pin_profiles_alias_rules_and_the_retired_runner_absence() {
             "the {acceptance_alias} alias should stay pinned"
         );
     }
-    for throughput_alias in ["test-jangtq2-decode-throughput", "test-jangtq2-serving-throughput"] {
+    for throughput_alias in [
+        "test-jangtq2-decode-throughput",
+        "test-jangtq2-serving-throughput",
+    ] {
         let alias_command_text = alias_section_text
             .lines()
             .find(|alias_line| alias_line.starts_with(&format!("{throughput_alias} =")))

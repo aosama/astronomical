@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{MlxRuntime, MlxRuntimeError, mlx_runtime::check_status};
-use astronomical_mlx_c_rust::{MlxArray, raw};
+use mlx_c_rust::{MlxArray, raw};
 
 const WRITER_LABEL: &[u8] = b"retained descriptor-backed safetensors output\0";
 

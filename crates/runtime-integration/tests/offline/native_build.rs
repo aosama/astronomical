@@ -2,7 +2,11 @@
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
 const NATIVE_BUILD_COMPILATION: &str = include_str!("../../build_native_compile.rs");
-const BINDGEN_CONFIGURATION: &str = include_str!("../../../mlx-c-rust/build.rs");
+
+// The bindgen-allowlist completeness contract that lived here moved with the
+// bridge into the published mlx-c-rust crate; the live coverage contract
+// (mlx_c_coverage_contract_tests, mlx feature) is the authoritative proof —
+// any narrowing of the published surface fails it as unbridged symbols.
 
 #[test]
 fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {
@@ -10,23 +14,6 @@ fn should_enable_runtime_metal_kernel_selection_for_the_current_apple_gpu() {
         NATIVE_BUILD_CONFIGURATION.contains("set(MLX_METAL_JIT ON"),
         "the native runtime must let MLX select and cache NAX kernels on capable Apple GPUs"
     );
-}
-
-#[test]
-fn should_allowlist_the_complete_mlx_c_surface() {
-    // The bridge contract guarantees the complete MLX C surface, not a
-    // hand-picked subset: both allowlists must stay the broad mlx_.* pattern
-    // so narrowing them back fails here instead of silently un-bridging
-    // functions the coverage inventory already declares.
-    for required_allowlist in [
-        "BINDGEN_FUNCTION_ALLOWLIST: &str = \"mlx_.*\"",
-        "BINDGEN_TYPE_ALLOWLIST: &str = \"mlx_.*\"",
-    ] {
-        assert!(
-            BINDGEN_CONFIGURATION.contains(required_allowlist),
-            "the bindgen allowlist must stay complete: {required_allowlist}"
-        );
-    }
 }
 
 #[test]

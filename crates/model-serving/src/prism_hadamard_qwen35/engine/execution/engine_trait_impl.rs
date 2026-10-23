@@ -9,7 +9,7 @@ use std::time::Instant;
 use astronomical_ipc_protocol::{ExpertMemoryMode, RequestId, WorkerPromptWorkReuse};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use super::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,

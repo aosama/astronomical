@@ -1,7 +1,7 @@
 //! Deterministic MLX fixtures shared by the resident gate/up acceptance test.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 
 pub(super) const EXPERT_COUNT: i32 = 4;
 const HIDDEN_DIMENSION: i32 = 64;

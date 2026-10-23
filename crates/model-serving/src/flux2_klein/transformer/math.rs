@@ -3,7 +3,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 pub(super) fn linear(
     runtime: &MlxRuntime,

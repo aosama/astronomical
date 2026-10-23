@@ -33,10 +33,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use astronomical_mlx_c_rust::{
+use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
+use mlx_c_rust::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
 };
-use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::codebook;
 use super::hadamard32;

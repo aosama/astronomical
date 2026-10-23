@@ -63,7 +63,7 @@ fn report_prefill_shaped_layer(
     model: &PrismHadamardTextModel,
     layer_label: &str,
     layer_index: usize,
-    chunk_hidden_states: &astronomical_mlx_c_rust::MlxArray,
+    chunk_hidden_states: &mlx_c_rust::MlxArray,
 ) {
     let mut samples = Vec::with_capacity(PREFILL_MEASURED_ITERATIONS);
     for iteration in 0..PREFILL_WARMUP_ITERATIONS + PREFILL_MEASURED_ITERATIONS {
@@ -91,7 +91,7 @@ fn report_decode_shaped_layer(
     model: &PrismHadamardTextModel,
     layer_label: &str,
     layer_index: usize,
-    chunk_hidden_states: &astronomical_mlx_c_rust::MlxArray,
+    chunk_hidden_states: &mlx_c_rust::MlxArray,
     decode_token_ids: &[i32],
 ) {
     let mut state = PrismHadamardGenerationState::empty();

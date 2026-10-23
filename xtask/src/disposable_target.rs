@@ -45,8 +45,7 @@ const LIFECYCLE_MARKER_VERSION: &str = "astronomical-disposable-cargo-target-v1"
 /// runner used. The shell runner conveyed this through its own script
 /// path; a compiled binary can be copied into lane targets, so the root
 /// travels explicitly.
-pub(crate) const DISPOSABLE_REPOSITORY_ROOT_ENV: &str =
-    "ASTRONOMICAL_DISPOSABLE_REPOSITORY_ROOT";
+pub(crate) const DISPOSABLE_REPOSITORY_ROOT_ENV: &str = "ASTRONOMICAL_DISPOSABLE_REPOSITORY_ROOT";
 
 // ── Pure helpers (unit-tested beside this source) ─────────────────────
 
@@ -219,8 +218,7 @@ fn command_is_available(command_name: &str) -> bool {
             .ok()
             .map(|candidate_metadata| {
                 use std::os::unix::fs::PermissionsExt;
-                candidate_metadata.is_file()
-                    && candidate_metadata.permissions().mode() & 0o111 != 0
+                candidate_metadata.is_file() && candidate_metadata.permissions().mode() & 0o111 != 0
             })
             .unwrap_or(false);
         if is_executable_file {
@@ -243,9 +241,8 @@ fn unix_epoch_seconds() -> u64 {
 fn local_timestamp() -> String {
     let epoch_seconds = unix_epoch_seconds() as libc::time_t;
     let mut broken_down_time: libc::tm = unsafe { std::mem::zeroed() };
-    let time_conversion_succeeded = unsafe {
-        libc::localtime_r(&epoch_seconds, &mut broken_down_time) != std::ptr::null_mut()
-    };
+    let time_conversion_succeeded =
+        unsafe { libc::localtime_r(&epoch_seconds, &mut broken_down_time) != std::ptr::null_mut() };
     if !time_conversion_succeeded {
         return epoch_seconds.to_string();
     }

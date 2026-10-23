@@ -7,7 +7,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_streaming::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Convenience trait for cloning expert weights without importing the runtime.
 pub(super) trait RetainedReferenceOk {
@@ -148,12 +148,12 @@ pub(super) fn materialize_and_detach_table_weights(
     weights.append_array_references(&mut array_references);
     runtime.evaluate_arrays(&array_references)?;
     for array in array_references {
-        array
-            .detach()
-            .map_err(|error| MlxRuntimeError::RuntimeOperation {
+        astronomical_mlx_c_fork::detach_array(&array).map_err(|error| {
+            MlxRuntimeError::RuntimeOperation {
                 operation: "detach a warm table from its lazy graph",
                 description: error.to_string(),
-            })?;
+            }
+        })?;
     }
     Ok(())
 }

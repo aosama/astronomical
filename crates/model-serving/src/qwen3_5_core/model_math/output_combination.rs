@@ -2,7 +2,7 @@ use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::routing;
 use crate::PerformanceAttribution;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Combines selected expert outputs and the separately gated shared expert.
 pub fn qwen3_5_moe_combine_experts(

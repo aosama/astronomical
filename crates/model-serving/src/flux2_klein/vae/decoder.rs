@@ -13,7 +13,7 @@ use super::{
     Flux2KleinVaeDecodeAdvance, Flux2KleinVaeError, Flux2KleinVaeMiddleAttention,
     Flux2KleinVaeResnetBlock, Flux2KleinVaeTilingConfig, Flux2KleinVaeUpBlock,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 const DECODER_CHANNELS: [usize; 4] = [512, 512, 256, 128];
 pub(super) const OUTPUT_CHANNELS: usize = 3;

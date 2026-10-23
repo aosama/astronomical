@@ -5,8 +5,8 @@
 //! compiles or submits Metal work; otherwise cache-enabled checkpointing could
 //! accept a graph that ordinary prompt processing rejects, or vice versa.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
 use astronomical_runtime_integration::MlxRuntimeError;
+use mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
 
 const GATED_DELTA_SEQUENCE_OPERATION: &str = "apply fused Qwen3.5 gated-delta sequence";
 

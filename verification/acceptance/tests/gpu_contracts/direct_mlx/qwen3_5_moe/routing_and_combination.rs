@@ -8,7 +8,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 #[tokio::test]
 async fn should_route_normalize_and_combine_selected_and_shared_experts() {

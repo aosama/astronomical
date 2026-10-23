@@ -22,7 +22,7 @@ use tokio::time::timeout;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const KEY_HEAD_COUNT: i32 = 16;
 const HEAD_DIMENSION: i32 = 128;

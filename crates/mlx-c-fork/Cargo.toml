@@ -1,6 +1,5 @@
 [package]
-name = "astronomical-mlx-c-rust"
-build = "build.rs"
+name = "astronomical-mlx-c-fork"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -9,6 +8,8 @@ rust-version.workspace = true
 version.workspace = true
 
 [lints.rust]
+# The extern declaration of the patched MLX-C symbol lives here; the unsafe
+# surface is exactly one foreign function behind a checked wrapper.
 unsafe_code = "allow"
 unused_must_use = "deny"
 
@@ -16,8 +17,4 @@ unused_must_use = "deny"
 all = { level = "warn", priority = -1 }
 
 [dependencies]
-thiserror.workspace = true
-
-[build-dependencies]
-bindgen = "0.73"
-astronomical-native-identity = { path = "../../crates/native-identity" }
+mlx-c-rust.workspace = true

@@ -5,7 +5,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use super::math;
 use super::weights::Flux2KleinBlockWeights;
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 pub(super) struct DoubleStreamState {
     pub(super) image: MlxArray,

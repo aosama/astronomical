@@ -3,10 +3,10 @@ use astronomical_ipc_protocol::{
     ProtocolReader, ProtocolWriter, WorkerCommand, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
 };
-use astronomical_mlx_c_rust::set_wired_limit;
 use astronomical_model_serving::effective_mlx_memory_ceiling_after_wired_claim;
 use astronomical_model_serving::effective_mlx_memory_ceiling_bytes;
 use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
+use mlx_c_rust::set_wired_limit;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::model_family_factory::{InferenceWorker, ModelFamilyFactory};

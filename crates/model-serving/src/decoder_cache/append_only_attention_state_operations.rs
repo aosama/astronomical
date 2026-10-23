@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::append_only_attention_state::{FULL_ATTENTION_OPERATION, STATE_DIMENSION_TOKEN_AXIS};
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 pub(super) fn build_updated_storage(
     runtime: &MlxRuntime,

@@ -21,7 +21,7 @@ use crate::qwen3_5_core::decoder::{
 };
 use crate::qwen3_5_core::text::sampler;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Retained request state needed to retry one rejected prompt-processing attempt.
 pub(super) struct Qwen3_5PrefillRequestCheckpoint {

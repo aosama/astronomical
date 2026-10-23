@@ -21,7 +21,7 @@ use crate::qwen3_5_core::model_math::gated_delta_sequence::{
 use crate::qwen3_5_core::model_math::gdn_decode_prework_kernel::{
     qwen3_5_gdn_decode_prework, qwen3_5_gdn_decode_prework_kernel,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 const PROBE_TOKEN_COUNT: i32 = 3;
 const PROBE_KEY_HEAD_COUNT: i32 = 1;

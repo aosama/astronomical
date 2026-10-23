@@ -8,7 +8,7 @@ use tokio::sync::MutexGuard;
 use crate::common::{
     DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES, DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
 };
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 async fn test_runtime() -> (MutexGuard<'static, ()>, MlxRuntime) {
     let direct_mlx_guard = crate::common::direct_mlx_test_guard().await;

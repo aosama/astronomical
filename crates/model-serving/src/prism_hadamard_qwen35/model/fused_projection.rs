@@ -20,8 +20,8 @@
 //! view the next consumer materializes for prefill, where that copy is a
 //! small fraction of the prefill matmul itself.
 
-use astronomical_mlx_c_rust::{MlxArray, MlxCError};
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::{MlxArray, MlxCError};
 
 use super::fwht::RotatedActivations;
 use super::weights::{PackedProjection, slice_last_dimension_raw};

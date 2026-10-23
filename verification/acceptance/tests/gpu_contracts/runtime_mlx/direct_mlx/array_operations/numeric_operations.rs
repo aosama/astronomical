@@ -1,4 +1,4 @@
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 use crate::common::runtime_test_support;
 

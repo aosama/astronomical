@@ -31,7 +31,7 @@ use super::decoder;
 use super::model::K2HorizonMoVAModel;
 use super::prefill_causality_probe::{probe_runtime, romeo_and_juliet_prompt_token_ids};
 use super::weights::K2HorizonMoVALayerWeights;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 /// The probe deadline. The synchronous MLX work cannot be interrupted, so the
 /// timeout fails the journey when the blocking task overruns and the bounded

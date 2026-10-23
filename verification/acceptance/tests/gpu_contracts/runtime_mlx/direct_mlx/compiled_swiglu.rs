@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support;
-use astronomical_mlx_c_rust::{MlxCompiledSwiGlu, MlxDtype};
+use mlx_c_rust::{MlxCompiledSwiGlu, MlxDtype};
 
 #[test]
 fn should_reuse_one_shapeless_compiled_swiglu_across_sequence_lengths() {

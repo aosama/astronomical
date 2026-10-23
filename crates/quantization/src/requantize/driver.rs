@@ -2,8 +2,8 @@
 
 use std::path::Path;
 
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::MlxArray;
 
 use crate::encoder::RangeSearchPolicy;
 use crate::error::QuantizationError;

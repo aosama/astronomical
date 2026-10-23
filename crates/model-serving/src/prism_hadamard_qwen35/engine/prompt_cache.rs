@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use astronomical_ipc_protocol::WorkerEvent;
-use astronomical_mlx_c_rust::MlxArray;
 use astronomical_runtime_integration::MlxRuntime;
+use mlx_c_rust::MlxArray;
 
 use crate::persistent_cache::PersistentPromptCacheCounters;
 use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;

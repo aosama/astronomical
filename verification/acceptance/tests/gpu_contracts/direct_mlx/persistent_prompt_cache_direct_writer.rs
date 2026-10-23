@@ -12,7 +12,7 @@ use super::persistent_prompt_cache_disk_store_support::{
     synthetic_kv_block_tensors, synthetic_recurrent_snapshot_tensors,
 };
 use crate::common::qwen3_5_moe;
-use astronomical_mlx_c_rust::MlxDtype;
+use mlx_c_rust::MlxDtype;
 
 const LARGE_CACHE_LIMIT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 const DIRECT_MLX_PROMPT_CACHE_TEST_TIMEOUT: Duration = Duration::from_secs(115);

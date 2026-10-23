@@ -4,7 +4,7 @@ use crate::{
     BoundedReadInterval, MlxRuntime, MlxRuntimeError, MlxSafetensors, PositionalFileReadMetrics,
     SafetensorsLoadResult,
 };
-use astronomical_mlx_c_rust::MlxStream;
+use mlx_c_rust::MlxStream;
 
 impl MlxRuntime {
     /// Loads a safetensors map from the caller's retained read-only file

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;

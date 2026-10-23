@@ -20,7 +20,7 @@ use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
 };
-use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
+use mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
 
 impl Qwen3_5Model {
     /// Loads a model without diagnostic performance attribution.
@@ -442,8 +442,9 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
     runtime: &MlxRuntime,
     expert_pager: &Qwen3_5ExpertPager,
     performance_attribution: &mut PerformanceAttribution,
-) -> Option<astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel>
-{
+) -> Option<
+    astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
+> {
     let has_codebook_experts = expert_pager.layer_plans().iter().any(|layer_plan| {
         ["gate_proj", "up_proj", "down_proj"]
             .iter()

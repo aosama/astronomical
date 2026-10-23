@@ -62,17 +62,13 @@ fn main() -> ExitCode {
         }
     }
     if repository_root_override.is_none() {
-        if let Ok(journey_root) =
-            std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV)
-        {
+        if let Ok(journey_root) = std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV) {
             if !journey_root.is_empty() {
                 repository_root_override = Some(std::path::PathBuf::from(journey_root));
             }
         }
     }
-    let resolve_root = move || {
-        repository_root_override.unwrap_or_else(resolve_repository_root)
-    };
+    let resolve_root = move || repository_root_override.unwrap_or_else(resolve_repository_root);
     match arguments.first().map(String::as_str) {
         Some("disposable-target") => disposable_target::run(&resolve_root(), &arguments[1..]),
         Some("scan-retired-native-output") => {

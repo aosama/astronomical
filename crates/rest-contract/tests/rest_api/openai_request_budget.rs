@@ -262,9 +262,9 @@ fn should_accept_a_responses_request_at_the_image_count_budget() {
         .collect::<Vec<_>>();
     let responses_request = responses_request_with_image_data_uris(&image_data_uris);
 
-    responses_request
-        .into_parts()
-        .expect("exactly the image-count budget of images should be accepted on the Responses surface");
+    responses_request.into_parts().expect(
+        "exactly the image-count budget of images should be accepted on the Responses surface",
+    );
 }
 
 #[test]

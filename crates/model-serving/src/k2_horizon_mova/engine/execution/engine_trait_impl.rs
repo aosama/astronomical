@@ -28,7 +28,7 @@ use crate::{
     CustomMetalKernelFamily, GeneratedToken, GenerationFinalization, InferenceEngineError,
     MlxInferenceExecution, PerformanceAttribution, PerformanceOperation,
 };
-use astronomical_mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu};
+use mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu};
 
 impl MlxInferenceExecution for K2HorizonMoVAInferenceExecution {
     type Request = K2HorizonMoVAInferenceRequest;

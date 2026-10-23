@@ -7,7 +7,7 @@ use crate::{PerformanceAttribution, PerformanceOperation};
 use super::{
     Flux2KleinImageEncodingError, Flux2KleinPngEncoder, reference_pixels::normalized_rgb_u8,
 };
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::{MlxArray, MlxDtype};
 
 impl Flux2KleinPngEncoder {
     pub fn encode_decoded_mlx_rgb_with_performance_attribution(

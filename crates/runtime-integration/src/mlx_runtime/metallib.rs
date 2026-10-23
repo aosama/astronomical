@@ -128,8 +128,7 @@ pub(crate) fn configure_metallib_path(metallib_path: &Path) -> Result<(), MlxRun
             description: "path contains an interior NUL byte".to_owned(),
         }
     })?;
-    astronomical_mlx_c_rust::set_metallib_path(metallib_path_c_string.as_ptr())
-        .map_err(MlxRuntimeError::from)?;
+    mlx_c_rust::set_metallib_path(&metallib_path_c_string).map_err(MlxRuntimeError::from)?;
     *configured_path = Some(metallib_path.to_path_buf());
     Ok(())
 }

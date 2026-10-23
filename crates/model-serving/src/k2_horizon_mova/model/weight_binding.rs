@@ -21,7 +21,7 @@ use super::weights::{
 use crate::k2_horizon_mova::K2HorizonMoVAShardIndex;
 use crate::k2_horizon_mova::artifacts::ValidatedK2HorizonMoVAArtifact;
 use crate::k2_horizon_mova::configuration::K2HorizonMoVALayerKind;
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 pub(super) fn load_weights(
     runtime: &MlxRuntime,

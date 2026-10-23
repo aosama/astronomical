@@ -12,7 +12,7 @@ use crate::sparse_experts::{
 
 use super::affine::K2HorizonMoVAAffineLinear;
 use super::error::K2HorizonMoVAExecutionError;
-use astronomical_mlx_c_rust::{
+use mlx_c_rust::{
     MlxArray, MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype, MlxMetalKernel,
 };
 

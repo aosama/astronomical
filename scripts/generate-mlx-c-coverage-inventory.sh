@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 
-# Refreshes crates/mlx-c-rust/COVERAGE_INVENTORY.md from live data: the
-# provisioned pinned MLX-C headers and the bridge inventory the mlx-c-rust
+# Refreshes crates/mlx-c-fork/COVERAGE_INVENTORY.md from live data: the
+# provisioned pinned MLX-C headers and the bridge inventory the published mlx-c-rust and astronomical-mlx-c-fork crates
 # build script just compiled. The artifact is the human-reviewable record
 # behind the coverage contract; the contract test fails on drift and names
 # this script as the refresh command.
@@ -39,7 +39,7 @@ else
     exit 1
 fi
 
-inventory_path="${repository_root}/crates/mlx-c-rust/COVERAGE_INVENTORY.md"
+inventory_path="${repository_root}/crates/mlx-c-fork/COVERAGE_INVENTORY.md"
 
 started_at_seconds="$(date +%s)"
 printf '%s\n' "${SCRIPT_PREFIX} status=start timeout_seconds=${COMPILE_CLASS_TIMEOUT_SECONDS}"

@@ -5,8 +5,8 @@
 use super::Qwen3_5PagedExpertWeights;
 use crate::expert_paging::ExpertWeightPage;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
-use astronomical_mlx_c_rust::{MlxArray, MlxDtype};
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 const PAGE_EXPERT_COUNT: usize = 4;

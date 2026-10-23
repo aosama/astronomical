@@ -26,7 +26,7 @@ use super::weights::{
     CONTEXT_INPUT_WIDTH, HEAD_WIDTH, HIDDEN_WIDTH, LATENT_CHANNEL_COUNT, MODULATION_WIDTH,
     QwenImage21TransformerWeights, TIMESTEP_EMBEDDING_WIDTH,
 };
-use astronomical_mlx_c_rust::MlxArray;
+use mlx_c_rust::MlxArray;
 
 /// Each vision-language image slot represents a 2×2 group of latent tokens.
 const IMG_TOKENS_PER_SLOT: usize = 4;

@@ -464,15 +464,16 @@ fn append_jangtq2_codebook_tensor_profiles(
         expert_count: codebook_expert_count,
         affine_group_size: 64,
     };
-    let codebook_tensor_inventory = astronomical_jangtq2_qwen35::artifacts::tensor_inventory_for_module(
-        tensor_prefix,
-        &codebook_override_entry,
-        &codebook_module_geometry,
-    )
-    .map_err(|source| Qwen3_5ArtifactError::Jangtq2TensorContract {
-        module_name: tensor_prefix.to_owned(),
-        source,
-    })?;
+    let codebook_tensor_inventory =
+        astronomical_jangtq2_qwen35::artifacts::tensor_inventory_for_module(
+            tensor_prefix,
+            &codebook_override_entry,
+            &codebook_module_geometry,
+        )
+        .map_err(|source| Qwen3_5ArtifactError::Jangtq2TensorContract {
+            module_name: tensor_prefix.to_owned(),
+            source,
+        })?;
     for codebook_tensor_expectation in codebook_tensor_inventory.expected_tensors {
         let contract_dtype = match codebook_tensor_expectation.element_kind {
             astronomical_jangtq2_qwen35::artifacts::ContractTensorElementKind::PackedUnsignedInteger32 => {
