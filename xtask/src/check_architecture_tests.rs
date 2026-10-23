@@ -67,6 +67,30 @@ fn should_detect_a_direct_family_to_serving_dependency() {
 }
 
 #[test]
+fn should_detect_a_direct_forbidden_fork_dependency() {
+    // The fork crate carries the same graphics-processor linkage as the
+    // stock bridge, so the memory policy crate must stay free of it too.
+    let metadata_json_text = metadata_document_for(&[
+        (
+            "astronomical-memory-policy",
+            vec!["astronomical-mlx-c-fork"],
+            "normal",
+        ),
+        ("mlx-c-rust", Vec::new(), "normal"),
+        ("astronomical-mlx-c-fork", Vec::new(), "normal"),
+        ("astronomical-model-serving", Vec::new(), "normal"),
+        ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
+    ]);
+    let violations = architecture_violations(&metadata_json_text).unwrap();
+    assert_eq!(violations.len(), 1);
+    assert_eq!(violations[0].rule_name, "policy-without-mlx-fork-bindings");
+    assert_eq!(
+        violations[0].dependency_chain,
+        vec!["astronomical-memory-policy", "astronomical-mlx-c-fork"]
+    );
+}
+
+#[test]
 fn should_detect_a_direct_forbidden_dependency() {
     // Detector self-check carried over from the shell contract: a known MLX
     // declaration must be caught so the check can never pass vacuously.
