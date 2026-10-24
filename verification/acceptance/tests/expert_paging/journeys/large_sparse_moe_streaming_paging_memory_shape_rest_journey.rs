@@ -1,4 +1,4 @@
-//! Experiment journey: the large sparse MoE is larger than its 32 GB MLX
+//! Experiment journey: the large sparse MoE streaming model is larger than its 32 GB MLX
 //! ceiling, so prefill and decode page routed experts from SSD. The journey
 //! measures the memory shape across the whole request and the serving rates
 //! the user actually experiences.
@@ -38,7 +38,7 @@ use crate::support::openai_client::LocalOpenAiClient;
 use crate::support::serving_rest::{launch_real_model_rest_server, stop_real_model_rest_server};
 
 fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 
 // The 8-bit artifact is ~36.8 decimal GB on disk; the default ceiling is ~87%
@@ -67,7 +67,7 @@ const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and real worker to measure paging memory shape and serving rates for the large sparse MoE under the configured ceiling (default 32 GB)"]
+#[ignore = "launches the production REST server and real worker to measure paging memory shape and serving rates for the large sparse MoE streaming model under the configured ceiling (default 32 GB)"]
 #[serial]
 async fn should_measure_paging_memory_shape_and_serving_rates_under_the_configured_ceiling() {
     timeout(EXPERIMENT_TIMEOUT, run_paging_memory_shape_experiment())

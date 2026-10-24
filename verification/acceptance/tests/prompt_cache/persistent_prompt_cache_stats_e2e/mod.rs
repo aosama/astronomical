@@ -14,7 +14,7 @@ use super::cache_stats_worker_launcher::create_cache_stats_worker_configuration;
 use crate::support::discovered_model_artifact;
 
 pub(super) fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const PROGRESS_INTERVAL_SECONDS: u64 = 5;

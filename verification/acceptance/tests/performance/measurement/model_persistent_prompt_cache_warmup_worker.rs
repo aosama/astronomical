@@ -24,7 +24,7 @@ use super::model_process_metrics::{
 };
 
 pub(super) fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 pub(super) const BENCHMARK_TIMEOUT: Duration = Duration::from_secs(115);
 const READY_ATTEMPT_LIMIT: u8 = 70;

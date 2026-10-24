@@ -70,7 +70,7 @@ async fn run_forced_fallback_romeo_continuation() {
             "family {family:?} must stay demoted for the whole worker process"
         );
     }
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");

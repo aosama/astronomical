@@ -96,7 +96,7 @@ pub(super) fn preserve_experiment_evidence(
         .unwrap_or_default();
     let evidence_directory = std::env::current_dir()
         .expect("the journey should resolve its working directory")
-        .join("target/acceptance-evidence/large-sparse-moe-paging-memory-shape")
+        .join("target/acceptance-evidence/large-sparse-moe-streaming-paging-memory-shape")
         .join(unix_millis.to_string());
     fs::create_dir_all(&evidence_directory)
         .expect("the acceptance evidence directory should be created");

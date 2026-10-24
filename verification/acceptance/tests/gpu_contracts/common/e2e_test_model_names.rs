@@ -10,12 +10,12 @@ const E2E_TEST_MODEL_NAMES_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../registry/e2e_test_model_names.json"
 ));
-const LARGE_SPARSE_MOE_ROLE: &str = "large_sparse_moe";
+const LARGE_SPARSE_MOE_STREAMING_ROLE: &str = "large_sparse_moe_streaming";
 const RESIDENT_SPARSE_MOE_ROLE: &str = "resident_sparse_moe";
 const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
 const E2E_TEST_MODEL_ROLES: [&str; 4] = [
-    LARGE_SPARSE_MOE_ROLE,
+    LARGE_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
     SMALL_DENSE_ROLE,
     FLUX2_KLEIN_ROLE,
@@ -66,8 +66,8 @@ fn model_id_for_role(role: &str) -> &'static str {
         .unwrap_or_else(|| panic!("registry/e2e_test_model_names.json must declare {role}"))
 }
 
-pub(crate) fn large_sparse_moe_model_id() -> &'static str {
-    model_id_for_role(LARGE_SPARSE_MOE_ROLE)
+pub(crate) fn large_sparse_moe_streaming_model_id() -> &'static str {
+    model_id_for_role(LARGE_SPARSE_MOE_STREAMING_ROLE)
 }
 
 pub(crate) fn resident_sparse_moe_model_id() -> &'static str {
@@ -84,7 +84,7 @@ pub(crate) fn flux2_klein_model_id() -> &'static str {
 
 pub(crate) fn e2e_test_model_ids() -> [&'static str; 4] {
     [
-        large_sparse_moe_model_id(),
+        large_sparse_moe_streaming_model_id(),
         resident_sparse_moe_model_id(),
         small_dense_model_id(),
         flux2_klein_model_id(),
@@ -95,7 +95,7 @@ pub(crate) fn e2e_test_model_ids() -> [&'static str; 4] {
 /// because its own tests fail closed at discovery.
 pub(crate) fn required_e2e_test_model_ids() -> [&'static str; 3] {
     [
-        large_sparse_moe_model_id(),
+        large_sparse_moe_streaming_model_id(),
         resident_sparse_moe_model_id(),
         small_dense_model_id(),
     ]
