@@ -6,6 +6,7 @@
 //! persistent/temporary accounting that prefill, persistent-cache restore,
 //! and complete-resident seating charge.
 
+use crate::memory_equation::MemoryEquation;
 use crate::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
 
 /// Visible-answer KV reserve beyond the thinking allowance, in tokens.
@@ -67,22 +68,19 @@ impl ContextAdmissionRequirements {
     /// Returns the complete active-memory projection or `None` on overflow.
     #[must_use]
     pub fn projected_active_memory_bytes(self) -> Option<usize> {
-        self.current_active_memory_bytes
-            .checked_add(self.context_growth_bytes)?
-            .checked_add(self.expert_page_reservation_bytes)?
-            .checked_add(self.temporary_workspace_bytes)
+        Some(self.memory_equation()?.peak_projected_bytes())
     }
 
     /// Decides admission without mutating expert ownership.
     #[must_use]
     pub fn decide(self) -> MemoryAdmissionDecision {
-        let Some(projected_active_memory_bytes) = self.projected_active_memory_bytes() else {
+        let Some(memory_equation) = self.memory_equation() else {
             return MemoryAdmissionDecision::Reject {
                 boundary: MemoryBoundary::StableActiveCeiling,
                 shortfall_bytes: u64::MAX,
             };
         };
-        if projected_active_memory_bytes <= self.active_memory_ceiling_bytes {
+        if memory_equation.fits_request_memory_limit() {
             return MemoryAdmissionDecision::Admit;
         }
         if self.complete_experts_are_resident {
@@ -90,8 +88,7 @@ impl ContextAdmissionRequirements {
                 reassess_after_demotion: true,
             };
         }
-        let required_bytes =
-            projected_active_memory_bytes.saturating_sub(self.active_memory_ceiling_bytes);
+        let required_bytes = memory_equation.request_memory_shortfall_bytes();
         if required_bytes <= self.retained_expert_payload_bytes {
             MemoryAdmissionDecision::Reclaim {
                 required_bytes: u64::try_from(required_bytes).unwrap_or(u64::MAX),
@@ -105,6 +102,16 @@ impl ContextAdmissionRequirements {
                 .unwrap_or(u64::MAX),
             }
         }
+    }
+
+    fn memory_equation(self) -> Option<MemoryEquation> {
+        MemoryEquation::for_request_admission(
+            self.current_active_memory_bytes,
+            self.context_growth_bytes,
+            self.expert_page_reservation_bytes,
+            self.temporary_workspace_bytes,
+            self.active_memory_ceiling_bytes,
+        )
     }
 }
 

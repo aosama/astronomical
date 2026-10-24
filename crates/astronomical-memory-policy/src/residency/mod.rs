@@ -4,6 +4,7 @@
 mod complete_headroom;
 mod decode_seating;
 mod foundation_overlay;
+mod observed_mode;
 mod ownership_mode;
 mod page_commit;
 mod planner;
@@ -21,6 +22,8 @@ mod expert_residency_policy_tests;
 mod foundation_overlay_accounting_tests;
 #[cfg(test)]
 mod generation_full_fit_tests;
+#[cfg(test)]
+mod observed_mode_tests;
 #[cfg(test)]
 mod page_commit_boundary_tests;
 #[cfg(test)]
@@ -40,6 +43,7 @@ mod validation_boundary_tests;
 
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;
 pub use decode_seating::complete_layer_indexes_required_before_decode;
+pub use observed_mode::observed_expert_memory_mode;
 pub use ownership_mode::classify_expert_memory_mode;
 pub use page_commit::{
     decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,

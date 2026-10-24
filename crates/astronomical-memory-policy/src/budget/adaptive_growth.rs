@@ -27,10 +27,11 @@ use std::collections::BTreeMap;
 
 use thiserror::Error;
 
-use crate::budget::adaptive_growth_projection::{
-    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
-    scale_transient_to_token_count,
+use crate::budget::adaptive_growth_projection::AdaptiveRamGrowthProjection;
+use crate::budget::transient_workspace_reserve::{
+    TransientWorkspaceObservation, TransientWorkspaceReserve,
 };
+use crate::memory_equation::MemoryEquation;
 use crate::phase::MemoryPhase;
 
 /// Separates complete-residency forwards from forwards that use expert paging.
@@ -247,19 +248,19 @@ impl AdaptiveRamGrowthGuard {
         &self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
         unobserved_scope_transient_floor_bytes: usize,
-    ) -> (usize, AdaptiveRamGrowthTransientReserveSource) {
+    ) -> TransientWorkspaceReserve {
         if let Some(&exact_context_high_water_bytes) = self
             .observed_transient_high_water_bytes_by_context
             .get(&adaptive_ram_growth_context)
         {
-            return (
+            return TransientWorkspaceReserve::exact_context(TransientWorkspaceObservation::new(
                 exact_context_high_water_bytes,
-                AdaptiveRamGrowthTransientReserveSource::ExactContext,
-            );
+                adaptive_ram_growth_context.forward_token_count(),
+            ));
         }
         let forward_token_count = adaptive_ram_growth_context.forward_token_count();
-        let mut largest_scaled_down_covering_reserve_bytes: Option<usize> = None;
-        let mut largest_unscaled_smaller_observation_bytes: Option<usize> = None;
+        let mut largest_scaled_down_covering_reserve: Option<TransientWorkspaceReserve> = None;
+        let mut largest_unscaled_smaller_observation: Option<TransientWorkspaceObservation> = None;
         for (observed_context, &observed_high_water_bytes) in self
             .observed_transient_high_water_bytes_by_context
             .iter()
@@ -268,46 +269,51 @@ impl AdaptiveRamGrowthGuard {
                     && observed_context.forward_token_count() > 0
             })
         {
-            if observed_context.forward_token_count() < forward_token_count {
-                largest_unscaled_smaller_observation_bytes = Some(
-                    largest_unscaled_smaller_observation_bytes
-                        .map_or(observed_high_water_bytes, |largest_bytes| {
-                            largest_bytes.max(observed_high_water_bytes)
-                        }),
-                );
-            } else if let Some(scaled_down_reserve_bytes) = scale_transient_to_token_count(
+            let observation = TransientWorkspaceObservation::new(
                 observed_high_water_bytes,
                 observed_context.forward_token_count(),
-                forward_token_count,
-            ) {
-                largest_scaled_down_covering_reserve_bytes = Some(
-                    largest_scaled_down_covering_reserve_bytes
-                        .map_or(scaled_down_reserve_bytes, |largest_bytes| {
-                            largest_bytes.max(scaled_down_reserve_bytes)
-                        }),
+            );
+            if observed_context.forward_token_count() < forward_token_count {
+                largest_unscaled_smaller_observation = Some(
+                    largest_unscaled_smaller_observation.map_or(observation, |largest| {
+                        if observation.high_water_bytes() > largest.high_water_bytes() {
+                            observation
+                        } else {
+                            largest
+                        }
+                    }),
+                );
+            } else if let Some(scaled_down_reserve) =
+                TransientWorkspaceReserve::scaled_down_to(observation, forward_token_count)
+            {
+                largest_scaled_down_covering_reserve = Some(
+                    largest_scaled_down_covering_reserve.map_or(scaled_down_reserve, |largest| {
+                        if scaled_down_reserve.reserve_bytes() > largest.reserve_bytes() {
+                            scaled_down_reserve
+                        } else {
+                            largest
+                        }
+                    }),
                 );
             }
         }
         match (
-            largest_scaled_down_covering_reserve_bytes,
-            largest_unscaled_smaller_observation_bytes,
+            largest_scaled_down_covering_reserve,
+            largest_unscaled_smaller_observation,
         ) {
-            (
-                Some(scaled_down_covering_reserve_bytes),
-                optional_unscaled_smaller_observation_bytes,
-            ) => (
-                scaled_down_covering_reserve_bytes
-                    .max(optional_unscaled_smaller_observation_bytes.unwrap_or(0)),
-                AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
-            ),
-            (None, Some(unscaled_smaller_observation_bytes)) => (
-                unscaled_smaller_observation_bytes.max(unobserved_scope_transient_floor_bytes),
-                AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan,
-            ),
-            (None, None) => (
+            (Some(scaled_down_covering_reserve), smaller_observation) => smaller_observation
+                .map_or(scaled_down_covering_reserve, |observation| {
+                    scaled_down_covering_reserve.max_with_smaller_unscaled_observation(observation)
+                }),
+            (None, Some(smaller_observation)) => TransientWorkspaceReserve::analytic_floor(
+                unobserved_scope_transient_floor_bytes,
+                forward_token_count,
+            )
+            .max_with_smaller_unscaled_observation(smaller_observation),
+            (None, None) => TransientWorkspaceReserve::global_maximum(
                 self.admission_transient_high_water_bytes()
                     .max(unobserved_scope_transient_floor_bytes),
-                AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
+                forward_token_count,
             ),
         }
     }
@@ -385,49 +391,22 @@ impl AdaptiveRamGrowthGuard {
         // maximum for a phase with no evidence at all. Charging one shape's
         // absolute transient window to every other shape demoted fully
         // resident expert owners whose own chunk needed a fraction of it.
-        let (observed_transient_high_water_bytes, transient_reserve_source) = self
-            .admission_transient_reserve_for_context(
-                adaptive_ram_growth_context,
-                unobserved_scope_transient_floor_bytes,
-            );
-        let stable_projected_bytes = current_active_memory_bytes
-            .checked_add(exact_persistent_growth_bytes)
-            .and_then(|projected_bytes| {
-                projected_bytes.checked_add(routed_expert_page_reservation_bytes)
-            })
-            .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
-        // Explicit workspace and learned transient history are additive. Taking
-        // only their maximum would under-reserve when a new operation introduces
-        // known workspace on top of ordinary activation behavior.
-        let predicted_transient_bytes = exact_temporary_workspace_bytes
-            .checked_add(observed_transient_high_water_bytes)
-            .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
-        let peak_projected_bytes = stable_projected_bytes
-            .checked_add(predicted_transient_bytes)
-            .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
-        let recovery_projected_bytes = peak_projected_bytes
-            .checked_add(predicted_transient_bytes)
-            .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
-        // P is the repository's approved temporary allowance. Stable ownership
-        // must fit C; a short-lived peak may use C + 1 percent.
-        let transient_allowance_bytes = self.active_memory_ceiling_bytes / 100;
-        let allowed_active_memory_bytes = self
-            .active_memory_ceiling_bytes
-            .checked_add(transient_allowance_bytes)
-            .unwrap_or(usize::MAX);
-        Ok(AdaptiveRamGrowthProjection {
+        let transient_workspace_reserve = self.admission_transient_reserve_for_context(
+            adaptive_ram_growth_context,
+            unobserved_scope_transient_floor_bytes,
+        );
+        let memory_equation = MemoryEquation::new(
             current_active_memory_bytes,
             exact_persistent_growth_bytes,
             routed_expert_page_reservation_bytes,
             exact_temporary_workspace_bytes,
-            observed_transient_high_water_bytes,
-            transient_reserve_source,
-            stable_projected_bytes,
-            peak_projected_bytes,
-            recovery_projected_bytes,
-            active_memory_ceiling_bytes: self.active_memory_ceiling_bytes,
-            allowed_active_memory_bytes,
-        })
+            transient_workspace_reserve,
+            self.active_memory_ceiling_bytes,
+        )
+        .ok_or(AdaptiveRamGrowthGuardError::MemoryProjectionOverflow)?;
+        Ok(AdaptiveRamGrowthProjection::from_memory_equation(
+            memory_equation,
+        ))
     }
 
     /// Retains only recurring-context transient evidence after a successful forward.

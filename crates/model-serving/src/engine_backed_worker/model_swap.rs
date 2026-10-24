@@ -112,6 +112,19 @@ where
                     "model factory returned a runtime for the wrong modality".to_owned(),
             });
         }
+        if matches!(
+            factory_runtime,
+            ModelFactoryRuntime::Autoregressive {
+                engine_placement: None,
+                ..
+            }
+        ) {
+            return Err(WorkerRuntimeError::ModelSwapFailed {
+                model_load_failure_reason:
+                    "model factory returned a swap-only runtime without a startup engine placement"
+                        .to_owned(),
+            });
+        }
 
         // Creation and modality validation preserve the prior runtime on a rejected selection.
         // Once validated, release it before load so large model payloads never overlap.
@@ -121,6 +134,8 @@ where
             model_swapped_event,
             minimum_mlx_memory_ceiling_bytes,
             runtime_configuration,
+            engine_placement,
+            startup_residency_facts,
         ) = {
             let _engine_load_attribution = ModelSwapPhasePerformanceLog::start(
                 performance_attribution_enabled,
@@ -128,7 +143,11 @@ where
                 model_configuration.model_id(),
             );
             match factory_runtime {
-                ModelFactoryRuntime::Autoregressive { processor, engine } => {
+                ModelFactoryRuntime::Autoregressive {
+                    processor,
+                    engine,
+                    engine_placement,
+                } => {
                     let mut replacement_model = LoadedModel { processor, engine };
                     let engine_load_result = replacement_model.engine.load().await.map_err(|engine_error| {
                         tracing::error!(model_directory, error = %engine_error, "model engine load failed after swap creation");
@@ -148,6 +167,8 @@ where
                         event,
                         minimum,
                         runtime_configuration,
+                        engine_placement,
+                        engine_load_result.startup_residency_facts(),
                     )
                 }
                 ModelFactoryRuntime::Image(mut image_engine) => {
@@ -179,6 +200,9 @@ where
                         event,
                         minimum,
                         model_configuration.runtime_configuration(),
+                        // No autoregressive engine is loaded, so there is no placement.
+                        None,
+                        None,
                     )
                 }
                 ModelFactoryRuntime::Embeddings(mut embedding_engine) => {
@@ -211,6 +235,9 @@ where
                         event,
                         minimum,
                         model_configuration.runtime_configuration(),
+                        // No autoregressive engine is loaded, so there is no placement.
+                        None,
+                        None,
                     )
                 }
             }
@@ -222,6 +249,16 @@ where
             model_configuration: model_configuration.clone(),
         });
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
+        self.engine_placement = engine_placement;
+        self.startup_residency_facts = startup_residency_facts;
+        tracing::info!(
+            model_id = model_configuration.model_id(),
+            engine_placement = self.engine_placement.map_or(
+                "no_autoregressive_engine",
+                crate::EnginePlacement::log_label
+            ),
+            "engine placement recorded after model swap"
+        );
         event_writer.send_event(&model_swapped_event).await?;
         if let Some(mut worker_runtime_feature_configuration) =
             self.worker_runtime_feature_configuration()

@@ -8,7 +8,7 @@ use crate::budget::adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError,
 };
-use crate::budget::adaptive_growth_projection::AdaptiveRamGrowthTransientReserveSource;
+use crate::budget::adaptive_growth_projection::TransientWorkspaceReserveSource;
 use crate::phase::MemoryPhase;
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
@@ -84,7 +84,7 @@ fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
     );
     assert_eq!(
         different_context_projection.transient_reserve_source(),
-        AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan,
+        TransientWorkspaceReserveSource::BeyondObservedTokenSpan,
     );
     assert_eq!(observed_context_projection.stable_projected_bytes(), 800);
     assert_eq!(observed_context_projection.peak_projected_bytes(), 1_000);

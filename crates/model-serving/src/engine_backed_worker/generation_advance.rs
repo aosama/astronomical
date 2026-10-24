@@ -62,7 +62,7 @@ where
                 Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                 return Ok(None);
             }
-            Err(InferenceEngineError::ResidentForkRequired { reason })
+            Err(InferenceEngineError::ResidentForkRequired { cause, reason })
                 if active_generation.can_retry_streaming() =>
             {
                 let Some(streaming_retry_request) =
@@ -72,10 +72,14 @@ where
                     return Ok(None);
                 };
                 active_generation.streaming_retry_attempted = true;
+                let demoted_total_context_token_count =
+                    active_generation.total_context_token_count();
                 match self
                     .retry_resident_generation_on_streaming(
                         request_id,
                         streaming_retry_request,
+                        cause,
+                        demoted_total_context_token_count,
                         reason,
                     )
                     .await
@@ -104,7 +108,10 @@ where
                     }
                 }
             }
-            Err(InferenceEngineError::ResidentForkRequired { reason }) => {
+            // The request already used its one streaming retry, so a second
+            // fork requirement is answered as an invalid request; the typed
+            // cause stays in the demotion record from the first fork.
+            Err(InferenceEngineError::ResidentForkRequired { reason, .. }) => {
                 Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                 return Ok(None);
             }

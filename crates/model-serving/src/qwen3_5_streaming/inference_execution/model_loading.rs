@@ -63,6 +63,7 @@ impl Qwen3_5EngineState {
                     model_core_payload_bytes: startup_geometry.model_core_payload_bytes,
                     complete_expert_payload_bytes: startup_geometry.complete_expert_payload_bytes,
                     startup_complete_residency_headroom_bytes,
+                    sequence_state_bytes_per_token: startup_geometry.sequence_state_bytes_per_token,
                 });
             }
             let runtime = model_loading_performance_attribution

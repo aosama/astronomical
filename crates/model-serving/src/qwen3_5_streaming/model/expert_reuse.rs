@@ -200,17 +200,16 @@ impl Qwen3_5Model {
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
     {
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
-        let (streamed_weights, streamed_manifest) = expert_pager
-            .stream_selected_expert_page_from_ssd(
-                &self.runtime,
-                layer_index,
-                &complete_expert_ids,
-                Qwen3_5ExpertStreamingRequestShape {
-                    route_token_count,
-                    routed_expert_count,
-                },
-                performance_attribution,
-            )?;
+        let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage(
+            expert_pager,
+            layer_index,
+            &complete_expert_ids,
+            Qwen3_5ExpertStreamingRequestShape {
+                route_token_count,
+                routed_expert_count,
+            },
+            performance_attribution,
+        )?;
         if let Some(retained_experts) = self.retained_experts.as_ref() {
             retained_experts.borrow_mut().record_disk_load(
                 complete_expert_ids.len(),
@@ -300,17 +299,16 @@ impl Qwen3_5Model {
                 return Ok(warm_table_page);
             }
         }
-        let (streamed_weights, streamed_manifest) = expert_pager
-            .stream_selected_expert_page_from_ssd(
-                &self.runtime,
-                layer_index,
-                routed_expert_ids,
-                Qwen3_5ExpertStreamingRequestShape {
-                    route_token_count,
-                    routed_expert_count: routed_expert_ids.len(),
-                },
-                performance_attribution,
-            )?;
+        let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage(
+            expert_pager,
+            layer_index,
+            routed_expert_ids,
+            Qwen3_5ExpertStreamingRequestShape {
+                route_token_count,
+                routed_expert_count: routed_expert_ids.len(),
+            },
+            performance_attribution,
+        )?;
         if let Some(retained_experts) = self.retained_experts.as_ref() {
             retained_experts.borrow_mut().record_disk_load(
                 routed_expert_ids.len(),
@@ -480,17 +478,16 @@ impl Qwen3_5Model {
         } else {
             missing_route_expert_ids.clone()
         };
-        let (streamed_weights, streamed_manifest) = expert_pager
-            .stream_selected_expert_page_from_ssd(
-                &self.runtime,
-                layer_index,
-                &read_expert_ids,
-                Qwen3_5ExpertStreamingRequestShape {
-                    route_token_count,
-                    routed_expert_count: read_expert_ids.len(),
-                },
-                performance_attribution,
-            )?;
+        let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage(
+            expert_pager,
+            layer_index,
+            &read_expert_ids,
+            Qwen3_5ExpertStreamingRequestShape {
+                route_token_count,
+                routed_expert_count: read_expert_ids.len(),
+            },
+            performance_attribution,
+        )?;
         retained_experts.borrow_mut().record_disk_load(
             read_expert_ids.len(),
             streamed_manifest.source_manifests.len(),

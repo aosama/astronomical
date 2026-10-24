@@ -20,6 +20,16 @@ pub struct EngineBackedWorker<
     pub(crate) worker_runtime_feature_configuration:
         Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
     pub(crate) selected_model: Option<support::SelectedModel>,
+    /// The typed placement lifecycle of the loaded autoregressive engine:
+    /// produced by startup engine selection, demoted by a request's
+    /// admission, and re-promoted only through the bounded gate. The
+    /// streaming-retry path records the demotion; nothing else may write
+    /// free-form states because the type has none.
+    pub(crate) engine_placement: Option<crate::EnginePlacement>,
+    /// Startup residency facts of a loaded streaming engine; the
+    /// re-promotion gate replays them against the current effective
+    /// ceiling. `None` while a resident engine (or no engine) is loaded.
+    pub(crate) startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
 }
 
 pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine> {
@@ -43,6 +53,7 @@ mod image_generation;
 mod memory_limit;
 mod model_swap;
 mod output;
+mod promotion;
 mod protocol;
 mod retry;
 mod support;

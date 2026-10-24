@@ -1,6 +1,9 @@
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxMemorySnapshot};
 
-use crate::{ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionDecision};
+use crate::{
+    ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionDecision,
+    StreamingEngineRequirement,
+};
 
 use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5ResidentModel;
@@ -71,12 +74,21 @@ pub(crate) fn validate_context_memory_admission(
         MemoryAdmissionDecision::DemoteCompleteResidency { .. } => {
             return Err(resident_capacity_error(
                 model,
+                StreamingEngineRequirement::RequestContextShortfall {
+                    shortfall_bytes: initial_projected_active_memory_bytes
+                        .saturating_sub(configured_mlx_memory_limit_bytes),
+                },
                 "generation context requires complete expert demotion before paged admission",
             ));
         }
-        MemoryAdmissionDecision::Reject { .. } => {
+        MemoryAdmissionDecision::Reject {
+            shortfall_bytes, ..
+        } => {
             return Err(resident_capacity_error(
                 model,
+                StreamingEngineRequirement::RequestContextShortfall {
+                    shortfall_bytes: usize::try_from(shortfall_bytes).unwrap_or(usize::MAX),
+                },
                 "generation context exceeds available GPU wired memory",
             ));
         }
@@ -168,6 +180,10 @@ pub(crate) fn validate_context_memory_admission(
         );
         return Err(resident_capacity_error(
             model,
+            StreamingEngineRequirement::RequestContextShortfall {
+                shortfall_bytes: projected_active_memory_bytes_after_reclamation
+                    .saturating_sub(configured_mlx_memory_limit_bytes),
+            },
             "generation context exceeds available GPU wired memory",
         ));
     }
@@ -183,6 +199,10 @@ pub(crate) fn validate_context_memory_admission(
     );
     Err(resident_capacity_error(
         model,
+        StreamingEngineRequirement::RequestContextShortfall {
+            shortfall_bytes: initial_projected_active_memory_bytes
+                .saturating_sub(configured_mlx_memory_limit_bytes),
+        },
         "generation context exceeds available GPU wired memory",
     ))
 }
@@ -235,11 +255,12 @@ pub(crate) fn invalid_request_error(reason: impl Into<String>) -> InferenceEngin
 
 pub(in crate::qwen3_5_resident) fn resident_capacity_error(
     model: &Qwen3_5ResidentModel,
+    cause: StreamingEngineRequirement,
     reason: impl Into<String>,
 ) -> InferenceEngineError {
     let reason = reason.into();
     if model.resident_expert_weights.is_some() {
-        InferenceEngineError::ResidentForkRequired { reason }
+        InferenceEngineError::ResidentForkRequired { cause, reason }
     } else {
         InferenceEngineError::InvalidRequest { reason }
     }

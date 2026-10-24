@@ -79,6 +79,71 @@ where
         let inference_request = prepared_generation.inference_request;
         let mut streaming_retry_request = inference_request.clone_for_streaming_retry();
         let mut streaming_retry_attempted = false;
+        // The bounded re-promotion gate runs before generation starts, so a
+        // demoted worker returns to the resident engine at most once per
+        // request and never mid-generation upward. The strict
+        // total-context inequality inside the gate is the anti-thrash
+        // hysteresis; the worker-level bound of one swap per direction per
+        // request is completed by `streaming_retry_attempted` below.
+        let incoming_total_context_token_count = super::support::request_total_context_token_count(
+            prompt_token_count,
+            generation_command.settings.max_output_tokens,
+        );
+        if let Some(demoted_engine_placement) = self
+            .engine_placement
+            .filter(|engine_placement| engine_placement.is_demoted_for_request())
+        {
+            let factory_supports_resident_promotion = self
+                .model_factory
+                .as_ref()
+                .is_some_and(ModelFactory::supports_resident_promotion);
+            if let Some(startup_residency_facts) = self.startup_residency_facts {
+                match crate::should_promote_demoted_streaming_engine_to_resident(
+                    demoted_engine_placement,
+                    factory_supports_resident_promotion,
+                    &startup_residency_facts,
+                    self.effective_mlx_memory_ceiling_bytes,
+                    incoming_total_context_token_count,
+                ) {
+                    crate::ResidentPromotionDecision::PromoteToResident => {
+                        match self.promote_demoted_engine_to_resident(request_id).await {
+                            Ok(was_promoted_to_resident) => {
+                                if was_promoted_to_resident {
+                                    tracing::info!(
+                                        request_id = request_id.value(),
+                                        engine_placement = self.engine_placement.map_or(
+                                            "no_autoregressive_engine",
+                                            crate::EnginePlacement::log_label,
+                                        ),
+                                        "demoted engine promoted to resident before generation"
+                                    );
+                                }
+                            }
+                            Err(promotion_error) => {
+                                return fatal::report_fatal_engine_error(
+                                    request_id,
+                                    promotion_error,
+                                    event_writer,
+                                )
+                                .await;
+                            }
+                        }
+                    }
+                    crate::ResidentPromotionDecision::StayStreaming { cause } => {
+                        tracing::info!(
+                            request_id = request_id.value(),
+                            promotion_blocker = ?cause,
+                            "demoted engine stays streaming for this request"
+                        );
+                    }
+                }
+            } else {
+                tracing::info!(
+                    request_id = request_id.value(),
+                    "promotion skipped: startup residency facts are unavailable"
+                );
+            }
+        }
         let generation_start_result = {
             let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
             else {
@@ -106,13 +171,19 @@ where
                 Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                 return Ok(None);
             }
-            Err(InferenceEngineError::ResidentForkRequired { reason }) => {
+            Err(InferenceEngineError::ResidentForkRequired { cause, reason }) => {
                 let Some(retry_request) = streaming_retry_request.take() else {
                     Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
                     return Ok(None);
                 };
                 match self
-                    .retry_resident_generation_on_streaming(request_id, retry_request, reason)
+                    .retry_resident_generation_on_streaming(
+                        request_id,
+                        retry_request,
+                        cause,
+                        incoming_total_context_token_count,
+                        reason,
+                    )
                     .await
                 {
                     Ok(generation_start) => {

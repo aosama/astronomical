@@ -20,6 +20,7 @@ impl Qwen3_5EngineState {
                     .map(|loaded_model| loaded_model.expert_memory_mode()),
             )
             .with_minimum_mlx_memory_ceiling_bytes(minimum_mlx_memory_ceiling_bytes)
+            .with_startup_residency_facts(self.startup_residency_facts)
     }
 
     pub(super) fn record_model_loading_performance_attribution(

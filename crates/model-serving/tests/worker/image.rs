@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
     WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 use astronomical_model_serving::{
-    EngineBackedWorker, FLUX2_KLEIN_OFFICIAL_MODEL_ID, WorkerRuntimeError,
+    EngineBackedWorker, EnginePlacement, FLUX2_KLEIN_OFFICIAL_MODEL_ID, WorkerRuntimeError,
 };
 use tokio::time::timeout;
 
@@ -192,6 +192,7 @@ async fn should_fail_closed_across_modalities_and_apply_an_idle_image_memory_upd
             Ok(ScriptedRuntime::autoregressive(
                 ScriptedChatProcessor::new(),
                 ScriptedChatEngine::new(),
+                EnginePlacement::CompleteResidencyFits,
             )),
             Ok(ScriptedRuntime::Image(image_engine)),
         ],
@@ -260,6 +261,7 @@ async fn should_preserve_the_prior_runtime_when_a_replacement_model_load_fails_m
         Ok(ScriptedRuntime::autoregressive(
             ScriptedChatProcessor::new(),
             ScriptedChatEngine::new(),
+            EnginePlacement::CompleteResidencyFits,
         )),
         Ok(ScriptedRuntime::Image(ScriptedImageEngine::new(vec![
             vec![Ok(completed_step())],
@@ -268,6 +270,7 @@ async fn should_preserve_the_prior_runtime_when_a_replacement_model_load_fails_m
         Ok(ScriptedRuntime::autoregressive(
             ScriptedChatProcessor::new(),
             ScriptedChatEngine::new(),
+            EnginePlacement::CompleteResidencyFits,
         )),
     ]);
     let worker = EngineBackedWorker::idle_with_model_factory(factory, 8_000)
