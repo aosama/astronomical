@@ -51,21 +51,21 @@ fn should_flag_only_strictly_below_floor_line_coverage() {
     let measured_summary = CoverageSummary {
         region_coverage_percent: 85.0,
         function_coverage_percent: 85.0,
-        line_coverage_percent: 80.0,
+        line_coverage_percent: 90.0,
     };
     assert!(
-        !measured_summary.is_below_floor(80.0),
+        !measured_summary.is_below_floor(90.0),
         "coverage exactly at the floor passes"
     );
     let one_hundredth_below = CoverageSummary {
-        line_coverage_percent: 79.99,
+        line_coverage_percent: 89.99,
         ..measured_summary
     };
-    assert!(one_hundredth_below.is_below_floor(80.0));
+    assert!(one_hundredth_below.is_below_floor(90.0));
 }
 
 #[test]
-fn should_default_to_the_memory_policy_package_at_eighty_percent() {
+fn should_default_to_the_memory_policy_package_at_or_above_ninety_percent() {
     let default_invocation = CoverageFloorInvocation::parse(&[])
         .expect("an empty argument list should parse to the defaults");
     assert_eq!(default_invocation.package_name, DEFAULT_PACKAGE_NAME);

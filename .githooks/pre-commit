@@ -25,7 +25,7 @@ fi
 # no continuous-integration step). The crate is the admission and eviction
 # brain, so any commit staging changes to its sources — deletions included,
 # since removing a well-covered file can pull the aggregate below the floor —
-# must keep cargo-llvm-cov line coverage at or above 80%. Gated on staged
+# must keep cargo-llvm-cov line coverage at or above 90%. Gated on staged
 # paths so unrelated commits never pay the instrumented coverage run.
 if git diff --cached --name-only | grep -q '^crates/astronomical-memory-policy/'; then
     printf '%s\n' "[pre-commit] status=start check=memory-policy-coverage-floor root=${REPOSITORY_ROOT}"

@@ -216,3 +216,72 @@ fn should_reject_a_shape_whose_byte_count_overflows_the_usize_domain() {
         Err(SafetensorsHeaderError::ByteCountMismatch { .. })
     ));
 }
+
+#[test]
+fn should_reject_a_directory_path_as_not_a_regular_file() {
+    let scratch_directory_path = scratch_directory();
+    assert!(matches!(
+        parse_safetensors_header(&scratch_directory_path),
+        Err(SafetensorsHeaderError::NotARegularFile { .. })
+    ));
+}
+
+#[test]
+fn should_reject_a_tensor_entry_with_a_missing_dtype_field() {
+    let scratch_file = write_safetensors_file(r#"{"t":{"shape":[1],"data_offsets":[0,1]}}"#, 1);
+    assert!(matches!(
+        parse_safetensors_header(&scratch_file.0),
+        Err(SafetensorsHeaderError::UnsupportedDtype { dtype, .. }) if dtype == "missing"
+    ));
+}
+
+#[test]
+fn should_reject_every_invalid_shape_entry() {
+    // Negative, fractional, and absent shapes are all structural defects.
+    for header_json in [
+        r#"{"t":{"dtype":"U8","shape":[-1],"data_offsets":[0,1]}}"#,
+        r#"{"t":{"dtype":"U8","shape":[1.5],"data_offsets":[0,1]}}"#,
+        r#"{"t":{"dtype":"U8","data_offsets":[0,1]}}"#,
+        r#"{"t":{"dtype":"U8","shape":"wide","data_offsets":[0,1]}}"#,
+    ] {
+        let scratch_file = write_safetensors_file(header_json, 1);
+        assert!(
+            matches!(
+                parse_safetensors_header(&scratch_file.0),
+                Err(SafetensorsHeaderError::InvalidShape { tensor_name }) if tensor_name == "t"
+            ),
+            "shape entry in {header_json} must fail closed"
+        );
+    }
+}
+
+#[test]
+fn should_reject_data_offsets_that_are_not_exactly_two_entries() {
+    for header_json in [
+        r#"{"t":{"dtype":"U8","shape":[1],"data_offsets":[0]}}"#,
+        r#"{"t":{"dtype":"U8","shape":[1],"data_offsets":[0,1,2]}}"#,
+        r#"{"t":{"dtype":"U8","shape":[1]}}"#,
+        r#"{"t":{"dtype":"U8","shape":[1],"data_offsets":{"start":0,"end":1}}}"#,
+    ] {
+        let scratch_file = write_safetensors_file(header_json, 1);
+        assert!(
+            matches!(
+                parse_safetensors_header(&scratch_file.0),
+                Err(SafetensorsHeaderError::InvalidDataOffsets { tensor_name }) if tensor_name == "t"
+            ),
+            "offsets entry in {header_json} must fail closed"
+        );
+    }
+}
+
+#[test]
+fn should_reject_a_negative_data_offset_start() {
+    let scratch_file = write_safetensors_file(
+        r#"{"t":{"dtype":"U8","shape":[1],"data_offsets":[-1,1]}}"#,
+        1,
+    );
+    assert!(matches!(
+        parse_safetensors_header(&scratch_file.0),
+        Err(SafetensorsHeaderError::InvalidDataOffsets { .. })
+    ));
+}

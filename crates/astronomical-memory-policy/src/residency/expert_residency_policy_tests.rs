@@ -472,12 +472,22 @@ fn should_keep_opening_prefill_pins_when_later_leftover_is_tighter_without_capac
     assert_eq!(
         continued_residency.pinned_complete_layer_indexes(),
         vec![0, 1],
-        "learned leftover tightening is not a capacity failure and must not unpin seated layers"
+        "learned leftover tightening is not a capacity failure and must not \
+         unpin layers at the contract level"
     );
-    assert_eq!(continued_plan.complete_layer_targets, vec![0, 1]);
+    // The plan-level claims respect the tighter 70-byte ceiling: pin 0 funds
+    // its 40-byte claim, pin 1 does not (40 more would claim 80 of 70), so
+    // it falls through to streamed handling instead of promising a
+    // promotion the budget cannot honor — the over-claim shape that left
+    // 26.95 GB unused on the 2026-10-23 Ornith flight.
+    assert_eq!(continued_plan.complete_layer_targets, vec![0]);
+    assert_eq!(
+        continued_plan.layer_targets[0],
+        ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+    );
     assert_eq!(
         continued_plan.layer_targets[1],
-        ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        ExpertLayerResidencyTarget::StreamOperationLocal
     );
 }
 

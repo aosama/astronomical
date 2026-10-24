@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 /// The package whose coverage this gate protects by default: the pure
 /// admission, eviction, and residency arithmetic every family trusts.
 pub const DEFAULT_PACKAGE_NAME: &str = "astronomical-memory-policy";
-pub const DEFAULT_MINIMUM_LINE_COVERAGE_PERCENT: f64 = 80.0;
+pub const DEFAULT_MINIMUM_LINE_COVERAGE_PERCENT: f64 = 90.0;
 const HEARTBEAT_INTERVAL_SECONDS: u64 = 30;
 const MAXIMUM_ELAPSED_SECONDS: u64 = 900;
 
