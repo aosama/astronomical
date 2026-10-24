@@ -105,3 +105,29 @@ fn should_bound_the_field_name_quoted_in_the_duplicate_error() {
         parse_error.chars().count()
     );
 }
+
+#[test]
+fn should_fail_closed_on_an_out_of_range_float_literal() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // 1e400 overflows f64; whether serde_json rejects the literal or the
+    // visitor sees a non-finite value, the parse must fail closed rather
+    // than produce an infinite JSON number.
+    let parse_error = parse("1e400").expect_err("an overflowing float must not parse");
+    assert!(
+        !parse_error.is_empty(),
+        "the failure must carry a reason: {parse_error}"
+    );
+}
+
+#[test]
+fn should_parse_negative_and_integral_floats() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let parsed_negative_float = parse("-2.5").expect("negative floats are valid JSON");
+    assert_eq!(parsed_negative_float, serde_json::json!(-2.5));
+    let parsed_integral_float = parse("4.0").expect("integral floats are valid JSON");
+    assert_eq!(parsed_integral_float, serde_json::json!(4.0));
+}

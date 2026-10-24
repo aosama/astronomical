@@ -285,3 +285,47 @@ fn should_reject_a_negative_data_offset_start() {
         Err(SafetensorsHeaderError::InvalidDataOffsets { .. })
     ));
 }
+
+#[test]
+fn should_report_the_exact_byte_width_and_name_of_every_supported_dtype() {
+    use crate::expert_paging::safetensors_header::SafetensorsDtype as Dtype;
+    let every_dtype_with_width_and_name = [
+        (Dtype::Bool, 1, "BOOL"),
+        (Dtype::Int8, 1, "I8"),
+        (Dtype::Uint8, 1, "U8"),
+        (Dtype::Float8E4M3, 1, "F8_E4M3"),
+        (Dtype::Float8E5M2, 1, "F8_E5M2"),
+        (Dtype::Int16, 2, "I16"),
+        (Dtype::Uint16, 2, "U16"),
+        (Dtype::Float16, 2, "F16"),
+        (Dtype::BFloat16, 2, "BF16"),
+        (Dtype::Int32, 4, "I32"),
+        (Dtype::Uint32, 4, "U32"),
+        (Dtype::Float32, 4, "F32"),
+        (Dtype::Int64, 8, "I64"),
+        (Dtype::Uint64, 8, "U64"),
+    ];
+    for (dtype, expected_byte_width, expected_name) in every_dtype_with_width_and_name {
+        assert_eq!(
+            dtype.byte_width(),
+            expected_byte_width,
+            "{expected_name} byte width"
+        );
+        assert_eq!(dtype.to_string(), expected_name);
+        assert_eq!(dtype.as_str(), expected_name);
+    }
+}
+
+#[test]
+fn should_answer_none_for_an_unknown_tensor_name() {
+    let scratch_file = write_safetensors_file(
+        r#"{"known":{"dtype":"U8","shape":[1],"data_offsets":[0,1]}}"#,
+        1,
+    );
+    let header = parse_safetensors_header(&scratch_file.0).expect("valid header should parse");
+    assert!(header.tensor_entry_for_name("known").is_some());
+    assert!(
+        header.tensor_entry_for_name("absent").is_none(),
+        "an unknown tensor name must answer None, never a wrong entry"
+    );
+}

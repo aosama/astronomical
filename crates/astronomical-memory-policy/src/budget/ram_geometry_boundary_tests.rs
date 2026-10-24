@@ -166,3 +166,11 @@ fn should_floor_the_model_core_at_zero_when_the_total_undercounts_the_expert_pay
 
     assert_eq!(model_geometry.model_core_payload_bytes, 0);
 }
+
+#[test]
+fn should_expose_measured_layer_facts_through_accessors() {
+    use crate::budget::ram_geometry::MeasuredExpertLayerPayload;
+    let measured_layer = MeasuredExpertLayerPayload::new(408, 6);
+    assert_eq!(measured_layer.complete_payload_bytes(), 408);
+    assert_eq!(measured_layer.expert_capacity(), 6);
+}
