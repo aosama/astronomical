@@ -14,6 +14,8 @@ pub mod retained_prefix;
 pub mod rotating;
 
 #[cfg(test)]
+mod allocation_boundary_tests;
+#[cfg(test)]
 mod context_boundary_tests;
 #[cfg(test)]
 mod expert_memory_admission_tests;
