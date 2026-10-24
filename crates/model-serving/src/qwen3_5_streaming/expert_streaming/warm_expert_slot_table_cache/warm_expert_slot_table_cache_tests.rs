@@ -617,3 +617,45 @@ fn should_discard_queued_inserts_without_writing_them() {
         "a discarded insert must not land in a table"
     );
 }
+
+#[test]
+#[serial]
+fn should_report_route_missing_non_resident_and_occupied_experts_per_table() {
+    let runtime = test_runtime();
+    let mut cache = WarmExpertSlotTableCache::new(2);
+    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    let weights = streamed_weights(&runtime);
+    cache
+        .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
+        .expect("the warm insert should queue");
+    cache
+        .flush_pending_inserts(&runtime)
+        .expect("the first warm flush should succeed");
+
+    // A layer without a table answers None for the table-shaped queries and
+    // zero occupancy, never an empty table claim.
+    assert_eq!(cache.missing_route_expert_ids(1, &[3]), None);
+    assert_eq!(cache.non_resident_expert_ids(1, EXPERT_CAPACITY), None);
+    assert_eq!(cache.occupied_slot_count(1), 0);
+
+    // A partial table reports exactly the route experts it lacks, the full
+    // non-resident read set, and its occupancy.
+    assert_eq!(cache.missing_route_expert_ids(0, &[7, 9]), Some(vec![]));
+    assert_eq!(cache.missing_route_expert_ids(0, &[9, 12]), Some(vec![12]));
+    assert_eq!(
+        cache
+            .non_resident_expert_ids(0, EXPERT_CAPACITY)
+            .expect("a seated layer reports its read set"),
+        (0..EXPERT_CAPACITY)
+            .filter(|expert_id| ![7, 9].contains(expert_id))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(cache.occupied_slot_count(0), 2);
+
+    // Inputs are normalized: duplicates and unsorted routes answer in stable
+    // sorted order.
+    assert_eq!(
+        cache.missing_route_expert_ids(0, &[12, 7, 12]),
+        Some(vec![12])
+    );
+}
