@@ -379,3 +379,31 @@ fn should_demote_only_the_tail_pin_when_one_claim_misses_the_ceiling() {
         ExpertLayerResidencyTarget::StreamOperationLocal
     );
 }
+
+#[test]
+fn should_keep_planner_targets_beyond_the_contract_span_instead_of_truncating() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // A candidate plan longer than the opened contract must never be
+    // truncated down to the contract's span: layers beyond the roles keep
+    // the planner's disposition for them. Truncating dropped those layers'
+    // targets entirely, leaving callers to index out of bounds.
+    let geometries = uniform_geometry(3);
+    let mut one_layer_opening = candidate_plan(vec![0], 80);
+    one_layer_opening.layer_targets =
+        vec![ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead];
+    let request_residency = RequestExpertResidency::open_prefill(&one_layer_opening);
+    let mut longer_candidate = candidate_plan(Vec::new(), 80);
+    longer_candidate.layer_targets =
+        vec![ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead; 3];
+
+    let stabilized = request_residency.stabilize_prefill_plan(longer_candidate, &[], &geometries);
+
+    assert_eq!(stabilized.layer_targets.len(), 3);
+    assert_eq!(
+        stabilized.layer_targets[2],
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+        "the planner target beyond the contract span must survive stabilization"
+    );
+}

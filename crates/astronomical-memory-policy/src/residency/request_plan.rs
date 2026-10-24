@@ -122,7 +122,10 @@ impl RequestExpertResidency {
                 layer_is_currently_complete[current_residency.layer_index] = true;
             }
         }
-        if candidate_plan.layer_targets.len() != self.layer_roles.len() {
+        if candidate_plan.layer_targets.len() < self.layer_roles.len() {
+            // Extend-only: a candidate plan longer than the roles carries
+            // planner targets for layers beyond the contract's span, and
+            // truncating it would silently drop those layers' dispositions.
             candidate_plan.layer_targets.resize(
                 self.layer_roles.len(),
                 ExpertLayerResidencyTarget::StreamOperationLocal,
