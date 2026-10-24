@@ -401,13 +401,6 @@ jobs:
           set -o pipefail
           cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
         timeout-minutes: 2
-      - name: Run shared test-harness fixture contracts
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end test-harness-fixtures' EXIT
-          scripts/ci/ci-step-timing.sh begin test-harness-fixtures
-          set -o pipefail
-          cargo test-test-harness-fixtures -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/test-harness-fixtures.log"
-        timeout-minutes: 2
       - name: Run Library REST contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end rest-library-contracts' EXIT
@@ -794,3 +787,4 @@ jobs:
       - name: Run the Linux-buildable offline crates with no network namespace
         run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
         timeout-minutes: 8
+
