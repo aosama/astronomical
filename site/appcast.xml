@@ -4,33 +4,39 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.80</title>
-            <pubDate>Mon, 19 Oct 2026 12:55:40 -0400</pubDate>
-            <sparkle:version>1499</sparkle:version>
-            <sparkle:shortVersionString>0.2.80</sparkle:shortVersionString>
+            <title>0.2.81</title>
+            <pubDate>Sat, 24 Oct 2026 19:24:51 -0400</pubDate>
+            <sparkle:version>1669</sparkle:version>
+            <sparkle:shortVersionString>0.2.81</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.80
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.81
 
 ## What's new
 
-- **Fixed: text-only folded ternary pack variants now load.** A real installed export of the folded ternary family (the text-only DFlash2 variant of schema version 2) was refused with a model-load failure on 0.2.79; the loader now accepts that export's omitted runtime marker and Transformers metadata, and validation failures carry their cause. Model output is unchanged — the upstream greedy parity journey still replays token for token.
-- **Release hardening behind the scenes**: releases now round-trip every installed chat model (a sampled one-hundred-token reply from each) before shipping, so a pack variant the loader would refuse is caught at release time.
+- **Typed memory decisions across the serving stack.** Every request now flows through a memory equation, a transient workspace reserve, typed admission verdicts, and typed engine placement. Resident prompts that fit the live ceiling stay resident instead of being demoted, and a streaming engine demoted under memory pressure returns to resident once pressure clears.
+- **Smoother long generations.** Decode expert sets are seated before handoff, the status surface stays honest during long requests, and default-budget generations render indeterminate progress.
+- **Persistent SSD prompt cache for folded-ternary models**, with MLX memory telemetry reported on finalization and limit changes.
+- **OpenAI-compatible request ceilings aligned with mainstream providers.**
+- **Codex CLI integration:** start Codex CLI against a local chat model.
+- **Accessibility:** every Thin Talk interactive control now carries a stable accessibility identifier.
+- **Native MLX runtime upgraded to v0.32.4**, and the jangtq2 weight family (JANGH2 bundle) is now supported with fused codebook decode.
 
 ## Compatibility
 
 - macOS 14.0 and later on Apple silicon (arm64).
-- Existing configuration, state, and installed models are preserved; no migration is required.
+- The K2 Horizon MoVA model family is retired: it is no longer served, downloadable, or discovered; an installed copy classifies as an unknown model type and fails closed at discovery.
+- Existing configuration, state, and other installed models are preserved; no migration is required.
 
 ## Distribution
 
 - The application and every nested executable are signed with Astronomical's Developer ID Application certificate (Hardened Runtime, timestamped), and the disk image is notarized with Apple and carries a stapled notarization ticket.
-- Existing installs receive this update through the signed Sparkle feed; new installs download `Astronomical-0.2.80-macOS-arm64.dmg` from the releases page.
+- Existing installs receive this update through the signed Sparkle feed; new installs download `Astronomical-0.2.81-macOS-arm64.dmg` from the releases page.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.80/Astronomical-0.2.80-macOS-arm64.dmg" length="18168258" type="application/octet-stream" sparkle:edSignature="Zf2nFcw2EG7TLPnuShT/o+SMrCDwnBPH2mwvqazpXBHloNb4ClShG2rSelpWVaUv/eHb3A9Ggw4NjhozOckJBg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.81/Astronomical-0.2.81-macOS-arm64.dmg" length="18432085" type="application/octet-stream" sparkle:edSignature="mqaWDe9qqWOqE8vOAxMrmdIM6ELQeXAff9MFQQAkZyT0iQOGrOXJ72XJMBrHvJFaBynqHMw17x0jTui+aPNqAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: ncsr96mN8mRHCuO/Xub6DFE/EA79V2h61lTrL/tAhoBrC/2P/wULExWZyuzDVj0perLmgJ/qz6xKfgN0/B8bCg==
-length: 2505
+edSignature: nEBbhSjf21phaU416hqq2z3d1x+sutpXP7ZnADQMwB2vr0Db1MKWDfglrW+ANBFaRFUX4enVRhcQBF+N3r9lBQ==
+length: 3113
 -->
