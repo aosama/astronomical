@@ -8,6 +8,7 @@ use crate::budget::adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError,
 };
+use crate::budget::adaptive_growth_projection::AdaptiveRamGrowthTransientReserveSource;
 use crate::phase::MemoryPhase;
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
@@ -35,7 +36,7 @@ fn should_allow_unobserved_growth_when_exact_persistent_bytes_fit_the_limit() {
         .expect("a positive active-memory limit should create a guard");
 
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 700, 300, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 700, 300, 0, 0, 0)
         .expect("exact persistent growth ending at the limit should not overflow");
 
     assert!(projection.fits_stable_and_peak_limits());
@@ -63,22 +64,27 @@ fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
     );
 
     let observed_context_projection = adaptive_ram_growth_guard
-        .project_growth_for_context(observed_prefill_context, 700, 100, 0, 0)
+        .project_growth_for_context(observed_prefill_context, 700, 100, 0, 0, 0)
         .expect("the observed context should project without overflow");
     let different_context_projection = adaptive_ram_growth_guard
-        .project_growth_for_context(different_prefill_context, 700, 100, 0, 0)
+        .project_growth_for_context(different_prefill_context, 700, 100, 0, 0, 0)
         .expect("an unseen context should project without overflow");
 
     assert_eq!(
         observed_context_projection.observed_transient_high_water_bytes(),
         200
     );
-    // Issue #623: an unseen shape reserves its own token-proportional share of
-    // the observed window (200 bytes at 128 tokens → 400 bytes at 256 tokens),
-    // not the observed shape's absolute window.
+    // An unseen LARGER shape keeps the smaller shape's window unscaled as a
+    // lower bound (the analytic floor is zero here). Doubling it to 400 bytes
+    // by the token ratio multiplied fixed per-forward overhead and once
+    // projected a 23 GB phantom transient (measured 2026-10-24).
     assert_eq!(
         different_context_projection.observed_transient_high_water_bytes(),
-        400
+        200
+    );
+    assert_eq!(
+        different_context_projection.transient_reserve_source(),
+        AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan,
     );
     assert_eq!(observed_context_projection.stable_projected_bytes(), 800);
     assert_eq!(observed_context_projection.peak_projected_bytes(), 1_000);
@@ -137,10 +143,10 @@ fn should_accept_stable_memory_at_c_and_reject_one_byte_above_c() {
         AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
 
     let fitting_projection = adaptive_ram_growth_guard
-        .project_growth_for_context(adaptive_ram_growth_context, 700, 300, 0, 0)
+        .project_growth_for_context(adaptive_ram_growth_context, 700, 300, 0, 0, 0)
         .expect("stable growth ending exactly at C should project");
     let exceeding_projection = adaptive_ram_growth_guard
-        .project_growth_for_context(adaptive_ram_growth_context, 700, 301, 0, 0)
+        .project_growth_for_context(adaptive_ram_growth_context, 700, 301, 0, 0, 0)
         .expect("stable growth one byte above C should project");
 
     assert_eq!(fitting_projection.stable_projected_bytes(), 1_000);
@@ -182,10 +188,10 @@ fn should_accept_peak_memory_at_p_and_reject_one_byte_above_p() {
     );
 
     let fitting_projection = adaptive_ram_growth_guard
-        .project_growth_for_context(fitting_peak_context, 900, 100, 0, 0)
+        .project_growth_for_context(fitting_peak_context, 900, 100, 0, 0, 0)
         .expect("peak ending exactly at P should project");
     let exceeding_projection = adaptive_ram_growth_guard
-        .project_growth_for_context(exceeding_peak_context, 900, 101, 0, 0)
+        .project_growth_for_context(exceeding_peak_context, 900, 101, 0, 0, 0)
         .expect("peak one byte above P should project");
 
     // Issue #623: each context reserves its own exact evidence (10 and 11),
@@ -221,7 +227,7 @@ fn should_not_retain_a_final_partial_prefill_tail_as_reusable_evidence() {
 
     assert_eq!(
         adaptive_ram_growth_guard
-            .project_growth_for_context(partial_tail_context, 400, 100, 0, 0)
+            .project_growth_for_context(partial_tail_context, 400, 100, 0, 0, 0)
             .expect("an unretained tail should project")
             .observed_transient_high_water_bytes(),
         0
@@ -246,7 +252,7 @@ fn should_reject_growth_when_the_peak_projection_exceeds_the_limit() {
 
     // peak: 800 + 100 + 150 = 1_050 > P=1_010
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 800, 100, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 800, 100, 0, 0, 0)
         .expect("the peak projection should not overflow");
 
     assert_eq!(projection.peak_projected_bytes(), 1_050);
@@ -263,7 +269,7 @@ fn should_reject_an_overflowing_memory_projection() {
         .expect("the platform maximum should be a valid positive limit");
 
     let growth_rejection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, usize::MAX, 1, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, usize::MAX, 1, 0, 0, 0)
         .expect_err("an overflowing byte projection must not be admitted");
 
     assert_eq!(
@@ -298,7 +304,7 @@ fn should_preserve_the_highest_transient_observation_after_a_lower_spike() {
 
     // peak: 701 + 100 + 200 = 1_001 <= P=1_010
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 701, 100, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 701, 100, 0, 0, 0)
         .expect("a high-water projection within the platform range should not overflow");
 
     assert_eq!(projection.observed_transient_high_water_bytes(), 200);
@@ -324,7 +330,7 @@ fn should_not_underflow_when_active_memory_falls_without_a_new_allocator_peak() 
     );
 
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 800, 200, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 800, 200, 0, 0, 0)
         .expect("falling active memory should not overflow the projection");
 
     assert_eq!(projection.observed_transient_high_water_bytes(), 0);

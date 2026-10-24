@@ -17,27 +17,42 @@ pub enum AdaptiveRamGrowthTransientReserveSource {
     /// The same phase, token count, position bucket, and ownership mode
     /// completed a forward before.
     ExactContext,
-    /// Same-phase observations rescaled to this forward's token count.
+    /// A same-phase observation at least as large as this forward, scaled
+    /// down to this forward's token count, never below any smaller
+    /// same-phase observation taken unscaled.
     PhaseScaled,
+    /// Every same-phase observation forwarded fewer tokens than this forward.
+    /// The reserve is the caller's analytic floor for an unobserved scope or
+    /// the largest smaller observation, whichever is larger; neither is
+    /// multiplied by a token ratio.
+    BeyondObservedTokenSpan,
     /// The phase had no evidence; the largest window ever observed in any
-    /// phase was reserved.
+    /// phase, or the caller's analytic floor when larger, was reserved.
     GlobalMaximum,
 }
 
-/// Rescales an observed transient window to a different forward token count.
+/// Scales a larger observed transient window down to a smaller forward.
 ///
 /// Activation workspace grows with the number of tokens in the forward, so the
 /// estimate is proportional with ceiling division (conservative). Returns
-/// `None` when the observation carries a zero token count, which cannot bound
-/// a proportional estimate; such observations still participate through the
-/// global-maximum fallback.
+/// `None` when either token count is zero, which cannot bound a proportional
+/// estimate, and when the target is LARGER than the observation. Scaling up
+/// multiplies the observation's fixed per-forward overhead (logits, per-layer
+/// buffers, allocator rounding) by the token ratio: a one-token prefill's
+/// 11,255,538-byte window became a 23,051,341,824-byte reserve for a
+/// 2,048-token chunk, which demoted a fully resident model to SSD streaming
+/// with more than 5 GB of the ceiling unused (measured 2026-10-24). Such
+/// observations participate unscaled instead.
 #[must_use]
 pub(crate) fn scale_transient_to_token_count(
     observed_high_water_bytes: usize,
     observed_forward_token_count: usize,
     target_forward_token_count: usize,
 ) -> Option<usize> {
-    if observed_forward_token_count == 0 || target_forward_token_count == 0 {
+    if observed_forward_token_count == 0
+        || target_forward_token_count == 0
+        || target_forward_token_count > observed_forward_token_count
+    {
         return None;
     }
     let observed_bytes_u128 =
@@ -198,6 +213,17 @@ impl AdaptiveRamGrowthProjection {
     #[must_use]
     pub const fn fits_stable_and_peak_limits(&self) -> bool {
         self.operation_reclamation_required_bytes() == 0
+    }
+
+    /// Returns whether stable ownership alone fits the ceiling. When it does
+    /// but [`Self::fits_stable_and_peak_limits`] does not, only the forward's
+    /// transient peak is short. A smaller forward resolves that only when the
+    /// transient reserve depends on token count (exact or scaled-down
+    /// evidence); a token-independent reserve such as the analytic floor or
+    /// the all-phase maximum stays the same at every chunk size.
+    #[must_use]
+    pub const fn fits_stable_limit(&self) -> bool {
+        self.stable_projected_bytes <= self.active_memory_ceiling_bytes
     }
 
     #[must_use]

@@ -3,15 +3,29 @@
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_resident::model::adaptive_ram_growth_logging;
 use crate::{
-    AdaptiveRamGrowthContext, InferenceEngineError, MemoryPhase, PerformanceAttribution,
-    PerformanceCounter, PerformanceOperation, combined_persistent_growth_bytes,
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthProjection, InferenceEngineError, MemoryPhase,
+    PerformanceAttribution, PerformanceCounter, PerformanceOperation,
+    combined_persistent_growth_bytes,
 };
 
 use super::Qwen3_5EngineState;
 use super::qwen3_5_runtime_error;
 
 pub(in crate::qwen3_5_resident) enum AdaptiveRamGrowthMemoryAdmissionError {
-    InsufficientCapacity { reason: String },
+    /// Stable ownership (weights, decoder state, and this forward's exact
+    /// persistent growth) does not fit the ceiling. No smaller forward can fix
+    /// that, so prefill hands the request to the streaming engine.
+    InsufficientCapacity {
+        reason: String,
+    },
+    /// Stable ownership fits; only the forward's projected transient peak does
+    /// not. Resident prefill retries a smaller chunk before giving up
+    /// residency because a token-dependent reserve shrinks with the chunk; a
+    /// token-independent reserve does not, so the bounded halving then ends at
+    /// the minimum chunk and hands the request to the streaming engine.
+    TransientPeakExceeded {
+        reason: String,
+    },
     Engine(InferenceEngineError),
 }
 
@@ -24,7 +38,8 @@ impl From<InferenceEngineError> for AdaptiveRamGrowthMemoryAdmissionError {
 impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
     fn from(admission_error: AdaptiveRamGrowthMemoryAdmissionError) -> Self {
         match admission_error {
-            AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason } => {
+            AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }
+            | AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { reason } => {
                 crate::qwen3_5_resident::model::memory_admission::invalid_request_error(reason)
             }
             AdaptiveRamGrowthMemoryAdmissionError::Engine(inference_engine_error) => {
@@ -87,6 +102,9 @@ impl Qwen3_5EngineState {
                 crate::AdaptiveRamGrowthTransientReserveSource::PhaseScaled => {
                     PerformanceCounter::AdmissionReservePhaseScaledSourceCount
                 }
+                crate::AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan => {
+                    PerformanceCounter::AdmissionReserveBeyondObservedTokenSpanSourceCount
+                }
                 crate::AdaptiveRamGrowthTransientReserveSource::GlobalMaximum => {
                     PerformanceCounter::AdmissionReserveGlobalMaximumSourceCount
                 }
@@ -128,6 +146,9 @@ impl Qwen3_5EngineState {
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
+        let unobserved_scope_transient_floor_bytes = model
+            .mlx_ram_budget()
+            .adaptive_growth_unobserved_scope_transient_floor_bytes(adaptive_ram_growth_context);
         let forward_projection = self
             .adaptive_ram_growth_guard
             .project_growth_for_context(
@@ -136,6 +157,7 @@ impl Qwen3_5EngineState {
                 exact_context_growth_bytes,
                 0,
                 exact_temporary_workspace_bytes,
+                unobserved_scope_transient_floor_bytes,
             )
             .map_err(|projection_error| {
                 crate::qwen3_5_resident::model::memory_admission::invalid_request_error(format!(
@@ -148,22 +170,16 @@ impl Qwen3_5EngineState {
                 &forward_projection,
                 if forward_projection.fits_stable_and_peak_limits() {
                     "admit_resident_forward"
+                } else if forward_projection.fits_stable_limit() {
+                    "reject_resident_transient_peak"
                 } else {
                     "request_streaming_engine"
                 },
             );
         }
-        if !forward_projection.fits_stable_and_peak_limits() {
-            return Err(
-                AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity {
-                    reason: format!(
-                        "resident forward requires {} bytes at stable projection and {} bytes at peak projection; allowed ceiling is {} bytes",
-                        forward_projection.stable_projected_bytes(),
-                        forward_projection.peak_projected_bytes(),
-                        forward_projection.active_memory_ceiling_bytes(),
-                    ),
-                },
-            );
+        if let Some(admission_rejection) = resident_forward_admission_rejection(&forward_projection)
+        {
+            return Err(admission_rejection);
         }
         model
             .runtime()
@@ -186,6 +202,32 @@ impl Qwen3_5EngineState {
     }
 }
 
+/// Classifies a resident forward projection: `None` admits it; a stable miss
+/// requests the streaming engine; a transient-peak-only miss lets resident
+/// prefill retry a smaller chunk first.
+fn resident_forward_admission_rejection(
+    forward_projection: &AdaptiveRamGrowthProjection,
+) -> Option<AdaptiveRamGrowthMemoryAdmissionError> {
+    if forward_projection.fits_stable_and_peak_limits() {
+        return None;
+    }
+    let reason = format!(
+        "resident forward requires {} bytes at stable projection and {} bytes at peak projection; allowed ceiling is {} bytes",
+        forward_projection.stable_projected_bytes(),
+        forward_projection.peak_projected_bytes(),
+        forward_projection.active_memory_ceiling_bytes(),
+    );
+    Some(if forward_projection.fits_stable_limit() {
+        AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { reason }
+    } else {
+        AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }
+    })
+}
+
 fn performance_attribution_payload_bytes(performance_attribution: &PerformanceAttribution) -> u64 {
     performance_attribution.expert_streaming_payload_byte_count()
 }
+
+#[cfg(test)]
+#[path = "memory_admission_tests.rs"]
+mod memory_admission_tests;

@@ -111,8 +111,12 @@ pub enum PerformanceCounter {
     PreviousTokenPrefetchCapacityDropCount,
     /// Admission decisions composed from the exact-context transient evidence (#691).
     AdmissionReserveExactContextSourceCount,
-    /// Admission decisions composed from a token-scaled phase estimate (#691).
+    /// Admission decisions composed from a larger same-phase forward scaled down (#691).
     AdmissionReservePhaseScaledSourceCount,
+    /// Admission decisions for a forward larger than every same-phase
+    /// observation, composed from the analytic floor or an unscaled smaller
+    /// observation instead of a token-ratio extrapolation.
+    AdmissionReserveBeyondObservedTokenSpanSourceCount,
     /// Admission decisions composed from the all-phase maximum (#691).
     AdmissionReserveGlobalMaximumSourceCount,
     /// Total bfloat16 bytes the jangtq2 codebook page decoder materialized
@@ -123,13 +127,16 @@ pub enum PerformanceCounter {
     Jangtq2CodebookDecodedOutputByteCount,
     /// Candidate-policy demand inserts that replaced an occupied decode slot.
     DecodeExpertCacheSlotEvictionCount,
+    /// Resident prefill chunks halved because admission accepted the stable
+    /// footprint but rejected only the transient peak of the larger chunk.
+    ResidentPrefillTransientPeakChunkShrinkCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
     /// Number of distinct counters the enabled report storage reserves.
-    pub const COUNT: usize = Self::DecodeExpertCacheSlotEvictionCount as usize + 1;
+    pub const COUNT: usize = Self::ResidentPrefillTransientPeakChunkShrinkCount as usize + 1;
     /// Every counter in declaration order, so report serialization can pair a
     /// counter with its stored value by position without an allocation.
     pub const ALL: [Self; Self::COUNT] = [
@@ -200,9 +207,11 @@ impl PerformanceCounter {
         Self::PreviousTokenPrefetchCapacityDropCount,
         Self::AdmissionReserveExactContextSourceCount,
         Self::AdmissionReservePhaseScaledSourceCount,
+        Self::AdmissionReserveBeyondObservedTokenSpanSourceCount,
         Self::AdmissionReserveGlobalMaximumSourceCount,
         Self::Jangtq2CodebookDecodedOutputByteCount,
         Self::DecodeExpertCacheSlotEvictionCount,
+        Self::ResidentPrefillTransientPeakChunkShrinkCount,
     ];
 
     /// Stable report identifier for this counter.
@@ -351,6 +360,9 @@ impl PerformanceCounter {
             Self::AdmissionReservePhaseScaledSourceCount => {
                 "admission_reserve_phase_scaled_source_count"
             }
+            Self::AdmissionReserveBeyondObservedTokenSpanSourceCount => {
+                "admission_reserve_beyond_observed_token_span_source_count"
+            }
             Self::AdmissionReserveGlobalMaximumSourceCount => {
                 "admission_reserve_global_maximum_source_count"
             }
@@ -358,6 +370,9 @@ impl PerformanceCounter {
                 "jangtq2_codebook_decoded_output_byte_count"
             }
             Self::DecodeExpertCacheSlotEvictionCount => "decode_expert_cache_slot_eviction_count",
+            Self::ResidentPrefillTransientPeakChunkShrinkCount => {
+                "resident_prefill_transient_peak_chunk_shrink_count"
+            }
         }
     }
 }

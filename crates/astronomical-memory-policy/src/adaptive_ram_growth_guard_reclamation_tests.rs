@@ -30,7 +30,7 @@ fn should_admit_growth_without_expert_reclamation_when_only_the_recovery_reserve
     );
 
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 600, 150, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 600, 150, 0, 0, 0)
         .expect("a valid projection should not overflow");
 
     assert_eq!(projection.current_active_memory_bytes(), 600);
@@ -70,7 +70,7 @@ fn should_report_only_the_measured_peak_shortfall_as_required_reclamation() {
     );
 
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 700, 150, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 700, 150, 0, 0, 0)
         .expect("a valid projection should not overflow");
 
     // peak: 700 + 150 + 200 = 1_050, deficit against P=1,010 is 40.
@@ -105,7 +105,7 @@ fn should_reject_a_recovery_projection_overflow() {
     );
 
     let projection_error = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 0, 0, 0, 0)
+        .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 0, 0, 0, 0, 0)
         .expect_err("an overflowing recovery projection must fail closed");
 
     assert_eq!(
@@ -148,7 +148,7 @@ fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
         AdaptiveRamGrowthExecutionProfile::Resident,
     );
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(small_resident_prefill_context, 900_000, 10_000, 0, 0)
+        .project_growth_for_context(small_resident_prefill_context, 900_000, 10_000, 0, 0, 0)
         .expect("the smaller shape should project without overflow");
 
     // 8,000 bytes observed at 8,192 tokens scale to 2,000 bytes at 2,048 tokens
@@ -197,7 +197,7 @@ fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
     );
 
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(exact_resident_prefill_context, 900_000, 10_000, 0, 0)
+        .project_growth_for_context(exact_resident_prefill_context, 900_000, 10_000, 0, 0, 0)
         .expect("the exact context should project without overflow");
 
     assert_eq!(projection.observed_transient_high_water_bytes(), 1_500);
@@ -208,7 +208,7 @@ fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
 }
 
 #[test]
-fn should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape() {
+fn should_bound_an_unobserved_shape_by_scaled_down_larger_and_unscaled_smaller_observations() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
@@ -241,8 +241,10 @@ fn should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape() {
         0,
     );
 
-    // 8,000 × 2,048/8,192 = 2,000; 3,000 × 2,048/1,024 = 6,000. The largest
-    // scaled observation is the conservative proportional estimate.
+    // 8,000 × 2,048/8,192 = 2,000 from the larger observation. The smaller
+    // 1,024-token observation joins UNSCALED (3,000) as a lower bound; scaling
+    // it up to 6,000 would multiply its fixed per-forward overhead by the
+    // token ratio (measured 2026-10-24).
     let projection = adaptive_ram_growth_guard
         .project_growth_for_context(
             AdaptiveRamGrowthContext::prefill(
@@ -255,10 +257,11 @@ fn should_use_the_largest_scaled_phase_observation_for_an_unobserved_shape() {
             10_000,
             0,
             0,
+            0,
         )
         .expect("the unobserved shape should project without overflow");
 
-    assert_eq!(projection.observed_transient_high_water_bytes(), 6_000);
+    assert_eq!(projection.observed_transient_high_water_bytes(), 3_000);
     assert_eq!(
         projection.transient_reserve_source(),
         AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
@@ -282,8 +285,8 @@ fn should_keep_the_global_maximum_for_a_phase_without_any_evidence() {
     );
 
     // Decode evidence exists but prefill has none. The first prefill reserves
-    // the global maximum; its completion records prefill evidence and every
-    // later prefill reserves proportionally.
+    // the global maximum (the analytic floor here is zero); its completion
+    // records prefill evidence for every later prefill.
     let projection = adaptive_ram_growth_guard
         .project_growth_for_context(
             AdaptiveRamGrowthContext::prefill(
@@ -294,6 +297,7 @@ fn should_keep_the_global_maximum_for_a_phase_without_any_evidence() {
             ),
             900_000,
             10_000,
+            0,
             0,
             0,
         )

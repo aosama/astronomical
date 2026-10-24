@@ -146,6 +146,13 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # remain structurally Hybrid; raw entitlement can exceed the whole artifact,
 # so exact resident expert count and payload distinguish surplus from missing
 # experts. The existing 36 GB streaming cell remains unchanged.
+# Resident multi-chunk regression cell (manual, serial, real resident sparse
+# artifact, persistent prompt cache enabled, 120-second budget): a short
+# Romeo and Juliet prompt leaves a one-token terminal prefill observation, then
+# a 5,000-token prompt must stay resident with no resident_to_streaming_retry;
+# `cargo xtask test-run --package astronomical-acceptance --features
+# serving-acceptance --test chat_serving --release --filter
+# should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt --ignored`.
 xtask = "run -p xtask --"
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —
