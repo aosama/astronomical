@@ -25,6 +25,8 @@ const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
 const FIXED_PREFILL_CHUNK_SIZE_TOKENS: u32 = 2_048;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
 const SMALL_PROMPT_TOKEN_COUNT: usize = 256;
+const SHORT_PROMPT_TOKEN_COUNT: usize = 40;
+const MULTI_CHUNK_PROMPT_TOKEN_COUNT: usize = 5_000;
 const CACHE_SEED_PROMPT_TOKEN_COUNT: usize = FIXED_PREFILL_CHUNK_SIZE_TOKENS as usize;
 const CACHE_APPEND_PROMPT_TOKEN_COUNT: usize = 512;
 const ROMEO_AND_JULIET_SOURCE: &str =
@@ -119,6 +121,135 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
     })
     .await
     .expect("the resident engine-selection journey must finish within 115 seconds");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "loads the resident engine, then sends a short and a multi-chunk prompt that both fit"]
+#[serial]
+async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
+    timeout(SSD_JOURNEY_TIMEOUT, async {
+        let model_id = resident_sparse_moe_model_id();
+        let model_directory = configured_installed_model_directory_by_id(model_id);
+        let residency_geometry =
+            measure_sparse_artifact_residency_geometry(&model_directory);
+        let short_user_message = exact_model_prompt::build_exact_model_prompt_content(
+            &model_directory,
+            ROMEO_AND_JULIET_SOURCE,
+            "Name the two families in one short sentence.",
+            SHORT_PROMPT_TOKEN_COUNT,
+        );
+        let multi_chunk_user_message = exact_model_prompt::build_exact_model_prompt_content(
+            &model_directory,
+            ROMEO_AND_JULIET_SOURCE,
+            "Explain how haste shapes the tragedy in one concise sentence.",
+            MULTI_CHUNK_PROMPT_TOKEN_COUNT,
+        );
+        // The ceiling purchases complete residency, the multi-chunk context,
+        // and the analytic three-layer prefill activation floor of one
+        // configured chunk, so the second request fits by construction.
+        let bootstrap_ram_budget = MlxRamBudget::new(
+            residency_geometry.complete_residency_with_headroom_bytes,
+            residency_geometry.model_geometry,
+        )
+        .expect("the resident artifact geometry should compose a bootstrap RAM budget");
+        let resident_memory_ceiling_bytes = residency_geometry
+            .complete_residency_with_headroom_bytes
+            .saturating_add(context_memory_reservation_bytes(
+                &model_directory,
+                MULTI_CHUNK_PROMPT_TOKEN_COUNT + 2,
+            ))
+            .saturating_add(bootstrap_ram_budget.activation_headroom_bytes(
+                MemoryPhase::Prefill,
+                u64::from(FIXED_PREFILL_CHUNK_SIZE_TOKENS),
+            ));
+        assert!(
+            resident_memory_ceiling_bytes <= MAXIMUM_REAL_MODEL_MEMORY_BYTES,
+            "the multi-chunk resident cell must remain within 36 GB: ceiling={resident_memory_ceiling_bytes}"
+        );
+        let worker_home = tempfile::tempdir()
+            .expect("the multi-chunk resident worker home should be created");
+        // The persistent prompt cache stops a terminal chunk one token short,
+        // so the short request leaves a one-token prefill observation. That
+        // observation once extrapolated to a 2,048-token chunk as a ~23 GB
+        // phantom transient and demoted a fitting request to SSD streaming.
+        write_acceptance_config(
+            worker_home.path(),
+            &model_directory,
+            model_id,
+            resident_memory_ceiling_bytes,
+            true,
+        );
+        let real_model_rest_server = launch_real_model_rest_server(
+            model_id,
+            model_directory,
+            worker_home.path(),
+            resident_memory_ceiling_bytes,
+        )
+        .await;
+        let server_address = real_model_rest_server.server_address;
+        complete_chat_request(
+            server_address,
+            model_id,
+            json!([{"role": "user", "content": short_user_message}]),
+            "short-resident-prompt",
+        )
+        .await;
+        complete_chat_request(
+            server_address,
+            model_id,
+            json!([{"role": "user", "content": multi_chunk_user_message}]),
+            "multi-chunk-resident-prompt",
+        )
+        .await;
+        let status_document = get_json_endpoint(server_address, "/v1/status").await;
+        assert_eq!(
+            status_document["expert_memory_mode"], "resident",
+            "a fitting multi-chunk prompt must not demote the resident engine: {status_document}"
+        );
+        stop_real_model_rest_server(real_model_rest_server).await;
+
+        let generation_reports = read_generation_attribution_reports(worker_home.path());
+        assert!(
+            generation_reports.len() >= 2,
+            "both user-visible requests should have generation attribution reports"
+        );
+        let streaming_retry_report_count = generation_reports
+            .iter()
+            .filter(|report| {
+                report["operations"].as_array().is_some_and(|operations| {
+                    operations
+                        .iter()
+                        .any(|operation| operation["operation"] == "resident_to_streaming_retry")
+                })
+            })
+            .count();
+        assert_eq!(
+            streaming_retry_report_count, 0,
+            "no request may retry on the streaming engine when the resident engine fits it"
+        );
+        // Without these, a regression back to token-ratio upscaling could stay
+        // green by silently halving the chunk until the phantom reserve fits.
+        let multi_chunk_report = generation_reports
+            .last()
+            .expect("the multi-chunk request should have the latest generation report");
+        assert!(
+            attribution_counter(
+                multi_chunk_report,
+                "admission_reserve_beyond_observed_token_span_source_count"
+            ) > 0,
+            "the first 2,048-token chunk must reserve from the evidence beyond the observed token span"
+        );
+        assert_eq!(
+            attribution_counter(
+                multi_chunk_report,
+                "resident_prefill_transient_peak_chunk_shrink_count"
+            ),
+            0,
+            "a prompt that fits by construction must execute its configured chunks unshrunk"
+        );
+    })
+    .await
+    .expect("the multi-chunk resident journey must finish within 120 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]

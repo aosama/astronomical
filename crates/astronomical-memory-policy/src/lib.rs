@@ -68,6 +68,8 @@ mod adaptive_ram_growth_guard_admission_tests;
 #[cfg(test)]
 mod adaptive_ram_growth_guard_reclamation_tests;
 #[cfg(test)]
+mod adaptive_ram_growth_guard_transient_reserve_tests;
+#[cfg(test)]
 mod adaptive_ram_growth_observations_tests;
 #[cfg(test)]
 mod ceiling_boundary_tests;

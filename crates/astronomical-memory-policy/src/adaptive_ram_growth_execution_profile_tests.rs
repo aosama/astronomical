@@ -32,7 +32,7 @@ fn should_reserve_transient_headroom_for_unseen_prefill_contexts() {
     ] {
         assert_eq!(
             adaptive_ram_growth_guard
-                .project_growth_for_context(independent_prefill_context, 500, 100, 0, 0)
+                .project_growth_for_context(independent_prefill_context, 500, 100, 0, 0, 0)
                 .expect("an independent context should project")
                 .observed_transient_high_water_bytes(),
             200

@@ -5,9 +5,11 @@
 //! peak limits? It uses exact persistent growth supplied by decoder-state owners,
 //! one routed expert-page reservation, explicit temporary workspace, and a
 //! transient reserve resolved from completed forwards at the highest specificity
-//! available: the exact execution context first, then a token-proportional
-//! estimate from the same phase, then the global maximum for a phase with no
-//! evidence at all (issue #623).
+//! available: the exact execution context first, then larger same-phase
+//! observations scaled down to the forward's token count, then the caller's
+//! analytic floor when every same-phase observation was smaller, then the
+//! global maximum for a phase with no evidence at all (issue #623). Evidence is
+//! never scaled UP by a token ratio (measured 2026-10-24).
 //!
 //! Three projections are retained for diagnostics:
 //!
@@ -44,8 +46,10 @@ pub enum AdaptiveRamGrowthExecutionProfile {
 
 /// Exact recurrent execution shape whose temporary allocation evidence may recur.
 ///
-/// Observations are deliberately not transferable between chunk sizes, prompt
-/// positions, visual requests, or execution profiles.
+/// Each context keys its own exact-shape evidence. Admission reuses evidence
+/// from other same-phase contexts only conservatively: a larger forward's
+/// observation is scaled down, a smaller forward's observation is used
+/// unscaled, and no observation is ever scaled up to a larger forward.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AdaptiveRamGrowthContext {
     memory_phase: MemoryPhase,
@@ -206,16 +210,31 @@ impl AdaptiveRamGrowthGuard {
     /// 1. **Exact context** — the same phase, token count, position bucket,
     ///    and ownership mode completed a forward before; its high-water is the
     ///    tightest known bound for this operation.
-    /// 2. **Phase-scaled** — no exact observation, but the phase completed
-    ///    other shapes. Activation workspace scales with the forward's token
-    ///    count, so each observation is rescaled to this forward's token count
-    ///    (ceiling division) and the largest scaled value wins. An 8,192-token
-    ///    chunk's 8 GB window therefore reserves about 2 GB for a 2,048-token
-    ///    chunk instead of borrowing the absolute 8 GB.
-    /// 3. **Global maximum** — the phase has no evidence at all. The first
-    ///    forward of a new phase reserves the largest window ever observed;
-    ///    its completion records that phase's own evidence and every later
-    ///    forward in the phase reserves proportionally.
+    /// 2. **Phase-scaled** — no exact observation, but the phase completed a
+    ///    forward at least as large as this one. Activation workspace scales
+    ///    with the forward's token count, so each larger observation is scaled
+    ///    DOWN to this forward's token count (ceiling division) and the
+    ///    largest scaled value wins. An 8,192-token chunk's 8 GB window
+    ///    therefore reserves about 2 GB for a 2,048-token chunk instead of
+    ///    borrowing the absolute 8 GB. Smaller observations join unscaled as a
+    ///    lower bound, because a forward never needs less workspace than a
+    ///    smaller forward of the same phase.
+    /// 3. **Beyond the observed token span** — every same-phase observation
+    ///    forwarded fewer tokens than this one. Scaling a small forward up by
+    ///    the token ratio multiplies its fixed per-forward overhead: a
+    ///    one-token prefill's 11 MB window became a 23 GB reserve for a
+    ///    2,048-token chunk and demoted a fully resident model to SSD
+    ///    streaming with more than 5 GB of the ceiling unused (measured
+    ///    2026-10-24). The caller's analytic floor for an unobserved scope
+    ///    governs instead — the same activation workspace request admission
+    ///    already promised for this operation — unless a smaller observation
+    ///    is larger still. This mirrors the rule `MlxRamBudget` follows for
+    ///    its own activation promise (issue #690).
+    /// 4. **Global maximum** — the phase has no evidence at all. The first
+    ///    forward of a new phase reserves the largest window ever observed, or
+    ///    the analytic floor when larger; its completion records that phase's
+    ///    own evidence. Observations that carry a zero token count only
+    ///    participate here, because they cannot bound a per-token estimate.
     ///
     /// Under-projection remains recoverable by design: a typed allocation
     /// failure restores the request checkpoint, reclaims the exact deficit,
@@ -227,6 +246,7 @@ impl AdaptiveRamGrowthGuard {
     pub fn admission_transient_reserve_for_context(
         &self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        unobserved_scope_transient_floor_bytes: usize,
     ) -> (usize, AdaptiveRamGrowthTransientReserveSource) {
         if let Some(&exact_context_high_water_bytes) = self
             .observed_transient_high_water_bytes_by_context
@@ -238,30 +258,58 @@ impl AdaptiveRamGrowthGuard {
             );
         }
         let forward_token_count = adaptive_ram_growth_context.forward_token_count();
-        let scaled_phase_reserve_bytes = self
+        let mut largest_scaled_down_covering_reserve_bytes: Option<usize> = None;
+        let mut largest_unscaled_smaller_observation_bytes: Option<usize> = None;
+        for (observed_context, &observed_high_water_bytes) in self
             .observed_transient_high_water_bytes_by_context
             .iter()
             .filter(|(observed_context, _)| {
                 observed_context.memory_phase() == adaptive_ram_growth_context.memory_phase()
+                    && observed_context.forward_token_count() > 0
             })
-            .filter_map(|(observed_context, &observed_high_water_bytes)| {
-                scale_transient_to_token_count(
-                    observed_high_water_bytes,
-                    observed_context.forward_token_count(),
-                    forward_token_count,
-                )
-            })
-            .max();
-        if let Some(scaled_phase_reserve_bytes) = scaled_phase_reserve_bytes {
-            return (
-                scaled_phase_reserve_bytes,
-                AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
-            );
+        {
+            if observed_context.forward_token_count() < forward_token_count {
+                largest_unscaled_smaller_observation_bytes = Some(
+                    largest_unscaled_smaller_observation_bytes
+                        .map_or(observed_high_water_bytes, |largest_bytes| {
+                            largest_bytes.max(observed_high_water_bytes)
+                        }),
+                );
+            } else if let Some(scaled_down_reserve_bytes) = scale_transient_to_token_count(
+                observed_high_water_bytes,
+                observed_context.forward_token_count(),
+                forward_token_count,
+            ) {
+                largest_scaled_down_covering_reserve_bytes = Some(
+                    largest_scaled_down_covering_reserve_bytes
+                        .map_or(scaled_down_reserve_bytes, |largest_bytes| {
+                            largest_bytes.max(scaled_down_reserve_bytes)
+                        }),
+                );
+            }
         }
-        (
-            self.admission_transient_high_water_bytes(),
-            AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
-        )
+        match (
+            largest_scaled_down_covering_reserve_bytes,
+            largest_unscaled_smaller_observation_bytes,
+        ) {
+            (
+                Some(scaled_down_covering_reserve_bytes),
+                optional_unscaled_smaller_observation_bytes,
+            ) => (
+                scaled_down_covering_reserve_bytes
+                    .max(optional_unscaled_smaller_observation_bytes.unwrap_or(0)),
+                AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
+            ),
+            (None, Some(unscaled_smaller_observation_bytes)) => (
+                unscaled_smaller_observation_bytes.max(unobserved_scope_transient_floor_bytes),
+                AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan,
+            ),
+            (None, None) => (
+                self.admission_transient_high_water_bytes()
+                    .max(unobserved_scope_transient_floor_bytes),
+                AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
+            ),
+        }
     }
 
     /// Returns the retained-payload ceiling that keeps the adaptive growth
@@ -290,8 +338,8 @@ impl AdaptiveRamGrowthGuard {
         // phase's own learned workspace. Capping decode warming at the largest
         // workspace ever seen in any phase let one huge prefill suppress decode
         // warming forever (issue #512): the prefill transient is spent by the
-        // time decode runs, and prefill admission still reserves against the
-        // all-phase maximum through `project_growth_for_context`, so a later
+        // time decode runs, and prefill admission still reserves its own
+        // shape-specific transient through `project_growth_for_context`, so a later
         // large prefill reclaims warm tables through the existing pressure path
         // instead of needing warming to have predicted it. Before this phase has
         // any observation the all-phase maximum keeps the first warming steps
@@ -314,6 +362,13 @@ impl AdaptiveRamGrowthGuard {
     }
 
     /// Builds a checked C-stable and P-peak projection from exact-context evidence.
+    ///
+    /// `unobserved_scope_transient_floor_bytes` is the caller's analytic
+    /// activation reserve for this forward, used only when no same-phase
+    /// observation covers the forward's token count (see
+    /// [`Self::admission_transient_reserve_for_context`]). Callers pass the
+    /// same per-operation workspace their request admission promised, so this
+    /// guard can never demote a forward that request admission already sized.
     pub fn project_growth_for_context(
         &self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
@@ -321,15 +376,20 @@ impl AdaptiveRamGrowthGuard {
         exact_persistent_growth_bytes: usize,
         routed_expert_page_reservation_bytes: usize,
         exact_temporary_workspace_bytes: usize,
+        unobserved_scope_transient_floor_bytes: usize,
     ) -> Result<AdaptiveRamGrowthProjection, AdaptiveRamGrowthGuardError> {
         // Reserve from the most specific evidence available and widen only when
-        // it is missing (issue #623): the exact context first, then a
-        // token-proportional estimate from the same phase's observations, then
-        // the global maximum for a phase with no evidence at all. Charging one
-        // shape's absolute transient window to every other shape demoted fully
+        // it is missing (issue #623): the exact context first, then larger
+        // same-phase observations scaled down to this forward, then the
+        // analytic floor beyond the observed token span, then the global
+        // maximum for a phase with no evidence at all. Charging one shape's
+        // absolute transient window to every other shape demoted fully
         // resident expert owners whose own chunk needed a fraction of it.
-        let (observed_transient_high_water_bytes, transient_reserve_source) =
-            self.admission_transient_reserve_for_context(adaptive_ram_growth_context);
+        let (observed_transient_high_water_bytes, transient_reserve_source) = self
+            .admission_transient_reserve_for_context(
+                adaptive_ram_growth_context,
+                unobserved_scope_transient_floor_bytes,
+            );
         let stable_projected_bytes = current_active_memory_bytes
             .checked_add(exact_persistent_growth_bytes)
             .and_then(|projected_bytes| {

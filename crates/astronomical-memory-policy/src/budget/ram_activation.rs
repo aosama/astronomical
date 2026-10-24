@@ -24,11 +24,41 @@
 //! while an over-reserve has no recovery path and starves every later request
 //! until the model reloads and the learned evidence is forgotten.
 
+use crate::budget::adaptive_growth::AdaptiveRamGrowthContext;
 use crate::budget::ram::{MlxRamBudget, context_token_bucket};
 use crate::phase::MemoryPhase;
 use crate::reclamation;
 
 impl MlxRamBudget {
+    /// Analytic transient floor the adaptive RAM growth guard reserves for a
+    /// forward that no same-phase observation covers.
+    ///
+    /// Request admission already promised [`Self::activation_headroom_bytes`]
+    /// for the planned prefill operation, so the guard reserves that same
+    /// quantity for a prefill forward beyond its observed token span. Two
+    /// owners disagreeing on one forward's activation demoted a fully resident
+    /// model to SSD streaming: request admission reserved 2.57 GB while the
+    /// guard extrapolated a one-token window into 23 GB (measured 2026-10-24).
+    /// Decode keeps a zero floor because every production decode forward is a
+    /// single token, which any completed decode observation already covers.
+    #[must_use]
+    pub fn adaptive_growth_unobserved_scope_transient_floor_bytes(
+        &self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+    ) -> usize {
+        match adaptive_ram_growth_context.memory_phase() {
+            MemoryPhase::Prefill => usize::try_from(
+                self.activation_headroom_bytes(
+                    MemoryPhase::Prefill,
+                    u64::try_from(adaptive_ram_growth_context.forward_token_count())
+                        .unwrap_or(u64::MAX),
+                ),
+            )
+            .unwrap_or(usize::MAX),
+            MemoryPhase::GenerationPreparation | MemoryPhase::Decode | MemoryPhase::Idle => 0,
+        }
+    }
+
     /// Activation headroom for one planned operation.
     ///
     /// Prefill resolves the learned evidence for the planned operation size

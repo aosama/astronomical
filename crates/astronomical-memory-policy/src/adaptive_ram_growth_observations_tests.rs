@@ -189,14 +189,14 @@ fn should_preserve_adaptive_high_water_observations_when_the_limit_changes() {
     );
     assert_eq!(
         adaptive_ram_growth_guard
-            .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 6_000, 500, 0, 0)
+            .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 6_000, 500, 0, 0, 0)
             .expect("the updated guard should project growth")
             .active_memory_ceiling_bytes(),
         8_000
     );
     assert_eq!(
         adaptive_ram_growth_guard
-            .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 6_000, 500, 0, 0)
+            .project_growth_for_context(DEFAULT_DECODE_CONTEXT, 6_000, 500, 0, 0, 0)
             .expect("the updated guard should project growth")
             .allowed_active_memory_bytes(),
         8_080
@@ -220,7 +220,7 @@ fn should_project_exact_temporary_workspace_without_double_counting_learned_resi
     );
 
     let projection = adaptive_ram_growth_guard
-        .project_growth_for_context(DEFAULT_PREFILL_CONTEXT, 500, 100, 0, 200)
+        .project_growth_for_context(DEFAULT_PREFILL_CONTEXT, 500, 100, 0, 200, 0)
         .expect("exact temporary and residual bytes should project without overflow");
 
     assert_eq!(projection.exact_temporary_workspace_bytes(), 200);
@@ -277,6 +277,7 @@ fn should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_
             27_806_577_158,
             192_061_440,
             70_778_880,
+            0,
             0,
         )
         .expect("the reproduced paged decode projection should fit the platform range");
