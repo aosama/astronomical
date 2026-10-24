@@ -9,9 +9,8 @@
 use crate::budget::adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
 };
-use crate::budget::adaptive_growth_projection::{
-    AdaptiveRamGrowthTransientReserveSource, scale_transient_to_token_count,
-};
+use crate::budget::adaptive_growth_projection::TransientWorkspaceReserveSource;
+use crate::budget::transient_workspace_reserve::scale_transient_to_token_count;
 
 const TWENTY_SEVEN_GIGABYTE_ACTIVE_MEMORY_CEILING_BYTES: usize = 28_991_029_248;
 const THIRTY_EIGHT_TOKEN_PREFILL_TRANSIENT_BYTES: usize = 28_113_460;
@@ -89,7 +88,7 @@ fn should_keep_a_resident_long_prompt_chunk_inside_the_ceiling_after_a_one_token
     );
     assert_eq!(
         long_chunk_projection.transient_reserve_source(),
-        AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan,
+        TransientWorkspaceReserveSource::BeyondObservedTokenSpan,
     );
     assert_eq!(long_chunk_projection.peak_projected_bytes(), 24_837_946_126);
     assert_eq!(
@@ -105,19 +104,18 @@ fn should_never_scale_a_smaller_observation_up_by_the_token_ratio() {
         .expect("network denial could not be applied");
     let adaptive_ram_growth_guard = guard_after_the_short_prompt();
 
-    let (long_chunk_reserve_bytes, long_chunk_reserve_source) = adaptive_ram_growth_guard
-        .admission_transient_reserve_for_context(
-            resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
-            0,
-        );
+    let long_chunk_reserve = adaptive_ram_growth_guard.admission_transient_reserve_for_context(
+        resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
+        0,
+    );
 
     assert_eq!(
-        long_chunk_reserve_bytes,
+        long_chunk_reserve.reserve_bytes(),
         THIRTY_EIGHT_TOKEN_PREFILL_TRANSIENT_BYTES
     );
     assert_eq!(
-        long_chunk_reserve_source,
-        AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan,
+        long_chunk_reserve.source(),
+        TransientWorkspaceReserveSource::BeyondObservedTokenSpan,
     );
 }
 
@@ -134,16 +132,15 @@ fn should_prefer_an_unscaled_smaller_observation_that_exceeds_the_analytic_floor
         3_000_000_000,
     );
 
-    let (long_chunk_reserve_bytes, long_chunk_reserve_source) = adaptive_ram_growth_guard
-        .admission_transient_reserve_for_context(
-            resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
-            THREE_COMPLETE_EXPERT_LAYER_PREFILL_FLOOR_BYTES,
-        );
+    let long_chunk_reserve = adaptive_ram_growth_guard.admission_transient_reserve_for_context(
+        resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
+        THREE_COMPLETE_EXPERT_LAYER_PREFILL_FLOOR_BYTES,
+    );
 
-    assert_eq!(long_chunk_reserve_bytes, 3_000_000_000);
+    assert_eq!(long_chunk_reserve.reserve_bytes(), 3_000_000_000);
     assert_eq!(
-        long_chunk_reserve_source,
-        AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan,
+        long_chunk_reserve.source(),
+        TransientWorkspaceReserveSource::BeyondObservedTokenSpan,
     );
 }
 
@@ -167,16 +164,15 @@ fn should_trust_covering_evidence_over_the_analytic_floor() {
 
     // Same token count in another position bucket is covering evidence at a
     // one-to-one ratio; measured evidence outranks the analytic estimate.
-    let (long_chunk_reserve_bytes, long_chunk_reserve_source) = adaptive_ram_growth_guard
-        .admission_transient_reserve_for_context(
-            resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
-            THREE_COMPLETE_EXPERT_LAYER_PREFILL_FLOOR_BYTES,
-        );
+    let long_chunk_reserve = adaptive_ram_growth_guard.admission_transient_reserve_for_context(
+        resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
+        THREE_COMPLETE_EXPERT_LAYER_PREFILL_FLOOR_BYTES,
+    );
 
-    assert_eq!(long_chunk_reserve_bytes, 1_500_000_000);
+    assert_eq!(long_chunk_reserve.reserve_bytes(), 1_500_000_000);
     assert_eq!(
-        long_chunk_reserve_source,
-        AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
+        long_chunk_reserve.source(),
+        TransientWorkspaceReserveSource::PhaseScaled,
     );
 }
 
@@ -188,19 +184,18 @@ fn should_reserve_the_analytic_floor_when_no_forward_has_completed() {
         AdaptiveRamGrowthGuard::new(TWENTY_SEVEN_GIGABYTE_ACTIVE_MEMORY_CEILING_BYTES)
             .expect("the reproduced 27 GB ceiling should create a guard");
 
-    let (first_chunk_reserve_bytes, first_chunk_reserve_source) = adaptive_ram_growth_guard
-        .admission_transient_reserve_for_context(
-            resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
-            THREE_COMPLETE_EXPERT_LAYER_PREFILL_FLOOR_BYTES,
-        );
+    let first_chunk_reserve = adaptive_ram_growth_guard.admission_transient_reserve_for_context(
+        resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
+        THREE_COMPLETE_EXPERT_LAYER_PREFILL_FLOOR_BYTES,
+    );
 
     assert_eq!(
-        first_chunk_reserve_bytes,
+        first_chunk_reserve.reserve_bytes(),
         THREE_COMPLETE_EXPERT_LAYER_PREFILL_FLOOR_BYTES
     );
     assert_eq!(
-        first_chunk_reserve_source,
-        AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
+        first_chunk_reserve.source(),
+        TransientWorkspaceReserveSource::GlobalMaximum,
     );
 }
 
@@ -210,16 +205,16 @@ fn should_use_the_global_maximum_for_a_zero_token_forward() {
         .expect("network denial could not be applied");
     let adaptive_ram_growth_guard = guard_after_the_short_prompt();
 
-    let (zero_token_reserve_bytes, zero_token_reserve_source) = adaptive_ram_growth_guard
+    let zero_token_reserve = adaptive_ram_growth_guard
         .admission_transient_reserve_for_context(resident_prefill_context(0), 0);
 
     assert_eq!(
-        zero_token_reserve_bytes,
+        zero_token_reserve.reserve_bytes(),
         THIRTY_EIGHT_TOKEN_PREFILL_TRANSIENT_BYTES
     );
     assert_eq!(
-        zero_token_reserve_source,
-        AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
+        zero_token_reserve.source(),
+        TransientWorkspaceReserveSource::GlobalMaximum,
     );
 }
 
@@ -236,16 +231,15 @@ fn should_count_a_zero_token_observation_only_toward_the_global_maximum() {
         50_000,
     );
 
-    let (long_chunk_reserve_bytes, long_chunk_reserve_source) = adaptive_ram_growth_guard
-        .admission_transient_reserve_for_context(
-            resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
-            0,
-        );
+    let long_chunk_reserve = adaptive_ram_growth_guard.admission_transient_reserve_for_context(
+        resident_prefill_context(LONG_PROMPT_CHUNK_TOKEN_COUNT),
+        0,
+    );
 
-    assert_eq!(long_chunk_reserve_bytes, 50_000);
+    assert_eq!(long_chunk_reserve.reserve_bytes(), 50_000);
     assert_eq!(
-        long_chunk_reserve_source,
-        AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
+        long_chunk_reserve.source(),
+        TransientWorkspaceReserveSource::GlobalMaximum,
     );
 }
 
@@ -273,7 +267,7 @@ fn should_still_reject_a_forward_whose_own_measured_window_does_not_fit() {
 
     assert_eq!(
         long_chunk_projection.transient_reserve_source(),
-        AdaptiveRamGrowthTransientReserveSource::ExactContext,
+        TransientWorkspaceReserveSource::ExactContext,
     );
     assert!(!long_chunk_projection.fits_stable_and_peak_limits());
     // Only the transient peak is short, so a smaller chunk can still run

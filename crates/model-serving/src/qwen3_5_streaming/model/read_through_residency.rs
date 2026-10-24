@@ -97,17 +97,16 @@ impl Qwen3_5Model {
                 performance_attribution,
             );
         }
-        let (streamed_expert_weights, page_manifest) = expert_pager
-            .stream_selected_expert_page_from_ssd(
-                &self.runtime,
-                layer_index,
-                sorted_unique_expert_ids,
-                Qwen3_5ExpertStreamingRequestShape {
-                    route_token_count,
-                    routed_expert_count: sorted_unique_expert_ids.len(),
-                },
-                performance_attribution,
-            )?;
+        let (streamed_expert_weights, page_manifest) = self.stream_expert_page_from_storage(
+            expert_pager,
+            layer_index,
+            sorted_unique_expert_ids,
+            Qwen3_5ExpertStreamingRequestShape {
+                route_token_count,
+                routed_expert_count: sorted_unique_expert_ids.len(),
+            },
+            performance_attribution,
+        )?;
         performance_attribution.measure_operation(
             PerformanceOperation::ExpertPagingDiagnosticLogging,
             |_performance_attribution| {

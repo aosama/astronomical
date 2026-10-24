@@ -29,9 +29,15 @@
 //! - `vocabulary` — the shared decision vocabulary (`MemoryBoundary`,
 //!   `MemoryAdmissionDecision`): every rejection names its boundary.
 //! - `reclamation` — what must yield, by how much (`ExpertReclamationPlan`,
-//!   the paged step enum `PagedExpertReclamationStep`, the admission error
-//!   vocabulary `ExpertMemoryAdmissionError`, and the reclamation
-//!   arithmetic).
+//!   the admission error vocabulary `ExpertMemoryAdmissionError`, and the
+//!   reclamation arithmetic).
+//! - `memory_equation` — the checked stable, peak, and recovery equation
+//!   shared by request and per-forward admission.
+//! - `forward_admission` — typed resident retry, streaming, and paged reclaim
+//!   decisions for one forward.
+//! - `placement` — the typed engine-placement lifecycle: startup selection,
+//!   request demotion with its typed cause, and the bounded re-promotion
+//!   gate back to the resident engine.
 //! - `budget` — how many bytes this phase owns or needs (`MlxRamBudget`
 //!   composition, learned activation evidence, adaptive growth guards,
 //!   measured model geometry).
@@ -51,8 +57,11 @@ pub mod admission;
 pub mod budget;
 pub mod ceiling;
 pub mod expert_paging;
+pub mod forward_admission;
 pub mod geometry_floor;
+pub mod memory_equation;
 pub mod phase;
+pub mod placement;
 pub mod reclamation;
 pub mod recovery;
 pub mod residency;
@@ -60,6 +69,18 @@ pub mod safetensors;
 pub mod serving_ceiling;
 pub mod strict_json;
 pub mod vocabulary;
+
+pub use forward_admission::{
+    MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT, PagedForwardAdmissionDecision,
+    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection,
+    StreamingEngineRequirement, next_smaller_resident_prefill_chunk_token_count,
+};
+pub use memory_equation::MemoryEquation;
+pub use placement::{
+    EnginePlacement, ResidentPromotionBlocker, ResidentPromotionDecision,
+    should_promote_demoted_streaming_engine_to_resident,
+};
+pub use residency::observed_expert_memory_mode;
 
 #[cfg(test)]
 mod adaptive_ram_growth_execution_profile_tests;

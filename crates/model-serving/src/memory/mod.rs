@@ -90,10 +90,10 @@ pub use astronomical_memory_policy::ceiling::{
 pub use budget::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError, AdaptiveRamGrowthProjection,
-    AdaptiveRamGrowthTransientReserveSource, BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES,
-    MeasuredExpertLayerPayload, MlxRamBudget, MlxRamBudgetError, MlxRamBudgetMeasurement,
-    MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot, RamBudgetGeometryError,
-    measured_non_expert_forward_growth_bytes,
+    BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MeasuredExpertLayerPayload, MlxRamBudget,
+    MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
+    RamBudgetGeometryError, TransientWorkspaceObservation, TransientWorkspaceReserve,
+    TransientWorkspaceReserveSource, measured_non_expert_forward_growth_bytes,
     measured_non_expert_forward_growth_bytes_excluding_expert_page_streaming,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
@@ -104,13 +104,23 @@ pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_by
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
 // direct-MLX admission callers and the offline artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
+pub use astronomical_memory_policy::forward_admission::{
+    MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT, PagedForwardAdmissionDecision,
+    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection,
+    StreamingEngineRequirement, next_smaller_resident_prefill_chunk_token_count,
+};
 pub use astronomical_memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
+pub use astronomical_memory_policy::memory_equation::MemoryEquation;
 pub use astronomical_memory_policy::phase::MemoryPhase;
+pub use astronomical_memory_policy::placement::{
+    EnginePlacement, ResidentPromotionBlocker, ResidentPromotionDecision,
+    should_promote_demoted_streaming_engine_to_resident,
+};
 pub use astronomical_memory_policy::reclamation::{
-    ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,
+    ExpertMemoryAdmissionError, ExpertReclamationPlan,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure, next_paged_expert_reclamation_step,
+    fixed_forward_workspace_after_allocation_failure,
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes,
     should_retry_fixed_forward_after_expert_reclamation, whole_table_reclamation_target_bytes,
@@ -135,8 +145,8 @@ pub use astronomical_memory_policy::residency::{
     ExpertResidencyPlan, ExpertResidencyPlanError, RequestExpertLayerRole, RequestExpertResidency,
     RetainedExpertPageClass, StreamingStartupResidencyFacts, classify_expert_memory_mode,
     complete_layer_indexes_required_before_decode, decode_warm_floor_eviction_indexes,
-    hot_expert_warm_slot_count, minimum_decode_warm_slot_count, plan_expert_residency,
-    publish_request_stable_residency_plan,
+    hot_expert_warm_slot_count, minimum_decode_warm_slot_count, observed_expert_memory_mode,
+    plan_expert_residency, publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,

@@ -15,6 +15,7 @@ pub mod ram;
 pub mod ram_activation;
 pub mod ram_geometry;
 pub mod ram_values;
+pub mod transient_workspace_reserve;
 
 #[cfg(test)]
 mod geometry_memory_floor_tests;
@@ -34,7 +35,7 @@ pub use adaptive_growth::{
     AdaptiveRamGrowthGuardError,
 };
 pub use adaptive_growth_projection::{
-    AdaptiveRamGrowthProjection, AdaptiveRamGrowthTransientReserveSource,
+    AdaptiveRamGrowthProjection, TransientWorkspaceReserveSource,
 };
 pub use ram::{
     BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES, MlxRamBudget, measured_non_expert_forward_growth_bytes,
@@ -47,3 +48,4 @@ pub use ram_geometry::{
 pub use ram_values::{
     MlxRamBudgetError, MlxRamBudgetMeasurement, MlxRamBudgetModelGeometry, MlxRamBudgetSnapshot,
 };
+pub use transient_workspace_reserve::{TransientWorkspaceObservation, TransientWorkspaceReserve};

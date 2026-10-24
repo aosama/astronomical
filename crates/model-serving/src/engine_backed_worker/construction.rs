@@ -21,6 +21,11 @@ where
             wired_residency_budget_bytes: None,
             worker_runtime_feature_configuration: None,
             selected_model: None,
+            // A directly injected engine is treated as complete-resident:
+            // startup engine selection did not run, and every injected
+            // engine owns all of its weights.
+            engine_placement: Some(crate::EnginePlacement::CompleteResidencyFits),
+            startup_residency_facts: None,
         }
     }
 }
@@ -56,6 +61,9 @@ where
             wired_residency_budget_bytes: None,
             worker_runtime_feature_configuration: None,
             selected_model: None,
+            // No autoregressive engine is loaded, so there is no placement.
+            engine_placement: None,
+            startup_residency_facts: None,
         }
     }
 

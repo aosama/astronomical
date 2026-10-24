@@ -1,7 +1,8 @@
-use super::{AdaptiveRamGrowthMemoryAdmissionError, resident_forward_admission_rejection};
+use super::AdaptiveRamGrowthMemoryAdmissionError;
+use super::resident_forward_admission_reason;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
-    AdaptiveRamGrowthProjection,
+    InferenceEngineError, ResidentForwardAdmissionDecision, StreamingEngineRequirement,
 };
 
 const TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES: usize = 10_000_000_000;
@@ -9,12 +10,10 @@ const ONE_PERCENT_TRANSIENT_ALLOWANCE_BYTES: usize =
     TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES / 100;
 const CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT: usize = 2_048;
 
-/// Projects one resident 2,048-token prefill on an evidence-free guard, so the
-/// analytic floor argument alone sets the transient reserve.
 fn resident_prefill_projection(
     current_active_memory_bytes: usize,
     unobserved_scope_transient_floor_bytes: usize,
-) -> AdaptiveRamGrowthProjection {
+) -> crate::AdaptiveRamGrowthProjection {
     AdaptiveRamGrowthGuard::new(TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES)
         .expect("a ten-billion-byte ceiling should create a guard")
         .project_growth_for_context(
@@ -37,56 +36,155 @@ fn resident_prefill_projection(
 fn should_admit_a_resident_forward_whose_stable_and_peak_projections_fit() {
     let forward_projection = resident_prefill_projection(1_000_000_000, 1_000_000_000);
 
-    assert!(resident_forward_admission_rejection(&forward_projection).is_none());
+    assert_eq!(
+        ResidentForwardAdmissionDecision::for_resident_forward(
+            &forward_projection,
+            Some(CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT),
+        ),
+        ResidentForwardAdmissionDecision::Admit
+    );
 }
 
 #[test]
-fn should_admit_a_resident_forward_whose_peak_lands_exactly_on_the_transient_allowance() {
+fn should_admit_a_resident_forward_whose_peak_lands_on_the_transient_allowance() {
     let forward_projection = resident_prefill_projection(
         TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES,
         ONE_PERCENT_TRANSIENT_ALLOWANCE_BYTES,
     );
 
-    assert!(resident_forward_admission_rejection(&forward_projection).is_none());
+    assert_eq!(
+        ResidentForwardAdmissionDecision::for_resident_forward(
+            &forward_projection,
+            Some(CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT),
+        ),
+        ResidentForwardAdmissionDecision::Admit
+    );
 }
 
 #[test]
-fn should_classify_a_peak_one_byte_over_the_allowance_as_a_transient_peak_miss() {
+fn should_offer_a_shrunk_chunk_for_a_peak_one_byte_over_the_allowance() {
     let forward_projection = resident_prefill_projection(
         TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES,
         ONE_PERCENT_TRANSIENT_ALLOWANCE_BYTES + 1,
     );
 
-    assert!(matches!(
-        resident_forward_admission_rejection(&forward_projection),
-        Some(AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { .. })
-    ));
+    assert_eq!(
+        ResidentForwardAdmissionDecision::for_resident_forward(
+            &forward_projection,
+            Some(CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT),
+        ),
+        ResidentForwardAdmissionDecision::ShrinkPrefillChunk {
+            maximum_token_count: 1_024,
+        }
+    );
 }
 
 #[test]
-fn should_classify_a_fitting_stable_footprint_with_a_large_transient_as_a_transient_peak_miss() {
-    let forward_projection = resident_prefill_projection(9_500_000_000, 2_000_000_000);
+fn should_require_streaming_for_a_transient_peak_at_the_minimum_chunk() {
+    let forward_projection = resident_prefill_projection(
+        TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES,
+        ONE_PERCENT_TRANSIENT_ALLOWANCE_BYTES + 1,
+    );
+    let forward_admission_decision = ResidentForwardAdmissionDecision::for_resident_forward(
+        &forward_projection,
+        Some(crate::MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT),
+    );
 
     assert!(matches!(
-        resident_forward_admission_rejection(&forward_projection),
-        Some(AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { .. })
+        forward_admission_decision,
+        ResidentForwardAdmissionDecision::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::TransientPeakShortfallAtMinimumPrefillChunk {
+                shortfall_bytes: 1,
+                ..
+            }
+        }
     ));
+    assert!(
+        resident_forward_admission_reason(
+            &forward_projection,
+            forward_admission_decision
+                .rejection()
+                .expect("a missed forward is a rejection"),
+        )
+        .contains("transient peak")
+    );
 }
 
 #[test]
-fn should_classify_a_stable_footprint_over_the_ceiling_as_insufficient_capacity() {
+fn should_classify_a_stable_footprint_over_the_ceiling_as_a_stable_shortfall() {
     let forward_projection =
         resident_prefill_projection(TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES + 1, 0);
+    let forward_admission_decision = ResidentForwardAdmissionDecision::for_resident_forward(
+        &forward_projection,
+        Some(CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT),
+    );
 
-    let admission_rejection = resident_forward_admission_rejection(&forward_projection);
-
-    match admission_rejection {
-        Some(AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }) => {
-            assert!(
-                reason.contains("allowed ceiling is 10000000000 bytes"),
-                "the rejection should name the ceiling: {reason}"
-            );
+    assert_eq!(
+        forward_admission_decision,
+        ResidentForwardAdmissionDecision::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::StableShortfall { shortfall_bytes: 1 },
         }
-        _ => panic!("a stable-footprint miss must request the streaming engine"),
-    }
+    );
+    assert!(
+        resident_forward_admission_reason(
+            &forward_projection,
+            forward_admission_decision
+                .rejection()
+                .expect("a missed forward is a rejection"),
+        )
+        .contains("exceeds the 10000000000 byte ceiling by 1 bytes")
+    );
+}
+
+#[test]
+fn should_keep_a_decode_transient_peak_miss_as_an_invalid_request() {
+    // A decode forward has no chunk to shrink and no retry the caller can enact,
+    // so converting its typed decision through InferenceEngineError must keep
+    // the pre-slice-A invalid-request rejection. Promoting it to
+    // ResidentForkRequired would make decode paths request an engine fork that
+    // only a replayable prefill attempt can justify.
+    let forward_projection =
+        AdaptiveRamGrowthGuard::new(TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES)
+            .expect("a ten-billion-byte ceiling should create a guard")
+            .project_growth_for_context(
+                AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident),
+                TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES,
+                0,
+                0,
+                0,
+                ONE_PERCENT_TRANSIENT_ALLOWANCE_BYTES + 1,
+            )
+            .expect("an in-range decode should project");
+    let forward_admission_decision =
+        ResidentForwardAdmissionDecision::for_resident_forward(&forward_projection, None);
+
+    assert!(matches!(
+        forward_admission_decision,
+        ResidentForwardAdmissionDecision::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::TransientPeakShortfallWithoutPrefillChunk { .. },
+        }
+    ));
+    let forward_admission_rejection = forward_admission_decision
+        .rejection()
+        .expect("a transient-peak miss is a rejection");
+    let converted_inference_engine_error =
+        InferenceEngineError::from(AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
+            rejection: forward_admission_rejection,
+            reason: resident_forward_admission_reason(
+                &forward_projection,
+                forward_admission_rejection,
+            ),
+        });
+
+    assert!(
+        matches!(
+            converted_inference_engine_error,
+            InferenceEngineError::InvalidRequest { .. }
+        ),
+        "a decode transient-peak miss must stay an invalid request, got {converted_inference_engine_error:?}"
+    );
+    assert!(!matches!(
+        converted_inference_engine_error,
+        InferenceEngineError::ResidentForkRequired { .. }
+    ));
 }

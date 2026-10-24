@@ -463,6 +463,8 @@ impl Qwen3_5Model {
             paged_forward_missing_route_collector:
                 crate::qwen3_5_streaming::PagedForwardMissingRouteCollector::default(),
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
+            request_expert_storage_read_tally:
+                super::request_expert_storage_read_tally::RequestExpertStorageReadTally::default(),
             fused_jangtq2_gathered_projection_kernel,
         })
     }

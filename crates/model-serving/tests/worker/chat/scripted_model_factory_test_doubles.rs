@@ -2,7 +2,9 @@
 
 use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
 use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerModelConfiguration};
-use astronomical_model_serving::{MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime};
+use astronomical_model_serving::{
+    EnginePlacement, MlxMemoryTelemetry, ModelFactory, ModelFactoryRuntime,
+};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -62,6 +64,7 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
         Ok(ModelFactoryRuntime::autoregressive(
             ScriptedChatProcessor::new(),
             scripted_engine,
+            EnginePlacement::CompleteResidencyFits,
         ))
     }
 
@@ -93,6 +96,7 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine>
         Ok(ModelFactoryRuntime::autoregressive(
             ScriptedChatProcessor::new(),
             ScriptedChatEngine::new(),
+            EnginePlacement::CompleteResidencyFits,
         ))
     }
 }

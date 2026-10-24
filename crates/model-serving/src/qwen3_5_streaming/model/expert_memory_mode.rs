@@ -47,4 +47,19 @@ impl Qwen3_5StreamingModel {
             retained_paged_expert_payload_bytes,
         )
     }
+
+    /// Observed residency label for the active request: the load-time
+    /// ownership claim refined by the SSD expert bytes actually streamed
+    /// during the request. A Paged/Hybrid claim that has read zero bytes is
+    /// reported as Resident because the request experienced fully resident
+    /// experts, while a Resident claim that streamed reads downgrades to
+    /// Hybrid (issue #1533).
+    #[must_use]
+    pub(crate) fn observed_expert_memory_mode(&self) -> ExpertMemoryMode {
+        crate::observed_expert_memory_mode(
+            self.expert_memory_mode(),
+            self.request_expert_storage_read_tally
+                .expert_storage_read_byte_count(),
+        )
+    }
 }

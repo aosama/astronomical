@@ -23,6 +23,7 @@ mod prefill_chunk_planning;
 mod prefill_execution_context;
 mod prefill_forward_dispatch;
 mod prefill_memory_admission;
+mod prefill_staging_yield;
 mod prompt_prefill;
 mod prompt_prefill_counters;
 mod prompt_prefill_errors;

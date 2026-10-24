@@ -10,7 +10,7 @@ fn should_cap_the_wired_residency_claim_at_the_recommended_working_set() {
 }
 
 #[test]
-fn should_claim_the_full_serving_ceiling_below_the_recommendation() {
+fn should_claim_the_full_machine_ceiling_below_the_recommendation() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
     assert_eq!(wired_residency_claim_budget_bytes(32, 64), 32);
@@ -24,14 +24,14 @@ fn should_not_claim_more_than_a_zero_recommendation() {
 }
 
 #[test]
-fn should_preserve_a_zero_serving_ceiling() {
+fn should_preserve_a_zero_machine_ceiling() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
     assert_eq!(wired_residency_claim_budget_bytes(0, 64), 0);
 }
 
 #[test]
-fn should_keep_equal_serving_and_recommendation_budgets() {
+fn should_keep_equal_machine_and_recommendation_budgets() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
     assert_eq!(wired_residency_claim_budget_bytes(64, 64), 64);

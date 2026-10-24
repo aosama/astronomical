@@ -14,6 +14,7 @@ pub(super) struct AdmissionOutcome {
     pub(super) active_memory_bytes_before_growth: usize,
     pub(super) retained_expert_payload_bytes_before_growth: u64,
     pub(super) streamed_expert_page_bytes_before_growth: u64,
+    pub(super) unreserved_headroom_bytes: u64,
 }
 
 impl Qwen3_5EngineState {
@@ -85,6 +86,7 @@ impl Qwen3_5EngineState {
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             streamed_expert_page_bytes_before_growth: admitted_baseline.streamed_expert_page_bytes,
+            unreserved_headroom_bytes: admitted_baseline.unreserved_headroom_bytes,
         })
     }
 }

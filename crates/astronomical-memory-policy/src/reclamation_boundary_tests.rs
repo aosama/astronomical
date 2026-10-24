@@ -6,12 +6,33 @@
 //! must terminate in Reject instead of looping forever against retention
 //! that can no longer cover the deficit.
 
+use crate::budget::{
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+};
+use crate::forward_admission::PagedForwardAdmissionDecision;
 use crate::reclamation::{
-    ExpertReclamationPlan, PagedExpertReclamationStep,
     expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure, next_paged_expert_reclamation_step,
+    fixed_forward_workspace_after_allocation_failure,
     should_retry_fixed_forward_after_expert_reclamation,
 };
+
+fn paged_forward_projection(
+    stable_projected_bytes: usize,
+    peak_projected_bytes: usize,
+    active_memory_ceiling_bytes: usize,
+) -> crate::budget::AdaptiveRamGrowthProjection {
+    AdaptiveRamGrowthGuard::new(active_memory_ceiling_bytes)
+        .expect("valid ceiling")
+        .project_growth_for_context(
+            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged),
+            stable_projected_bytes,
+            0,
+            0,
+            0,
+            peak_projected_bytes.saturating_sub(stable_projected_bytes),
+        )
+        .expect("the projection should fit the platform range")
+}
 
 #[test]
 fn should_demand_the_full_retained_payload_when_even_zero_experts_cannot_fit() {
@@ -71,32 +92,30 @@ fn should_reject_immediately_when_retention_can_never_cover_the_deficit() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
-    let unsatisfiable_plan =
-        ExpertReclamationPlan::for_projected_memory(130, 130, 130, 100, 120, 5);
+    let unsatisfiable_projection = paged_forward_projection(130, 130, 100);
+    let decision =
+        PagedForwardAdmissionDecision::for_paged_forward(&unsatisfiable_projection, 5, None);
 
-    assert_eq!(unsatisfiable_plan.required_reclamation_bytes(), 30);
-    assert_eq!(unsatisfiable_plan.reclamation_target_bytes(), 5);
-    assert_eq!(unsatisfiable_plan.unresolved_shortfall_bytes(), 25);
-    assert!(!unsatisfiable_plan.can_satisfy_every_memory_boundary());
     assert_eq!(
-        next_paged_expert_reclamation_step(false, unsatisfiable_plan, None),
-        PagedExpertReclamationStep::Reject,
+        decision,
+        PagedForwardAdmissionDecision::Reject {
+            unresolved_shortfall_bytes: 25
+        },
         "a deficit retention cannot cover must reject before any eviction pass runs"
     );
 }
 
 #[test]
-fn should_fail_closed_when_no_deficit_exists_yet_the_caller_reports_a_miss() {
+fn should_admit_when_the_projection_fits_even_after_a_prior_reclaim_pass() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
-    let fitting_plan = ExpertReclamationPlan::for_projected_memory(90, 110, 110, 100, 120, 50);
+    let fitting_projection = paged_forward_projection(90, 100, 100);
 
-    assert_eq!(fitting_plan.required_reclamation_bytes(), 0);
     assert_eq!(
-        next_paged_expert_reclamation_step(false, fitting_plan, None),
-        PagedExpertReclamationStep::Reject,
-        "every projection fits but the caller still reports a miss: eviction has nothing to fix"
+        PagedForwardAdmissionDecision::for_paged_forward(&fitting_projection, 50, Some(false)),
+        PagedForwardAdmissionDecision::Admit,
+        "the projection, rather than a stale caller boolean, owns the decision"
     );
 }
 
@@ -105,10 +124,10 @@ fn should_take_a_single_max_of_equal_deficits_rather_than_summing() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
-    let plan = ExpertReclamationPlan::for_projected_memory(110, 120, 105, 100, 120, 50);
+    let forward_projection = paged_forward_projection(110, 110, 100);
 
     assert_eq!(
-        plan.required_reclamation_bytes(),
+        forward_projection.operation_reclamation_required_bytes(),
         10,
         "equal stable and peak deficits of 10 must reclaim 10 once, not 20"
     );
@@ -133,16 +152,13 @@ fn should_terminate_the_reclaim_loop_in_reject_once_retention_runs_out() {
             pass_count <= 4,
             "the reclaim loop must terminate within a few passes"
         );
-        let plan = ExpertReclamationPlan::for_projected_memory(
-            130,
-            130,
-            130,
-            100,
-            120,
+        let forward_projection = paged_forward_projection(130, 130, 100);
+        match PagedForwardAdmissionDecision::for_paged_forward(
+            &forward_projection,
             usize::try_from(retained_expert_payload_bytes).expect("payload fits usize"),
-        );
-        match next_paged_expert_reclamation_step(false, plan, Some(true)) {
-            PagedExpertReclamationStep::Reclaim { target_bytes } => {
+            Some(true),
+        ) {
+            PagedForwardAdmissionDecision::ReclaimRetainedExperts { target_bytes } => {
                 retained_expert_payload_bytes =
                     retained_expert_payload_bytes.saturating_sub(target_bytes as u64);
             }
@@ -150,7 +166,12 @@ fn should_terminate_the_reclaim_loop_in_reject_once_retention_runs_out() {
         }
     };
 
-    assert_eq!(decision, PagedExpertReclamationStep::Reject);
+    assert_eq!(
+        decision,
+        PagedForwardAdmissionDecision::Reject {
+            unresolved_shortfall_bytes: 10
+        }
+    );
     assert_eq!(
         retained_expert_payload_bytes, 20,
         "the final 20 retained bytes cannot cover the 30-byte deficit and must survive, not be churned"

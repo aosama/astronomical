@@ -5,25 +5,17 @@ use crate::qwen3_5_resident::model::adaptive_ram_growth_logging;
 use crate::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthProjection, InferenceEngineError, MemoryPhase,
     PerformanceAttribution, PerformanceCounter, PerformanceOperation,
-    combined_persistent_growth_bytes,
+    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection,
+    StreamingEngineRequirement, combined_persistent_growth_bytes,
 };
 
 use super::Qwen3_5EngineState;
 use super::qwen3_5_runtime_error;
 
 pub(in crate::qwen3_5_resident) enum AdaptiveRamGrowthMemoryAdmissionError {
-    /// Stable ownership (weights, decoder state, and this forward's exact
-    /// persistent growth) does not fit the ceiling. No smaller forward can fix
-    /// that, so prefill hands the request to the streaming engine.
-    InsufficientCapacity {
-        reason: String,
-    },
-    /// Stable ownership fits; only the forward's projected transient peak does
-    /// not. Resident prefill retries a smaller chunk before giving up
-    /// residency because a token-dependent reserve shrinks with the chunk; a
-    /// token-independent reserve does not, so the bounded halving then ends at
-    /// the minimum chunk and hands the request to the streaming engine.
-    TransientPeakExceeded {
+    /// The typed policy rejection the resident caller must enact.
+    ForwardAdmission {
+        rejection: ResidentForwardAdmissionRejection,
         reason: String,
     },
     Engine(InferenceEngineError),
@@ -38,8 +30,13 @@ impl From<InferenceEngineError> for AdaptiveRamGrowthMemoryAdmissionError {
 impl From<AdaptiveRamGrowthMemoryAdmissionError> for InferenceEngineError {
     fn from(admission_error: AdaptiveRamGrowthMemoryAdmissionError) -> Self {
         match admission_error {
-            AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }
-            | AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { reason } => {
+            // Prefill chunk attempts intercept the typed decision before this
+            // conversion (PromptPrefillChunkAttemptError), shrinking the chunk or
+            // raising a typed capacity error. Every other resident path — decode
+            // and inject — has no chunk to shrink and no retry to enact, so the
+            // decision degrades to the established invalid-request rejection
+            // instead of a ResidentForkRequired signal the caller cannot act on.
+            AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission { reason, .. } => {
                 crate::qwen3_5_resident::model::memory_admission::invalid_request_error(reason)
             }
             AdaptiveRamGrowthMemoryAdmissionError::Engine(inference_engine_error) => {
@@ -54,7 +51,7 @@ pub(in crate::qwen3_5_resident) struct AdaptiveRamGrowthAdmissionBaseline {
     pub(in crate::qwen3_5_resident) retained_expert_payload_bytes: u64,
     pub(in crate::qwen3_5_resident) streamed_expert_page_bytes: u64,
     pub(in crate::qwen3_5_resident) transient_reserve_source:
-        Option<crate::AdaptiveRamGrowthTransientReserveSource>,
+        Option<crate::TransientWorkspaceReserveSource>,
 }
 
 impl AdaptiveRamGrowthAdmissionBaseline {
@@ -95,21 +92,27 @@ impl Qwen3_5EngineState {
             },
         )?;
         if let Some(transient_reserve_source) = admission_baseline.transient_reserve_source {
+            // NoLearnedReserve marks request-scoped equations that carry no
+            // learned transient evidence; a forward admission cannot produce it,
+            // and no source-attribution counter exists for it.
             let admission_reserve_source_counter = match transient_reserve_source {
-                crate::AdaptiveRamGrowthTransientReserveSource::ExactContext => {
-                    PerformanceCounter::AdmissionReserveExactContextSourceCount
+                crate::TransientWorkspaceReserveSource::ExactContext => {
+                    Some(PerformanceCounter::AdmissionReserveExactContextSourceCount)
                 }
-                crate::AdaptiveRamGrowthTransientReserveSource::PhaseScaled => {
-                    PerformanceCounter::AdmissionReservePhaseScaledSourceCount
+                crate::TransientWorkspaceReserveSource::PhaseScaled => {
+                    Some(PerformanceCounter::AdmissionReservePhaseScaledSourceCount)
                 }
-                crate::AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan => {
-                    PerformanceCounter::AdmissionReserveBeyondObservedTokenSpanSourceCount
+                crate::TransientWorkspaceReserveSource::BeyondObservedTokenSpan => {
+                    Some(PerformanceCounter::AdmissionReserveBeyondObservedTokenSpanSourceCount)
                 }
-                crate::AdaptiveRamGrowthTransientReserveSource::GlobalMaximum => {
-                    PerformanceCounter::AdmissionReserveGlobalMaximumSourceCount
+                crate::TransientWorkspaceReserveSource::GlobalMaximum => {
+                    Some(PerformanceCounter::AdmissionReserveGlobalMaximumSourceCount)
                 }
+                crate::TransientWorkspaceReserveSource::NoLearnedReserve => None,
             };
-            performance_attribution.record_counter(admission_reserve_source_counter, 1);
+            if let Some(admission_reserve_source_counter) = admission_reserve_source_counter {
+                performance_attribution.record_counter(admission_reserve_source_counter, 1);
+            }
         }
         Ok(admission_baseline)
     }
@@ -164,22 +167,29 @@ impl Qwen3_5EngineState {
                     "adaptive RAM growth rejected: {projection_error}"
                 ))
             })?;
+        let forward_admission_decision = ResidentForwardAdmissionDecision::for_resident_forward(
+            &forward_projection,
+            matches!(
+                adaptive_ram_growth_context.memory_phase(),
+                MemoryPhase::Prefill
+            )
+            .then_some(adaptive_ram_growth_context.forward_token_count()),
+        );
         if should_log_memory_decision {
             adaptive_ram_growth_logging::log_adaptive_ram_growth_admission_decision(
                 adaptive_ram_growth_context,
                 &forward_projection,
-                if forward_projection.fits_stable_and_peak_limits() {
-                    "admit_resident_forward"
-                } else if forward_projection.fits_stable_limit() {
-                    "reject_resident_transient_peak"
-                } else {
-                    "request_streaming_engine"
-                },
+                forward_admission_decision.resident_log_label(),
             );
         }
-        if let Some(admission_rejection) = resident_forward_admission_rejection(&forward_projection)
-        {
-            return Err(admission_rejection);
+        if let Some(forward_admission_rejection) = forward_admission_decision.rejection() {
+            return Err(AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
+                reason: resident_forward_admission_reason(
+                    &forward_projection,
+                    forward_admission_rejection,
+                ),
+                rejection: forward_admission_rejection,
+            });
         }
         model
             .runtime()
@@ -202,26 +212,66 @@ impl Qwen3_5EngineState {
     }
 }
 
-/// Classifies a resident forward projection: `None` admits it; a stable miss
-/// requests the streaming engine; a transient-peak-only miss lets resident
-/// prefill retry a smaller chunk first.
-fn resident_forward_admission_rejection(
+fn resident_forward_admission_reason(
     forward_projection: &AdaptiveRamGrowthProjection,
-) -> Option<AdaptiveRamGrowthMemoryAdmissionError> {
-    if forward_projection.fits_stable_and_peak_limits() {
-        return None;
+    forward_admission_rejection: ResidentForwardAdmissionRejection,
+) -> String {
+    let equation = forward_projection.memory_equation();
+    match forward_admission_rejection {
+        ResidentForwardAdmissionRejection::ShrinkPrefillChunk {
+            maximum_token_count,
+        } => format!(
+            "resident forward peak of {} bytes exceeds the allowed ceiling of {} bytes; retry with at most {maximum_token_count} prefill tokens",
+            equation.peak_projected_bytes(),
+            equation.allowed_active_memory_bytes(),
+        ),
+        ResidentForwardAdmissionRejection::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::StableShortfall { shortfall_bytes },
+        } => format!(
+            "resident stable projection of {} bytes exceeds the {} byte ceiling by {shortfall_bytes} bytes",
+            equation.stable_projected_bytes(),
+            equation.active_memory_ceiling_bytes(),
+        ),
+        ResidentForwardAdmissionRejection::RequireStreamingEngine {
+            cause:
+                StreamingEngineRequirement::TransientPeakShortfallAtMinimumPrefillChunk {
+                    shortfall_bytes,
+                    prefill_chunk_token_count,
+                },
+        } => format!(
+            "resident prefill chunk of {prefill_chunk_token_count} tokens has a transient peak that exceeds the allowed ceiling by {shortfall_bytes} bytes"
+        ),
+        ResidentForwardAdmissionRejection::RequireStreamingEngine {
+            cause:
+                StreamingEngineRequirement::TransientPeakShortfallWithoutPrefillChunk {
+                    shortfall_bytes,
+                },
+        } => format!(
+            "resident forward peak of {} bytes exceeds the allowed ceiling of {} bytes by {shortfall_bytes} bytes",
+            equation.peak_projected_bytes(),
+            equation.allowed_active_memory_bytes(),
+        ),
+        // The arms below describe causes that never come from
+        // `for_resident_forward`: request-context admission rejects before any
+        // forward is projected, and runtime allocation failures surface after
+        // the forward already ran. The wording states the cause itself because
+        // the projection equation the forward never had cannot describe it.
+        ResidentForwardAdmissionRejection::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::RequestContextShortfall { shortfall_bytes },
+        } => format!(
+            "request context workspace exceeds the {} byte ceiling by {shortfall_bytes} bytes before any forward ran",
+            equation.active_memory_ceiling_bytes(),
+        ),
+        ResidentForwardAdmissionRejection::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::ForwardAllocationShortfall { shortfall_bytes },
+        } => format!(
+            "runtime forward allocation exceeded the allowed ceiling of {} bytes by {shortfall_bytes} bytes",
+            equation.allowed_active_memory_bytes(),
+        ),
+        ResidentForwardAdmissionRejection::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::ForwardGraphicsProcessorMemoryExhausted,
+        } => "runtime forward allocation exhausted graphics-processor memory".to_owned(),
     }
-    let reason = format!(
-        "resident forward requires {} bytes at stable projection and {} bytes at peak projection; allowed ceiling is {} bytes",
-        forward_projection.stable_projected_bytes(),
-        forward_projection.peak_projected_bytes(),
-        forward_projection.active_memory_ceiling_bytes(),
-    );
-    Some(if forward_projection.fits_stable_limit() {
-        AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { reason }
-    } else {
-        AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason }
-    })
 }
 
 fn performance_attribution_payload_bytes(performance_attribution: &PerformanceAttribution) -> u64 {

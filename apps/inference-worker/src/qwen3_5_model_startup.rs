@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use astronomical_config::PromptCacheConfig;
 use astronomical_ipc_protocol::{WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy};
 use astronomical_model_serving::{
-    CompleteResidencyDecision, CompleteResidencyRequirements, ModelFamilyInferenceEngine,
+    CompleteResidencyRequirements, EnginePlacement, ModelFamilyInferenceEngine,
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
     PerformanceOperation, PersistentPromptCacheDiskStoreConfig, Qwen3_5ArtifactValidator,
     Qwen3_5GenerationProcessor, Qwen3_5RamBudgetGeometryError, Qwen3_5ResidentEngine,
@@ -19,6 +19,7 @@ use astronomical_model_serving::ModelLoadingPerformanceAttributionMetadata;
 pub(crate) enum Qwen3_5EngineSelection {
     Automatic,
     StreamingRetry,
+    ResidentPromotion,
 }
 
 #[derive(Clone, Copy)]
@@ -42,7 +43,14 @@ pub(crate) fn initialize_qwen3_5_model(
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
     engine_selection: Qwen3_5EngineSelection,
-) -> Result<(Qwen3_5GenerationProcessor, ModelFamilyInferenceEngine), Qwen3_5ModelStartupError> {
+) -> Result<
+    (
+        Qwen3_5GenerationProcessor,
+        ModelFamilyInferenceEngine,
+        Option<EnginePlacement>,
+    ),
+    Qwen3_5ModelStartupError,
+> {
     let mut model_loading_performance_attribution = if performance_attribution_enabled {
         PerformanceAttribution::enabled()
     } else {
@@ -90,7 +98,7 @@ pub(crate) fn initialize_qwen3_5_model(
     let artifact_model_revision = validated_artifact.revision().to_owned();
     let artifact_payload_bytes = validated_artifact.total_payload_bytes();
     let artifact_shard_count = validated_artifact.shard_count();
-    let selected_engine = match engine_selection {
+    let (selected_engine, engine_placement) = match engine_selection {
         Qwen3_5EngineSelection::Automatic => {
             match model_loading_performance_attribution.measure_operation(
                 PerformanceOperation::ArtifactRamBudgetGeometry,
@@ -102,7 +110,9 @@ pub(crate) fn initialize_qwen3_5_model(
                     )
                 },
             ) {
-                Ok(selected_engine) => selected_engine,
+                Ok((selected_engine, engine_placement)) => {
+                    (selected_engine, Some(engine_placement))
+                }
                 Err(selection_error) => {
                     tracing::warn!(
                         error = %selection_error,
@@ -122,7 +132,11 @@ pub(crate) fn initialize_qwen3_5_model(
                 }
             }
         }
-        Qwen3_5EngineSelection::StreamingRetry => Qwen3_5SelectedEngine::Streaming,
+        // Forced selections exist for one worker-directed swap. No startup
+        // selection runs, so they carry no placement; the worker records the
+        // typed transition (request demotion or resident promotion) itself.
+        Qwen3_5EngineSelection::StreamingRetry => (Qwen3_5SelectedEngine::Streaming, None),
+        Qwen3_5EngineSelection::ResidentPromotion => (Qwen3_5SelectedEngine::Resident, None),
     };
     let generation_processor = match model_loading_performance_attribution.measure_operation(
         PerformanceOperation::TokenizerInitialization,
@@ -254,14 +268,14 @@ pub(crate) fn initialize_qwen3_5_model(
         model_directory: model_directory_path,
         source,
     })?;
-    Ok((generation_processor, qwen3_5_engine))
+    Ok((generation_processor, qwen3_5_engine, engine_placement))
 }
 
 fn select_qwen3_5_engine_from_artifact(
     validated_artifact: &astronomical_model_serving::ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
     active_memory_limit_bytes: usize,
-) -> Result<Qwen3_5SelectedEngine, Qwen3_5ModelStartupError> {
+) -> Result<(Qwen3_5SelectedEngine, EnginePlacement), Qwen3_5ModelStartupError> {
     let (model_geometry, required_headroom_bytes) =
         match mlx_ram_budget_model_geometry_from_validated_artifact(
             validated_artifact,
@@ -269,7 +283,10 @@ fn select_qwen3_5_engine_from_artifact(
         ) {
             Ok(geometry) => geometry,
             Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => {
-                return Ok(Qwen3_5SelectedEngine::Resident);
+                return Ok((
+                    Qwen3_5SelectedEngine::Resident,
+                    EnginePlacement::CompleteResidencyFits,
+                ));
             }
             Err(source) => {
                 return Err(Qwen3_5ModelStartupError::ArtifactRamGeometry {
@@ -286,16 +303,20 @@ fn select_qwen3_5_engine_from_artifact(
         active_memory_ceiling_bytes: u64::try_from(active_memory_limit_bytes).unwrap_or(u64::MAX),
     }
     .decide();
-    match complete_residency_decision {
-        CompleteResidencyDecision::Admit { .. } => Ok(Qwen3_5SelectedEngine::Resident),
-        CompleteResidencyDecision::DoesNotFit { .. } => Ok(Qwen3_5SelectedEngine::Streaming),
-        CompleteResidencyDecision::RejectInvalidObservation { error: source } => {
-            Err(Qwen3_5ModelStartupError::CompleteResidencyDecision {
-                model_directory: model_directory_path.to_path_buf(),
-                source,
-            })
-        }
-    }
+    let engine_placement =
+        EnginePlacement::from_startup_complete_residency_decision(complete_residency_decision)
+            .map_err(
+                |source| Qwen3_5ModelStartupError::CompleteResidencyDecision {
+                    model_directory: model_directory_path.to_path_buf(),
+                    source,
+                },
+            )?;
+    let selected_engine = if engine_placement.runs_resident_engine() {
+        Qwen3_5SelectedEngine::Resident
+    } else {
+        Qwen3_5SelectedEngine::Streaming
+    };
+    Ok((selected_engine, engine_placement))
 }
 
 #[allow(clippy::too_many_arguments)]
