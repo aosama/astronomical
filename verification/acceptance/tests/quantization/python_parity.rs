@@ -9,7 +9,7 @@ use super::support::{
 
 #[test]
 #[serial]
-#[ignore = "needs ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR and ASTRONOMICAL_QUANTIZATION_PYTHON_REFERENCE_DIR; pending implementation"]
+#[ignore = "needs model_directory and reference_artifact_path in the explicit test-run configuration; pending implementation"]
 fn should_match_the_python_artifact_tensor_by_tensor_under_the_same_static_allocation() {
     // Work to implement:
     // 1. Read the Python artifact's optiq/metadata.json; convert the source
@@ -36,7 +36,7 @@ fn should_match_the_python_artifact_tensor_by_tensor_under_the_same_static_alloc
 
 #[test]
 #[serial]
-#[ignore = "needs ASTRONOMICAL_QUANTIZATION_PYTHON_REFERENCE_DIR with optiq/sensitivity.json; pending implementation"]
+#[ignore = "needs reference_artifact_path with optiq/sensitivity.json in the explicit test-run configuration; pending implementation"]
 fn should_reproduce_the_python_bit_map_from_the_python_sensitivity_document() {
     // Work to implement: read the reference artifact's optiq/sensitivity.json
     // and optiq/metadata.json; allocate with the Rust allocator at the

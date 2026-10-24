@@ -13,7 +13,7 @@
 //! transformer — so numeric equality with the diffusers reference is a property of the future
 //! end-to-end render journey, not this one.
 //!
-//! Resolves the artifact through `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY`, and derives
+//! Resolves the artifact through the explicit test-run `model_directory`, and derives
 //! the wired-memory limit from the artifact's own weight file size plus fixed activation
 //! headroom, so the journey adapts to any artifact revision instead of any machine.
 
@@ -92,8 +92,9 @@ fn journey_request<'a>(
     }
 }
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_denoise_a_text_conditioned_latent_grid_deterministically() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(TRANSFORMER_JOURNEY_TIMEOUT, async {
@@ -209,8 +210,9 @@ async fn should_denoise_a_text_conditioned_latent_grid_deterministically() {
     .expect("the transformer journey should finish within its 115 s budget");
 }
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_reject_a_latent_request_with_the_wrong_channel_count() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(TRANSFORMER_JOURNEY_TIMEOUT, async {

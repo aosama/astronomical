@@ -73,7 +73,7 @@ mod native_progress;
 mod native_store;
 
 use native_compile::{
-    NATIVE_ARCHIVE_VARIABLES, NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE,
+    NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE,
     NATIVE_DEPENDENCY_CACHE_VARIABLE, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
     build_pinned_native_runtime, native_build_store_directory, native_parallel_job_count,
     required_path_variable, resolve_native_build_identity, write_native_build_status,
@@ -150,9 +150,6 @@ fn emit_environment_rerun_contracts() {
     ] {
         println!("cargo:rerun-if-env-changed={environment_variable}");
     }
-    for archive_variable in NATIVE_ARCHIVE_VARIABLES {
-        println!("cargo:rerun-if-env-changed={archive_variable}");
-    }
 }
 
 /// Maps the requested Cargo features onto a native build profile.
@@ -203,8 +200,8 @@ fn emit_native_source_rerun_contracts(
     ] {
         println!("cargo:rerun-if-changed={}", source_path.display());
     }
-    // The build script previously tracked these paths only on cold builds;
-    // emitting them on every run keeps Cargo's rebuild triggers honest when
+    // The build script previously tracked this path only on cold builds;
+    // emitting it on every run keeps Cargo's rebuild triggers honest when
     // the store reuses a warm entry.
     if let Some(native_dependency_cache_directory) =
         native_build_inputs.native_dependency_cache_directory()
@@ -213,8 +210,5 @@ fn emit_native_source_rerun_contracts(
             "cargo:rerun-if-changed={}",
             native_dependency_cache_directory.display()
         );
-    }
-    for (_, archive_path) in native_build_inputs.native_archive_paths() {
-        println!("cargo:rerun-if-changed={}", archive_path.display());
     }
 }

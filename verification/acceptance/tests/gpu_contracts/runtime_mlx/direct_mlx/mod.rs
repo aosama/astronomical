@@ -11,7 +11,7 @@ mod metal_kernel_in_trace_probe;
 mod mlx_runtime;
 mod moe_gather_stage_benchmark;
 mod nvfp4_quantized_operations;
-mod qmm_nax_tile_benchmark;
+mod qmm_nax_tile_selection;
 mod quantized_operations;
 mod safetensors_reader;
 mod safetensors_writer;

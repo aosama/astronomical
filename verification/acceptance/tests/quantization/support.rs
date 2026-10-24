@@ -4,16 +4,7 @@
 use std::path::PathBuf;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-
-/// The installed bf16 (or FP8) source snapshot: `config.json`, shards,
-/// `tokenizer.json`. A small Qwen3.5 dense base keeps the exact sweep inside
-/// the runner budget.
-pub(crate) const SOURCE_MODEL_DIRECTORY_ENV: &str = "ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR";
-/// An artifact the Python tool (`optiq convert`, mlx-optiq 0.6.5) produced
-/// from the same source with `--method static --candidate-bits 2,4,8
-/// --target-bpw 4.5 --no-low-bit-search`, for the parity journey.
-pub(crate) const PYTHON_REFERENCE_DIRECTORY_ENV: &str =
-    "ASTRONOMICAL_QUANTIZATION_PYTHON_REFERENCE_DIR";
+use astronomical_test_harness::test_run::TestRunContext;
 
 /// Generous for a small base plus the encoder's working copies, far below
 /// any laptop ceiling.
@@ -28,24 +19,16 @@ pub(crate) const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 pub(crate) fn source_model_directory() -> PathBuf {
-    match std::env::var_os(SOURCE_MODEL_DIRECTORY_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {SOURCE_MODEL_DIRECTORY_ENV} to a local bf16 Qwen3.5 snapshot directory \
-             (config.json, *.safetensors, tokenizer.json)"
-        ),
-    }
+    TestRunContext::current().required_model_directory()
 }
 
 pub(crate) fn python_reference_directory() -> PathBuf {
-    match std::env::var_os(PYTHON_REFERENCE_DIRECTORY_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {PYTHON_REFERENCE_DIRECTORY_ENV} to the artifact mlx-optiq 0.6.5 produced from \
-             the same source (optiq convert --method static --candidate-bits 2,4,8 \
-             --target-bpw 4.5 --no-low-bit-search)"
-        ),
-    }
+    let reference_directory = TestRunContext::current().required_reference_artifact_path();
+    assert!(
+        reference_directory.is_dir(),
+        "the Python reference artifact must be a directory"
+    );
+    reference_directory
 }
 
 pub(crate) fn journey_runtime() -> MlxRuntime {

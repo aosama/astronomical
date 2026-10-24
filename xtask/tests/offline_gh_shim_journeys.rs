@@ -253,3 +253,48 @@ fn sccache_save_without_a_listable_cache_degrades_to_skip() {
         Some("cache-list-unavailable")
     );
 }
+
+#[test]
+fn should_apply_fixed_sccache_save_budgets_despite_retired_environment_entries() {
+    for (stored_entry_bytes, directory_budget, entry_budget, expected_decision) in [
+        (450_000_000, "1", "1", "fresh-entry-within-budget"),
+        (450_000_001, "1", "900000000", "replace-oversize-entry"),
+        (
+            450_000_001,
+            "not-an-integer",
+            "not-an-integer",
+            "replace-oversize-entry",
+        ),
+        (450_000_001, "", "", "replace-oversize-entry"),
+    ] {
+        let test_directory = tempfile::tempdir().expect("the test directory should be created");
+        let cache_list = format!(
+            "1\tprimary-cache-key\trefs/heads/main\t2026-10-01T00:00:00Z\t{stored_entry_bytes}\n"
+        );
+        let shim = GhShim::install(test_directory.path(), &cache_list, &HashMap::new());
+        let sccache_directory = test_directory.path().join("sccache");
+        std::fs::create_dir_all(&sccache_directory).unwrap();
+        std::fs::write(sccache_directory.join("entry"), [0; 10]).unwrap();
+        let github_output_path = output_path(test_directory.path());
+        std::fs::write(&github_output_path, "").unwrap();
+        let save_run = shim
+            .command_for_xtask(&["save-sccache", "primary-cache-key"])
+            .env("GITHUB_REPOSITORY", "example/project")
+            .env("SCCACHE_DIR", &sccache_directory)
+            .env("GITHUB_OUTPUT", &github_output_path)
+            .env("SCCACHE_SAVE_MAX_DIRECTORY_BYTES", directory_budget)
+            .env("SCCACHE_SAVE_MAX_ENTRY_BYTES", entry_budget)
+            .output()
+            .expect("the xtask binary should run");
+        assert!(
+            save_run.status.success(),
+            "{}",
+            String::from_utf8_lossy(&save_run.stderr)
+        );
+        let decisions = read_output_map(&github_output_path);
+        assert_eq!(
+            decisions.get("decision").map(String::as_str),
+            Some(expected_decision)
+        );
+    }
+}

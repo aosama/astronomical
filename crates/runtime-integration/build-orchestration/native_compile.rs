@@ -21,14 +21,12 @@
 //! into the actual build, the produced bytes would depend on state the
 //! fingerprint never saw, and store reuse would serve mismatched artifacts.
 //!
-//! # Why the environment is also the input channel
+//! # Verified dependency provisioning
 //!
-//! Archive locations and the dependency cache arrive through the
-//! `ASTRONOMICAL_*` environment variables below (populated by
-//! `cargo xtask bootstrap-native-dependencies` and hosted CI), because build
-//! scripts cannot receive structured arguments. The CMake side re-verifies
-//! every archive's SHA-256 (see `native/CMakeLists.txt`), so a corrupted or
-//! swapped archive fails the build even if the environment pointed at it.
+//! `cargo xtask bootstrap-native-dependencies` provisions the pinned archive
+//! filenames under one dependency cache directory. CMake resolves every
+//! archive from that directory and re-verifies its SHA-256 before extraction
+//! (see `native/CMakeLists.txt`); per-archive environment overrides are absent.
 
 use std::{
     env,
@@ -49,54 +47,23 @@ pub const RUSTC_WRAPPER_VARIABLE: &str = "RUSTC_WRAPPER";
 pub const NATIVE_DEPENDENCY_CACHE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
 pub const NATIVE_BUILD_STORE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_STORE_DIR";
 pub const NATIVE_BUILD_STATUS_FILE_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE";
-/// The five verified source archives the pinned native build consumes. Each
-/// has a matching `-D<variable>=<path>` CMake definition; see
-/// `native/CMakeLists.txt` for the SHA-256 pins.
-pub const NATIVE_ARCHIVE_VARIABLES: [&str; 5] = [
-    "ASTRONOMICAL_MLX_SOURCE_ARCHIVE",
-    "ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE",
-    "ASTRONOMICAL_METAL_CPP_SOURCE_ARCHIVE",
-    "ASTRONOMICAL_JSON_SOURCE_ARCHIVE",
-    "ASTRONOMICAL_FMT_SOURCE_ARCHIVE",
-];
-
 const SCCACHE_EXECUTABLE_NAME: &str = "sccache";
 
 /// Native inputs resolved from the environment once per run so the CMake
 /// configuration and Cargo's path tracking observe the same values.
 pub struct NativeRuntimeBuildInputs {
     native_dependency_cache_directory: Option<PathBuf>,
-    native_archive_paths: Vec<(&'static str, PathBuf)>,
 }
 
 impl NativeRuntimeBuildInputs {
     pub fn from_environment() -> Self {
         Self {
             native_dependency_cache_directory: native_dependency_cache_directory(),
-            native_archive_paths: NATIVE_ARCHIVE_VARIABLES
-                .into_iter()
-                .filter_map(|archive_variable| {
-                    env::var_os(archive_variable)
-                        .map(PathBuf::from)
-                        .map(|archive_path| (archive_variable, archive_path))
-                })
-                .collect(),
         }
     }
 
     pub fn native_dependency_cache_directory(&self) -> Option<&Path> {
         self.native_dependency_cache_directory.as_deref()
-    }
-
-    pub fn native_archive_paths(&self) -> &[(&'static str, PathBuf)] {
-        &self.native_archive_paths
-    }
-
-    fn archive_path(&self, archive_variable: &str) -> Option<&Path> {
-        self.native_archive_paths
-            .iter()
-            .find(|(variable_name, _)| *variable_name == archive_variable)
-            .map(|(_, archive_path)| archive_path.as_path())
     }
 }
 
@@ -213,7 +180,18 @@ pub fn build_pinned_native_runtime(
             "-DASTRONOMICAL_BUILD_MEMORY_CONTRACT_PROBE={}",
             cmake_boolean(native_build_profile.should_build_memory_contract_probe())
         ));
-    append_native_archive_configuration(&mut configure_command, native_build_inputs);
+    if let Some(native_dependency_cache_directory) =
+        native_build_inputs.native_dependency_cache_directory()
+    {
+        configure_command.arg(format!(
+            "-D{NATIVE_DEPENDENCY_CACHE_VARIABLE}={}",
+            native_dependency_cache_directory.display()
+        ));
+    } else {
+        configure_command
+            .arg("-U")
+            .arg(NATIVE_DEPENDENCY_CACHE_VARIABLE);
+    }
     run_command(
         &mut configure_command,
         "native-configure",
@@ -253,34 +231,6 @@ pub fn build_pinned_native_runtime(
         )?;
     }
     Ok(())
-}
-
-/// Forwards the resolved archive locations (or their explicit absence) to
-/// CMake. `-U` un-definitions matter as much as definitions: a stale
-/// CMakeCache from an earlier configuration must not silently keep pointing
-/// at a moved archive.
-fn append_native_archive_configuration(
-    configure_command: &mut Command,
-    native_build_inputs: &NativeRuntimeBuildInputs,
-) {
-    if let Some(native_dependency_cache_directory) =
-        native_build_inputs.native_dependency_cache_directory()
-    {
-        configure_command.arg(format!(
-            "-D{NATIVE_DEPENDENCY_CACHE_VARIABLE}={}",
-            native_dependency_cache_directory.display()
-        ));
-    }
-    for archive_variable in NATIVE_ARCHIVE_VARIABLES {
-        match native_build_inputs.archive_path(archive_variable) {
-            Some(archive_path) => {
-                configure_command.arg(format!("-D{archive_variable}={}", archive_path.display()));
-            }
-            None => {
-                configure_command.arg("-U").arg(archive_variable);
-            }
-        }
-    }
 }
 
 /// Writes the one-word build status (`built` or `reused`) for CI steps that

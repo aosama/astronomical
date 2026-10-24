@@ -72,8 +72,9 @@ fn encode_prompt(runtime: &MlxRuntime, encoder: &QwenImage21TextEncoder, prompt:
         .expect("the hidden states should materialize")
 }
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_encode_a_real_prompt_into_deterministic_conditioning() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(ENCODER_JOURNEY_TIMEOUT, async {
@@ -112,8 +113,9 @@ async fn should_encode_a_real_prompt_into_deterministic_conditioning() {
     .expect("the encoder journey should finish within its 115 s budget");
 }
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_reject_an_out_of_vocabulary_token_id() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(ENCODER_JOURNEY_TIMEOUT, async {

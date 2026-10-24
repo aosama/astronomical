@@ -59,6 +59,7 @@ impl PagingExperimentCase {
 #[serde(default, deny_unknown_fields)]
 pub struct TestRunConfiguration {
     pub model_directory: Option<PathBuf>,
+    pub reference_artifact_path: Option<PathBuf>,
     pub evidence_directory: Option<PathBuf>,
     pub real_models: bool,
     pub diagnostics: bool,
@@ -89,6 +90,7 @@ impl TestRunConfiguration {
     pub fn resolve_paths(&mut self, configuration_directory: &Path) {
         for configured_path in [
             &mut self.model_directory,
+            &mut self.reference_artifact_path,
             &mut self.evidence_directory,
             &mut self.throughput_history_path,
             &mut self.coverage_inventory_output,
@@ -100,9 +102,13 @@ impl TestRunConfiguration {
         }
     }
 
-    fn configured_paths(&self) -> [(&'static str, Option<&Path>); 4] {
+    fn configured_paths(&self) -> [(&'static str, Option<&Path>); 5] {
         [
             ("model directory", self.model_directory.as_deref()),
+            (
+                "reference artifact path",
+                self.reference_artifact_path.as_deref(),
+            ),
             ("evidence directory", self.evidence_directory.as_deref()),
             (
                 "throughput history path",
@@ -180,6 +186,18 @@ impl TestRunContext {
             model_directory.display()
         );
         model_directory.clone()
+    }
+
+    pub fn required_reference_artifact_path(&self) -> PathBuf {
+        let reference_artifact_path = self.configuration.reference_artifact_path.as_ref().expect(
+            "select a reference_artifact_path in the configuration passed to cargo xtask test-run",
+        );
+        assert!(
+            reference_artifact_path.exists(),
+            "the selected reference artifact does not exist: {}",
+            reference_artifact_path.display()
+        );
+        reference_artifact_path.clone()
     }
 
     fn validate(&self) -> Result<(), String> {

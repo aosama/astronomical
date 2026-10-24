@@ -8,7 +8,7 @@
 //! reference needs a reference decode this machine cannot produce, so the end-to-end render
 //! journey carries the image-level acceptance and these journeys pin the decoder's own contract.
 //!
-//! Resolves the artifact through `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY` — the same
+//! Resolves the artifact through the explicit test-run `model_directory` — the same
 //! env-var acceptance pattern as the text-conditioning journeys — so no developer path is
 //! hardcoded. The wired-memory limit is computed from the artifact's own weight file size plus a
 //! fixed activation headroom, so the journey adapts to any artifact revision instead of any
@@ -55,8 +55,9 @@ fn journey_latents(runtime: &MlxRuntime) -> mlx_c_rust::MlxArray {
         .expect("the journey latents should materialize")
 }
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_decode_a_latent_grid_into_deterministic_clamped_rgba_pixels() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(VAE_DECODE_JOURNEY_TIMEOUT, async {
@@ -116,8 +117,9 @@ fn decoded_pixel_count() -> usize {
     height * width * OUTPUT_CHANNEL_COUNT
 }
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_reject_a_latent_grid_with_the_wrong_channel_count() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(VAE_DECODE_JOURNEY_TIMEOUT, async {
