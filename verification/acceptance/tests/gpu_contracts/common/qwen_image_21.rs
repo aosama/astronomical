@@ -2,17 +2,13 @@
 //!
 //! The MLX runtime is process-global: `MlxRuntime::initialize` accepts a second call only when
 //! the memory limits are byte-identical, so every Qwen-Image-2.1 GPU journey in one test binary
-//! must derive the SAME limit. This module resolves the artifact through the shared environment
-//! variable and computes the limit from every component weight file plus fixed activation
+//! must derive the SAME limit. This module resolves the artifact through the explicit test-run
+//! model directory and computes the limit from every component weight file plus fixed activation
 //! headroom — adapting to any artifact revision and any machine, never a developer path.
 
 use std::path::PathBuf;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-
-/// Environment variable pointing at the installed artifact root (the
-/// `models--.../snapshots/<sha>` directory containing `transformer/` and `vae/`).
-pub(crate) const QWEN_IMAGE_21_ARTIFACT_ENV: &str = "ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY";
 
 /// Activation headroom above the component weights. A render stages the components — the text
 /// encoder and transformer release before the VAE decodes — but a journey that loads all three
@@ -50,18 +46,10 @@ pub(crate) const JOURNEY_ALLOCATOR_CACHE_LIMIT_BYTES: usize = ALLOCATOR_CACHE_LI
 
 /// Resolves the artifact root every Qwen-Image-2.1 journey shares.
 ///
-/// The panic spells out what a valid root contains because journeys read different parts of it:
-/// component `model.safetensors` files, the `processor/` tokenizer, or both.
+/// The selected directory contains component `model.safetensors` files and the
+/// `processor/` tokenizer.
 pub(crate) fn artifact_directory() -> PathBuf {
-    match std::env::var_os(QWEN_IMAGE_21_ARTIFACT_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {QWEN_IMAGE_21_ARTIFACT_ENV} to the installed Qwen-Image-2.1 artifact root \
-             (the models--mlx-community--Qwen-Image-2.1-MLX-4bit snapshots directory containing \
-             transformer/, vae/, text_encoder/, and processor/), not a hardcoded developer \
-             path"
-        ),
-    }
+    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// The `model.safetensors` path of one artifact component (`"transformer"` or `"vae"`).

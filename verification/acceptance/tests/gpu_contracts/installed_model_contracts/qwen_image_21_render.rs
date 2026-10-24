@@ -17,10 +17,9 @@
 //! wave through — pairing the transformer with the training-timestep scale instead of the sigma
 //! renders noise while still producing a full-size, non-uniform, valid PNG.
 //!
-//! Setting `ASTRONOMICAL_QWEN_IMAGE_21_RENDER_OUTPUT` additionally writes the rendered PNG to
-//! that path, so the same journey can hand a real image to a human.
+//! The explicit test runner retains `qwen-image-21-render.png` in its evidence directory,
+//! so the same journey can hand a real image to a human.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use astronomical_model_serving::{QwenImage21Pipeline, QwenImage21RenderRequest};
@@ -36,12 +35,12 @@ const RENDER_WIDTH: usize = 1024;
 const RENDER_HEIGHT: usize = 1024;
 const RENDER_STEPS: usize = 6;
 const RENDER_SEED: u64 = 20260924;
-const RENDER_OUTPUT_ENV: &str = "ASTRONOMICAL_QWEN_IMAGE_21_RENDER_OUTPUT";
 /// Minimum neighbour luma correlation a render must clear to count as a picture rather than noise.
 const MINIMUM_NEIGHBOR_CORRELATION: f64 = 0.5;
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_render_a_text_to_image_png_from_the_full_pipeline() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(RENDER_JOURNEY_TIMEOUT, async {
@@ -108,11 +107,14 @@ async fn should_render_a_text_to_image_png_from_the_full_pipeline() {
              {neighbor_correlation:.4} is below the {MINIMUM_NEIGHBOR_CORRELATION} floor"
         );
 
-        if let Some(output_path) = std::env::var_os(RENDER_OUTPUT_ENV) {
-            let output_path = PathBuf::from(output_path);
-            if let Some(parent) = output_path.parent() {
-                std::fs::create_dir_all(parent).expect("the render output parent should create");
-            }
+        if let Some(evidence_directory) =
+            astronomical_test_harness::test_run::TestRunContext::current()
+                .configuration
+                .evidence_directory
+        {
+            std::fs::create_dir_all(&evidence_directory)
+                .expect("the render evidence directory should create");
+            let output_path = evidence_directory.join("qwen-image-21-render.png");
             std::fs::write(&output_path, &png_bytes)
                 .unwrap_or_else(|error| panic!("the render output should write: {error}"));
         }

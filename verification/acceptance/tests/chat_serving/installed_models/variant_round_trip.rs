@@ -11,12 +11,10 @@
 //! assertion is on successful streaming and visible text, never on an exact
 //! output count.
 //!
-//! The inventory comes from the machine's configured model roots, or from
-//! `ASTRONOMICAL_RELEASE_VARIANT_MODEL_ROOTS` (colon-separated) when a
-//! release run wants an explicit variant set. Each model round trip must
+//! The inventory comes from the Development configuration's model directories.
+//! Each model round trip must
 //! finish within its own 120-second budget.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use astronomical_config::{AstronomicalConfig, ModelCapabilities};
@@ -37,16 +35,16 @@ const MAXIMUM_OUTPUT_TOKENS: u16 = 100;
 /// Roughly one hundred prompt tokens: eighty words of Romeo and Juliet with
 /// the summary instruction.
 const PROMPT_WORD_COUNT: usize = 80;
-const VARIANT_MODEL_ROOTS_ENV: &str = "ASTRONOMICAL_RELEASE_VARIANT_MODEL_ROOTS";
 
 #[tokio::test(flavor = "multi_thread")]
+#[serial_test::serial]
 #[ignore = "loads every installed chat-capable model variant and streams a sampled reply from each"]
 async fn should_round_trip_every_installed_chat_model_variant() {
     let chat_model_variants = discovered_chat_model_variants();
     assert!(
         !chat_model_variants.is_empty(),
         "the release variant round trip needs a populated chat-model inventory; \
-         set {VARIANT_MODEL_ROOTS_ENV} or configure model directories"
+         configure the Development model directories"
     );
     for discovered_model in &chat_model_variants {
         eprintln!(
@@ -118,16 +116,8 @@ async fn round_trip_one_model_variant(discovered_model: &astronomical_config::Di
 fn discovered_chat_model_variants() -> Vec<astronomical_config::DiscoveredModel> {
     let astronomical_config = AstronomicalConfig::load_from_development_location()
         .expect("the Development configuration should load for variant discovery");
-    let model_roots: Vec<PathBuf> = match std::env::var(VARIANT_MODEL_ROOTS_ENV) {
-        Ok(explicit_roots) if !explicit_roots.is_empty() => explicit_roots
-            .split(':')
-            .filter(|root| !root.is_empty())
-            .map(PathBuf::from)
-            .collect(),
-        _ => astronomical_config.model_directories().to_vec(),
-    };
     let mut chat_model_variants: Vec<astronomical_config::DiscoveredModel> =
-        astronomical_config::discover_models(&model_roots)
+        astronomical_config::discover_models(astronomical_config.model_directories())
             .expect("variant discovery should complete")
             .into_iter()
             .flat_map(|configured_model_directory_scan| {

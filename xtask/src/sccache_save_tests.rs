@@ -1,52 +1,62 @@
 use crate::sccache_save::{SccacheSaveDecision, directory_size_bytes, save_decision};
 
 #[test]
-fn fresh_generation_saves_when_no_stored_entry_exists() {
+fn should_save_a_fresh_generation_when_no_stored_entry_exists() {
     assert_eq!(
-        save_decision(100_000_000, 450_000_000, 0, 0, false),
+        save_decision(100_000_000, 0, 0, false),
         SccacheSaveDecision::NewGeneration
     );
 }
 
 #[test]
-fn stored_entry_within_budget_skips_the_save() {
+fn should_skip_the_save_when_a_stored_entry_is_within_budget() {
     assert_eq!(
-        save_decision(100_000_000, 450_000_000, 1, 0, false),
+        save_decision(100_000_000, 1, 0, false),
         SccacheSaveDecision::FreshEntryWithinBudget
     );
 }
 
 #[test]
-fn directory_over_budget_skips_the_save_even_after_deletions() {
+fn should_skip_the_save_when_the_directory_is_over_budget_even_after_deletions() {
     assert_eq!(
-        save_decision(500_000_000, 450_000_000, 1, 1, false),
+        save_decision(450_000_001, 1, 1, false),
         SccacheSaveDecision::DirectoryOverBudget
     );
     assert_eq!(
-        save_decision(500_000_000, 450_000_000, 0, 0, false),
+        save_decision(450_000_001, 0, 0, false),
         SccacheSaveDecision::DirectoryOverBudget
     );
 }
 
 #[test]
-fn deleting_an_oversize_entry_forces_a_replacement_save() {
+fn should_save_directories_at_the_fixed_budget_boundary() {
+    for directory_bytes in [0, 449_999_999, 450_000_000] {
+        assert_eq!(
+            save_decision(directory_bytes, 0, 0, false),
+            SccacheSaveDecision::NewGeneration
+        );
+    }
+}
+
+#[test]
+fn should_replace_a_deleted_oversize_entry() {
     assert_eq!(
-        save_decision(100_000_000, 450_000_000, 1, 1, false),
+        save_decision(100_000_000, 1, 1, false),
         SccacheSaveDecision::ReplaceOversizeEntry
     );
 }
 
 #[test]
-fn blocked_deletion_wins_over_every_other_decision() {
+fn should_prioritize_blocked_deletion_over_every_other_decision() {
     assert_eq!(
-        save_decision(100_000_000, 450_000_000, 0, 0, true),
+        save_decision(100_000_000, 0, 0, true),
         SccacheSaveDecision::ReplaceBlocked
     );
     assert!(!SccacheSaveDecision::ReplaceBlocked.should_save());
 }
 
 #[test]
-fn only_replacement_decisions_save() {
+fn should_save_only_new_or_replacement_generations() {
     assert!(SccacheSaveDecision::NewGeneration.should_save());
     assert!(SccacheSaveDecision::ReplaceOversizeEntry.should_save());
     assert!(!SccacheSaveDecision::FreshEntryWithinBudget.should_save());
@@ -65,7 +75,7 @@ fn only_replacement_decisions_save() {
 }
 
 #[test]
-fn directory_measurement_sums_apparent_file_sizes_recursively() {
+fn should_sum_apparent_file_sizes_recursively() {
     let temporary_directory = std::env::temp_dir().join(format!(
         "astronomical-sccache-save-measure-{}",
         std::process::id()
@@ -80,7 +90,7 @@ fn directory_measurement_sums_apparent_file_sizes_recursively() {
 }
 
 #[test]
-fn missing_directory_measures_as_zero() {
+fn should_measure_a_missing_directory_as_zero() {
     let absent_directory = std::env::temp_dir().join(format!(
         "astronomical-sccache-save-absent-{}",
         std::process::id()
