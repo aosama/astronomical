@@ -12,6 +12,8 @@ mod common;
 mod daemon_instance_isolation;
 #[path = "daemon_lifecycle/daemon_process.rs"]
 mod daemon_process;
+#[path = "model_journeys/decode_full_fit_status_journey.rs"]
+mod decode_full_fit_status_journey;
 #[path = "library/library_process.rs"]
 mod library_process;
 #[path = "model_journeys/qwen3_5_chat_schema_ipc_journey.rs"]

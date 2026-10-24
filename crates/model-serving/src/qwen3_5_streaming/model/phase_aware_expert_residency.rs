@@ -303,7 +303,7 @@ impl Qwen3_5StreamingModel {
     }
 }
 
-fn retained_expert_layer_geometries(
+pub(in crate::qwen3_5_streaming) fn retained_expert_layer_geometries(
     layer_plans: &[QuantizedExpertLayerPlan],
     experts_per_token: usize,
 ) -> Result<Vec<ExpertLayerGeometry>, ExpertPagingError> {

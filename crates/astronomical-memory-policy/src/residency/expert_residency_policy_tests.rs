@@ -530,7 +530,7 @@ fn should_not_re_pin_a_layer_after_a_prefill_capacity_failure() {
 }
 
 #[test]
-fn should_keep_prefill_routed_pages_when_generation_handoff_replans() {
+fn should_promote_every_partial_prefill_page_when_generation_payload_fits() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
@@ -575,11 +575,12 @@ fn should_keep_prefill_routed_pages_when_generation_handoff_replans() {
     );
 
     assert!(generation_residency.is_none());
-    assert!(generation_plan.complete_layer_targets.is_empty());
+    assert_eq!(generation_plan.complete_layer_targets, vec![0, 1, 2]);
+    assert_eq!(generation_plan.expected_preserved_bytes, 60);
+    assert_eq!(generation_plan.maximum_new_retained_bytes, 60);
     assert!(
-        generation_plan
-            .layer_targets
-            .iter()
-            .all(|target| { *target == ExpertLayerResidencyTarget::PreservePartial })
+        generation_plan.layer_targets.iter().all(|target| {
+            *target == ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        })
     );
 }

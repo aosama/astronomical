@@ -81,40 +81,26 @@ impl Qwen3_5EngineState {
         } else {
             planned_complete_layer_indexes_to_seat.clone()
         };
-        if !complete_layer_indexes_to_seat.is_empty() {
-            match model.seat_complete_layers_before_decode(
-                &complete_layer_indexes_to_seat,
-                &mut active_request.performance_attribution,
-            ) {
-                Ok(seated_payload_bytes) => {
-                    tracing::info!(
-                        request_id = request_id.value(),
-                        planned_complete_layer_count = planned_complete_layer_indexes_to_seat.len(),
-                        warm_floor_capped_complete_layer_count =
-                            complete_layer_indexes_to_seat.len(),
-                        seated_payload_bytes,
-                        "seated planned complete layers before decode"
-                    );
-                }
-                Err(seating_error) => {
-                    tracing::warn!(
-                        request_id = request_id.value(),
-                        error = %seating_error,
-                        "continued decode after planned complete-layer seating failed"
-                    );
-                }
+        match model.seat_complete_layers_before_decode(
+            &complete_layer_indexes_to_seat,
+            &mut active_request.performance_attribution,
+        ) {
+            Ok(seated_payload_bytes) => {
+                tracing::info!(
+                    request_id = request_id.value(),
+                    planned_complete_layer_count = planned_complete_layer_indexes_to_seat.len(),
+                    warm_floor_capped_complete_layer_count = complete_layer_indexes_to_seat.len(),
+                    seated_payload_bytes,
+                    "seated planned complete layers before decode"
+                );
             }
-        }
-        // Seating adopts lazy pages. Evaluate them now so the first decode
-        // admission snapshot includes the seated weights. Leaving them lazy made
-        // the first generate token look like a huge activation spike and leftover
-        // publication evicted the same pages.
-        if let Err(materialize_error) = model.materialize_seated_complete_layers() {
-            tracing::warn!(
-                request_id = request_id.value(),
-                error = %materialize_error,
-                "continued decode after seated complete-layer materialization failed"
-            );
+            Err(seating_error) => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    error = %seating_error,
+                    "continued decode after planned complete-layer seating failed"
+                );
+            }
         }
         // Cache bookkeeping after seating and materialization. Decode admission
         // takes its own MLX snapshot next.
@@ -385,41 +371,27 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
     let Some(expert_pager) = model.expert_pager.as_ref() else {
         return planned_complete_layer_indexes_to_seat.to_vec();
     };
-    let Some(first_layer_plan) = expert_pager.layer_plans().first() else {
-        return planned_complete_layer_indexes_to_seat.to_vec();
-    };
-    let expert_capacity = first_layer_plan.expert_capacity;
-    let Some(per_expert_payload_bytes) =
-        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-            first_layer_plan,
-            1,
-        )
-        .ok()
-    else {
-        return planned_complete_layer_indexes_to_seat.to_vec();
-    };
-    let sparse_layer_count = expert_pager.layer_count();
     let experts_per_token = usize::try_from(model.config.experts_per_token()).unwrap_or(1);
-    let complete_layer_count = model
-        .retained_experts
-        .as_ref()
-        .map_or(0, |retained_experts| {
-            retained_experts
-                .borrow()
-                .topology_snapshot(expert_capacity)
-                .into_iter()
-                .filter(|layer_residency| {
-                    layer_residency.class == crate::RetainedExpertPageClass::StableCompleteLayer
-                })
-                .count()
-        });
-    let unseated_sparse_layer_count = sparse_layer_count.saturating_sub(complete_layer_count);
-    let minimum_warm_budget_bytes = u128::from(per_expert_payload_bytes)
-        .saturating_mul(u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX))
-        .saturating_mul(
-            u128::try_from(crate::minimum_decode_warm_slot_count(experts_per_token))
-                .unwrap_or(u128::MAX),
-        );
+    let geometries = match crate::qwen3_5_streaming::model::phase_aware_expert_residency::retained_expert_layer_geometries(
+        expert_pager.layer_plans(), experts_per_token
+    ) {
+        Ok(geometries) => geometries,
+        Err(geometry_error) => {
+            tracing::warn!(error = %geometry_error, "skipped decode seating after invalid expert geometry");
+            return Vec::new();
+        }
+    };
+    let current_residencies =
+        model
+            .retained_experts
+            .as_ref()
+            .map_or_else(Vec::new, |retained_experts| {
+                retained_experts.borrow().topology_snapshot(
+                    geometries
+                        .first()
+                        .map_or(0, |geometry| geometry.expert_capacity),
+                )
+            });
     let expert_statistics = model.expert_weight_memory_cache_statistics();
     let warm_budget_bytes = model
         .runtime()
@@ -432,35 +404,10 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
                 expert_statistics.resident_payload_byte_count,
             )
         });
-    // Seating may consume the free warm budget beyond what the floor needs;
-    // once the free budget is at or below the floor, no complete layer may
-    // stream at all and the post-seating floor enforcement evicts instead.
-    let seatable_budget_bytes = warm_budget_bytes.saturating_sub(
-        u64::try_from(minimum_warm_budget_bytes.min(u128::from(u64::MAX))).unwrap_or(u64::MAX),
-    );
-    if seatable_budget_bytes == 0 {
-        return Vec::new();
-    }
-    let mut seatable_budget_bytes = seatable_budget_bytes;
-    let mut capped_indexes = Vec::with_capacity(planned_complete_layer_indexes_to_seat.len());
-    for &layer_index in planned_complete_layer_indexes_to_seat {
-        let Some(layer_plan) = expert_pager.layer_plans().get(layer_index) else {
-            continue;
-        };
-        let Some(complete_layer_payload_bytes) =
-            crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-                layer_plan,
-                layer_plan.expert_capacity,
-            )
-            .ok()
-        else {
-            continue;
-        };
-        if complete_layer_payload_bytes > seatable_budget_bytes {
-            break;
-        }
-        seatable_budget_bytes -= complete_layer_payload_bytes;
-        capped_indexes.push(layer_index);
-    }
-    capped_indexes
+    crate::memory::decode_seating::complete_layers_within_decode_warm_budget(
+        &geometries,
+        &current_residencies,
+        planned_complete_layer_indexes_to_seat,
+        warm_budget_bytes,
+    )
 }

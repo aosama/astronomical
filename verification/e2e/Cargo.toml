@@ -23,7 +23,7 @@ astronomical-config = { path = "../../crates/config" }
 astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
-astronomical-test-harness = { path = "../../crates/test-harness" }
+astronomical-test-harness = { path = "../../crates/test-harness", features = ["test-fixtures"] }
 base64.workspace = true
 image.workspace = true
 serde_json.workspace = true
