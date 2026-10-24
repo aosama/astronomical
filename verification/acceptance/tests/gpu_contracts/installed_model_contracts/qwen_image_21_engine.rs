@@ -38,8 +38,9 @@ const MAXIMUM_ADVANCES_PER_REQUEST: usize = 64;
 /// Minimum neighbour luma correlation a published image must clear to count as a picture.
 const MINIMUM_NEIGHBOR_CORRELATION: f64 = 0.5;
 
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 #[tokio::test]
+#[serial_test::serial]
 async fn should_serve_two_image_generation_requests_through_the_engine() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     tokio::time::timeout(ENGINE_JOURNEY_TIMEOUT, async {

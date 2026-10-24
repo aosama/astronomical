@@ -10,7 +10,7 @@
 //! `&lt;`) would still pass the algebra but tokenize to seven garbage subword ids; this is
 //! the only way to guard against that corruption end to end.
 //!
-//! Resolves the artifact through `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY` so no
+//! Resolves the artifact through the explicit test-run `model_directory` so no
 //! developer path is hardcoded; the artifact is not registered in the Development model
 //! directory, so it cannot be found by ordinary discovery.
 
@@ -159,7 +159,8 @@ fn oracle_valid_tokens(raw_ids: &[u32], raw_mask: &[u32]) -> Vec<u32> {
 }
 
 #[test]
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[serial_test::serial]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 fn should_encode_chat_special_tokens_as_single_ids() {
     let tokenizer = artifact_tokenizer();
 
@@ -178,7 +179,8 @@ fn should_encode_chat_special_tokens_as_single_ids() {
 }
 
 #[test]
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[serial_test::serial]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 fn should_render_and_encode_t2i_templates_bit_identically_to_the_oracle() {
     let fixture = oracle_fixture();
     let tokenizer = artifact_tokenizer();
@@ -222,7 +224,8 @@ fn should_render_and_encode_t2i_templates_bit_identically_to_the_oracle() {
 }
 
 #[test]
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[serial_test::serial]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 fn should_render_and_encode_ti2i_templates_bit_identically_to_the_oracle() {
     let fixture = oracle_fixture();
     let tokenizer = artifact_tokenizer();
@@ -265,7 +268,8 @@ fn should_render_and_encode_ti2i_templates_bit_identically_to_the_oracle() {
 }
 
 #[test]
-#[ignore = "requires the Qwen-Image-2.1 artifact directory; set ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY"]
+#[serial_test::serial]
+#[ignore = "requires the Qwen-Image-2.1 model_directory in the explicit test-run configuration"]
 fn should_derive_the_real_drop_idx_alignment_and_packaging_from_the_tokenizer() {
     let fixture = oracle_fixture();
     let tokenizer = artifact_tokenizer();

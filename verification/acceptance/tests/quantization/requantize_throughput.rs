@@ -6,7 +6,7 @@ use super::support::{fresh_output_directory, journey_runtime, source_model_direc
 
 #[test]
 #[serial]
-#[ignore = "needs ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR; pending implementation of run_requantize"]
+#[ignore = "needs model_directory in the explicit test-run configuration; pending implementation of run_requantize"]
 fn should_requantize_the_installed_source_at_uniform_four_bits_and_report_throughput() {
     // Work to implement:
     // 1. Inventory the source; build a Uniform 4-bit plan.

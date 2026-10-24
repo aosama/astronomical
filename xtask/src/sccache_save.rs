@@ -2,13 +2,14 @@
 //! directory may be uploaded as a new cache generation, and clears stored
 //! copies of the primary key that can never serve within budget. The
 //! decision policy is pure and unit-tested beside this source; the
-//! directory walk and `gh` calls stay thin edges (issue #1250).
+//! directory walk and `gh` calls stay thin edges (issue #1250). Directory
+//! and stored-entry budgets are repository policy, not environment inputs.
 
 use std::path::Path;
 use std::process::Command;
 
-const DEFAULT_MAX_DIRECTORY_BYTES: u64 = 450_000_000;
-const DEFAULT_MAX_ENTRY_BYTES: u64 = 450_000_000;
+const MAX_DIRECTORY_BYTES: u64 = 450_000_000;
+const MAX_ENTRY_BYTES: u64 = 450_000_000;
 
 /// The save decision the workflow's thin save step consumes. An exact-key
 /// restore skips the save step entirely, so this gate exists to shrink the
@@ -47,7 +48,6 @@ impl SccacheSaveDecision {
 /// leaves an oversize entry colliding with the key.
 pub fn save_decision(
     directory_bytes: u64,
-    max_directory_bytes: u64,
     stored_exact_key_entries: usize,
     oversize_deleted_count: usize,
     deletion_blocked: bool,
@@ -55,7 +55,7 @@ pub fn save_decision(
     if deletion_blocked {
         return SccacheSaveDecision::ReplaceBlocked;
     }
-    if directory_bytes > max_directory_bytes {
+    if directory_bytes > MAX_DIRECTORY_BYTES {
         return SccacheSaveDecision::DirectoryOverBudget;
     }
     if stored_exact_key_entries > 0 && oversize_deleted_count == 0 {
@@ -126,14 +126,8 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     };
     let github_repository = require_environment_value("GITHUB_REPOSITORY")?;
     let sccache_directory = require_environment_value("SCCACHE_DIR")?;
-    let max_directory_bytes = optional_budget(
-        "SCCACHE_SAVE_MAX_DIRECTORY_BYTES",
-        DEFAULT_MAX_DIRECTORY_BYTES,
-    )?;
-    let max_entry_bytes = optional_budget("SCCACHE_SAVE_MAX_ENTRY_BYTES", DEFAULT_MAX_ENTRY_BYTES)?;
-
     eprintln!(
-        "[sccache-save] status=start repository={github_repository} max_directory_bytes={max_directory_bytes} max_entry_bytes={max_entry_bytes}"
+        "[sccache-save] status=start repository={github_repository} max_directory_bytes={MAX_DIRECTORY_BYTES} max_entry_bytes={MAX_ENTRY_BYTES}"
     );
 
     let directory_bytes = directory_size_bytes(Path::new(&sccache_directory));
@@ -168,7 +162,7 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     let mut oversize_deleted_count = 0usize;
     let mut deletion_blocked = false;
     for stored_entry in &stored_entries {
-        if stored_entry.size_bytes <= max_entry_bytes {
+        if stored_entry.size_bytes <= MAX_ENTRY_BYTES {
             continue;
         }
         let delete_status = Command::new("gh")
@@ -204,7 +198,6 @@ pub fn run(arguments: &[String]) -> Result<(), String> {
     } else {
         save_decision(
             directory_bytes,
-            max_directory_bytes,
             stored_entries.len(),
             oversize_deleted_count,
             false,
@@ -254,15 +247,6 @@ fn require_environment_value(variable_name: &str) -> Result<String, String> {
         .ok()
         .filter(|value| !value.is_empty())
         .ok_or_else(|| format!("{variable_name} is required"))
-}
-
-fn optional_budget(variable_name: &str, default_budget: u64) -> Result<u64, String> {
-    match std::env::var(variable_name) {
-        Ok(budget_text) if !budget_text.is_empty() => budget_text
-            .parse()
-            .map_err(|_| "sccache save budgets must be decimal integers".to_owned()),
-        _ => Ok(default_budget),
-    }
 }
 
 fn gh_output(gh_arguments: &[&str]) -> Result<String, String> {

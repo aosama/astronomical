@@ -1,6 +1,6 @@
 //! Native official FLUX.2 Klein acceptance through discovery and public REST.
 
-use std::fs;
+use std::{fs, path::Path};
 use std::{net::SocketAddr, time::Duration};
 
 use astronomical_config::{DiscoveredModel, ModelCapabilities, ModelFamily, ModelLicense};
@@ -31,10 +31,6 @@ use astronomical_test_harness::flux_reference_oracle::{
 };
 use mlx_c_rust::MlxDtype;
 
-/// The independent reference bundle must be produced outside Astronomical and
-/// located through this operator-provided path.
-const REFERENCE_BUNDLE_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_FLUX2_KLEIN_REFERENCE_BUNDLE";
-
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const ACCEPTANCE_WIDTH_PIXELS: u32 = 64;
@@ -44,7 +40,8 @@ const MAXIMUM_NATIVE_CHANNEL_DIFFERENCE: u8 = 1;
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires ASTRONOMICAL_FLUX2_KLEIN_REFERENCE_BUNDLE and the official artifact for native REST acceptance"]
+#[serial_test::serial]
+#[ignore = "requires the official artifact; select an independent reference_artifact_path for reference comparison"]
 async fn should_generate_official_flux2_klein_through_rest() {
     timeout(JOURNEY_TIMEOUT, run_flux_rgb_and_repetition_journey())
         .await
@@ -52,7 +49,8 @@ async fn should_generate_official_flux2_klein_through_rest() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "requires ASTRONOMICAL_FLUX2_KLEIN_REFERENCE_BUNDLE for native initial-noise acceptance"]
+#[serial_test::serial]
+#[ignore = "evaluates native initial noise; select reference_artifact_path for independent comparison"]
 async fn should_match_the_independent_flux2_klein_initial_noise() {
     timeout(Duration::from_secs(15), run_initial_noise_journey())
         .await
@@ -60,6 +58,7 @@ async fn should_match_the_independent_flux2_klein_initial_noise() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[serial_test::serial]
 #[ignore = "requires the official artifact for cancellation cleanup and reuse acceptance"]
 async fn should_cleanup_and_reuse_flux2_klein_after_cancellation() {
     timeout(JOURNEY_TIMEOUT, run_flux_cancellation_reuse_journey())
@@ -68,6 +67,7 @@ async fn should_cleanup_and_reuse_flux2_klein_after_cancellation() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+#[serial_test::serial]
 #[ignore = "swaps an exact configured chat fixture to official FLUX.2 Klein and back when available"]
 async fn should_optionally_swap_from_chat_to_flux_and_back_to_chat() {
     timeout(JOURNEY_TIMEOUT, run_optional_chat_swap_journey())
@@ -204,39 +204,42 @@ async fn run_flux_cancellation_reuse_journey() {
     rest_server.stop().await;
 }
 
-fn read_reference_oracle_from_environment(
+fn read_reference_oracle(
+    bundle_path: &Path,
     expected: &ExpectedFluxReference<'_>,
 ) -> Result<FluxReferenceOracle, String> {
-    let bundle_path = std::env::var(REFERENCE_BUNDLE_ENVIRONMENT_VARIABLE).map_err(|_| {
+    let bundle_bytes = fs::read(bundle_path).map_err(|read_error| {
         format!(
-            "{REFERENCE_BUNDLE_ENVIRONMENT_VARIABLE} must identify an independent FLUX reference bundle"
-        )
-    })?;
-    let bundle_bytes = fs::read(bundle_path).map_err(|_| {
-        format!(
-            "the bundle identified by {REFERENCE_BUNDLE_ENVIRONMENT_VARIABLE} could not be read"
+            "the independent FLUX reference bundle {} could not be read: {read_error}",
+            bundle_path.display()
         )
     })?;
     FluxReferenceOracle::parse(&bundle_bytes, expected)
 }
 
 fn optional_reference_oracle(acceptance_prompt: &str) -> Option<FluxReferenceOracle> {
-    if std::env::var(REFERENCE_BUNDLE_ENVIRONMENT_VARIABLE).is_err() {
+    let Some(bundle_path) = astronomical_test_harness::test_run::TestRunContext::current()
+        .configuration
+        .reference_artifact_path
+    else {
         eprintln!(
             "[flux-acceptance] phase=independent-reference status=skipped reason=bundle-not-configured"
         );
         return None;
-    }
-    let reference_oracle = read_reference_oracle_from_environment(&ExpectedFluxReference {
-        model_id: FLUX2_KLEIN_PROVIDER_MODEL_ID,
-        model_revision: FLUX2_KLEIN_OFFICIAL_REVISION,
-        prompt: acceptance_prompt,
-        width: ACCEPTANCE_WIDTH_PIXELS,
-        height: ACCEPTANCE_HEIGHT_PIXELS,
-        seed: ACCEPTANCE_SEED,
-        steps: 4,
-        guidance: 1.0,
-    })
+    };
+    let reference_oracle = read_reference_oracle(
+        &bundle_path,
+        &ExpectedFluxReference {
+            model_id: FLUX2_KLEIN_PROVIDER_MODEL_ID,
+            model_revision: FLUX2_KLEIN_OFFICIAL_REVISION,
+            prompt: acceptance_prompt,
+            width: ACCEPTANCE_WIDTH_PIXELS,
+            height: ACCEPTANCE_HEIGHT_PIXELS,
+            seed: ACCEPTANCE_SEED,
+            steps: 4,
+            guidance: 1.0,
+        },
+    )
     .unwrap_or_else(|oracle_error| panic!("independent FLUX reference rejected: {oracle_error}"));
     eprintln!(
         "[flux-acceptance] phase=independent-reference status=validated bfl_revision={BFL_SOURCE_REVISION} diffusers_revision={DIFFUSERS_SOURCE_REVISION}"

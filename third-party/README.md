@@ -77,10 +77,7 @@ MLX patches (`mlx-0.32.4-*.patch`):
   split-K topology stable once row tiles already expose parallelism, so
   prefill numerics do not change with batch shape. Retires if upstream
   adopts an equivalent stability rule for the split-K heuristic.
-- `nax-qmm-tile-variants` — serving performance. Adds transposed-prefill
-  tile candidates for the NAX quantized matmul, ported from the OMLX
-  project's Qwen3.5 prefill kernels. Retires if upstream grows an equivalent
-  shape-driven tile set.
+- `nax-qmm-tile-variants` — serving performance. Selects the transposed-prefill tile deterministically from the token count: up to 32 rows uses `(32, 64, 64, 2, 2)`, and larger inputs use `(64, 64, 64, 4, 1)` in `(bm, bn, bk, wm, wn)` order. The tile choices were ported from the OMLX project's Qwen3.5 prefill kernels; no environment override or runtime tile selection control remains. The former override-driven benchmark is now a dense-reference correctness check across production tile boundaries in `verification/acceptance/tests/gpu_contracts/runtime_mlx/direct_mlx/qmm_nax_tile_selection.rs`; it makes no comparative performance claim. Retires if upstream grows an equivalent shape-driven tile set.
 - `jit-qmv-template-arity` — retired at the v0.32.4 bump. Upstream's
   partial-row qmv fast-kernel restructure (the `partial_rows` template
   parameter and the unconditional `results_per_simdgroup` arity) declares
@@ -126,6 +123,8 @@ MLX-C patches (`mlx-c-0.7.0-*.patch`):
 5. `third-party/native-dependency-manifest.cmake` writes the resolved
    inventory (file name, URL, digest, description) to a manifest file for
    build-time auditability.
+
+Archive paths are always the pinned filenames under the provisioned dependency cache, selected with `cargo xtask bootstrap-native-dependencies --cache-dir ABSOLUTE_PATH` and `ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR` when a nondefault cache is needed. Per-archive environment overrides are not read. The `ASTRONOMICAL_*_SOURCE_ARCHIVE` CMake variables are internal resolved paths, not configuration inputs; inherited environment entries and stale CMake cache definitions cannot redirect them. Both the Cargo build script and standalone native-build tool use this same resolution and native build identity.
 
 ## Bump-and-release process
 
