@@ -61,11 +61,10 @@ fn claim_wired_residency_up_to(machine_mlx_memory_ceiling_bytes: usize) -> Optio
             return None;
         }
     };
-    let claim_budget_bytes =
-        wired_residency_claim_budget_bytes(
-            machine_mlx_memory_ceiling_bytes,
-            recommended_working_set_bytes,
-        );
+    let claim_budget_bytes = wired_residency_claim_budget_bytes(
+        machine_mlx_memory_ceiling_bytes,
+        recommended_working_set_bytes,
+    );
     match set_wired_limit(claim_budget_bytes) {
         Ok(previous_wired_limit_bytes) => {
             tracing::info!(
