@@ -92,6 +92,37 @@ pub const fn should_commit_multi_token_union_as_complete_layer(
         )
 }
 
+/// Whether a prefill read that must stream some of a layer's routed experts
+/// should extend the read to every non-resident expert of the layer, so the
+/// warm table converges to a complete layer instead of waiting for a lucky
+/// full-coverage union.
+///
+/// Partial tables are the steady state of skewed routing: unions rarely
+/// select every expert, so coverage grows by a few experts per chunk while
+/// every chunk still re-reads the missing ones (the 2026-10-23 flights held
+/// ~17 GB of partial tables yet re-read 27.8 GB per request). When the plan
+/// funds the layer's complete claim, one read of the remaining experts pays
+/// for itself by turning every later chunk into a full table hit.
+#[must_use]
+pub const fn should_complete_partial_layer_on_prefill_read(
+    production_default_paging: bool,
+    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    resident_expert_count: usize,
+    expert_capacity: usize,
+) -> bool {
+    production_default_paging
+        && expert_capacity > 0
+        && resident_expert_count > 0
+        && resident_expert_count < expert_capacity
+        && matches!(
+            residency_target,
+            Some(
+                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+            )
+        )
+}
+
 /// Structural slot cap for one decode warm table (hot-expert caching).
 ///
 /// Issue #514: a history-length multiplier (`experts_per_token * 8`) left

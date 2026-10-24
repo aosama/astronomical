@@ -56,6 +56,7 @@ pub use page_commit::{
     decode_warm_floor_eviction_indexes, hot_expert_warm_slot_count, minimum_decode_warm_slot_count,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
     should_commit_multi_token_union_as_complete_layer,
+    should_complete_partial_layer_on_prefill_read,
 };
 pub use promotion_on_raise::StreamingStartupResidencyFacts;
 pub use release::should_enact_planned_expert_release;

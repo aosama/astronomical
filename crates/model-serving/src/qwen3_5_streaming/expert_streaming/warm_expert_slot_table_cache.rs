@@ -119,6 +119,46 @@ impl WarmExpertSlotTableCache {
         }
     }
 
+    /// Route experts absent from this layer's table, or `None` when the layer
+    /// has no table. Sorted and deduplicated for one positional-range read.
+    #[must_use]
+    pub fn missing_route_expert_ids(
+        &self,
+        layer_index: usize,
+        routed_expert_ids: &[usize],
+    ) -> Option<Vec<usize>> {
+        let table = self.tables_by_layer.get(layer_index)?.as_ref()?;
+        let mut missing_route_expert_ids = routed_expert_ids.to_vec();
+        missing_route_expert_ids.sort_unstable();
+        missing_route_expert_ids.dedup();
+        missing_route_expert_ids
+            .retain(|expert_id| !table.slot_by_expert_id.contains_key(expert_id));
+        Some(missing_route_expert_ids)
+    }
+
+    /// Every expert of the layer absent from its table, or `None` when the
+    /// layer has no table: the one read set that completes a partial table.
+    pub fn non_resident_expert_ids(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+    ) -> Option<Vec<usize>> {
+        let table = self.tables_by_layer.get(layer_index)?.as_ref()?;
+        Some(
+            (0..expert_capacity)
+                .filter(|expert_id| !table.slot_by_expert_id.contains_key(expert_id))
+                .collect(),
+        )
+    }
+
+    /// Occupied slots of this layer's table, zero when the layer has no table.
+    pub fn occupied_slot_count(&self, layer_index: usize) -> usize {
+        self.tables_by_layer
+            .get(layer_index)
+            .and_then(|table| table.as_ref())
+            .map_or(0, |table| table.occupied_slot_count)
+    }
+
     /// Returns the warm table's preallocated weights and a slot-indexed
     /// manifest, but only when every requested expert is seated — an
     /// all-or-nothing coverage contract. A single missing expert yields
@@ -259,6 +299,7 @@ impl WarmExpertSlotTableCache {
     /// Counts one served read for each routed expert present in the layer's
     /// table, feeding the least-frequently-used eviction order so a stable hot
     /// set outlives one-off routing noise.
+    /// Records routed reads for the least-frequently-used eviction order.
     pub fn record_routed_reads(&mut self, layer_index: usize, expert_ids: &[usize]) {
         let Some(Some(table)) = self.tables_by_layer.get_mut(layer_index) else {
             return;

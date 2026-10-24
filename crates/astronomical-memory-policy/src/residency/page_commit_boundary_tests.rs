@@ -111,3 +111,54 @@ fn should_not_commit_a_multi_token_union_for_unfunded_or_non_production_plans() 
         128,
     ));
 }
+
+#[test]
+fn should_complete_a_partial_layer_when_the_plan_funds_the_remaining_experts() {
+    use crate::residency::ExpertLayerResidencyTarget;
+    use crate::residency::should_complete_partial_layer_on_prefill_read;
+    for funded_target in [
+        ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead,
+        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
+    ] {
+        assert!(
+            should_complete_partial_layer_on_prefill_read(true, Some(funded_target), 65, 128),
+            "a funded partial table should converge to complete on the next read"
+        );
+    }
+}
+
+#[test]
+fn should_not_complete_an_empty_complete_or_unfunded_layer() {
+    use crate::residency::ExpertLayerResidencyTarget;
+    use crate::residency::should_complete_partial_layer_on_prefill_read;
+    let funded = Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead);
+    // An empty table has nothing worth extending: the union adoption path
+    // owns the from-scratch case.
+    assert!(!should_complete_partial_layer_on_prefill_read(
+        true, funded, 0, 128
+    ));
+    // A complete table has nothing left to read.
+    assert!(!should_complete_partial_layer_on_prefill_read(
+        true, funded, 128, 128
+    ));
+    assert!(!should_complete_partial_layer_on_prefill_read(
+        true, funded, 200, 128
+    ));
+    // Unfunded or absent plans, diagnostic modes, and degenerate capacities
+    // never authorize the extended read.
+    assert!(!should_complete_partial_layer_on_prefill_read(
+        true,
+        Some(ExpertLayerResidencyTarget::StreamOperationLocal),
+        65,
+        128
+    ));
+    assert!(!should_complete_partial_layer_on_prefill_read(
+        true, None, 65, 128
+    ));
+    assert!(!should_complete_partial_layer_on_prefill_read(
+        false, funded, 65, 128
+    ));
+    assert!(!should_complete_partial_layer_on_prefill_read(
+        true, funded, 65, 0
+    ));
+}
