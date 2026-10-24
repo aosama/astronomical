@@ -3,6 +3,9 @@
 //! Artifact names change as we retarget checkpoints. Tests look up a stable role
 //! from `registry/e2e_test_model_names.json` instead of embedding those names.
 
+#[cfg(test)]
+mod tests;
+
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
