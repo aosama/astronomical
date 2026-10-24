@@ -3,13 +3,13 @@
 use mlx_c_rust::MlxArray;
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_streaming::expert_paging::expert_pager::{
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     ExpertPagingError, Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
 };
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::Qwen3_5MoEPagedPrefillExecutionMode;
+use super::Qwen3_5MoEPagedExecutionMode;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 
 impl Qwen3_5Model {
@@ -25,7 +25,7 @@ impl Qwen3_5Model {
         selected_indices: &MlxArray,
         selected_scores: &MlxArray,
         should_use_compiled_elementwise_graphs: bool,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         known_sorted_unique_expert_ids: Option<&[usize]>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -47,8 +47,7 @@ impl Qwen3_5Model {
                     route_token_count,
                     expert_capacity,
                     sorted_unique_expert_ids.len(),
-                    paged_prefill_execution_mode
-                        == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                    paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                     performance_attribution,
                 )?
             } else {
@@ -74,8 +73,7 @@ impl Qwen3_5Model {
                         layer_index,
                         route_token_count,
                         sorted_unique_expert_ids,
-                        paged_prefill_execution_mode
-                            == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                        paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                         performance_attribution,
                     )?,
                 }
@@ -99,16 +97,17 @@ impl Qwen3_5Model {
                 performance_attribution,
             );
         }
-        let (streamed_expert_weights, page_manifest) = expert_pager.load_rust_streamed_experts(
-            &self.runtime,
-            layer_index,
-            sorted_unique_expert_ids,
-            Qwen3_5ExpertStreamingRequestShape {
-                route_token_count,
-                routed_expert_count: sorted_unique_expert_ids.len(),
-            },
-            performance_attribution,
-        )?;
+        let (streamed_expert_weights, page_manifest) = expert_pager
+            .stream_selected_expert_page_from_ssd(
+                &self.runtime,
+                layer_index,
+                sorted_unique_expert_ids,
+                Qwen3_5ExpertStreamingRequestShape {
+                    route_token_count,
+                    routed_expert_count: sorted_unique_expert_ids.len(),
+                },
+                performance_attribution,
+            )?;
         performance_attribution.measure_operation(
             PerformanceOperation::ExpertPagingDiagnosticLogging,
             |_performance_attribution| {

@@ -37,7 +37,7 @@ fn should_accept_complete_entries_for_all_executable_families_in_authored_order(
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-flux", "flux2_klein"),
             valid_entry("astronomical-test/example-embedder", "modernbert"),
-            valid_entry("astronomical-test/example-k2", "k2_horizon_mova"),
+            valid_entry("astronomical-test/example-prism", "prism_hadamard_qwen35"),
         ]
     });
 
@@ -59,7 +59,7 @@ fn should_accept_complete_entries_for_all_executable_families_in_authored_order(
     );
     assert_eq!(
         download_catalog.entries()[3].huggingface_id(),
-        "astronomical-test/example-k2"
+        "astronomical-test/example-prism"
     );
 }
 

@@ -1,4 +1,4 @@
-//! Low-level retention contract for paged expert streaming on the large sparse MoE.
+//! Low-level retention contract for paged expert streaming on the large sparse MoE streaming model.
 //!
 //! The memory-ceiling sweep measured ~40 GB of request-time positional reads for a
 //! hybrid cell whose un-retained expert payload is ~4.3 GB — roughly five times the
@@ -30,11 +30,11 @@ const WARM_REQUEST_ID: RequestId = RequestId::new(96_301);
 const RETENTION_CONTRACT_TIMEOUT: Duration = Duration::from_secs(60);
 
 fn model_id() -> &'static str {
-    crate::common::large_sparse_moe_model_id()
+    crate::common::large_sparse_moe_streaming_model_id()
 }
 
 #[tokio::test]
-#[ignore = "loads the large sparse MoE in-process and proves warm paged requests re-stream far fewer expert bytes than cold ones"]
+#[ignore = "loads the large sparse MoE streaming model in-process and proves warm paged requests re-stream far fewer expert bytes than cold ones"]
 #[serial]
 async fn should_not_restream_expert_pages_on_a_warm_paged_request() {
     timeout(RETENTION_CONTRACT_TIMEOUT, async {

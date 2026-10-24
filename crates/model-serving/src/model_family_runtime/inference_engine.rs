@@ -3,7 +3,7 @@ use astronomical_ipc_protocol::{RequestId, WorkerEvent};
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::{
     GeneratedToken, GenerationFinalization, InferenceEngine, InferenceEngineError,
-    K2HorizonMoVAEngine, PrismHadamardQwen35Engine, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
+    PrismHadamardQwen35Engine, Qwen3_5ResidentEngine, Qwen3_5StreamingEngine,
 };
 
 use super::ModelFamilyInferenceRequest;
@@ -12,7 +12,6 @@ use super::ModelFamilyInferenceRequest;
 pub enum ModelFamilyInferenceEngine {
     Qwen3_5(Qwen3_5ResidentEngine),
     Qwen3_5Streaming(Qwen3_5StreamingEngine),
-    K2HorizonMoVA(K2HorizonMoVAEngine),
     PrismHadamardQwen35(PrismHadamardQwen35Engine),
 }
 
@@ -23,7 +22,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         match self {
             Self::Qwen3_5(engine) => engine.load().await,
             Self::Qwen3_5Streaming(engine) => engine.load().await,
-            Self::K2HorizonMoVA(engine) => engine.load().await,
             Self::PrismHadamardQwen35(engine) => engine.load().await,
         }
     }
@@ -41,10 +39,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
                 ModelFamilyInferenceRequest::Qwen3_5(inference_request),
             ) => engine.start_generation(inference_request).await,
             (
-                Self::K2HorizonMoVA(engine),
-                ModelFamilyInferenceRequest::K2HorizonMoVA(inference_request),
-            ) => engine.start_generation(inference_request).await,
-            (
                 Self::PrismHadamardQwen35(engine),
                 ModelFamilyInferenceRequest::PrismHadamardQwen35(inference_request),
             ) => engine.start_generation(inference_request).await,
@@ -59,7 +53,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         match self {
             Self::Qwen3_5(engine) => engine.decode_next_token(request_id).await,
             Self::Qwen3_5Streaming(engine) => engine.decode_next_token(request_id).await,
-            Self::K2HorizonMoVA(engine) => engine.decode_next_token(request_id).await,
             Self::PrismHadamardQwen35(engine) => engine.decode_next_token(request_id).await,
         }
     }
@@ -80,11 +73,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
                     .inject_input_tokens(request_id, input_token_ids)
                     .await
             }
-            Self::K2HorizonMoVA(engine) => {
-                engine
-                    .inject_input_tokens(request_id, input_token_ids)
-                    .await
-            }
             Self::PrismHadamardQwen35(engine) => {
                 engine
                     .inject_input_tokens(request_id, input_token_ids)
@@ -100,7 +88,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         match self {
             Self::Qwen3_5(engine) => engine.cancel_generation(request_id).await,
             Self::Qwen3_5Streaming(engine) => engine.cancel_generation(request_id).await,
-            Self::K2HorizonMoVA(engine) => engine.cancel_generation(request_id).await,
             Self::PrismHadamardQwen35(engine) => engine.cancel_generation(request_id).await,
         }
     }
@@ -111,7 +98,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         match self {
             Self::Qwen3_5(engine) => engine.collect_persistent_prompt_cache_stats().await,
             Self::Qwen3_5Streaming(engine) => engine.collect_persistent_prompt_cache_stats().await,
-            Self::K2HorizonMoVA(engine) => engine.collect_persistent_prompt_cache_stats().await,
             Self::PrismHadamardQwen35(engine) => {
                 engine.collect_persistent_prompt_cache_stats().await
             }
@@ -125,7 +111,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         match self {
             Self::Qwen3_5(engine) => engine.clear_persistent_prompt_cache(model_id).await,
             Self::Qwen3_5Streaming(engine) => engine.clear_persistent_prompt_cache(model_id).await,
-            Self::K2HorizonMoVA(engine) => engine.clear_persistent_prompt_cache(model_id).await,
             Self::PrismHadamardQwen35(engine) => {
                 engine.clear_persistent_prompt_cache(model_id).await
             }
@@ -138,7 +123,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         match self {
             Self::Qwen3_5(engine) => engine.collect_mlx_memory_telemetry().await,
             Self::Qwen3_5Streaming(engine) => engine.collect_mlx_memory_telemetry().await,
-            Self::K2HorizonMoVA(engine) => engine.collect_mlx_memory_telemetry().await,
             Self::PrismHadamardQwen35(engine) => engine.collect_mlx_memory_telemetry().await,
         }
     }
@@ -154,11 +138,6 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
                     .await
             }
             Self::Qwen3_5Streaming(engine) => {
-                engine
-                    .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
-                    .await
-            }
-            Self::K2HorizonMoVA(engine) => {
                 engine
                     .update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes)
                     .await

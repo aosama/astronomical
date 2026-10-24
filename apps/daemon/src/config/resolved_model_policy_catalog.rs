@@ -113,10 +113,7 @@ impl ResolvedModelPolicyCatalog {
             // An image capability requires one of the image families above; a discovered
             // directory that classifies otherwise fails at worker selection instead of
             // silently receiving a Flux identity it never verified.
-            ModelFamily::Qwen3_5
-            | ModelFamily::K2HorizonMoVA
-            | ModelFamily::PrismHadamardQwen35
-            | ModelFamily::ModernBert => {
+            ModelFamily::Qwen3_5 | ModelFamily::PrismHadamardQwen35 | ModelFamily::ModernBert => {
                 WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
                     model_family: WorkerImageGenerationModelFamily::Flux2Klein,

@@ -1,4 +1,4 @@
-//! Real large sparse MoE acceptance journey for fixed-chunk whole-layer paged prefill.
+//! Real large sparse MoE streaming acceptance journey for fixed-chunk whole-layer paged prefill.
 
 use std::time::{Duration, Instant};
 
@@ -14,7 +14,7 @@ use crate::serving_acceptance::support::performance_attribution::{
 };
 
 fn model_id() -> &'static str {
-    crate::common::large_sparse_moe_model_id()
+    crate::common::large_sparse_moe_streaming_model_id()
 }
 const MEMORY_CEILING_BYTES: usize = 20_000_000_000;
 const PROMPT_TOKEN_COUNT: usize = 4_096;
@@ -24,7 +24,7 @@ const REQUEST_ID: RequestId = RequestId::new(96_204);
 const PRODUCT_PERFORMANCE_BUDGET: Duration = Duration::from_secs(30);
 
 #[tokio::test]
-#[ignore = "loads the large sparse MoE e2e fixture under 20 GB and proves two fixed 2048-token prefill chunks finish under 60 seconds without whole-forward replay"]
+#[ignore = "loads the large sparse MoE streaming e2e fixture under 20 GB and proves two fixed 2048-token prefill chunks finish under 60 seconds without whole-forward replay"]
 #[serial]
 async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_replay() {
     timeout(Duration::from_secs(60), async {
@@ -34,7 +34,7 @@ async fn should_process_each_fixed_paged_prefill_chunk_without_whole_forward_rep
             crate::common::configured_installed_model_directory_by_id(model_id());
         let validated_artifact = Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, u32::from(OUTPUT_TOKEN_COUNT))
-            .expect("the large sparse MoE e2e fixture should validate");
+            .expect("the large sparse MoE streaming e2e fixture should validate");
         let sparse_layer_count = u64::from(validated_artifact.config().layer_count());
         let prompt = crate::serving_acceptance::support::romeo_and_juliet::prepare_romeo_and_juliet_three_paragraph_summary_prompt(
             &model_directory,

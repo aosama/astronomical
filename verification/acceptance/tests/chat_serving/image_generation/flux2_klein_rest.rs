@@ -275,7 +275,7 @@ async fn run_optional_chat_swap_journey() {
     let discovered_models = configured_discovered_models().await;
     let flux_model = official_flux_model_from_discovery(&discovered_models);
     let Some(chat_model) = discovered_models.into_iter().find(|model| {
-        model.model_id == crate::support::large_sparse_moe_model_id()
+        model.model_id == crate::support::large_sparse_moe_streaming_model_id()
             && matches!(&model.capabilities, ModelCapabilities::Chat(_))
     }) else {
         eprintln!("[flux-swap] phase=skipped reason=exact-chat-fixture-not-configured");

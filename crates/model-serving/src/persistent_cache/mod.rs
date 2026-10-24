@@ -93,12 +93,6 @@ pub use visual_embedding_model_contract::PersistentVisualEmbeddingModelContract;
 pub use counters::PersistentPromptCacheCounters;
 
 #[cfg(feature = "direct-mlx")]
-pub(crate) use quota_bounded_contract::resolve_quota_bounded_prompt_cache_contract;
-
-#[cfg(feature = "direct-mlx")]
-pub use prefix_lookup::PersistentPromptCachePrefixLookup;
-
-#[cfg(feature = "direct-mlx")]
 pub use visual_embedding_format::PersistentVisualEmbeddingFileHeader;
 
 #[cfg(feature = "direct-mlx")]

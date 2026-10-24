@@ -6,7 +6,7 @@
 //! expert cache leaves available. The engine freezes the retained-page ceiling
 //! at a smaller number until the remaining prompt chunks finish.
 //!
-//! That freeze lives in `RetainedExpertPageCache` as
+//! That freeze lives in `WarmExpertSlotTableCache` as
 //! `request_pressure_maximum_resident_payload_bytes`. The long-lived normal
 //! maximum is stored beside it so this file can later remove the freeze
 //! without guessing the machine budget again.

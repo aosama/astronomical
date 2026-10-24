@@ -20,7 +20,7 @@
 //!
 //! The cells run one process each (MLX limits are process-global): one cell is
 //! one `cargo test` invocation of this module's
-//! `should_serve_the_large_sparse_moe_under_a_..._ceiling_and_record_the_memory_cell`
+//! `should_serve_the_large_sparse_moe_streaming_under_a_..._ceiling_and_record_the_memory_cell`
 //! journey, naming the requested ceiling in the test filter, with
 //! `-- --ignored --nocapture --exact --test-threads=1`. Set
 //! MEMORY_SWEEP_CELL_ORDER to the cell's position in your sweep so the
@@ -78,7 +78,7 @@ macro_rules! memory_ceiling_cell {
     ($test_function_name:ident, $ceiling_gb:literal) => {
         #[tokio::test(flavor = "multi_thread")]
         #[ignore = concat!(
-            "loads the large sparse MoE and measures serving throughput under a ",
+            "loads the large sparse MoE streaming model and measures serving throughput under a ",
             stringify!($ceiling_gb),
             " GB MLX ceiling, appending a memory-cell history record within the 60-second test timeout"
         )]
@@ -95,34 +95,34 @@ macro_rules! memory_ceiling_cell {
 }
 
 memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_23gb_ceiling_and_record_the_memory_cell,
+    should_serve_the_large_sparse_moe_streaming_under_a_23gb_ceiling_and_record_the_memory_cell,
     23
 );
 memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_28gb_ceiling_and_record_the_memory_cell,
+    should_serve_the_large_sparse_moe_streaming_under_a_28gb_ceiling_and_record_the_memory_cell,
     28
 );
 memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_32gb_ceiling_and_record_the_memory_cell,
+    should_serve_the_large_sparse_moe_streaming_under_a_32gb_ceiling_and_record_the_memory_cell,
     32
 );
 memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_35gb_ceiling_and_record_the_memory_cell,
+    should_serve_the_large_sparse_moe_streaming_under_a_35gb_ceiling_and_record_the_memory_cell,
     35
 );
 memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_38gb_ceiling_and_record_the_memory_cell,
+    should_serve_the_large_sparse_moe_streaming_under_a_38gb_ceiling_and_record_the_memory_cell,
     38
 );
 memory_ceiling_cell!(
-    should_serve_the_large_sparse_moe_under_a_40gb_ceiling_and_record_the_memory_cell,
+    should_serve_the_large_sparse_moe_streaming_under_a_40gb_ceiling_and_record_the_memory_cell,
     40
 );
 
 async fn run_memory_ceiling_cell(ceiling_gb: u64) {
     let configured_maximum_mlx_memory_bytes = ceiling_gb * 1_000_000_000;
     let run_outcome = throughput_support::measure_throughput(
-        support::large_sparse_moe_model_id(),
+        support::large_sparse_moe_streaming_model_id(),
         &cell_journey(configured_maximum_mlx_memory_bytes),
     )
     .await;

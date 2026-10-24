@@ -1,9 +1,9 @@
 use astronomical_model_serving::{OptiQMetadata, Qwen3_5Config};
 
 #[test]
-#[ignore = "requires model_directories to discover the large sparse MoE installed model"]
-fn should_parse_the_large_sparse_moe_config() {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+#[ignore = "requires model_directories to discover the large sparse MoE streaming installed model"]
+fn should_parse_the_large_sparse_moe_streaming_config() {
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let config_bytes = std::fs::read(model_directory.join("config.json"))
         .expect("the config.json should be readable for acceptance");
 

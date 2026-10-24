@@ -6,10 +6,10 @@ use crate::PerformanceAttribution;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
-use super::super::expert_paging::expert_pager::{
+use super::super::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape,
 };
-use super::Qwen3_5MoEPagedPrefillExecutionMode;
+use super::Qwen3_5MoEPagedExecutionMode;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 
 impl Qwen3_5Model {
@@ -28,16 +28,17 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let sorted_unique_expert_ids = self.copy_sorted_unique_expert_ids(selected_indices)?;
-        let (streamed_expert_weights, page_manifest) = expert_pager.load_rust_streamed_experts(
-            &self.runtime,
-            layer_index,
-            &sorted_unique_expert_ids,
-            Qwen3_5ExpertStreamingRequestShape {
-                route_token_count,
-                routed_expert_count: sorted_unique_expert_ids.len(),
-            },
-            performance_attribution,
-        )?;
+        let (streamed_expert_weights, page_manifest) = expert_pager
+            .stream_selected_expert_page_from_ssd(
+                &self.runtime,
+                layer_index,
+                &sorted_unique_expert_ids,
+                Qwen3_5ExpertStreamingRequestShape {
+                    route_token_count,
+                    routed_expert_count: sorted_unique_expert_ids.len(),
+                },
+                performance_attribution,
+            )?;
         self.forward_moe_paged_with_performance_attribution(
             hidden_states,
             mixture_of_experts_weights,
@@ -106,7 +107,7 @@ impl Qwen3_5Model {
                 &token_selected_indices,
                 &token_selected_scores,
                 should_use_compiled_elementwise_graphs,
-                Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic,
+                Qwen3_5MoEPagedExecutionMode::TokenLocalDiagnostic,
                 None,
                 performance_attribution,
             )?);

@@ -8,7 +8,7 @@
 //! with different active-memory bytes appear while the model processes
 //! prompt tokens from zero through at least 2,000.
 //!
-//! The large sparse MoE e2e fixture pages experts from SSD under a 32 GB ceiling.
+//! The large sparse MoE streaming e2e fixture pages experts from SSD under a 32 GB ceiling.
 //! Each prefill chunk brings new expert pages into MLX memory, making attribution
 //! grow visibly chunk by chunk.
 //!
@@ -37,7 +37,7 @@ use crate::support::serving_rest::{
 };
 
 fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 // This ceiling defines a reproducible acceptance cell only. Production code
 // must not hardwire it or assume this model always pages experts.

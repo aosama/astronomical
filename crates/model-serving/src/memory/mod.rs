@@ -6,7 +6,7 @@
 //! family code ──measures──▶ memory decides ──decision──▶ family code enacts
 //! ```
 //!
-//! Family modules (`qwen3_5`, `qwen3_5_streaming`, `k2_horizon_mova`) measure byte facts from
+//! Family modules (`qwen3_5`, `qwen3_5_streaming`) measure byte facts from
 //! MLX and the artifact, hand them to the pure arithmetic in
 //! `astronomical-memory-policy` (re-exported below) and to the MLX-facing
 //! owners in this package, and enact the typed decisions they receive. This
@@ -126,10 +126,9 @@ pub(crate) use expert_cache::source_expert_page_payload_bytes;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use astronomical_memory_policy::residency;
 pub use astronomical_memory_policy::residency::{
-    CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerGeometry,
-    ExpertLayerResidencyTarget, ExpertResidencyPlan, ExpertResidencyPlanError,
-    RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
-    StreamingStartupResidencyFacts, classify_expert_memory_mode,
+    CompleteResidencyHeadroomBoundary, CurrentExpertLayerResidency, ExpertLayerResidencyTarget,
+    ExpertResidencyPlan, ExpertResidencyPlanError, RequestExpertLayerRole, RequestExpertResidency,
+    RetainedExpertPageClass, StreamingStartupResidencyFacts, classify_expert_memory_mode,
     complete_layer_indexes_required_before_decode, decode_warm_floor_eviction_indexes,
     hot_expert_warm_slot_count, minimum_decode_warm_slot_count, plan_expert_residency,
     publish_request_stable_residency_plan,

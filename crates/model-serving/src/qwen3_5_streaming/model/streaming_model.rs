@@ -14,8 +14,8 @@ use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::forward_contract;
 use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector;
 use crate::qwen3_5_streaming::{
-    PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedPrefillExecutionMode,
-    RetainedExpertCache,
+    PagedForwardMissingRouteCollector, Qwen3_5ExpertPager, Qwen3_5MoEPagedExecutionMode,
+    WarmExpertSlotTableCache,
 };
 use crate::{
     DecoderCacheState, ExpertResidencyPlan, PerformanceAttribution, RequestExpertResidency,
@@ -30,7 +30,7 @@ pub struct Qwen3_5StreamingModel {
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
     /// Individual routed experts retained within the paged-mode RAM ceiling.
-    pub(crate) retained_experts: Option<RefCell<RetainedExpertCache>>,
+    pub(crate) retained_experts: Option<RefCell<WarmExpertSlotTableCache>>,
     /// Pure target published at load and refreshed before mandatory expert reads.
     pub(crate) active_expert_residency_plan: RefCell<Option<ExpertResidencyPlan>>,
     /// Prefill pin/stream contract for the active request. Generation clears it.
@@ -237,32 +237,32 @@ impl Qwen3_5StreamingModel {
 
     /// Executes one prompt chunk with a test-only paged MoE execution selector.
     #[doc(hidden)]
-    pub fn forward_chunk_with_paged_prefill_execution_mode_for_tests(
+    pub fn forward_chunk_with_paged_execution_mode_for_tests(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let mut disabled_performance_attribution = PerformanceAttribution::disabled();
         let final_logits = self
-            .build_forward_chunk_with_paged_prefill_execution_mode_and_performance_attribution(
+            .build_forward_chunk_with_paged_execution_mode_and_performance_attribution(
                 token_ids,
                 starting_position_tokens,
                 request_decoder_state,
-                paged_prefill_execution_mode,
+                paged_execution_mode,
                 &mut disabled_performance_attribution,
             )?;
         self.evaluate_forward_state(&final_logits, request_decoder_state)?;
         Ok(final_logits)
     }
 
-    pub(crate) fn build_forward_chunk_with_paged_prefill_execution_mode_and_performance_attribution(
+    pub(crate) fn build_forward_chunk_with_paged_execution_mode_and_performance_attribution(
         &self,
         token_ids: &[u32],
         starting_position_tokens: u32,
         request_decoder_state: &mut RequestDecoderStateStack,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let token_count = forward_contract::validate_forward_input(
@@ -290,7 +290,7 @@ impl Qwen3_5StreamingModel {
             token_count,
             starting_position_tokens,
             request_decoder_state,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             performance_attribution,
         )
     }
@@ -309,7 +309,7 @@ impl Qwen3_5StreamingModel {
         boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let attention_output = self.forward_decoder_layer_attention(
@@ -328,7 +328,7 @@ impl Qwen3_5StreamingModel {
             token_count,
             layer_index,
             decoder_layer_weights,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             performance_attribution,
         )
     }

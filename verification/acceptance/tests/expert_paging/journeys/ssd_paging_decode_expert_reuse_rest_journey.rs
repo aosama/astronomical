@@ -41,7 +41,7 @@ use crate::support::serving_rest::{
 };
 
 fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 // This ceiling defines a reproducible acceptance cell only. Production code must
 // not hardwire it or assume this model always leaves exactly four layers cold.
@@ -57,7 +57,7 @@ const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches the production REST server and real worker against the large sparse MoE under a 23 GB ceiling to accept routed-expert reuse from retained RAM during decode"]
+#[ignore = "launches the production REST server and real worker against the large sparse MoE streaming model under a 23 GB ceiling to accept routed-expert reuse from retained RAM during decode"]
 #[serial]
 async fn should_reuse_retained_decode_experts_while_staying_within_the_mlx_memory_ceiling() {
     timeout(

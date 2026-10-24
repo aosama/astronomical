@@ -411,9 +411,9 @@ fn measure_warmed_one_token_precise_swiglu_path(
     measurement_started_at.elapsed()
 }
 
-/// The K2 Horizon MoVA gate softplus is the reference implementation's
-/// beta-scaled form, NOT the standard logaddexp softplus; this pins the
-/// compiled graph to the hand-composed reference chain within bf16 rounding.
+/// This softplus is the reference implementation's beta-scaled form, NOT the
+/// standard logaddexp softplus; this pins the compiled graph to the
+/// hand-composed reference chain within bf16 rounding.
 #[test]
 fn should_match_the_reference_beta_softplus_chain_within_bf16_rounding() {
     let runtime = runtime();

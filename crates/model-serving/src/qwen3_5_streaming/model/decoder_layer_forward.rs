@@ -9,7 +9,7 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5DecoderFeedForwardWeights, Qwen3_5DecoderLayerWeights,
 };
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_streaming::Qwen3_5MoEPagedPrefillExecutionMode;
+use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel;
@@ -21,7 +21,7 @@ impl Qwen3_5StreamingModel {
         token_count: i32,
         layer_index: usize,
         decoder_layer_weights: &Qwen3_5DecoderLayerWeights,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let should_use_compiled_elementwise_graphs = token_count != 1;
@@ -48,7 +48,7 @@ impl Qwen3_5StreamingModel {
                     expert_pager,
                     layer_index,
                     should_use_compiled_elementwise_graphs,
-                    paged_prefill_execution_mode,
+                    paged_execution_mode,
                     performance_attribution,
                 )
             }

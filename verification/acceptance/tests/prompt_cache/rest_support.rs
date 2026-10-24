@@ -11,7 +11,7 @@ use crate::openai_rest;
 use crate::support::openai_client::{ChatCompletionStream, LocalOpenAiClient};
 
 pub(crate) fn cache_pressure_model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 pub(crate) const MAXIMUM_OUTPUT_TOKEN_COUNT: u16 = 2_048;
 pub(crate) const THINKING_BUDGET_TOKEN_COUNT: u16 = 256;

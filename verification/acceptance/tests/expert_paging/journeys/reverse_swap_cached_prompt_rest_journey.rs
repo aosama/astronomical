@@ -1,5 +1,5 @@
 //! Public cached-prompt journey guarding physical expert residency across an
-//! intervening request on the large sparse MoE e2e fixture.
+//! intervening request on the large sparse MoE streaming e2e fixture.
 //!
 //! A user first serves a long prompt, then a short unrelated request, then
 //! returns to the original prompt with a short append. Success requires valid
@@ -38,25 +38,25 @@ async fn should_complete_cached_reverse_swap_without_hidden_model_page_ins() {
 }
 
 async fn run_cached_reverse_swap_journey() {
-    let large_sparse_moe_model_directory =
+    let large_sparse_moe_streaming_model_directory =
         crate::support::configured_installed_model_directory_by_id(
-            crate::support::large_sparse_moe_model_id(),
+            crate::support::large_sparse_moe_streaming_model_id(),
         );
     let isolated_worker_home =
         tempfile::tempdir().expect("the reverse-swap worker home should be created");
     write_acceptance_config(
         isolated_worker_home.path(),
-        [&large_sparse_moe_model_directory],
+        [&large_sparse_moe_streaming_model_directory],
     );
     let long_prompt = crate::support::exact_model_prompt::build_exact_model_prompt_content(
-        &large_sparse_moe_model_directory,
+        &large_sparse_moe_streaming_model_directory,
         ROMEO_AND_JULIET_SOURCE,
         "Read this Romeo and Juliet excerpt and reply with exactly one word.",
         LONG_PROMPT_TOKEN_COUNT,
     );
     let model_artifacts = [(
-        crate::support::large_sparse_moe_model_id().to_owned(),
-        large_sparse_moe_model_directory,
+        crate::support::large_sparse_moe_streaming_model_id().to_owned(),
+        large_sparse_moe_streaming_model_directory,
     )];
     let real_model_rest_server = launch_real_model_rest_server_for_models(
         &model_artifacts,
@@ -69,7 +69,7 @@ async fn run_cached_reverse_swap_journey() {
 
     complete_request(
         &openai_client,
-        crate::support::large_sparse_moe_model_id(),
+        crate::support::large_sparse_moe_streaming_model_id(),
         &long_prompt,
         Duration::from_secs(75),
         "oq6_cache_seed",
@@ -77,7 +77,7 @@ async fn run_cached_reverse_swap_journey() {
     .await;
     complete_request(
         &openai_client,
-        crate::support::large_sparse_moe_model_id(),
+        crate::support::large_sparse_moe_streaming_model_id(),
         "Quote one word from Romeo and Juliet.",
         Duration::from_secs(25),
         "q6_intervening_swap",
@@ -87,7 +87,7 @@ async fn run_cached_reverse_swap_journey() {
         format!("{long_prompt}\n\nNow answer with one different word from Romeo and Juliet.");
     let reverse_swap_elapsed = complete_request(
         &openai_client,
-        crate::support::large_sparse_moe_model_id(),
+        crate::support::large_sparse_moe_streaming_model_id(),
         &appended_prompt,
         REVERSE_SWAP_TIMEOUT,
         "oq6_cached_append",

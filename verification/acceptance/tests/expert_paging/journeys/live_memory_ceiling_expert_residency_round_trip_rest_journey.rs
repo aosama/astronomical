@@ -39,13 +39,13 @@ const STATUS_CONSISTENCY_SAMPLE_INTERVAL: Duration = Duration::from_millis(200);
 const SETTLE_TIMEOUT: Duration = Duration::from_secs(45);
 
 fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 const INITIAL_MLX_MEMORY_CEILING_BYTES: u64 = 23_000_000_000;
 // The REST raise sends whole GB; the daemon converts user GB input with the
 // marketed-gigabyte convention, so the expected effective ceiling is 38 x 2^30.
 const RESIDENT_MLX_MEMORY_CEILING_BYTES: u64 = 38 * BYTES_PER_MARKETED_GIGABYTE;
-// Below the large sparse MoE complete-owner idle snapshot (~28.5 GB). 30 GB used to look
+// Below the large sparse MoE streaming complete-owner idle snapshot (~28.5 GB). 30 GB used to look
 // too small only because admission stacked exclusive paper peaks.
 const RETURN_TO_STREAMING_MLX_MEMORY_CEILING_BYTES: u64 = 26 * BYTES_PER_MARKETED_GIGABYTE;
 const INITIAL_PROMPT_TOKEN_COUNT: usize = 1_024;

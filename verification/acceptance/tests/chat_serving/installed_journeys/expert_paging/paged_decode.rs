@@ -24,7 +24,7 @@ const COLD_REQUEST_ID: RequestId = RequestId::new(96_100);
 const WARM_REQUEST_ID: RequestId = RequestId::new(96_101);
 
 fn model_id() -> &'static str {
-    crate::common::large_sparse_moe_model_id()
+    crate::common::large_sparse_moe_streaming_model_id()
 }
 
 #[tokio::test]

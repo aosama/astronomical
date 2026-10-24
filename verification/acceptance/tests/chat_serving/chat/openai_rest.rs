@@ -12,7 +12,7 @@ pub(crate) use crate::support::serving_rest::{
 
 pub(crate) const E2E_TIMEOUT: Duration = Duration::from_secs(115);
 fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 // The litmus checks stream completion and worker reuse, not long output volume.
 const DEPLOYMENT_LITMUS_MAX_OUTPUT_TOKENS: u32 = 512;

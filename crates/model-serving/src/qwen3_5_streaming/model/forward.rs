@@ -1,4 +1,36 @@
 //! Sparse routing selects retained experts or SSD streaming.
+//!
+//! # One token's journey through this dispatch
+//!
+//! The match below is the whole SSD-paging decision tree. Every outcome names
+//! the serving function it lands in, so a reader can trace any layer's forward
+//! from here without hunting across directories:
+//!
+//! 1. **Seated complete layer, single decode token, fused kernel** — the whole
+//!    layer is served from the warm slot tables with the route remapped
+//!    on-device: zero host copies, zero SSD reads. The fast path before any
+//!    host-side route materialization.
+//! 2. **Seated complete layer, multi-token (or no fused kernel)** — the
+//!    chunk's routed union is gathered as a subset of the seated layer
+//!    (`routed_subset_of_cached_page`, this file's sibling `expert_reuse.rs`).
+//! 3. **Multi-token miss (prefill chunk)** — the chunk's routed-expert union is
+//!    streamed from SSD as an operation-local page
+//!    (`stream_operation_local_routed_experts` in `expert_reuse.rs`; loading in
+//!    `expert_streaming/expert_pager/expert_page_streaming.rs`).
+//! 4. **Single-token miss, mixed coverage** — some routed experts are warm,
+//!    some are not: covered assignments are served from the slot tables and
+//!    only the missing experts stream from SSD
+//!    (`forward_moe_mixed_decode_route_with_performance_attribution` in
+//!    `mixed_decode_execution.rs`, built on
+//!    `cached_plus_streamed_page_route.rs`).
+//! 5. **Single-token miss, fully warm** — the hot-expert cache hit serves the
+//!    whole routed set from RAM (`hot_expert_partial_page` in
+//!    `expert_reuse.rs`); a total miss falls through to outcome 3's streaming.
+//!
+//! The warm tables themselves live in
+//! `expert_streaming/warm_expert_slot_table_cache.rs`; the byte plans and the
+//! bounded SSD reader are family-neutral under `crate::expert_paging` and
+//! `astronomical-runtime-integration`'s safetensors module.
 
 use mlx_c_rust::MlxArray;
 
@@ -6,8 +38,8 @@ use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 
-use super::super::expert_paging::expert_pager::Qwen3_5ExpertPager;
-use super::Qwen3_5MoEPagedPrefillExecutionMode;
+use super::super::expert_streaming::expert_pager::Qwen3_5ExpertPager;
+use super::Qwen3_5MoEPagedExecutionMode;
 use super::expert_reuse::ExpertPageDisposition;
 use super::feed_forward_weights::{Qwen3_5MoEFeedForwardWeights, Qwen3_5MoERouterGateWeights};
 use super::routing;
@@ -23,7 +55,7 @@ impl Qwen3_5Model {
         expert_pager: &Qwen3_5ExpertPager,
         layer_index: usize,
         should_use_compiled_elementwise_graphs: bool,
-        paged_prefill_execution_mode: Qwen3_5MoEPagedPrefillExecutionMode,
+        paged_execution_mode: Qwen3_5MoEPagedExecutionMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let hidden_state_shape = hidden_states.shape();
@@ -58,8 +90,8 @@ impl Qwen3_5Model {
         )?;
 
         let should_use_loaded_model_mode = matches!(
-            paged_prefill_execution_mode,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault
+            paged_execution_mode,
+            Qwen3_5MoEPagedExecutionMode::ProductionDefault
         );
         // Issue #536/#542: retain this decode token's route lazily. The array
         // stays lazy until the decode evaluation that materializes logits;
@@ -208,8 +240,7 @@ impl Qwen3_5Model {
                             layer_index,
                             token_count,
                             routed_expert_ids,
-                            paged_prefill_execution_mode
-                                == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                            paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                             performance_attribution,
                         )?
                     } else {
@@ -239,7 +270,7 @@ impl Qwen3_5Model {
                                     selected_expert_ids,
                                     &route_coverage,
                                     expert_capacity,
-                                    paged_prefill_execution_mode,
+                                    paged_execution_mode,
                                     should_use_compiled_elementwise_graphs,
                                     performance_attribution,
                                 );
@@ -263,8 +294,8 @@ impl Qwen3_5Model {
                                 layer_index,
                                 token_count,
                                 routed_expert_ids,
-                                paged_prefill_execution_mode
-                                    == Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                                paged_execution_mode
+                                    == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                                 performance_attribution,
                             )?
                         }
@@ -289,8 +320,8 @@ impl Qwen3_5Model {
         }
 
         if token_count > 1 {
-            match paged_prefill_execution_mode {
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault => {
+            match paged_execution_mode {
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault => {
                     return self.forward_moe_with_expert_store_paging(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -300,12 +331,12 @@ impl Qwen3_5Model {
                         &selected_indices,
                         &selected_scores,
                         should_use_compiled_elementwise_graphs,
-                        paged_prefill_execution_mode,
+                        paged_execution_mode,
                         sorted_unique_expert_ids.as_deref(),
                         performance_attribution,
                     );
                 }
-                Qwen3_5MoEPagedPrefillExecutionMode::CompactPromptDiagnostic => {
+                Qwen3_5MoEPagedExecutionMode::CompactPromptDiagnostic => {
                     return self.forward_moe_with_direct_prefill_paging(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -318,7 +349,7 @@ impl Qwen3_5Model {
                         performance_attribution,
                     );
                 }
-                Qwen3_5MoEPagedPrefillExecutionMode::TokenLocalDiagnostic => {
+                Qwen3_5MoEPagedExecutionMode::TokenLocalDiagnostic => {
                     return self.forward_moe_with_per_token_paging(
                         hidden_states,
                         mixture_of_experts_weights,
@@ -342,7 +373,7 @@ impl Qwen3_5Model {
             &selected_indices,
             &selected_scores,
             should_use_compiled_elementwise_graphs,
-            paged_prefill_execution_mode,
+            paged_execution_mode,
             sorted_unique_expert_ids.as_deref(),
             performance_attribution,
         )

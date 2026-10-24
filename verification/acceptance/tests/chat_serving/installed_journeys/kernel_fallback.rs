@@ -16,24 +16,17 @@
 
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{ChatMessage, ChatToolChoice, RequestId};
+use astronomical_ipc_protocol::RequestId;
 use astronomical_model_serving::{
-    CustomKernelVerdict, CustomMetalKernelFamily, GeneratedToken, InferenceEngine,
-    K2HorizonMoVAInferenceRequest, K2HorizonMoVAPromptRenderer, K2HorizonMoVARequestOutput,
-    K2HorizonMoVATokenizer, KernelUnsupportedReason, MlxInferenceExecution, PerformanceAttribution,
+    CustomMetalKernelFamily, GeneratedToken, InferenceEngine, PerformanceAttribution,
     Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5StreamingEngine,
-    Qwen3_5StreamingPromptProcessingChunkSizer, WorkerKernelCapabilities,
-    initialize_k2_horizon_mova_execution, install_forced_worker_verdicts_for_tests,
+    Qwen3_5StreamingPromptProcessingChunkSizer, install_forced_worker_verdicts_for_tests,
     worker_process_kernel_capabilities,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use tokio::time::timeout;
 
 use crate::serving_acceptance::support::{IMAGE_PAD_TOKEN_ID, LOCAL_AI_PROMPT_TOKEN_IDS};
-
-const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
-    "../../../../../verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt"
-);
 
 const FORCED_FALLBACK_MAX_TOKENS: usize = 16;
 
@@ -77,7 +70,7 @@ async fn run_forced_fallback_romeo_continuation() {
             "family {family:?} must stay demoted for the whole worker process"
         );
     }
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");
@@ -143,127 +136,4 @@ async fn run_forced_fallback_romeo_continuation() {
         generated_token_count > 0,
         "the forced-fallback path must produce at least one token"
     );
-}
-/// Forces the two K2 Horizon MoVA kernel families unsupported and serves a
-/// Romeo and Juliet chat request. The fused expert decode demotion is the
-/// historically dangerous one: a silently dropped dispatch once returned
-/// zeros on an untested GPU, so this journey proves the gathered public MLX
-/// route still decodes real text when that verdict is forced.
-#[tokio::test]
-#[ignore = "loads the K2 Horizon MoVA artifact with both kernel families demoted"]
-async fn should_serve_romeo_and_juliet_on_k2_horizon_mova_when_both_kernels_are_unsupported() {
-    timeout(
-        Duration::from_secs(FORCED_FALLBACK_TIMEOUT_SECONDS),
-        run_forced_fallback_k2_generation(),
-    )
-    .await
-    .expect("the K2 forced-fallback request must finish within 120 seconds");
-}
-
-async fn run_forced_fallback_k2_generation() {
-    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    install_forced_worker_verdicts_for_tests(k2_forced_unsupported_capabilities());
-    let model_directory = k2_horizon_mova_model_directory();
-    let memory_limits = crate::common::sample_machine_serving_acceptance_mlx_memory_limits().await;
-    let (_processor, mut execution) = initialize_k2_horizon_mova_execution(
-        &model_directory,
-        memory_limits.active_memory_limit_bytes(),
-        memory_limits.allocator_cache_memory_limit_bytes(),
-        true,
-    )
-    .expect("configured K2 Horizon MoVA artifact should start with both kernels demoted");
-    execution
-        .load()
-        .expect("K2 Horizon MoVA weights should load through the MLX fallback");
-
-    let prompt_excerpt = ROMEO_AND_JULIET_SOURCE
-        .chars()
-        .take(280)
-        .collect::<String>();
-    let prompt = K2HorizonMoVAPromptRenderer::new().render(
-        &[ChatMessage::User {
-            content: format!(
-                "Name the two households in the supplied Romeo and Juliet source.\n\n{prompt_excerpt}"
-            ),
-            images: Vec::new(),
-        }],
-        &[],
-        &ChatToolChoice::None,
-    );
-    let tokenizer = K2HorizonMoVATokenizer::from_json_bytes(
-        &std::fs::read(model_directory.join("tokenizer.json"))
-            .expect("tokenizer.json should be readable"),
-        &astronomical_model_serving::K2HorizonMoVAConfig::from_json_bytes(
-            &std::fs::read(model_directory.join("config.json"))
-                .expect("config.json should be readable"),
-        )
-        .expect("family config should parse"),
-    )
-    .expect("tokenizer should load");
-    let prompt_token_ids = tokenizer
-        .encode_prompt(&prompt)
-        .expect("Romeo and Juliet prompt should encode");
-    let max_output_tokens = FORCED_FALLBACK_MAX_TOKENS as u32;
-    execution
-        .start_generation(K2HorizonMoVAInferenceRequest::new(
-            prompt_token_ids,
-            max_output_tokens,
-            1_000,
-            950,
-            Some(2),
-        ))
-        .expect("prefill should start through the fallback dispatch");
-
-    let mut request_output =
-        K2HorizonMoVARequestOutput::new_with_declared_tool_names(&tokenizer, Vec::new());
-    let mut generated_token_count = 0_u32;
-    for decode_step in 0..(max_output_tokens.saturating_add(32)) {
-        match execution
-            .decode_next_token(RequestId::new(u64::from(decode_step) + 1))
-            .expect("decode should advance through the fallback dispatch")
-        {
-            GeneratedToken::TokenId { token_id, .. } => {
-                generated_token_count += 1;
-                request_output
-                    .push_token(token_id)
-                    .expect("token should decode through the fallback dispatch");
-                if generated_token_count >= max_output_tokens {
-                    break;
-                }
-            }
-            GeneratedToken::EndOfSequence => break,
-            GeneratedToken::PrefillProgress { .. }
-            | GeneratedToken::PromptProcessingPhaseStarted { .. }
-            | GeneratedToken::GenerationPreparationStarted { .. } => {}
-        }
-    }
-    assert!(
-        generated_token_count > 0,
-        "the K2 forced-fallback path must produce at least one token"
-    );
-    request_output.finish();
-}
-
-fn k2_forced_unsupported_capabilities() -> WorkerKernelCapabilities {
-    let forced_demotion_description = "forced demotion for the K2 serving fallback journey";
-    WorkerKernelCapabilities::with_forced_verdicts_for_tests([
-        (
-            CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
-            CustomKernelVerdict::Unsupported(KernelUnsupportedReason::Compilation {
-                description: forced_demotion_description.to_owned(),
-            }),
-        ),
-        (
-            CustomMetalKernelFamily::FUSED_QUANTIZED_EXPERT_DECODE,
-            CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
-                description: forced_demotion_description.to_owned(),
-            }),
-        ),
-    ])
-}
-
-fn k2_horizon_mova_model_directory() -> std::path::PathBuf {
-    crate::common::configured_installed_model_directory_by_id(
-        crate::common::k2_horizon_mova_model_id(),
-    )
 }
