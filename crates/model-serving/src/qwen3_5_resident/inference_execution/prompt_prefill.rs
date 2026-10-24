@@ -41,11 +41,9 @@ impl Qwen3_5EngineState {
     ) -> Result<PromptPrefillChunkOutcome, PromptPrefillChunkAttemptError> {
         // Phase 1: pure decision logic — no side effects.
         let plan = self.plan_prompt_prefill_chunk(active_request, prefill_start, prefill_end)?;
-        active_request
-            .performance_attribution
-            .record_counter(PerformanceCounter::PrefillChunkCount, 1);
 
-        // Phase 2: adaptive RAM growth admission.
+        // Phase 2: adaptive RAM growth admission. A rejection leaves no state
+        // behind, so the caller may retry a smaller chunk of the same prompt.
         let admission_outcome = self.execute_prefill_memory_admission(
             active_request,
             plan.adaptive_ram_growth_context,
@@ -53,6 +51,11 @@ impl Qwen3_5EngineState {
             plan.exact_temporary_workspace_bytes,
             plan.direct_publication_workspace_bytes,
         )?;
+        // Counted after admission so a rejected attempt that is retried as a
+        // smaller chunk counts once, as the chunk that actually executes.
+        active_request
+            .performance_attribution
+            .record_counter(PerformanceCounter::PrefillChunkCount, 1);
 
         // Phase 3: dispatch the target model's prompt forward.
         let forward_started_at = std::time::Instant::now();

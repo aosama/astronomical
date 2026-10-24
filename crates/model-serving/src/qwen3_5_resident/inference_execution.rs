@@ -19,6 +19,7 @@ mod persistent_prompt_cache_tail_capture;
 mod persistent_prompt_cache_visual_identity;
 mod prefill_advance;
 mod prefill_chunk_planning;
+mod prefill_chunk_shrink;
 mod prefill_execution_context;
 mod prefill_forward_dispatch;
 mod prefill_memory_admission;

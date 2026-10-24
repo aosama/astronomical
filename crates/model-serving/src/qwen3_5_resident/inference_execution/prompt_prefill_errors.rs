@@ -6,6 +6,11 @@ pub(super) enum PromptPrefillChunkAttemptError {
     AdaptiveMemoryLimitExceeded {
         reason: String,
     },
+    /// Only the chunk's projected transient peak missed the ceiling; a smaller
+    /// chunk of the same prompt may still run resident.
+    AdaptiveTransientPeakExceeded {
+        reason: String,
+    },
     ActiveMemoryLimitExceeded {
         active_memory_bytes: usize,
         attempted_allocation_bytes: usize,
@@ -28,6 +33,9 @@ impl From<AdaptiveRamGrowthMemoryAdmissionError> for PromptPrefillChunkAttemptEr
         match admission_error {
             AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason } => {
                 Self::AdaptiveMemoryLimitExceeded { reason }
+            }
+            AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { reason } => {
+                Self::AdaptiveTransientPeakExceeded { reason }
             }
             AdaptiveRamGrowthMemoryAdmissionError::Engine(inference_engine_error) => {
                 Self::Engine(inference_engine_error)

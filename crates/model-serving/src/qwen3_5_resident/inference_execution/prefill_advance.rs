@@ -4,24 +4,32 @@
 //!
 //! 1. Choose a deterministic fixed chunk from resolved configuration.
 //! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
-//! 3. Execute that unchanged chunk under adaptive memory admission.
+//! 3. Execute that chunk under adaptive memory admission; when admission rejects
+//!    only its transient peak, halve it (never below 256 tokens) and retry.
 //! 4. Publish required prompt-cache state before advancing the in-memory cursor.
 //! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
 //! 7. Emit progress only after all required state transitions succeeded.
 //!
-//! A capacity failure is terminal: the request reports the mismatch instead of
-//! retrying a smaller chunk. The retired ladder halved the executable chunk
-//! after each failure, which collapsed real requests into dozens of forwards
-//! that re-paid complete-layer storage reads while making no visible progress.
+//! A stable-footprint miss, a minimum-size transient miss, and an execution
+//! out-of-memory failure are terminal: the request reports the mismatch. The
+//! retired streaming ladder halved the chunk after every failure, collapsing
+//! real requests into dozens of forwards that each re-paid complete-layer
+//! storage reads. The resident shrink differs on both counts: every expert is
+//! already in RAM, so a smaller forward reads nothing from storage, and the
+//! shrink happens at admission before any forward executes, halving toward a
+//! 256-token minimum (three halvings from a 2,048-token chunk).
 
 use std::time::Instant;
 
-use crate::{GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceOperation};
+use crate::{
+    GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceCounter, PerformanceOperation,
+};
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use super::completed_forward_memory;
+use super::prefill_chunk_shrink;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_resident::model::memory_admission;
@@ -77,91 +85,130 @@ impl Qwen3_5EngineState {
             requested_prefill_chunk_end
         };
         let forward_chunk_started_at = Instant::now();
-        let attempted_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
-        tracing::info!(
-            request_id = request_id.value(),
-            prefill_start,
-            attempted_prefill_chunk_token_count,
-            "executing prompt-prefill chunk"
-        );
-        let prefill_end = prefill_start
-            .checked_add(attempted_prefill_chunk_token_count)
-            .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
-        let prompt_prefill_chunk_outcome = match self.execute_prompt_prefill_chunk(
-            active_request,
-            prefill_start,
-            prefill_end,
-        ) {
-            Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
-            Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
-                return Err(generation_error);
-            }
-            // A capacity failure is terminal: the configured chunk either
-            // fits or the request reports the mismatch. Retrying smaller
-            // chunks once collapsed real requests into dozens of forwards
-            // that re-paid complete-layer storage reads for no progress.
-            Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    prefill_start,
-                    attempted_prefill_chunk_token_count,
-                    reason = %reason,
-                    "prefill admission rejected the configured chunk"
-                );
-                let model = self
-                    .model
-                    .as_ref()
-                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-                return Err(memory_admission::resident_capacity_error(
-                    model,
-                    format!(
-                        "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
-                    ),
-                ));
-            }
-            Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-                active_memory_bytes,
-                attempted_allocation_bytes,
-                allowed_active_memory_bytes,
-            }) => {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    prefill_start,
-                    attempted_prefill_chunk_token_count,
+        let mut attempted_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
+        let (prompt_prefill_chunk_outcome, prefill_end) = loop {
+            tracing::info!(
+                request_id = request_id.value(),
+                prefill_start,
+                attempted_prefill_chunk_token_count,
+                "executing prompt-prefill chunk"
+            );
+            let prefill_end = prefill_start
+                .checked_add(attempted_prefill_chunk_token_count)
+                .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
+            match self.execute_prompt_prefill_chunk(active_request, prefill_start, prefill_end) {
+                Ok(prompt_prefill_chunk_outcome) => {
+                    break (prompt_prefill_chunk_outcome, prefill_end);
+                }
+                Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
+                    return Err(generation_error);
+                }
+                // Only the transient peak missed: every expert is already in RAM,
+                // so a smaller forward re-reads nothing and fits the same request
+                // without abandoning the resident engine. Admission rejected
+                // before any state changed, so the retry starts clean.
+                Err(PromptPrefillChunkAttemptError::AdaptiveTransientPeakExceeded { reason }) => {
+                    if let Some(shrunk_prefill_chunk_token_count) =
+                        prefill_chunk_shrink::next_shrunk_resident_prefill_chunk_token_count(
+                            attempted_prefill_chunk_token_count,
+                        )
+                    {
+                        tracing::info!(
+                            request_id = request_id.value(),
+                            prefill_start,
+                            attempted_prefill_chunk_token_count,
+                            shrunk_prefill_chunk_token_count,
+                            reason = %reason,
+                            "shrinking resident prefill chunk after the adaptive RAM growth guard rejected only its transient peak"
+                        );
+                        active_request.performance_attribution.record_counter(
+                            PerformanceCounter::ResidentPrefillTransientPeakChunkShrinkCount,
+                            1,
+                        );
+                        attempted_prefill_chunk_token_count = shrunk_prefill_chunk_token_count;
+                        continue;
+                    }
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        prefill_start,
+                        attempted_prefill_chunk_token_count,
+                        reason = %reason,
+                        "prefill admission rejected the transient peak of the smallest resident chunk"
+                    );
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
+                    return Err(memory_admission::resident_capacity_error(
+                        model,
+                        format!(
+                            "smallest resident prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit its transient peak under the MLX ceiling: {reason}"
+                        ),
+                    ));
+                }
+                // A stable-footprint miss is terminal: no smaller forward reduces
+                // memory that stays resident after the forward completes.
+                Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        prefill_start,
+                        attempted_prefill_chunk_token_count,
+                        reason = %reason,
+                        "prefill admission rejected the stable footprint of the attempted chunk"
+                    );
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
+                    return Err(memory_admission::resident_capacity_error(
+                        model,
+                        format!(
+                            "attempted prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
+                        ),
+                    ));
+                }
+                Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
                     active_memory_bytes,
                     attempted_allocation_bytes,
                     allowed_active_memory_bytes,
-                    "prefill chunk forward exceeded the MLX active-memory limit"
-                );
-                let model = self
-                    .model
-                    .as_ref()
-                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-                return Err(memory_admission::resident_capacity_error(
-                    model,
-                    format!(
-                        "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
-                    ),
-                ));
-            }
-            Err(PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { reason }) => {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    prefill_start,
-                    attempted_prefill_chunk_token_count,
-                    reason = %reason,
-                    "prefill chunk forward exhausted graphics-processor memory"
-                );
-                let model = self
-                    .model
-                    .as_ref()
-                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-                return Err(memory_admission::resident_capacity_error(
-                    model,
-                    format!(
-                        "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
-                    ),
-                ));
+                }) => {
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        prefill_start,
+                        attempted_prefill_chunk_token_count,
+                        active_memory_bytes,
+                        attempted_allocation_bytes,
+                        allowed_active_memory_bytes,
+                        "prefill chunk forward exceeded the MLX active-memory limit"
+                    );
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
+                    return Err(memory_admission::resident_capacity_error(
+                        model,
+                        format!(
+                            "attempted prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
+                        ),
+                    ));
+                }
+                Err(PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
+                    reason,
+                }) => {
+                    tracing::warn!(
+                        request_id = request_id.value(),
+                        prefill_start,
+                        attempted_prefill_chunk_token_count,
+                        reason = %reason,
+                        "prefill chunk forward exhausted graphics-processor memory"
+                    );
+                    let model = self.model.as_ref().ok_or_else(|| {
+                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
+                    })?;
+                    return Err(memory_admission::resident_capacity_error(
+                        model,
+                        format!(
+                            "attempted prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
+                        ),
+                    ));
+                }
             }
         };
         let active_memory_bytes_before_growth =

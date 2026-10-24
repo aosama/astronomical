@@ -130,6 +130,9 @@ impl Qwen3_5EngineState {
                     crate::AdaptiveRamGrowthTransientReserveSource::PhaseScaled => {
                         PerformanceCounter::AdmissionReservePhaseScaledSourceCount
                     }
+                    crate::AdaptiveRamGrowthTransientReserveSource::BeyondObservedTokenSpan => {
+                        PerformanceCounter::AdmissionReserveBeyondObservedTokenSpanSourceCount
+                    }
                     crate::AdaptiveRamGrowthTransientReserveSource::GlobalMaximum => {
                         PerformanceCounter::AdmissionReserveGlobalMaximumSourceCount
                     }
@@ -155,6 +158,7 @@ impl Qwen3_5EngineState {
         let (
             target_persistent_state_growth_bytes,
             routed_expert_page_reservation_bytes,
+            unobserved_scope_transient_floor_bytes,
             mut memory_snapshot_before_growth,
             mut retained_expert_payload_bytes_before_growth,
         ) = {
@@ -193,9 +197,15 @@ impl Qwen3_5EngineState {
             let retained_expert_payload_bytes_before_growth = model
                 .expert_weight_memory_cache_statistics()
                 .resident_payload_byte_count;
+            let unobserved_scope_transient_floor_bytes = model
+                .mlx_ram_budget()
+                .adaptive_growth_unobserved_scope_transient_floor_bytes(
+                    adaptive_ram_growth_context,
+                );
             (
                 target_persistent_state_growth_bytes,
                 routed_expert_page_reservation_bytes,
+                unobserved_scope_transient_floor_bytes,
                 memory_snapshot_before_growth,
                 retained_expert_payload_bytes_before_growth,
             )
@@ -219,6 +229,7 @@ impl Qwen3_5EngineState {
                 exact_context_growth_bytes,
                 routed_expert_page_reservation_bytes,
                 exact_temporary_workspace_bytes,
+                unobserved_scope_transient_floor_bytes,
             )
             .map_err(|adaptive_ram_growth_projection_error| {
                 tracing::warn!(
@@ -371,6 +382,7 @@ impl Qwen3_5EngineState {
                                     exact_context_growth_bytes,
                                     routed_expert_page_reservation_bytes,
                                     exact_temporary_workspace_bytes,
+                                    unobserved_scope_transient_floor_bytes,
                                 )
                                 .map_err(|adaptive_ram_growth_projection_error| {
                                     tracing::warn!(
