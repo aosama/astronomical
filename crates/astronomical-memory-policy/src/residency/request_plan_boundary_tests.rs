@@ -257,3 +257,125 @@ fn should_shrink_but_never_expand_an_open_prefill_contract() {
         "a zero-release republish must not re-pin the demoted layer"
     );
 }
+
+fn four_layer_candidate(
+    complete_layer_targets: Vec<usize>,
+    ceiling_bytes: u64,
+) -> ExpertResidencyPlan {
+    ExpertResidencyPlan {
+        phase: MemoryPhase::Prefill,
+        retained_expert_ceiling_bytes: ceiling_bytes,
+        complete_layer_targets,
+        layer_targets: vec![ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead; 4],
+        reserved_routed_overlay_bytes: 0,
+        expected_preserved_bytes: 0,
+        maximum_new_retained_bytes: 0,
+        deterministic_release_order: Vec::new(),
+        is_low_budget_partial_mode: false,
+    }
+}
+
+#[test]
+fn should_not_claim_pinned_layers_beyond_the_composed_ceiling() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // The 2026-10-23 under-utilization flight: 34 pins claimed
+    // 29,091,692,544 bytes against a 28,938,405,632-byte ceiling. Pins
+    // frozen at request open must not keep claiming past a ceiling that
+    // context growth shrank: the over-claim saturates stream-admission
+    // headroom to zero while naming promotion targets the budget cannot
+    // honor. Three pins of 40 against a 100-byte ceiling: the first two
+    // claim 80; the third pin's claim does not fit and must fall through to
+    // streamed handling instead of promising a promotion it cannot fund.
+    let geometries = uniform_geometry(4);
+    let request_residency =
+        RequestExpertResidency::open_prefill(&four_layer_candidate(vec![0, 1, 2], 160));
+
+    let stabilized =
+        request_residency.stabilize_prefill_plan(candidate_plan(Vec::new(), 100), &[], &geometries);
+
+    assert_eq!(
+        stabilized.layer_targets[0],
+        ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+    );
+    assert_eq!(
+        stabilized.layer_targets[1],
+        ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+    );
+    assert_eq!(
+        stabilized.layer_targets[2],
+        ExpertLayerResidencyTarget::StreamOperationLocal,
+        "a pin whose claim cannot fit the composed ceiling must stream, not \
+         promise an unfunded promotion"
+    );
+    assert_eq!(stabilized.complete_layer_targets, vec![0, 1]);
+    assert_eq!(stabilized.maximum_new_retained_bytes, 0);
+}
+
+#[test]
+fn should_keep_a_seated_pinned_layer_claimed_even_when_unseated_pins_cannot_fit() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // A seated pin's bytes are already resident: its claim always holds, and
+    // only the unseated pins compete for whatever ceiling remains.
+    let geometries = uniform_geometry(4);
+    let request_residency =
+        RequestExpertResidency::open_prefill(&four_layer_candidate(vec![0, 1, 2], 160));
+    let seated_layer = CurrentExpertLayerResidency {
+        layer_index: 0,
+        class: RetainedExpertPageClass::StableCompleteLayer,
+        retained_expert_ids: vec![0, 1, 2, 3],
+        payload_bytes: 40,
+        covered_weighted_demand: 0,
+    };
+
+    let stabilized = request_residency.stabilize_prefill_plan(
+        candidate_plan(Vec::new(), 60),
+        &[seated_layer],
+        &geometries,
+    );
+
+    assert_eq!(
+        stabilized.layer_targets[0],
+        ExpertLayerResidencyTarget::PreserveComplete,
+        "the seated pin keeps its claim regardless of the shrunken ceiling"
+    );
+    assert_eq!(stabilized.expected_preserved_bytes, 40);
+    assert_eq!(
+        stabilized.layer_targets[1],
+        ExpertLayerResidencyTarget::StreamOperationLocal,
+        "unseated pins must fit within the ceiling left after seated claims"
+    );
+    assert_eq!(stabilized.complete_layer_targets, vec![0]);
+}
+
+#[test]
+fn should_demote_only_the_tail_pin_when_one_claim_misses_the_ceiling() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // Boundary: three pins claim exactly 120 of 120. All fit; none demotes.
+    let geometries = uniform_geometry(4);
+    let request_residency =
+        RequestExpertResidency::open_prefill(&four_layer_candidate(vec![0, 1, 2], 120));
+
+    let exact_fit =
+        request_residency.stabilize_prefill_plan(candidate_plan(Vec::new(), 120), &[], &geometries);
+    assert_eq!(exact_fit.complete_layer_targets, vec![0, 1, 2]);
+    assert_eq!(
+        exact_fit.layer_targets[3],
+        ExpertLayerResidencyTarget::StreamOperationLocal
+    );
+
+    // One byte less and only the tail pin yields, mirroring the contract's
+    // tail-first shrink order.
+    let one_byte_short =
+        request_residency.stabilize_prefill_plan(candidate_plan(Vec::new(), 119), &[], &geometries);
+    assert_eq!(one_byte_short.complete_layer_targets, vec![0, 1]);
+    assert_eq!(
+        one_byte_short.layer_targets[2],
+        ExpertLayerResidencyTarget::StreamOperationLocal
+    );
+}

@@ -129,12 +129,21 @@ impl RequestExpertResidency {
             );
         }
         // The stream-admission headroom is what remains of the composed
-        // ceiling after every pinned layer's claim: each pin, seated or not,
-        // reserves its full complete payload, because a seated pin's table
-        // holds exactly that payload and an unseated pin claims it on
-        // promotion. Spent sequentially in layer order, the headroom
-        // reproduces the cache's own first-insert admission against the same
-        // ceiling.
+        // ceiling after every claimable pinned layer: each pin, seated or
+        // not, reserves its full complete payload, because a seated pin's
+        // table holds exactly that payload and an unseated pin claims it on
+        // promotion. A seated pin's claim always holds — its bytes are
+        // already resident — but an unseated pin only claims while the
+        // ceiling can fund it: pins frozen at request open must not keep
+        // claiming past a ceiling that context growth shrank, because the
+        // over-claim saturates headroom to zero while naming promotion
+        // targets the budget cannot honor (the 2026-10-23 under-utilization
+        // flight: 34 claims of 855,638,016 bytes against a 28,938,405,632
+        // -byte ceiling left 26.95 GB unused and streamed 389 GB from SSD).
+        // Unfunded pins fall through to streamed handling below; funding is
+        // spent in ascending layer order, so the loss of funding lands on
+        // the tail pins first, mirroring the contract's shrink order.
+        let mut pin_claim_is_funded = vec![false; self.layer_roles.len()];
         let mut stream_admission_headroom_bytes = candidate_plan.retained_expert_ceiling_bytes;
         let mut expected_preserved_bytes = 0_u64;
         let mut maximum_new_retained_bytes = 0_u64;
@@ -146,15 +155,33 @@ impl RequestExpertResidency {
                 .get(layer_index)
                 .map(|geometry| geometry.complete_layer_payload_bytes)
                 .unwrap_or(0);
-            stream_admission_headroom_bytes =
-                stream_admission_headroom_bytes.saturating_sub(pinned_complete_claim_bytes);
-            if layer_is_currently_complete[layer_index]
-                && let Some(current_residency) = current_residencies
+            if layer_is_currently_complete[layer_index] {
+                pin_claim_is_funded[layer_index] = true;
+                stream_admission_headroom_bytes =
+                    stream_admission_headroom_bytes.saturating_sub(pinned_complete_claim_bytes);
+                if let Some(current_residency) = current_residencies
                     .iter()
                     .find(|residency| residency.layer_index == layer_index)
+                {
+                    expected_preserved_bytes =
+                        expected_preserved_bytes.saturating_add(current_residency.payload_bytes);
+                }
+            }
+        }
+        for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
+            if *layer_role != RequestExpertLayerRole::PinnedComplete
+                || layer_is_currently_complete[layer_index]
             {
-                expected_preserved_bytes =
-                    expected_preserved_bytes.saturating_add(current_residency.payload_bytes);
+                continue;
+            }
+            let pinned_complete_claim_bytes = layer_geometries
+                .get(layer_index)
+                .map(|geometry| geometry.complete_layer_payload_bytes)
+                .unwrap_or(0);
+            if pinned_complete_claim_bytes <= stream_admission_headroom_bytes {
+                pin_claim_is_funded[layer_index] = true;
+                stream_admission_headroom_bytes =
+                    stream_admission_headroom_bytes.saturating_sub(pinned_complete_claim_bytes);
             }
         }
         for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
@@ -164,10 +191,10 @@ impl RequestExpertResidency {
                 {
                     ExpertLayerResidencyTarget::PreserveComplete
                 }
-                RequestExpertLayerRole::PinnedComplete => {
+                RequestExpertLayerRole::PinnedComplete if pin_claim_is_funded[layer_index] => {
                     ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
                 }
-                RequestExpertLayerRole::Streamed => {
+                RequestExpertLayerRole::Streamed | RequestExpertLayerRole::PinnedComplete => {
                     let complete_layer_payload_bytes = layer_geometries
                         .get(layer_index)
                         .map(|geometry| geometry.complete_layer_payload_bytes)
@@ -186,13 +213,25 @@ impl RequestExpertResidency {
                         ExpertLayerResidencyTarget::StreamOperationLocal
                     }
                 }
+                // A capacity-recovery demotion may never re-seat: re-admitting
+                // what a recovery just released lets every later attempt
+                // re-seat, re-fail, and re-evict the same table (issue #1278).
                 RequestExpertLayerRole::DemotedByCapacityFailure => {
                     ExpertLayerResidencyTarget::StreamOperationLocal
                 }
             };
             candidate_plan.layer_targets[layer_index] = layer_target;
         }
-        candidate_plan.complete_layer_targets = self.pinned_complete_layer_indexes();
+        candidate_plan.complete_layer_targets = self
+            .layer_roles
+            .iter()
+            .enumerate()
+            .filter_map(|(layer_index, layer_role)| {
+                matches!(layer_role, RequestExpertLayerRole::PinnedComplete)
+                    .then_some(layer_index)
+                    .filter(|funded_layer_index| pin_claim_is_funded[*funded_layer_index])
+            })
+            .collect();
         candidate_plan.reserved_routed_overlay_bytes = 0;
         candidate_plan.expected_preserved_bytes = expected_preserved_bytes;
         candidate_plan.maximum_new_retained_bytes = maximum_new_retained_bytes;

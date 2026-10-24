@@ -59,6 +59,39 @@ pub const fn should_commit_mandatory_routed_page(
     }
 }
 
+/// Whether a multi-token prefill chunk's operation-local routed-union stream
+/// may be offered to retained ownership as a complete layer.
+///
+/// The host-visible prefill path streams the chunk's routed union, and a
+/// chunk large enough to route every expert of a layer has already paid the
+/// complete-layer read cost; discarding it re-reads the same bytes from
+/// storage on every later chunk (the 2026-10-23 Ornith flight streamed
+/// 389,018,225,728 bytes for one 23,976-token prompt — about 12.6 passes
+/// over the model's whole expert set — while 26.95 GB of ceiling sat unused).
+/// The offer is honest only when the plan funds the layer's complete claim
+/// (a Promote or Admit target) and the union covers the layer exactly;
+/// budget admission inside the retained cache remains the only refusal path.
+#[must_use]
+pub const fn should_commit_multi_token_union_as_complete_layer(
+    route_token_count: i32,
+    production_default_paging: bool,
+    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    routed_expert_count: usize,
+    expert_capacity: usize,
+) -> bool {
+    route_token_count > 1
+        && production_default_paging
+        && expert_capacity > 0
+        && routed_expert_count == expert_capacity
+        && matches!(
+            residency_target,
+            Some(
+                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+            )
+        )
+}
+
 /// Structural slot cap for one decode warm table (hot-expert caching).
 ///
 /// Issue #514: a history-length multiplier (`experts_per_token * 8`) left

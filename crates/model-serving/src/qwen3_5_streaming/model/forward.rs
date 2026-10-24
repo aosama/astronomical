@@ -245,10 +245,12 @@ impl Qwen3_5Model {
                         )?
                     } else {
                         // Issue #373: classify warm-table coverage before
-                        // dispatch so the all-or-nothing cost is measurable. A
-                        // partially covered token still reads every routed
-                        // expert from storage today, including the ones already
-                        // in RAM.
+                        // dispatch. A fully warm route serves from retained
+                        // RAM; a mixed route splits between the retained
+                        // rows and a storage read of only the missing
+                        // experts; a fully cold route streams the whole
+                        // routed set. Classifying first keeps each of those
+                        // costs measurable and picks the dispatch.
                         let route_coverage = self.record_decode_route_coverage(
                             layer_index,
                             routed_expert_ids,

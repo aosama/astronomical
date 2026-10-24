@@ -18,6 +18,8 @@ mod allocation_boundary_tests;
 #[cfg(test)]
 mod context_boundary_tests;
 #[cfg(test)]
+mod context_workspace_boundary_tests;
+#[cfg(test)]
 mod expert_memory_admission_tests;
 #[cfg(test)]
 mod retained_prefix_policy_tests;
