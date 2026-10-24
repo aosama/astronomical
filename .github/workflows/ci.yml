@@ -364,7 +364,8 @@ jobs:
           progress_tail_pid=$!
           trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-offline-tests' EXIT
           scripts/ci/ci-step-timing.sh begin compile-offline-tests
-          cargo test --timings --no-fail-fast --no-run -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests
+          cargo test-offline --timings --no-run
+          cargo test-test-harness-fixtures --no-run
           cargo test --timings --no-fail-fast --no-run -p astronomical-daemon --test rest_api_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-e2e --test e2e
           # The root E2E journeys spawn the real daemon and fixture worker
@@ -396,7 +397,8 @@ jobs:
           # this required check; the default GitHub bash shell sets pipefail, but
           # state it explicitly so the invariant survives a shell change.
           set -o pipefail
-          cargo test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon --lib --test offline_tests -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
+          cargo test-offline -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
+          cargo test-test-harness-fixtures 2>&1 | tee "$RUNNER_TEMP/test-logs/test-harness-fixtures.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
         run: |

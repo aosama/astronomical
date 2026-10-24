@@ -2,15 +2,14 @@
 //!
 //! When the ceiling cannot hold every complete layer, this planner keeps the
 //! routed floor for all layers and promotes the cheapest complete layers on
-//! top; split from the strategy dispatch in the parent so each file stays
-//! inside the source-size budget. As a child module it reaches the parent's
-//! private helpers and plan vocabulary directly.
+//! top. This strategy stays separate from `planner.rs`'s dispatch so each file
+//! stays inside the source-size budget.
 
+use super::planner::{compare_partial_coverage, release_order};
 use super::validation;
 use super::{
     CurrentExpertLayerResidency, ExpertLayerGeometry, ExpertLayerResidencyTarget,
     ExpertResidencyPlan, ExpertResidencyPlanError, RetainedExpertPageClass,
-    compare_partial_coverage, release_order,
 };
 use crate::phase::MemoryPhase;
 

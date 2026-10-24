@@ -17,6 +17,42 @@ use contract_support::{
 use serde_yaml::Value;
 
 #[test]
+fn should_use_the_canonical_offline_package_selection_for_compile_and_execution() {
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    for step_name in ["Compile offline lane tests", "Run offline lane tests"] {
+        let step = find_step_by_name(&verification_steps, step_name);
+        let command = run_text_of(step, step_name);
+        assert!(
+            command
+                .lines()
+                .any(|line| line.trim_start().starts_with("cargo test-offline ")),
+            "{step_name} must use cargo test-offline so extracted policy packages cannot disappear"
+        );
+        assert!(
+            !command.lines().any(|line| {
+                line.trim_start().starts_with("cargo test ")
+                    && line.contains("--test offline_tests")
+            }),
+            "{step_name} duplicates the canonical offline package selection"
+        );
+        assert!(
+            command.contains("cargo test-test-harness-fixtures"),
+            "{step_name} must cover the shared real-model evidence assertions offline"
+        );
+    }
+    let configuration =
+        std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
+            .expect("the canonical Cargo configuration should be readable");
+    let offline_alias = configuration
+        .lines()
+        .find(|line| line.starts_with("test-offline = "))
+        .expect("the canonical offline alias should exist");
+    assert!(offline_alias.contains("-p astronomical-memory-policy "));
+    assert!(offline_alias.contains("--lib --test offline_tests"));
+}
+
+#[test]
 fn workflow_triggers_keep_the_classification_surface_open() {
     let workflow = workflow_contract();
     let triggers = triggers_of(&workflow);
@@ -200,8 +236,8 @@ fn required_check_steps_keep_their_bounded_contracts() {
         "offline compile does not use --no-run"
     );
     assert!(
-        compile_command.contains("--test offline_tests"),
-        "offline compile omits offline_tests"
+        compile_command.contains("cargo test-offline "),
+        "offline compile omits the canonical offline alias"
     );
     assert!(
         compile_command.contains("--test rest_api_tests"),

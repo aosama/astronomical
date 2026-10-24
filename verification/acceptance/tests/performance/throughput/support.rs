@@ -327,10 +327,18 @@ pub(crate) async fn measure_throughput(
         if let Some(configured_maximum_mlx_memory_bytes) = journey.maximum_mlx_memory_bytes {
             let effective_mlx_memory_ceiling_bytes =
                 worker_handle.worker_health_snapshot().mlx_memory_ceiling_bytes;
-            assert!(
+            if matches!(journey.journey_kind, ThroughputJourneyKind::DecodeFullFit) {
+                assert_eq!(
+                    effective_mlx_memory_ceiling_bytes,
+                    astronomical_test_harness::sparse_decode_full_fit::MEMORY_CEILING_BYTES,
+                    "the full-fit diagnostic must exercise 37 GB, not a clamped streaming cell",
+                );
+            } else {
+                assert!(
                 effective_mlx_memory_ceiling_bytes <= MAXIMUM_MODEL_MEMORY_BYTES,
                 "the configured {configured_maximum_mlx_memory_bytes}-byte real-model journey must be capped at or below the {MAXIMUM_MODEL_MEMORY_BYTES}-byte effective limit before model loading, got {effective_mlx_memory_ceiling_bytes}",
-            );
+                );
+            }
             if matches!(
                 journey.journey_kind,
                 ThroughputJourneyKind::MemoryCeilingSweep

@@ -48,6 +48,7 @@ pub enum ThroughputJourneyKind {
     Text,
     Vision,
     MemoryCeilingSweep,
+    DecodeFullFit,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
