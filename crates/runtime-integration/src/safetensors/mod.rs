@@ -38,6 +38,8 @@
 //!   ([`MlxRuntime::save_safetensors`]).
 //! - `memory_writer` — bounded in-memory serialization
 //!   ([`MlxRuntime::serialize_safetensors`]).
+//! - `page_cache_bypass` — `F_NOCACHE` on expert-paging descriptors so
+//!   streamed expert pages do not also fill the operating system file cache.
 //! - `read_metrics` — the lock-free positional-read counters threaded
 //!   through every reader above.
 //!
@@ -57,4 +59,5 @@ pub mod file_writer;
 pub mod lazy_map;
 pub mod memory_writer;
 pub mod name_maps;
+pub mod page_cache_bypass;
 pub mod read_metrics;
