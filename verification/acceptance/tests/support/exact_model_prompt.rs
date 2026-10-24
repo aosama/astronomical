@@ -14,6 +14,29 @@ pub(crate) fn build_exact_model_prompt_content(
 ) -> String {
     let tokenizer = Tokenizer::from_file(model_directory.join("tokenizer.json"))
         .expect("the pinned Ornith tokenizer should load");
+    let mut exact_content = build_model_prompt_content_at_most(
+        model_directory,
+        source_document,
+        instruction,
+        target_prompt_tokens,
+    );
+    let rendered_token_count_before_filler =
+        rendered_prompt_token_count(&tokenizer, &exact_content);
+    let missing_prompt_tokens = target_prompt_tokens - rendered_token_count_before_filler;
+    append_missing_single_token_fillers(&mut exact_content, missing_prompt_tokens);
+    let rendered_token_count = rendered_prompt_token_count(&tokenizer, &exact_content);
+    assert_eq!(rendered_token_count, target_prompt_tokens);
+    exact_content
+}
+
+pub(crate) fn build_model_prompt_content_at_most(
+    model_directory: &Path,
+    source_document: &str,
+    instruction: &str,
+    target_prompt_tokens: usize,
+) -> String {
+    let tokenizer = Tokenizer::from_file(model_directory.join("tokenizer.json"))
+        .expect("the model tokenizer should load");
     let source_words = source_document.split_whitespace().collect::<Vec<_>>();
     let mut minimum_word_count = 0_usize;
     let mut maximum_word_count = source_words.len();
@@ -29,17 +52,10 @@ pub(crate) fn build_exact_model_prompt_content(
             maximum_word_count = candidate_word_count - 1;
         }
     }
-    let mut exact_content = format!(
+    format!(
         "{instruction}\n\n{}",
         source_words[..minimum_word_count].join(" ")
-    );
-    let rendered_token_count_before_filler =
-        rendered_prompt_token_count(&tokenizer, &exact_content);
-    let missing_prompt_tokens = target_prompt_tokens - rendered_token_count_before_filler;
-    append_missing_single_token_fillers(&mut exact_content, missing_prompt_tokens);
-    let rendered_token_count = rendered_prompt_token_count(&tokenizer, &exact_content);
-    assert_eq!(rendered_token_count, target_prompt_tokens);
-    exact_content
+    )
 }
 
 pub(crate) fn append_missing_single_token_fillers(

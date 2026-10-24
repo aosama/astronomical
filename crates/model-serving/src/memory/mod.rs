@@ -53,6 +53,10 @@
 
 mod admission;
 mod budget;
+#[cfg(any(test, feature = "direct-mlx"))]
+pub(crate) mod decode_seating;
+#[cfg(test)]
+mod decode_seating_tests;
 // The dense-resident ceiling policy is consumed only by the direct-MLX
 // engine, so an isolated default-feature build would otherwise flag the
 // whole module as dead (workspace builds unify the feature away).

@@ -130,6 +130,22 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # `cargo test -p astronomical-runtime-integration -p astronomical-inference-worker
 # --features astronomical-runtime-integration/mlx --lib --
 # bounded_range_read_concurrency worker_startup_wired_claim_tests`.
+# Issue #1530 decode-full-fit regression cells (manual, serial, real sparse
+# artifact, 37 GB = 37 * 2^30 bytes, persistent prompt cache disabled):
+# `cargo xtask test-run --package astronomical-acceptance --test expert_paging
+# --features expert-paging --release --filter decode_full_fit --ignored`;
+# `cargo xtask test-run --package astronomical-acceptance --test performance_throughput
+# --features performance_throughput --release --filter decode_full_fit --ignored`;
+# `cargo xtask test-run --package astronomical-e2e --test e2e --release
+# --filter decode_full_fit --ignored --configuration PATH`, with real_models=true
+# in the configuration. Each cell has the same 120-second runner budget.
+# The longer Romeo and Juliet context forces paged prefill. The performance
+# cell warms up with approximately 500 input / 50 output tokens, then measures
+# approximately 26,552 input / 500 output tokens. Evidence asserts complete
+# expert payload and zero decode source reads. Pager-backed complete tables
+# remain structurally Hybrid; raw entitlement can exceed the whole artifact,
+# so exact resident expert count and payload distinguish surplus from missing
+# experts. The existing 36 GB streaming cell remains unchanged.
 xtask = "run -p xtask --"
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —

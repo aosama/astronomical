@@ -2,8 +2,10 @@
 //!
 //! These journeys measure serving throughput for the Qwen3.5-family sparse-MoE
 //! artifacts over the worker IPC boundary and append a durable historical
-//! record of the numbers they acquire on this machine. They do not assert
-//! throughput thresholds: they measure and report.
+//! record of the numbers they acquire. Measurement journeys report rates;
+//! performance tests additionally assert their documented throughput floors.
+//! The full-fit diagnostic asserts byte-level residency and source-read
+//! invariants rather than a hardware-sensitive throughput threshold.
 //!
 //! They are intentionally separate from the serving-acceptance journeys, which
 //! validate functional behavior over the REST boundary. The measurement surface

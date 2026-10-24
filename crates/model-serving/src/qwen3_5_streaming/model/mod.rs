@@ -23,7 +23,7 @@ mod paged_execution_mode;
 #[cfg(feature = "direct-mlx")]
 mod paged_route_resolution;
 #[cfg(feature = "direct-mlx")]
-mod phase_aware_expert_residency;
+pub(super) mod phase_aware_expert_residency;
 #[cfg(feature = "direct-mlx")]
 mod read_through_residency;
 #[cfg(feature = "direct-mlx")]
