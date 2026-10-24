@@ -10,11 +10,9 @@ use std::time::Instant;
 
 use crate::{FingerprintRequest, NativeIdentityError, digest_bytes};
 
-/// Toolchain identity inputs, explicit per caller. `None` means "probe the
-/// real toolchain". The environment-backed constructor preserves the
-/// historical `ASTRONOMICAL_NATIVE_IDENTITY_*` variables for CI and fixture
-/// workflows; the Cargo build scripts use `none()` so a production build
-/// always fingerprints the toolchain CMake actually uses.
+/// Toolchain identity inputs, explicit per caller. Fixtures inject these
+/// fields directly; production callers supply only the target triple so the
+/// identity fingerprints the toolchain CMake actually uses.
 #[derive(Debug, Default, Clone)]
 pub struct ToolchainOverrides {
     pub xcode: Option<String>,
@@ -29,24 +27,6 @@ pub struct ToolchainOverrides {
 impl ToolchainOverrides {
     pub fn none() -> Self {
         Self::default()
-    }
-
-    pub fn from_environment() -> Self {
-        let environment_value = |variable_name: &str| {
-            std::env::var(variable_name)
-                .ok()
-                .filter(|value| !value.is_empty())
-        };
-        Self {
-            xcode: environment_value("ASTRONOMICAL_NATIVE_IDENTITY_XCODE"),
-            sdk: environment_value("ASTRONOMICAL_NATIVE_IDENTITY_SDK"),
-            clang: environment_value("ASTRONOMICAL_NATIVE_IDENTITY_CLANG"),
-            cmake: environment_value("ASTRONOMICAL_NATIVE_IDENTITY_CMAKE"),
-            rustc: environment_value("ASTRONOMICAL_NATIVE_IDENTITY_RUSTC"),
-            target_triple: environment_value("ASTRONOMICAL_NATIVE_IDENTITY_TARGET")
-                .or_else(|| environment_value("TARGET")),
-            build_type: environment_value("ASTRONOMICAL_NATIVE_BUILD_TYPE"),
-        }
     }
 }
 
@@ -71,7 +51,9 @@ pub fn toolchain_probe_values(
     let target_triple = request
         .overrides
         .target_triple
-        .clone()
+        .as_ref()
+        .filter(|target_triple| !target_triple.trim().is_empty())
+        .cloned()
         .ok_or(NativeIdentityError::MissingTargetTriple)?;
     let build_type = request
         .overrides

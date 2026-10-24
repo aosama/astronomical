@@ -71,22 +71,6 @@ impl Qwen3_5EngineState {
         }
         Ok(active_request.prompt_work_reuse.clone())
     }
-
-    fn force_next_prefill_capacity_rejection_for_tests(
-        &mut self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        let active_request = self.active_request.as_mut().ok_or_else(|| {
-            fatal_engine_error("cannot force prefill rejection without an active request")
-        })?;
-        if active_request.request_id != request_id {
-            return Err(fatal_engine_error(
-                "cannot force prefill rejection for a different request",
-            ));
-        }
-        active_request.force_next_prefill_capacity_rejection_for_tests = true;
-        Ok(())
-    }
 }
 
 impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
@@ -180,17 +164,6 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         prompt_work_reuse_receiver.recv().map_err(|_| {
             fatal_engine_error("prompt work reuse owner operation returned no response")
         })
-    }
-
-    /// Rejects one completed prefill attempt so acceptance can verify full retry rollback.
-    pub async fn force_next_prefill_capacity_rejection_for_tests(
-        &self,
-        request_id: RequestId,
-    ) -> Result<(), InferenceEngineError> {
-        self.run_owner_test_operation(move |qwen_inference_execution| {
-            qwen_inference_execution.force_next_prefill_capacity_rejection_for_tests(request_id)
-        })
-        .await
     }
 
     /// Disables adaptive growth guarding and its memory sampling for benchmarks.

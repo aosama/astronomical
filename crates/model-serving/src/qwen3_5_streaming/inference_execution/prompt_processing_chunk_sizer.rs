@@ -31,10 +31,10 @@ impl Qwen3_5StreamingPromptProcessingChunkSizer {
         chunk_start_token_position: usize,
         final_prompt_end_token_position_exclusive: usize,
     ) -> usize {
-        self.next_prompt_processing_chunk_end_with_maximum_executable_capacity(
+        paged_chunk_end_after_folding_short_remainder(
             chunk_start_token_position,
             final_prompt_end_token_position_exclusive,
-            usize::MAX,
+            self.ssd_streaming_prompt_processing_chunk_size_tokens,
         )
     }
 
@@ -46,61 +46,6 @@ impl Qwen3_5StreamingPromptProcessingChunkSizer {
     #[must_use]
     pub fn prompt_processing_operation_bound_tokens(&self) -> usize {
         self.ssd_streaming_prompt_processing_chunk_size_tokens
-    }
-
-    #[must_use]
-    pub fn next_prompt_processing_chunk_end_with_maximum_executable_capacity(
-        &self,
-        chunk_start_token_position: usize,
-        final_prompt_end_token_position_exclusive: usize,
-        maximum_executable_chunk_size_tokens: usize,
-    ) -> usize {
-        let executable_chunk_size_tokens = self
-            .ssd_streaming_prompt_processing_chunk_size_tokens
-            .min(maximum_executable_chunk_size_tokens)
-            .max(1);
-        paged_chunk_end_after_folding_short_remainder(
-            chunk_start_token_position,
-            final_prompt_end_token_position_exclusive,
-            executable_chunk_size_tokens,
-        )
-    }
-
-    #[must_use]
-    pub fn remaining_prompt_processing_chunk_ranges(
-        &self,
-        chunk_start_token_position: usize,
-        final_prompt_end_token_position_exclusive: usize,
-        maximum_executable_chunk_size_tokens: usize,
-    ) -> Vec<(usize, usize)> {
-        let mut remaining_chunk_ranges = Vec::new();
-        let mut current_chunk_start = chunk_start_token_position;
-        while current_chunk_start < final_prompt_end_token_position_exclusive {
-            let current_chunk_end = self
-                .next_prompt_processing_chunk_end_with_maximum_executable_capacity(
-                    current_chunk_start,
-                    final_prompt_end_token_position_exclusive,
-                    maximum_executable_chunk_size_tokens,
-                );
-            if current_chunk_end <= current_chunk_start {
-                break;
-            }
-            remaining_chunk_ranges.push((current_chunk_start, current_chunk_end));
-            current_chunk_start = current_chunk_end;
-        }
-        remaining_chunk_ranges
-    }
-
-    #[must_use]
-    pub const fn next_smaller_executable_chunk_size_tokens(
-        attempted_chunk_size_tokens: usize,
-    ) -> Option<usize> {
-        let smaller_chunk_size_tokens = attempted_chunk_size_tokens / 2;
-        if smaller_chunk_size_tokens == 0 {
-            None
-        } else {
-            Some(smaller_chunk_size_tokens)
-        }
     }
 }
 

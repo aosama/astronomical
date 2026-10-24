@@ -3,17 +3,20 @@
 //! Each measurement appends a single JSON object as one line of a JSONL file so
 //! that a machine's throughput can be compared across commits and dates. The log
 //! lives beside the surface that produces it and is source-controlled, so the
-//! trend travels with the code. The path is resolved from the
-//! `ASTRONOMICAL_PERF_HISTORY` environment variable, falling back to the
+//! trend travels with the code. The runner configuration's
+//! `throughput_history_path` selects a destination, falling back to the
 //! source-controlled ledger under `verification/acceptance/tests/performance/throughput/`.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
 use serde_json::Value;
+
+use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
+use astronomical_test_harness::test_run::TestRunContext;
 
 use crate::performance_throughput::machine_specs::MachineSpecs;
 
@@ -33,13 +36,12 @@ use crate::performance_throughput::machine_specs::MachineSpecs;
 /// measurements into an untracked sibling until the drift was noticed.
 const DEFAULT_HISTORY_RELATIVE_PATH: &str =
     "verification/acceptance/tests/performance/throughput/throughput-history.jsonl";
-const HISTORY_ENV_VAR: &str = "ASTRONOMICAL_PERF_HISTORY";
-const GIT_COMMIT_ENV_VAR: &str = "ASTRONOMICAL_PERF_COMMIT";
 
 /// The journey family one throughput record came from. Every line of the
 /// shared history log carries this field so text, vision, and memory-cell
 /// measurements delineate themselves without separate files; lines written
-/// before the field existed are text-journey measurements.
+/// before this field existed are text-journey measurements. Historical rows
+/// without an explicit decode-cache policy were produced by the baseline path.
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThroughputJourneyKind {
@@ -99,18 +101,20 @@ pub struct MemoryCellRecord {
 /// journey, recorded against the host and the wall-clock time it was taken on.
 ///
 /// The first columns are ordered for human reading: the time, the model, the
-/// journey family, then the prefill and decode tokens-per-second as whole
-/// numbers. The remaining fields carry the host, the git commit, and the
-/// input, output, and cached token counts plus prefill and decode latencies
-/// from the measured completion.
+/// journey family, the decode-cache policy arm, then the prefill and decode
+/// tokens-per-second as whole numbers. The remaining fields carry the host,
+/// the git commit, and the input, output, and cached token counts plus prefill
+/// and decode latencies from the measured completion.
 #[derive(Clone, Debug, Serialize)]
 pub struct ThroughputRecord {
     pub timestamp: String,
     pub model_id: String,
     pub journey: ThroughputJourneyKind,
+    pub decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     pub prefill_tokens_per_second: u32,
     pub decode_tokens_per_second: u32,
     pub git_commit: Option<String>,
+    pub worker_build_identity: WorkerBuildIdentity,
     pub machine: MachineSpecs,
     pub total_input_tokens: u32,
     pub total_output_tokens: u16,
@@ -121,6 +125,13 @@ pub struct ThroughputRecord {
     /// journey so historical lines stay additive-compatible.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub memory_cell: Option<MemoryCellRecord>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct WorkerBuildIdentity {
+    pub source_commit: String,
+    pub source_is_dirty: bool,
+    pub executable_sha256: String,
 }
 
 /// Formats a Unix-epoch millisecond value as a human-readable UTC timestamp such
@@ -163,11 +174,19 @@ pub fn throughput_record_json(record: &ThroughputRecord) -> Value {
     serde_json::to_value(record).unwrap_or(Value::Null)
 }
 
-/// Resolves the history log path from the environment or the default target
-/// location.
+/// Resolves the history log path from explicit runner inputs or the workspace default.
 pub fn history_log_path() -> PathBuf {
-    std::env::var_os(HISTORY_ENV_VAR)
-        .map(PathBuf::from)
+    resolve_history_log_path(
+        TestRunContext::current()
+            .configuration
+            .throughput_history_path
+            .as_deref(),
+    )
+}
+
+fn resolve_history_log_path(configured_history_path: Option<&Path>) -> PathBuf {
+    configured_history_path
+        .map(Path::to_path_buf)
         .unwrap_or_else(default_history_log_path)
 }
 
@@ -203,11 +222,32 @@ pub fn append_throughput_history(
     Ok(())
 }
 
-/// Resolves the recorded git commit, if the environment provides one.
+/// Records the source identity captured by the runner for the built executable.
 pub fn recorded_git_commit() -> Option<String> {
-    std::env::var(GIT_COMMIT_ENV_VAR)
-        .ok()
-        .filter(|value| !value.is_empty())
+    TestRunContext::current().source_commit
+}
+
+pub fn recorded_worker_build_identity() -> WorkerBuildIdentity {
+    worker_build_identity(&TestRunContext::current()).unwrap_or_else(|identity_error| {
+        panic!("throughput requires cargo xtask test-run build identity: {identity_error}")
+    })
+}
+
+fn worker_build_identity(run_context: &TestRunContext) -> Result<WorkerBuildIdentity, String> {
+    let source_commit = run_context
+        .source_commit
+        .clone()
+        .ok_or_else(|| "the runner did not record the source commit".to_owned())?;
+    let executable_sha256 = run_context
+        .workspace_binary_sha256
+        .get("astronomical-inference-worker")
+        .cloned()
+        .ok_or_else(|| "the runner did not identify its built inference worker".to_owned())?;
+    Ok(WorkerBuildIdentity {
+        source_commit,
+        source_is_dirty: run_context.source_is_dirty,
+        executable_sha256,
+    })
 }
 
 /// Current time as milliseconds since the Unix epoch.

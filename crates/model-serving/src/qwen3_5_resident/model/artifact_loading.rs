@@ -254,18 +254,7 @@ impl Qwen3_5ResidentModel {
             };
         // The fused decode prework kernel removes roughly thirteen
         // launch-bound dispatches per gated-delta layer at decode shapes.
-        // `ASTRONOMICAL_GDN_DECODE_PREWORK=0` forces the composed fallback so
-        // the same binary can A/B measure the fusion; every other value (and
-        // the unset default) leaves the capability verdict in charge.
-        let gdn_decode_prework_kernel = if std::env::var("ASTRONOMICAL_GDN_DECODE_PREWORK")
-            .map(|value| value == "0")
-            .unwrap_or(false)
-        {
-            tracing::info!(
-                "fused decode prework kernel disabled by environment for this worker process"
-            );
-            None
-        } else if kernel_capability::worker_process_kernel_capabilities(
+        let gdn_decode_prework_kernel = if kernel_capability::worker_process_kernel_capabilities(
             &runtime,
             performance_attribution,
         )

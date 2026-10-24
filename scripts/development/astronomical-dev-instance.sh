@@ -7,10 +7,6 @@
 # accepts no overrides, so it can never touch the Stable instance, port
 # 6732, or the ~/.astronomical state directory.
 #
-# Any ASTRONOMICAL_* environment variables exported by the caller flow
-# through to the daemon and its worker child (for example the
-# ASTRONOMICAL_MLX_WIRED_CLAIM=1 wired-residency experiment flag).
-#
 # Usage:
 #   scripts/development/astronomical-dev-instance.sh status
 #   scripts/development/astronomical-dev-instance.sh start
@@ -109,8 +105,6 @@ start_instance() {
     if [ -n "$(daemon_process_ids)" ] || daemon_is_responding; then
         fail "the development instance is already running; use restart or stop first"
     fi
-    # Exported ASTRONOMICAL_* variables intentionally flow to the daemon and
-    # its worker child (for example ASTRONOMICAL_MLX_WIRED_CLAIM=1).
     nohup "$DAEMON_EXECUTABLE_PATH" --instance development \
         > /tmp/astronomical-dev-daemon-stdout.log 2>&1 &
     daemon_launch_pid=$!

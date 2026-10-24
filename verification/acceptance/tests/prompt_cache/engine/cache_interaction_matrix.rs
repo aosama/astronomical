@@ -1,25 +1,29 @@
 //! Storage-transition cells of the pinned prompt-cache interaction matrix.
 //!
-//! One cell runs per process, selected by
-//! `ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL`. The journey fails
-//! closed when the variable is unset or names an unknown cell, so an
-//! unselected default can never silently run the wrong transition. The cells
-//! are `fixed-live-reuse`, `fixed-worker-restart`, and
-//! `fixed-deleted-while-live`; run all three, one process each.
+//! Each ignored serial test names its storage transition: `LiveReuse`,
+//! `WorkerRestart`, or `DeletedWhileLive`. Select exactly one full test name
+//! per process through `cargo xtask test-run --package astronomical-acceptance
+//! --test engine_prompt_cache --features direct-mlx --release --configuration
+//! PATH --filter <full_test_name> --exact --ignored`. There is no default cell.
 
-use std::{fs, time::Duration};
+use std::{fs, path::Path, time::Duration};
 
 use astronomical_ipc_protocol::RequestId;
-use astronomical_model_serving::{InferenceEngine, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine};
+use astronomical_model_serving::{
+    InferenceEngine, Qwen3_5ArtifactValidator, Qwen3_5InferenceRequest, Qwen3_5ResidentEngine,
+    Qwen3_5Tokenizer,
+};
+use serial_test::serial;
 use tokio::time::timeout;
 
 use super::engine_prompt_cache::{
     generate_token_ids, load_persistent_prompt_cache_acceptance_engine,
-    persistent_prompt_cache_eligible_prompt_token_ids, wait_for_persistent_prompt_cache_blocks,
+    wait_for_persistent_prompt_cache_blocks,
 };
+use super::large_prefill_prompt::representative_long_generation_prompt_token_ids_capped_at;
 
 const CACHE_INTERACTION_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
-const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
+const FIXED_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 
 #[derive(Clone, Copy)]
 enum StorageTransition {
@@ -28,70 +32,56 @@ enum StorageTransition {
     DeletedWhileLive,
 }
 
-#[derive(Clone, Copy)]
-struct CacheInteractionAcceptanceCell {
-    environment_label: &'static str,
-    storage_transition: StorageTransition,
+impl StorageTransition {
+    fn label(self) -> &'static str {
+        match self {
+            Self::LiveReuse => "LiveReuse",
+            Self::WorkerRestart => "WorkerRestart",
+            Self::DeletedWhileLive => "DeletedWhileLive",
+        }
+    }
 }
 
-const CACHE_INTERACTION_ACCEPTANCE_CELLS: [CacheInteractionAcceptanceCell; 3] = [
-    CacheInteractionAcceptanceCell {
-        environment_label: "fixed-live-reuse",
-        storage_transition: StorageTransition::LiveReuse,
-    },
-    CacheInteractionAcceptanceCell {
-        environment_label: "fixed-worker-restart",
-        storage_transition: StorageTransition::WorkerRestart,
-    },
-    CacheInteractionAcceptanceCell {
-        environment_label: "fixed-deleted-while-live",
-        storage_transition: StorageTransition::DeletedWhileLive,
-    },
-];
+#[tokio::test]
+#[ignore = "loads Ornith and proves the LiveReuse cache interaction matrix cell"]
+#[serial]
+async fn should_run_pinned_ornith_cache_interaction_live_reuse() {
+    run_selected_acceptance_cell(StorageTransition::LiveReuse).await;
+}
 
 #[tokio::test]
-#[ignore = "loads Ornith and proves one selected cache interaction matrix cell"]
-async fn should_run_selected_pinned_ornith_cache_interaction_matrix_cell() {
-    let selected_cell = selected_acceptance_cell();
+#[ignore = "loads Ornith and proves the WorkerRestart cache interaction matrix cell"]
+#[serial]
+async fn should_run_pinned_ornith_cache_interaction_worker_restart() {
+    run_selected_acceptance_cell(StorageTransition::WorkerRestart).await;
+}
+
+#[tokio::test]
+#[ignore = "loads Ornith and proves the DeletedWhileLive cache interaction matrix cell"]
+#[serial]
+async fn should_run_pinned_ornith_cache_interaction_deleted_while_live() {
+    run_selected_acceptance_cell(StorageTransition::DeletedWhileLive).await;
+}
+
+async fn run_selected_acceptance_cell(storage_transition: StorageTransition) {
     eprintln!(
         "[prompt-cache-interaction-matrix] status=start cell={} timeout_seconds={}",
-        selected_cell.environment_label,
+        storage_transition.label(),
         CACHE_INTERACTION_ACCEPTANCE_TIMEOUT.as_secs()
     );
     timeout(
         CACHE_INTERACTION_ACCEPTANCE_TIMEOUT,
-        run_acceptance_cell(selected_cell),
+        run_acceptance_cell(storage_transition),
     )
     .await
     .expect("the selected prompt-cache interaction matrix cell should finish within 115 seconds");
     eprintln!(
         "[prompt-cache-interaction-matrix] status=success cell={}",
-        selected_cell.environment_label
+        storage_transition.label()
     );
 }
 
-fn selected_acceptance_cell() -> CacheInteractionAcceptanceCell {
-    let selected_environment_label =
-        std::env::var("ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL")
-            .expect("set ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL");
-    CACHE_INTERACTION_ACCEPTANCE_CELLS
-        .iter()
-        .copied()
-        .find(|acceptance_cell| {
-            acceptance_cell.environment_label == selected_environment_label
-        })
-        .unwrap_or_else(|| {
-            let allowed_environment_labels = CACHE_INTERACTION_ACCEPTANCE_CELLS
-                .iter()
-                .map(|acceptance_cell| acceptance_cell.environment_label)
-                .collect::<Vec<_>>();
-            panic!(
-                "ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL must be one of {allowed_environment_labels:?}, got {selected_environment_label}"
-            )
-        })
-}
-
-async fn run_acceptance_cell(acceptance_cell: CacheInteractionAcceptanceCell) {
+async fn run_acceptance_cell(storage_transition: StorageTransition) {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let persistent_prompt_cache_directory =
@@ -100,11 +90,13 @@ async fn run_acceptance_cell(acceptance_cell: CacheInteractionAcceptanceCell) {
         load_persistent_prompt_cache_acceptance_engine(
             &model_directory,
             persistent_prompt_cache_directory.path(),
-            FIXED_PREFILL_CHUNCK_TOKENS,
+            FIXED_PREFILL_CHUNK_TOKENS,
         )
         .await;
-    let prompt_token_ids =
-        persistent_prompt_cache_eligible_prompt_token_ids(prompt_cache_block_token_count * 2 + 16);
+    let prompt_token_ids = romeo_and_juliet_prompt_token_ids(
+        &model_directory,
+        prompt_cache_block_token_count * 2 + 16,
+    );
 
     let (cold_cached_token_count, cold_generated_token_ids) = run_one_token_request(
         &mut qwen3_5_engine,
@@ -118,14 +110,14 @@ async fn run_acceptance_cell(acceptance_cell: CacheInteractionAcceptanceCell) {
     );
     wait_for_persistent_prompt_cache_blocks(&qwen3_5_engine, 2).await;
 
-    match acceptance_cell.storage_transition {
+    match storage_transition {
         StorageTransition::LiveReuse => {}
         StorageTransition::WorkerRestart => {
             drop(qwen3_5_engine);
             (qwen3_5_engine, _, _, _) = load_persistent_prompt_cache_acceptance_engine(
                 &model_directory,
                 persistent_prompt_cache_directory.path(),
-                FIXED_PREFILL_CHUNCK_TOKENS,
+                FIXED_PREFILL_CHUNK_TOKENS,
             )
             .await;
         }
@@ -151,7 +143,7 @@ async fn run_acceptance_cell(acceptance_cell: CacheInteractionAcceptanceCell) {
         }
     }
 
-    let warm_request_id = match acceptance_cell.storage_transition {
+    let warm_request_id = match storage_transition {
         StorageTransition::DeletedWhileLive => RequestId::new(30_003),
         StorageTransition::LiveReuse | StorageTransition::WorkerRestart => RequestId::new(30_002),
     };
@@ -165,6 +157,22 @@ async fn run_acceptance_cell(acceptance_cell: CacheInteractionAcceptanceCell) {
         warm_generated_token_ids, cold_generated_token_ids,
         "cold and restored deterministic output must match"
     );
+}
+
+fn romeo_and_juliet_prompt_token_ids(
+    model_directory: &Path,
+    target_prompt_token_count: usize,
+) -> Vec<u32> {
+    let prompt_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(model_directory, 20_480)
+        .expect("the selected cache-interaction artifact should validate");
+    let prompt_tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&prompt_artifact)
+        .expect("the selected cache-interaction tokenizer should load");
+    representative_long_generation_prompt_token_ids_capped_at(
+        &prompt_tokenizer,
+        prompt_artifact.model_id(),
+        target_prompt_token_count,
+    )
 }
 
 async fn run_one_token_request(

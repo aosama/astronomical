@@ -24,29 +24,6 @@ async fn should_process_streaming_chunks_and_an_exact_terminal_remainder() {
 }
 
 #[tokio::test]
-async fn should_bound_the_next_chunk_by_proven_executable_capacity() {
-    timeout(Duration::from_secs(5), async {
-        let chunk_sizer =
-            Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(2_048)
-                .expect("the streaming chunk size should construct");
-
-        assert_eq!(
-            chunk_sizer
-                .next_prompt_processing_chunk_end_with_maximum_executable_capacity(0, 5_000, 512,),
-            512
-        );
-        assert_eq!(
-            Qwen3_5StreamingPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
-                512
-            ),
-            Some(256)
-        );
-    })
-    .await
-    .expect("streaming capacity planning should finish within five seconds");
-}
-
-#[tokio::test]
 async fn should_reject_a_zero_streaming_chunk_size() {
     timeout(Duration::from_secs(5), async {
         assert!(

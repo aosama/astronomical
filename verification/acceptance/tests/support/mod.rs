@@ -2,7 +2,7 @@
 
 use std::{fs, path::PathBuf};
 
-#[cfg(feature = "expert-paging")]
+#[cfg(any(feature = "expert-paging", feature = "performance_throughput"))]
 pub(crate) mod acceptance_evidence;
 #[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 pub(crate) mod artifact_bytes;

@@ -7,8 +7,8 @@
 //!   at column zero, under beside-source trees.
 //! - integration: the same unindented `#[test]` and `#[tokio::test`
 //!   attribute lines under `tests/` directories, excluding helper folders.
-//! - e2e / acceptance split of the root e2e package: files with the
-//!   `ASTRONOMICAL_REAL_MODEL` gate count as acceptance.
+//! - e2e / acceptance split of the root e2e package: files selecting
+//!   `ModelFidelity` count as acceptance.
 //! - acceptance also counts the root acceptance package.
 
 use std::fs;
@@ -140,8 +140,8 @@ fn count_e2e_package_tier(repository_root: &Path, acceptance_files: bool) -> usi
         if excluded_helper_directory(&relative_path, &["common", "fixtures", "support"]) {
             continue;
         }
-        let has_real_model_toggle = file_contains_literal(&source_file, "ASTRONOMICAL_REAL_MODEL");
-        if has_real_model_toggle != acceptance_files {
+        let selects_model_fidelity = file_contains_literal(&source_file, "ModelFidelity::");
+        if selects_model_fidelity != acceptance_files {
             continue;
         }
         total += count_matching_lines(&source_file);

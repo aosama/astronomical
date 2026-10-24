@@ -92,6 +92,35 @@ pub const fn should_commit_multi_token_union_as_complete_layer(
         )
 }
 
+/// Whether a partial prefill union may seed a funded complete-layer table.
+///
+/// A multi-token chunk often routes most, but not all, experts of a layer.
+/// Retaining that union lets the next read fetch only the remainder and finish
+/// the table. Cache admission still enforces the actual retained-byte ceiling.
+#[must_use]
+pub const fn should_seed_partial_layer_on_prefill_read(
+    route_token_count: i32,
+    production_default_paging: bool,
+    residency_target: Option<super::ExpertLayerResidencyTarget>,
+    resident_expert_count: usize,
+    routed_expert_count: usize,
+    expert_capacity: usize,
+) -> bool {
+    route_token_count > 1
+        && production_default_paging
+        && resident_expert_count == 0
+        && expert_capacity > 0
+        && routed_expert_count > 0
+        && routed_expert_count < expert_capacity
+        && matches!(
+            residency_target,
+            Some(
+                super::ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+                    | super::ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+            )
+        )
+}
+
 /// Whether a prefill read that must stream some of a layer's routed experts
 /// should extend the read to every non-resident expert of the layer, so the
 /// warm table converges to a complete layer instead of waiting for a lucky

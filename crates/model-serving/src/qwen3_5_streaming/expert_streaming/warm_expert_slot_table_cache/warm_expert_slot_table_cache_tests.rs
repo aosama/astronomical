@@ -62,6 +62,7 @@ pub(super) fn streamed_weights_for_expert_count(
 }
 
 #[test]
+#[serial]
 fn should_grow_a_warm_table_from_the_first_decode_miss_and_serve_later_hits() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
@@ -118,6 +119,7 @@ fn should_grow_a_warm_table_from_the_first_decode_miss_and_serve_later_hits() {
 }
 
 #[test]
+#[serial]
 fn should_evict_the_least_read_expert_when_a_warm_table_overflows() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
@@ -164,35 +166,7 @@ fn should_evict_the_least_read_expert_when_a_warm_table_overflows() {
 }
 
 #[test]
-fn should_report_real_demand_coverage_from_the_recorded_routing_evidence() {
-    let runtime = test_runtime();
-    let mut cache = WarmExpertSlotTableCache::new(1);
-    // Production ceilings are set by the residency plan refresh; the tests
-    // set a generous ceiling except the budget-refusal case.
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
-    let weights = streamed_weights(&runtime);
-
-    cache
-        .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
-        .expect("the warm insert should queue");
-    cache
-        .flush_pending_inserts(&runtime)
-        .expect("the warm flush should succeed");
-
-    // With no routing evidence the coverage is zero; recorded demand for
-    // retained experts makes the residency planner frequency-aware.
-    assert_eq!(
-        cache.topology_snapshot(EXPERT_CAPACITY)[0].covered_weighted_demand,
-        0
-    );
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[7, 9, 9]);
-    cache.record_expert_demand(0, EXPERT_CAPACITY, &[11]);
-    let snapshot = cache.topology_snapshot(EXPERT_CAPACITY);
-    // Experts 7 and 9 are retained; 11 is routed but not retained.
-    assert_eq!(snapshot[0].covered_weighted_demand, 3);
-}
-
-#[test]
+#[serial]
 fn should_keep_the_stream_operation_local_when_the_budget_refuses_the_warm_table() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
@@ -254,6 +228,7 @@ fn should_scale_final_prefill_chunk_demand_above_earlier_prompt_frequency() {
 }
 
 #[test]
+#[serial]
 fn should_count_warm_inserts_only_for_hot_expert_warming() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
@@ -325,6 +300,7 @@ fn warm_two_tokens(
 /// mostly-zero tables, the per-token slot resize then reported zero
 /// affordable slots, and every later token re-streamed its experts from disk.
 #[test]
+#[serial]
 fn should_keep_budget_headroom_for_sibling_layers_when_the_first_warm_tables_are_barely_filled() {
     let runtime = test_runtime();
     let mut probe_cache = WarmExpertSlotTableCache::new(1);
@@ -368,6 +344,7 @@ fn should_keep_budget_headroom_for_sibling_layers_when_the_first_warm_tables_are
 /// must still land through least-read eviction inside the existing capacity
 /// instead of dropping the routed experts entirely.
 #[test]
+#[serial]
 fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(1);
@@ -422,6 +399,7 @@ fn should_fall_back_to_least_read_eviction_when_the_budget_refuses_growth() {
 /// Oversubscription therefore cannot originate in `try_adopt_complete_layer`;
 /// it can only arrive through a ceiling raised above the composed budget.
 #[test]
+#[serial]
 fn should_seat_at_most_the_composed_ceiling_and_refuse_every_further_complete_layer() {
     let runtime = test_runtime();
     let sparse_layer_count = 8_usize;
@@ -465,6 +443,7 @@ fn should_seat_at_most_the_composed_ceiling_and_refuse_every_further_complete_la
 /// floor — so every later forward re-pays its complete-page SSD read. This is
 /// the steady state the incident's halving loop executed for 69 seconds.
 #[test]
+#[serial]
 fn should_evict_one_whole_table_for_a_sub_table_target_and_never_reseat_it() {
     let runtime = test_runtime();
     let sparse_layer_count = 8_usize;
@@ -551,6 +530,7 @@ fn should_evict_one_whole_table_for_a_sub_table_target_and_never_reseat_it() {
 /// pressure paths may reclaim, never on finalization releasing tables
 /// outright.
 #[test]
+#[serial]
 fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() {
     let runtime = test_runtime();
     let mut cache = WarmExpertSlotTableCache::new(2);
@@ -594,68 +574,111 @@ fn should_classify_a_filled_warm_table_as_pinned_and_a_partial_one_as_elastic() 
 
 #[test]
 #[serial]
-fn should_discard_queued_inserts_without_writing_them() {
+fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
     let runtime = test_runtime();
-    let mut cache = WarmExpertSlotTableCache::new(1);
-    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    let mut seeded_cache = WarmExpertSlotTableCache::new(1);
+    seeded_cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    // Persisted history says experts 4 and 5 of this layer are hot.
+    seeded_cache.seed_expert_demand_history(vec![vec![0, 0, 0, 0, 9, 7]]);
     let weights = streamed_weights(&runtime);
-    cache
-        .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
+    seeded_cache
+        .queue_pending_routed_expert_insert(0, &[4, 5], &weights, WARM_SLOT_COUNT)
         .expect("the warm insert should queue");
-    assert_eq!(cache.discard_pending_inserts(), 1);
-    assert_eq!(
-        cache.discard_pending_inserts(),
-        0,
-        "a second discard finds nothing"
-    );
-    let written_count = cache
+    seeded_cache
         .flush_pending_inserts(&runtime)
-        .expect("flushing an empty queue should succeed");
-    assert_eq!(written_count, 0);
-    assert!(
-        cache.full_coverage_page(0, &[7], EXPERT_CAPACITY).is_none(),
-        "a discarded insert must not land in a table"
+        .expect("the warm flush should succeed");
+    // Live demand adds one more sighting of expert 4 on top of the history.
+    seeded_cache.record_expert_demand(0, EXPERT_CAPACITY, &[4]);
+
+    let covered_weighted_demand =
+        seeded_cache.topology_snapshot(EXPERT_CAPACITY)[0].covered_weighted_demand;
+    assert_eq!(
+        covered_weighted_demand, 17,
+        "the planner's coverage score must rank seated layers by history plus \
+         live demand: 9 + 7 seeded plus 1 live sighting"
+    );
+
+    // The control: an identical session without history ranks the same
+    // seating strictly lower, so seeded heat genuinely raises priority.
+    let mut cold_cache = WarmExpertSlotTableCache::new(1);
+    cold_cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    cold_cache
+        .queue_pending_routed_expert_insert(0, &[4, 5], &weights, WARM_SLOT_COUNT)
+        .expect("the cold warm insert should queue");
+    cold_cache
+        .flush_pending_inserts(&runtime)
+        .expect("the cold warm flush should succeed");
+    cold_cache.record_expert_demand(0, EXPERT_CAPACITY, &[4]);
+    assert_eq!(
+        cold_cache.topology_snapshot(EXPERT_CAPACITY)[0].covered_weighted_demand,
+        1
     );
 }
 
 #[test]
 #[serial]
-fn should_report_route_missing_non_resident_and_occupied_experts_per_table() {
+fn should_serve_a_second_chunk_route_from_a_layer_seated_by_the_first_chunk() {
     let runtime = test_runtime();
-    let mut cache = WarmExpertSlotTableCache::new(2);
+    let mut cache = WarmExpertSlotTableCache::new(1);
     cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
-    let weights = streamed_weights(&runtime);
+    // Chunk 1 routes the layer's whole expert set; the streamed page covers
+    // every expert, so adoption seats the complete layer.
+    let complete_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
+    let every_expert_id: Vec<usize> = (0..EXPERT_CAPACITY).collect();
     cache
-        .queue_pending_routed_expert_insert(0, &[7, 9], &weights, WARM_SLOT_COUNT)
-        .expect("the warm insert should queue");
+        .queue_pending_routed_expert_insert(0, &every_expert_id, &complete_weights, EXPERT_CAPACITY)
+        .expect("the chunk-1 complete insert should queue");
     cache
         .flush_pending_inserts(&runtime)
-        .expect("the first warm flush should succeed");
+        .expect("the chunk-1 flush should succeed");
+    assert!(cache.has_complete_layer(0, EXPERT_CAPACITY));
 
-    // A layer without a table answers None for the table-shaped queries and
-    // zero occupancy, never an empty table claim.
-    assert_eq!(cache.missing_route_expert_ids(1, &[3]), None);
-    assert_eq!(cache.non_resident_expert_ids(1, EXPERT_CAPACITY), None);
-    assert_eq!(cache.occupied_slot_count(1), 0);
-
-    // A partial table reports exactly the route experts it lacks, the full
-    // non-resident read set, and its occupancy.
-    assert_eq!(cache.missing_route_expert_ids(0, &[7, 9]), Some(vec![]));
-    assert_eq!(cache.missing_route_expert_ids(0, &[9, 12]), Some(vec![12]));
+    // Chunk 2 routes an arbitrary subset: coverage is a full hit against the
+    // seated layer, so the dispatch serves it from RAM and streams nothing.
     assert_eq!(
         cache
-            .non_resident_expert_ids(0, EXPERT_CAPACITY)
-            .expect("a seated layer reports its read set"),
-        (0..EXPERT_CAPACITY)
-            .filter(|expert_id| ![7, 9].contains(expert_id))
-            .collect::<Vec<_>>()
+            .missing_route_expert_ids(0, &[3, 7, 12])
+            .expect("a seated layer must answer coverage probes"),
+        Vec::<usize>::new(),
+        "a layer seated by chunk 1 must leave nothing to re-stream in chunk 2"
     );
-    assert_eq!(cache.occupied_slot_count(0), 2);
-
-    // Inputs are normalized: duplicates and unsorted routes answer in stable
-    // sorted order.
+    let chunk_two_page = cache
+        .full_coverage_page(0, &[3, 7, 12], EXPERT_CAPACITY)
+        .expect("a seated complete layer must serve the chunk-2 route");
     assert_eq!(
-        cache.missing_route_expert_ids(0, &[12, 7, 12]),
-        Some(vec![12])
+        chunk_two_page.1.expert_ids,
+        (0..EXPERT_CAPACITY).collect::<Vec<usize>>()
     );
+}
+
+#[test]
+#[serial]
+fn should_adopt_a_streamed_complete_layer_when_the_budget_admits_it() {
+    let runtime = test_runtime();
+    let mut cache = WarmExpertSlotTableCache::new(1);
+    cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
+    let complete_weights = streamed_weights_for_expert_count(&runtime, EXPERT_CAPACITY);
+    let every_expert_id: Vec<usize> = (0..EXPERT_CAPACITY).collect();
+
+    // Positive path: a whole-layer read the budget admits must be adopted,
+    // not dropped after serving one forward.
+    let adopted = cache
+        .try_adopt_complete_layer(&runtime, 0, &every_expert_id, &complete_weights)
+        .expect("the adoption should not error");
+    assert!(adopted, "a complete read within budget must be adopted");
+    assert!(cache.has_complete_layer(0, EXPERT_CAPACITY));
+    assert_eq!(
+        cache.topology_snapshot(EXPERT_CAPACITY)[0].class,
+        RetainedExpertPageClass::StableCompleteLayer
+    );
+
+    // Refusal path: a ceiling below the layer's payload keeps the page
+    // operation-local and leaves the layer unseated.
+    let mut refusing_cache = WarmExpertSlotTableCache::new(1);
+    refusing_cache.update_maximum_resident_payload_bytes(8);
+    let refused = refusing_cache
+        .try_adopt_complete_layer(&runtime, 1, &every_expert_id, &complete_weights)
+        .expect("the refused adoption should not error either");
+    assert!(!refused, "a complete read above the ceiling must not adopt");
+    assert!(!refusing_cache.has_complete_layer(1, EXPERT_CAPACITY));
 }

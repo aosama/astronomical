@@ -13,7 +13,7 @@ use crate::residency::{
     RequestExpertLayerRole, RequestExpertResidency, RetainedExpertPageClass,
     publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
-    retained_resident_ceiling_after_budget_refresh,
+    retained_resident_ceiling_after_budget_refresh, seated_complete_layer_count,
 };
 
 fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
@@ -255,6 +255,260 @@ fn should_shrink_but_never_expand_an_open_prefill_contract() {
             .pinned_complete_layer_indexes(),
         vec![0],
         "a zero-release republish must not re-pin the demoted layer"
+    );
+}
+
+fn streamed_target_count(plan: &ExpertResidencyPlan) -> usize {
+    plan.layer_targets
+        .iter()
+        .filter(|target| matches!(target, ExpertLayerResidencyTarget::StreamOperationLocal))
+        .count()
+}
+
+#[test]
+fn should_keep_authorizing_new_retention_until_every_streamed_layer_is_seated() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // The 2026-10-24 flight: a multi-chunk request's retention allowance read
+    // zero on every chunk after the first while two thirds of the paid ceiling
+    // sat unused, because nothing pinned the allowance to the unseated target.
+    // A mixed contract (one pin, two streamed layers) over a ceiling that fits
+    // all three layers must authorize new retention on every chunk until the
+    // last streamed layer seats, and only then converge to zero.
+    let geometries = uniform_geometry(3);
+    let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0], 120));
+
+    // Chunk 1: the pin is seated; both streamed layers fit the leftover 80.
+    let seated_pin = CurrentExpertLayerResidency {
+        layer_index: 0,
+        class: RetainedExpertPageClass::StableCompleteLayer,
+        retained_expert_ids: vec![0, 1, 2, 3],
+        payload_bytes: 40,
+        covered_weighted_demand: 0,
+    };
+    let chunk_one = request_residency.stabilize_prefill_plan(
+        candidate_plan(Vec::new(), 120),
+        &[seated_pin.clone()],
+        &geometries,
+    );
+    assert_eq!(
+        chunk_one.layer_targets[1],
+        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+    );
+    assert_eq!(
+        chunk_one.layer_targets[2],
+        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+    );
+    assert_eq!(
+        chunk_one.maximum_new_retained_bytes, 80,
+        "both unseated streamed layers must be covered by the retention allowance"
+    );
+
+    // Chunk 2: one more layer seated. The seated streamed layer is now
+    // preserved like a seated pin — its payload stops re-consuming stream
+    // headroom — so the allowance covers exactly the one remaining unseated
+    // streamed layer.
+    let seated_pin_and_first_streamed = vec![
+        seated_pin,
+        CurrentExpertLayerResidency {
+            layer_index: 1,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+    ];
+    let chunk_two = request_residency.stabilize_prefill_plan(
+        candidate_plan(Vec::new(), 120),
+        &seated_pin_and_first_streamed,
+        &geometries,
+    );
+    assert_eq!(
+        chunk_two.layer_targets[1],
+        ExpertLayerResidencyTarget::PreserveComplete,
+        "a seated streamed layer must be preserved, not re-charged to the ceiling"
+    );
+    assert_eq!(
+        chunk_two.layer_targets[2],
+        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+    );
+    assert_eq!(
+        chunk_two.maximum_new_retained_bytes, 40,
+        "the allowance must shrink to exactly the unseated streamed layer"
+    );
+
+    // Chunk 3: the whole target is seated. Every streamed layer is preserved,
+    // nothing streams, and the allowance is zero because nothing is unseated.
+    let fully_seated = vec![
+        CurrentExpertLayerResidency {
+            layer_index: 0,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+        CurrentExpertLayerResidency {
+            layer_index: 1,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+        CurrentExpertLayerResidency {
+            layer_index: 2,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+    ];
+    let chunk_three = request_residency.stabilize_prefill_plan(
+        candidate_plan(Vec::new(), 120),
+        &fully_seated,
+        &geometries,
+    );
+    assert_eq!(streamed_target_count(&chunk_three), 0);
+    assert_eq!(chunk_three.maximum_new_retained_bytes, 0);
+    assert_eq!(
+        chunk_three.expected_preserved_bytes, 120,
+        "every seated layer — pin or streamed — counts in preserved bytes"
+    );
+}
+
+#[test]
+fn should_count_only_actually_resident_complete_layers_as_seated() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // The 2026-10-24 flight logged pinned_complete_layer_count=34 beside
+    // current_residency_count=9: the contract's pin count (intent) was
+    // published as if it were occupancy. The seated count must come from the
+    // topology's complete-layer classification, never from the contract.
+    let current_residencies = vec![
+        CurrentExpertLayerResidency {
+            layer_index: 0,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+        CurrentExpertLayerResidency {
+            layer_index: 1,
+            class: RetainedExpertPageClass::ElasticRoutedExperts,
+            retained_expert_ids: vec![0, 1],
+            payload_bytes: 20,
+            covered_weighted_demand: 0,
+        },
+        CurrentExpertLayerResidency {
+            layer_index: 2,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+    ];
+
+    assert_eq!(
+        seated_complete_layer_count(&current_residencies),
+        2,
+        "partial (elastic) residency must never count toward seated complete layers"
+    );
+    assert_eq!(seated_complete_layer_count(&[]), 0);
+}
+
+#[test]
+fn should_count_only_seated_complete_pins_in_expected_preserved_bytes() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // expected_preserved_bytes feeds the utilization telemetry, so it must
+    // count exactly the complete-layer payload preserved by the plan. Warm
+    // partial tables (elastic routed experts) are retention too, but they are
+    // not complete layers and must not inflate this number.
+    let geometries = uniform_geometry(3);
+    let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0], 120));
+    let mixed_residency = vec![
+        CurrentExpertLayerResidency {
+            layer_index: 0,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+        CurrentExpertLayerResidency {
+            layer_index: 1,
+            class: RetainedExpertPageClass::ElasticRoutedExperts,
+            retained_expert_ids: vec![0, 1],
+            payload_bytes: 20,
+            covered_weighted_demand: 0,
+        },
+    ];
+
+    let stabilized = request_residency.stabilize_prefill_plan(
+        candidate_plan(Vec::new(), 120),
+        &mixed_residency,
+        &geometries,
+    );
+
+    assert_eq!(
+        stabilized.expected_preserved_bytes, 40,
+        "a 20-byte partial warm table beside a 40-byte complete layer must not \
+         be counted in expected_preserved_bytes"
+    );
+}
+
+#[test]
+fn should_never_grow_the_streamed_layer_count_across_chunks_of_one_request() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    // With a constant budget, seating progress must never plan MORE streamed
+    // layers than the previous chunk planned. The count is structurally
+    // stable — a seated streamed layer keeps its idempotent adopt-on-read
+    // offer and keeps consuming its own payload from the same ceiling — but
+    // growth chunk over chunk would be the re-stream spiral the utilization
+    // journey exists to catch, so the direction is pinned here.
+    let geometries = uniform_geometry(4);
+    let request_residency =
+        RequestExpertResidency::open_prefill(&four_layer_candidate(vec![0], 80));
+
+    let seated_pin = CurrentExpertLayerResidency {
+        layer_index: 0,
+        class: RetainedExpertPageClass::StableCompleteLayer,
+        retained_expert_ids: vec![0, 1, 2, 3],
+        payload_bytes: 40,
+        covered_weighted_demand: 0,
+    };
+    let chunk_one = request_residency.stabilize_prefill_plan(
+        four_layer_candidate(Vec::new(), 80),
+        &[seated_pin.clone()],
+        &geometries,
+    );
+
+    let seated_pin_and_one = vec![
+        seated_pin,
+        CurrentExpertLayerResidency {
+            layer_index: 1,
+            class: RetainedExpertPageClass::StableCompleteLayer,
+            retained_expert_ids: vec![0, 1, 2, 3],
+            payload_bytes: 40,
+            covered_weighted_demand: 0,
+        },
+    ];
+    let chunk_two = request_residency.stabilize_prefill_plan(
+        four_layer_candidate(Vec::new(), 80),
+        &seated_pin_and_one,
+        &geometries,
+    );
+
+    let chunk_one_streamed_count = streamed_target_count(&chunk_one);
+    let chunk_two_streamed_count = streamed_target_count(&chunk_two);
+    assert_eq!(chunk_one_streamed_count, 2);
+    assert!(
+        chunk_two_streamed_count <= chunk_one_streamed_count,
+        "seating progress must never plan more streamed layers than the \
+         previous chunk: {chunk_two_streamed_count} > {chunk_one_streamed_count}"
     );
 }
 

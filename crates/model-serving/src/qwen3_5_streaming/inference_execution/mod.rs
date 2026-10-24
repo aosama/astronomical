@@ -19,7 +19,6 @@ mod persistent_prompt_cache_startup_logging;
 mod persistent_prompt_cache_tail_capture;
 mod persistent_prompt_cache_visual_identity;
 mod prefill_advance;
-mod prefill_capacity_recovery;
 mod prefill_chunk_planning;
 mod prefill_execution_context;
 mod prefill_forward_dispatch;
@@ -28,8 +27,6 @@ mod prompt_prefill;
 mod prompt_prefill_counters;
 mod prompt_prefill_errors;
 mod prompt_processing_chunk_sizer;
-#[cfg(test)]
-mod prompt_processing_chunk_sizer_tests;
 mod request_memory_release;
 mod start_generation;
 mod terminal_prefill_seed;
@@ -37,7 +34,9 @@ mod test_controls;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use astronomical_ipc_protocol::{RequestId, WorkerChunkingConfiguration, WorkerEvent};
+use astronomical_ipc_protocol::{
+    RequestId, WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy, WorkerEvent,
+};
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use crate::inference_engine::load_result::EngineLoadResult;
@@ -143,6 +142,40 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
     ) -> Result<Qwen3_5StreamingEngine, InferenceEngineError> {
+        Self::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
+            validated_artifact,
+            active_memory_limit_bytes,
+            allocator_cache_memory_limit_bytes,
+            persistent_prompt_cache_disk_store_config,
+            prompt_processing_chunk_sizer,
+            think_end_token_id,
+            model_directory,
+            maximum_context_tokens,
+            chunking,
+            adaptive_ram_growth_guard_enabled,
+            model_loading_performance_attribution,
+            performance_attribution_log,
+            WorkerDecodeExpertCachePolicy::Baseline,
+        )
+    }
+
+    /// Starts the owner thread with an internal decode-cache benchmark policy.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
+        validated_artifact: ValidatedQwen3_5Artifact,
+        active_memory_limit_bytes: usize,
+        allocator_cache_memory_limit_bytes: usize,
+        persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+        prompt_processing_chunk_sizer: Qwen3_5StreamingPromptProcessingChunkSizer,
+        think_end_token_id: u32,
+        model_directory: PathBuf,
+        maximum_context_tokens: u32,
+        chunking: WorkerChunkingConfiguration,
+        adaptive_ram_growth_guard_enabled: bool,
+        model_loading_performance_attribution: PerformanceAttribution,
+        performance_attribution_log: PerformanceAttributionLog,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    ) -> Result<Qwen3_5StreamingEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
                 fatal_engine_error("full-attention growth tokens exceed Int32 range")
@@ -179,6 +212,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             active_request: None,
             adaptive_ram_growth_guard,
             adaptive_ram_growth_guard_enabled,
+            decode_expert_cache_policy,
             persistent_prompt_cache_disk_store_config,
             persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
             context_memory_reservation_bytes_per_token,
@@ -210,6 +244,7 @@ pub struct Qwen3_5InferenceExecution {
     pub(super) active_request: Option<Qwen3_5EngineRequest>,
     pub(super) adaptive_ram_growth_guard: AdaptiveRamGrowthGuard,
     pub(super) adaptive_ram_growth_guard_enabled: bool,
+    pub(super) decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     pub(crate) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
     pub(super) context_memory_reservation_bytes_per_token: usize,

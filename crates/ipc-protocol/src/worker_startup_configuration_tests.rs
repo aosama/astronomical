@@ -4,9 +4,10 @@ use std::path::PathBuf;
 
 use crate::{
     ProtocolReader, ProtocolWriter, WorkerAutoregressiveModelConfiguration,
-    WorkerChunkingConfiguration, WorkerCommand, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel,
-    WorkerModelConfiguration, WorkerQwenImage21ModelConfiguration, WorkerStartupConfiguration,
+    WorkerChunkingConfiguration, WorkerCommand, WorkerDecodeExpertCachePolicy,
+    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
+    WorkerLoadedModelRuntimeConfiguration, WorkerLogLevel, WorkerModelConfiguration,
+    WorkerQwenImage21ModelConfiguration, WorkerStartupConfiguration,
 };
 use tokio::io::duplex;
 
@@ -26,6 +27,7 @@ async fn should_round_trip_worker_startup_configuration() {
         persistent_prompt_cache_enabled: false,
         configured_maximum_mlx_memory_bytes: Some(8_000_000_000),
         performance_attribution_enabled: false,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
         logging_directory: PathBuf::from("/tmp/fictional-logs"),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,
@@ -45,6 +47,23 @@ async fn should_round_trip_worker_startup_configuration() {
             .await
             .expect("worker startup configuration should decode"),
         Some(worker_command)
+    );
+}
+
+#[test]
+fn should_serialize_the_candidate_decode_expert_cache_policy() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    assert_eq!(
+        serde_json::to_value(WorkerDecodeExpertCachePolicy::Candidate)
+            .expect("candidate policy should serialize"),
+        serde_json::json!("candidate")
+    );
+    assert_eq!(
+        serde_json::from_value::<WorkerDecodeExpertCachePolicy>(serde_json::json!("candidate"))
+            .expect("candidate policy should deserialize"),
+        WorkerDecodeExpertCachePolicy::Candidate
     );
 }
 

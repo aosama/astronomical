@@ -73,7 +73,8 @@ pub(super) fn write_interaction_config(
 ///
 /// Disposable Cargo targets are deleted after the journey, so evidence cannot live
 /// there. The workspace `target/` directory survives that cleanup and is gitignored.
-/// `ASTRONOMICAL_ACCEPTANCE_EVIDENCE_DIRECTORY` overrides the destination.
+/// The `evidence_directory` in the `cargo xtask test-run` configuration selects
+/// another destination.
 pub(super) fn persist_acceptance_evidence(isolated_worker_home: &Path) -> PathBuf {
     let logging_directory = interaction_instance_paths(isolated_worker_home).logging_directory();
     let evidence_directory = acceptance_evidence_directory();

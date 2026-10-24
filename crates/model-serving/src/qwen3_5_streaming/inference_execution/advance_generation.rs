@@ -194,14 +194,28 @@ impl Qwen3_5EngineState {
                         "starting first decode forward after prompt processing"
                     );
                     first_decode_forward_started_at = Some(Instant::now());
-                    let final_prompt_logits = model
+                    model.begin_decode_expert_cache_forward();
+                    let decode_forward_started_at = active_request
+                        .performance_attribution
+                        .is_enabled()
+                        .then(Instant::now);
+                    let final_prompt_logits_result = model
                         .forward_chunk_with_performance_attribution(
                             &[final_prompt_token_id],
                             active_request.next_position_tokens,
                             &mut active_request.request_decoder_state,
                             &mut active_request.performance_attribution,
-                        )
-                        .map_err(InferenceEngineError::from)?;
+                        );
+                    if let Some(decode_forward_started_at) = decode_forward_started_at {
+                        active_request
+                            .performance_attribution
+                            .record_decode_token_forward_elapsed(
+                                decode_forward_started_at.elapsed(),
+                            );
+                    }
+                    model.end_decode_expert_cache_forward();
+                    let final_prompt_logits =
+                        final_prompt_logits_result.map_err(InferenceEngineError::from)?;
                     active_request.advance_position(1)?;
                     let first_generated_token =
                         active_request.build_generated_token(model, &final_prompt_logits)?;
@@ -354,14 +368,25 @@ impl Qwen3_5EngineState {
             None
         };
         let next_generated_token = {
-            let next_logits = model
+            model.begin_decode_expert_cache_forward();
+            let decode_forward_started_at = active_request
+                .performance_attribution
+                .is_enabled()
+                .then(Instant::now);
+            let next_logits_result = model
                 .build_generated_token_forward_with_performance_attribution(
                     &current_generated_token,
                     active_request.next_position_tokens,
                     &mut active_request.request_decoder_state,
                     &mut active_request.performance_attribution,
-                )
-                .map_err(InferenceEngineError::from)?;
+                );
+            if let Some(decode_forward_started_at) = decode_forward_started_at {
+                active_request
+                    .performance_attribution
+                    .record_decode_token_forward_elapsed(decode_forward_started_at.elapsed());
+            }
+            model.end_decode_expert_cache_forward();
+            let next_logits = next_logits_result.map_err(InferenceEngineError::from)?;
             active_request.advance_position(1)?;
             let next_generated_token = active_request.build_generated_token(model, &next_logits)?;
             // Issue #536/#542: decode route history after sampling. Route

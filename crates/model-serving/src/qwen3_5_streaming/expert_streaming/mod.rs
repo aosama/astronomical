@@ -10,12 +10,19 @@ pub mod expert_pager;
 #[cfg(feature = "direct-mlx")]
 mod expert_pager_construction;
 #[cfg(feature = "direct-mlx")]
+mod expert_usage_history;
+#[cfg(feature = "direct-mlx")]
 mod paged_expert_weights;
 #[cfg(feature = "direct-mlx")]
 mod retained_page_payload;
 pub mod route_observation;
 #[cfg(feature = "direct-mlx")]
 mod warm_expert_slot_table_cache;
+
+#[cfg(feature = "direct-mlx")]
+pub(crate) use expert_usage_history::{
+    expert_usage_file_path, read_expert_usage, write_expert_usage,
+};
 
 #[cfg(feature = "direct-mlx")]
 pub use expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};

@@ -9,7 +9,8 @@ use crate::{
     ExpertLayerResidencyTarget, MemoryPhase, PerformanceAttribution, PerformanceCounter,
     PerformanceOperation, RetainedExpertPageClass, RetainedExpertReclamation,
     plan_expert_residency, publish_request_stable_residency_plan,
-    retained_resident_ceiling_after_budget_refresh, should_enact_planned_expert_release,
+    retained_resident_ceiling_after_budget_refresh, seated_complete_layer_count,
+    should_enact_planned_expert_release,
 };
 
 use super::streaming_model::Qwen3_5StreamingModel;
@@ -57,33 +58,6 @@ impl Qwen3_5StreamingModel {
     pub(crate) fn clear_phase_aware_expert_residency_plan(&self) {
         *self.active_expert_residency_plan.borrow_mut() = None;
         *self.request_expert_residency.borrow_mut() = None;
-    }
-
-    /// Shrinks the request's retained-layer target after capacity reclamation.
-    pub(crate) fn shrink_request_expert_residency_after_reclamation(
-        &self,
-        released_complete_payload_bytes: u64,
-    ) {
-        if released_complete_payload_bytes == 0 {
-            return;
-        }
-        let Some(expert_pager) = self.expert_pager.as_ref() else {
-            return;
-        };
-        let experts_per_token =
-            usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
-        let Ok(layer_geometries) =
-            retained_expert_layer_geometries(expert_pager.layer_plans(), experts_per_token)
-        else {
-            return;
-        };
-        let Some(current_residency) = self.request_expert_residency.borrow().clone() else {
-            return;
-        };
-        *self.request_expert_residency.borrow_mut() = Some(
-            current_residency
-                .shrink_after_capacity_failure(released_complete_payload_bytes, &layer_geometries),
-        );
     }
 
     /// Refreshes the no-I/O target after memory policy has established a phase budget.
@@ -277,7 +251,15 @@ impl Qwen3_5StreamingModel {
                 );
             }
         }
-        let pinned_complete_layer_count = self
+        // Occupancy truth first: the pinned count published here must equal
+        // the layers actually resident as complete layers, because a contract
+        // pin is intent, not ownership. The 2026-10-24 flight logged
+        // `pinned_complete_layer_count=34` beside `current_residency_count=9`
+        // because both the contract's pin roles and the occupancy were
+        // conflated into one field; the contract's pin count is published
+        // separately as `contracted_complete_layer_count`.
+        let seated_complete_layer_count = seated_complete_layer_count(&current_residencies);
+        let contracted_complete_layer_count = self
             .request_expert_residency
             .borrow()
             .as_ref()
@@ -292,7 +274,8 @@ impl Qwen3_5StreamingModel {
             ?phase,
             retained_expert_ceiling_bytes,
             complete_layer_target_count = residency_plan.complete_layer_targets.len(),
-            pinned_complete_layer_count,
+            pinned_complete_layer_count = seated_complete_layer_count,
+            contracted_complete_layer_count,
             streamed_layer_count,
             released_complete_payload_bytes = budget_reclamation.released_complete_payload_bytes,
             released_partial_payload_bytes = budget_reclamation.released_partial_payload_bytes,

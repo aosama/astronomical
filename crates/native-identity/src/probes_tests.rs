@@ -24,7 +24,7 @@ fn overridden_request() -> FingerprintRequest<'static> {
 }
 
 #[test]
-fn probe_values_carry_the_fixed_order_and_override_flag() {
+fn should_capture_direct_fixture_fields_in_the_fixed_order() {
     let probe_values = toolchain_probe_values(&overridden_request()).unwrap();
     let names: Vec<&str> = probe_values.iter().map(|entry| entry.name).collect();
     assert_eq!(
@@ -56,7 +56,7 @@ fn probe_values_carry_the_fixed_order_and_override_flag() {
 }
 
 #[test]
-fn manifest_lines_digest_exactly_the_reported_probe_values() {
+fn should_digest_exactly_the_reported_probe_values() {
     let probe_values = toolchain_probe_values(&overridden_request()).unwrap();
     let manifest_lines = toolchain_manifest_lines(&overridden_request()).unwrap();
     let mut manifest_lines_iter = manifest_lines.lines();
@@ -80,7 +80,7 @@ fn manifest_lines_digest_exactly_the_reported_probe_values() {
 }
 
 #[test]
-fn probe_values_preserve_the_digest_semantics_of_composite_probes() {
+fn should_preserve_the_digest_semantics_of_composite_fixture_probes() {
     let probe_values = toolchain_probe_values(&overridden_request()).unwrap();
     let sdk_entry = &probe_values[3];
     assert_eq!(
@@ -93,7 +93,7 @@ fn probe_values_preserve_the_digest_semantics_of_composite_probes() {
 // guards the value shapes the helper flattens, so the CI log format stays
 // predictable for flap forensics.
 #[test]
-fn probe_value_shapes_stay_single_line_flattenable() {
+fn should_keep_probe_value_shapes_single_line_flattenable() {
     let probe_values: Vec<ProbeValue> = toolchain_probe_values(&overridden_request()).unwrap();
     for probe_entry in &probe_values {
         assert!(
@@ -105,7 +105,7 @@ fn probe_value_shapes_stay_single_line_flattenable() {
 }
 
 #[test]
-fn cmake_patch_versions_share_one_identity() {
+fn should_share_one_identity_across_cmake_patch_versions() {
     // Runner images roll CMake patch releases (observed 4.4.3 then 4.4.4 a few
     // hours apart); patch releases do not change codegen, so they must not
     // rotate the native build identity and force a cold rebuild per rollout.
@@ -130,7 +130,7 @@ fn cmake_patch_versions_share_one_identity() {
 }
 
 #[test]
-fn cmake_probe_drops_the_vendor_banner_and_extra_lines() {
+fn should_drop_the_cmake_vendor_banner_and_extra_lines() {
     let whole_cmake_output = "cmake version 4.4.3\nCMake suite maintained and supported by Kitware (kitware.com/cmake).\n";
     let coarsened_line = super::probes::coarsened_cmake_version_line_for_tests(whole_cmake_output)
         .expect("the full version banner should coarsen");
@@ -142,7 +142,7 @@ fn cmake_probe_drops_the_vendor_banner_and_extra_lines() {
 }
 
 #[test]
-fn cmake_probe_fails_loudly_on_an_unrecognized_version_line() {
+fn should_reject_an_unrecognized_cmake_version_line() {
     for unrecognized_output in ["", "some other tool 1.2.3", "cmake version"] {
         let coarsening_outcome =
             super::probes::coarsened_cmake_version_line_for_tests(unrecognized_output);
@@ -151,4 +151,64 @@ fn cmake_probe_fails_loudly_on_an_unrecognized_version_line() {
             "unrecognized cmake output {unrecognized_output:?} must fail the probe instead of hashing an unstable value"
         );
     }
+}
+
+#[test]
+fn should_preserve_the_shared_toolchain_manifest_digest_for_direct_fixtures() {
+    let manifest_lines = toolchain_manifest_lines(&overridden_request()).unwrap();
+    assert_eq!(
+        digest_bytes(manifest_lines.as_bytes()),
+        "f3b25d32c578687fb846237918af6acd32bb31af451a1bd7a9a5dcebc7f0e966"
+    );
+}
+
+#[test]
+fn should_keep_the_release_manifest_when_no_build_type_is_injected() {
+    let explicit_release_manifest = toolchain_manifest_lines(&overridden_request()).unwrap();
+    let mut default_release_request = overridden_request();
+    default_release_request.overrides.build_type = None;
+    assert_eq!(
+        toolchain_manifest_lines(&default_release_request).unwrap(),
+        explicit_release_manifest
+    );
+}
+
+#[test]
+fn should_reject_every_non_release_fixture_build_type_before_probing() {
+    for unsupported_build_type in ["", "Debug", "release", "RelWithDebInfo"] {
+        let mut request = overridden_request();
+        request.overrides.build_type = Some(unsupported_build_type.to_owned());
+        assert_eq!(
+            toolchain_probe_values(&request),
+            Err(crate::NativeIdentityError::UnsupportedBuildType(
+                unsupported_build_type.to_owned()
+            ))
+        );
+    }
+}
+
+#[test]
+fn should_reject_absent_empty_and_blank_targets_before_probing() {
+    for target_triple in [None, Some(""), Some(" \t")] {
+        let mut request = overridden_request();
+        request.overrides = crate::probes::ToolchainOverrides {
+            target_triple: target_triple.map(str::to_owned),
+            ..crate::probes::ToolchainOverrides::none()
+        };
+        assert_eq!(
+            toolchain_probe_values(&request),
+            Err(crate::NativeIdentityError::MissingTargetTriple)
+        );
+    }
+}
+
+#[test]
+fn should_change_the_manifest_when_the_selected_target_changes() {
+    let mut request = overridden_request();
+    let original_manifest = toolchain_manifest_lines(&request).unwrap();
+    request.overrides.target_triple = Some("x86_64-apple-darwin".to_owned());
+    assert_ne!(
+        toolchain_manifest_lines(&request).unwrap(),
+        original_manifest
+    );
 }

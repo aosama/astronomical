@@ -1,4 +1,4 @@
-//! Returns a packed complete expert layer on hit, or streams one complete layer on miss.
+//! Selects retained or streamed expert pages for mixture-of-experts forwards.
 
 use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
@@ -10,7 +10,7 @@ use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
     should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
-    should_complete_partial_layer_on_prefill_read,
+    should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
 
 /// How one forward should execute one mixture-of-experts layer.
@@ -263,12 +263,11 @@ impl Qwen3_5Model {
     /// residency plan, so a layer the plan streams operation-local or is
     /// releasing stays unwarmed.
     ///
-    /// A multi-token routed-union chunk keeps its page operation-local. The
-    /// warm-insert queue drains only after a decode token's evaluation, so
-    /// queueing prefill pages pinned every streamed union of every chunk (about
-    /// 0.6 GB packed per layer on the 122B bundle, 24 streamed layers per
-    /// chunk) until generation started — including the pages of failed chunk
-    /// attempts — which is what drove prefill into the ceiling.
+    /// A cold multi-token union seeds a retained table only when the plan funds
+    /// a complete layer; existing partial tables use their missing-expert
+    /// growth path. Prefill pages stay off the decode warm-insert queue, which
+    /// previously pinned every chunk's union, including failed attempts, until
+    /// generation started.
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
@@ -318,9 +317,13 @@ impl Qwen3_5Model {
                 streamed_manifest.source_manifests.len(),
             );
             let warm_slot_count = self.hot_expert_warm_slot_count();
-            let layer_has_complete_table = retained_experts
-                .borrow()
-                .has_complete_layer(layer_index, expert_capacity);
+            let (resident_expert_count, layer_has_complete_table) = {
+                let retained_experts = retained_experts.borrow();
+                (
+                    retained_experts.occupied_slot_count(layer_index),
+                    retained_experts.has_complete_layer(layer_index, expert_capacity),
+                )
+            };
             // A multi-token chunk whose union covers the whole layer has
             // already paid the complete-layer read cost; offering it to
             // retained ownership is pure reuse. Without this offer every
@@ -357,6 +360,30 @@ impl Qwen3_5Model {
                         streamed_manifest.payload_byte_count,
                     );
                 }
+            } else if should_seed_partial_layer_on_prefill_read(
+                route_token_count,
+                production_default_paging,
+                self.expert_residency_target(layer_index),
+                resident_expert_count,
+                routed_expert_ids.len(),
+                expert_capacity,
+            ) {
+                let inserted_expert_count = retained_experts.borrow_mut().insert_streamed_experts(
+                    &self.runtime,
+                    layer_index,
+                    routed_expert_ids,
+                    &streamed_weights,
+                    routed_expert_ids,
+                    expert_capacity,
+                )?;
+                tracing::debug!(
+                    layer_index,
+                    inserted_expert_count,
+                    routed_expert_count = routed_expert_ids.len(),
+                    expert_capacity,
+                    streamed_payload_bytes = streamed_manifest.payload_byte_count,
+                    "multi-token prefill union offered to retained ownership as a completion seed",
+                );
             }
             if route_token_count == 1 && warm_slot_count > 0 && !layer_has_complete_table {
                 if should_commit_mandatory_routed_page(
@@ -392,7 +419,7 @@ impl Qwen3_5Model {
 
     /// Serves a multi-token routed union from the warm table, streaming only
     /// what the table lacks. Returns `None` when the layer has no table (the
-    /// union stream and adoption offer own that case) or when budget
+    /// caller owns cold-union seeding or adoption) or when budget
     /// admission refused enough table growth that the route still is not
     /// covered (the caller falls back to the full union stream).
     #[allow(clippy::too_many_arguments)]

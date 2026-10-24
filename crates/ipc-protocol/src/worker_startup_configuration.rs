@@ -15,6 +15,15 @@ pub enum WorkerLogLevel {
     Trace,
 }
 
+/// Internal decode-cache arm selected only by controlled benchmarks.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerDecodeExpertCachePolicy {
+    #[default]
+    Baseline,
+    Candidate,
+}
+
 /// Worker-acknowledged feature settings safe to expose through local status.
 ///
 /// This intentionally excludes startup paths and model locations. It proves the
@@ -41,6 +50,9 @@ pub struct WorkerStartupConfiguration {
     pub persistent_prompt_cache_enabled: bool,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub performance_attribution_enabled: bool,
+    /// Benchmark-only policy selector; never read from the user configuration.
+    #[serde(default)]
+    pub decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     pub logging_directory: PathBuf,
     pub logging_level: WorkerLogLevel,
     pub retained_log_file_count: usize,
