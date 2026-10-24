@@ -41,7 +41,11 @@ mod planner_boundary_tests;
 #[cfg(test)]
 mod promotion_on_raise_tests;
 #[cfg(test)]
+mod release_boundary_tests;
+#[cfg(test)]
 mod request_plan_boundary_tests;
+#[cfg(test)]
+mod validation_boundary_tests;
 
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;
 pub use decode_seating::complete_layer_indexes_required_before_decode;

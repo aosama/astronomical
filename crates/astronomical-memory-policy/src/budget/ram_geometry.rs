@@ -93,7 +93,14 @@ pub fn mlx_ram_budget_model_geometry_from_measured_layer_facts(
     ))
 }
 
-/// Largest exact top-K routed expert page across the measured layers.
+/// Sound lower bound of the largest top-K routed expert page across the
+/// measured layers.
+///
+/// Aggregate layer facts cannot name which K experts routing selects, so
+/// the exact page is unknowable here; the average-based bound is
+/// `complete_payload * top_k / capacity`, rounded UP. Rounding down would
+/// under-reserve the decode stream slot and the geometry-safe minimum
+/// ceiling, letting admission accept a page that cannot actually fit.
 fn largest_routed_expert_page_bytes(
     measured_layer_payloads: &[MeasuredExpertLayerPayload],
     experts_per_token: usize,
@@ -103,8 +110,14 @@ fn largest_routed_expert_page_bytes(
         .try_fold(0_u64, |largest_page_bytes, layer_payload| {
             let routed_expert_count = experts_per_token.min(layer_payload.expert_capacity);
             let routed_page_bytes = u128::from(layer_payload.complete_payload_bytes)
-                .saturating_mul(routed_expert_count as u128)
-                / (layer_payload.expert_capacity.max(1) as u128);
-            Ok(largest_page_bytes.max(u64::try_from(routed_page_bytes).unwrap_or(u64::MAX)))
+                .saturating_mul(routed_expert_count as u128);
+            let layer_expert_capacity =
+                u128::from(u64::try_from(layer_payload.expert_capacity.max(1)).unwrap_or(u64::MAX));
+            let routed_page_bytes_ceiling =
+                routed_page_bytes.saturating_add(layer_expert_capacity - 1) / layer_expert_capacity;
+            Ok(
+                largest_page_bytes
+                    .max(u64::try_from(routed_page_bytes_ceiling).unwrap_or(u64::MAX)),
+            )
         })
 }

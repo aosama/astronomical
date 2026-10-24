@@ -22,6 +22,8 @@ mod geometry_memory_floor_tests;
 mod mlx_ram_budget_ceiling_adjustment_tests;
 #[cfg(test)]
 mod mlx_ram_budget_tests;
+#[cfg(test)]
+mod ram_geometry_boundary_tests;
 
 pub use adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,

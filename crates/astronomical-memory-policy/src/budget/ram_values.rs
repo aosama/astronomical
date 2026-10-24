@@ -18,7 +18,8 @@ pub struct MlxRamBudgetModelGeometry {
     pub complete_expert_payload_bytes: u64,
     /// One complete sparse layer; reserved as the streaming workspace.
     pub largest_complete_expert_layer_bytes: u64,
-    /// Largest exact top-K page used by one-token decode.
+    /// Largest top-K page used by one-token decode: the sound ceiling-rounded
+    /// lower bound derived from aggregate layer facts (see `budget/ram_geometry`).
     pub largest_routed_expert_page_bytes: u64,
     /// Persistent decoder-state bytes added by one more prompt token.
     pub sequence_state_bytes_per_token: u64,
