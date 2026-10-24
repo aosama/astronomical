@@ -10,7 +10,9 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, RuntimeModelPolicy, WorkerHandle,
 };
-use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
+use astronomical_ipc_protocol::{
+    WorkerDecodeExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
+};
 
 use super::worker_model_swap::{
     assert_generation_completed, chat_command, runtime_model_policy, wait_for_ready_worker,
@@ -153,6 +155,7 @@ pub(super) fn startup_configuration(
         persistent_prompt_cache_enabled: true,
         configured_maximum_mlx_memory_bytes,
         performance_attribution_enabled: true,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
         logging_directory: temporary_directory.to_path_buf(),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,

@@ -32,10 +32,9 @@
 //! process-wide limiter (a mutex-and-condvar permit pool) caps concurrent
 //! positional reads across *all* readers, keeping the queue depth the SSD
 //! sees within the measured sweet spot even during multi-tensor evaluation.
-//! `ASTRONOMICAL_POSITIONAL_READ_PARALLELISM` overrides the process default
-//! within a bounded range (1..=32) for constrained machines — the default
-//! itself stays the measured sixteen-permit ceiling (further clamped by the
-//! machine's available parallelism so tiny containers never oversubscribe).
+//! The permit count follows the machine's available parallelism, bounded
+//! between one and the measured sixteen-permit ceiling so constrained
+//! processes never oversubscribe.
 
 use std::{
     fs::File,
@@ -52,14 +51,6 @@ use crate::safetensors::read_metrics::PositionalFileReadMetrics;
 const PARALLEL_READ_MINIMUM_BYTES: usize = 1 << 25;
 // See the module documentation for the measurements behind this value.
 const MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT: usize = 16;
-// SSDs differ widely in queue depth, so the process cap is an adaptation
-// parameter, not a constant: `ASTRONOMICAL_POSITIONAL_READ_PARALLELISM`
-// overrides it within a bounded range; the default stays at the measured
-// sixteen-permit ceiling above.
-const POSITIONAL_READ_PARALLELISM_ENVIRONMENT_VARIABLE: &str =
-    "ASTRONOMICAL_POSITIONAL_READ_PARALLELISM";
-const POSITIONAL_READ_PARALLELISM_OVERRIDE_CEILING: usize = 32;
-static CONFIGURED_POSITIONAL_READ_PARALLELISM: OnceLock<usize> = OnceLock::new();
 static POSITIONAL_READ_CONCURRENCY_LIMITER: OnceLock<PositionalReadConcurrencyLimiter> =
     OnceLock::new();
 
@@ -129,7 +120,7 @@ pub(super) fn read_source_interval(
     let read_partition_count = destination
         .len()
         .div_ceil(PARALLEL_READ_MINIMUM_BYTES)
-        .min(configured_read_parallelism());
+        .min(positional_read_concurrency_limiter().maximum_concurrent_read_count);
     if read_partition_count <= 1 {
         return measure_source_read(
             source_file,
@@ -178,9 +169,7 @@ fn measure_source_read(
     source_offset: u64,
     positional_file_read_metrics: Option<&PositionalFileReadMetrics>,
 ) -> bool {
-    let concurrency_limiter = POSITIONAL_READ_CONCURRENCY_LIMITER
-        .get_or_init(|| PositionalReadConcurrencyLimiter::new(configured_read_parallelism()));
-    let _positional_read_permit = concurrency_limiter.acquire();
+    let _positional_read_permit = positional_read_concurrency_limiter().acquire();
     let destination_byte_count = destination.len();
     let mut read_operation = || {
         source_file
@@ -193,31 +182,114 @@ fn measure_source_read(
     }
 }
 
-/// Resolves the process read-parallelism default once.
-///
-/// Precedence: the environment override (clamped to 1..=32), else the
-/// machine's available parallelism clamped by the measured sixteen-permit
-/// ceiling. Memoized in a `OnceLock` so every callback after the first reads
-/// one atomic-free value — and so a mid-process environment change cannot
-/// split readers across different limiter sizes.
-fn configured_read_parallelism() -> usize {
-    *CONFIGURED_POSITIONAL_READ_PARALLELISM.get_or_init(|| {
-        let default_parallelism = thread::available_parallelism()
+fn positional_read_concurrency_limiter() -> &'static PositionalReadConcurrencyLimiter {
+    POSITIONAL_READ_CONCURRENCY_LIMITER.get_or_init(|| {
+        let available_parallelism = thread::available_parallelism()
             .map(usize::from)
-            .unwrap_or(1)
-            .min(MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT);
-        std::env::var(POSITIONAL_READ_PARALLELISM_ENVIRONMENT_VARIABLE)
-            .ok()
-            .and_then(|parallelism_text| parallelism_text.parse::<usize>().ok())
-            .map(|override_parallelism| {
-                override_parallelism.clamp(1, POSITIONAL_READ_PARALLELISM_OVERRIDE_CEILING)
-            })
-            .unwrap_or(default_parallelism)
+            .unwrap_or(1);
+        PositionalReadConcurrencyLimiter::new(automatic_read_parallelism(available_parallelism))
     })
+}
+
+fn automatic_read_parallelism(available_parallelism: usize) -> usize {
+    available_parallelism
+        .min(MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT)
+        .max(1)
 }
 
 fn lock_after_possible_poison(mutex: &Mutex<usize>) -> MutexGuard<'_, usize> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
+}
+
+#[cfg(test)]
+mod bounded_range_read_concurrency_tests {
+    use std::sync::mpsc::{self, RecvTimeoutError};
+    use std::time::Duration;
+
+    use super::{
+        PositionalReadConcurrencyLimiter, automatic_read_parallelism, lock_after_possible_poison,
+        positional_read_concurrency_limiter,
+    };
+
+    #[test]
+    fn should_follow_available_parallelism_below_the_ceiling() {
+        astronomical_test_harness::ensure_network_denied()
+            .expect("network denial could not be applied");
+        for available_parallelism in [1, 2, 8, 16] {
+            assert_eq!(
+                automatic_read_parallelism(available_parallelism),
+                available_parallelism
+            );
+        }
+    }
+
+    #[test]
+    fn should_keep_at_least_one_positional_read_worker() {
+        astronomical_test_harness::ensure_network_denied()
+            .expect("network denial could not be applied");
+        assert_eq!(automatic_read_parallelism(0), 1);
+    }
+
+    #[test]
+    fn should_cap_positional_read_parallelism_at_sixteen() {
+        astronomical_test_harness::ensure_network_denied()
+            .expect("network denial could not be applied");
+        for available_parallelism in [17, 32, usize::MAX] {
+            assert_eq!(automatic_read_parallelism(available_parallelism), 16);
+        }
+    }
+
+    #[test]
+    fn should_share_one_bounded_limiter_across_readers() {
+        astronomical_test_harness::ensure_network_denied()
+            .expect("network denial could not be applied");
+        let first_reader_limiter = positional_read_concurrency_limiter();
+        let second_reader_limiter = positional_read_concurrency_limiter();
+        assert!(std::ptr::eq(first_reader_limiter, second_reader_limiter));
+        assert!((1..=16).contains(&first_reader_limiter.maximum_concurrent_read_count));
+    }
+
+    #[test]
+    fn should_return_a_read_permit_when_the_read_finishes() {
+        astronomical_test_harness::ensure_network_denied()
+            .expect("network denial could not be applied");
+        let limiter = PositionalReadConcurrencyLimiter::new(1);
+        let read_permit = limiter.acquire();
+        assert_eq!(*lock_after_possible_poison(&limiter.active_read_count), 1);
+        drop(read_permit);
+        assert_eq!(*lock_after_possible_poison(&limiter.active_read_count), 0);
+        let _next_read_permit = limiter.acquire();
+        assert_eq!(*lock_after_possible_poison(&limiter.active_read_count), 1);
+    }
+
+    #[test]
+    fn should_wait_for_a_permit_when_the_read_limit_is_reached() {
+        astronomical_test_harness::ensure_network_denied()
+            .expect("network denial could not be applied");
+        let limiter = PositionalReadConcurrencyLimiter::new(1);
+        let held_read_permit = limiter.acquire();
+        let (permit_acquired_sender, permit_acquired_receiver) = mpsc::channel();
+
+        std::thread::scope(|scope| {
+            let waiting_reader_limiter = &limiter;
+            scope.spawn(move || {
+                let _read_permit = waiting_reader_limiter.acquire();
+                permit_acquired_sender
+                    .send(())
+                    .expect("waiting reader could not report its acquired permit");
+            });
+            let waiting_reader_was_blocked = matches!(
+                permit_acquired_receiver.recv_timeout(Duration::from_millis(20)),
+                Err(RecvTimeoutError::Timeout)
+            );
+            drop(held_read_permit);
+            assert!(waiting_reader_was_blocked);
+            permit_acquired_receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("waiting reader did not resume after a permit was returned");
+        });
+        assert_eq!(*lock_after_possible_poison(&limiter.active_read_count), 0);
+    }
 }

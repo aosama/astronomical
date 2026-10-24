@@ -14,6 +14,7 @@
 //! for network-denial contracts, and workspace binary resolution.
 
 pub mod network_denial;
+pub mod test_run;
 pub mod timeout;
 pub mod workspace;
 

@@ -46,6 +46,7 @@ pub(super) struct EnabledPerformanceAttribution {
     pub(super) operation_measurements:
         [PerformanceOperationMeasurement; PerformanceOperation::COUNT],
     pub(super) counter_values: [u64; PerformanceCounter::COUNT],
+    pub(super) decode_token_forward_elapsed_nanoseconds: Vec<u64>,
     pub(super) previous_token_selected_expert_ids_by_layer: Vec<Option<Vec<usize>>>,
     /// The immediately preceding observed decode token's compact route for the
     /// current request. Request-owned so a new request starts its prediction
@@ -93,6 +94,7 @@ impl PerformanceAttribution {
                 operation_measurements: [PerformanceOperationMeasurement::EMPTY;
                     PerformanceOperation::COUNT],
                 counter_values: [0; PerformanceCounter::COUNT],
+                decode_token_forward_elapsed_nanoseconds: Vec::with_capacity(512),
                 previous_token_selected_expert_ids_by_layer: Vec::new(),
                 previous_token_expert_route_reuse_by_layer: Vec::new(),
                 route_observation_previous_route: None,
@@ -224,6 +226,16 @@ impl PerformanceAttribution {
         };
         enabled_attribution.counter_values[counter as usize] =
             enabled_attribution.counter_values[counter as usize].saturating_add(amount);
+    }
+
+    /// Records one single-token model-forward duration for the decode latency histogram.
+    pub fn record_decode_token_forward_elapsed(&mut self, elapsed: Duration) {
+        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
+            return;
+        };
+        enabled_attribution
+            .decode_token_forward_elapsed_nanoseconds
+            .push(u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX));
     }
 
     /// Returns the cumulative logical expert-streaming payload bytes recorded so

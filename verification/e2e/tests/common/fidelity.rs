@@ -1,4 +1,6 @@
-//! The shared fidelity switch for the root acceptance journeys.
+//! Explicit fidelity selection for the whole-product model journeys.
+
+use astronomical_test_harness::test_run::{TestRunConfiguration, TestRunContext};
 
 /// Which daemon and worker pair a journey drives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -13,14 +15,40 @@ pub enum ModelFidelity {
 }
 
 impl ModelFidelity {
-    /// Reads the journey switch: `ASTRONOMICAL_REAL_MODEL=1` selects the
-    /// real daemon and artifacts; anything else runs the scripted pair.
     #[must_use]
-    pub fn from_environment() -> Self {
-        if std::env::var("ASTRONOMICAL_REAL_MODEL").as_deref() == Ok("1") {
+    pub fn current() -> Self {
+        Self::from_configuration(&TestRunContext::current().configuration)
+    }
+
+    fn from_configuration(configuration: &TestRunConfiguration) -> Self {
+        if configuration.real_models {
             Self::Real
         } else {
             Self::Scripted
         }
+    }
+}
+
+#[cfg(test)]
+mod fidelity_tests {
+    use super::{ModelFidelity, TestRunConfiguration};
+
+    #[test]
+    fn should_default_to_scripted_models_without_a_real_model_request() {
+        assert_eq!(
+            ModelFidelity::from_configuration(&TestRunConfiguration::default()),
+            ModelFidelity::Scripted
+        );
+    }
+
+    #[test]
+    fn should_select_real_models_only_when_the_run_configuration_requests_them() {
+        assert_eq!(
+            ModelFidelity::from_configuration(&TestRunConfiguration {
+                real_models: true,
+                ..TestRunConfiguration::default()
+            }),
+            ModelFidelity::Real
+        );
     }
 }

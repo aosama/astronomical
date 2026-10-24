@@ -15,7 +15,7 @@ use crate::mlx_c_coverage::coverage_engine::{
 /// The platform audit that justified the current emptiness of the
 /// platform-absent category: every symbol declared in the pinned MLX-C 0.7.0
 /// headers — including the CUDA and distributed families — is defined in the
-/// Apple Silicon native image, so nothing qualifies as platform-absent.
+/// Apple Silicon native image, so no symbol is platform-absent.
 /// Backends that are unavailable at runtime still bridge and return MLX
 /// errors.
 const COVERAGE_EXCLUSIONS: Exclusions = &[(
@@ -210,7 +210,10 @@ fn should_keep_the_committed_coverage_inventory_current() {
     let rendered_inventory = render_inventory(&surface, &bridged);
 
     let artifact_path = inventory_artifact_path();
-    if let Some(output_path) = std::env::var_os("MLX_C_COVERAGE_INVENTORY_PATH") {
+    if let Some(output_path) = astronomical_test_harness::test_run::TestRunContext::current()
+        .configuration
+        .coverage_inventory_output
+    {
         std::fs::write(&output_path, &rendered_inventory)
             .expect("coverage inventory artifact writes");
         println!("coverage contract: refreshed inventory at {output_path:?}");
@@ -219,12 +222,12 @@ fn should_keep_the_committed_coverage_inventory_current() {
 
     let committed_inventory = std::fs::read_to_string(&artifact_path).unwrap_or_else(|error| {
         panic!(
-            "the committed coverage inventory is missing at {:?} ({}); run scripts/generate-mlx-c-coverage-inventory.sh",
+            "the committed coverage inventory is missing at {:?} ({}); run cargo xtask mlx-c-coverage-inventory",
             artifact_path, error
         )
     });
     assert_eq!(
         committed_inventory, rendered_inventory,
-        "the committed coverage inventory is stale; run scripts/generate-mlx-c-coverage-inventory.sh"
+        "the committed coverage inventory is stale; run cargo xtask mlx-c-coverage-inventory"
     );
 }

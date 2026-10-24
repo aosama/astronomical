@@ -1,13 +1,12 @@
 //! Mutable state for one serial Qwen3.5 generation journey.
 //!
-//! This owner is the transaction boundary for prompt retries, sampling state,
-//! and performance attribution. State that can be rewound is deliberately kept
-//! here rather than hidden in the model owner.
+//! This owner is the transaction boundary for sampling state and performance
+//! attribution. State that can be rewound is deliberately kept here rather
+//! than hidden in the model owner.
 
 use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
 };
-use astronomical_runtime_integration::MlxRuntimeError;
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{
@@ -16,20 +15,10 @@ use crate::{
 };
 
 use super::qwen3_5_runtime_error;
-use crate::qwen3_5_core::decoder::{
-    RequestDecoderStateStack, RequestDecoderStateStackAllocationCheckpoint,
-};
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::text::sampler;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use mlx_c_rust::MlxArray;
-
-/// Retained request state needed to retry one rejected prompt-processing attempt.
-pub(super) struct Qwen3_5PrefillRequestCheckpoint {
-    request_decoder_state_allocation_checkpoint: RequestDecoderStateStackAllocationCheckpoint,
-    prefill_cursor: usize,
-    next_position_tokens: u32,
-    consumed_visual_embedding_count: usize,
-}
 
 pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     pub(super) request_decoder_state: RequestDecoderStateStack,
@@ -46,8 +35,6 @@ pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     /// One-token-ahead successor submitted during the previous advancement.
     pub(super) pending_generated_token: Option<MlxArray>,
     pub(super) prefill_cursor: usize,
-    /// Largest chunk proven to fit after a capacity-driven retry in this request.
-    pub(super) maximum_successful_prefill_chunk_tokens: Option<usize>,
     pub(super) random_state: Option<MlxArray>,
     pub(super) request_id: RequestId,
     pub(super) sampling_strategy: Qwen3_5SamplingStrategy,
@@ -72,7 +59,6 @@ pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     pub(super) prompt_work_reuse: WorkerPromptWorkReuse,
     pub(super) persistent_prompt_cache_diagnostics:
         Option<WorkerPersistentPromptCacheRequestDiagnostics>,
-    pub(super) force_next_prefill_capacity_rejection_for_tests: bool,
     /// One-shot guard for no-I/O prefill-to-decode residency reconciliation.
     /// Mandatory decode reads populate any remaining elastic route ownership.
     pub(super) generation_residency_preparation_attempted: bool,
@@ -90,67 +76,6 @@ pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
 }
 
 impl Qwen3_5EngineRequest {
-    /// Retains mutable prompt state before an attempt that can hit MLX's hard ceiling.
-    pub(super) fn prefill_request_checkpoint(
-        &self,
-    ) -> Result<Qwen3_5PrefillRequestCheckpoint, MlxRuntimeError> {
-        Ok(Qwen3_5PrefillRequestCheckpoint {
-            request_decoder_state_allocation_checkpoint: self
-                .request_decoder_state
-                .allocation_checkpoint()?,
-            prefill_cursor: self.prefill_cursor,
-            next_position_tokens: self.next_position_tokens,
-            consumed_visual_embedding_count: self.consumed_visual_embedding_count,
-        })
-    }
-
-    /// Restores mutable prompt state after MLX rejected an allocation before a retry.
-    pub(super) fn restore_prefill_request_checkpoint(
-        &mut self,
-        prefill_request_checkpoint: Qwen3_5PrefillRequestCheckpoint,
-    ) -> Result<(), MlxRuntimeError> {
-        self.request_decoder_state.restore_allocation_checkpoint(
-            prefill_request_checkpoint.request_decoder_state_allocation_checkpoint,
-        )?;
-        self.prefill_cursor = prefill_request_checkpoint.prefill_cursor;
-        self.next_position_tokens = prefill_request_checkpoint.next_position_tokens;
-        self.consumed_visual_embedding_count =
-            prefill_request_checkpoint.consumed_visual_embedding_count;
-        Ok(())
-    }
-
-    #[must_use]
-    pub(super) fn clamped_prefill_chunk_token_count(
-        &self,
-        requested_prefill_chunk_token_count: usize,
-        remaining_prompt_token_count: usize,
-    ) -> usize {
-        // A folded paged stub is the rest of the prompt and may exceed the last
-        // proven size by less than one configured chunk. Capacity recovery still
-        // halves if that forward cannot fit.
-        if requested_prefill_chunk_token_count >= remaining_prompt_token_count {
-            return remaining_prompt_token_count;
-        }
-        self.maximum_successful_prefill_chunk_tokens.map_or(
-            requested_prefill_chunk_token_count,
-            |maximum_successful_prefill_chunk_tokens| {
-                requested_prefill_chunk_token_count.min(maximum_successful_prefill_chunk_tokens)
-            },
-        )
-    }
-
-    #[must_use]
-    pub(super) const fn maximum_successful_prefill_chunk_tokens(&self) -> Option<usize> {
-        self.maximum_successful_prefill_chunk_tokens
-    }
-
-    pub(super) fn record_successful_capacity_prefill_chunk(
-        &mut self,
-        successful_prefill_chunk_token_count: usize,
-    ) {
-        self.maximum_successful_prefill_chunk_tokens = Some(successful_prefill_chunk_token_count);
-    }
-
     /// Records one generated token in the penalty history, keeping it sorted and unique.
     ///
     /// Only requests with an active penalty call this, so the common path never

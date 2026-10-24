@@ -23,6 +23,11 @@ use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
+use super::decode_cache_policy::{
+    DecodeExpertSlotState, HISTORICAL_HOT_DEMAND_COUNT,
+    MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP,
+    MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER, available_probationary_slot_count,
+};
 use super::slot_writes::{
     RetainedReferenceOk, create_warm_table_weights, materialize_and_detach_table_weights,
     write_expert_into_slot,
@@ -46,14 +51,84 @@ impl WarmExpertSlotTableCache {
         protected_expert_ids: &[usize],
         warm_slot_count: usize,
     ) -> Result<usize, MlxRuntimeError> {
+        self.insert_streamed_experts_internal(
+            runtime,
+            layer_index,
+            expert_ids,
+            streamed_weights,
+            protected_expert_ids,
+            warm_slot_count,
+            None,
+        )
+    }
+
+    pub(super) fn insert_candidate_decode_experts(
+        &mut self,
+        runtime: &MlxRuntime,
+        layer_index: usize,
+        expert_ids: &[usize],
+        streamed_weights: &Qwen3_5PagedExpertWeights,
+        protected_expert_ids: &[usize],
+        warm_slot_count: usize,
+        decode_step_epoch: u64,
+    ) -> Result<usize, MlxRuntimeError> {
+        self.insert_streamed_experts_internal(
+            runtime,
+            layer_index,
+            expert_ids,
+            streamed_weights,
+            protected_expert_ids,
+            warm_slot_count,
+            Some(decode_step_epoch),
+        )
+    }
+
+    fn insert_streamed_experts_internal(
+        &mut self,
+        runtime: &MlxRuntime,
+        layer_index: usize,
+        expert_ids: &[usize],
+        streamed_weights: &Qwen3_5PagedExpertWeights,
+        protected_expert_ids: &[usize],
+        warm_slot_count: usize,
+        candidate_decode_step_epoch: Option<u64>,
+    ) -> Result<usize, MlxRuntimeError> {
         if expert_ids.is_empty() {
             return Ok(0);
         }
+        // Snapshot before the mutable table borrow below: victims must exclude
+        // prefetched-but-unconsumed experts (colibri's PILOT_EVICT_GUARD
+        // default) — evicting a page the next step is expected to consume
+        // converts a hit into a re-read. Persisted-usage hotness is snapshotted
+        // for the same reason: the incoming set's history decides probation.
+        let layer_prefetched_unconsumed_expert_ids: Vec<usize> = self
+            .prefetched_unconsumed_experts
+            .iter()
+            .filter(|(prefetched_layer_index, _)| *prefetched_layer_index == layer_index)
+            .map(|(_, prefetched_expert_id)| *prefetched_expert_id)
+            .collect();
+        let historically_hot_expert_ids: Vec<usize> = expert_ids
+            .iter()
+            .copied()
+            .filter(|expert_id| {
+                self.historical_demand_count(layer_index, *expert_id) >= HISTORICAL_HOT_DEMAND_COUNT
+            })
+            .collect();
         if self
             .tables_by_layer
             .get(layer_index)
             .is_none_or(|table| table.is_none())
         {
+            if let Some(decode_step_epoch) = candidate_decode_step_epoch {
+                return self.insert_first_candidate_decode_table(
+                    runtime,
+                    layer_index,
+                    expert_ids,
+                    streamed_weights,
+                    warm_slot_count,
+                    decode_step_epoch,
+                );
+            }
             let routed_expert_count = expert_ids.len();
             let per_expert_payload_bytes = streamed_weights
                 .resident_payload_byte_count()
@@ -92,6 +167,7 @@ impl WarmExpertSlotTableCache {
                 expert_id_by_slot,
                 slot_by_expert_id,
                 read_count_by_slot: vec![0; routed_expert_count],
+                decode_policy_by_slot: vec![DecodeExpertSlotState::default(); routed_expert_count],
                 occupied_slot_count: routed_expert_count,
                 per_expert_payload_bytes,
                 payload_bytes,
@@ -126,12 +202,17 @@ impl WarmExpertSlotTableCache {
         // first. Victims also exclude slots holding any incoming routed expert:
         // such an expert is contained now, and an eviction would demote it to a
         // late surprise miss that exhausts the plan.
-        let new_expert_rows: Vec<(usize, usize)> = expert_ids
+        let mut new_expert_rows: Vec<(usize, usize)> = expert_ids
             .iter()
             .copied()
             .enumerate()
             .filter(|(_, expert_id)| !table.slot_by_expert_id.contains_key(expert_id))
             .collect();
+        if let Some(decode_step_epoch) = candidate_decode_step_epoch {
+            let available_probationary_slot_count =
+                available_probationary_slot_count(&table.decode_policy_by_slot, decode_step_epoch);
+            new_expert_rows.truncate(available_probationary_slot_count);
+        }
         let new_expert_count = new_expert_rows.len();
         if new_expert_count == 0 {
             return Ok(0);
@@ -170,16 +251,38 @@ impl WarmExpertSlotTableCache {
                             && protected_expert_ids
                                 .binary_search(&retained_expert_id)
                                 .is_err()
+                            && !layer_prefetched_unconsumed_expert_ids.contains(&retained_expert_id)
+                            && candidate_decode_step_epoch.is_none_or(|decode_step_epoch| {
+                                table.decode_policy_by_slot[*slot].is_evictable(decode_step_epoch)
+                            })
                     })
                 })
                 .collect();
-            evictable_slots.sort_unstable_by_key(|slot| {
-                table
-                    .read_count_by_slot
-                    .get(*slot)
-                    .copied()
-                    .unwrap_or(u64::MAX)
-            });
+            if let Some(decode_step_epoch) = candidate_decode_step_epoch {
+                // Bound replacements per layer per decode step; beyond the cap
+                // the insert refuses and the streamed page stays
+                // operation-local. Unbounded swap-for-admission measured 492
+                // evictions in 200 tokens and a 4.4x decode source-byte blowup.
+                evictable_slots.truncate(MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP);
+                evictable_slots.sort_unstable_by(|left_slot, right_slot| {
+                    table.decode_policy_by_slot[*left_slot].compare_eviction_priority(
+                        *left_slot,
+                        table.decode_policy_by_slot[*right_slot],
+                        *right_slot,
+                        decode_step_epoch,
+                        table.per_expert_payload_bytes,
+                        table.per_expert_payload_bytes,
+                    )
+                });
+            } else {
+                evictable_slots.sort_unstable_by_key(|slot| {
+                    table
+                        .read_count_by_slot
+                        .get(*slot)
+                        .copied()
+                        .unwrap_or(u64::MAX)
+                });
+            }
         }
         if new_expert_count > free_slots.len() + evictable_slots.len() {
             return Ok(0);
@@ -196,6 +299,7 @@ impl WarmExpertSlotTableCache {
         }
         let mut planned_slot_iter = planned_slots.into_iter();
         let mut written_expert_count = 0_usize;
+        let mut slot_replacement_count = 0_u64;
         for (expert_row, expert_id) in new_expert_rows {
             let slot = planned_slot_iter
                 .next()
@@ -203,6 +307,7 @@ impl WarmExpertSlotTableCache {
             let evicted = table.expert_id_by_slot[slot].take();
             if let Some(evicted_id) = evicted {
                 table.slot_by_expert_id.remove(&evicted_id);
+                slot_replacement_count = slot_replacement_count.saturating_add(1);
                 // The victim's slot is refilled by this same iteration, so the
                 // occupied payload stays net-constant: decrementing here leaked
                 // one expert of payload per evict-refill cycle and drifted the
@@ -236,6 +341,15 @@ impl WarmExpertSlotTableCache {
             table.expert_id_by_slot[slot] = Some(expert_id);
             table.slot_by_expert_id.insert(expert_id, slot);
             table.read_count_by_slot[slot] = 0;
+            if let Some(decode_step_epoch) = candidate_decode_step_epoch {
+                if historically_hot_expert_ids.contains(&expert_id) {
+                    table.decode_policy_by_slot[slot].mark_historically_hot(decode_step_epoch);
+                } else {
+                    table.decode_policy_by_slot[slot].mark_probationary(decode_step_epoch);
+                }
+            } else {
+                table.decode_policy_by_slot[slot] = DecodeExpertSlotState::default();
+            }
             written_expert_count += 1;
         }
         if warm_slot_count > 0 {
@@ -243,12 +357,119 @@ impl WarmExpertSlotTableCache {
                 .warm_expert_insert_count
                 .saturating_add(u64::try_from(written_expert_count).unwrap_or(u64::MAX));
         }
+        self.slot_replacement_count = self
+            .slot_replacement_count
+            .saturating_add(slot_replacement_count);
+        if candidate_decode_step_epoch.is_some() {
+            self.decode_slot_eviction_count = self
+                .decode_slot_eviction_count
+                .saturating_add(slot_replacement_count);
+        }
         self.resident_payload_bytes = resident_payload_bytes;
         // The fills left the table arrays with lazy graphs that pin this
         // token's streamed page for the table's lifetime. Materialize the
         // writes and strip the provenance so the page frees with the forward.
         materialize_and_detach_table_weights(runtime, &table.weights)?;
         Ok(written_expert_count)
+    }
+
+    fn insert_first_candidate_decode_table(
+        &mut self,
+        runtime: &MlxRuntime,
+        layer_index: usize,
+        expert_ids: &[usize],
+        streamed_weights: &Qwen3_5PagedExpertWeights,
+        warm_slot_count: usize,
+        decode_step_epoch: u64,
+    ) -> Result<usize, MlxRuntimeError> {
+        let admitted_expert_count = expert_ids
+            .len()
+            .min(warm_slot_count)
+            .min(MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER);
+        if admitted_expert_count == 0 {
+            return Ok(0);
+        }
+        let per_expert_payload_bytes = streamed_weights
+            .resident_payload_byte_count()
+            .checked_div(u64::try_from(expert_ids.len()).unwrap_or(1))
+            .unwrap_or(0);
+        let estimated_table_payload_bytes = per_expert_payload_bytes
+            .saturating_mul(u64::try_from(admitted_expert_count).unwrap_or(u64::MAX));
+        if !self.can_admit(estimated_table_payload_bytes) {
+            return Ok(0);
+        }
+
+        let mut table_weights =
+            create_warm_table_weights(runtime, streamed_weights, admitted_expert_count)?;
+        for expert_row in 0..admitted_expert_count {
+            write_expert_into_slot(
+                runtime,
+                &mut table_weights,
+                streamed_weights,
+                expert_row,
+                expert_row,
+            )?;
+        }
+        materialize_and_detach_table_weights(runtime, &table_weights)?;
+        let full_padded_payload_bytes = table_weights.resident_payload_byte_count();
+        if !self.can_admit(full_padded_payload_bytes) {
+            return Ok(0);
+        }
+
+        let occupied_payload_bytes = per_expert_payload_bytes
+            .saturating_mul(u64::try_from(admitted_expert_count).unwrap_or(u64::MAX));
+        let expert_id_by_slot: Vec<Option<usize>> = expert_ids
+            .iter()
+            .take(admitted_expert_count)
+            .copied()
+            .map(Some)
+            .collect();
+        let slot_by_expert_id = expert_id_by_slot
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, expert_id)| expert_id.map(|expert_id| (expert_id, slot)))
+            .collect();
+        let mut decode_policy_by_slot =
+            vec![DecodeExpertSlotState::default(); admitted_expert_count];
+        for (decode_policy_slot, admitted_expert_id) in expert_ids
+            .iter()
+            .take(admitted_expert_count)
+            .copied()
+            .enumerate()
+        {
+            if self.historical_demand_count(layer_index, admitted_expert_id)
+                >= HISTORICAL_HOT_DEMAND_COUNT
+            {
+                decode_policy_by_slot[decode_policy_slot].mark_historically_hot(decode_step_epoch);
+            } else {
+                decode_policy_by_slot[decode_policy_slot].mark_probationary(decode_step_epoch);
+            }
+        }
+        let table = ExpertSlotTable {
+            weights: table_weights,
+            expert_id_by_slot,
+            slot_by_expert_id,
+            read_count_by_slot: vec![0; admitted_expert_count],
+            decode_policy_by_slot,
+            occupied_slot_count: admitted_expert_count,
+            per_expert_payload_bytes,
+            payload_bytes: occupied_payload_bytes,
+            full_padded_payload_bytes,
+        };
+        if let Some(table_slot) = self.tables_by_layer.get_mut(layer_index) {
+            *table_slot = Some(table);
+        } else {
+            return Ok(0);
+        }
+        self.resident_payload_bytes = self
+            .resident_payload_bytes
+            .saturating_add(full_padded_payload_bytes);
+        if warm_slot_count > 0 {
+            self.warm_expert_insert_count = self
+                .warm_expert_insert_count
+                .saturating_add(u64::try_from(admitted_expert_count).unwrap_or(u64::MAX));
+        }
+        Ok(admitted_expert_count)
     }
 }
 
@@ -332,6 +553,9 @@ fn grow_table_within_budget(
         .expert_id_by_slot
         .resize(growth_target_slot_count, None);
     table.read_count_by_slot.resize(growth_target_slot_count, 0);
+    table
+        .decode_policy_by_slot
+        .resize(growth_target_slot_count, DecodeExpertSlotState::default());
     table.full_padded_payload_bytes = grown_full_padded_payload_bytes;
     tracing::debug!(
         previous_slot_count,

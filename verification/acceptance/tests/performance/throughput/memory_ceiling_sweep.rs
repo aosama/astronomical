@@ -19,26 +19,27 @@
 //! attribution report instead of continuing into a long external runner.
 //!
 //! The cells run one process each (MLX limits are process-global): one cell is
-//! one `cargo test` invocation of this module's
+//! one `cargo xtask test-run --package astronomical-acceptance --test
+//! performance_throughput --features performance_throughput --release` invocation of this module's
 //! `should_serve_the_large_sparse_moe_streaming_under_a_..._ceiling_and_record_the_memory_cell`
 //! journey, naming the requested ceiling in the test filter, with
-//! `-- --ignored --nocapture --exact --test-threads=1`. Set
-//! MEMORY_SWEEP_CELL_ORDER to the cell's position in your sweep so the
-//! appended record carries it; when unset the record's sweep_cell_order
-//! defaults to 0. The recommended protocol brackets the sweep with a 32 GB
+//! `--filter <full_test_name> --exact --ignored`. Set `sweep_cell_order` in the
+//! JSON configuration passed with `--configuration PATH` to the cell's position
+//! in the sweep; without a selection it defaults to 0. The recommended protocol brackets the sweep with a 32 GB
 //! reference cell and interleaves ceilings so page-cache warmth cannot
 //! masquerade as a ceiling effect.
 
 use std::fs;
 use std::time::Duration;
 
-use astronomical_ipc_protocol::ChatImageInput;
+use astronomical_ipc_protocol::{ChatImageInput, WorkerDecodeExpertCachePolicy};
+use astronomical_test_harness::test_run::TestRunContext;
 use serial_test::serial;
 
 use crate::performance_throughput::historical_record::{
     MemoryCellBudgetExhaustedStage, MemoryCellRecord, ThroughputJourneyKind, ThroughputRecord,
-    append_throughput_history, current_unix_epoch_millis, format_utc_timestamp, history_log_path,
-    recorded_git_commit, throughput_record_json,
+    WorkerBuildIdentity, append_throughput_history, current_unix_epoch_millis,
+    format_utc_timestamp, history_log_path, recorded_worker_build_identity, throughput_record_json,
 };
 use crate::performance_throughput::machine_specs::MachineSpecs;
 use crate::performance_throughput::support::{
@@ -60,7 +61,7 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 /// worker shutdown, and durable partial-evidence persistence.
 const MEMORY_CELL_SERVING_BUDGET: Duration = Duration::from_secs(45);
 const MEMORY_CELL_TEST_TIMEOUT: Duration = Duration::from_secs(60);
-const SWEEP_CELL_ORDER_ENVIRONMENT_VARIABLE: &str = "MEMORY_SWEEP_CELL_ORDER";
+const BYTES_PER_GIGABYTE: u64 = 1 << 30;
 
 /// The serving budget must leave the time the evidence pass needs: it stops the
 /// worker, reaps it, reads its attribution log, and appends the durable record.
@@ -120,7 +121,8 @@ memory_ceiling_cell!(
 );
 
 async fn run_memory_ceiling_cell(ceiling_gb: u64) {
-    let configured_maximum_mlx_memory_bytes = ceiling_gb * 1_000_000_000;
+    let worker_build_identity = recorded_worker_build_identity();
+    let configured_maximum_mlx_memory_bytes = ceiling_gb * BYTES_PER_GIGABYTE;
     let run_outcome = throughput_support::measure_throughput(
         support::large_sparse_moe_streaming_model_id(),
         &cell_journey(configured_maximum_mlx_memory_bytes),
@@ -132,6 +134,7 @@ async fn run_memory_ceiling_cell(ceiling_gb: u64) {
         configured_maximum_mlx_memory_bytes,
         ceiling_gb,
         &history_path,
+        worker_build_identity,
     )
     .await;
 }
@@ -141,6 +144,7 @@ async fn append_memory_cell_record(
     configured_maximum_mlx_memory_bytes: u64,
     ceiling_gb: u64,
     history_path: &std::path::Path,
+    worker_build_identity: WorkerBuildIdentity,
 ) {
     let budget_exhausted = run_outcome.measured_budget_exhausted;
     let mut measurement = run_outcome.measurement.clone();
@@ -198,9 +202,11 @@ async fn append_memory_cell_record(
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: ThroughputJourneyKind::MemoryCeilingSweep,
+        decode_expert_cache_policy: measurement.decode_expert_cache_policy,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
-        git_commit: recorded_git_commit(),
+        git_commit: Some(worker_build_identity.source_commit.clone()),
+        worker_build_identity,
         machine: machine_specs,
         total_input_tokens: measurement.total_input_tokens,
         total_output_tokens: measurement.total_output_tokens,
@@ -223,7 +229,7 @@ async fn append_memory_cell_record(
             "the {ceiling_gb} GB memory-cell record must persist to the durable history: {error}"
         ),
     }
-    if !budget_exhausted && configured_maximum_mlx_memory_bytes >= 38_000_000_000 {
+    if !budget_exhausted && configured_maximum_mlx_memory_bytes >= 38 * BYTES_PER_GIGABYTE {
         assert_eq!(
             record
                 .memory_cell
@@ -289,6 +295,7 @@ fn apply_partial_progress_rates(
 fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
     ThroughputJourney {
         journey_kind: ThroughputJourneyKind::MemoryCeilingSweep,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
         warmup_input_prompt: throughput_support::romeo_and_juliet_warmup_prompt(
             WARMUP_INPUT_INSTRUCTION,
             WARMUP_ROMEO_AND_JULIET_SOURCE,
@@ -363,10 +370,7 @@ fn compose_memory_cell(
             operation_maximum_elapsed_nanoseconds as f64 / 1_000_000_000.0
         })
         .unwrap_or(0.0),
-        sweep_cell_order: std::env::var(SWEEP_CELL_ORDER_ENVIRONMENT_VARIABLE)
-            .ok()
-            .and_then(|cell_order| cell_order.parse().ok())
-            .unwrap_or(0),
+        sweep_cell_order: TestRunContext::current().configuration.sweep_cell_order,
         model_loading_process_disk_read_bytes: model_loading_attribution_report(
             &run_outcome.logging_directory,
         )

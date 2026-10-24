@@ -30,8 +30,6 @@
 
 - The fixture of Romeo and Juliet MUST be used as the source test input for LLMs; there should not be random text or tokens used for testing.
 
-- The prompt prefill chunk size in tests should be set and fixed to 2048 tokens; this is the mechanism to guarantee the consistency and reproducibility of test results.
-
 ## Performance Related
 
 ### Instructions for Performance Throughput Tests
@@ -50,7 +48,3 @@
 
 - `<repo-root>/xtask` exists so that repository tooling is typed, unit-tested Rust invoked as `cargo xtask <command>` instead of untested shell, with each subcommand keeping the output lines and exit codes of the shell tool it replaced so hooks and CI steps survive unchanged. Whenever you add or change such tooling, put it in xtask as a new or extended subcommand with its tests and document the invocation in the `xtask` alias comment of `.cargo/config.toml`;
 - This repo prefers <repo-root>/xtask convention versus shell scripts, shell scripts are highly discouraged and the repo is moving off of shell scripts and reducing their usage.
-
-## Verification Suites Live Under verification
-
-- `<repo-root>/verification/` is for repository-wide checks that no single package owns; it exists because Cargo reserves integration-test `tests/` directories for packages, the root manifest is a virtual workspace with no package, and the name aligns with `cargo verify` and the macOS offline verification lane. Put real-model acceptance journeys and graphics processing unit contracts in `verification/acceptance`, whole-product daemon journeys in `verification/e2e`, and shell contracts required before any Rust build in `verification/tooling_contracts`; keep package-owned unit tests and integration-test binaries in `crates/*/` or `apps/*/`, and put repository tooling expressible as typed Rust in `xtask`.

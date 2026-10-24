@@ -16,8 +16,21 @@ fn workspace_root_from_manifest_directory() -> std::path::PathBuf {
         .to_path_buf()
 }
 
+fn fixture_directory(fixture_name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from("target")
+        .join("native-identity-fixtures")
+        .join(format!(
+            "{fixture_name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("the system clock should be after the Unix epoch")
+                .as_nanos()
+        ))
+}
+
 #[test]
-fn profile_text_round_trips_for_both_supported_profiles() {
+fn should_round_trip_both_supported_profile_spellings() {
     assert_eq!(
         NativeBuildProfile::from_profile_text("core"),
         Ok(NativeBuildProfile::Core)
@@ -29,7 +42,7 @@ fn profile_text_round_trips_for_both_supported_profiles() {
 }
 
 #[test]
-fn profile_text_rejects_unknown_spellings() {
+fn should_reject_unknown_profile_spellings() {
     assert_eq!(
         NativeBuildProfile::from_profile_text("release"),
         Err(NativeIdentityError::UnsupportedProfile(
@@ -39,7 +52,7 @@ fn profile_text_rejects_unknown_spellings() {
 }
 
 #[test]
-fn source_identity_policy_covers_native_inputs_and_excludes_executors() {
+fn should_cover_native_inputs_and_exclude_executors_from_source_identity() {
     let covered: Vec<&str> = SOURCE_IDENTITY_PATHSPECS.to_vec();
     assert!(
         covered.contains(&"crates/native-identity/src"),
@@ -57,7 +70,7 @@ fn source_identity_policy_covers_native_inputs_and_excludes_executors() {
 }
 
 #[test]
-fn digest_bytes_matches_reference_sha256_vectors() {
+fn should_match_reference_sha256_vectors() {
     // sha256("") and sha256("abc") reference digests from FIPS 180-4 test
     // vectors; they pin the hex-encoding and hashing primitive together.
     assert_eq!(
@@ -71,7 +84,7 @@ fn digest_bytes_matches_reference_sha256_vectors() {
 }
 
 #[test]
-fn full_scope_requires_a_target_triple() {
+fn should_require_a_target_triple_for_full_scope() {
     let repository_root = workspace_root_from_manifest_directory();
     let failure = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
@@ -84,7 +97,7 @@ fn full_scope_requires_a_target_triple() {
 }
 
 #[test]
-fn full_scope_rejects_non_release_build_types() {
+fn should_reject_non_release_build_types_for_full_scope() {
     let repository_root = workspace_root_from_manifest_directory();
     let failure = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
@@ -104,7 +117,7 @@ fn full_scope_rejects_non_release_build_types() {
 }
 
 #[test]
-fn full_scope_with_total_overrides_stays_offline_deterministic() {
+fn should_keep_direct_toolchain_fixtures_offline_deterministic() {
     // Every toolchain probe is overridden, so no real tool is invoked and the
     // identity is a pure function of the inputs: identical requests must
     // agree, and a changed override must change the identity.
@@ -148,14 +161,12 @@ fn full_scope_with_total_overrides_stays_offline_deterministic() {
 }
 
 #[test]
-fn enumeration_fails_loudly_outside_a_git_worktree() {
-    let temporary_directory = std::env::temp_dir().join(format!(
-        "astronomical-native-identity-not-git-{}",
-        std::process::id()
-    ));
-    std::fs::create_dir_all(&temporary_directory).unwrap();
-    let failure = enumerate_tracked_source_paths(&temporary_directory);
-    std::fs::remove_dir_all(&temporary_directory).unwrap();
+fn should_reject_enumeration_outside_a_git_worktree() {
+    let fixture_root = fixture_directory("not-git");
+    std::fs::create_dir_all(&fixture_root).unwrap();
+    std::fs::write(fixture_root.join(".git"), "gitdir: missing-repository\n").unwrap();
+    let failure = enumerate_tracked_source_paths(&fixture_root);
+    std::fs::remove_dir_all(&fixture_root).unwrap();
     assert!(matches!(
         failure,
         Err(NativeIdentityError::GitEnumeration(_))
@@ -163,26 +174,13 @@ fn enumeration_fails_loudly_outside_a_git_worktree() {
 }
 
 #[test]
-fn enumeration_ignores_untracked_files_under_covered_paths() {
-    let fixture_root = std::env::temp_dir().join(format!(
-        "astronomical-native-identity-untracked-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| elapsed.as_nanos())
-            .unwrap_or(0)
-    ));
+fn should_ignore_untracked_files_under_covered_paths() {
+    let fixture_root = fixture_directory("untracked");
     std::fs::create_dir_all(fixture_root.join("crates/native-identity/src")).unwrap();
     let git = |arguments: &[&str]| {
         std::process::Command::new("git")
             .arg("-C")
             .arg(&fixture_root)
-            .args([
-                "-c",
-                "user.email=fixture@example.invalid",
-                "-c",
-                "user.name=fixture",
-            ])
             .args(arguments)
             .output()
             .unwrap()
@@ -190,17 +188,11 @@ fn enumeration_ignores_untracked_files_under_covered_paths() {
     assert!(git(&["init", "--quiet"]).status.success());
     std::fs::write(
         fixture_root.join("crates/native-identity/src/lib.rs"),
-        "committed identity source\n",
+        "tracked identity source\n",
     )
     .unwrap();
     assert!(git(&["add", "."]).status.success());
-    assert!(
-        git(&["commit", "--quiet", "-m", "fixture"])
-            .status
-            .success()
-    );
-
-    let committed_enumeration = enumerate_tracked_source_paths(&fixture_root).unwrap();
+    let tracked_enumeration = enumerate_tracked_source_paths(&fixture_root).unwrap();
     std::fs::write(
         fixture_root.join("crates/native-identity/src/scratch_file.rs"),
         "untracked scratch that must not churn the identity\n",
@@ -208,7 +200,7 @@ fn enumeration_ignores_untracked_files_under_covered_paths() {
     .unwrap();
     let enumeration_with_scratch = enumerate_tracked_source_paths(&fixture_root).unwrap();
     assert_eq!(
-        committed_enumeration, enumeration_with_scratch,
+        tracked_enumeration, enumeration_with_scratch,
         "an untracked scratch file under a covered path must not enter the identity"
     );
 
@@ -216,7 +208,7 @@ fn enumeration_ignores_untracked_files_under_covered_paths() {
 }
 
 #[test]
-fn single_pass_identity_matches_native_build_identity() {
+fn should_match_the_single_pass_identity_to_the_shared_identity_entry_point() {
     let repository_root = workspace_root_from_manifest_directory();
     let request = FingerprintRequest {
         repository_root: &repository_root,

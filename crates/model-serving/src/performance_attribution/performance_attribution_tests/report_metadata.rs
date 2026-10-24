@@ -60,6 +60,92 @@ fn should_serialize_prefill_evidence_in_generation_report() {
 }
 
 #[test]
+fn should_serialize_decode_token_forward_p95_and_histogram() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let mut performance_attribution = PerformanceAttribution::enabled();
+    for elapsed_nanoseconds in [100_000, 1_000_000, 1_500_000, 2_000_001] {
+        performance_attribution.record_decode_token_forward_elapsed(
+            std::time::Duration::from_nanos(elapsed_nanoseconds),
+        );
+    }
+    let performance_attribution_json = serialize_generation_report(
+        performance_attribution,
+        PerformanceAttributionOutcome::Success,
+    );
+
+    assert_eq!(
+        performance_attribution_json["decode_token_forward_latency_p95_nanoseconds"],
+        2_000_001
+    );
+    assert_eq!(
+        performance_attribution_json["decode_token_forward_latency_histogram"],
+        serde_json::json!([
+            {"upper_bound_nanoseconds": 1_000_000, "sample_count": 2},
+            {"upper_bound_nanoseconds": 2_000_000, "sample_count": 1},
+            {"upper_bound_nanoseconds": 3_000_000, "sample_count": 1}
+        ])
+    );
+}
+
+#[test]
+fn should_serialize_decode_expert_route_host_materialization_timing() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let mut performance_attribution = PerformanceAttribution::enabled();
+    for operation in [
+        PerformanceOperation::DecodeExpertRouteHostMaterialization,
+        PerformanceOperation::DecodeExpertRouteContiguousArrayConstruction,
+        PerformanceOperation::DecodeExpertRouteArrayEvaluation,
+        PerformanceOperation::DecodeExpertRouteHostCopy,
+    ] {
+        performance_attribution.measure_operation(operation, |_performance_attribution| ());
+    }
+    let performance_attribution_json = serialize_generation_report(
+        performance_attribution,
+        PerformanceAttributionOutcome::Success,
+    );
+    let operation_reports = performance_attribution_json["operations"]
+        .as_array()
+        .expect("operation evidence should be serialized");
+    for expected_operation_name in [
+        "decode_expert_route_host_materialization",
+        "decode_expert_route_contiguous_array_construction",
+        "decode_expert_route_array_evaluation",
+        "decode_expert_route_host_copy",
+    ] {
+        assert!(operation_reports.iter().any(|operation_report| {
+            operation_report["operation"] == expected_operation_name
+                && operation_report["occurrence_count"] == 1
+        }));
+    }
+}
+
+#[test]
+fn should_omit_decode_latency_when_no_token_forward_was_recorded() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let performance_attribution_json = serialize_generation_report(
+        PerformanceAttribution::enabled(),
+        PerformanceAttributionOutcome::Success,
+    );
+
+    assert!(
+        performance_attribution_json
+            .get("decode_token_forward_latency_p95_nanoseconds")
+            .is_none()
+    );
+    assert!(
+        performance_attribution_json
+            .get("decode_token_forward_latency_histogram")
+            .is_none()
+    );
+}
+
+#[test]
 fn should_serialize_process_io_as_an_all_or_unavailable_pair() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");

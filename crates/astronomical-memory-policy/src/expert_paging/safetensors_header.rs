@@ -241,8 +241,13 @@ pub fn parse_safetensors_header(
         let element_count = shape.iter().try_fold(1_usize, |product, &dimension| {
             product.checked_mul(dimension)
         });
+        // Both multiplies stay checked: a shape whose element count fits
+        // usize can still overflow once multiplied by the dtype byte width,
+        // and an unchecked multiply wraps to a small value that lets a
+        // corrupt header pass byte-count validation fail-open (or panics on
+        // an overflow-checked build) instead of failing closed.
         let expected_byte_count = element_count
-            .map(|count| count * dtype.byte_width())
+            .and_then(|element_count| element_count.checked_mul(dtype.byte_width()))
             .ok_or_else(|| SafetensorsHeaderError::ByteCountMismatch {
                 tensor_name: tensor_name.clone(),
                 declared_bytes: declared_byte_count,

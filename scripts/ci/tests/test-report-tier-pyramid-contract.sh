@@ -63,7 +63,7 @@ async fn one_end_to_end_case() {
 }
 EOF
     cat > "${fixture_root}/verification/e2e/tests/real_model_journey.rs" <<'EOF'
-// ASTRONOMICAL_REAL_MODEL=1 drives the byte-identical request flow against real artifacts.
+// ModelFidelity::current() selects the explicit request's model fidelity.
 #[tokio::test]
 async fn one_acceptance_case() {
     assert_eq!(1, 1);

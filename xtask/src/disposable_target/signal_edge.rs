@@ -40,15 +40,15 @@ extern "C" fn handle_terminate(signal_number: i32) {
     record_signal(signal_number);
 }
 
-pub(super) struct SignalPipe {
-    pub(super) read_fd: i32,
+pub(crate) struct SignalPipe {
+    pub(crate) read_fd: i32,
 }
 
 impl SignalPipe {
     /// Installs HUP/INT/TERM handlers that write one byte into a
     /// self-pipe; the supervisor polls that pipe instead of running any
     /// logic inside the handler itself.
-    pub(super) fn install() -> Option<SignalPipe> {
+    pub(crate) fn install() -> Option<SignalPipe> {
         let mut pipe_fds = [0 as libc::c_int; 2];
         if unsafe { libc::pipe(pipe_fds.as_mut_ptr()) } != 0 {
             return None;
@@ -91,9 +91,21 @@ impl SignalPipe {
             read_fd: pipe_fds[0],
         })
     }
+
+    pub(crate) fn received_signal(&self) -> Option<i32> {
+        let mut signal_byte = [0_u8; 1];
+        let bytes_read = unsafe {
+            libc::read(
+                self.read_fd,
+                signal_byte.as_mut_ptr().cast::<libc::c_void>(),
+                1,
+            )
+        };
+        (bytes_read == 1).then_some(i32::from(signal_byte[0]))
+    }
 }
 
-pub(super) fn signal_name(signal_number: i32) -> &'static str {
+pub(crate) fn signal_name(signal_number: i32) -> &'static str {
     match signal_number {
         libc::SIGHUP => "HUP",
         libc::SIGINT => "INT",
@@ -101,7 +113,7 @@ pub(super) fn signal_name(signal_number: i32) -> &'static str {
     }
 }
 
-pub(super) fn signal_exit_status(signal_number: i32) -> i32 {
+pub(crate) fn signal_exit_status(signal_number: i32) -> i32 {
     match signal_number {
         libc::SIGHUP => 129,
         libc::SIGINT => 130,
@@ -109,11 +121,11 @@ pub(super) fn signal_exit_status(signal_number: i32) -> i32 {
     }
 }
 
-pub(super) fn process_group_is_alive(process_group_id: i32) -> bool {
+pub(crate) fn process_group_is_alive(process_group_id: i32) -> bool {
     unsafe { libc::kill(-process_group_id, 0) == 0 }
 }
 
-pub(super) fn signal_process_group(process_group_id: i32, signal_number: i32) {
+pub(crate) fn signal_process_group(process_group_id: i32, signal_number: i32) {
     unsafe {
         libc::kill(-process_group_id, signal_number);
     }

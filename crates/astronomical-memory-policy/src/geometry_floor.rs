@@ -8,9 +8,9 @@ const GEOMETRY_FLOOR_BOOTSTRAP_CONTEXT_RESERVE_BYTES: u64 = 1_000_000_000;
 /// The floor is derived from validated artifact geometry once at load and is
 /// deliberately independent of the ceiling that produced the current load:
 /// model core plus the cold-start context reserve plus the streaming
-/// workspace (one complete expert layer) plus one exact routed expert page
-/// for decode. Retained expert payload never counts because the pager can
-/// reclaim it.
+/// workspace (one complete expert layer) plus one ceiling-rounded routed
+/// expert page for decode. Retained expert payload never counts because
+/// the pager can reclaim it.
 #[must_use]
 pub const fn geometry_safe_minimum_mlx_memory_ceiling_bytes(
     model_geometry: &MlxRamBudgetModelGeometry,

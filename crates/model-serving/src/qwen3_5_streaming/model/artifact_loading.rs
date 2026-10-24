@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 
+use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::kernel_capability;
@@ -52,10 +53,30 @@ impl Qwen3_5Model {
     /// without loading expert payloads.
     pub fn load_with_performance_attribution(
         runtime: MlxRuntime,
+        validated_artifact: ValidatedQwen3_5Artifact,
+        model_directory: &Path,
+        should_bind_vision_weights: bool,
+        chunking: super::Qwen3_5ModelChunkingConfiguration,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Self, Qwen3_5ExecutionError> {
+        Self::load_with_performance_attribution_and_decode_expert_cache_policy(
+            runtime,
+            validated_artifact,
+            model_directory,
+            should_bind_vision_weights,
+            chunking,
+            WorkerDecodeExpertCachePolicy::Baseline,
+            performance_attribution,
+        )
+    }
+
+    pub(crate) fn load_with_performance_attribution_and_decode_expert_cache_policy(
+        runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,
         model_directory: &Path,
         should_bind_vision_weights: bool,
         chunking: super::Qwen3_5ModelChunkingConfiguration,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let config = validated_artifact.config().clone();
@@ -188,10 +209,33 @@ impl Qwen3_5Model {
                         );
                         None
                     };
-                let retained_experts =
-                    RefCell::new(crate::qwen3_5_streaming::WarmExpertSlotTableCache::new(
+                let retained_experts = RefCell::new(
+                    crate::qwen3_5_streaming::WarmExpertSlotTableCache::new_with_decode_cache_policy(
                         expert_pager.layer_count(),
-                    ));
+                        decode_expert_cache_policy,
+                    ),
+                );
+                // Seed demand ranking from the persisted usage history beside
+                // the artifact (colibri's `.coli_usage` analog). A missing or
+                // stale file simply leaves the session cold.
+                let usage_file_path =
+                    crate::qwen3_5_streaming::expert_streaming::expert_usage_file_path(
+                        model_directory,
+                    );
+                match crate::qwen3_5_streaming::expert_streaming::read_expert_usage(
+                    &usage_file_path,
+                    expert_pager.layer_count(),
+                ) {
+                    Some(historical_demand_counts_by_layer) => {
+                        retained_experts
+                            .borrow_mut()
+                            .seed_expert_demand_history(historical_demand_counts_by_layer);
+                    }
+                    None => tracing::info!(
+                        usage_file_path = usage_file_path.display().to_string(),
+                        "no reusable expert usage history; warm tables start cold"
+                    ),
+                }
                 (
                     Some(expert_pager),
                     Some(retained_experts),
@@ -263,18 +307,7 @@ impl Qwen3_5Model {
             };
         // The fused decode prework kernel removes roughly thirteen
         // launch-bound dispatches per gated-delta layer at decode shapes.
-        // `ASTRONOMICAL_GDN_DECODE_PREWORK=0` forces the composed fallback so
-        // the same binary can A/B measure the fusion; every other value (and
-        // the unset default) leaves the capability verdict in charge.
-        let gdn_decode_prework_kernel = if std::env::var("ASTRONOMICAL_GDN_DECODE_PREWORK")
-            .map(|value| value == "0")
-            .unwrap_or(false)
-        {
-            tracing::info!(
-                "fused decode prework kernel disabled by environment for this worker process"
-            );
-            None
-        } else if kernel_capability::worker_process_kernel_capabilities(
+        let gdn_decode_prework_kernel = if kernel_capability::worker_process_kernel_capabilities(
             &runtime,
             performance_attribution,
         )
@@ -436,8 +469,8 @@ impl Qwen3_5Model {
 }
 
 /// Builds the fused jangtq2 decode-token projection kernel when the pager has
-/// codebook experts, the worker's capability verdict allows it, and the
-/// diagnostic kill switch is not set. A demoted kernel leaves `None`, and
+/// codebook experts and the worker's capability verdict allows it.
+/// A demoted kernel leaves `None`, and
 /// decode tokens then decode a transient bfloat16 page exactly like prefill.
 fn fused_jangtq2_gathered_projection_kernel_for_pager(
     runtime: &MlxRuntime,
@@ -455,12 +488,6 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
             })
     });
     if !has_codebook_experts {
-        return None;
-    }
-    if std::env::var("ASTRONOMICAL_JANGTQ2_FUSED_PROJECTION").is_ok_and(|value| value == "0") {
-        tracing::info!(
-            "fused jangtq2 gathered projection disabled by ASTRONOMICAL_JANGTQ2_FUSED_PROJECTION=0; decode tokens decode transient pages"
-        );
         return None;
     }
     if !kernel_capability::worker_process_kernel_capabilities(runtime, performance_attribution)

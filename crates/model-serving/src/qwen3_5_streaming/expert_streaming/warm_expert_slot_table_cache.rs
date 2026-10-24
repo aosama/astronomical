@@ -1,12 +1,13 @@
-//! Per-layer complete expert pages for SSD-streamed MoE.
+//! Per-layer expert slot tables for SSD-streamed MoE.
 //!
-//! Prefill streams every expert of a decoder index and seats that complete page
-//! when leftover RAM allows. A seated complete layer is a cache hit for every
-//! later route. Layers that do not fit stay operation-local so sequential
-//! decoder order does not thrash pinned complete layers.
+//! A funded multi-token prefill route union can seed a table, and a later read
+//! can fill its remaining rows into a complete layer. Decode grows warm tables
+//! from routed experts. Cache-budget refusals leave streamed pages
+//! operation-local rather than displacing sibling layers.
 
 use std::collections::{HashMap, HashSet};
 
+use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::expert_paging::{
@@ -16,6 +17,7 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpert
 
 use slot_writes::RetainedReferenceOk;
 
+mod decode_cache_policy;
 mod demand;
 mod flush;
 mod insert;
@@ -27,7 +29,13 @@ mod slot_writes;
 mod memory_behavior_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
+mod prefill_seed_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
 mod warm_expert_slot_table_cache_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod table_query_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod slot_writes_tests;
@@ -46,6 +54,7 @@ struct ExpertSlotTable {
     expert_id_by_slot: Vec<Option<usize>>,
     slot_by_expert_id: HashMap<usize, usize>,
     read_count_by_slot: Vec<u64>,
+    decode_policy_by_slot: Vec<decode_cache_policy::DecodeExpertSlotState>,
     occupied_slot_count: usize,
     /// Per-expert payload bytes. Used when decode inserts or evicts a slot.
     per_expert_payload_bytes: u64,
@@ -71,6 +80,7 @@ struct PendingSlotInsert {
     /// Slot capacity for the table created by this insert, decided by the
     /// memory package's warm-capacity policy at queue time.
     warm_slot_count: usize,
+    is_decode_demand: bool,
     /// Issue #537: leftover-only insert. Never evicts an occupied slot.
     no_evict: bool,
 }
@@ -81,10 +91,19 @@ pub struct WarmExpertSlotTableCache {
     tables_by_layer: Vec<Option<ExpertSlotTable>>,
     pending_inserts: Vec<PendingSlotInsert>,
     expert_demand_counts_by_layer: Vec<Vec<u64>>,
+    /// Persisted demand counts seeded at construction (colibri's `.coli_usage`
+    /// analog): historically hot experts skip probation on first admission and
+    /// the demand ranking starts warm instead of at the first-touch floor.
+    historical_demand_counts_by_layer: Vec<Vec<u64>>,
     demand_assignment_weight: u64,
     resident_payload_bytes: u64,
     normal_maximum_resident_payload_bytes: u64,
     request_pressure_maximum_resident_payload_bytes: Option<u64>,
+    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    decode_forward_active: bool,
+    decode_step_epoch: u64,
+    slot_replacement_count: u64,
+    decode_slot_eviction_count: u64,
     eviction_count: u64,
     disk_page_load_count: u64,
     disk_batch_load_count: u64,
@@ -98,16 +117,30 @@ pub struct WarmExpertSlotTableCache {
 }
 
 impl WarmExpertSlotTableCache {
+    #[cfg(test)]
     #[must_use]
     pub fn new(layer_count: usize) -> Self {
+        Self::new_with_decode_cache_policy(layer_count, WorkerDecodeExpertCachePolicy::Baseline)
+    }
+
+    pub(crate) fn new_with_decode_cache_policy(
+        layer_count: usize,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    ) -> Self {
         Self {
             tables_by_layer: (0..layer_count).map(|_| None).collect(),
             pending_inserts: Vec::new(),
             expert_demand_counts_by_layer: (0..layer_count).map(|_| Vec::new()).collect(),
+            historical_demand_counts_by_layer: Vec::new(),
             demand_assignment_weight: 1,
             resident_payload_bytes: 0,
             normal_maximum_resident_payload_bytes: 0,
             request_pressure_maximum_resident_payload_bytes: None,
+            decode_expert_cache_policy,
+            decode_forward_active: false,
+            decode_step_epoch: 0,
+            slot_replacement_count: 0,
+            decode_slot_eviction_count: 0,
             eviction_count: 0,
             disk_page_load_count: 0,
             disk_batch_load_count: 0,
@@ -117,6 +150,122 @@ impl WarmExpertSlotTableCache {
             prefetch_capacity_drop_count: 0,
             prefetch_payload_bytes: 0,
         }
+    }
+
+    pub(crate) fn begin_decode_forward(&mut self) {
+        self.decode_forward_active = true;
+        if self.decode_expert_cache_policy == WorkerDecodeExpertCachePolicy::Candidate {
+            self.decode_step_epoch = self.decode_step_epoch.saturating_add(1);
+            for table in self.tables_by_layer.iter_mut().flatten() {
+                for decode_policy_state in &mut table.decode_policy_by_slot {
+                    decode_policy_state.expire_probationary_admission(self.decode_step_epoch);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn end_decode_forward(&mut self) {
+        self.decode_forward_active = false;
+    }
+
+    /// Seeds demand ranking and candidate admission from a persisted usage
+    /// history. Historically hot experts skip probation at first admission;
+    /// the seeded demand counts also rank residency ahead of first-touch noise
+    /// for the least-frequently-used order.
+    pub(crate) fn seed_expert_demand_history(
+        &mut self,
+        historical_demand_counts_by_layer: Vec<Vec<u64>>,
+    ) {
+        if historical_demand_counts_by_layer.len() != self.tables_by_layer.len() {
+            tracing::warn!(
+                seeded_layer_count = historical_demand_counts_by_layer.len(),
+                expected_layer_count = self.tables_by_layer.len(),
+                "expert usage history shape mismatch; starting cold"
+            );
+            return;
+        }
+        let seeded_expert_count: u64 = historical_demand_counts_by_layer
+            .iter()
+            .flat_map(|layer_counts| layer_counts.iter())
+            .filter(|demand_count| **demand_count > 0)
+            .count()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        for (layer_index, historical_layer_counts) in
+            historical_demand_counts_by_layer.iter().enumerate()
+        {
+            let live_layer_counts = &mut self.expert_demand_counts_by_layer[layer_index];
+            if live_layer_counts.len() < historical_layer_counts.len() {
+                live_layer_counts.resize(historical_layer_counts.len(), 0);
+            }
+            for (expert_id, historical_demand_count) in historical_layer_counts.iter().enumerate() {
+                live_layer_counts[expert_id] =
+                    live_layer_counts[expert_id].saturating_add(*historical_demand_count);
+            }
+        }
+        self.historical_demand_counts_by_layer = historical_demand_counts_by_layer;
+        tracing::info!(
+            seeded_expert_count,
+            "seeded expert warm tables from persisted usage history"
+        );
+    }
+
+    /// Persisted demand count for one expert, zero when no history was seeded.
+    pub(crate) fn historical_demand_count(&self, layer_index: usize, expert_id: usize) -> u64 {
+        self.historical_demand_counts_by_layer
+            .get(layer_index)
+            .and_then(|layer_counts| layer_counts.get(expert_id))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Live per-layer expert demand counts for usage-history persistence.
+    pub(crate) fn expert_demand_counts(&self) -> &[Vec<u64>] {
+        &self.expert_demand_counts_by_layer
+    }
+
+    pub(crate) fn take_decode_slot_eviction_count(&mut self) -> u64 {
+        std::mem::take(&mut self.decode_slot_eviction_count)
+    }
+
+    /// Route experts absent from this layer's table, or `None` when the layer
+    /// has no table. Sorted and deduplicated for one positional-range read.
+    #[must_use]
+    pub fn missing_route_expert_ids(
+        &self,
+        layer_index: usize,
+        routed_expert_ids: &[usize],
+    ) -> Option<Vec<usize>> {
+        let table = self.tables_by_layer.get(layer_index)?.as_ref()?;
+        let mut missing_route_expert_ids = routed_expert_ids.to_vec();
+        missing_route_expert_ids.sort_unstable();
+        missing_route_expert_ids.dedup();
+        missing_route_expert_ids
+            .retain(|expert_id| !table.slot_by_expert_id.contains_key(expert_id));
+        Some(missing_route_expert_ids)
+    }
+
+    /// Every expert of the layer absent from its table, or `None` when the
+    /// layer has no table: the one read set that completes a partial table.
+    pub fn non_resident_expert_ids(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+    ) -> Option<Vec<usize>> {
+        let table = self.tables_by_layer.get(layer_index)?.as_ref()?;
+        Some(
+            (0..expert_capacity)
+                .filter(|expert_id| !table.slot_by_expert_id.contains_key(expert_id))
+                .collect(),
+        )
+    }
+
+    /// Occupied slots of this layer's table, zero when the layer has no table.
+    pub fn occupied_slot_count(&self, layer_index: usize) -> usize {
+        self.tables_by_layer
+            .get(layer_index)
+            .and_then(|table| table.as_ref())
+            .map_or(0, |table| table.occupied_slot_count)
     }
 
     /// Returns the warm table's preallocated weights and a slot-indexed
@@ -220,6 +369,7 @@ impl WarmExpertSlotTableCache {
             expert_ids: expert_ids.to_vec(),
             weights: streamed_weights.retained_reference_ok(),
             warm_slot_count,
+            is_decode_demand: self.decode_forward_active,
             no_evict: false,
         });
         Ok(())
@@ -241,25 +391,20 @@ impl WarmExpertSlotTableCache {
             expert_ids: expert_ids.to_vec(),
             weights: streamed_weights.retained_reference_ok(),
             warm_slot_count,
+            is_decode_demand: false,
             no_evict: true,
         });
         Ok(())
     }
 
-    /// Drops every queued slot insert without writing it, returning how many
-    /// were dropped. A forward that failed on the memory ceiling leaves its
-    /// queued pages behind; they pin streamed arrays the recovery is about to
-    /// measure against, so the recovery discards them before it samples.
-    pub fn discard_pending_inserts(&mut self) -> usize {
-        let discarded_count = self.pending_inserts.len();
-        self.pending_inserts.clear();
-        discarded_count
-    }
-
     /// Counts one served read for each routed expert present in the layer's
     /// table, feeding the least-frequently-used eviction order so a stable hot
     /// set outlives one-off routing noise.
+    /// Records routed reads for the least-frequently-used eviction order.
     pub fn record_routed_reads(&mut self, layer_index: usize, expert_ids: &[usize]) {
+        let record_candidate_decode_reuse = self.decode_forward_active
+            && self.decode_expert_cache_policy == WorkerDecodeExpertCachePolicy::Candidate;
+        let decode_step_epoch = self.decode_step_epoch;
         let Some(Some(table)) = self.tables_by_layer.get_mut(layer_index) else {
             return;
         };
@@ -268,6 +413,11 @@ impl WarmExpertSlotTableCache {
                 && let Some(read_count) = table.read_count_by_slot.get_mut(*slot)
             {
                 *read_count = read_count.saturating_add(1);
+                if record_candidate_decode_reuse
+                    && let Some(decode_policy_state) = table.decode_policy_by_slot.get_mut(*slot)
+                {
+                    decode_policy_state.record_decode_reuse(decode_step_epoch);
+                }
             }
         }
     }

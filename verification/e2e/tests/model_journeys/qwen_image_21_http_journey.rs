@@ -1,6 +1,6 @@
 //! Whole-product acceptance journey: one Qwen-Image-2.1 image over real HTTP.
 //!
-//! Driven in two fidelities selected by `ASTRONOMICAL_REAL_MODEL=1`: the real
+//! Driven in two fidelities selected by the explicit test-run configuration: the real
 //! `astronomicald` daemon (which discovers and spawns the real inference
 //! worker from its own directory), configured to discover the installed
 //! Qwen-Image-2.1 artifact — or, by default, the fixture
@@ -30,6 +30,7 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
+use serial_test::serial;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
@@ -54,9 +55,10 @@ const MINIMUM_NEIGHBOR_CORRELATION: f64 = 0.5;
 const ENDPOINT_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[tokio::test]
+#[serial]
 async fn should_serve_one_qwen_image_over_http_end_to_end() {
     timeout(JOURNEY_TIMEOUT, async {
-        let fidelity = ModelFidelity::from_environment();
+        let fidelity = ModelFidelity::current();
         let state_directory = tempfile::tempdir().expect("state directory should be created");
         let isolated_home = tempfile::tempdir().expect("isolated home should be created");
         write_instance_config(

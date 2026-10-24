@@ -136,7 +136,13 @@ impl Qwen3_5EngineState {
             })?;
 
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
-            0,
+            // The real chunk token count, not zero: admission derives its
+            // routed-expert reservation and its exact-context transient key
+            // from this value, and a zero made every chunk reserve a single
+            // decode-token page while the forward actually held the streamed
+            // union page of every non-resident sparse layer (the
+            // back-to-back-request ceiling breach of 2026-10-24).
+            prefill_token_count,
             Qwen3_5PrefillExecutionContext::new(
                 active_request.visual_embeddings.is_some(),
                 AdaptiveRamGrowthExecutionProfile::Paged,

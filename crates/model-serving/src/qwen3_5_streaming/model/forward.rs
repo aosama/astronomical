@@ -148,7 +148,23 @@ impl Qwen3_5Model {
         }
 
         let selected_expert_ids = if should_use_loaded_model_mode {
-            Some(self.copy_selected_expert_ids(&selected_indices)?)
+            let selected_expert_ids = if token_count == 1 {
+                // Streamed decode must know the exact route before loading its
+                // weights. Materializing that route can evaluate pending MLX
+                // work, so track this per-layer synchronization separately.
+                performance_attribution.measure_operation(
+                    PerformanceOperation::DecodeExpertRouteHostMaterialization,
+                    |performance_attribution| {
+                        self.copy_selected_expert_ids(
+                            &selected_indices,
+                            Some(performance_attribution),
+                        )
+                    },
+                )?
+            } else {
+                self.copy_selected_expert_ids(&selected_indices, None)?
+            };
+            Some(selected_expert_ids)
         } else {
             None
         };
@@ -245,10 +261,12 @@ impl Qwen3_5Model {
                         )?
                     } else {
                         // Issue #373: classify warm-table coverage before
-                        // dispatch so the all-or-nothing cost is measurable. A
-                        // partially covered token still reads every routed
-                        // expert from storage today, including the ones already
-                        // in RAM.
+                        // dispatch. A fully warm route serves from retained
+                        // RAM; a mixed route splits between the retained
+                        // rows and a storage read of only the missing
+                        // experts; a fully cold route streams the whole
+                        // routed set. Classifying first keeps each of those
+                        // costs measurable and picks the dispatch.
                         let route_coverage = self.record_decode_route_coverage(
                             layer_index,
                             routed_expert_ids,

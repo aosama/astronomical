@@ -9,11 +9,11 @@
 //! Collects results into `PromptPrefillChunkOutcome` for the caller in
 //! `prefill_advance.rs`.
 
+use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_forward_dispatch::PrefillForwardError;
 use super::prompt_prefill_errors;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 use crate::{
     AdaptiveRamGrowthExecutionProfile, PerformanceCounter,
@@ -54,10 +54,6 @@ impl Qwen3_5EngineState {
             plan.direct_publication_workspace_bytes,
         )?;
 
-        let prefill_request_checkpoint = active_request
-            .prefill_request_checkpoint()
-            .map_err(qwen3_5_runtime_error)?;
-
         // Phase 3: dispatch the target model's prompt forward.
         let forward_started_at = std::time::Instant::now();
         let dispatch_outcome = match self.dispatch_prefill_forward(
@@ -70,7 +66,6 @@ impl Qwen3_5EngineState {
             Err(PrefillForwardError::Execution(execution_error)) => {
                 return Err(prompt_prefill_errors::prefill_execution_error(
                     execution_error,
-                    prefill_request_checkpoint,
                 ));
             }
         };
@@ -96,16 +91,6 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-
-        // Test-only: force a capacity rejection after the forward succeeds.
-        if std::mem::take(&mut active_request.force_next_prefill_capacity_rejection_for_tests) {
-            return Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-                active_memory_bytes: 1,
-                attempted_allocation_bytes: 1,
-                allowed_active_memory_bytes: 1,
-                prefill_request_checkpoint,
-            });
-        }
 
         Ok(PromptPrefillChunkOutcome {
             active_memory_bytes_before_growth: admission_outcome.active_memory_bytes_before_growth,
