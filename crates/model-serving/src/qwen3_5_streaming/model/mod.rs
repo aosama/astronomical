@@ -10,6 +10,10 @@ mod expert_retention_memory_pressure;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_reuse;
 #[cfg(feature = "direct-mlx")]
+mod expert_storage_streaming;
+#[cfg(feature = "direct-mlx")]
+mod request_expert_storage_read_tally;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::model_math::{
     feed_forward_weights, output_combination, routing,
 };

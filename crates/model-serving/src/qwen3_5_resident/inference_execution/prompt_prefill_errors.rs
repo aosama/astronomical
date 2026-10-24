@@ -1,14 +1,14 @@
+use crate::ResidentForwardAdmissionRejection;
 use crate::{InferenceEngineError, Qwen3_5ExecutionError};
 
 use super::memory_admission::AdaptiveRamGrowthMemoryAdmissionError;
 
 pub(super) enum PromptPrefillChunkAttemptError {
-    AdaptiveMemoryLimitExceeded {
-        reason: String,
-    },
-    /// Only the chunk's projected transient peak missed the ceiling; a smaller
-    /// chunk of the same prompt may still run resident.
-    AdaptiveTransientPeakExceeded {
+    /// The adaptive RAM growth guard rejected this chunk. The typed rejection
+    /// says whether a smaller chunk of the same prompt may still run resident
+    /// or which shortfall requires the streaming engine.
+    AdaptiveForwardAdmissionRejected {
+        rejection: ResidentForwardAdmissionRejection,
         reason: String,
     },
     ActiveMemoryLimitExceeded {
@@ -31,11 +31,8 @@ impl From<InferenceEngineError> for PromptPrefillChunkAttemptError {
 impl From<AdaptiveRamGrowthMemoryAdmissionError> for PromptPrefillChunkAttemptError {
     fn from(admission_error: AdaptiveRamGrowthMemoryAdmissionError) -> Self {
         match admission_error {
-            AdaptiveRamGrowthMemoryAdmissionError::InsufficientCapacity { reason } => {
-                Self::AdaptiveMemoryLimitExceeded { reason }
-            }
-            AdaptiveRamGrowthMemoryAdmissionError::TransientPeakExceeded { reason } => {
-                Self::AdaptiveTransientPeakExceeded { reason }
+            AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission { rejection, reason } => {
+                Self::AdaptiveForwardAdmissionRejected { rejection, reason }
             }
             AdaptiveRamGrowthMemoryAdmissionError::Engine(inference_engine_error) => {
                 Self::Engine(inference_engine_error)

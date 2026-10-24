@@ -42,6 +42,13 @@ pub struct Qwen3_5StreamingModel {
     /// growth guard's headroom so warming only claims memory the guard can
     /// spare (issue #372).
     pub(crate) hot_expert_warm_slot_count: Cell<usize>,
+    /// Expert payload bytes streamed from storage for the active request,
+    /// written only by `stream_expert_page_from_storage` and read by
+    /// `observed_expert_memory_mode` to report the residency actually
+    /// experienced (issue #1533): a Paged/Hybrid ownership claim that never
+    /// streams reads is observed as Resident.
+    pub(super) request_expert_storage_read_tally:
+        super::request_expert_storage_read_tally::RequestExpertStorageReadTally,
     /// Decode route capture for the expert-predictor program: lazy pending
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation: RefCell<RouteObservationCollector>,

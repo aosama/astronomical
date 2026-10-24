@@ -8,7 +8,7 @@ use crate::budget::adaptive_growth::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
     AdaptiveRamGrowthGuardError,
 };
-use crate::budget::adaptive_growth_projection::AdaptiveRamGrowthTransientReserveSource;
+use crate::budget::adaptive_growth_projection::TransientWorkspaceReserveSource;
 
 const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
@@ -156,7 +156,7 @@ fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
     assert_eq!(projection.observed_transient_high_water_bytes(), 2_000);
     assert_eq!(
         projection.transient_reserve_source(),
-        AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
+        TransientWorkspaceReserveSource::PhaseScaled,
     );
 }
 
@@ -203,7 +203,7 @@ fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
     assert_eq!(projection.observed_transient_high_water_bytes(), 1_500);
     assert_eq!(
         projection.transient_reserve_source(),
-        AdaptiveRamGrowthTransientReserveSource::ExactContext,
+        TransientWorkspaceReserveSource::ExactContext,
     );
 }
 
@@ -264,7 +264,7 @@ fn should_bound_an_unobserved_shape_by_scaled_down_larger_and_unscaled_smaller_o
     assert_eq!(projection.observed_transient_high_water_bytes(), 3_000);
     assert_eq!(
         projection.transient_reserve_source(),
-        AdaptiveRamGrowthTransientReserveSource::PhaseScaled,
+        TransientWorkspaceReserveSource::PhaseScaled,
     );
 }
 
@@ -306,6 +306,6 @@ fn should_keep_the_global_maximum_for_a_phase_without_any_evidence() {
     assert_eq!(projection.observed_transient_high_water_bytes(), 500);
     assert_eq!(
         projection.transient_reserve_source(),
-        AdaptiveRamGrowthTransientReserveSource::GlobalMaximum,
+        TransientWorkspaceReserveSource::GlobalMaximum,
     );
 }

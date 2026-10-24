@@ -44,10 +44,18 @@ where
                 )
                 .await;
         }
-        let effective_requested_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes(
-            Some(requested_mlx_memory_ceiling_bytes),
-            self.machine_mlx_memory_ceiling_bytes,
-        );
+        // The wired-residency budget is claimed once for the worker lifetime,
+        // so a live raise may never plan past it: admission above the wired
+        // budget is the issue #1297 gap where Metal evicts GPU-resident
+        // weights and the worker dies with an out-of-memory command buffer.
+        let effective_requested_mlx_memory_ceiling_bytes =
+            crate::effective_mlx_memory_ceiling_after_wired_claim(
+                effective_mlx_memory_ceiling_bytes(
+                    Some(requested_mlx_memory_ceiling_bytes),
+                    self.machine_mlx_memory_ceiling_bytes,
+                ),
+                self.wired_residency_budget_bytes,
+            );
         let Some(loaded_runtime) = self.loaded_runtime.as_mut() else {
             let Some(model_factory) = self.model_factory.as_mut() else {
                 return self

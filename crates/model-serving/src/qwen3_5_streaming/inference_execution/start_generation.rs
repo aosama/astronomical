@@ -59,6 +59,10 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         model.clear_phase_aware_expert_residency_plan();
+        // A fresh request observes a fresh SSD-read tally so the label
+        // emitted across this request's lifecycle reflects only this
+        // request's expert storage reads (issue #1533).
+        model.begin_request_expert_storage_read_observation();
         let decoder_cache_layout = model.decoder_cache_layout().clone();
         self.admit_initial_generation_context_or_record_rejection(
             request_id,
@@ -353,6 +357,10 @@ impl Qwen3_5EngineState {
                 u32::try_from(prefill_cursor).map_err(|_| {
                     super::fatal_engine_error("restored prompt prefix exceeds the u32 range")
                 })?;
+            // No forward has run yet, so the freshly reset read tally carries
+            // no evidence; reporting it would claim "resident" for every
+            // streaming request during prefill. The start label is the
+            // ownership claim, and token emission refines it with evidence.
             Ok(EngineGenerationStart::with_expert_memory_mode(
                 restored_prompt_prefix_token_count,
                 self.model

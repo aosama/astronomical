@@ -139,7 +139,10 @@ impl Qwen3_5EngineState {
             Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
                 return Err(generation_error);
             }
-            Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
+            Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
+                decision: crate::PagedForwardAdmissionDecision::Reject { .. },
+                reason,
+            }) => {
                 tracing::warn!(
                     request_id = request_id.value(),
                     prefill_start,
@@ -149,6 +152,14 @@ impl Qwen3_5EngineState {
                 );
                 return Err(memory_admission::invalid_request_error(format!(
                     "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
+                )));
+            }
+            Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
+                decision,
+                reason,
+            }) => {
+                return Err(memory_admission::invalid_request_error(format!(
+                    "unexpected paged forward admission decision {decision:?}: {reason}"
                 )));
             }
             Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
@@ -369,7 +380,7 @@ impl Qwen3_5EngineState {
             })?,
             mlx_memory_telemetry,
             expert_residency_telemetry: expert_residency,
-            expert_memory_mode: Some(model.expert_memory_mode()),
+            expert_memory_mode: Some(model.observed_expert_memory_mode()),
             prompt_work_reuse: active_request.prompt_work_reuse,
             persistent_prompt_cache_diagnostics: active_request
                 .persistent_prompt_cache_diagnostics

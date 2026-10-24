@@ -111,7 +111,7 @@ impl Qwen3_5EngineState {
         let generated_token = GeneratedToken::TokenId {
             token_id: generated_token_id,
             is_reasoning_token,
-            expert_memory_mode: Some(model.expert_memory_mode()),
+            expert_memory_mode: Some(model.observed_expert_memory_mode()),
             mlx_memory_telemetry,
             first_decode_forward_elapsed_millis: active_request
                 .first_decode_forward_elapsed_millis

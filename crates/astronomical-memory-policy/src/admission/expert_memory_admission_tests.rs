@@ -1,12 +1,34 @@
+use crate::budget::{
+    AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
+};
+use crate::forward_admission::PagedForwardAdmissionDecision;
 use crate::reclamation::{
-    ExpertMemoryAdmissionError, ExpertReclamationPlan, PagedExpertReclamationStep,
+    ExpertMemoryAdmissionError, ExpertReclamationPlan,
     complete_residency_exceeds_ceiling_with_activation_headroom,
     expert_reclamation_bytes_to_fit_fixed_forward,
-    fixed_forward_workspace_after_allocation_failure, next_paged_expert_reclamation_step,
+    fixed_forward_workspace_after_allocation_failure,
     projected_active_memory_after_complete_expert_replacement,
     required_complete_residency_activation_headroom_bytes,
     should_retry_fixed_forward_after_expert_reclamation,
 };
+
+fn paged_forward_projection(
+    stable_projected_bytes: usize,
+    peak_projected_bytes: usize,
+    active_memory_ceiling_bytes: usize,
+) -> crate::budget::AdaptiveRamGrowthProjection {
+    AdaptiveRamGrowthGuard::new(active_memory_ceiling_bytes)
+        .expect("valid ceiling")
+        .project_growth_for_context(
+            AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Paged),
+            stable_projected_bytes,
+            0,
+            0,
+            0,
+            peak_projected_bytes.saturating_sub(stable_projected_bytes),
+        )
+        .expect("the projection should fit the platform range")
+}
 
 #[test]
 fn should_project_complete_residency_as_replacement() {
@@ -133,10 +155,10 @@ fn should_keep_reclaiming_paged_experts_while_peak_still_misses_and_payload_rema
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
-    let remaining_deficit = ExpertReclamationPlan::for_projected_memory(90, 130, 130, 100, 120, 50);
+    let forward_projection = paged_forward_projection(90, 111, 100);
     assert_eq!(
-        next_paged_expert_reclamation_step(false, remaining_deficit, Some(true)),
-        PagedExpertReclamationStep::Reclaim { target_bytes: 10 },
+        PagedForwardAdmissionDecision::for_paged_forward(&forward_projection, 50, Some(true)),
+        PagedForwardAdmissionDecision::ReclaimRetainedExperts { target_bytes: 10 },
     );
 }
 
@@ -145,10 +167,12 @@ fn should_stop_paged_expert_reclamation_when_a_pass_releases_nothing() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
-    let remaining_deficit = ExpertReclamationPlan::for_projected_memory(90, 130, 130, 100, 120, 50);
+    let forward_projection = paged_forward_projection(90, 111, 100);
     assert_eq!(
-        next_paged_expert_reclamation_step(false, remaining_deficit, Some(false)),
-        PagedExpertReclamationStep::Reject,
+        PagedForwardAdmissionDecision::for_paged_forward(&forward_projection, 50, Some(false)),
+        PagedForwardAdmissionDecision::Reject {
+            unresolved_shortfall_bytes: 10
+        },
     );
 }
 
@@ -157,9 +181,9 @@ fn should_admit_once_stable_and_peak_fit_after_paged_expert_reclamation() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
-    let fitting = ExpertReclamationPlan::for_projected_memory(90, 110, 110, 100, 120, 50);
+    let fitting = paged_forward_projection(90, 100, 100);
     assert_eq!(
-        next_paged_expert_reclamation_step(true, fitting, Some(true)),
-        PagedExpertReclamationStep::Admit,
+        PagedForwardAdmissionDecision::for_paged_forward(&fitting, 50, Some(true)),
+        PagedForwardAdmissionDecision::Admit,
     );
 }

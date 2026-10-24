@@ -167,7 +167,7 @@ impl Qwen3_5EngineState {
         let Some(model) = self.model.as_ref() else {
             return GenerationFinalization::default();
         };
-        let expert_memory_mode = Some(model.expert_memory_mode());
+        let expert_memory_mode = Some(model.observed_expert_memory_mode());
         let mlx_memory_telemetry = match performance_attribution.measure_operation(
             PerformanceOperation::FinalizedMlxMemorySnapshot,
             |_performance_attribution| model.runtime().memory_snapshot(),

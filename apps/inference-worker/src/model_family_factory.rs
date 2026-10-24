@@ -61,6 +61,7 @@ impl ModelFamilyFactory {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     async fn create_qwen3_5_runtime(
         &self,
         model_directory_path: PathBuf,
@@ -70,6 +71,7 @@ impl ModelFamilyFactory {
         (
             astronomical_model_serving::Qwen3_5GenerationProcessor,
             ModelFamilyInferenceEngine,
+            Option<astronomical_model_serving::EnginePlacement>,
         ),
         String,
     > {
@@ -145,17 +147,20 @@ impl
                 Some(ModelFamily::Qwen3_5),
                 WorkerModelConfiguration::Autoregressive(model_configuration),
             ) => {
-                let (generation_processor, qwen3_5_engine) = self
+                let (generation_processor, qwen3_5_engine, engine_placement) = self
                     .create_qwen3_5_runtime(
                         model_directory_path,
                         model_configuration,
                         Qwen3_5EngineSelection::Automatic,
                     )
                     .await?;
-                Ok(ModelFactoryRuntime::autoregressive(
-                    ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
-                    qwen3_5_engine,
-                ))
+                // Automatic selection always yields a startup placement; the
+                // worker's model swap rejects a runtime without one.
+                Ok(ModelFactoryRuntime::Autoregressive {
+                    processor: ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+                    engine: qwen3_5_engine,
+                    engine_placement,
+                })
             }
             (
                 Some(ModelFamily::Flux2Klein),
@@ -285,9 +290,13 @@ impl
                 .await
                 .map_err(|_| "folded ternary initialization task failed".to_owned())?;
                 let (generation_processor, prism_engine) = initialization_task_result?;
+                // The folded ternary pack is dense, so complete residency is
+                // not a sparse-expert concern and the placement records that
+                // the resident engine fits by construction.
                 Ok(ModelFactoryRuntime::autoregressive(
                     ModelFamilyGenerationProcessor::PrismHadamardQwen35(generation_processor),
                     ModelFamilyInferenceEngine::PrismHadamardQwen35(prism_engine),
+                    astronomical_model_serving::EnginePlacement::CompleteResidencyFits,
                 ))
             }
             (
@@ -354,14 +363,48 @@ impl
         else {
             return Err("streaming retry requires an autoregressive model".to_owned());
         };
-        let (generation_processor, inference_engine) = self
+        let (generation_processor, inference_engine, _) = self
             .create_qwen3_5_runtime(
                 PathBuf::from(model_directory),
                 model_configuration,
                 Qwen3_5EngineSelection::StreamingRetry,
             )
             .await?;
-        Ok(ModelFactoryRuntime::autoregressive(
+        Ok(ModelFactoryRuntime::autoregressive_for_streaming_retry(
+            ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+            inference_engine,
+        ))
+    }
+
+    fn supports_resident_promotion(&self) -> bool {
+        true
+    }
+
+    async fn create_resident_promotion(
+        &self,
+        model_directory: &str,
+        model_configuration: WorkerModelConfiguration,
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            ModelFamilyImageEngine,
+            ModernBertEmbeddingEngine,
+        >,
+        String,
+    > {
+        let WorkerModelConfiguration::Autoregressive(model_configuration) = model_configuration
+        else {
+            return Err("resident promotion requires an autoregressive model".to_owned());
+        };
+        let (generation_processor, inference_engine, _) = self
+            .create_qwen3_5_runtime(
+                PathBuf::from(model_directory),
+                model_configuration,
+                Qwen3_5EngineSelection::ResidentPromotion,
+            )
+            .await?;
+        Ok(ModelFactoryRuntime::autoregressive_for_resident_promotion(
             ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
             inference_engine,
         ))

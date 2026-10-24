@@ -18,8 +18,11 @@ pub enum InferenceEngineError {
     ///
     /// The worker consumes this signal only when the request remains replayable.
     /// It must never be sent to the client as this variant.
-    #[error("resident execution requires a streaming retry: {reason}")]
+    #[error("resident execution requires a streaming retry ({cause:?}): {reason}")]
     ResidentForkRequired {
+        /// Typed admission cause that forced the fork; the worker records it
+        /// on the engine placement when it demotes to the streaming engine.
+        cause: crate::StreamingEngineRequirement,
         /// Bounded capacity reason retained for a real failure if streaming also rejects.
         reason: String,
     },

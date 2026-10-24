@@ -20,6 +20,8 @@ where
         &mut self,
         request_id: RequestId,
         mut retry_request: Processor::InferenceRequest,
+        demotion_cause: crate::StreamingEngineRequirement,
+        demoted_total_context_token_count: usize,
         resident_fork_reason: String,
     ) -> Result<crate::inference_engine::contract::EngineGenerationStart, InferenceEngineError>
     {
@@ -60,7 +62,15 @@ where
                 reason: "streaming retry factory returned the wrong runtime modality".to_owned(),
             });
         }
-        let ModelFactoryRuntime::Autoregressive { processor, engine } = factory_runtime else {
+        // A streaming-retry runtime carries no startup placement: the worker
+        // records the typed `DemotedForRequest` placement below, once the
+        // streaming engine has loaded.
+        let ModelFactoryRuntime::Autoregressive {
+            processor,
+            engine,
+            engine_placement: _,
+        } = factory_runtime
+        else {
             return Err(InferenceEngineError::Fatal {
                 reason: "streaming retry factory returned a non-autoregressive runtime".to_owned(),
             });
@@ -76,6 +86,22 @@ where
         self.minimum_mlx_memory_ceiling_bytes =
             engine_load_result.minimum_mlx_memory_ceiling_bytes();
         self.loaded_runtime = Some(LoadedRuntime::Autoregressive(replacement_model));
+        // The swap is complete: the placement lifecycle records the typed
+        // request demotion, and the streaming engine's own startup residency
+        // facts are kept so a later re-promotion gate can replay them.
+        let demoted_engine_placement = crate::EnginePlacement::DemotedForRequest {
+            cause: demotion_cause,
+            demoted_total_context_token_count,
+        };
+        self.engine_placement = Some(demoted_engine_placement);
+        self.startup_residency_facts = engine_load_result.startup_residency_facts();
+        tracing::info!(
+            request_id = request_id.value(),
+            engine_placement = demoted_engine_placement.log_label(),
+            demotion_cause = ?demotion_cause,
+            demoted_total_context_token_count,
+            "engine placement demoted to streaming for this request"
+        );
 
         if let Some(retry_operation_started_at) = retry_operation_log.started_at {
             retry_request.record_streaming_retry_interval(
@@ -94,7 +120,10 @@ where
         };
         match generation_start {
             Ok(generation_start) => Ok(generation_start),
-            Err(InferenceEngineError::ResidentForkRequired { reason }) => {
+            // The demotion has already been recorded above, so the streaming
+            // replay failing its own admission cannot fork again: the
+            // request is answered with the rejection reason instead.
+            Err(InferenceEngineError::ResidentForkRequired { reason, .. }) => {
                 Err(InferenceEngineError::InvalidRequest { reason })
             }
             Err(engine_error) => Err(engine_error),

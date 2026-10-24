@@ -63,6 +63,8 @@ warnings = "deny"
 # fails the lane instead of rotting until release day.
 # test-offline-and-rest: both offline-property lanes together; run this
 # before committing.
+# Memory-policy memory-equation and reserve compile-time contracts: run
+# `cargo test -p astronomical-memory-policy` to include unit tests and doctests.
 test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test offline_tests"
 test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures --lib"
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
@@ -153,6 +155,21 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # `cargo xtask test-run --package astronomical-acceptance --features
 # serving-acceptance --test chat_serving --release --filter
 # should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt --ignored`.
+# Live-ceiling re-promotion cell (manual, serial, real resident sparse
+# artifact, 120-second budget, issue #1533): lowering the ceiling below the
+# artifact size must serve on the streaming engine with a "paged"/"hybrid"
+# label backed by observed expert storage reads, and restoring the
+# complete-residency ceiling must return to the resident engine and report
+# "resident"; `cargo xtask test-run --package astronomical-acceptance
+# --features serving-acceptance --test chat_serving --release --filter
+# live_ceiling_lowering_rest --ignored`.
+# Request-demotion re-promotion worker tests (offline, scripted engines): a
+# worker demoted by one request returns to the resident engine for a strictly
+# smaller request once complete residency plus that request's decoder state
+# fits the effective ceiling, and stays streaming for a smaller request that
+# still cannot run resident;
+# `cargo test -p astronomical-model-serving --features direct-mlx --test
+# offline_tests resident_promotion`.
 xtask = "run -p xtask --"
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —

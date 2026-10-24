@@ -7,11 +7,11 @@ use astronomical_ipc_protocol::{
     WorkerModelConfiguration,
 };
 use astronomical_model_serving::{
-    EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
+    EngineBackedWorker, EngineGenerationStart, EngineLoadResult, EnginePlacement, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError, ModelFactory,
     ModelFactoryRuntime, ModelGeneratedTokenTranslation, ModelGenerationOutputError,
     ModelGenerationProcessor, PreparedInferenceRequest, PreparedModelGeneration,
-    WorkerRuntimeError,
+    StreamingEngineRequirement, WorkerRuntimeError,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -157,6 +157,9 @@ impl InferenceEngine for RetryEngine {
                 | (RetryEngineRole::Streaming, RetryScenario::StreamingFork)
         ) {
             return Err(InferenceEngineError::ResidentForkRequired {
+                cause: StreamingEngineRequirement::RequestContextShortfall {
+                    shortfall_bytes: 4096,
+                },
                 reason: "complete resident experts do not fit the request memory budget".to_owned(),
             });
         }
@@ -184,6 +187,9 @@ impl InferenceEngine for RetryEngine {
             )
         {
             return Err(InferenceEngineError::ResidentForkRequired {
+                cause: StreamingEngineRequirement::TransientPeakShortfallWithoutPrefillChunk {
+                    shortfall_bytes: 4096,
+                },
                 reason: "resident prefill cannot continue within the memory budget".to_owned(),
             });
         }
@@ -244,6 +250,7 @@ impl ModelFactory<RetryProcessor, RetryEngine> for RetryModelFactory {
                 request_cache_identities: Arc::clone(&self.request_cache_identities),
                 continue_after_visible_output: Arc::clone(&self.continue_after_visible_output),
             },
+            EnginePlacement::CompleteResidencyFits,
         ))
     }
 
@@ -253,7 +260,7 @@ impl ModelFactory<RetryProcessor, RetryEngine> for RetryModelFactory {
         _model_configuration: WorkerModelConfiguration,
     ) -> Result<ModelFactoryRuntime<RetryProcessor, RetryEngine>, String> {
         self.streaming_retry_count.fetch_add(1, Ordering::SeqCst);
-        Ok(ModelFactoryRuntime::autoregressive(
+        Ok(ModelFactoryRuntime::autoregressive_for_streaming_retry(
             RetryProcessor {
                 streaming_retry_drop_count: Arc::clone(&self.streaming_retry_drop_count),
             },

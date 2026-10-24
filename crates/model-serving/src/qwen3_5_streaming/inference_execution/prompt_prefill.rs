@@ -56,14 +56,14 @@ impl Qwen3_5EngineState {
         //
         // Colibri's bounded staging, applied to our one-shot graph: the
         // chunk's tape holds one union page per streaming layer while the
-        // graph builds, so the warm cache yields a fixed staging reserve —
-        // eight page slots, colibri's READ_DEPTH analog — smallest tables
-        // first, then refills from warming after the chunk. The reserve is a
-        // page-slot count, never a per-layer tape model: the 2026-10-24
-        // per-layer tape model charged admission for every streamed layer's
-        // payload and made admission evict the very tables residency had
-        // just seated. Yielding never takes more than half the cache, so a
-        // nearly-empty cache is never drained to zero.
+        // graph builds, so it needs a fixed staging reserve — eight page
+        // slots, colibri's READ_DEPTH analog. Ceiling the admitted peak left
+        // unclaimed funds that reserve first; only the remainder is borrowed
+        // from the warm cache, which then refills from warming after the
+        // chunk. The reserve is a page-slot count, never a per-layer tape
+        // model: the 2026-10-24 per-layer tape model charged admission for
+        // every streamed layer's payload and made admission evict the very
+        // tables residency had just seated.
         let staging_page_slot_count: u64 = 8;
         let staging_yield_bytes = {
             let model = self.model.as_ref().ok_or_else(|| {
@@ -80,7 +80,11 @@ impl Qwen3_5EngineState {
             let resident_cache_bytes = model
                 .expert_weight_memory_cache_statistics()
                 .resident_payload_byte_count;
-            let staging_yield_bytes = staging_reserve_bytes.min(resident_cache_bytes / 2);
+            let staging_yield_bytes = super::prefill_staging_yield::staging_yield_bytes(
+                staging_reserve_bytes,
+                admission_outcome.unreserved_headroom_bytes,
+                resident_cache_bytes,
+            );
             if staging_yield_bytes == 0 {
                 0
             } else {
@@ -93,6 +97,7 @@ impl Qwen3_5EngineState {
                 if cache_yielded {
                     tracing::info!(
                         staging_reserve_bytes,
+                        unreserved_headroom_bytes = admission_outcome.unreserved_headroom_bytes,
                         staging_yield_bytes,
                         "warm cache yielded staging slots for the prefill chunk tape"
                     );
