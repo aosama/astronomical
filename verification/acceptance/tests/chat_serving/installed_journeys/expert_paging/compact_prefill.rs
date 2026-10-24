@@ -148,7 +148,7 @@ pub(crate) async fn require_prefill_comparison_completion(
 }
 
 pub(crate) fn prepare_reproduced_prompt_token_ids() -> Vec<u32> {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before tokenizer loading");
@@ -156,7 +156,7 @@ pub(crate) fn prepare_reproduced_prompt_token_ids() -> Vec<u32> {
         .expect("the Ornith tokenizer should load from validated model metadata");
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(9_001),
-        model: crate::common::large_sparse_moe_model_id().to_owned(),
+        model: crate::common::large_sparse_moe_streaming_model_id().to_owned(),
         messages: vec![ChatMessage::User {
             content: "so what folder are we in?".to_owned(),
             images: Vec::new(),
@@ -194,7 +194,7 @@ pub(crate) async fn run_prefill_snapshot(
         "[paged-prefill-compare] status=progress phase=artifact_validation path={prefill_path_label} elapsed_seconds={:.2}",
         test_started_at.elapsed().as_secs_f64()
     );
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before native loading");

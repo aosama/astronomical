@@ -27,7 +27,7 @@ const DOCUMENT_WORD_COUNT: usize = 5_000;
 const FIXED_BENCHMARK_PREFILL_CHUNK_TOKENS: u32 = 2_048;
 const MAXIMUM_SUMMARY_TOKENS: u16 = 2_000;
 fn model_id() -> &'static str {
-    crate::support::large_sparse_moe_model_id()
+    crate::support::large_sparse_moe_streaming_model_id()
 }
 const READY_ATTEMPT_LIMIT: u8 = 70;
 const SOURCE_DOCUMENT_FIXTURE: &str =

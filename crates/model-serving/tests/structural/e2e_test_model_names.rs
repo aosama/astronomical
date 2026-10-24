@@ -1,7 +1,7 @@
 #[test]
 fn should_load_a_discovered_leaf_model_id_for_every_e2e_test_role() {
     let e2e_test_model_ids = [
-        astronomical_test_harness::fixtures::large_sparse_moe_model_id(),
+        astronomical_test_harness::fixtures::large_sparse_moe_streaming_model_id(),
         astronomical_test_harness::fixtures::resident_sparse_moe_model_id(),
         astronomical_test_harness::fixtures::small_dense_model_id(),
         astronomical_test_harness::fixtures::flux2_klein_model_id(),

@@ -88,7 +88,7 @@ async fn should_keep_high_ram_tool_prefixed_cached_suffix_prefill_responsive() {
     .expect("the high-RAM cached suffix SSD journey must finish within 120 seconds");
 }
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches one real worker against the large sparse MoE e2e fixture under a tight ceiling that forces the prefill OOM-retry-reread stall"]
+#[ignore = "launches one real worker against the large sparse MoE streaming e2e fixture under a tight ceiling that forces the prefill OOM-retry-reread stall"]
 #[serial]
 async fn should_recover_from_prefill_oom_without_stalling() {
     timeout(
@@ -96,7 +96,7 @@ async fn should_recover_from_prefill_oom_without_stalling() {
         run_interaction_journey(StreamingPrefillJourneyKind::TightCeiling),
     )
     .await
-    .expect("the tight-ceiling large sparse MoE prefill must finish within 120 seconds");
+    .expect("the tight-ceiling large sparse MoE streaming prefill must finish within 120 seconds");
 }
 
 fn journey_kind_label(kind: StreamingPrefillJourneyKind) -> &'static str {
@@ -118,7 +118,7 @@ enum StreamingPrefillJourneyKind {
 }
 
 async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
-    let model_id = crate::support::large_sparse_moe_model_id();
+    let model_id = crate::support::large_sparse_moe_streaming_model_id();
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id);
     // Persistent (not tempfile) so worker logs survive a timeout or panic.
     // tempfile::tempdir deletes everything when dropped, including on abort.

@@ -119,7 +119,7 @@ async fn run_romeo_continuation() {
 #[ignore = "loads and samples with the complete Ornith artifact"]
 async fn should_generate_a_sampled_continuation_through_the_engine_trait() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the Ornith artifact should validate before engine loading");

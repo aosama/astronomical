@@ -18,7 +18,7 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
 );
 
 fn load_tokenizer() -> Qwen3_5Tokenizer {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the Ornith artifact should validate");
@@ -28,7 +28,7 @@ fn load_tokenizer() -> Qwen3_5Tokenizer {
 
 #[test]
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
-fn should_load_the_large_sparse_moe_tokenizer_and_expose_control_tokens() {
+fn should_load_the_large_sparse_moe_streaming_tokenizer_and_expose_control_tokens() {
     let tokenizer = load_tokenizer();
 
     // Structural validity: the tokenizer must expose valid control token ids
@@ -101,7 +101,7 @@ fn should_prepare_a_validated_structured_chat_command_for_prefill() {
     let tokenizer = load_tokenizer();
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(800),
-        model: crate::common::large_sparse_moe_model_id().to_owned(),
+        model: crate::common::large_sparse_moe_streaming_model_id().to_owned(),
         messages: vec![ChatMessage::User {
             content: "Explain Mars in one sentence.".to_owned(),
             images: Vec::new(),
@@ -155,7 +155,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
     let tokenizer = load_tokenizer();
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(801),
-        model: crate::common::large_sparse_moe_model_id().to_owned(),
+        model: crate::common::large_sparse_moe_streaming_model_id().to_owned(),
         messages: vec![ChatMessage::User {
             content: "What color is this image?".to_owned(),
             images: vec![ChatImageInput {

@@ -18,7 +18,7 @@ use crate::support::serving_rest::{
 };
 use crate::support::{
     artifact_bytes::acceptance_model_scan_root, configured_installed_model_directory_by_id,
-    exact_model_prompt, large_sparse_moe_model_id, resident_sparse_moe_model_id,
+    exact_model_prompt, large_sparse_moe_streaming_model_id, resident_sparse_moe_model_id,
 };
 
 const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
@@ -126,7 +126,7 @@ async fn should_select_resident_engine_when_artifact_geometry_and_prompt_fit() {
 #[serial]
 async fn should_select_streaming_engine_when_complete_residency_headroom_does_not_fit() {
     timeout(SSD_JOURNEY_TIMEOUT, async {
-        let model_id = large_sparse_moe_model_id();
+        let model_id = large_sparse_moe_streaming_model_id();
         let model_directory = configured_installed_model_directory_by_id(model_id);
         let residency_geometry =
             measure_sparse_artifact_residency_geometry(&model_directory);

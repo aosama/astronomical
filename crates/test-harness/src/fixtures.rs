@@ -79,7 +79,7 @@ pub fn scheduler_config_json() -> Vec<u8> {
 }
 
 pub use e2e_test_model_names::{
-    e2e_test_model_ids, flux2_klein_model_id, large_sparse_moe_model_id,
+    e2e_test_model_ids, flux2_klein_model_id, large_sparse_moe_streaming_model_id,
     required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
 };
 

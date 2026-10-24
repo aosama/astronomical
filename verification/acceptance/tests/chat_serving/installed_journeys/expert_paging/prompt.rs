@@ -6,10 +6,10 @@ pub(crate) fn prepare_reproduced_long_prompt_token_ids(
     prompt_token_count: usize,
     maximum_output_token_count: u16,
 ) -> Vec<u32> {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     prepare_reproduced_long_prompt_token_ids_for_model(
         &model_directory,
-        crate::common::large_sparse_moe_model_id(),
+        crate::common::large_sparse_moe_streaming_model_id(),
         prompt_token_count,
         maximum_output_token_count,
     )

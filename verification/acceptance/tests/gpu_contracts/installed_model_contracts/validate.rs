@@ -19,7 +19,7 @@ fn link_or_copy_file(source: &std::path::Path, target: &std::path::Path) {
 #[test]
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let text_artifact_directory = tempfile::tempdir()
         .expect("the acceptance test should create a temporary text artifact directory");
     // Link all files from the model directory except the vision sidecar and
@@ -88,7 +88,7 @@ fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
 #[test]
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let vision_artifact_directory = tempfile::tempdir()
         .expect("the acceptance test should create a temporary vision artifact directory");
     // Link all files from the model directory including the optiq vision sidecar.
@@ -143,7 +143,7 @@ fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
 #[test]
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 fn should_ignore_non_execution_files_in_the_configured_local_artifact() {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
 
     Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
@@ -151,13 +151,13 @@ fn should_ignore_non_execution_files_in_the_configured_local_artifact() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover the large sparse MoE installed model"]
-fn should_validate_the_large_sparse_moe_artifact_quantization_width() {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+#[ignore = "requires model_directories to discover the large sparse MoE streaming installed model"]
+fn should_validate_the_large_sparse_moe_streaming_artifact_quantization_width() {
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the large sparse MoE installed model should validate");
+        .expect("the large sparse MoE streaming installed model should validate");
 
     // Shard count must be positive and consistent with the index.
     let shard_count = validated_artifact.shard_count();
@@ -182,7 +182,7 @@ fn should_validate_the_large_sparse_moe_artifact_quantization_width() {
     }
     assert!(
         [2, 3, 4, 5, 6, 8].contains(&validated_artifact.config().default_quantization_bits()),
-        "the large sparse MoE installed model must declare a supported affine bit width"
+        "the large sparse MoE streaming installed model must declare a supported affine bit width"
     );
     assert!(
         [32u32, 64, 128].contains(
@@ -190,21 +190,22 @@ fn should_validate_the_large_sparse_moe_artifact_quantization_width() {
                 .config()
                 .default_quantization_group_size()
         ),
-        "the large sparse MoE installed model must declare a supported affine group size"
+        "the large sparse MoE streaming installed model must declare a supported affine group size"
     );
 }
 #[test]
-#[ignore = "requires model_directories to discover the large sparse MoE installed model"]
-fn should_validate_the_large_sparse_moe_artifact() {
+#[ignore = "requires model_directories to discover the large sparse MoE streaming installed model"]
+fn should_validate_the_large_sparse_moe_streaming_artifact() {
     fn expected_model_id() -> &'static str {
-        crate::common::large_sparse_moe_model_id()
+        crate::common::large_sparse_moe_streaming_model_id()
     }
 
-    let model_directory = crate::serving_acceptance::support::large_sparse_moe_model_directory();
+    let model_directory =
+        crate::serving_acceptance::support::large_sparse_moe_streaming_model_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
-        .expect("the large sparse MoE installed model should validate");
+        .expect("the large sparse MoE streaming installed model should validate");
 
     // Structural validity: positive shard count, positive payload, architecture from config.
     assert!(validated_artifact.shard_count() > 0);

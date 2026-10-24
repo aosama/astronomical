@@ -13,10 +13,10 @@ use tokio::time::{Duration as TokioDuration, MissedTickBehavior, interval, timeo
 use crate::common::generation_progress;
 
 fn first_model_id() -> &'static str {
-    crate::common::large_sparse_moe_model_id()
+    crate::common::large_sparse_moe_streaming_model_id()
 }
 fn replacement_model_id() -> &'static str {
-    crate::common::large_sparse_moe_model_id()
+    crate::common::large_sparse_moe_streaming_model_id()
 }
 const VALIDATION_MAXIMUM_OUTPUT_TOKENS: u32 = 20_480;
 const FIXED_PREFILL_CHUNCK_TOKENS: u32 = 2_048;
@@ -32,7 +32,7 @@ const SAY_HI_PROMPT_TOKEN_IDS: [u32; 15] = [
 ];
 
 #[tokio::test]
-#[ignore = "loads the large sparse MoE e2e fixture, drops it, then reloads it"]
+#[ignore = "loads the large sparse MoE streaming e2e fixture, drops it, then reloads it"]
 async fn should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_model() {
     timeout(MODEL_SWAP_TEST_TIMEOUT, run_model_swap_allocator_contract())
         .await

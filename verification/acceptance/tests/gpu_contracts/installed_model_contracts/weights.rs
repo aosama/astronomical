@@ -8,7 +8,7 @@ use astronomical_runtime_integration::MlxRuntime;
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 async fn should_bind_only_resident_language_tensors_for_automatic_sparse_expert_paging() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(model_directory, 20_480)
         .expect("the reference Ornith artifact should validate before paged native loading");
