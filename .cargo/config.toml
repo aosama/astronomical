@@ -85,7 +85,11 @@ test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization
 test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx --test quantization -- --ignored --nocapture --test-threads=1"
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
-# source-size [--staged] [root]`, `cargo xtask notices [--check]`, `cargo
+# source-size [--staged] [root]`, `cargo xtask coverage-floor [--package
+# NAME] [--minimum-percent N]` (the local-only pre-commit llvm-cov
+# line-coverage floor for astronomical-memory-policy, 80% by default;
+# deliberately not a continuous-integration step), `cargo xtask notices
+# [--check]`, `cargo
 # xtask native-fingerprint [--source-only] [--explain] --profile
 # core|core+memory-contract [root]`, `cargo xtask classify-scope`, `cargo
 # xtask check-architecture`, `cargo xtask prune-caches [--dry-run]

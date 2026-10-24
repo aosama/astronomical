@@ -16,6 +16,9 @@ mod check_architecture_tests;
 mod classify_scope;
 #[cfg(test)]
 mod classify_scope_tests;
+mod coverage_floor;
+#[cfg(test)]
+mod coverage_floor_tests;
 mod disposable_target;
 #[cfg(test)]
 mod disposable_target_tests;
@@ -79,6 +82,9 @@ fn main() -> ExitCode {
             arguments.contains(&"--update-baseline".to_owned()),
         )),
         Some("source-size") => run_command(source_size::run(&resolve_root(), &arguments[1..])),
+        Some("coverage-floor") => {
+            run_command(coverage_floor::run(&resolve_root(), &arguments[1..]))
+        }
         Some("notices") => run_command(notices::run(
             &resolve_root(),
             arguments.contains(&"--check".to_owned()),

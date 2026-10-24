@@ -15,8 +15,27 @@ started_epoch_seconds="$(date +%s)"
 if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- source-size --staged; then
     elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
     printf '%s\n' "[pre-commit] status=success check=staged-source-size elapsed_seconds=${elapsed_seconds}"
-    exit 0
+else
+    elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
+    printf '%s\n' "[pre-commit] status=failed check=staged-source-size elapsed_seconds=${elapsed_seconds}" >&2
+    exit 1
 fi
-elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
-printf '%s\n' "[pre-commit] status=failed check=staged-source-size elapsed_seconds=${elapsed_seconds}" >&2
-exit 1
+
+# Coverage floor for the memory-policy crate (local hook only; deliberately
+# no continuous-integration step). The crate is the admission and eviction
+# brain, so any commit staging changes to its sources — deletions included,
+# since removing a well-covered file can pull the aggregate below the floor —
+# must keep cargo-llvm-cov line coverage at or above 80%. Gated on staged
+# paths so unrelated commits never pay the instrumented coverage run.
+if git diff --cached --name-only | grep -q '^crates/astronomical-memory-policy/'; then
+    printf '%s\n' "[pre-commit] status=start check=memory-policy-coverage-floor root=${REPOSITORY_ROOT}"
+    coverage_started_epoch_seconds="$(date +%s)"
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- coverage-floor; then
+        coverage_elapsed_seconds=$(( $(date +%s) - coverage_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=memory-policy-coverage-floor elapsed_seconds=${coverage_elapsed_seconds}"
+    else
+        coverage_elapsed_seconds=$(( $(date +%s) - coverage_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=memory-policy-coverage-floor elapsed_seconds=${coverage_elapsed_seconds}" >&2
+        exit 1
+    fi
+fi
