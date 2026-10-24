@@ -5,6 +5,8 @@ use super::{
     PerformanceOperation, expert_streaming_source::ExpertStreamingSourceSummary, unix_epoch_millis,
 };
 
+const DECODE_TOKEN_FORWARD_LATENCY_BUCKET_WIDTH_NANOSECONDS: u64 = 1_000_000;
+
 /// Outcome recorded when one bounded attribution report ends.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -89,8 +91,18 @@ pub struct GenerationPerformanceAttributionReport {
     mlx_allocator_cache_memory_bytes: Option<u64>,
     mlx_peak_memory_bytes: Option<u64>,
     failure_description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    decode_token_forward_latency_p95_nanoseconds: Option<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    decode_token_forward_latency_histogram: Vec<DecodeTokenForwardLatencyHistogramBucket>,
     previous_token_expert_route_reuse_by_layer: Vec<PreviousTokenExpertRouteReuseByLayerReport>,
     expert_streaming_source_summaries: Vec<ExpertStreamingSourceSummary>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct DecodeTokenForwardLatencyHistogramBucket {
+    upper_bound_nanoseconds: u64,
+    sample_count: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -206,6 +218,10 @@ impl PerformanceAttribution {
         generation_metadata: GenerationPerformanceAttributionMetadata,
     ) -> Option<PerformanceAttributionReport> {
         let enabled_attribution = self.enabled_attribution?;
+        let (decode_token_forward_latency_p95_nanoseconds, decode_token_forward_latency_histogram) =
+            summarize_decode_token_forward_latency(
+                &enabled_attribution.decode_token_forward_elapsed_nanoseconds,
+            );
         Some(PerformanceAttributionReport::Generation(
             GenerationPerformanceAttributionReport {
                 common: enabled_attribution.finish_common_report(generation_metadata.outcome),
@@ -223,6 +239,8 @@ impl PerformanceAttribution {
                     .mlx_allocator_cache_memory_bytes,
                 mlx_peak_memory_bytes: generation_metadata.mlx_peak_memory_bytes,
                 failure_description: generation_metadata.failure_description,
+                decode_token_forward_latency_p95_nanoseconds,
+                decode_token_forward_latency_histogram,
                 previous_token_expert_route_reuse_by_layer: enabled_attribution
                     .previous_token_expert_route_reuse_by_layer
                     .iter()
@@ -315,6 +333,41 @@ impl PerformanceAttribution {
             },
         ))
     }
+}
+
+fn summarize_decode_token_forward_latency(
+    decode_token_forward_elapsed_nanoseconds: &[u64],
+) -> (Option<u64>, Vec<DecodeTokenForwardLatencyHistogramBucket>) {
+    let mut sorted_elapsed_nanoseconds = decode_token_forward_elapsed_nanoseconds.to_vec();
+    if sorted_elapsed_nanoseconds.is_empty() {
+        return (None, Vec::new());
+    }
+    sorted_elapsed_nanoseconds.sort_unstable();
+    let p95_rank = sorted_elapsed_nanoseconds
+        .len()
+        .saturating_mul(95)
+        .div_ceil(100);
+    let p95_elapsed_nanoseconds = sorted_elapsed_nanoseconds
+        .get(p95_rank.saturating_sub(1))
+        .copied();
+    let mut histogram_buckets: Vec<DecodeTokenForwardLatencyHistogramBucket> = Vec::new();
+    for elapsed_nanoseconds in sorted_elapsed_nanoseconds {
+        let bucket_upper_bound_nanoseconds = elapsed_nanoseconds
+            .div_ceil(DECODE_TOKEN_FORWARD_LATENCY_BUCKET_WIDTH_NANOSECONDS)
+            .saturating_mul(DECODE_TOKEN_FORWARD_LATENCY_BUCKET_WIDTH_NANOSECONDS);
+        if let Some(last_histogram_bucket) = histogram_buckets.last_mut()
+            && last_histogram_bucket.upper_bound_nanoseconds == bucket_upper_bound_nanoseconds
+        {
+            last_histogram_bucket.sample_count =
+                last_histogram_bucket.sample_count.saturating_add(1);
+        } else {
+            histogram_buckets.push(DecodeTokenForwardLatencyHistogramBucket {
+                upper_bound_nanoseconds: bucket_upper_bound_nanoseconds,
+                sample_count: 1,
+            });
+        }
+    }
+    (p95_elapsed_nanoseconds, histogram_buckets)
 }
 
 fn image_memory_snapshot(

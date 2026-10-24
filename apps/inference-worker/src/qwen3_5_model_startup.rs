@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;
-use astronomical_ipc_protocol::WorkerChunkingConfiguration;
+use astronomical_ipc_protocol::{WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy};
 use astronomical_model_serving::{
     CompleteResidencyDecision, CompleteResidencyRequirements, ModelFamilyInferenceEngine,
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
@@ -38,6 +38,7 @@ pub(crate) fn initialize_qwen3_5_model(
     max_output_tokens: u32,
     persistent_prompt_cache_enabled: bool,
     performance_attribution_enabled: bool,
+    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
     engine_selection: Qwen3_5EngineSelection,
@@ -231,7 +232,7 @@ pub(crate) fn initialize_qwen3_5_model(
                         ));
                     }
                 };
-            Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
+            Qwen3_5StreamingEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy(
                 validated_artifact,
                 active_memory_limit_bytes,
                 allocator_cache_memory_limit_bytes,
@@ -244,6 +245,7 @@ pub(crate) fn initialize_qwen3_5_model(
                 true,
                 model_loading_performance_attribution,
                 performance_attribution_log,
+                decode_expert_cache_policy,
             )
             .map(ModelFamilyInferenceEngine::Qwen3_5Streaming)
         }

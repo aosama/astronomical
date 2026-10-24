@@ -9,11 +9,12 @@
 //! Collects results into `PromptPrefillChunkOutcome` for the caller in
 //! `prefill_advance.rs`.
 
+use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::prefill_forward_dispatch::PrefillForwardError;
 use super::prompt_prefill_errors;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use super::{fatal_engine_error, qwen3_5_runtime_error};
 
 use crate::{PerformanceCounter, Qwen3_5PersistentPromptCacheBoundaryCheckpoint};
 
@@ -51,23 +52,70 @@ impl Qwen3_5EngineState {
             plan.direct_publication_workspace_bytes,
         )?;
 
-        let prefill_request_checkpoint = active_request
-            .prefill_request_checkpoint()
-            .map_err(qwen3_5_runtime_error)?;
-
         // Phase 3: dispatch the target model's prompt forward.
+        //
+        // Colibri's bounded staging, applied to our one-shot graph: the
+        // chunk's tape holds one union page per streaming layer while the
+        // graph builds, so the warm cache yields a fixed staging reserve —
+        // eight page slots, colibri's READ_DEPTH analog — smallest tables
+        // first, then refills from warming after the chunk. The reserve is a
+        // page-slot count, never a per-layer tape model: the 2026-10-24
+        // per-layer tape model charged admission for every streamed layer's
+        // payload and made admission evict the very tables residency had
+        // just seated. Yielding never takes more than half the cache, so a
+        // nearly-empty cache is never drained to zero.
+        let staging_page_slot_count: u64 = 8;
+        let staging_yield_bytes = {
+            let model = self.model.as_ref().ok_or_else(|| {
+                PromptPrefillChunkAttemptError::Engine(fatal_engine_error(
+                    "Qwen3.5 engine lost its loaded model",
+                ))
+            })?;
+            let staging_page_slot_bytes = model
+                .expert_page_reservation_bytes_for_forward(1)
+                .map_err(qwen3_5_runtime_error)
+                .map_err(PromptPrefillChunkAttemptError::Engine)?;
+            let staging_reserve_bytes =
+                staging_page_slot_bytes.saturating_mul(staging_page_slot_count);
+            let resident_cache_bytes = model
+                .expert_weight_memory_cache_statistics()
+                .resident_payload_byte_count;
+            let staging_yield_bytes = staging_reserve_bytes.min(resident_cache_bytes / 2);
+            if staging_yield_bytes == 0 {
+                0
+            } else {
+                let cache_yielded = model
+                    .limit_expert_retention_for_request_memory_pressure(
+                        usize::try_from(staging_yield_bytes).unwrap_or(usize::MAX),
+                    )
+                    .map_err(qwen3_5_runtime_error)
+                    .map_err(PromptPrefillChunkAttemptError::Engine)?;
+                if cache_yielded {
+                    tracing::info!(
+                        staging_reserve_bytes,
+                        staging_yield_bytes,
+                        "warm cache yielded staging slots for the prefill chunk tape"
+                    );
+                }
+                staging_yield_bytes
+            }
+        };
         let forward_started_at = std::time::Instant::now();
-        let dispatch_outcome = match self.dispatch_prefill_forward(
-            active_request,
-            prefill_start,
-            prefill_end,
-            &plan,
-        ) {
+        let dispatch_outcome_result =
+            self.dispatch_prefill_forward(active_request, prefill_start, prefill_end, &plan);
+        // The staging yield is a per-chunk loan: lift the pressure ceiling
+        // immediately whatever the dispatch outcome was, so inter-chunk
+        // warming can refill the cache.
+        if staging_yield_bytes > 0
+            && let Some(model) = self.model.as_ref()
+        {
+            model.resume_expert_retention_after_request_memory_pressure();
+        }
+        let dispatch_outcome = match dispatch_outcome_result {
             Ok(dispatch_outcome) => dispatch_outcome,
             Err(PrefillForwardError::Execution(execution_error)) => {
                 return Err(prompt_prefill_errors::prefill_execution_error(
                     execution_error,
-                    prefill_request_checkpoint,
                 ));
             }
         };
@@ -89,15 +137,6 @@ impl Qwen3_5EngineState {
             &plan.all_completed_prefill_chunk_tokens,
             &mut boundary_checkpoints,
         )?;
-        // Test-only: force a capacity rejection after the forward succeeds.
-        if std::mem::take(&mut active_request.force_next_prefill_capacity_rejection_for_tests) {
-            return Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-                active_memory_bytes: 1,
-                attempted_allocation_bytes: 1,
-                allowed_active_memory_bytes: 1,
-                prefill_request_checkpoint,
-            });
-        }
 
         Ok(PromptPrefillChunkOutcome {
             active_memory_bytes_before_growth: admission_outcome.active_memory_bytes_before_growth,

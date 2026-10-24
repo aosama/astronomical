@@ -197,6 +197,25 @@ impl RequestExpertResidency {
                 RequestExpertLayerRole::PinnedComplete if pin_claim_is_funded[layer_index] => {
                     ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
                 }
+                // A streamed role whose whole expert set is already seated:
+                // the mandatory read paid the complete-layer cost in an
+                // earlier chunk, and evicting it would make every later chunk
+                // re-stream the same bytes. Preserve it the way a seated pin
+                // is preserved — funded once at seating time, never again —
+                // so its payload stops re-consuming stream-admission
+                // headroom every chunk (the 2026-10-24 flight: 31 streamed
+                // layers froze the allowance while 19.6 GB of the paid
+                // ceiling sat unused and 90 GB were re-streamed).
+                RequestExpertLayerRole::Streamed if layer_is_currently_complete[layer_index] => {
+                    if let Some(current_residency) = current_residencies
+                        .iter()
+                        .find(|residency| residency.layer_index == layer_index)
+                    {
+                        expected_preserved_bytes = expected_preserved_bytes
+                            .saturating_add(current_residency.payload_bytes);
+                    }
+                    ExpertLayerResidencyTarget::PreserveComplete
+                }
                 RequestExpertLayerRole::Streamed | RequestExpertLayerRole::PinnedComplete => {
                     let complete_layer_payload_bytes = layer_geometries
                         .get(layer_index)
@@ -241,6 +260,20 @@ impl RequestExpertResidency {
         candidate_plan.is_low_budget_partial_mode = false;
         candidate_plan
     }
+}
+
+/// Counts the layers that are actually resident as complete layers right now.
+/// The request contract's pin count is intent; this is occupancy. Publishing
+/// the two as one number made the 2026-10-24 flight log claim
+/// `pinned_complete_layer_count=34` while nine layers were resident.
+#[must_use]
+pub fn seated_complete_layer_count(current_residencies: &[CurrentExpertLayerResidency]) -> usize {
+    current_residencies
+        .iter()
+        .filter(|current_residency| {
+            current_residency.class == RetainedExpertPageClass::StableCompleteLayer
+        })
+        .count()
 }
 
 /// Floors the retained-page ceiling at complete layers already in RAM.

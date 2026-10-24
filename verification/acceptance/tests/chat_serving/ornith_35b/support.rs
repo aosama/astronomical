@@ -7,6 +7,7 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use astronomical_test_harness::test_run::TestRunContext;
 use serde_json::Value;
 
 use crate::serving_acceptance::chat::openai_rest::{
@@ -55,15 +56,13 @@ pub(super) fn prefill_attribution_warmup_prompt() -> String {
     )
 }
 
-/// Builds an isolated Development home pinned to the production measurement
-/// conditions: performance attribution and stage-split decode attribution are
-/// both explicitly disabled, so the baseline measures the path users run and
-/// a developer's local diagnostics settings cannot leak into the numbers.
+/// Keeps restore attribution enabled so prefix-adoption evidence survives
+/// each completion, while stage-split decode attribution remains disabled.
 pub(super) fn isolated_home_for_measurement(model_directory: &Path) -> tempfile::TempDir {
     // Attribution stays on for this measurement journey: the per-request
     // restore spans and the prefix-adoption diagnostic are the evidence the
     // prefix-adoption A/B compares, and the journey itself reports them.
-    isolated_home(model_directory, "ornith-35b-throughput-journey", true)
+    isolated_home(model_directory, "ornith-35b-throughput-journey", true, None)
 }
 
 /// Builds the isolated Development home for the prefill attribution journey:
@@ -75,6 +74,7 @@ pub(super) fn isolated_home_for_prefill_attribution(model_directory: &Path) -> t
         model_directory,
         "ornith-35b-prefill-attribution-journey",
         true,
+        None,
     )
 }
 
@@ -82,18 +82,17 @@ fn isolated_home(
     model_directory: &Path,
     home_prefix: &str,
     performance_attribution_enabled: bool,
+    persistent_prompt_cache_enabled: Option<bool>,
 ) -> tempfile::TempDir {
     let development_config =
         astronomical_config::AstronomicalConfig::load_from_development_location()
             .expect("Development configuration should load");
     // Forensic mode: keep the isolated home so the worker log can be
     // inspected after a failing journey instead of being deleted on unwind.
-    let keep_isolated_home = std::env::var("STREAMING_JOURNEY_KEEP_HOME")
-        .map(|value| value != "0")
-        .unwrap_or(false);
+    let run_configuration = TestRunContext::current().configuration;
     let mut isolated_home_builder = tempfile::Builder::new();
     isolated_home_builder.prefix(home_prefix);
-    isolated_home_builder.disable_cleanup(keep_isolated_home);
+    isolated_home_builder.disable_cleanup(run_configuration.retain_isolated_home);
     let isolated_development_home = isolated_home_builder
         .tempdir()
         .expect("isolated Development home should be created");
@@ -114,16 +113,17 @@ fn isolated_home(
         serde_json::json!(performance_attribution_enabled);
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
-    if let Ok(adoption_override) = std::env::var("ORNITH_JOURNEY_PREFIX_ADOPTION") {
-        config_document["chunking"]["experimental_in_memory_prefix_adoption_enabled"] =
-            serde_json::json!(adoption_override == "1");
+    if let Some(persistent_prompt_cache_enabled) = persistent_prompt_cache_enabled {
+        config_document["persistent_prompt_cache"]["persistent_prompt_cache_enabled"] =
+            serde_json::json!(persistent_prompt_cache_enabled);
     }
-    if let Ok(chunk_override) = std::env::var("STREAMING_JOURNEY_CHUNK_TOKENS") {
-        config_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] = serde_json::json!(
-            chunk_override
-                .parse::<u32>()
-                .expect("valid chunk token count")
-        );
+    if let Some(prefix_adoption_enabled) = run_configuration.prefix_adoption_enabled {
+        config_document["chunking"]["experimental_in_memory_prefix_adoption_enabled"] =
+            serde_json::json!(prefix_adoption_enabled);
+    }
+    if let Some(prompt_processing_chunk_tokens) = run_configuration.prompt_processing_chunk_tokens {
+        config_document["chunking"]["fixed_prompt_processing_chunk_size_tokens"] =
+            serde_json::json!(prompt_processing_chunk_tokens);
     }
     std::fs::write(
         isolated_state_directory.join("config.json"),
@@ -150,6 +150,18 @@ pub(super) async fn launch_resident_rest_server_with_prefill_attribution()
     launch_rest_server_with_home(model_id, model_directory, isolated_development_home).await
 }
 
+pub(super) async fn launch_resident_rest_server_for_decode_diagnostics()
+-> (tempfile::TempDir, ServingRestServer) {
+    let model_id = resident_model_id();
+    let model_directory = model_directory();
+    let isolated_development_home = isolated_home(
+        &model_directory,
+        "ornith-35b-production-decode-diagnostic",
+        true,
+        Some(false),
+    );
+    launch_rest_server_with_home(model_id, model_directory, isolated_development_home).await
+}
 async fn launch_rest_server_with_home(
     model_id: &str,
     model_directory: PathBuf,

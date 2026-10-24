@@ -22,32 +22,35 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::mpsc::RecvTimeoutError;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, WorkerHandle, WorkerHealthSnapshot,
 };
-use astronomical_ipc_protocol::{ChatImageInput, RequestId};
+use astronomical_ipc_protocol::{ChatImageInput, RequestId, WorkerDecodeExpertCachePolicy};
 use tokio::time::sleep;
 
-use crate::performance_throughput::completion::{
-    drive_completion, dump_worker_logging_directory, read_measured_completion, wait_until_idle,
+pub(crate) use crate::performance_throughput::completion::{
+    drive_completion, dump_worker_logging_directory, read_decode_cache_diagnostic_evidence,
+    read_measured_completion, wait_until_idle,
 };
 
 // The evidence lane composes the same measurement type, so it stays reachable
 // through the journey driver rather than through its own module path.
-pub(crate) use crate::performance_throughput::completion::ThroughputMeasurement;
+pub(crate) use crate::performance_throughput::completion::{
+    CompletionIndex, ThroughputMeasurement, read_completion_by_index,
+};
 use crate::performance_throughput::historical_record::{
     MemoryCellBudgetExhaustedStage, ThroughputJourneyKind, ThroughputRecord,
     append_throughput_history, current_unix_epoch_millis, format_utc_timestamp, history_log_path,
     recorded_git_commit, throughput_record_json,
 };
 use crate::performance_throughput::machine_specs::MachineSpecs;
-use crate::performance_throughput::worker_environment::{
+pub(crate) use crate::performance_throughput::worker_environment::{
     diagnostics_enabled, perf_worker_environment,
 };
 
-pub(crate) const MAXIMUM_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
+pub(crate) const MAXIMUM_MODEL_MEMORY_BYTES: u64 = 36 * (1 << 30);
 const MINIMUM_ACCEPTABLE_INPUT_TOKENS: u32 = 9_000;
 const MAXIMUM_ACCEPTABLE_INPUT_TOKENS: u32 = 11_000;
 const MINIMUM_ACCEPTABLE_OUTPUT_TOKENS: u16 = 450;
@@ -87,20 +90,23 @@ pub(crate) fn assert_measurement_shape(measured_throughput: &ThroughputMeasureme
 }
 
 pub(crate) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
-const MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
-const READY_ATTEMPT_LIMIT: u8 = 70;
+pub(crate) const MODEL_LOAD_TIMEOUT: Duration = Duration::from_secs(60);
+pub(crate) const READY_ATTEMPT_LIMIT: u8 = 70;
 const WORKER_LOG_DUMP_LINE_LIMIT: usize = 60;
 
 /// The test case for one throughput journey: the journey family recorded in
-/// the durable history line, the short warmup completion (its prompt, images,
-/// and output cap), the measured completion (its prompt, images, and output
-/// cap), the sampling temperature, the per-cell MLX ceiling override, whether
-/// the worker runs with performance attribution, and the built-in journey
-/// deadline. The test that defines these values lives beside this driver so
-/// the test case is readable where the test is.
+/// the durable history line, the internal decode-cache policy arm, the short
+/// warmup completion (its prompt, images, and output cap), the measured
+/// completion (its prompt, images, and output cap), the sampling temperature,
+/// the per-cell MLX ceiling override, whether the worker runs with performance
+/// attribution, and the built-in journey deadline. The test that defines these
+/// values lives beside this driver so the test case is readable where the test
+/// is.
 #[derive(Clone, Debug)]
 pub(crate) struct ThroughputJourney {
     pub(crate) journey_kind: ThroughputJourneyKind,
+    /// Internal experiment selector passed to the worker, never a user setting.
+    pub(crate) decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     pub(crate) warmup_input_prompt: String,
     pub(crate) warmup_images: Vec<ChatImageInput>,
     pub(crate) warmup_output_tokens: u16,
@@ -132,6 +138,7 @@ impl ThroughputJourney {
     ) -> Self {
         Self {
             journey_kind,
+            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
             warmup_input_prompt,
             warmup_images,
             warmup_output_tokens,
@@ -184,13 +191,41 @@ pub(crate) fn run_journey_with_timeout(
         let measured_throughput = runtime.block_on(run_throughput_journey(model_id, &journey));
         sender.send(measured_throughput).ok();
     });
-    let measured_throughput = match receiver.recv_timeout(journey_timeout) {
-        Ok(measured_throughput) => measured_throughput,
-        Err(RecvTimeoutError::Timeout) => panic!(
-            "the throughput journey for {model_id} exceeded the {journey_timeout:?} deadline"
-        ),
-        Err(RecvTimeoutError::Disconnected) => {
-            panic!("the throughput worker thread terminated before completing")
+    let journey_started_at = Instant::now();
+    let measured_throughput = loop {
+        let journey_elapsed = journey_started_at.elapsed();
+        let remaining_budget = journey_timeout.saturating_sub(journey_elapsed);
+        if remaining_budget.is_zero() {
+            panic!(
+                "the throughput journey for {model_id} exceeded the {journey_timeout:?} deadline"
+            );
+        }
+        let status_interval = remaining_budget.min(Duration::from_secs(5));
+        match receiver.recv_timeout(status_interval) {
+            Ok(measured_throughput) => break measured_throughput,
+            Err(RecvTimeoutError::Timeout) => {
+                let journey_elapsed = journey_started_at.elapsed();
+                if journey_elapsed >= journey_timeout {
+                    panic!(
+                        "the throughput journey for {model_id} exceeded the {journey_timeout:?} deadline"
+                    );
+                }
+                let journey_budget_millis = journey_timeout.as_millis().max(1);
+                let time_budget_progress_percent = journey_elapsed
+                    .as_millis()
+                    .saturating_mul(100)
+                    .checked_div(journey_budget_millis)
+                    .unwrap_or(100)
+                    .min(100);
+                let remaining_budget = journey_timeout.saturating_sub(journey_elapsed);
+                eprintln!(
+                    "[performance-throughput] progress model={model_id} time_budget_progress_percent={time_budget_progress_percent} eta_seconds={} stage=bounded_journey",
+                    remaining_budget.as_secs()
+                );
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                panic!("the throughput worker thread terminated before completing")
+            }
         }
     };
     worker
@@ -211,9 +246,11 @@ pub(crate) async fn run_throughput_journey(
         timestamp: format_utc_timestamp(current_unix_epoch_millis()),
         model_id: measurement.model_id.clone(),
         journey: journey.journey_kind,
+        decode_expert_cache_policy: measurement.decode_expert_cache_policy,
         prefill_tokens_per_second: (measurement.prefill_tokens_per_second.round()) as u32,
         decode_tokens_per_second: (measurement.decode_tokens_per_second.round()) as u32,
         git_commit: recorded_git_commit(),
+        worker_build_identity: super::historical_record::recorded_worker_build_identity(),
         machine: machine_specs,
         total_input_tokens: measurement.total_input_tokens,
         total_output_tokens: measurement.total_output_tokens,
@@ -227,7 +264,7 @@ pub(crate) async fn run_throughput_journey(
         serde_json::to_string_pretty(&throughput_record_json(&record))
             .unwrap_or_else(|_| "{ \"error\": \"record serialization failed\" }".to_owned())
     );
-    if diagnostics_enabled() {
+    if diagnostics_enabled() || journey.attribution_enabled {
         eprintln!(
             "[performance-throughput] diagnostics run: durable history append skipped because attribution distorts throughput"
         );
@@ -270,6 +307,7 @@ pub(crate) async fn measure_throughput(
     ) = perf_worker_environment(model_id, &model_directory, journey.attribution_enabled);
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         journey.maximum_mlx_memory_bytes;
+    worker_startup_configuration.decode_expert_cache_policy = journey.decode_expert_cache_policy;
     let performance_log_path = logging_directory.join("performance.jsonl");
     fs::create_dir_all(&logging_directory)
         .expect("the throughput performance log directory should be created");
@@ -315,6 +353,7 @@ pub(crate) async fn measure_throughput(
             return JourneyRunOutcome {
                 measurement: ThroughputMeasurement {
                     model_id: model_id.to_owned(),
+                    decode_expert_cache_policy: journey.decode_expert_cache_policy,
                     total_input_tokens: 0,
                     total_output_tokens: 0,
                     cached_tokens: 0,
@@ -322,6 +361,9 @@ pub(crate) async fn measure_throughput(
                     decode_time_seconds: 0.0,
                     prefill_tokens_per_second: 0.0,
                     decode_tokens_per_second: 0.0,
+                    mlx_peak_memory_bytes: None,
+                    measured_output_text: None,
+                    decode_cache_diagnostic_evidence: None,
                 },
                 measured_budget_exhausted: true,
                 budget_exhausted_stage: Some(MemoryCellBudgetExhaustedStage::LaunchOrIdle),
@@ -363,38 +405,53 @@ pub(crate) async fn measure_throughput(
         }
     });
 
-    eprintln!("[performance-throughput] warmup model={model_id}");
-    let warmup_completed = tokio::time::timeout(
-        remaining_budget(),
-        drive_completion(
-            &worker_handle,
-            RequestId::new(1),
-            model_id,
-            &journey.warmup_input_prompt,
-            journey.warmup_images.clone(),
-            journey.warmup_output_tokens,
-            journey.temperature_thousandths,
-        ),
-    )
-    .await
-    .map(|warmup_result| match warmup_result {
-        Ok(()) => true,
-        Err(drive_error) => {
-            dump_worker_logging_directory(&logging_directory, WORKER_LOG_DUMP_LINE_LIMIT);
-            panic!("the throughput completion for {model_id} failed: {drive_error}");
-        }
-    })
-    .unwrap_or_else(|_| {
-        // Dropping the pending drive future drops its event receiver, which is
-        // the client-disconnect cancellation signal; the worker releases its
-        // generation permit and finalizes a cancelled attribution report.
+    // A zero-output warmup marks a single-request lane: each journey launches a
+    // fresh worker and measures exactly one completion. The streaming hybrid
+    // engine cannot serve two sequential requests under one ceiling once the
+    // first request leaves its warm expert tables resident — the second
+    // request's prefill streams the remaining layers beside them — so the
+    // in-worker warmup is skipped and first-use JIT cost lands on both arms
+    // identically through the alternating paired order.
+    let warmup_completed = if journey.warmup_output_tokens == 0 {
         eprintln!(
-            "[performance-throughput] budget_exhausted=true model={model_id} stage=warmup budget_seconds={} — a warmup that cannot finish inside the budget is itself the collapse signal",
-            journey.journey_timeout.as_secs(),
+            "[performance-throughput] single-request lane: skipping the in-worker warmup completion model={model_id}"
         );
-        false
-    });
+        true
+    } else {
+        eprintln!("[performance-throughput] warmup model={model_id}");
+        tokio::time::timeout(
+            remaining_budget(),
+            drive_completion(
+                &worker_handle,
+                RequestId::new(1),
+                model_id,
+                &journey.warmup_input_prompt,
+                journey.warmup_images.clone(),
+                journey.warmup_output_tokens,
+                journey.temperature_thousandths,
+            ),
+        )
+        .await
+        .map(|warmup_result| match warmup_result {
+            Ok(_) => true,
+            Err(drive_error) => {
+                dump_worker_logging_directory(&logging_directory, WORKER_LOG_DUMP_LINE_LIMIT);
+                panic!("the throughput completion for {model_id} failed: {drive_error}");
+            }
+        })
+        .unwrap_or_else(|_| {
+            // Dropping the pending drive future drops its event receiver, which is
+            // the client-disconnect cancellation signal; the worker releases its
+            // generation permit and finalizes a cancelled attribution report.
+            eprintln!(
+                "[performance-throughput] budget_exhausted=true model={model_id} stage=warmup budget_seconds={} — a warmup that cannot finish inside the budget is itself the collapse signal",
+                journey.journey_timeout.as_secs(),
+            );
+            false
+        })
+    };
     let mut measured_completed = false;
+    let mut measured_output_text = None;
     if warmup_completed {
         eprintln!("[performance-throughput] measured model={model_id}");
         measured_completed = tokio::time::timeout(
@@ -411,7 +468,10 @@ pub(crate) async fn measure_throughput(
         )
         .await
         .map(|measured_result| match measured_result {
-            Ok(()) => true,
+            Ok(generated_text) => {
+                measured_output_text = Some(generated_text);
+                true
+            }
             Err(drive_error) => {
                 dump_worker_logging_directory(&logging_directory, WORKER_LOG_DUMP_LINE_LIMIT);
                 panic!("the throughput completion for {model_id} failed: {drive_error}");
@@ -455,10 +515,15 @@ pub(crate) async fn measure_throughput(
     // are zero here. Callers that own an evidence lane (the memory-ceiling
     // sweep) recover partial rates from the preserved request progress and the
     // cancelled attribution report; this driver only reports the shortfall.
-    let measurement = match read_measured_completion(&performance_log_path, model_id) {
+    let mut measurement = match read_measured_completion(
+        &performance_log_path,
+        model_id,
+        journey.decode_expert_cache_policy,
+    ) {
         Some(measurement) => measurement,
         None if measured_budget_exhausted => ThroughputMeasurement {
             model_id: model_id.to_owned(),
+            decode_expert_cache_policy: journey.decode_expert_cache_policy,
             total_input_tokens: 0,
             total_output_tokens: 0,
             cached_tokens: 0,
@@ -466,9 +531,17 @@ pub(crate) async fn measure_throughput(
             decode_time_seconds: 0.0,
             prefill_tokens_per_second: 0.0,
             decode_tokens_per_second: 0.0,
+            mlx_peak_memory_bytes: None,
+            measured_output_text: None,
+            decode_cache_diagnostic_evidence: None,
         },
         None => panic!("the measured completion should produce a performance sample"),
     };
+    measurement.measured_output_text = measured_output_text;
+    if journey.attribution_enabled {
+        measurement.decode_cache_diagnostic_evidence =
+            read_decode_cache_diagnostic_evidence(&logging_directory, MEASURED_REQUEST_ID);
+    }
     JourneyRunOutcome {
         measurement,
         measured_budget_exhausted,

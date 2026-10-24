@@ -136,7 +136,12 @@ impl Qwen3_5EngineState {
             })?;
 
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
-            0,
+            // The real chunk token count, not zero: admission keys its
+            // exact-context transient evidence on this value, and a zero
+            // mislabeled every chunk as a token-less context (the streaming
+            // family additionally derives its routed-expert reservation from
+            // this count).
+            prefill_token_count,
             Qwen3_5PrefillExecutionContext::new(
                 active_request.visual_embeddings.is_some(),
                 AdaptiveRamGrowthExecutionProfile::Resident,

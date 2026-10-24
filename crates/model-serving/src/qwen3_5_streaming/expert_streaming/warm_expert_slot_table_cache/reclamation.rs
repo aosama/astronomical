@@ -108,9 +108,24 @@ impl WarmExpertSlotTableCache {
                 }
             }
         }
-        let Some((layer_index, _)) = fewest else {
+        let Some((layer_index, occupied_slot_count)) = fewest else {
             return false;
         };
+        let victim_payload_bytes = self.tables_by_layer[layer_index]
+            .as_ref()
+            .map_or(0, |table| table.payload_bytes);
+        let victim_is_complete = self.tables_by_layer[layer_index]
+            .as_ref()
+            .is_some_and(|table| {
+                table.occupied_slot_count == table.slot_count() && table.slot_count() > 0
+            });
+        tracing::info!(
+            layer_index,
+            occupied_slot_count,
+            victim_payload_bytes,
+            victim_is_complete,
+            "warm cache evicted least-used table"
+        );
         self.remove_layer(layer_index)
     }
 

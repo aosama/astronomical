@@ -4,94 +4,98 @@
 //! test, so a root-level E2E suite that drives binaries from other packages
 //! resolves them through the shared target directory instead.
 //!
-//! A journey launches the binary built with the same Cargo profile as the test
-//! binary itself: `cargo test` spawns `target/debug/<name>` and
-//! `cargo test --release` spawns `target/release/<name>`, with no fallback to
-//! the other profile. Throughput journeys depend on that rule, because an
-//! optimized journey that quietly launched an unoptimized worker would record
-//! debug-build rates as release numbers. `ASTRONOMICAL_WORKSPACE_BINARY_PROFILE`
-//! names another profile directory explicitly (for example `full-debug`) when a
-//! journey must deliberately launch a binary built differently from itself.
+//! An explicit test run uses the exact executables reported by Cargo. Plain
+//! test invocations resolve siblings of their own Cargo profile directory,
+//! including custom profiles and target triples, without selecting a different
+//! profile or falling back to an older build.
 
 use std::path::{Path, PathBuf};
 
-/// Environment variable naming the profile directory under the target root
-/// that workspace binaries are launched from, overriding the test binary's own
-/// profile. The value is the directory name cargo uses: `debug`, `release`, or
-/// a custom profile's name such as `full-debug`.
-pub const WORKSPACE_BINARY_PROFILE_ENVIRONMENT_VARIABLE: &str =
-    "ASTRONOMICAL_WORKSPACE_BINARY_PROFILE";
+use crate::test_run::TestRunContext;
 
-/// Returns the executable path of a binary built into the workspace's shared
-/// target directory with the same profile as the running test binary (or the
-/// profile named by `ASTRONOMICAL_WORKSPACE_BINARY_PROFILE`).
+/// Returns an explicitly built executable or a sibling of this test's profile.
 ///
 /// Panics with the exact build command when the binary is missing from that
 /// profile directory, so a skipped build fails loudly at the point of use
 /// instead of surfacing as a confusing spawn error deep inside a journey, and
-/// so a release journey never measures a leftover debug build. A relative
-/// `CARGO_TARGET_DIR` resolves against the test's working directory, which
-/// cargo sets to the test package's root.
+/// so a release journey never measures a leftover debug build.
 pub fn workspace_binary(binary_name: &str) -> PathBuf {
     let test_working_directory =
         std::env::current_dir().expect("the test working directory should be readable");
-    let workspace_root = find_workspace_root(&test_working_directory).unwrap_or_else(|| {
-        panic!(
-            "no workspace root found above {}",
-            test_working_directory.display()
-        )
-    });
-    let target_root = std::env::var_os("CARGO_TARGET_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| workspace_root.join("target"));
-    let profile_directory = requested_profile_directory(
-        std::env::var(WORKSPACE_BINARY_PROFILE_ENVIRONMENT_VARIABLE).ok(),
+    if let Some(run_context) = TestRunContext::read_from_directory(&test_working_directory)
+        .expect("the explicit test-run context should load")
+    {
+        return resolve_run_binary(&run_context, binary_name);
+    }
+    let test_executable_path =
+        std::env::current_exe().expect("the test executable path should resolve");
+    let profile_directory = executing_profile_directory(&test_executable_path)
+        .expect("the test executable should identify its Cargo profile");
+    let profile_name = profile_directory
+        .file_name()
+        .and_then(|profile_name| profile_name.to_str())
+        .expect("the Cargo profile directory should have a text name");
+    resolve_workspace_binary(
+        profile_directory
+            .parent()
+            .expect("the Cargo profile directory should have a parent"),
+        profile_name,
+        binary_name,
+    )
+}
+
+fn resolve_run_binary(run_context: &TestRunContext, binary_name: &str) -> PathBuf {
+    let executable_path = run_context
+        .workspace_binaries
+        .get(binary_name)
+        .unwrap_or_else(|| {
+            panic!("cargo xtask test-run did not build requested workspace binary '{binary_name}'")
+        });
+    assert!(
+        executable_path.is_file(),
+        "the explicitly built workspace binary is missing: {}",
+        executable_path.display()
     );
-    resolve_workspace_binary(&target_root, &profile_directory, binary_name)
+    executable_path.clone()
 }
 
-/// The profile directory to launch binaries from: the explicit override when
-/// it is set to a non-empty value, otherwise the running test binary's own
-/// profile.
-fn requested_profile_directory(profile_override: Option<String>) -> String {
-    profile_override
-        .filter(|profile_directory| !profile_directory.is_empty())
-        .unwrap_or_else(|| test_binary_profile_directory().to_owned())
-}
-
-/// The profile directory the running test binary was built into.
-///
-/// `debug_assertions` is on for the dev and test profiles and off for release
-/// and bench, and this crate is compiled with the same profile as the test
-/// binary that links it, so the flag mirrors the test binary's profile without
-/// reading cargo metadata at run time. A custom profile inherits the flag from
-/// its parent and lands in its own directory, which is what the environment
-/// override exists for.
-fn test_binary_profile_directory() -> &'static str {
-    if cfg!(debug_assertions) {
-        "debug"
-    } else {
-        "release"
+fn executing_profile_directory(test_executable_path: &Path) -> Result<PathBuf, String> {
+    let executable_directory = test_executable_path
+        .parent()
+        .ok_or_else(|| "the test executable has no parent directory".to_owned())?;
+    if executable_directory
+        .file_name()
+        .is_some_and(|name| name == "deps")
+    {
+        return executable_directory
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| "the test executable has no Cargo profile directory".to_owned());
     }
-}
-
-fn find_workspace_root(start_directory: &Path) -> Option<PathBuf> {
-    let mut candidate_directory = Some(start_directory);
-    while let Some(candidate) = candidate_directory {
-        let manifest_path = candidate.join("Cargo.toml");
-        let is_workspace_root = std::fs::read_to_string(&manifest_path)
-            .map(|manifest_text| {
-                manifest_text
-                    .lines()
-                    .any(|line| line.trim() == "[workspace]")
-            })
-            .unwrap_or(false);
-        if is_workspace_root {
-            return Some(candidate.to_path_buf());
+    // Cargo's artifact layout can place test executables under
+    // profile/build/package/fingerprint/out instead of profile/deps.
+    if executable_directory
+        .file_name()
+        .is_some_and(|name| name == "out")
+    {
+        for build_directory in executable_directory.ancestors().skip(2).take(2) {
+            if build_directory
+                .file_name()
+                .is_some_and(|name| name == "build")
+            {
+                return build_directory
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .ok_or_else(|| {
+                        "the test executable has no Cargo profile directory".to_owned()
+                    });
+            }
         }
-        candidate_directory = candidate.parent();
     }
-    None
+    Err(
+        "the test executable does not identify its Cargo profile; use cargo xtask test-run"
+            .to_owned(),
+    )
 }
 
 /// The two profile directories cargo creates without a custom profile; a
@@ -120,8 +124,8 @@ fn resolve_workspace_binary(
         .filter(|other_profile_binary_path| other_profile_binary_path.is_file())
         .map(|other_profile_binary_path| {
             format!(
-                " A build from another profile exists at {} and is not used; set \
-                 {WORKSPACE_BINARY_PROFILE_ENVIRONMENT_VARIABLE} to launch it deliberately.",
+                " A build from another profile exists at {} and is not used; \
+                 cargo xtask test-run selects and builds an explicit profile.",
                 other_profile_binary_path.display()
             )
         })
@@ -148,10 +152,8 @@ fn build_command(profile_directory: &str, binary_name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        WORKSPACE_BINARY_PROFILE_ENVIRONMENT_VARIABLE, requested_profile_directory,
-        resolve_workspace_binary, test_binary_profile_directory,
-    };
+    use super::{executing_profile_directory, resolve_run_binary, resolve_workspace_binary};
+    use crate::test_run::TestRunContext;
     use std::path::{Path, PathBuf};
 
     fn write_fixture_binary(target_root: &Path, profile_directory: &str) -> PathBuf {
@@ -215,8 +217,8 @@ mod tests {
             "the panic should point at the unused debug build, got: {panic_message}"
         );
         assert!(
-            panic_message.contains(WORKSPACE_BINARY_PROFILE_ENVIRONMENT_VARIABLE),
-            "the panic should name the override variable, got: {panic_message}"
+            panic_message.contains("cargo xtask test-run"),
+            "the panic should name the explicit runner, got: {panic_message}"
         );
     }
 
@@ -233,13 +235,13 @@ mod tests {
             "the panic should name the debug build command, got: {panic_message}"
         );
         assert!(
-            !panic_message.contains(WORKSPACE_BINARY_PROFILE_ENVIRONMENT_VARIABLE),
-            "no other-profile build exists, so the override must not be suggested, got: {panic_message}"
+            !panic_message.contains("A build from another profile"),
+            "no other-profile build exists, so none should be suggested, got: {panic_message}"
         );
     }
 
     #[test]
-    fn should_name_the_custom_profile_build_command_for_an_overridden_profile() {
+    fn should_name_the_custom_profile_build_command() {
         let target_root = tempfile::tempdir().expect("temporary target root should be created");
 
         let panic_message = panic_message_of(|| {
@@ -253,34 +255,63 @@ mod tests {
     }
 
     #[test]
-    fn should_default_to_the_test_binary_profile_without_an_override() {
-        let expected_profile_directory = if cfg!(debug_assertions) {
-            "debug"
-        } else {
-            "release"
-        };
-
-        assert_eq!(test_binary_profile_directory(), expected_profile_directory);
+    fn should_resolve_custom_profiles_and_target_triples_from_the_test_executable() {
+        let target_root = tempfile::tempdir().expect("target root");
+        let profile_directory = target_root.path().join("target-triple/full-debug");
         assert_eq!(
-            requested_profile_directory(None),
-            expected_profile_directory
-        );
-        assert_eq!(
-            requested_profile_directory(Some(String::new())),
-            expected_profile_directory,
-            "an empty override should behave like no override"
+            executing_profile_directory(&profile_directory.join("deps/test-executable"))
+                .expect("the custom profile should resolve"),
+            profile_directory
         );
     }
 
     #[test]
-    fn should_prefer_the_override_profile_over_the_test_binary_profile() {
-        assert_eq!(
-            requested_profile_directory(Some("full-debug".to_owned())),
-            "full-debug"
+    fn should_reject_executables_that_do_not_identify_a_cargo_test_profile() {
+        assert!(executing_profile_directory(Path::new("test-executable")).is_err());
+        assert!(executing_profile_directory(Path::new("profile/test-executable")).is_err());
+    }
+
+    #[test]
+    fn should_resolve_the_running_test_profile_and_cargo_build_output_layouts() {
+        assert!(
+            executing_profile_directory(
+                &std::env::current_exe().expect("the test executable should resolve")
+            )
+            .is_ok()
         );
+        let target_root = tempfile::tempdir().expect("target root");
+        let profile_directory = target_root.path().join("full-debug");
+        for test_executable_path in [
+            profile_directory.join("build/package/fingerprint/out/test-executable"),
+            profile_directory.join("build/package-fingerprint/out/test-executable"),
+        ] {
+            assert_eq!(
+                executing_profile_directory(&test_executable_path).expect("build output profile"),
+                profile_directory
+            );
+        }
+    }
+
+    #[test]
+    fn should_launch_only_the_executable_recorded_by_the_explicit_runner() {
+        let target_root = tempfile::tempdir().expect("target root");
+        let executable_path = write_fixture_binary(target_root.path(), "full-debug");
+        let mut run_context = TestRunContext::default();
+        run_context
+            .workspace_binaries
+            .insert("fixture-bin".to_owned(), executable_path.clone());
         assert_eq!(
-            requested_profile_directory(Some("release".to_owned())),
-            "release"
+            resolve_run_binary(&run_context, "fixture-bin"),
+            executable_path
         );
+    }
+
+    #[test]
+    fn should_reject_missing_explicit_executables_without_falling_back() {
+        let run_context = TestRunContext::default();
+        let panic_message = panic_message_of(|| {
+            resolve_run_binary(&run_context, "fixture-bin");
+        });
+        assert!(panic_message.contains("did not build requested workspace binary"));
     }
 }

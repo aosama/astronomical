@@ -18,12 +18,19 @@
 //! 6. The worker's performance-attribution reports (model loading and
 //!    generation) are printed as complete segment tables and preserved, so
 //!    every run attributes elapsed time to specific code segments.
+//!
+//! Select `paging_experiment` fields in the JSON configuration passed to
+//! `cargo xtask test-run --package astronomical-acceptance --test expert_paging
+//! --features expert-paging --release --configuration PATH --filter
+//! <full_test_name> --exact --ignored`. Defaults are a 32 GB ceiling, 2,048
+//! streaming prompt tokens, and one layer per paging graph submission.
 
 mod memory_observation;
 mod support;
 
 use std::{fs, path::Path};
 
+use astronomical_test_harness::test_run::{PagingExperimentCase, TestRunContext};
 use serde_json::{Value, json};
 use serial_test::serial;
 use tokio::time::{Duration, Instant as TokioInstant, timeout};
@@ -41,20 +48,7 @@ fn model_id() -> &'static str {
     crate::support::large_sparse_moe_streaming_model_id()
 }
 
-// The 8-bit artifact is ~36.8 decimal GB on disk; the default ceiling is ~87%
-// of that, so complete residency is impossible and routed experts must page
-// from SSD. `PAGING_EXPERIMENT_MLX_MEMORY_GB` sweeps the ceiling so one
-// journey binary can probe the complete-residency boundary too.
-const DEFAULT_MAXIMUM_MLX_MEMORY_GB: u64 = 32;
-
-fn experiment_maximum_mlx_memory_bytes() -> u64 {
-    std::env::var("PAGING_EXPERIMENT_MLX_MEMORY_GB")
-        .ok()
-        .and_then(|ceiling_gb| ceiling_gb.parse::<u64>().ok())
-        .unwrap_or(DEFAULT_MAXIMUM_MLX_MEMORY_GB)
-        * 1_000_000_000
-}
-
+const BYTES_PER_GIGABYTE: u64 = 1 << 30;
 const PROMPT_TOKEN_COUNT: usize = 5_000;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 500;
 const MINIMUM_MEANINGFUL_OUTPUT_TOKEN_COUNT: u64 = 50;
@@ -76,7 +70,10 @@ async fn should_measure_paging_memory_shape_and_serving_rates_under_the_configur
 }
 
 async fn run_paging_memory_shape_experiment() {
-    let maximum_mlx_memory_bytes = experiment_maximum_mlx_memory_bytes();
+    let paging_experiment = TestRunContext::current().configuration.paging_experiment;
+    let maximum_mlx_memory_bytes = paging_experiment
+        .maximum_mlx_memory_bytes()
+        .expect("the selected paging experiment should have a valid binary-gigabyte ceiling");
     // One percent covers allocator rounding and transient peaks that settle
     // before the finalized snapshot.
     let maximum_mlx_memory_tolerance_bytes = maximum_mlx_memory_bytes / 100;
@@ -86,7 +83,7 @@ async fn run_paging_memory_shape_experiment() {
     write_acceptance_config(
         isolated_worker_home.path(),
         &model_directory,
-        maximum_mlx_memory_bytes / 1_000_000_000,
+        &paging_experiment,
     );
     let user_message = build_exact_model_prompt_content(
         &model_directory,
@@ -168,7 +165,7 @@ async fn run_paging_memory_shape_experiment() {
         .unwrap_or(0);
     assert!(
         maximum_observed_expert_payload_bytes > 0,
-        "the 36.8 GB artifact under a 32 GB ceiling must retain expert payload in RAM while paging"
+        "the paged model must retain expert payload in memory alongside its storage reads"
     );
     stop_real_model_rest_server(real_model_rest_server).await;
     let expert_source_read_byte_count = support::generation_attribution_counter(
@@ -261,10 +258,10 @@ decode_wall_seconds={wall_decode_seconds:.3} \
 peak_memory_gb={:.2} final_active_memory_gb={:.2} \
 maximum_expert_payload_gb={:.2} \
 expert_source_read_gb={:.2} expert_source_read_calls={expert_source_read_call_count}",
-        peak_memory_bytes as f64 / 1_000_000_000.0,
-        final_active_memory_bytes as f64 / 1_000_000_000.0,
-        maximum_observed_expert_payload_bytes as f64 / 1_000_000_000.0,
-        expert_source_read_byte_count as f64 / 1_000_000_000.0,
+        peak_memory_bytes as f64 / BYTES_PER_GIGABYTE as f64,
+        final_active_memory_bytes as f64 / BYTES_PER_GIGABYTE as f64,
+        maximum_observed_expert_payload_bytes as f64 / BYTES_PER_GIGABYTE as f64,
+        expert_source_read_byte_count as f64 / BYTES_PER_GIGABYTE as f64,
     );
     let evidence_directory = support::preserve_experiment_evidence(
         isolated_worker_home.path(),
@@ -307,40 +304,41 @@ expert_source_read_gb={:.2} expert_source_read_calls={expert_source_read_call_co
 fn write_acceptance_config(
     isolated_worker_home: &Path,
     model_directory: &Path,
-    maximum_mlx_memory_gb: u64,
+    paging_experiment: &PagingExperimentCase,
 ) {
     let configuration_directory = isolated_worker_home.join(".astronomical-dev");
     fs::create_dir(&configuration_directory)
         .expect("the paging-experiment configuration directory should be created");
-    // Experiment overrides let one journey binary sweep paging-cell variables
-    // one at a time; the defaults reproduce the production cell, whose
-    // SSD-streaming chunk default is 2,048 tokens.
-    let ssd_streaming_chunk_tokens: usize =
-        std::env::var("PAGING_EXPERIMENT_SSD_STREAMING_CHUNK_TOKENS")
-            .ok()
-            .and_then(|chunk_tokens| chunk_tokens.parse().ok())
-            .unwrap_or(2_048);
-    let prefill_graph_submission_layer_interval: u32 =
-        std::env::var("PAGING_EXPERIMENT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL")
-            .ok()
-            .and_then(|layer_interval| layer_interval.parse().ok())
-            .unwrap_or(1);
-    let generation_graph_submission_layer_interval: u32 =
-        std::env::var("PAGING_EXPERIMENT_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL")
-            .ok()
-            .and_then(|layer_interval| layer_interval.parse().ok())
-            .unwrap_or(1);
+    let maximum_mlx_memory_gb = paging_experiment.maximum_mlx_memory_gigabytes;
+    let streaming_prompt_processing_chunk_tokens =
+        paging_experiment.streaming_prompt_processing_chunk_tokens;
+    let prefill_graph_submission_layer_interval =
+        paging_experiment.prefill_graph_submission_layer_interval;
+    let generation_graph_submission_layer_interval =
+        paging_experiment.generation_graph_submission_layer_interval;
     eprintln!(
-        "[paging-memory-shape] status=cell maximum_mlx_memory_gb={maximum_mlx_memory_gb} ssd_streaming_chunk_tokens={ssd_streaming_chunk_tokens} \
+        "[paging-memory-shape] status=cell maximum_mlx_memory_gb={maximum_mlx_memory_gb} streaming_prompt_processing_chunk_tokens={streaming_prompt_processing_chunk_tokens} \
 prefill_graph_submission_layer_interval={prefill_graph_submission_layer_interval} \
-generation_graph_submission_layer_interval={generation_graph_submission_layer_interval} \
-positional_read_parallelism={}",
-        std::env::var("ASTRONOMICAL_POSITIONAL_READ_PARALLELISM")
-            .unwrap_or_else(|_| "default".to_owned()),
+generation_graph_submission_layer_interval={generation_graph_submission_layer_interval}"
     );
-    let configuration_document = json!({
+    fs::write(
+        configuration_directory.join("config.json"),
+        serde_json::to_vec_pretty(&paging_experiment_configuration(
+            model_directory,
+            paging_experiment,
+        ))
+        .expect("the paging-experiment configuration should serialize"),
+    )
+    .expect("the paging-experiment configuration should be written");
+}
+
+fn paging_experiment_configuration(
+    model_directory: &Path,
+    paging_experiment: &PagingExperimentCase,
+) -> Value {
+    json!({
         "model_directories": [crate::support::artifact_bytes::acceptance_model_scan_root(model_directory)],
-        "maximum_mlx_memory_gb": maximum_mlx_memory_gb,
+        "maximum_mlx_memory_gb": paging_experiment.maximum_mlx_memory_gigabytes,
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": false,
         "performance_attribution_enabled": true,
@@ -352,17 +350,15 @@ positional_read_parallelism={}",
         // many decoder layers accumulate before one evaluation submission, which
         // trades submission back-pressure against lazy-tape residency.
         "chunking": {
-            "fixed_prompt_processing_chunk_size_tokens": ssd_streaming_chunk_tokens,
-            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": ssd_streaming_chunk_tokens,
+            "fixed_prompt_processing_chunk_size_tokens": paging_experiment.streaming_prompt_processing_chunk_tokens,
+            "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": paging_experiment.streaming_prompt_processing_chunk_tokens,
             "prefill_graph_submission_layer_interval": 0,
-            "experimental_ssd_paging_prefill_graph_submission_layer_interval": prefill_graph_submission_layer_interval,
-            "experimental_ssd_paging_generation_graph_submission_layer_interval": generation_graph_submission_layer_interval,
+            "experimental_ssd_paging_prefill_graph_submission_layer_interval": paging_experiment.prefill_graph_submission_layer_interval,
+            "experimental_ssd_paging_generation_graph_submission_layer_interval": paging_experiment.generation_graph_submission_layer_interval,
         },
-    });
-    fs::write(
-        configuration_directory.join("config.json"),
-        serde_json::to_vec_pretty(&configuration_document)
-            .expect("the paging-experiment configuration should serialize"),
-    )
-    .expect("the paging-experiment configuration should be written");
+    })
 }
+
+#[cfg(test)]
+#[path = "large_sparse_moe_streaming_paging_memory_shape_rest_journey/paging_experiment_tests.rs"]
+mod paging_experiment_tests;

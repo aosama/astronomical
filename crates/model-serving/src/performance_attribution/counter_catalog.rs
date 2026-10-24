@@ -18,8 +18,6 @@ pub enum PerformanceCounter {
     GeneratedTokenCount,
     ForcedThinkingTransitionTokenCount,
     PrefillChunkCount,
-    PrefillCapacityRejectionCount,
-    PrefillCapacityRetryCount,
     RustExpertStreamingPayloadByteCount,
     RustStreamedExpertProjectionGraphCount,
     PositionalFileReadCallCount,
@@ -123,13 +121,15 @@ pub enum PerformanceCounter {
     /// compared across chunk sizes it shows how the decode round trip
     /// amortizes (or fails to) over prompt tokens.
     Jangtq2CodebookDecodedOutputByteCount,
+    /// Candidate-policy demand inserts that replaced an occupied decode slot.
+    DecodeExpertCacheSlotEvictionCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
     /// Number of distinct counters the enabled report storage reserves.
-    pub const COUNT: usize = Self::Jangtq2CodebookDecodedOutputByteCount as usize + 1;
+    pub const COUNT: usize = Self::DecodeExpertCacheSlotEvictionCount as usize + 1;
     /// Every counter in declaration order, so report serialization can pair a
     /// counter with its stored value by position without an allocation.
     pub const ALL: [Self; Self::COUNT] = [
@@ -138,8 +138,6 @@ impl PerformanceCounter {
         Self::GeneratedTokenCount,
         Self::ForcedThinkingTransitionTokenCount,
         Self::PrefillChunkCount,
-        Self::PrefillCapacityRejectionCount,
-        Self::PrefillCapacityRetryCount,
         Self::RustExpertStreamingPayloadByteCount,
         Self::RustStreamedExpertProjectionGraphCount,
         Self::PositionalFileReadCallCount,
@@ -204,6 +202,7 @@ impl PerformanceCounter {
         Self::AdmissionReservePhaseScaledSourceCount,
         Self::AdmissionReserveGlobalMaximumSourceCount,
         Self::Jangtq2CodebookDecodedOutputByteCount,
+        Self::DecodeExpertCacheSlotEvictionCount,
     ];
 
     /// Stable report identifier for this counter.
@@ -216,8 +215,6 @@ impl PerformanceCounter {
             Self::GeneratedTokenCount => "generated_token_count",
             Self::ForcedThinkingTransitionTokenCount => "forced_thinking_transition_token_count",
             Self::PrefillChunkCount => "prefill_chunk_count",
-            Self::PrefillCapacityRejectionCount => "prefill_capacity_rejection_count",
-            Self::PrefillCapacityRetryCount => "prefill_capacity_retry_count",
             Self::RustExpertStreamingPayloadByteCount => "rust_expert_streaming_payload_byte_count",
             Self::RustStreamedExpertProjectionGraphCount => {
                 "rust_streamed_expert_projection_graph_count"
@@ -360,6 +357,7 @@ impl PerformanceCounter {
             Self::Jangtq2CodebookDecodedOutputByteCount => {
                 "jangtq2_codebook_decoded_output_byte_count"
             }
+            Self::DecodeExpertCacheSlotEvictionCount => "decode_expert_cache_slot_eviction_count",
         }
     }
 }

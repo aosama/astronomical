@@ -16,6 +16,7 @@ workspace = true
 
 [dependencies]
 astronomical-native-identity = { path = "../crates/native-identity" }
+astronomical-test-harness = { path = "../crates/test-harness" }
 # Signal handlers, process-group signaling, access(2), and localtime_r for
 # the disposable-target lifecycle runner: the one sanctioned unsafe edge.
 libc.workspace = true
@@ -23,8 +24,9 @@ serde_json.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
-astronomical-test-harness = { path = "../crates/test-harness" }
+serial_test.workspace = true
 serde_yaml = "0.9"
+tempfile = "=3.27.0"
 
 [[test]]
 name = "offline_gh_shim_journeys"

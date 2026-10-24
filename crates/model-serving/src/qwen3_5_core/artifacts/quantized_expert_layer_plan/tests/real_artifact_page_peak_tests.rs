@@ -15,11 +15,10 @@ use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use std::collections::HashMap;
 
 #[test]
-#[ignore = "loads the real JANGH2 bundle headers through the production validators; set ASTRONOMICAL_JANGTQ2_MODEL_DIR"]
+#[ignore = "loads real JANGH2 bundle headers; select model_directory through cargo xtask test-run"]
 fn should_keep_every_jangtq2_complete_layer_page_peak_under_six_gigabytes() {
-    let model_directory = std::env::var_os("ASTRONOMICAL_JANGTQ2_MODEL_DIR")
-        .map(std::path::PathBuf::from)
-        .expect("ASTRONOMICAL_JANGTQ2_MODEL_DIR should name the local JANGH2 artifact");
+    let model_directory =
+        astronomical_test_harness::test_run::TestRunContext::current().required_model_directory();
     let layer_plans = jangtq2_real_artifact_layer_plans(&model_directory);
 
     // The graph decoder reserved roughly 15.1 GB per complete layer of this

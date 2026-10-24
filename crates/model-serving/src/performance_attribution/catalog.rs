@@ -77,6 +77,10 @@ pub enum PerformanceOperation {
     CompletedForwardMemorySnapshot,
     PromptPrefillAdvanceSpan,
     DecodeAdvanceSpan,
+    DecodeExpertRouteHostMaterialization,
+    DecodeExpertRouteContiguousArrayConstruction,
+    DecodeExpertRouteArrayEvaluation,
+    DecodeExpertRouteHostCopy,
     DecodeAttentionGraphicsProcessorCompletionWait,
     DecodeMixtureOfValuesGraphicsProcessorCompletionWait,
     DecodeFeedForwardGraphicsProcessorCompletionWait,
@@ -222,6 +226,10 @@ impl PerformanceOperation {
         Self::CompletedForwardMemorySnapshot,
         Self::PromptPrefillAdvanceSpan,
         Self::DecodeAdvanceSpan,
+        Self::DecodeExpertRouteHostMaterialization,
+        Self::DecodeExpertRouteContiguousArrayConstruction,
+        Self::DecodeExpertRouteArrayEvaluation,
+        Self::DecodeExpertRouteHostCopy,
         Self::DecodeAttentionGraphicsProcessorCompletionWait,
         Self::DecodeMixtureOfValuesGraphicsProcessorCompletionWait,
         Self::DecodeFeedForwardGraphicsProcessorCompletionWait,
@@ -421,6 +429,14 @@ impl PerformanceOperation {
 
             Self::PromptPrefillAdvanceSpan => "prompt_prefill_advance_span",
             Self::DecodeAdvanceSpan => "decode_advance_span",
+            Self::DecodeExpertRouteHostMaterialization => {
+                "decode_expert_route_host_materialization"
+            }
+            Self::DecodeExpertRouteContiguousArrayConstruction => {
+                "decode_expert_route_contiguous_array_construction"
+            }
+            Self::DecodeExpertRouteArrayEvaluation => "decode_expert_route_array_evaluation",
+            Self::DecodeExpertRouteHostCopy => "decode_expert_route_host_copy",
             Self::DecodeAttentionGraphicsProcessorCompletionWait => {
                 "decode_attention_graphics_processor_completion_wait"
             }

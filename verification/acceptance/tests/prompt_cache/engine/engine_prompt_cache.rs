@@ -9,9 +9,10 @@
 //! real-model journeys: run the binary directly with
 //! `-- --ignored --nocapture --test-threads=1`.
 //!
-//! The one exception is the interaction-matrix journey, which fails closed
-//! unless ASTRONOMICAL_PROMPT_CACHE_INTERACTION_ACCEPTANCE_CELL names a cell
-//! — see its module doc for the three cells.
+//! The interaction-matrix tests name the `LiveReuse`, `WorkerRestart`, and
+//! `DeletedWhileLive` cells explicitly. Run each full test name in a separate
+//! process through `cargo xtask test-run --exact --ignored`; see that module's
+//! documentation for the complete runner invocation.
 //!
 //! The wide-chunk parity journey selects its prefill span with
 //! `ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS`; the cell

@@ -239,11 +239,33 @@ impl Qwen3_5EngineState {
             }
         };
         let (mlx_memory_telemetry, expert_residency_telemetry) = mlx_memory_telemetry;
+        self.persist_expert_usage_history();
         GenerationFinalization::new(
             expert_memory_mode,
             mlx_memory_telemetry,
             expert_residency_telemetry,
         )
+    }
+
+    /// Persists the live expert demand counts beside the artifact so the next
+    /// session's warm tables start hot instead of at the first-touch floor
+    /// (colibri's `.coli_usage` analog). Best-effort by contract: the store
+    /// logs write failures and serving continues unchanged.
+    fn persist_expert_usage_history(&self) {
+        let Some(model) = self.model.as_ref() else {
+            return;
+        };
+        let Some(retained_experts) = model.retained_experts.as_ref() else {
+            return;
+        };
+        let usage_file_path = crate::qwen3_5_streaming::expert_streaming::expert_usage_file_path(
+            &self.model_directory,
+        );
+        crate::qwen3_5_streaming::expert_streaming::write_expert_usage(
+            &usage_file_path,
+            self.model_id.as_deref(),
+            retained_experts.borrow().expert_demand_counts(),
+        );
     }
 
     pub(super) fn record_generation_performance_attribution(

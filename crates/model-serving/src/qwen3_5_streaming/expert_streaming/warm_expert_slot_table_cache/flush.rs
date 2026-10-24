@@ -68,14 +68,30 @@ impl WarmExpertSlotTableCache {
                     );
                 }
             } else {
-                let written_count = self.insert_streamed_experts(
-                    runtime,
-                    pending_insert.layer_index,
-                    &pending_insert.expert_ids,
-                    &pending_insert.weights,
-                    &[],
-                    pending_insert.warm_slot_count,
-                )?;
+                let candidate_decode_step_epoch = (pending_insert.is_decode_demand
+                    && self.decode_expert_cache_policy
+                        == astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy::Candidate)
+                    .then_some(self.decode_step_epoch);
+                let written_count = if let Some(decode_step_epoch) = candidate_decode_step_epoch {
+                    self.insert_candidate_decode_experts(
+                        runtime,
+                        pending_insert.layer_index,
+                        &pending_insert.expert_ids,
+                        &pending_insert.weights,
+                        &[],
+                        pending_insert.warm_slot_count,
+                        decode_step_epoch,
+                    )?
+                } else {
+                    self.insert_streamed_experts(
+                        runtime,
+                        pending_insert.layer_index,
+                        &pending_insert.expert_ids,
+                        &pending_insert.weights,
+                        &[],
+                        pending_insert.warm_slot_count,
+                    )?
+                };
                 written_expert_count = written_expert_count
                     .saturating_add(u64::try_from(written_count).unwrap_or(u64::MAX));
             }

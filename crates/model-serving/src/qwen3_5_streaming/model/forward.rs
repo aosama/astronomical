@@ -148,7 +148,23 @@ impl Qwen3_5Model {
         }
 
         let selected_expert_ids = if should_use_loaded_model_mode {
-            Some(self.copy_selected_expert_ids(&selected_indices)?)
+            let selected_expert_ids = if token_count == 1 {
+                // Streamed decode must know the exact route before loading its
+                // weights. Materializing that route can evaluate pending MLX
+                // work, so track this per-layer synchronization separately.
+                performance_attribution.measure_operation(
+                    PerformanceOperation::DecodeExpertRouteHostMaterialization,
+                    |performance_attribution| {
+                        self.copy_selected_expert_ids(
+                            &selected_indices,
+                            Some(performance_attribution),
+                        )
+                    },
+                )?
+            } else {
+                self.copy_selected_expert_ids(&selected_indices, None)?
+            };
+            Some(selected_expert_ids)
         } else {
             None
         };

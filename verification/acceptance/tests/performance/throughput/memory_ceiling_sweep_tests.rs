@@ -2,6 +2,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronomical_daemon::ChatGenerationExecutor;
+use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
 use serde_json::Value;
 
 use super::*;
@@ -88,7 +89,7 @@ async fn should_persist_the_stage_of_a_budget_exhausted_cell() {
             );
             let memory_cell = compose_memory_cell(
                 &run_outcome,
-                23_000_000_000,
+                23 * BYTES_PER_GIGABYTE,
                 budget_exhausted,
                 &Value::Object(serde_json::Map::new()),
             );
@@ -96,9 +97,11 @@ async fn should_persist_the_stage_of_a_budget_exhausted_cell() {
                 timestamp: "test-timestamp".to_owned(),
                 model_id: "test-model".to_owned(),
                 journey: ThroughputJourneyKind::MemoryCeilingSweep,
+                decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
                 prefill_tokens_per_second: 0,
                 decode_tokens_per_second: 0,
                 git_commit: None,
+                worker_build_identity: fixture_worker_build_identity(),
                 machine: machine_specs.clone(),
                 total_input_tokens: 0,
                 total_output_tokens: 0,
@@ -157,7 +160,14 @@ async fn should_append_an_exhausted_cell_before_failing() {
         let append_history_path = history_path.clone();
 
         let append_result = tokio::spawn(async move {
-            append_memory_cell_record(run_outcome, 23_000_000_000, 23, &append_history_path).await
+            append_memory_cell_record(
+                run_outcome,
+                23 * BYTES_PER_GIGABYTE,
+                23,
+                &append_history_path,
+                fixture_worker_build_identity(),
+            )
+            .await
         })
         .await;
         let append_failure =
@@ -179,6 +189,10 @@ async fn should_append_an_exhausted_cell_before_failing() {
             persisted_record["memory_cell"]["budget_exhausted_stage"].as_str(),
             Some("launch_or_idle"),
         );
+        assert_eq!(
+            persisted_record["worker_build_identity"]["source_commit"].as_str(),
+            Some("fixture-commit"),
+        );
     })
     .await
     .expect("the exhausted-cell persistence test should finish within ten seconds");
@@ -191,6 +205,7 @@ fn journey_run_outcome_with_budget_stage(
     JourneyRunOutcome {
         measurement: throughput_support::ThroughputMeasurement {
             model_id: "test-model".to_owned(),
+            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
             total_input_tokens: 0,
             total_output_tokens: 0,
             cached_tokens: 0,
@@ -198,6 +213,9 @@ fn journey_run_outcome_with_budget_stage(
             decode_time_seconds: 0.0,
             prefill_tokens_per_second: 0.0,
             decode_tokens_per_second: 0.0,
+            mlx_peak_memory_bytes: None,
+            measured_output_text: None,
+            decode_cache_diagnostic_evidence: None,
         },
         measured_budget_exhausted: budget_exhausted_stage.is_some(),
         budget_exhausted_stage,
@@ -217,6 +235,14 @@ fn generation_report(request_id: u64, prompt_token_count: u64) -> Value {
             "amount": prompt_token_count
         }]
     })
+}
+
+fn fixture_worker_build_identity() -> WorkerBuildIdentity {
+    WorkerBuildIdentity {
+        source_commit: "fixture-commit".to_owned(),
+        source_is_dirty: false,
+        executable_sha256: "ab".repeat(32),
+    }
 }
 
 fn write_generation_reports(logging_directory: &Path, reports: &[Value]) {

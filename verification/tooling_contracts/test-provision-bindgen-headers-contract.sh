@@ -103,9 +103,6 @@ FIXTURE_STORE_DIRECTORY="${SANDBOX_DIRECTORY}/store"
 FIXTURE_TARGET="aarch64-apple-darwin"
 mkdir -p "$CACHE_DIRECTORY" "$FIXTURE_DIRECTORY"
 
-export TARGET="$FIXTURE_TARGET"
-export ASTRONOMICAL_NATIVE_IDENTITY_TARGET="$FIXTURE_TARGET"
-
 # Builds one fixture archive: a pristine tree, a modified tree whose single
 # header gains one line, and the patch that transforms one into the other.
 build_fixture_dependency() {
@@ -262,7 +259,7 @@ assert_contains "$PROVISION_OUTPUT_FILE" "cargo xtask bootstrap-native-dependenc
 provision
 built_identity="$(
     timeout 120 cargo run --quiet --manifest-path "${repository_root}/xtask/Cargo.toml" -p xtask -- \
-        native-fingerprint --profile core "$repository_root"
+        native-fingerprint --target "$FIXTURE_TARGET" --profile core "$repository_root"
 )"
 FIXTURE_ENTRY_DIRECTORY="${FIXTURE_STORE_DIRECTORY}/v1/entries/${built_identity}"
 mkdir -p "${FIXTURE_ENTRY_DIRECTORY}/include"
@@ -272,6 +269,7 @@ printf '%s\n' "$built_identity" > "${FIXTURE_ENTRY_DIRECTORY}/complete"
 assert_run_succeeds "header verification against a matching build" \
     --cache-dir "$CACHE_DIRECTORY" \
     --native-build-store-dir "$FIXTURE_STORE_DIRECTORY" \
+    --target "$FIXTURE_TARGET" \
     --verify-headers
 assert_contains "$PROVISION_OUTPUT_FILE" "headers_match=yes" "verification should match an identical staged tree"
 
@@ -279,6 +277,7 @@ printf '\n' >> "${FIXTURE_ENTRY_DIRECTORY}/include/mlx/c/mlx.h"
 assert_run_fails "header verification against a modified build" \
     --cache-dir "$CACHE_DIRECTORY" \
     --native-build-store-dir "$FIXTURE_STORE_DIRECTORY" \
+    --target "$FIXTURE_TARGET" \
     --verify-headers
 assert_contains "$PROVISION_OUTPUT_FILE" "headers_match=no" "verification must detect a one-byte difference"
 assert_contains "$PROVISION_OUTPUT_FILE" "modified ./c/mlx.h" "the differing path should be reported"
@@ -287,6 +286,7 @@ rm -rf "${FIXTURE_STORE_DIRECTORY}/v1/entries/${built_identity}"
 assert_run_fails "header verification without a completed build" \
     --cache-dir "$CACHE_DIRECTORY" \
     --native-build-store-dir "$FIXTURE_STORE_DIRECTORY" \
+    --target "$FIXTURE_TARGET" \
     --verify-headers
 assert_contains "$PROVISION_OUTPUT_FILE" "no completed native build" \
     "a missing build entry should be reported with guidance"

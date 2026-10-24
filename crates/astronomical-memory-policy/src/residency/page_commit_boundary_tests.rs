@@ -2,7 +2,9 @@
 //! complete-layer adoption gate.
 
 use crate::residency::ExpertLayerResidencyTarget;
-use crate::residency::should_commit_multi_token_union_as_complete_layer;
+use crate::residency::{
+    should_commit_multi_token_union_as_complete_layer, should_seed_partial_layer_on_prefill_read,
+};
 
 #[test]
 fn should_commit_a_multi_token_union_as_a_complete_layer_when_the_plan_funds_it() {
@@ -113,6 +115,116 @@ fn should_not_commit_a_multi_token_union_for_unfunded_or_non_production_plans() 
 }
 
 #[test]
+fn should_seed_a_partial_prefill_union_for_a_funded_complete_layer_target() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    for funded_target in [
+        ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead,
+        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
+    ] {
+        for routed_expert_count in [1, 127] {
+            assert!(
+                should_seed_partial_layer_on_prefill_read(
+                    2_048,
+                    true,
+                    Some(funded_target),
+                    0,
+                    routed_expert_count,
+                    128,
+                ),
+                "a cold non-empty partial union must seed for {funded_target:?} \
+                 at {routed_expert_count} routed experts"
+            );
+        }
+    }
+}
+
+#[test]
+fn should_not_seed_a_partial_prefill_union_outside_its_funded_boundary() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+
+    let funded_target = Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead);
+    for routed_expert_count in [0, 128, 129] {
+        assert!(!should_seed_partial_layer_on_prefill_read(
+            2_048,
+            true,
+            funded_target,
+            0,
+            routed_expert_count,
+            128,
+        ));
+    }
+    assert!(!should_seed_partial_layer_on_prefill_read(
+        2_048,
+        true,
+        funded_target,
+        0,
+        0,
+        0,
+    ));
+    // An existing partial table uses the missing-expert growth path instead.
+    assert!(!should_seed_partial_layer_on_prefill_read(
+        2_048,
+        true,
+        funded_target,
+        1,
+        64,
+        128,
+    ));
+    // Decode tokens, diagnostic paths, and absent or partial-only plans do not
+    // authorize a prefill completion seed.
+    assert!(!should_seed_partial_layer_on_prefill_read(
+        1,
+        true,
+        funded_target,
+        0,
+        64,
+        128,
+    ));
+    assert!(!should_seed_partial_layer_on_prefill_read(
+        0,
+        true,
+        funded_target,
+        0,
+        64,
+        128,
+    ));
+    assert!(!should_seed_partial_layer_on_prefill_read(
+        2_048,
+        false,
+        funded_target,
+        0,
+        64,
+        128,
+    ));
+    assert!(!should_seed_partial_layer_on_prefill_read(
+        2_048, true, None, 0, 64, 128,
+    ));
+    for unfunded_target in [
+        ExpertLayerResidencyTarget::StreamOperationLocal,
+        ExpertLayerResidencyTarget::ReleasePartial,
+        ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit,
+        ExpertLayerResidencyTarget::PreserveComplete,
+        ExpertLayerResidencyTarget::PreservePartial,
+        ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+    ] {
+        assert!(
+            !should_seed_partial_layer_on_prefill_read(
+                2_048,
+                true,
+                Some(unfunded_target),
+                0,
+                64,
+                128,
+            ),
+            "target {unfunded_target:?} must not authorize the seed"
+        );
+    }
+}
+
+#[test]
 fn should_complete_a_partial_layer_when_the_plan_funds_the_remaining_experts() {
     use crate::residency::ExpertLayerResidencyTarget;
     use crate::residency::should_complete_partial_layer_on_prefill_read;
@@ -132,8 +244,7 @@ fn should_not_complete_an_empty_complete_or_unfunded_layer() {
     use crate::residency::ExpertLayerResidencyTarget;
     use crate::residency::should_complete_partial_layer_on_prefill_read;
     let funded = Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead);
-    // An empty table has nothing worth extending: the union adoption path
-    // owns the from-scratch case.
+    // Cold-union seeding and complete-union adoption own the empty-table case.
     assert!(!should_complete_partial_layer_on_prefill_read(
         true, funded, 0, 128
     ));

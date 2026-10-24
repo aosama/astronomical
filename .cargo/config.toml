@@ -20,8 +20,8 @@ warnings = "deny"
 # would make locally warmed entries unusable to the CI lane.
 
 [alias]
-# Each alias expands to one plain `cargo test` invocation; read the list to
-# see the exact packages and test binaries it covers.
+# Test aliases select the exact packages and test binaries below, either through
+# `cargo test` or the explicit repository-owned test runner.
 #
 # Every alias is written as one string, never as a TOML array. Cargo merges
 # config files from every ancestor directory and JOINS array values across
@@ -50,9 +50,10 @@ warnings = "deny"
 # test-e2e: the root whole-product journeys (verification/e2e) that spawn the real
 # astronomicald binary; run `cargo build --bins -p astronomical-daemon`
 # first. The harness's workspace_binary launches binaries from the test
-# binary's own profile (debug for `cargo test`, release for `--release`,
-# never the other) and names the matching `cargo build --bin` command if
-# the build was skipped; ASTRONOMICAL_WORKSPACE_BINARY_PROFILE overrides it.
+# actual Cargo profile directory, including custom profiles, and names the
+# matching `cargo build --bin` command if the build was skipped.
+# `cargo xtask test-run --package astronomical-e2e --test e2e
+# [--configuration PATH]` instead builds and supplies exact executables.
 # test-app-builder: the macOS app-builder packaging journey as an offline
 # integration test — a sandboxed repository copy runs the real
 # scripts/internal/build-macos-app.sh with fixture-bin tool shims on PATH,
@@ -90,7 +91,7 @@ test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance -
 # line-coverage floor for astronomical-memory-policy, at or above 90% by default;
 # deliberately not a continuous-integration step), `cargo xtask notices
 # [--check]`, `cargo
-# xtask native-fingerprint [--source-only] [--explain] --profile
+# xtask native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile
 # core|core+memory-contract [root]`, `cargo xtask classify-scope`, `cargo
 # xtask check-architecture`, `cargo xtask prune-caches [--dry-run]
 # [--repo owner/name]`, `cargo xtask save-sccache <primary-cache-key>`,
@@ -102,6 +103,30 @@ test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance -
 # `cargo xtask scan-retired-native-output [--target-directory PATH]
 # [--fail-on-found] [EXTRA_SCAN_ROOT ...]` (the read-only issue #1486 probe
 # counting the retired CMake native-output layout).
+# `cargo xtask test-run --package NAME (--test TARGET | --lib | --tests)
+# [--features FEATURES] [--release | --profile NAME] [--configuration PATH]
+# [--filter NAME] [--exact] [--ignored]` builds exact Cargo executables and
+# runs each selected test in its own process, with a 120-second test budget,
+# five-second progress, and retained manifests/logs under target/test-runs.
+# The explicit JSON configuration accepts model_directory,
+# evidence_directory, real_models, diagnostics, retain_isolated_home,
+# allow_large_wired_memory_probe, prefix_adoption_enabled,
+# prompt_processing_chunk_tokens, sweep_cell_order, throughput_history_path,
+# and coverage_inventory_output. Its paging_experiment object accepts
+# maximum_mlx_memory_gigabytes, streaming_prompt_processing_chunk_tokens,
+# prefill_graph_submission_layer_interval, and
+# generation_graph_submission_layer_interval. Defaults preserve the ordinary
+# test case; counts must be positive and whole gigabytes use 2^30 bytes.
+# Paths resolve relative to the configuration file. Evidence is separated by
+# run and case so a later failure cannot erase an earlier run. Source identity
+# and workspace executable paths and digests are generated, not configuration
+# overrides. Throughput history records that worker build identity and dirty
+# source state; serving measurements must use this runner.
+# `cargo xtask mlx-c-coverage-inventory` refreshes the bridge inventory through
+# the same explicit runner. Focused automatic read-limit and wired-claim tests:
+# `cargo test -p astronomical-runtime-integration -p astronomical-inference-worker
+# --features astronomical-runtime-integration/mlx --lib --
+# bounded_range_read_concurrency worker_startup_wired_claim_tests`.
 xtask = "run -p xtask --"
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —
@@ -173,9 +198,11 @@ test-mlx-memory = "test --no-fail-fast -p astronomical-acceptance --features dir
 # streamed live first with
 # `scripts/ci/prewarm-native-build.sh --profile core+memory-contract`.
 check-mlx-memory-contract = "check -p astronomical-runtime-integration --features mlx-memory-contract-probe --all-targets"
-# test-acceptance: the whole real-model acceptance package (journeys and
-# contracts across every feature gate), still `--test-threads=1`.
-test-acceptance = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --tests -- --ignored --test-threads=1"
+# test-acceptance: the whole real-model acceptance package, one selected case
+# per process. Append --configuration PATH for explicit model/evidence inputs;
+# --filter NAME narrows the selected journeys. Memory-probe permission is
+# false by default and must be granted in that run's configuration.
+test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --tests --release --ignored"
 # test-prism-hadamard-direct: real-pack text output and upstream greedy parity.
 # Set PRISM_HADAMARD_QWEN35_PACK_DIR and PRISM_HADAMARD_QWEN35_PARITY_REFERENCE
 # to the installed pack and its upstream trajectory reference before running.
@@ -185,15 +212,15 @@ test-prism-hadamard-direct = "test --no-fail-fast -p astronomical-acceptance --f
 # optimized build; set PRISM_HADAMARD_QWEN35_PACK_DIR first. The serving tier
 # over worker IPC is test-prism-hadamard-serving-throughput.
 test-prism-hadamard-performance = "test --release --no-fail-fast -p astronomical-acceptance --features direct-mlx --test prism_hadamard throughput -- --ignored --nocapture --test-threads=1"
-test-prism-hadamard-serving-throughput = "test --release --no-fail-fast -p astronomical-acceptance --features performance_throughput --test performance_throughput folded_ternary -- --ignored --nocapture --test-threads=1"
+test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
 # test-prism-hadamard-serving: real-worker chat, greedy/sampled output, and
 # one-token budget coverage; set PRISM_HADAMARD_QWEN35_PACK_DIR first.
 test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --features serving-acceptance --test chat_serving should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack -- --ignored --nocapture --test-threads=1"
 # test-jangtq2-plan: the ignored library tests that validate the real JANGH2
 # bundle against production validators: every codebook projection of an
 # installed jangtq2 bundle against real shard headers, and the complete-layer
-# page-peak reservation guard. Set ASTRONOMICAL_JANGTQ2_MODEL_DIR to the
-# installed bundle directory first; the tests are ignored by default so
+# page-peak reservation guard. Append --configuration PATH containing the
+# selected model_directory; the tests are ignored by default so
 # every offline lane runs without any model artifact. The lane builds the
 # direct-mlx library test binary (the tests themselves need no graphics
 # processor) so it shares an artifact variant with the other jangtq2 lanes
@@ -202,7 +229,7 @@ test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --
 # it validates the standard-family plan surface against a jangtq2 bundle —
 # while the family's own throughput lane lives in
 # astronomical-jangtq2-qwen35 (issue #1427).
-test-jangtq2-plan = "test --no-fail-fast -p astronomical-model-serving --features direct-mlx --lib quantized_expert_layer_plan -- --ignored --nocapture"
+test-jangtq2-plan = "run -p xtask -- test-run --package astronomical-model-serving --features direct-mlx --lib --filter quantized_expert_layer_plan --ignored"
 # test-jangtq2-decode-throughput: the bottom tier of the jangtq2 performance
 # pyramid — the codebook decode kernels themselves, measured on the graphics
 # processor with real page shapes (top-8 decode pages and complete-layer
@@ -218,8 +245,8 @@ test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-
 # test-jangtq2-serving-throughput: the top tier of the jangtq2 performance
 # pyramid — serving prompt-processing and decode throughput of the real 122B
 # bundle over the daemon IPC boundary (warmup 500/50, measured 10,000/500,
-# SSD cache disabled, 2,048-token prefill chunk, 37 GB ceiling), persisted to
-# the durable throughput history. Build the release worker first
-# (cargo build --release --bin astronomical-inference-worker) and set
-# ASTRONOMICAL_JANGTQ2_MODEL_DIR to the installed bundle directory.
-test-jangtq2-serving-throughput = "test --release --no-fail-fast -p astronomical-acceptance --features performance_throughput --test performance_throughput jangtq2 -- --ignored --nocapture --test-threads=1"
+# SSD cache disabled, 2,048-token prefill chunk, shared serving ceiling),
+# persisted to the durable throughput history. Append --configuration PATH
+# containing the selected model_directory. The runner builds the exact
+# optimized worker and records the source identity itself.
+test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter jangtq2 --ignored"

@@ -22,7 +22,7 @@ public enum ThinTalkChannel: String, Equatable, Sendable {
 
 /// Immutable application identity injected by the app bundle and shared by every
 /// local boundary. It is built from the Info.plist, never from the host machine,
-/// so the same binary can drive either isolated daemon instance.
+/// so channel, daemon port, and state directory share one bundled identity.
 public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   public let channel: ThinTalkChannel
   public let daemonPort: Int
@@ -33,37 +33,16 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
   public let isDirty: Bool
 
   public static func current(bundle: Bundle = .main) -> ThinTalkApplicationIdentity {
-    // Debug overrides: set THINTALK_CHANNEL=stable|development (and optionally
-    // THINTALK_DAEMON_PORT) to target another installed daemon without
-    // rebuilding Info.plist. Falls back to the bundle, then channel defaults.
-    let environment = ProcessInfo.processInfo.environment
-    let explicitPort: Int?
-    if let daemonPortText = environment["THINTALK_DAEMON_PORT"] {
-      explicitPort = Int(daemonPortText)
-    } else {
-      explicitPort = nil
-    }
-    let explicitChannel: ThinTalkChannel?
-    if let channelText = environment["THINTALK_CHANNEL"] {
-      explicitChannel = ThinTalkChannel(rawValue: channelText)
-    } else {
-      explicitChannel = nil
-    }
-
     let rawChannel = bundle.object(forInfoDictionaryKey: "AstronomicalChannel") as? String
     let channel: ThinTalkChannel
-    if let explicitChannel {
-      channel = explicitChannel
-    } else if let rawChannel, let bundledChannel = ThinTalkChannel(rawValue: rawChannel) {
+    if let rawChannel, let bundledChannel = ThinTalkChannel(rawValue: rawChannel) {
       channel = bundledChannel
     } else {
       channel = .development
     }
 
     let daemonPort: Int
-    if let explicitPort {
-      daemonPort = explicitPort
-    } else if let bundledPort = bundle.object(forInfoDictionaryKey: "AstronomicalDaemonPort") as? Int {
+    if let bundledPort = bundle.object(forInfoDictionaryKey: "AstronomicalDaemonPort") as? Int {
       daemonPort = bundledPort
     } else {
       daemonPort = channel.defaultDaemonPort

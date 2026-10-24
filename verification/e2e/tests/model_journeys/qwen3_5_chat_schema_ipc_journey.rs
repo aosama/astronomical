@@ -1,7 +1,7 @@
 //! Whole-product acceptance journey: one `respond --schema`-shaped chat
 //! generation through the daemon's IPC socket.
 //!
-//! Driven in two fidelities selected by `ASTRONOMICAL_REAL_MODEL=1`: the
+//! Driven in two fidelities selected by the explicit test-run configuration: the
 //! real `astronomicald` daemon (which spawns the real inference worker from
 //! its own directory), configured to discover the installed Qwen3.5-2B-4bit
 //! artifact — or, by default, the fixture `astronomical-daemon-test-daemon`
@@ -27,6 +27,7 @@ use astronomical_ipc_protocol::{
     ChatGenerationSettings, ChatMessage, DaemonIpcClient, DaemonRequest, DaemonResponse,
 };
 use astronomical_rest_contract::extract_json_value_from_text;
+use serial_test::serial;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::time::timeout;
@@ -54,9 +55,10 @@ const HOUSEHOLD_SCHEMA_JSON: &str = "{\"properties\":{\"household\":{\"type\":\"
 const JOURNEY_PROMPT: &str = "Who speaks the line \"O Romeo, Romeo, wherefore art thou Romeo?\", and which household does that speaker belong to? Reply with the JSON object.";
 
 #[tokio::test]
+#[serial]
 async fn should_serve_one_schema_matching_json_object_over_the_cli_ipc_path() {
     timeout(JOURNEY_TIMEOUT, async {
-        let fidelity = ModelFidelity::from_environment();
+        let fidelity = ModelFidelity::current();
         let state_directory = tempfile::tempdir().expect("state directory should be created");
         let isolated_home = tempfile::tempdir().expect("isolated home should be created");
         write_instance_config(state_directory.path(), &journey_scan_root(fidelity));

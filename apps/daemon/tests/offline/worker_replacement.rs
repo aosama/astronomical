@@ -10,8 +10,9 @@ use astronomical_daemon::{
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
     ChatToolChoice, RequestId, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerLogLevel,
-    WorkerModelConfiguration, WorkerStartupConfiguration,
+    WorkerDecodeExpertCachePolicy, WorkerFlux2KleinModelConfiguration,
+    WorkerImageGenerationModelFamily, WorkerLogLevel, WorkerModelConfiguration,
+    WorkerStartupConfiguration,
 };
 use tokio::time::{Instant, sleep};
 
@@ -408,6 +409,7 @@ fn startup_configuration(
         persistent_prompt_cache_enabled: true,
         configured_maximum_mlx_memory_bytes: None,
         performance_attribution_enabled: true,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
         logging_directory: temporary_directory.to_path_buf(),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,

@@ -98,5 +98,6 @@ pub use worker_model_configuration::{
     WorkerQwenImage21ModelConfiguration,
 };
 pub use worker_startup_configuration::{
-    WorkerLogLevel, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
+    WorkerDecodeExpertCachePolicy, WorkerLogLevel, WorkerRuntimeFeatureConfiguration,
+    WorkerStartupConfiguration,
 };

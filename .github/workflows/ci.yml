@@ -167,9 +167,6 @@ jobs:
       - name: Compute the native build identity cache key
         id: native-build-identity
         shell: bash
-        env:
-          ASTRONOMICAL_NATIVE_BUILD_TYPE: Release
-          ASTRONOMICAL_NATIVE_IDENTITY_TARGET: aarch64-apple-darwin
         run: |
           set -euo pipefail
           trap 'scripts/ci/ci-step-timing.sh end native-build-identity' EXIT
@@ -180,7 +177,7 @@ jobs:
           # --explain logs each toolchain probe value and its source to stderr,
           # so a native-cache identity flap is attributable from the run log
           # instead of by diffing runner images.
-          cargo run --quiet -p xtask -- native-fingerprint --explain --profile core > "$native_identity_file"
+          cargo run --quiet -p xtask -- native-fingerprint --explain --target aarch64-apple-darwin --profile core > "$native_identity_file"
           native_build_identity="$(tr -d '[:space:]' < "$native_identity_file")"
           case "$native_build_identity" in
             ''|*[!0-9a-f]*) printf '%s\n' 'Error: native build identity is invalid' >&2; exit 1 ;;
@@ -787,4 +784,3 @@ jobs:
       - name: Run the Linux-buildable offline crates with no network namespace
         run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
         timeout-minutes: 8
-
