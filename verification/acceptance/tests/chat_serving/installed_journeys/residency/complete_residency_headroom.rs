@@ -22,7 +22,8 @@ async fn should_not_claim_complete_residency_when_activation_headroom_does_not_f
         initialize_automatic_residency_tracing();
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
         let request_id = RequestId::new(1_041);
-        let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+        let model_directory =
+            crate::common::configured_large_sparse_moe_streaming_model_directory();
         let validated_artifact = astronomical_model_serving::Qwen3_5ArtifactValidator::new()
             .validate(&model_directory, 20_480)
             .expect("the configured sparse artifact should validate");

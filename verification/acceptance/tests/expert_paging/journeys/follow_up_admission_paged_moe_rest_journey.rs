@@ -1,4 +1,5 @@
-//! REST acceptance: the follow-up-turn admission journey on the paged large sparse MoE.
+//! REST acceptance: the follow-up-turn admission journey on the paged large
+//! sparse MoE streaming model.
 //!
 //! Production failed exactly here (2026-10-10): a long first turn taught the
 //! adaptive RAM budget chunk-shaped activation observations, and the follow-up
@@ -44,7 +45,7 @@ const FOLLOW_UP_QUESTION: &str =
 const REJECTION_SUBSTRING: &str = "generation context exceeds available GPU wired memory";
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "launches one production worker against the large sparse MoE paged fixture and requires both conversation turns to complete"]
+#[ignore = "launches one production worker against the large sparse MoE streaming paged fixture and requires both conversation turns to complete"]
 #[serial]
 async fn should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill() {
     timeout(SSD_JOURNEY_TIMEOUT, run_follow_up_admission_journey())
@@ -53,7 +54,7 @@ async fn should_admit_the_paged_moe_follow_up_turn_after_a_long_prefill() {
 }
 
 async fn run_follow_up_admission_journey() {
-    let model_id = crate::support::large_sparse_moe_model_id();
+    let model_id = crate::support::large_sparse_moe_streaming_model_id();
     let model_directory = configured_installed_model_directory_by_id(model_id);
     // Persistent (not tempfile) so worker logs survive a timeout or panic.
     let isolated_worker_home_path =

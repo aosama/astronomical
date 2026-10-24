@@ -10,7 +10,7 @@
 //! Both paths below are production. The resident path is exactly what
 //! `Qwen3_5ResidentExpertWeights::load` does (load the shard, take the named
 //! tensor, validate it against the plan). The paged path is exactly what
-//! `Qwen3_5ExpertPager::load_rust_streamed_experts` does (build a page manifest
+//! `Qwen3_5ExpertPager::stream_selected_expert_page_from_ssd` does (build a page manifest
 //! from the validated plan, then load it through bounded ranges).
 
 use std::collections::HashMap;

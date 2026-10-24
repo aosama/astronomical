@@ -1,6 +1,6 @@
 //! Lowest-layer forward probe for the resident sparse-MoE artifact.
 //!
-//! The daemon served the large sparse-MoE artifact at 0.25 decode tok/s and
+//! The daemon served the large sparse-MoE streaming artifact at 0.25 decode tok/s and
 //! ~24 prefill tok/s on the reference machine while attributing essentially
 //! the whole cost to graph evaluation (graph build near zero). This journey
 //! localizes that cost by driving `Qwen3_5ResidentModel` directly:
@@ -79,7 +79,7 @@ async fn drive_raw_resident_model_forwards() {
     let _gpu_exclusive = crate::common::direct_mlx_test_guard().await;
     let development_config = AstronomicalConfig::load_from_development_location()
         .expect("the Development configuration should load for the raw forward probe");
-    let model_id = crate::common::large_sparse_moe_model_id();
+    let model_id = crate::common::large_sparse_moe_streaming_model_id();
     let model_directory =
         crate::common::configured_discovered_model_by_id(&development_config, model_id)
             .model_directory;

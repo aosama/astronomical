@@ -14,8 +14,6 @@ use std::sync::OnceLock;
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 #[cfg(feature = "direct-mlx")]
-pub mod fused_expert_decode_probe;
-#[cfg(feature = "direct-mlx")]
 pub mod fused_jangtq2_gathered_projection_probe;
 #[cfg(feature = "direct-mlx")]
 pub mod gated_delta_probes;
@@ -279,7 +277,6 @@ pub fn worker_process_kernel_capabilities(
         // those supplies into the once-per-process probe run.
         let mut family_probes: Vec<Box<dyn CustomMetalKernelProbe + '_>> = Vec::new();
         family_probes.extend(sorted_expert_weighted_sum_probe::capability_probes(runtime));
-        family_probes.extend(fused_expert_decode_probe::capability_probes(runtime));
         family_probes.extend(fused_jangtq2_gathered_projection_probe::capability_probes(
             runtime,
         ));

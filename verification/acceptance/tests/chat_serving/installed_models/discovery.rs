@@ -27,10 +27,6 @@ fn should_discover_required_installed_models() {
     );
 
     report_optional_discovered_model(&discovered_models, crate::support::flux2_klein_model_id());
-    report_optional_discovered_model(
-        &discovered_models,
-        crate::support::k2_horizon_mova_model_id(),
-    );
 
     eprintln!(
         "[model-fixture-discovery] status=success required_role_count={}",

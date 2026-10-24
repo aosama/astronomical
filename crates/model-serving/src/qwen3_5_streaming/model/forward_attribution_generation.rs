@@ -6,7 +6,7 @@
 //! files inside the source-size budget.
 
 use crate::PerformanceAttribution;
-use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedPrefillExecutionMode};
+use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecutionMode};
 
 use super::Qwen3_5Model;
 use super::forward_contract;
@@ -37,7 +37,7 @@ impl Qwen3_5Model {
             token_ids.len() as i32,
             starting_position_tokens,
             request_decoder_state,
-            Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+            Qwen3_5MoEPagedExecutionMode::ProductionDefault,
             performance_attribution,
         )
     }
@@ -67,7 +67,7 @@ impl Qwen3_5Model {
                 1,
                 starting_position_tokens,
                 request_decoder_state,
-                Qwen3_5MoEPagedPrefillExecutionMode::ProductionDefault,
+                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
                 performance_attribution,
             )?;
             match self.evaluate_forward_state_with_performance_attribution(

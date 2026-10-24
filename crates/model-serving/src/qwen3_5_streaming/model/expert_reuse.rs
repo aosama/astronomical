@@ -2,8 +2,8 @@
 
 use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_streaming::expert_paging::RoutedExpertCoverage;
-use crate::qwen3_5_streaming::expert_paging::expert_pager::{
+use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
+use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
     Qwen3_5ExpertPager, Qwen3_5ExpertStreamingRequestShape, Qwen3_5PagedExpertWeights,
 };
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
@@ -111,7 +111,7 @@ impl Qwen3_5Model {
     ) -> Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)> {
         let retained_experts = self.retained_experts.as_ref()?;
         let cache = retained_experts.borrow();
-        cache.packed_page(layer_index, complete_expert_ids, expert_capacity)
+        cache.full_coverage_page(layer_index, complete_expert_ids, expert_capacity)
     }
 
     /// Returns the routed experts of a seated complete layer as their own
@@ -199,16 +199,17 @@ impl Qwen3_5Model {
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
     {
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
-        let (streamed_weights, streamed_manifest) = expert_pager.load_rust_streamed_experts(
-            &self.runtime,
-            layer_index,
-            &complete_expert_ids,
-            Qwen3_5ExpertStreamingRequestShape {
-                route_token_count,
-                routed_expert_count,
-            },
-            performance_attribution,
-        )?;
+        let (streamed_weights, streamed_manifest) = expert_pager
+            .stream_selected_expert_page_from_ssd(
+                &self.runtime,
+                layer_index,
+                &complete_expert_ids,
+                Qwen3_5ExpertStreamingRequestShape {
+                    route_token_count,
+                    routed_expert_count,
+                },
+                performance_attribution,
+            )?;
         if let Some(retained_experts) = self.retained_experts.as_ref() {
             retained_experts.borrow_mut().record_disk_load(
                 complete_expert_ids.len(),
@@ -278,16 +279,17 @@ impl Qwen3_5Model {
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
     {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-        let (streamed_weights, streamed_manifest) = expert_pager.load_rust_streamed_experts(
-            &self.runtime,
-            layer_index,
-            routed_expert_ids,
-            Qwen3_5ExpertStreamingRequestShape {
-                route_token_count,
-                routed_expert_count: routed_expert_ids.len(),
-            },
-            performance_attribution,
-        )?;
+        let (streamed_weights, streamed_manifest) = expert_pager
+            .stream_selected_expert_page_from_ssd(
+                &self.runtime,
+                layer_index,
+                routed_expert_ids,
+                Qwen3_5ExpertStreamingRequestShape {
+                    route_token_count,
+                    routed_expert_count: routed_expert_ids.len(),
+                },
+                performance_attribution,
+            )?;
         if let Some(retained_experts) = self.retained_experts.as_ref() {
             retained_experts.borrow_mut().record_disk_load(
                 routed_expert_ids.len(),
@@ -346,14 +348,15 @@ impl Qwen3_5Model {
             if cache.has_complete_layer(layer_index, expert_capacity) {
                 return None;
             }
-            let packed_page = cache.packed_page(layer_index, routed_expert_ids, expert_capacity)?;
+            let full_coverage_page =
+                cache.full_coverage_page(layer_index, routed_expert_ids, expert_capacity)?;
             drop(cache);
             retained_experts
                 .borrow_mut()
                 .record_routed_reads(layer_index, routed_expert_ids);
             performance_attribution
                 .record_counter(PerformanceCounter::HotExpertPartialRouteHitCount, 1);
-            Some(packed_page)
+            Some(full_coverage_page)
         }
     }
 }

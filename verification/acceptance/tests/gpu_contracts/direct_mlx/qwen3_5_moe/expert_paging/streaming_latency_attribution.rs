@@ -2,7 +2,7 @@
 //!
 //! These probes drive the storage-to-weights boundary directly — safetensors
 //! header plan, bounded page manifest, positional MLX read, forced
-//! materialization — against the installed large sparse MoE artifact. No
+//! materialization — against the installed large sparse MoE streaming artifact. No
 //! engine, no IPC (Inter-Process Communication), no REST boundary. The goal is
 //! to attribute where paged-prefill time goes: disk read, MLX graph
 //! materialization, or the higher-level scheduling that re-issues loads.
@@ -41,14 +41,14 @@ struct StreamingProbeFixture {
 
 /// Resolves the installed artifact through the development configuration so no
 /// developer path is embedded here.
-fn installed_large_sparse_moe_fixture() -> StreamingProbeFixture {
-    let model_directory = crate::common::configured_large_sparse_moe_model_directory();
+fn installed_large_sparse_moe_streaming_fixture() -> StreamingProbeFixture {
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
     let config_bytes = std::fs::read(model_directory.join("config.json"))
-        .expect("the installed large sparse MoE config.json should be readable");
+        .expect("the installed large sparse MoE streaming config.json should be readable");
     let config = Qwen3_5Config::from_json_bytes(&config_bytes)
-        .expect("the installed large sparse MoE config should validate");
+        .expect("the installed large sparse MoE streaming config should validate");
     let index_bytes = std::fs::read(model_directory.join(MODEL_INDEX_FILE_NAME))
-        .expect("the installed large sparse MoE shard index should be readable");
+        .expect("the installed large sparse MoE streaming shard index should be readable");
     let index_document: serde_json::Value =
         serde_json::from_slice(&index_bytes).expect("the shard index should be valid JSON");
     let mut weight_map = HashMap::new();
@@ -179,10 +179,10 @@ fn measure_page_load(
 }
 
 #[test]
-#[ignore = "streams one routed page from the installed large sparse MoE and attributes read latency"]
+#[ignore = "streams one routed page from the installed large sparse MoE streaming model and attributes read latency"]
 #[serial]
 fn should_attribute_one_routed_page_load_cold_then_page_cache_warm() {
-    let fixture = installed_large_sparse_moe_fixture();
+    let fixture = installed_large_sparse_moe_streaming_fixture();
     let runtime = probe_runtime();
     let experts_per_token = fixture.config.experts_per_token() as usize;
     let routed_expert_ids: Vec<usize> = (0..experts_per_token).collect();
@@ -242,10 +242,10 @@ fn load_page_tensors_for_hold(
 const PRESSURE_HOLD_TARGET_BYTES: u64 = 27 * 1_000_000_000;
 
 #[test]
-#[ignore = "streams one complete expert layer from the installed large sparse MoE and reports the effective rate, unpressured then under a 27 GB hold"]
+#[ignore = "streams one complete expert layer from the installed large sparse MoE streaming model and reports the effective rate, unpressured then under a 27 GB hold"]
 #[serial]
 fn should_attribute_complete_layer_streaming_rate() {
-    let fixture = installed_large_sparse_moe_fixture();
+    let fixture = installed_large_sparse_moe_streaming_fixture();
     let runtime = probe_runtime();
     let expert_capacity = fixture.config.expert_count() as usize;
     let every_expert_id: Vec<usize> = (0..expert_capacity).collect();
@@ -294,7 +294,7 @@ fn should_attribute_complete_layer_streaming_rate() {
 #[ignore = "reloads one routed page three times without retention to expose the re-stream multiplier"]
 #[serial]
 fn should_attribute_repeated_page_reloads_without_retention() {
-    let fixture = installed_large_sparse_moe_fixture();
+    let fixture = installed_large_sparse_moe_streaming_fixture();
     let runtime = probe_runtime();
     let experts_per_token = fixture.config.experts_per_token() as usize;
     let routed_expert_ids: Vec<usize> = (0..experts_per_token).collect();

@@ -44,6 +44,8 @@ warnings = "deny"
 # aliases from before the vocabulary campaign were retired with the
 # campaign's final batch.
 # test-offline: every package's offline_tests binary plus lib unit tests.
+# test-test-harness-fixtures: the shared fixture registry and leaf-id
+# contracts, with the test-fixtures feature enabled.
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
 # test-e2e: the root whole-product journeys (verification/e2e) that spawn the real
 # astronomicald binary; run `cargo build --bins -p astronomical-daemon`
@@ -61,6 +63,7 @@ warnings = "deny"
 # test-offline-and-rest: both offline-property lanes together; run this
 # before committing.
 test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test offline_tests"
+test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures --lib"
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 test-app-builder = "test -p xtask --test offline_app_builder_journeys"

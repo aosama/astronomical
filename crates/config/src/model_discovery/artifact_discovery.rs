@@ -10,8 +10,7 @@ use std::path::Path;
 use crate::model_discovery::{
     ChatModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities, ModelCapabilities,
     ModelFamily, ModelLicense, classified_artifacts, derive_revision_from_config_bytes,
-    flux2_klein, k2_horizon_mova, model_family, modernbert, prism_hadamard_qwen35, qwen_image_21,
-    qwen3_5,
+    flux2_klein, model_family, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
 };
 
 pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
@@ -102,35 +101,6 @@ pub fn try_discover_model_with_id(
                     max_input_tokens: family_metadata.max_input_tokens,
                 }),
                 license: None,
-                model_size_bytes: family_metadata.model_size_bytes,
-            })
-        }
-        ModelFamily::K2HorizonMoVA => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let family_metadata =
-                k2_horizon_mova::discover_model_metadata(model_directory, &config_bytes)?;
-            let immutable_provenance =
-                classified_artifacts::immutable_model_provenance(model_directory);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id: immutable_provenance
-                    .as_ref()
-                    .map(|(provider_model_id, _)| provider_model_id.clone()),
-                model_family,
-                revision: immutable_provenance.map_or_else(
-                    || derive_revision_from_config_bytes(&config_bytes),
-                    |(_, revision)| revision,
-                ),
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-                    context_window: family_metadata.context_window,
-                    max_input_tokens: family_metadata.max_input_tokens,
-                    max_output_tokens: family_metadata.max_output_tokens,
-                    supports_vision: family_metadata.has_vision,
-                    supports_reasoning: family_metadata.supports_reasoning,
-                    supports_tool_calls: family_metadata.supports_tool_calls,
-                }),
-                license: Some(ModelLicense::Apache20),
                 model_size_bytes: family_metadata.model_size_bytes,
             })
         }

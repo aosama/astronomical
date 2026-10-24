@@ -22,9 +22,9 @@ function createTypingSession() {
         entries: [
             validCatalogEntry(),
             validCatalogEntry({
-                huggingface_id: "astronomical-test/example-k2",
-                display_name: "Example k2",
-                family: "k2_horizon_mova"
+                huggingface_id: "astronomical-test/example-flux",
+                display_name: "Example flux",
+                family: "flux2_klein"
             })
         ]
     };
@@ -172,9 +172,9 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
         entries: [
             validCatalogEntry({ display_name: "First", approximate_size_bytes: 1_500_000_000 }),
             validCatalogEntry({
-                huggingface_id: "astronomical-test/example-k2",
+                huggingface_id: "astronomical-test/example-prism",
                 display_name: "Second",
-                family: "k2_horizon_mova",
+                family: "prism_hadamard_qwen35",
                 approximate_size_bytes: 2_000_000_000
             })
         ]
@@ -208,9 +208,9 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             maxOutputTokens: 4096
         },
         {
-            huggingfaceId: "astronomical-test/example-k2",
+            huggingfaceId: "astronomical-test/example-prism",
             displayName: "Second",
-            family: "k2_horizon_mova",
+            family: "prism_hadamard_qwen35",
             approximateSize: "1.86 GB",
             approximateSizeBytes: 2_000_000_000,
             readyOnThisMac: false,
@@ -401,8 +401,8 @@ test("renders daemon-authored catalog families without a client allowlist", () =
         entries: [
             validCatalogEntry(),
             validCatalogEntry({
-                huggingface_id: "astronomical-test/example-k2",
-                family: "k2_horizon_mova"
+                huggingface_id: "astronomical-test/example-prism",
+                family: "prism_hadamard_qwen35"
             }),
             validCatalogEntry({
                 huggingface_id: "astronomical-test/example-flux",
@@ -423,13 +423,13 @@ test("renders daemon-authored catalog families without a client allowlist", () =
     assert.equal(renderedState, "ready");
     assert.deepEqual(
         JSON.parse(JSON.stringify(catalogRows.map((catalogRow) => catalogRow.family))),
-        ["qwen3_5", "k2_horizon_mova", "flux2_klein"]
+        ["qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
     );
     const filterBar = libraryDocument.catalogContainer.children[2];
     const familyFilter = filterBar.children[2];
     assert.deepEqual(
         familyFilter.children.map((option) => option.value),
-        ["all", "qwen3_5", "k2_horizon_mova", "flux2_klein"]
+        ["all", "qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
     );
 });
 

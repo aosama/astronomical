@@ -26,7 +26,8 @@ async fn should_preserve_exact_final_prefill_logits_between_fixed_prefill_sizes(
 
 async fn assert_exact_final_prefill_logit_parity() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    let configured_model_directory = crate::common::configured_large_sparse_moe_model_directory();
+    let configured_model_directory =
+        crate::common::configured_large_sparse_moe_streaming_model_directory();
     let prompt_token_ids = prompt::prepare_reproduced_long_prompt_token_ids(
         ACCEPTANCE_PROMPT_TOKEN_COUNT,
         ACCEPTANCE_OUTPUT_TOKEN_COUNT,

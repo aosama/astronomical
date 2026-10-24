@@ -12,7 +12,7 @@ use crate::sparse_experts::{
 use crate::{PerformanceAttribution, PerformanceCounter, PerformanceOperation};
 use astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation;
 
-use super::super::expert_paging::expert_pager::Qwen3_5PagedExpertWeights;
+use super::super::expert_streaming::expert_pager::Qwen3_5PagedExpertWeights;
 use super::cached_plus_streamed_page_route;
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use super::output_combination;
