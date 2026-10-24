@@ -19,11 +19,6 @@ use crate::support::serving_rest::stop_serving_rest_server;
 
 pub(super) const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
 
-/// The environment variable pointing at the installed folded-pack snapshot
-/// (the directory containing config.json, hadamard.json, tokenizer.json, and
-/// model.safetensors).
-const PACK_SNAPSHOT_ENV: &str = "PRISM_HADAMARD_QWEN35_PACK_DIR";
-
 /// The decoded Hugging Face identity of the installed folded pack.
 pub(super) fn public_model_id() -> &'static str {
     "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit"
@@ -31,13 +26,7 @@ pub(super) fn public_model_id() -> &'static str {
 
 /// Resolves the installed snapshot directory, refusing to guess a path.
 fn pack_snapshot_directory() -> PathBuf {
-    match std::env::var_os(PACK_SNAPSHOT_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {PACK_SNAPSHOT_ENV} to the installed folded-pack snapshot directory \
-             (containing config.json, hadamard.json, tokenizer.json, and model.safetensors)"
-        ),
-    }
+    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// The Hugging Face cache directory holding the pack's `models--` tree: the

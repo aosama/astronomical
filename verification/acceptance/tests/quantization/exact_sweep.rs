@@ -9,7 +9,7 @@ use super::support::{
 
 #[test]
 #[serial]
-#[ignore = "needs ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR; pending implementation of the Qwen3.5 probe"]
+#[ignore = "needs model_directory in the explicit test-run configuration; pending implementation of the Qwen3.5 probe"]
 fn should_measure_sensitivity_with_the_bfloat16_reference_and_resume_from_a_checkpoint() {
     // Work to implement:
     // 1. Load the Qwen3.5 probe model from the source (bf16 reference) with

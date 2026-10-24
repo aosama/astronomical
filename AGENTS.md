@@ -1,7 +1,5 @@
 # Instructions for the Astronomical Project
 
-- Try to have code files not exceed around 600 lines of code give or take.
-
 ## Never Hardwire Local Developer Environment Into the Codebase
 
 - Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, acceptance artifacts, documentation, GitHub content, or agent instructions.
@@ -13,7 +11,7 @@
 
 ## Memory Measurement Units
 
-- Any end-user-facing file-size or memory value must use the gigabyte convention Apple uses to market the machine: 1 GB = 1,073,741,824 bytes (2³⁰). A machine with 51,539,607,552 bytes of RAM is presented as 48 GB, exactly as the purchase sticker reads; its model ceiling is (48 − 8) = 40 GB. Never present decimal SI gigabytes (10⁹ bytes) to end users. Internal storage and wire formats remain raw bytes; only display rendering and whole-GB user inputs convert, always with 2³⁰.
+- Any end-user-facing file-size or memory value must use the gigabyte convention Apple uses to market the machine: 1 GB = 1,073,741,824 bytes (2³⁰). A machine with 51,539,607,552 bytes of RAM is presented as 48 GB, exactly as the purchase sticker reads; its model ceiling is (48 − 8) = 40 GB.
 
 ## Prohibited Terminology: "qualification" and "hermetic"
 
@@ -22,17 +20,13 @@
 
 ## Testing Instructions For Astronomical
 
-- Running unit tests or offline tests in parallel is desired.
+- End to End or Acceptance tests that excersise an inference journey must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests and performance tests. However for integration (or offline) tests that use MLX/GPU those can be parallelized.
 
-- MLX/GPU tests must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests, performance tests, and any test that loads a real model in the GPU.
-
-- SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level instrumentation and tests to identify the slow call path rather than increasing the budget or repeating long model runs.
+- SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level tests to identify the slow call path rather than increasing the budget or repeating long model runs.
 
 - The fixture of Romeo and Juliet MUST be used as the source test input for LLMs; there should not be random text or tokens used for testing.
 
-## Performance Related
-
-### Instructions for Performance Throughput Tests
+## Performance Instructions
 
 - A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable.
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.

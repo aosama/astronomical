@@ -1,9 +1,10 @@
 //! GPU-machine probes for the inference worker's startup memory policy.
 //!
-//! Everything under this target touches real GPU state on the host and is
-//! opt-in through `ASTRONOMICAL_RUN_WIRED_CLAIM_PROBE=1`; without the
-//! variable the probes skip so offline suites stay sealed from machine
-//! state.
+//! The native probe is ignored by default and requires
+//! `allow_large_wired_memory_probe: true` in the explicit test-run configuration.
+//! Run `cargo xtask test-run --package astronomical-inference-worker --test gpu_tests
+//! --ignored --configuration PATH` to grant that permission for one run.
+//! Permission checks run without touching graphics-processor state.
 
 #[path = "gpu/wired_limit_claim_probe.rs"]
 mod wired_limit_claim_probe;

@@ -9,7 +9,7 @@ use super::support::{
 
 #[test]
 #[serial]
-#[ignore = "needs ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR; pending implementation of run_quantization_pipeline"]
+#[ignore = "needs model_directory in the explicit test-run configuration; pending implementation of run_quantization_pipeline"]
 fn should_convert_with_structural_rules_and_generate_a_romeo_and_juliet_continuation() {
     // Work to implement:
     // 1. Build a QuantizationPipelineRequest with method StaticStructural,

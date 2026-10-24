@@ -36,10 +36,10 @@ use std::time::{Duration, Instant};
 use astronomical_runtime_integration::{
     MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
+use astronomical_test_harness::test_run::{TestRunConfiguration, TestRunContext};
 use mlx_c_rust::{MlxArray, MlxDtype, set_wired_limit};
 use serial_test::serial;
 
-const RUN_PROBE_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_RUN_WIRED_CLAIM_PROBE";
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";
 const PROBE_STEP_BYTES: usize = 512 * 1024 * 1024;
 const PROBE_MAXIMUM_BYTES: usize = 2 * 1024 * 1024 * 1024;
@@ -86,13 +86,10 @@ impl Drop for WiredLimitClaimGuard {
 
 #[test]
 #[serial]
+#[ignore = "requires allow_large_wired_memory_probe in the explicit test-run configuration"]
 fn should_extend_the_wired_boundary_beyond_default_policy_when_mlx_claims_a_wired_limit() {
-    if !probe_is_requested() {
-        eprintln!(
-            "skipping: set {RUN_PROBE_ENVIRONMENT_VARIABLE}=1 to run the wired-limit claim probe"
-        );
-        return;
-    }
+    require_probe_permission(&TestRunContext::current().configuration)
+        .expect("the wired-limit claim probe requires explicit permission");
     let test_started_at = Instant::now();
     let test_deadline = test_started_at + WHOLE_TEST_BUDGET;
 
@@ -171,11 +168,26 @@ fn walk_reached_target(walk_outcome: &WalkOutcome, target_bytes: usize) -> bool 
         > target_bytes
 }
 
-fn probe_is_requested() -> bool {
-    std::env::var(RUN_PROBE_ENVIRONMENT_VARIABLE)
-        .ok()
-        .as_deref()
-        == Some("1")
+fn require_probe_permission(configuration: &TestRunConfiguration) -> Result<(), &'static str> {
+    if configuration.allow_large_wired_memory_probe {
+        Ok(())
+    } else {
+        Err("set allow_large_wired_memory_probe to true in the test-run configuration")
+    }
+}
+
+#[test]
+fn should_reject_the_wired_claim_probe_without_explicit_permission() {
+    assert!(require_probe_permission(&TestRunConfiguration::default()).is_err());
+}
+
+#[test]
+fn should_accept_explicit_permission_for_the_wired_claim_probe() {
+    let configuration = TestRunConfiguration {
+        allow_large_wired_memory_probe: true,
+        ..Default::default()
+    };
+    assert_eq!(require_probe_permission(&configuration), Ok(()));
 }
 
 fn read_sysctl_integer(sysctl_key: &str) -> Option<u64> {

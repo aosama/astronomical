@@ -86,7 +86,7 @@ Its transcript is long, so capture the exit code explicitly (`scripts/release/ac
 cargo test --release -p astronomical-acceptance --features serving-acceptance --test chat_serving should_round_trip_every_installed_chat_model_variant -- --ignored --nocapture --test-threads=1
 ```
 
-Every chat-capable model the configured model roots discover must load and stream a non-empty sampled reply (roughly one hundred tokens in at temperature 1.0, one-hundred-token budget, 120-second budget per model). Set `ASTRONOMICAL_RELEASE_VARIANT_MODEL_ROOTS` (colon-separated) to pin an explicit variant set. A variant that fails to load or replies empty blocks the release; fix forward before tagging. This journey needs the release machine's real graphics processor and model inventory — it never runs in continuous integration.
+Every chat-capable model the Development configuration's model directories discover must load and stream a non-empty sampled reply (roughly one hundred tokens in at temperature 1.0, one-hundred-token budget, 120-second budget per model). The Development configuration is the single source of the variant inventory. A variant that fails to load or replies empty blocks the release; fix forward before tagging. This journey needs a real graphics processor and installed model inventory — it never runs in continuous integration.
 
 3. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe. Re-resolve signing arguments in the same shell invocation that runs preparation; do not assume shell variables persisted from preflight.
 4. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.

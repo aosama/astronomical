@@ -96,6 +96,7 @@ fn should_resolve_all_relative_inputs_against_the_configuration_directory() {
     let configuration_directory = tempfile::tempdir().expect("configuration directory");
     let mut configuration = TestRunConfiguration {
         model_directory: Some(PathBuf::from("model")),
+        reference_artifact_path: Some(PathBuf::from("reference")),
         evidence_directory: Some(PathBuf::from("evidence")),
         throughput_history_path: Some(PathBuf::from("throughput.jsonl")),
         coverage_inventory_output: Some(PathBuf::from("inventory")),
@@ -105,6 +106,10 @@ fn should_resolve_all_relative_inputs_against_the_configuration_directory() {
     assert_eq!(
         configuration.model_directory,
         Some(configuration_directory.path().join("model"))
+    );
+    assert_eq!(
+        configuration.reference_artifact_path,
+        Some(configuration_directory.path().join("reference"))
     );
     assert_eq!(
         configuration.evidence_directory,
@@ -126,6 +131,7 @@ fn should_round_trip_explicit_inputs_and_exact_workspace_executables() {
     let mut run_context = TestRunContext {
         configuration: TestRunConfiguration {
             real_models: true,
+            reference_artifact_path: Some(run_directory.path().join("reference")),
             evidence_directory: Some(run_directory.path().join("evidence")),
             ..TestRunConfiguration::default()
         },
@@ -193,6 +199,13 @@ fn should_reject_unresolved_configuration_or_executable_paths_before_launch() {
             .is_err()
     );
     run_context.configuration.model_directory = None;
+    run_context.configuration.reference_artifact_path = Some(PathBuf::from("relative-reference"));
+    assert!(
+        run_context
+            .write_to_directory(run_directory.path())
+            .is_err()
+    );
+    run_context.configuration.reference_artifact_path = None;
     run_context.workspace_binaries.insert(
         "astronomical-inference-worker".to_owned(),
         PathBuf::from("relative-worker"),
@@ -202,6 +215,58 @@ fn should_reject_unresolved_configuration_or_executable_paths_before_launch() {
             .write_to_directory(run_directory.path())
             .is_err()
     );
+}
+
+#[test]
+fn should_reject_an_empty_reference_artifact_path() {
+    assert!(
+        TestRunConfiguration {
+            reference_artifact_path: Some(PathBuf::new()),
+            ..TestRunConfiguration::default()
+        }
+        .validate()
+        .is_err()
+    );
+}
+
+#[test]
+fn should_accept_an_existing_reference_file_or_directory() {
+    let reference_directory = tempfile::tempdir().expect("reference directory");
+    let reference_file = reference_directory.path().join("reference.json");
+    fs::write(&reference_file, "{}").expect("reference file");
+    for reference_artifact_path in [reference_directory.path().to_path_buf(), reference_file] {
+        let run_context = TestRunContext {
+            configuration: TestRunConfiguration {
+                reference_artifact_path: Some(reference_artifact_path.clone()),
+                ..TestRunConfiguration::default()
+            },
+            ..TestRunContext::default()
+        };
+        assert_eq!(
+            run_context.required_reference_artifact_path(),
+            reference_artifact_path
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "select a reference_artifact_path")]
+fn should_reject_a_missing_required_reference_selection() {
+    TestRunContext::default().required_reference_artifact_path();
+}
+
+#[test]
+#[should_panic(expected = "the selected reference artifact does not exist")]
+fn should_reject_a_nonexistent_required_reference() {
+    let reference_directory = tempfile::tempdir().expect("reference directory");
+    TestRunContext {
+        configuration: TestRunConfiguration {
+            reference_artifact_path: Some(reference_directory.path().join("missing")),
+            ..TestRunConfiguration::default()
+        },
+        ..TestRunContext::default()
+    }
+    .required_reference_artifact_path();
 }
 
 #[test]
@@ -230,10 +295,11 @@ fn should_reject_malformed_or_unbound_workspace_executable_digests() {
 }
 
 #[test]
-#[ignore = "explicit runner contract; requires diagnostics=true in cargo xtask test-run configuration"]
+#[ignore = "explicit runner contract; requires diagnostics=true, prompt_processing_chunk_tokens=2048, and a reference_artifact_path file"]
 fn should_receive_the_explicit_runner_configuration_and_generated_source_identity() {
     let run_context = TestRunContext::current();
     assert!(run_context.configuration.diagnostics);
+    assert!(run_context.required_reference_artifact_path().is_file());
     assert_eq!(
         run_context.configuration.prompt_processing_chunk_tokens,
         Some(2_048)

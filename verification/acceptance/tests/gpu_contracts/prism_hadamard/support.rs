@@ -1,7 +1,7 @@
 //! Shared pack, runtime, tokenizer, prompt, and timing helpers for the folded
 //! ternary journeys and their performance tiers.
 //!
-//! Every tier loads the real installed pack through environment variables
+//! Every tier loads the real installed pack through the explicit test-run configuration
 //! (never a hardcoded developer path), feeds Romeo and Juliet source text
 //! through the pack's own tokenizer, fixes the prompt-processing chunk at
 //! 2,048 tokens, and reports medians over repeated evaluated runs.
@@ -14,13 +14,6 @@ use astronomical_model_serving::prism_hadamard_qwen35::model::PrismHadamardTextM
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_c_rust::MlxArray;
 
-/// The environment variable pointing at the installed folded pack root (the
-/// Hugging Face snapshot directory containing `config.json`,
-/// `hadamard.json`, `tokenizer.json`, and `model.safetensors`).
-pub(crate) const PACK_DIRECTORY_ENV: &str = "PRISM_HADAMARD_QWEN35_PACK_DIR";
-/// The environment variable pointing at the upstream runtime's reference
-/// dump (source prompt, input ids, first-step logits, and greedy token ids).
-pub(crate) const PARITY_REFERENCE_ENV: &str = "PRISM_HADAMARD_QWEN35_PARITY_REFERENCE";
 /// Wired and allocator limits for one roughly 8 GB pack plus activations and
 /// a 10,000-token key-value prefix, far under the wired ceiling of a
 /// maximum-memory laptop.
@@ -51,26 +44,18 @@ const CONTINUATION_INSTRUCTION: &str =
 
 /// Resolves the installed pack root, refusing to guess a developer path.
 pub(crate) fn pack_directory() -> PathBuf {
-    match std::env::var_os(PACK_DIRECTORY_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {PACK_DIRECTORY_ENV} to the installed folded-pack snapshot root \
-             (the models--prism-ml--Ternary-Bonsai-2-27B-mlx-2bit snapshots directory \
-             containing config.json, hadamard.json, tokenizer.json, and model.safetensors)"
-        ),
-    }
+    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// Resolves the upstream reference dump for the parity journey.
 pub(crate) fn parity_reference_path() -> PathBuf {
-    match std::env::var_os(PARITY_REFERENCE_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {PARITY_REFERENCE_ENV} to the upstream parity reference JSON \
-             (input_ids, first_step_logits, greedy_token_ids) produced by the \
-             pack's bundled runtime"
-        ),
-    }
+    let reference_path = astronomical_test_harness::test_run::TestRunContext::current()
+        .required_reference_artifact_path();
+    assert!(
+        reference_path.is_file(),
+        "the parity reference artifact must be a file"
+    );
+    reference_path
 }
 
 /// The process-wide journey runtime, sized for the whole-pack residency.

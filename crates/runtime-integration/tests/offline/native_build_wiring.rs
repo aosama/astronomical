@@ -11,8 +11,8 @@ const NATIVE_BUILD_PARALLELISM_MODULE: &str =
 
 /// Collects the literal file and directory paths the build script watches
 /// through rerun-if-changed inside emit_native_source_rerun_contracts.
-/// Dynamic entries (the dependency cache directory and provisioned archive
-/// paths) are env-gated and intentionally excluded.
+/// The dynamic dependency cache directory is environment-dependent and
+/// intentionally excluded.
 fn watched_paths_from_rerun_contracts() -> Vec<String> {
     let contracts_section_start = NATIVE_BUILD_SCRIPT
         .find("fn emit_native_source_rerun_contracts")

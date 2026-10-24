@@ -12,7 +12,7 @@
 //! Every tier loads the real pack, touches the graphics processor, and is
 //! therefore `#[serial]` and `#[ignore]`d; run them through
 //! `cargo test-prism-hadamard-performance` (an optimized build) with
-//! `PRISM_HADAMARD_QWEN35_PACK_DIR` set.
+//! `model_directory` selected in the explicit test-run configuration.
 
 pub(crate) mod support;
 

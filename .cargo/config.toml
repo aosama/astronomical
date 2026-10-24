@@ -80,10 +80,10 @@ test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization
 # test-quantization-acceptance: real-model journeys (static and exact
 # conversions of an installed bf16 Qwen3.5 artifact, parity against an
 # artifact the Python tool produced from the same source, requantizer
-# throughput against the Python tool). Set
-# ASTRONOMICAL_QUANTIZATION_SOURCE_MODEL_DIR and, for the parity journey,
-# ASTRONOMICAL_QUANTIZATION_PYTHON_REFERENCE_DIR first; ignored by default.
-test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx --test quantization -- --ignored --nocapture --test-threads=1"
+# throughput against the Python tool). Append --configuration PATH containing
+# model_directory and, for parity, reference_artifact_path pointing to the
+# Python-produced artifact directory; ignored by default.
+test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --ignored"
 # xtask: repository tooling (CI reporting and verification glue as typed
 # Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
 # source-size [--staged] [root]`, `cargo xtask coverage-floor [--package
@@ -108,7 +108,7 @@ test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance -
 # [--filter NAME] [--exact] [--ignored]` builds exact Cargo executables and
 # runs each selected test in its own process, with a 120-second test budget,
 # five-second progress, and retained manifests/logs under target/test-runs.
-# The explicit JSON configuration accepts model_directory,
+# The explicit JSON configuration accepts model_directory, reference_artifact_path,
 # evidence_directory, real_models, diagnostics, retain_isolated_home,
 # allow_large_wired_memory_probe, prefix_adoption_enabled,
 # prompt_processing_chunk_tokens, sweep_cell_order, throughput_history_path,
@@ -118,8 +118,11 @@ test-quantization-acceptance = "test --no-fail-fast -p astronomical-acceptance -
 # generation_graph_submission_layer_interval. Defaults preserve the ordinary
 # test case; counts must be positive and whole gigabytes use 2^30 bytes.
 # Paths resolve relative to the configuration file. Evidence is separated by
-# run and case so a later failure cannot erase an earlier run. Source identity
-# and workspace executable paths and digests are generated, not configuration
+# run and case so a later failure cannot erase an earlier run.
+# The reference artifact is a secondary input: a FLUX reference bundle file,
+# a Python quantization reference directory, or a folded-pack trajectory file.
+# Image journeys retain their rendered PNG in the case's evidence directory.
+# Source identity and workspace executable paths and digests are generated, not configuration
 # overrides. Throughput history records that worker build identity and dirty
 # source state; serving measurements must use this runner.
 # `cargo xtask mlx-c-coverage-inventory` refreshes the bridge inventory through
@@ -204,18 +207,20 @@ check-mlx-memory-contract = "check -p astronomical-runtime-integration --feature
 # false by default and must be granted in that run's configuration.
 test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --tests --release --ignored"
 # test-prism-hadamard-direct: real-pack text output and upstream greedy parity.
-# Set PRISM_HADAMARD_QWEN35_PACK_DIR and PRISM_HADAMARD_QWEN35_PARITY_REFERENCE
-# to the installed pack and its upstream trajectory reference before running.
-test-prism-hadamard-direct = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx --test prism_hadamard -- --ignored --nocapture --test-threads=1"
+# Append --configuration PATH containing model_directory for the installed
+# pack and reference_artifact_path for its upstream trajectory reference.
+test-prism-hadamard-direct = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --ignored"
 # test-prism-hadamard-performance: the folded-ternary performance tiers
 # (GPU operation, decoder layer, forward pass, greedy generation) through an
-# optimized build; set PRISM_HADAMARD_QWEN35_PACK_DIR first. The serving tier
+# optimized build; append --configuration PATH containing model_directory.
+# The serving tier
 # over worker IPC is test-prism-hadamard-serving-throughput.
-test-prism-hadamard-performance = "test --release --no-fail-fast -p astronomical-acceptance --features direct-mlx --test prism_hadamard throughput -- --ignored --nocapture --test-threads=1"
+test-prism-hadamard-performance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter throughput --ignored"
 test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
 # test-prism-hadamard-serving: real-worker chat, greedy/sampled output, and
-# one-token budget coverage; set PRISM_HADAMARD_QWEN35_PACK_DIR first.
-test-prism-hadamard-serving = "test --no-fail-fast -p astronomical-acceptance --features serving-acceptance --test chat_serving should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack -- --ignored --nocapture --test-threads=1"
+# one-token budget coverage; append --configuration PATH containing
+# model_directory.
+test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack --ignored"
 # test-jangtq2-plan: the ignored library tests that validate the real JANGH2
 # bundle against production validators: every codebook projection of an
 # installed jangtq2 bundle against real shard headers, and the complete-layer

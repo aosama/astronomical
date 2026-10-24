@@ -15,8 +15,8 @@
 //! documentation for the complete runner invocation.
 //!
 //! The wide-chunk parity journey selects its prefill span with
-//! `ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS`; the cell
-//! accepts only 2048 or 4096 and defaults to 2048.
+//! `prompt_processing_chunk_tokens` in the explicit test-run configuration;
+//! the cell accepts only 2048 or 4096 and defaults to 2048.
 
 use std::{future::Future, path::Path, time::Duration};
 
@@ -49,6 +49,7 @@ struct PersistentPromptCacheParityAcceptanceOutcome {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "loads and generates with the complete Ornith artifact"]
 async fn should_restore_persistent_prompt_cache_blocks_and_report_cached_tokens_on_the_second_run()
 {
@@ -83,6 +84,7 @@ async fn run_persistent_prompt_cache_restore_acceptance() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "loads Ornith and compares cold and restored prompt-cache tokens"]
 async fn should_preserve_tokens_after_persistent_prompt_cache_restore() {
     require_persistent_prompt_cache_acceptance_completion(async {
@@ -115,17 +117,16 @@ async fn should_preserve_tokens_after_persistent_prompt_cache_restore() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 #[ignore = "runs one fixed 2048 or 4096 cache-safe prefill acceptance cell"]
 async fn should_restore_exact_cache_parity_for_one_selected_large_prefill_size() {
     require_persistent_prompt_cache_acceptance_completion(async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-        let configured_prefill_chunk_tokens = std::env::var(
-            "ASTRONOMICAL_PROMPT_CACHE_ACCEPTANCE_PREFILL_CHUNCK_TOKENS",
-        )
-        .map_or(Ok(2_048), |configured_prefill_chunk_tokens| {
-            configured_prefill_chunk_tokens.parse::<u32>()
-        })
-        .expect("the selected prompt-cache prefill acceptance size should be an integer");
+        let configured_prefill_chunk_tokens =
+            astronomical_test_harness::test_run::TestRunContext::current()
+                .configuration
+                .prompt_processing_chunk_tokens
+                .unwrap_or(2_048);
         assert!(
             [2_048, 4_096].contains(&configured_prefill_chunk_tokens),
             "the selected prompt-cache prefill acceptance size must be 2048 or 4096"

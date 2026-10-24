@@ -6,9 +6,9 @@
 //! tokens is discarded, then one measured completion sends at least 10,000
 //! Romeo and Juliet prompt tokens and acquires 500 output tokens with the SSD
 //! (persistent prompt) cache disabled and the prefill chunk fixed at 2,048
-//! tokens (both pinned by the worker environment this driver builds).
+//! tokens (both pinned by the worker configuration this driver builds).
 //!
-//! The pack is located through `PRISM_HADAMARD_QWEN35_PACK_DIR` (the Hugging
+//! The pack is located through the explicit test-run `model_directory` (the Hugging
 //! Face snapshot directory), never a hardcoded developer path, and the
 //! worker discovers it through the snapshot's `models--` entry root. Discovery
 //! names a cache entry by the leaf of its decoded `org/repo` identity, so the
@@ -22,8 +22,6 @@ use serial_test::serial;
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
 
-/// The environment variable pointing at the installed snapshot directory.
-const PACK_DIRECTORY_ENV: &str = "PRISM_HADAMARD_QWEN35_PACK_DIR";
 /// The Romeo and Juliet source every prompt is cut from, word by word.
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt");
@@ -43,13 +41,7 @@ const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(600);
 
 fn pack_directory() -> PathBuf {
-    match std::env::var_os(PACK_DIRECTORY_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {PACK_DIRECTORY_ENV} to the installed folded-pack snapshot directory \
-             (containing config.json, hadamard.json, tokenizer.json, and model.safetensors)"
-        ),
-    }
+    astronomical_test_harness::test_run::TestRunContext::current().required_model_directory()
 }
 
 /// The model id discovery derives for the snapshot: the leaf of the decoded
@@ -65,7 +57,7 @@ fn discovered_model_id(pack_directory: &std::path::Path) -> String {
         })
         .unwrap_or_else(|| {
             panic!(
-                "{PACK_DIRECTORY_ENV} must point inside a Hugging Face cache entry \
+                "model_directory must point inside a Hugging Face cache entry \
                  (models--org--repo/snapshots/<revision>)"
             )
         });

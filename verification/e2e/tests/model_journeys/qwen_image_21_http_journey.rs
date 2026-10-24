@@ -15,14 +15,14 @@
 //!
 //! The render runs at 256×256 with the worker profile's default schedule (the reference's 40
 //! steps) so the whole journey fits the bounded 115-second budget on any machine that can hold
-//! the model. Setting `ASTRONOMICAL_QWEN_IMAGE_21_RENDER_OUTPUT` writes the served PNG to that
-//! path so a human can inspect it for coherence — pixel-statistics assertions cannot see
+//! the model. The explicit test runner retains `qwen-image-21-http.png` in its evidence
+//! directory so a human can inspect it for coherence — pixel-statistics assertions cannot see
 //! garbling that keeps neighbour pixels correlated.
 //!
 //! Real-fidelity prerequisites: the real worker binary must sit next to the
 //! daemon binary, so build both before running (`cargo build -p astronomical-daemon
-//! -p astronomical-inference-worker`), and `ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY`
-//! must point at the installed artifact snapshots directory.
+//! -p astronomical-inference-worker`), and `model_directory` in the test-run configuration
+//! must point at the installed artifact snapshot directory.
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -39,8 +39,6 @@ use tokio::time::timeout;
 use crate::common::fidelity::ModelFidelity;
 
 const JOURNEY_TIMEOUT: Duration = Duration::from_secs(115);
-const ARTIFACT_ENV: &str = "ASTRONOMICAL_QWEN_IMAGE_21_ARTIFACT_DIRECTORY";
-const RENDER_OUTPUT_ENV: &str = "ASTRONOMICAL_QWEN_IMAGE_21_RENDER_OUTPUT";
 const DAEMON_STARTUP_PREFIX: &str = "astronomicald listening on http://";
 /// A prompt from the repo's mandated Romeo and Juliet source text.
 const JOURNEY_PROMPT: &str =
@@ -101,12 +99,13 @@ async fn should_serve_one_qwen_image_over_http_end_to_end() {
              correlation {neighbor_correlation:.4} is below the {MINIMUM_NEIGHBOR_CORRELATION} floor"
         );
 
-        if let Some(output_path) = std::env::var_os(RENDER_OUTPUT_ENV) {
-            let output_path = PathBuf::from(output_path);
-            if let Some(parent) = output_path.parent() {
-                std::fs::create_dir_all(parent)
-                    .expect("the journey output parent should create");
-            }
+        if let Some(evidence_directory) = astronomical_test_harness::test_run::TestRunContext::current()
+            .configuration
+            .evidence_directory
+        {
+            std::fs::create_dir_all(&evidence_directory)
+                .expect("the journey evidence directory should create");
+            let output_path = evidence_directory.join("qwen-image-21-http.png");
             std::fs::write(&output_path, &served_image.png_bytes)
                 .unwrap_or_else(|error| panic!("the journey output should write: {error}"));
         }
@@ -136,17 +135,11 @@ fn journey_model_root(fidelity: ModelFidelity) -> PathBuf {
 }
 
 /// The `models--org--repo` directory containing the installed snapshot, resolved from the
-/// shared artifact environment variable so no developer path is hardcoded.
+/// explicit test-run configuration.
 fn qwen_image_model_root() -> PathBuf {
-    let artifact_directory = match std::env::var_os(ARTIFACT_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {ARTIFACT_ENV} to the installed Qwen-Image-2.1 artifact root (the \
-             models--mlx-community--Qwen-Image-2.1-MLX-4bit snapshots directory), not a \
-             hardcoded developer path"
-        ),
-    };
-    // The env var points at `models--.../snapshots/<sha>`; discovery accepts the `models--...`
+    let artifact_directory =
+        astronomical_test_harness::test_run::TestRunContext::current().required_model_directory();
+    // The selected directory is `models--.../snapshots/<sha>`; discovery accepts the `models--...`
     // entry itself and resolves the active snapshot with its decoded model id.
     let model_root = artifact_directory
         .parent()

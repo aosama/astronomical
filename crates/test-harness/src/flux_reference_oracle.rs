@@ -1,6 +1,6 @@
 //! Independent FLUX RGB oracle contract shared by offline and real-model acceptance.
 //!
-//! Set `ASTRONOMICAL_FLUX2_KLEIN_REFERENCE_BUNDLE` to a JSON bundle produced outside
+//! Set `reference_artifact_path` in the explicit test-run configuration to a JSON bundle produced outside
 //! Astronomical by the pinned Black Forest Labs and Diffusers implementations. The bundle
 //! must contain exactly this shape; revisions and digests are lowercase 40/64-character hex:
 //!
