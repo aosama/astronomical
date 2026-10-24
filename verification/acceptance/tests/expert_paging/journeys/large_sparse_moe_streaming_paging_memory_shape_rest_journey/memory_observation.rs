@@ -16,7 +16,7 @@ use tokio::time::{Instant as TokioInstant, sleep};
 use crate::support::openai_client::ChatCompletionStream;
 use crate::support::serving_rest::get_json_endpoint;
 
-use super::{MEMORY_SAMPLE_INTERVAL, STATUS_LOG_INTERVAL};
+use super::{BYTES_PER_GIGABYTE, MEMORY_SAMPLE_INTERVAL, STATUS_LOG_INTERVAL};
 
 pub(super) fn progress_tokens_per_second(progress: &PhaseProgress) -> f64 {
     let elapsed_seconds = progress.elapsed_seconds();
@@ -40,10 +40,10 @@ pub(super) fn print_memory_shape_timeline(samples: &[MemorySample]) {
             sample.phase,
             sample.processed_tokens,
             sample.total_tokens,
-            sample.active_memory_bytes as f64 / 1_000_000_000.0,
-            sample.allocator_cache_memory_bytes as f64 / 1_000_000_000.0,
-            sample.peak_memory_bytes as f64 / 1_000_000_000.0,
-            sample.expert_payload_bytes as f64 / 1_000_000_000.0,
+            sample.active_memory_bytes as f64 / BYTES_PER_GIGABYTE as f64,
+            sample.allocator_cache_memory_bytes as f64 / BYTES_PER_GIGABYTE as f64,
+            sample.peak_memory_bytes as f64 / BYTES_PER_GIGABYTE as f64,
+            sample.expert_payload_bytes as f64 / BYTES_PER_GIGABYTE as f64,
             sample.expert_memory_mode,
         );
     }
@@ -187,8 +187,8 @@ pub(super) fn log_sample(sample: &MemorySample, request_finished: bool) {
         sample.total_tokens,
         sample.offset_seconds,
         phase_tokens_per_second(sample),
-        sample.active_memory_bytes as f64 / 1_000_000_000.0,
-        sample.expert_payload_bytes as f64 / 1_000_000_000.0,
+        sample.active_memory_bytes as f64 / BYTES_PER_GIGABYTE as f64,
+        sample.expert_payload_bytes as f64 / BYTES_PER_GIGABYTE as f64,
         sample.expert_memory_mode,
     );
 }

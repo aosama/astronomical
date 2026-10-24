@@ -1,7 +1,8 @@
 //! Durable acceptance-evidence roots shared by real-model acceptance journeys.
 
-use std::env;
 use std::path::PathBuf;
+
+use astronomical_test_harness::test_run::TestRunContext;
 
 /// Resolves the durable evidence root for one journey's lane so worker logs
 /// and performance reports survive a timeout or panic (tempdir drops them).
@@ -9,10 +10,10 @@ use std::path::PathBuf;
 /// subset, so unused-in-this-binary is expected rather than a defect.
 #[allow(dead_code)]
 pub(crate) fn acceptance_evidence_root(journey_evidence_directory_name: &str) -> PathBuf {
-    if let Ok(configured_evidence_directory) =
-        env::var("ASTRONOMICAL_ACCEPTANCE_EVIDENCE_DIRECTORY")
+    if let Some(configured_evidence_directory) =
+        TestRunContext::current().configuration.evidence_directory
     {
-        return PathBuf::from(configured_evidence_directory);
+        return configured_evidence_directory;
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")

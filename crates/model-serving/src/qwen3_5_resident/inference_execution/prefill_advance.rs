@@ -1,19 +1,19 @@
-//! Advances one user-visible prompt-processing chunk with bounded recovery.
+//! Advances one user-visible prompt-processing chunk.
 //!
 //! The order in this file is a correctness contract:
 //!
 //! 1. Choose a deterministic fixed chunk from resolved configuration.
 //! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
 //! 3. Execute that unchanged chunk under adaptive memory admission.
-//! 4. On a typed capacity failure, restore the request checkpoint before cleanup.
-//! 5. Reclaim exact elastic expert bytes and retry the same chunk at most once.
-//! 6. Publish required prompt-cache state before advancing the in-memory cursor.
-//! 7. Synchronize the chunk tape and reclaim allocator cache only above threshold.
-//! 8. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
-//! 9. Emit progress only after all required state transitions succeeded.
+//! 4. Publish required prompt-cache state before advancing the in-memory cursor.
+//! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
+//! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
+//! 7. Emit progress only after all required state transitions succeeded.
 //!
-//! Recovery retries the unchanged chunk once after exact expert reclamation,
-//! then halves executable work deterministically after another capacity failure.
+//! A capacity failure is terminal: the request reports the mismatch instead of
+//! retrying a smaller chunk. The retired ladder halved the executable chunk
+//! after each failure, which collapsed real requests into dozens of forwards
+//! that re-paid complete-layer storage reads while making no visible progress.
 
 use std::time::Instant;
 
@@ -23,10 +23,7 @@ use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
-use super::{
-    Qwen3_5EngineState, Qwen3_5ResidentPromptProcessingChunkSizer, fatal_engine_error,
-    qwen3_5_runtime_error,
-};
+use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_resident::model::memory_admission;
 impl Qwen3_5EngineState {
     pub(super) fn advance_prompt_prefill_if_pending(
@@ -43,13 +40,7 @@ impl Qwen3_5EngineState {
         let prefill_start = active_request.prefill_cursor;
         let configured_prompt_processing_chunk_end = self
             .prompt_processing_chunk_sizer
-            .next_prompt_processing_chunk_end_with_maximum_executable_capacity(
-                active_request.prefill_cursor,
-                prefill_end_exclusive,
-                active_request
-                    .maximum_successful_prefill_chunk_tokens()
-                    .unwrap_or(usize::MAX),
-            );
+            .next_prompt_processing_chunk_end(active_request.prefill_cursor, prefill_end_exclusive);
         let requested_prefill_chunk_end = configured_prompt_processing_chunk_end;
         // Required publication is synchronous, so do not let one forward cross
         // multiple durable boundaries. A successful forward produces one exact
@@ -85,113 +76,92 @@ impl Qwen3_5EngineState {
         } else {
             requested_prefill_chunk_end
         };
-        // recovery restores the checkpoint before retrying or halving this size.
         let forward_chunk_started_at = Instant::now();
-        let requested_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
-        let mut attempted_prefill_chunk_token_count = active_request
-            .clamped_prefill_chunk_token_count(
-                requested_prefill_chunk_token_count,
-                prefill_end_exclusive.saturating_sub(prefill_start),
-            );
-        let mut has_observed_prefill_capacity_constraint = false;
-        let (prefill_end, prompt_prefill_chunk_outcome) = loop {
-            let prefill_end = prefill_start
-                .checked_add(attempted_prefill_chunk_token_count)
-                .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
-            match self.execute_prompt_prefill_chunk(active_request, prefill_start, prefill_end) {
-                Ok(prompt_prefill_chunk_outcome) => {
-                    break (prefill_end, prompt_prefill_chunk_outcome);
-                }
-                Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
-                    return Err(generation_error);
-                }
-                Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
-                    if let Some(smaller_executable_chunk_size_tokens) =
-                        Qwen3_5ResidentPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
-                            attempted_prefill_chunk_token_count,
-                        )
-                    {
-                        tracing::warn!(
-                            request_id = request_id.value(),
-                            attempted_prefill_chunk_token_count,
-                            smaller_executable_chunk_size_tokens,
-                            reason = %reason,
-                            "prefill admission selected the next smaller executable chunk"
-                        );
-                        attempted_prefill_chunk_token_count = smaller_executable_chunk_size_tokens;
-                        has_observed_prefill_capacity_constraint = true;
-                        continue;
-                    }
-                    tracing::warn!(
-                        request_id = request_id.value(),
-                        attempted_prefill_chunk_token_count,
-                        reason = %reason,
-                        "fixed prefill chunk cannot fit under the MLX ceiling after expert-memory admission"
-                    );
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
-                    return Err(memory_admission::resident_capacity_error(
-                        model,
-                        format!(
-                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling after reclaiming elastic experts: {reason}"
-                        ),
-                    ));
-                }
-                Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+        let attempted_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
+        tracing::info!(
+            request_id = request_id.value(),
+            prefill_start,
+            attempted_prefill_chunk_token_count,
+            "executing prompt-prefill chunk"
+        );
+        let prefill_end = prefill_start
+            .checked_add(attempted_prefill_chunk_token_count)
+            .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
+        let prompt_prefill_chunk_outcome = match self.execute_prompt_prefill_chunk(
+            active_request,
+            prefill_start,
+            prefill_end,
+        ) {
+            Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
+            Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
+                return Err(generation_error);
+            }
+            // A capacity failure is terminal: the configured chunk either
+            // fits or the request reports the mismatch. Retrying smaller
+            // chunks once collapsed real requests into dozens of forwards
+            // that re-paid complete-layer storage reads for no progress.
+            Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { reason }) => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    prefill_start,
+                    attempted_prefill_chunk_token_count,
+                    reason = %reason,
+                    "prefill admission rejected the configured chunk"
+                );
+                let model = self
+                    .model
+                    .as_ref()
+                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                return Err(memory_admission::resident_capacity_error(
+                    model,
+                    format!(
+                        "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
+                    ),
+                ));
+            }
+            Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+                active_memory_bytes,
+                attempted_allocation_bytes,
+                allowed_active_memory_bytes,
+            }) => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    prefill_start,
+                    attempted_prefill_chunk_token_count,
                     active_memory_bytes,
                     attempted_allocation_bytes,
                     allowed_active_memory_bytes,
-                    prefill_request_checkpoint,
-                }) => {
-                    active_request
-                        .restore_prefill_request_checkpoint(prefill_request_checkpoint)
-                        .map_err(qwen3_5_runtime_error)?;
-                    has_observed_prefill_capacity_constraint = true;
-                    if let Some(smaller_executable_chunk_size_tokens) =
-                        Qwen3_5ResidentPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
-                            attempted_prefill_chunk_token_count,
-                        )
-                    {
-                        attempted_prefill_chunk_token_count = smaller_executable_chunk_size_tokens;
-                        continue;
-                    }
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
-                    return Err(memory_admission::resident_capacity_error(
-                        model,
-                        format!(
-                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
-                        ),
-                    ));
-                }
-                Err(PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted {
-                    reason,
-                    prefill_request_checkpoint,
-                }) => {
-                    active_request
-                        .restore_prefill_request_checkpoint(prefill_request_checkpoint)
-                        .map_err(qwen3_5_runtime_error)?;
-                    has_observed_prefill_capacity_constraint = true;
-                    if let Some(smaller_executable_chunk_size_tokens) =
-                        Qwen3_5ResidentPromptProcessingChunkSizer::next_smaller_executable_chunk_size_tokens(
-                            attempted_prefill_chunk_token_count,
-                        )
-                    {
-                        attempted_prefill_chunk_token_count = smaller_executable_chunk_size_tokens;
-                        continue;
-                    }
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
-                    return Err(memory_admission::resident_capacity_error(
-                        model,
-                        format!(
-                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
-                        ),
-                    ));
-                }
+                    "prefill chunk forward exceeded the MLX active-memory limit"
+                );
+                let model = self
+                    .model
+                    .as_ref()
+                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                return Err(memory_admission::resident_capacity_error(
+                    model,
+                    format!(
+                        "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
+                    ),
+                ));
+            }
+            Err(PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { reason }) => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    prefill_start,
+                    attempted_prefill_chunk_token_count,
+                    reason = %reason,
+                    "prefill chunk forward exhausted graphics-processor memory"
+                );
+                let model = self
+                    .model
+                    .as_ref()
+                    .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                return Err(memory_admission::resident_capacity_error(
+                    model,
+                    format!(
+                        "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
+                    ),
+                ));
             }
         };
         let active_memory_bytes_before_growth =
@@ -216,9 +186,6 @@ impl Qwen3_5EngineState {
         // they are discarded, a long OpenCode request can complete real prefill
         // work without ever teaching subsequent admission about its workspace.
         let should_retain_adaptive_ram_growth_observation = true;
-        if has_observed_prefill_capacity_constraint {
-            active_request.record_successful_capacity_prefill_chunk(prefill_token_count);
-        }
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
         // than continuing with an in-memory chain that restart cannot reproduce.

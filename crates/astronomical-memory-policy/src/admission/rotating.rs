@@ -10,7 +10,8 @@
 pub enum RotatingAdmissionError {
     /// Window size was zero.
     ZeroWindowSize,
-    /// Window plus chunk overflowed the destination integer.
+    /// The transient peak (committed window tokens plus the new chunk)
+    /// overflowed the destination integer.
     TransientTokenCountOverflow {
         window_size: u32,
         prompt_chunk_token_count: u32,
@@ -28,9 +29,15 @@ pub fn rotating_prefill_transient_token_count(
     if prompt_chunk_token_count == 0 {
         return Ok(window_size);
     }
+    // Peak ownership is (window - 1) committed tokens plus the new chunk.
+    // Computing it as (window - 1) + chunk admits a full window committing a
+    // one-token chunk at u32::MAX; window + chunk - 1 would reject that case
+    // through intermediate overflow even though the peak is representable.
     window_size
-        .checked_add(prompt_chunk_token_count)
-        .and_then(|window_plus_chunk| window_plus_chunk.checked_sub(1))
+        .checked_sub(1)
+        .and_then(|committed_window_token_count| {
+            committed_window_token_count.checked_add(prompt_chunk_token_count)
+        })
         .ok_or(RotatingAdmissionError::TransientTokenCountOverflow {
             window_size,
             prompt_chunk_token_count,

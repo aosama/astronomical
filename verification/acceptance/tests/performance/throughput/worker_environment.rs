@@ -3,13 +3,12 @@
 //! A throughput measurement is only production-faithful if the worker it
 //! measures is the real worker binary, built with the same Cargo profile as
 //! this test binary, started from the real configuration resolver, with the
-//! measured model and nothing else. A `cargo test --release` journey therefore
-//! measures `target/release/astronomical-inference-worker` and fails before
-//! launch when that build is missing, instead of quietly measuring a leftover
-//! debug worker; `ASTRONOMICAL_WORKSPACE_BINARY_PROFILE` launches a worker from
-//! another profile directory deliberately. This module owns that setup and
-//! nothing else; driving a completion and reading its numbers back live in
-//! `completion`, and the journey itself lives in `support`.
+//! measured model and nothing else. `cargo xtask test-run --release` builds
+//! and records the exact optimized worker executable; `--profile NAME`
+//! deliberately selects another Cargo profile. A missing selected executable
+//! fails before launch rather than measuring a leftover debug worker. This
+//! module owns that setup and nothing else; driving a completion and reading
+//! its numbers back live in `completion`, and the journey itself lives in `support`.
 
 use std::collections::HashMap;
 use std::fs;
@@ -18,6 +17,7 @@ use std::sync::Arc;
 
 use astronomical_daemon::{ResolvedRuntimeConfigResolver, RuntimeModelPolicy};
 use astronomical_ipc_protocol::WorkerStartupConfiguration;
+use astronomical_test_harness::test_run::TestRunContext;
 
 /// Resolves the directory to advertise as the configuration's
 /// `model_directories` entry for `model_directory`.
@@ -62,10 +62,15 @@ pub(crate) fn perf_worker_environment(
     Arc<HashMap<String, RuntimeModelPolicy>>,
     WorkerStartupConfiguration,
 ) {
+    super::historical_record::recorded_worker_build_identity();
     let production_worker_executable_path =
         astronomical_test_harness::workspace_binary("astronomical-inference-worker");
-    let isolated_worker_home =
-        tempfile::tempdir().expect("the throughput worker home should be created");
+    let mut isolated_home_builder = tempfile::Builder::new();
+    isolated_home_builder
+        .disable_cleanup(TestRunContext::current().configuration.retain_isolated_home);
+    let isolated_worker_home = isolated_home_builder
+        .tempdir()
+        .expect("the throughput worker home should be created");
     let configuration_directory = isolated_worker_home.path().join(".astronomical-dev");
     fs::create_dir_all(&configuration_directory)
         .expect("the throughput worker configuration directory should be created");
@@ -103,13 +108,14 @@ pub(crate) fn perf_worker_environment(
     )
     .load()
     .expect("the throughput worker configuration should resolve");
-    let persistent_logging_directory = std::env::temp_dir()
-        .join("astronomical-throughput-logs")
-        .join(model_id);
-    if persistent_logging_directory.exists() {
-        fs::remove_dir_all(&persistent_logging_directory)
-            .expect("the stale throughput logging directory should be removed");
-    }
+    let logging_root =
+        crate::support::acceptance_evidence::acceptance_evidence_root("throughput").join(model_id);
+    fs::create_dir_all(&logging_root).expect("the throughput logging root should be created");
+    let persistent_logging_directory = tempfile::Builder::new()
+        .prefix("worker-")
+        .tempdir_in(&logging_root)
+        .expect("the throughput worker logging directory should be created")
+        .keep();
     let mut worker_startup_configuration = resolved_configuration.worker_startup_configuration();
     worker_startup_configuration.logging_directory = persistent_logging_directory.clone();
     (
@@ -121,10 +127,8 @@ pub(crate) fn perf_worker_environment(
     )
 }
 
-const DIAGNOSTICS_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_THROUGHPUT_DIAGNOSTICS";
-
 /// Diagnostic runs turn on worker attribution and info logging to explain where
 /// time goes; their throughput is not production-faithful and is never recorded.
 pub(crate) fn diagnostics_enabled() -> bool {
-    std::env::var(DIAGNOSTICS_ENVIRONMENT_VARIABLE).is_ok_and(|value| value == "1")
+    TestRunContext::current().configuration.diagnostics
 }

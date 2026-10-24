@@ -114,6 +114,7 @@ pub use astronomical_memory_policy::reclamation::{
 pub use astronomical_memory_policy::recovery::{
     ForwardRecoveryDecision, ForwardRecoveryPolicy, ForwardRecoveryRequirements,
 };
+pub use astronomical_memory_policy::residency::seated_complete_layer_count;
 #[cfg(any(feature = "direct-mlx", test))]
 pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
@@ -134,7 +135,9 @@ pub use astronomical_memory_policy::residency::{
     publish_request_stable_residency_plan,
     retained_complete_layer_ceiling_after_prefill_budget_refresh,
     retained_resident_ceiling_after_budget_refresh, should_commit_mandatory_complete_layer,
-    should_commit_mandatory_routed_page, should_enact_planned_expert_release,
+    should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
+    should_complete_partial_layer_on_prefill_read, should_enact_planned_expert_release,
+    should_seed_partial_layer_on_prefill_read,
 };
 pub use astronomical_memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,

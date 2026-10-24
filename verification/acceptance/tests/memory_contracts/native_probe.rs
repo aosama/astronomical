@@ -5,6 +5,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use serial_test::serial;
+
 const NATIVE_PROBE_TIMEOUT: Duration = Duration::from_secs(105);
 const NATIVE_PROBE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const NATIVE_PROBE_PROGRESS_INTERVAL: Duration = Duration::from_secs(10);
@@ -24,20 +26,18 @@ const METAL_QUIESCENCE_WAIT: Duration = Duration::from_secs(5);
 /// store entry → `bin/mlx_memory_contract_probe` under the
 /// `core+memory-contract` profile).
 fn resolve_native_probe_executable_path() -> PathBuf {
-    let repository_root = Path::new(
-        &std::env::var("CARGO_MANIFEST_DIR")
-            .expect("the acceptance package manifest directory should be set for the test process"),
-    )
-    .join("../..")
-    .canonicalize()
-    .expect("the repository root should resolve above the acceptance package");
+    let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .expect("the repository root should resolve above the acceptance package");
     let identity_request = astronomical_native_identity::FingerprintRequest {
         repository_root: &repository_root,
         profile: astronomical_native_identity::NativeBuildProfile::CoreMemoryContract,
         scope: astronomical_native_identity::IdentityScope::Full,
-        // The probe inherits the historical environment contract: fixture
-        // overrides flow through the same variables the CI steps define.
-        overrides: astronomical_native_identity::probes::ToolchainOverrides::from_environment(),
+        overrides: astronomical_native_identity::probes::ToolchainOverrides {
+            target_triple: Some(native_probe_target_triple()),
+            ..astronomical_native_identity::probes::ToolchainOverrides::none()
+        },
     };
     let native_identity = astronomical_native_identity::native_build_identity(&identity_request)
         .unwrap_or_else(|error| panic!("the native build identity failed for the probe: {error}"));
@@ -63,8 +63,32 @@ fn resolve_native_probe_executable_path() -> PathBuf {
     probe_executable_path
 }
 
+fn native_probe_target_triple() -> String {
+    if let Ok(target_triple) = std::env::var("TARGET")
+        && !target_triple.trim().is_empty()
+    {
+        return target_triple;
+    }
+    let compiler_version = Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .expect("the native probe should inspect the current Rust compiler");
+    assert!(
+        compiler_version.status.success(),
+        "the Rust compiler should report its native host target"
+    );
+    String::from_utf8(compiler_version.stdout)
+        .expect("the Rust compiler version should be UTF-8")
+        .lines()
+        .find_map(|version_line| version_line.strip_prefix("host: "))
+        .filter(|host_target| !host_target.trim().is_empty())
+        .expect("the Rust compiler version should include its host target")
+        .to_owned()
+}
+
 #[test]
 #[ignore = "runs the pinned native MLX allocator probe in a fresh process"]
+#[serial]
 fn should_pass_the_pinned_native_mlx_memory_contract_probe() {
     // The probe subprocess inherits the published metallib location because
     // MLX's own baked-in staging path is removed right after the native build

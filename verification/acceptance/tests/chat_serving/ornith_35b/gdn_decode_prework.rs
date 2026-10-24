@@ -1,118 +1,117 @@
-//! Fused GDN decode prework A/B measurement, one phase per invocation.
+//! Production-selected gated-delta decode diagnostic measurement.
 //!
-//! The fused prework kernel replaces roughly thirteen launch-bound dispatches
-//! per gated-delta layer at decode shapes with one Metal launch. The offline //! numerics test proves the kernel bit-matches the composed path; this journey
-//! is the measurement half. The worker test binary forbids unsafe code, so the
-//! disengage switch must come from the environment the journey is invoked
-//! under (`ASTRONOMICAL_GDN_DECODE_PREWORK=0`), and this journey reads — never
-//! sets — that value and labels every printed line with the resulting mode.
+//! Production kernel capability probes select the execution path. This
+//! journey measures that selection without changing it or claiming to compare
+//! switch arms. Direct fused-versus-composed numeric tests remain separate.
 //!
-//! Run the journey alternately with the variable unset (engaged) and set to
-//! `0` (disengaged) so thermal state cannot order-confound the comparison;
-//! aggregate the medians across the alternation. Decode rates come from
-//! daemon status differencing, never attribution spans. A warm-up
-//! completion absorbs the model load and first-use JIT compilation.
-//! Persistent prompt caching makes each measured completion after the warmup
-//! a pure decode measurement over the identical Romeo and Juliet prompt.
+//! A 500-token Romeo and Juliet warmup requests 50 output tokens, then a
+//! 10,000-token prompt requests 500 output tokens with persistent caching off.
+//! Decode rates come from daemon status differencing, never attribution spans.
+//! Run the optimized diagnostic with `cargo xtask test-run --package
+//! astronomical-acceptance --test chat_serving --features serving-acceptance
+//! --release --configuration PATH --filter
+//! serving_acceptance::ornith_35b::gdn_decode_prework::should_measure_production_selected_gated_delta_decode_throughput
+//! --exact --ignored`.
 
-use serde_json::json;
+use serde_json::{Value, json};
+use serial_test::serial;
 use tokio::time::timeout;
 
 use crate::serving_acceptance::chat::openai_rest::{
     assert_successful_streaming_chat_response, post_chat_completion,
 };
+use crate::support::exact_model_prompt::build_exact_model_prompt_content;
 
 use super::support::{
-    JOURNEY_TIMEOUT, launch_resident_rest_server, resident_model_id, romeo_and_juliet_prompt,
-    status_document, stop_resident_rest_server,
+    JOURNEY_TIMEOUT, launch_resident_rest_server_for_decode_diagnostics, model_directory,
+    resident_model_id, status_document, stop_resident_rest_server,
 };
 
-const MEASURED_COMPLETION_COUNT: usize = 3;
-const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 128;
-const PREWORK_DISENGAGE_ENVIRONMENT: &str = "ASTRONOMICAL_GDN_DECODE_PREWORK";
+const WARMUP_INPUT_TOKEN_COUNT: usize = 500;
+const WARMUP_MAXIMUM_OUTPUT_TOKENS: u16 = 50;
+const MEASURED_INPUT_TOKEN_COUNT: usize = 10_000;
+const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;
+const WARMUP_ROMEO_AND_JULIET_SOURCE: &str =
+    include_str!("../../fixtures/model_metrics_warmup_romeo_and_juliet.txt");
+const MEASURED_ROMEO_AND_JULIET_SOURCE: &str =
+    include_str!("../../fixtures/model_metrics_10000_tokens_romeo_and_juliet.txt");
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the resident 35B sparse-MoE model and measures decode for the ambient fused-prework mode"]
-async fn should_measure_decode_for_the_ambient_prework_mode() {
-    timeout(JOURNEY_TIMEOUT, measure_ambient_prework_decode())
+#[ignore = "loads the resident sparse-MoE model and measures the production capability-selected decode path"]
+#[serial]
+async fn should_measure_production_selected_gated_delta_decode_throughput() {
+    if cfg!(debug_assertions) {
+        panic!(
+            "run the production-selected decode diagnostic through cargo xtask test-run --release"
+        );
+    }
+    timeout(JOURNEY_TIMEOUT, measure_production_selected_decode())
         .await
-        .expect("the prework decode measurement must finish within 115 seconds");
+        .expect("the production-selected decode diagnostic must finish within 115 seconds");
 }
 
-async fn measure_ambient_prework_decode() {
-    let prework_disengaged = std::env::var(PREWORK_DISENGAGE_ENVIRONMENT)
-        .map(|value| value == "0")
-        .unwrap_or(false);
-    let mode = if prework_disengaged {
-        "disengaged"
-    } else {
-        "engaged"
-    };
+async fn measure_production_selected_decode() {
     let model_id = resident_model_id();
-    let (_isolated_home, rest_server) = launch_resident_rest_server().await;
+    let model_directory = model_directory();
+    let warmup_prompt = build_exact_model_prompt_content(
+        &model_directory,
+        WARMUP_ROMEO_AND_JULIET_SOURCE,
+        "Continue the supplied Romeo and Juliet story.",
+        WARMUP_INPUT_TOKEN_COUNT,
+    );
+    let measured_prompt = build_exact_model_prompt_content(
+        &model_directory,
+        MEASURED_ROMEO_AND_JULIET_SOURCE,
+        "Continue the supplied Romeo and Juliet story for approximately 500 tokens.",
+        MEASURED_INPUT_TOKEN_COUNT,
+    );
+    let (_isolated_home, rest_server) = launch_resident_rest_server_for_decode_diagnostics().await;
     let server_address = rest_server.server_address;
 
-    eprintln!("[ornith-35b-prework] mode={mode} phase=jit-warmup model={model_id}");
+    eprintln!("[ornith-35b-production-decode-diagnostic] phase=warmup model={model_id}");
     let warmup_response = post_chat_completion(
         server_address,
         json!({
             "model": model_id,
             "messages": [{
                 "role": "user",
-                "content": romeo_and_juliet_prompt(),
+                "content": warmup_prompt,
             }],
             "stream": true,
             "temperature": 1,
-            "max_tokens": 8,
+            "max_tokens": WARMUP_MAXIMUM_OUTPUT_TOKENS,
         })
         .to_string(),
     )
     .await;
     assert_successful_streaming_chat_response(&warmup_response);
-    let mut previous_session_sample = status_sample(server_address).await;
+    let previous_session_sample = status_sample(server_address).await;
     assert!(
         previous_session_sample.completed_request_count >= 1,
         "the warmup completion must be attributed before measurement starts"
     );
 
-    let mut decode_tokens_per_second_samples = Vec::new();
-    for completion_index in 1..=MEASURED_COMPLETION_COUNT {
-        eprintln!(
-            "[ornith-35b-prework] mode={mode} phase=measured completion={completion_index}/{MEASURED_COMPLETION_COUNT} model={model_id}"
-        );
-        let chat_response = post_chat_completion(
-            server_address,
-            json!({
-                "model": model_id,
-                "messages": [{
-                    "role": "user",
-                    "content": romeo_and_juliet_prompt(),
-                }],
-                "stream": true,
-                "temperature": 1,
-                "max_tokens": MEASURED_MAXIMUM_OUTPUT_TOKENS,
-            })
-            .to_string(),
-        )
-        .await;
-        assert_successful_streaming_chat_response(&chat_response);
-        let current_session_sample = status_sample(server_address).await;
-        let decode_tok_per_second =
-            current_session_sample.recover_generation_rate(&previous_session_sample);
-        eprintln!(
-            "[ornith-35b-prework] mode={mode} completion={completion_index} decode_tok_per_second={decode_tok_per_second:.2}"
-        );
-        decode_tokens_per_second_samples.push(decode_tok_per_second);
-        previous_session_sample = current_session_sample;
-    }
-
-    let median_decode_tok_per_second = median(&mut decode_tokens_per_second_samples);
+    eprintln!("[ornith-35b-production-decode-diagnostic] phase=measured model={model_id}");
+    let chat_response = post_chat_completion(
+        server_address,
+        json!({
+            "model": model_id,
+            "messages": [{"role": "user", "content": measured_prompt}],
+            "stream": true,
+            "stream_options": {"include_usage": true},
+            "temperature": 1,
+            "max_tokens": MEASURED_MAXIMUM_OUTPUT_TOKENS,
+        })
+        .to_string(),
+    )
+    .await;
+    assert_successful_streaming_chat_response(&chat_response);
+    assert_measured_completion_shape(&chat_response);
+    let current_session_sample = status_sample(server_address).await;
+    let decode_tokens_per_second =
+        current_session_sample.recover_generation_rate(&previous_session_sample);
     eprintln!(
-        "[ornith-35b-prework] MODE_MEDIAN mode={mode} median_decode_tok_per_second={median_decode_tok_per_second:.2}"
-    );
-    assert!(
-        median_decode_tok_per_second.is_finite() && median_decode_tok_per_second > 0.0,
-        "the {mode} prework phase must report a positive decode rate"
+        "[ornith-35b-production-decode-diagnostic] selection=production-capability-probes decode_tokens_per_second={decode_tokens_per_second:.2}"
     );
 
     stop_resident_rest_server(rest_server).await;
@@ -167,12 +166,28 @@ async fn status_sample(server_address: std::net::SocketAddr) -> ServingSessionSa
     ServingSessionSample::new(server_address).await
 }
 
-fn median(samples: &mut [f64]) -> f64 {
-    samples.sort_by(|first, second| first.total_cmp(second));
-    let middle = samples.len() / 2;
-    if samples.len() % 2 == 0 {
-        (samples[middle - 1] + samples[middle]) / 2.0
-    } else {
-        samples[middle]
-    }
+fn assert_measured_completion_shape(chat_response: &str) {
+    let usage = chat_response
+        .lines()
+        .filter_map(|streamed_line| streamed_line.strip_prefix("data: "))
+        .filter_map(|event_json| serde_json::from_str::<Value>(event_json).ok())
+        .find_map(|streamed_event| {
+            streamed_event
+                .get("usage")
+                .filter(|usage| usage.is_object())
+                .cloned()
+        })
+        .expect("the measured diagnostic completion should report usage");
+    let prompt_tokens = usage["prompt_tokens"].as_u64().expect("prompt_tokens");
+    let completion_tokens = usage["completion_tokens"]
+        .as_u64()
+        .expect("completion_tokens");
+    assert!(
+        (9_000..=11_000).contains(&prompt_tokens),
+        "the diagnostic should measure approximately 10,000 Romeo and Juliet prompt tokens"
+    );
+    assert!(
+        (450..=550).contains(&completion_tokens),
+        "the diagnostic should measure approximately 500 output tokens"
+    );
 }

@@ -14,11 +14,17 @@ pub mod retained_prefix;
 pub mod rotating;
 
 #[cfg(test)]
+mod allocation_boundary_tests;
+#[cfg(test)]
 mod context_boundary_tests;
+#[cfg(test)]
+mod context_workspace_boundary_tests;
 #[cfg(test)]
 mod expert_memory_admission_tests;
 #[cfg(test)]
 mod retained_prefix_policy_tests;
+#[cfg(test)]
+mod rotating_admission_tests;
 
 pub use allocation::{
     AllocationAdmissionDecision, AllocationAdmissionObservation,

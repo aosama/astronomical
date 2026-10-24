@@ -141,6 +141,7 @@ dependencies = [
  "base64 0.23.1",
  "image",
  "serde_json",
+ "serial_test",
  "tempfile",
  "tokio",
 ]
@@ -318,6 +319,7 @@ version = "0.2.80"
 dependencies = [
  "base64 0.23.1",
  "image",
+ "serde",
  "serde_json",
  "sha2",
  "tempfile",
@@ -2971,7 +2973,9 @@ dependencies = [
  "libc",
  "serde_json",
  "serde_yaml",
+ "serial_test",
  "sha2",
+ "tempfile",
 ]
 
 [[package]]

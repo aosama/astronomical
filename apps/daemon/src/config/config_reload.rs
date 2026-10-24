@@ -14,7 +14,9 @@ use astronomical_config::{
     EffectiveModelDiscoveryError, LogLevel, LoggingConfig, ModelCapabilities,
     ModelDiscoveryDiagnostic, ModelDiscoveryDiagnosticCode, PromptCacheConfig, ResolvedModelConfig,
 };
-use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};
+use astronomical_ipc_protocol::{
+    WorkerDecodeExpertCachePolicy, WorkerLogLevel, WorkerStartupConfiguration,
+};
 use thiserror::Error;
 
 use crate::RuntimeModelPolicy;
@@ -229,6 +231,7 @@ impl ResolvedRuntimeConfig {
             persistent_prompt_cache_enabled: self.persistent_prompt_cache_enabled,
             configured_maximum_mlx_memory_bytes: self.maximum_mlx_memory_bytes,
             performance_attribution_enabled: self.performance_attribution_enabled,
+            decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
             logging_directory: self.logging_config.directory().to_path_buf(),
             logging_level: match self.logging_config.level() {
                 LogLevel::Error => WorkerLogLevel::Error,

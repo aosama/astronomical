@@ -31,7 +31,7 @@
 
 mod cleanup;
 mod lifecycle;
-mod signal_edge;
+use crate::process_signals as signal_edge;
 
 use std::io::Write;
 use std::path::{Path, PathBuf};

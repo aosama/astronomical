@@ -1,64 +1,50 @@
-//! Boundary tests for the wired-residency claim decision at worker startup.
-
-use std::ffi::OsStr;
+//! Boundary tests for the wired-residency budget at worker startup.
 
 use crate::worker_startup::wired_residency_claim_budget_bytes;
-use crate::worker_startup::wired_residency_claim_is_enabled;
 
 #[test]
-fn should_claim_wired_residency_when_the_environment_is_unset() {
+fn should_cap_the_wired_residency_claim_at_the_recommended_working_set() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
-    assert!(wired_residency_claim_is_enabled(None))
+    assert_eq!(wired_residency_claim_budget_bytes(96, 64), 64);
 }
 
 #[test]
-fn should_not_claim_wired_residency_when_explicitly_disabled() {
+fn should_claim_the_full_serving_ceiling_below_the_recommendation() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
-
-    assert!(!wired_residency_claim_is_enabled(Some(OsStr::new("0"))))
+    assert_eq!(wired_residency_claim_budget_bytes(32, 64), 32);
 }
 
 #[test]
-fn should_keep_the_claim_for_the_legacy_opt_in_value() {
+fn should_not_claim_more_than_a_zero_recommendation() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
-
-    assert!(wired_residency_claim_is_enabled(Some(OsStr::new("1"))))
+    assert_eq!(wired_residency_claim_budget_bytes(64, 0), 0);
 }
 
 #[test]
-fn should_keep_the_claim_for_an_unrecognized_value_rather_than_silently_disarming() {
+fn should_preserve_a_zero_serving_ceiling() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
-    assert!(wired_residency_claim_is_enabled(Some(OsStr::new("yes"))))
+    assert_eq!(wired_residency_claim_budget_bytes(0, 64), 0);
 }
 
 #[test]
-fn should_cap_the_wire_claim_at_the_recommended_working_set() {
+fn should_keep_equal_serving_and_recommendation_budgets() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
+    assert_eq!(wired_residency_claim_budget_bytes(64, 64), 64);
+}
 
-    // MLX rejects wired claims above Metal's recommendation, so a machine
-    // ceiling above the recommendation claims only the recommendation —
-    // the 48 GB incident shape (issue #1297).
+#[test]
+fn should_handle_the_platform_integer_boundary_without_overflow() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
     assert_eq!(
-        wired_residency_claim_budget_bytes(42_949_672_960, 40_000_028_672),
-        40_000_028_672
+        wired_residency_claim_budget_bytes(usize::MAX, usize::MAX),
+        usize::MAX
     );
-}
-
-#[test]
-fn should_claim_the_full_ceiling_below_the_recommendation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
-    // A configured ceiling below the recommendation is claimed as-is: the
-    // engine never plans above the budget, so the budget never needs to
-    // exceed the ceiling.
-    assert_eq!(
-        wired_residency_claim_budget_bytes(38_654_705_664, 40_000_028_672),
-        38_654_705_664
-    );
+    assert_eq!(wired_residency_claim_budget_bytes(usize::MAX, 1), 1);
+    assert_eq!(wired_residency_claim_budget_bytes(1, usize::MAX), 1);
 }

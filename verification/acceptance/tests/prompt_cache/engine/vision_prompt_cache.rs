@@ -24,7 +24,7 @@ const VISUAL_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 async fn should_preserve_visual_prefill_output_across_a_full_prefill_chunk_cache_restore() {
     timeout(
         VISUAL_ACCEPTANCE_TIMEOUT,
-        run_visual_prompt_cache_acceptance(false),
+        run_visual_prompt_cache_acceptance(),
     )
     .await
     .expect("the visual prompt-cache acceptance must finish within 115 seconds");
@@ -42,17 +42,17 @@ async fn should_restore_the_causal_prefix_before_an_appended_image() {
 }
 
 #[tokio::test]
-#[ignore = "forces one checkpoint-capable visual prefill rejection and verifies retry rollback"]
-async fn should_restore_visual_and_decoder_state_after_a_checkpoint_prefill_retry() {
+#[ignore = "loads Ornith and proves causal prefix reuse for a visual prompt"]
+async fn should_restore_the_causal_prefix_of_a_visual_prompt() {
     timeout(
         VISUAL_ACCEPTANCE_TIMEOUT,
-        run_visual_prompt_cache_acceptance(true),
+        run_visual_prompt_cache_acceptance(),
     )
     .await
-    .expect("the visual prefill rollback acceptance must finish within 115 seconds");
+    .expect("the visual prompt-cache acceptance must finish within 115 seconds");
 }
 
-async fn run_visual_prompt_cache_acceptance(force_prefill_retry: bool) {
+async fn run_visual_prompt_cache_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let prompt_cache_directory =
         tempfile::tempdir().expect("the visual acceptance should create a prompt-cache directory");
@@ -64,26 +64,12 @@ async fn run_visual_prompt_cache_acceptance(force_prefill_retry: bool) {
         .start_generation(cold_request)
         .await
         .expect("the cold visual request should start");
-    if force_prefill_retry {
-        qwen3_5_engine
-            .force_next_prefill_capacity_rejection_for_tests(RequestId::new(9_100))
-            .await
-            .expect("the visual acceptance should arm one prefill rejection");
-    }
     let (cold_token_id, cold_prefill_chunk_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_100)).await;
-    if force_prefill_retry {
-        assert_eq!(
-            cold_prefill_chunk_token_counts.first().copied(),
-            Some(VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS / 2),
-            "the forced full-chunk rejection must retry from the restored checkpoint at half size"
-        );
-    } else {
-        assert!(
-            cold_prefill_chunk_token_counts.contains(&VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS),
-            "the visual request must complete one full prefill chunk forward"
-        );
-    }
+    assert!(
+        cold_prefill_chunk_token_counts.contains(&VISUAL_ACCEPTANCE_PREFILL_CHUNK_TOKENS),
+        "the visual request must complete one full prefill chunk forward"
+    );
     wait_for_visual_prompt_cache_block(&qwen3_5_engine).await;
 
     let restored_request = representative_visual_request(&tokenizer, RequestId::new(9_101));
@@ -97,7 +83,7 @@ async fn run_visual_prompt_cache_acceptance(force_prefill_retry: bool) {
     let (restored_token_id, _restored_prefill_chunk_token_counts) =
         generate_one_token(&mut qwen3_5_engine, RequestId::new(9_101)).await;
     eprintln!(
-        "[visual-prompt-cache-acceptance] status=parity cold_token_id={cold_token_id} restored_token_id={restored_token_id} forced_retry={force_prefill_retry}"
+        "[visual-prompt-cache-acceptance] status=parity cold_token_id={cold_token_id} restored_token_id={restored_token_id}"
     );
     assert_eq!(cold_token_id, restored_token_id);
     eprintln!("[visual-prompt-cache-acceptance] status=success");

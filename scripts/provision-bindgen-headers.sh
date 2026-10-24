@@ -71,6 +71,7 @@ print_usage() {
     printf '%s\n' "  --patch-list FILE                Read the patch pipeline from FILE (lines: dependency<TAB>patch-path)"
     printf '%s\n' "                                   instead of parsing the native CMakeLists. Used by tooling and contract tests."
     printf '%s\n' "  --profile NAME                   Native build profile for --verify-headers (default: core)."
+    printf '%s\n' "  --target TARGET_TRIPLE           Target for --verify-headers (default: Cargo TARGET or the rustc host)."
     printf '%s\n' "  --verify-headers                 Compare extracted MLX-C headers against the staged headers of"
     printf '%s\n' "                                   the completed native build for the current identity and exit."
     printf '%s\n' "  --print-patch-list               Print the parsed patch pipeline (dependency<TAB>patch-path) and exit."
@@ -105,6 +106,11 @@ parse_arguments() {
             --profile)
                 [ "$#" -ge 2 ] || { print_error "--profile requires a native build profile name"; exit 2; }
                 NATIVE_BUILD_PROFILE="$2"
+                shift 2
+                ;;
+            --target)
+                [ "$#" -ge 2 ] && [ -n "$2" ] || { print_error "--target requires a target triple"; exit 2; }
+                NATIVE_TARGET_TRIPLE="$2"
                 shift 2
                 ;;
             --verify-headers)

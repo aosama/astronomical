@@ -93,15 +93,17 @@ impl Qwen3_5EngineState {
                     "failed to validate model chunking configuration: {configuration_error}"
                 ))
             })?;
-            let model = Qwen3_5Model::load_with_performance_attribution(
-                runtime,
-                validated_artifact,
-                &self.model_directory,
-                true,
-                model_chunking,
-                &mut model_loading_performance_attribution,
-            )
-            .map_err(qwen3_5_runtime_error)?;
+            let model =
+                Qwen3_5Model::load_with_performance_attribution_and_decode_expert_cache_policy(
+                    runtime,
+                    validated_artifact,
+                    &self.model_directory,
+                    true,
+                    model_chunking,
+                    self.decode_expert_cache_policy,
+                    &mut model_loading_performance_attribution,
+                )
+                .map_err(qwen3_5_runtime_error)?;
             model_loading_performance_attribution
                 .measure_operation(
                     PerformanceOperation::ResidentWeightMaterializationSynchronizationWait,

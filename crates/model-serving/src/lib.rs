@@ -234,9 +234,11 @@ pub use memory::{
     rotating_committed_token_count, rotating_prefill_transient_token_count,
     safe_minimum_active_memory_ceiling_bytes,
     seated_complete_expert_request_peak_active_memory_bytes,
-    seated_complete_expert_request_temporary_workspace_bytes,
+    seated_complete_expert_request_temporary_workspace_bytes, seated_complete_layer_count,
     should_commit_mandatory_complete_layer, should_commit_mandatory_routed_page,
-    should_enact_planned_expert_release, should_retry_fixed_forward_after_expert_reclamation,
+    should_commit_multi_token_union_as_complete_layer,
+    should_complete_partial_layer_on_prefill_read, should_enact_planned_expert_release,
+    should_retry_fixed_forward_after_expert_reclamation, should_seed_partial_layer_on_prefill_read,
     whole_table_reclamation_target_bytes,
 };
 

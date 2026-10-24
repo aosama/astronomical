@@ -9,9 +9,8 @@
 //! (persistent prompt) cache disabled and the prefill chunk fixed at 2,048
 //! tokens (both pinned by the worker environment this driver builds).
 //!
-//! The bundle is located through `ASTRONOMICAL_JANGTQ2_MODEL_DIR` (the
-//! installed bundle directory, named by its model id), never a hardcoded
-//! developer path — the same variable the real-bundle plan contracts use.
+//! The bundle is selected by `model_directory` in the JSON configuration
+//! passed to `cargo xtask test-run`, shared with the real-bundle plan contracts.
 //! The worker discovers it through that directory, and the requested model id
 //! is the directory's leaf name.
 //!
@@ -21,19 +20,21 @@
 //!
 //! This is a laptop-only journey: it streams real expert weights from the
 //! solid-state drive, so it is `#[ignore]`d and not wired into CI. Invoke it
-//! with `cargo test-jangtq2-serving-throughput` (see `.cargo/config.toml`)
-//! after building the release worker.
+//! with `cargo xtask test-run --package astronomical-acceptance --test
+//! performance_throughput --features performance_throughput --release
+//! --configuration PATH --filter
+//! performance_throughput::jangtq2_qwen35::should_measure_jangtq2_prompt_processing_and_decode_throughput
+//! --exact --ignored`. The runner builds the matching worker.
 
 use std::path::PathBuf;
 use std::time::Duration;
 
+use astronomical_test_harness::test_run::TestRunContext;
 use serial_test::serial;
 
 use crate::performance_throughput::historical_record::ThroughputJourneyKind;
 use crate::performance_throughput::support::{self as throughput_support, ThroughputJourney};
 
-/// The environment variable pointing at the installed bundle directory.
-const MODEL_DIRECTORY_ENV: &str = "ASTRONOMICAL_JANGTQ2_MODEL_DIR";
 const WARMUP_INPUT_INSTRUCTION: &str = "Continue the supplied Romeo and Juliet story above.";
 /// The Romeo and Juliet source used for the bounded warmup prompt.
 const WARMUP_ROMEO_AND_JULIET_SOURCE: &str =
@@ -50,20 +51,12 @@ const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 500;
 /// The sampling temperature in thousandths (1_000 = 1.0), matching the other
 /// serving throughput journeys.
 const TEMPERATURE_THOUSANDTHS: u16 = 1_000;
-/// The bundle streams about 32 GB of packed experts from the solid-state
-/// drive during the first prefill and decodes 500 tokens afterwards; the
-/// budget bounds the whole journey (launch, warmup, measured completion) and
-/// is deliberately wide so a slow run reports a rate instead of a timeout.
-const JOURNEY_TIMEOUT: Duration = Duration::from_secs(3_600);
+/// Slow solid-state-drive journeys need lower-level attribution rather than
+/// a longer model run; launch, warmup, and measurement share this budget.
+const JOURNEY_TIMEOUT: Duration = Duration::from_secs(120);
 
 fn model_directory() -> PathBuf {
-    match std::env::var_os(MODEL_DIRECTORY_ENV) {
-        Some(value) if !value.is_empty() => PathBuf::from(value),
-        _ => panic!(
-            "set {MODEL_DIRECTORY_ENV} to the installed jangtq2 bundle directory \
-             (containing config.json, jang_config.json, and the safetensors shards)"
-        ),
-    }
+    TestRunContext::current().required_model_directory()
 }
 
 /// The model id discovery derives for the bundle: the directory's leaf name.
@@ -72,7 +65,7 @@ fn discovered_model_id(model_directory: &std::path::Path) -> String {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_else(|| {
-            panic!("{MODEL_DIRECTORY_ENV} must name the bundle directory by its model id")
+            panic!("the selected model_directory must name the bundle directory by its model id")
         })
         .to_owned()
 }

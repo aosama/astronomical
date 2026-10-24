@@ -22,6 +22,7 @@ NATIVE_BUILD_STORE_DIRECTORY=""
 EXPLICIT_MANIFEST_PATH=""
 EXPLICIT_PATCH_LIST_PATH=""
 NATIVE_BUILD_PROFILE="$DEFAULT_PROFILE"
+NATIVE_TARGET_TRIPLE=""
 GENERATED_MANIFEST_PATH=""
 GENERATED_PATCH_LIST_PATH=""
 EFFECTIVE_MANIFEST_PATH=""
@@ -429,22 +430,16 @@ provision_headers() {
     log_line "extraction_directory=$extraction_directory status=provisioned mlx_files=$mlx_file_count mlx_c_files=$mlx_c_file_count"
 }
 
-# The build store keys its entries by the full identity, which honors the
-# same toolchain override variables the native build honors
-# (ASTRONOMICAL_NATIVE_IDENTITY_*, TARGET); passing them through here is
-# intentional so verification can address an entry built under an override.
+# Full identities probe the real toolchain. Target selection stays in the
+# Rust command so verification and the build store resolve the same inputs.
 resolve_built_identity() {
-    if [ -z "${TARGET:-}" ]; then
-        TARGET="$(rustc -vV | sed -n 's/^host: //p')"
-    fi
-    [ -n "$TARGET" ] || {
-        print_error "TARGET or ASTRONOMICAL_NATIVE_IDENTITY_TARGET is required to resolve the built identity"
-        exit 1
-    }
-    export TARGET
     built_identity="$(
+        set -- native-fingerprint --profile "$NATIVE_BUILD_PROFILE"
+        if [ -n "$NATIVE_TARGET_TRIPLE" ]; then
+            set -- "$@" --target "$NATIVE_TARGET_TRIPLE"
+        fi
         cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- \
-            native-fingerprint --profile "$NATIVE_BUILD_PROFILE" "$REPOSITORY_ROOT"
+            "$@" "$REPOSITORY_ROOT"
     )"
     validate_identity_text "$built_identity" "built identity fingerprint"
     printf '%s\n' "$built_identity"

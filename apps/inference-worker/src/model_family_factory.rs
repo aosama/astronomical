@@ -5,8 +5,8 @@ use astronomical_config::{
     verify_qwen_image_21_model_directory,
 };
 use astronomical_ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerImageGenerationModelFamily,
-    WorkerModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerDecodeExpertCachePolicy,
+    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine, ModelFactory,
@@ -25,6 +25,7 @@ pub struct ModelFamilyFactory {
     allocator_cache_memory_limit_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
     performance_attribution_enabled: bool,
+    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
     persistent_prompt_cache_enabled: bool,
 }
@@ -45,6 +46,7 @@ impl ModelFamilyFactory {
         allocator_cache_memory_limit_bytes: usize,
         prompt_cache_config: PromptCacheConfig,
         performance_attribution_enabled: bool,
+        decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
         performance_attribution_log_path: PathBuf,
         persistent_prompt_cache_enabled: bool,
     ) -> Self {
@@ -53,6 +55,7 @@ impl ModelFamilyFactory {
             allocator_cache_memory_limit_bytes,
             prompt_cache_config,
             performance_attribution_enabled,
+            decode_expert_cache_policy,
             performance_attribution_log_path,
             persistent_prompt_cache_enabled,
         }
@@ -74,6 +77,7 @@ impl ModelFamilyFactory {
         let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
         let prompt_cache_config = self.prompt_cache_config.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
+        let decode_expert_cache_policy = self.decode_expert_cache_policy;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
         let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
         tokio::task::spawn_blocking(move || {
@@ -88,6 +92,7 @@ impl ModelFamilyFactory {
                 model_configuration.maximum_output_tokens,
                 persistent_prompt_cache_enabled,
                 performance_attribution_enabled,
+                decode_expert_cache_policy,
                 performance_attribution_log_path,
                 chunking,
                 engine_selection,

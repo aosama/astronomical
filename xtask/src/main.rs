@@ -16,6 +16,9 @@ mod check_architecture_tests;
 mod classify_scope;
 #[cfg(test)]
 mod classify_scope_tests;
+mod coverage_floor;
+#[cfg(test)]
+mod coverage_floor_tests;
 mod disposable_target;
 #[cfg(test)]
 mod disposable_target_tests;
@@ -29,12 +32,15 @@ mod native_fingerprint;
 mod notices;
 #[cfg(test)]
 mod notices_tests;
+#[path = "disposable_target/signal_edge.rs"]
+mod process_signals;
 mod retired_native_scan;
 #[cfg(test)]
 mod retired_native_scan_tests;
 #[cfg(test)]
 mod sccache_save_tests;
 mod source_size;
+mod test_run;
 mod tier_pyramid;
 
 mod sccache_save;
@@ -70,6 +76,10 @@ fn main() -> ExitCode {
     }
     let resolve_root = move || repository_root_override.unwrap_or_else(resolve_repository_root);
     match arguments.first().map(String::as_str) {
+        Some("test-run") => test_run::run(&resolve_root(), &arguments[1..]),
+        Some("mlx-c-coverage-inventory") => {
+            test_run::refresh_coverage_inventory(&resolve_root(), &arguments[1..])
+        }
         Some("disposable-target") => disposable_target::run(&resolve_root(), &arguments[1..]),
         Some("scan-retired-native-output") => {
             retired_native_scan::run(&resolve_root(), &arguments[1..])
@@ -79,6 +89,9 @@ fn main() -> ExitCode {
             arguments.contains(&"--update-baseline".to_owned()),
         )),
         Some("source-size") => run_command(source_size::run(&resolve_root(), &arguments[1..])),
+        Some("coverage-floor") => {
+            run_command(coverage_floor::run(&resolve_root(), &arguments[1..]))
+        }
         Some("notices") => run_command(notices::run(
             &resolve_root(),
             arguments.contains(&"--check".to_owned()),
@@ -99,7 +112,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] --profile core|core+memory-contract [root] | classify-scope | check-architecture | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | classify-scope | check-architecture | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }

@@ -112,7 +112,7 @@ impl std::fmt::Display for NativeIdentityError {
             Self::MissingTargetTriple => {
                 write!(
                     formatter,
-                    "TARGET or ASTRONOMICAL_NATIVE_IDENTITY_TARGET is required"
+                    "a target triple is required for a full native build identity"
                 )
             }
             Self::UnsupportedBuildType(build_type) => {

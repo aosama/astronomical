@@ -1,14 +1,8 @@
-//! GPU wired-ceiling probe: the bottom-of-the-call-stack reproduction of the
-//! 2026-10-15 decode degradation.
+//! Graphics-processor wired-ceiling allocation diagnostic.
 //!
-//! Incident facts this probe interrogates: with a 41 GB configured ceiling on
-//! a 48.96 GB machine, decode fell from 50.9 to 7.8 tokens per second while
-//! MLX active memory plateaued at exactly 36,827,991,686 bytes — a number no
-//! Astronomical policy chose (the ceiling was 41 GB and the machine reports
-//! 48.96 GB). No application-level memory event fired during the degraded
-//! decodes. The remaining suspect is the hardware-side GPU wired limit that
-//! macOS enforces below total RAM; when MLX active memory presses against it,
-//! per-allocation latency collapses even before outright failure.
+//! A previously observed active-memory plateau motivates checking whether
+//! allocation latency degrades before the configured MLX limit. This probe
+//! cannot assume the host's safe wired-memory capacity.
 //!
 //! The probe allocates bf16 zero arrays in 512 MB steps under a 44 GB MLX
 //! limit, holds every array resident, and reports per-step latency, MLX
@@ -16,26 +10,27 @@
 //! failure, latency crawl, or clean completion past the incident plateau —
 //! is the fact that explains the plateau.
 //!
-//! >36 GB agreement (AGENTS.md test ceiling rule): Ahmed explicitly approved
-//! exceeding the 36 GB configured-memory test ceiling on 2026-10-15 to
-//! reproduce the 41 GB decode degradation; the probe caps at 43 GB so the
-//! machine always keeps headroom for macOS.
+//! This ignored serial test refuses to initialize MLX until the explicit
+//! `cargo xtask test-run` configuration contains
+//! `"allow_large_wired_memory_probe": true`. Permission is run-scoped, never
+//! inferred from the selected test name. The allocation span caps at 43 GB.
 
 use std::time::{Duration, Instant};
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use astronomical_test_harness::test_run::TestRunContext;
 use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 /// The plateau the incident session sat at through both degraded decodes.
 const INCIDENT_ACTIVE_MEMORY_PLATEAU_BYTES: u64 = 36_827_991_686;
 /// MLX limit high enough that MLX itself never refuses before the hardware.
-const PROBE_MLX_ACTIVE_LIMIT_BYTES: usize = 44_000_000_000;
+const PROBE_MLX_ACTIVE_LIMIT_BYTES: usize = 44 * (1 << 30);
 /// One probe step: 512 MB of bf16 weights, the granularity of one complete
 /// expert table of the incident artifact.
 const PROBE_STEP_BYTES: u64 = 512 * 1024 * 1024;
-/// Never wire more than this, so macOS always keeps RAM headroom.
-const PROBE_MAXIMUM_BYTES: u64 = 43_000_000_000;
+/// Bounds the explicit probe request without assuming the host's memory capacity.
+const PROBE_MAXIMUM_BYTES: u64 = 43 * (1 << 30);
 /// OOM-reproduction timeout exception: the budget every step is checked
 /// against (AGENTS.md allows exceeding 60 s for OOM reproductions).
 const PROBE_BUDGET: Duration = Duration::from_secs(110);
@@ -44,15 +39,13 @@ const PROGRESS_REPORT_INTERVAL: Duration = Duration::from_secs(5);
 
 #[test]
 #[serial]
-#[ignore = "wires GPU memory beyond the 36 GB test ceiling; run explicitly: ASTRONOMICAL_GPU_WIRED_CEILING_PROBE=1 (user agreement 2026-10-15)"]
+#[ignore = "wires graphics-processor memory beyond the normal ceiling; requires allow_large_wired_memory_probe in explicit runner configuration"]
 fn should_expose_the_gpu_wired_ceiling_that_caps_mlx_active_memory() {
-    if std::env::var("ASTRONOMICAL_GPU_WIRED_CEILING_PROBE")
-        .ok()
-        .as_deref()
-        != Some("1")
-    {
-        panic!("set ASTRONOMICAL_GPU_WIRED_CEILING_PROBE=1 to run the GPU wired-ceiling probe");
-    }
+    require_large_wired_memory_probe_permission(
+        TestRunContext::current()
+            .configuration
+            .allow_large_wired_memory_probe,
+    );
     let runtime = MlxRuntime::initialize(
         MlxMemoryLimits::new(PROBE_MLX_ACTIVE_LIMIT_BYTES, PROBE_MLX_ACTIVE_LIMIT_BYTES)
             .expect("the probe memory limits should be valid"),
@@ -127,7 +120,7 @@ fn should_expose_the_gpu_wired_ceiling_that_caps_mlx_active_memory() {
                 .map(|memory_snapshot| memory_snapshot.active_memory_bytes())
                 .unwrap_or(0);
             println!(
-                "gpu wired-ceiling probe: held_gib={:.2} ({:.0}%) step_latency_millis={} mlx_active_bytes={} eta_seconds={:.1}",
+                "gpu wired-ceiling probe: held_gigabytes={:.2} ({:.0}%) step_latency_millis={} mlx_active_bytes={} eta_seconds={:.1}",
                 held_bytes as f64 / 1_073_741_824.0,
                 100.0 * held_bytes as f64 / PROBE_MAXIMUM_BYTES as f64,
                 step_elapsed.as_millis(),
@@ -154,3 +147,14 @@ fn should_expose_the_gpu_wired_ceiling_that_caps_mlx_active_memory() {
         .synchronize_gpu_stream()
         .expect("the probe should synchronize the stream after releasing its arrays");
 }
+
+fn require_large_wired_memory_probe_permission(allow_large_wired_memory_probe: bool) {
+    assert!(
+        allow_large_wired_memory_probe,
+        "set allow_large_wired_memory_probe to true in the configuration passed to cargo xtask test-run before running this probe"
+    );
+}
+
+#[cfg(test)]
+#[path = "gpu_wired_ceiling_probe_tests.rs"]
+mod gpu_wired_ceiling_probe_tests;

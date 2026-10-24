@@ -242,10 +242,16 @@ impl MlxRamBudget {
         if context_token_count > highest_measured_token_count {
             let unmeasured_token_count =
                 context_token_count.saturating_sub(highest_measured_token_count);
-            return measured_or_bootstrap_reserve_bytes.saturating_add(
-                unmeasured_token_count
-                    .saturating_mul(self.model_geometry.sequence_state_bytes_per_token),
-            );
+            // The same geometry-projection floor that protects the
+            // within-range tail applies here: a learned measurement that
+            // disagrees with the sequence-state projection may not silently
+            // under-reserve context for the unmeasured span.
+            return measured_or_bootstrap_reserve_bytes
+                .saturating_add(
+                    unmeasured_token_count
+                        .saturating_mul(self.model_geometry.sequence_state_bytes_per_token),
+                )
+                .max(projected_sequence_state_bytes);
         }
         measured_or_bootstrap_reserve_bytes.max(projected_sequence_state_bytes)
     }
@@ -302,11 +308,6 @@ impl MlxRamBudget {
         // context evidence exists if a caller deliberately records an idle sample.
     }
 
-    /// Composes the full budget for one planned operation.
-    ///
-    /// The two token counts describe different scopes and must not be
-    /// conflated (issue #644): `context_token_count` sizes the context-window
-    /// reserve, which genuinely grows with the request's prompt, while
     /// Composes the generation-context workspace reservation exactly as the
     /// request-admission path does before it checks the active-memory ceiling.
     ///

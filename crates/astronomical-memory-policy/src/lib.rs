@@ -70,9 +70,12 @@ mod adaptive_ram_growth_guard_reclamation_tests;
 #[cfg(test)]
 mod adaptive_ram_growth_observations_tests;
 #[cfg(test)]
+mod ceiling_boundary_tests;
+#[cfg(test)]
 mod memory_policy_tests;
 #[cfg(test)]
 mod reclamation_boundary_tests;
-
 #[cfg(test)]
 mod serving_ceiling_tests;
+#[cfg(test)]
+mod strict_json_boundary_tests;

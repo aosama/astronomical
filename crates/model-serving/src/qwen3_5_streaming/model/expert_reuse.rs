@@ -1,4 +1,4 @@
-//! Returns a packed complete expert layer on hit, or streams one complete layer on miss.
+//! Selects retained or streamed expert pages for mixture-of-experts forwards.
 
 use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
@@ -9,7 +9,8 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
-    should_commit_mandatory_routed_page,
+    should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
+    should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
 };
 
 /// How one forward should execute one mixture-of-experts layer.
@@ -262,12 +263,11 @@ impl Qwen3_5Model {
     /// residency plan, so a layer the plan streams operation-local or is
     /// releasing stays unwarmed.
     ///
-    /// A multi-token routed-union chunk keeps its page operation-local. The
-    /// warm-insert queue drains only after a decode token's evaluation, so
-    /// queueing prefill pages pinned every streamed union of every chunk (about
-    /// 0.6 GB packed per layer on the 122B bundle, 24 streamed layers per
-    /// chunk) until generation started — including the pages of failed chunk
-    /// attempts — which is what drove prefill into the ceiling.
+    /// A cold multi-token union seeds a retained table only when the plan funds
+    /// a complete layer; existing partial tables use their missing-expert
+    /// growth path. Prefill pages stay off the decode warm-insert queue, which
+    /// previously pinned every chunk's union, including failed attempts, until
+    /// generation started.
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
@@ -279,6 +279,27 @@ impl Qwen3_5Model {
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
     {
         let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
+        // Multi-token chunks consult the warm table before touching storage:
+        // streaming only the route's missing experts and growing the table
+        // turns every later chunk into a table hit. Streaming the whole union
+        // re-read experts already in RAM on every chunk — the 2026-10-23
+        // flights held ~17 GB of partial tables yet still read 27.8 GB per
+        // request. When the plan funds the layer's complete claim, the read
+        // extends to every non-resident expert so the table converges to a
+        // complete layer in one pass instead of a few experts per chunk.
+        if route_token_count > 1 {
+            if let Some(warm_table_page) = self.serve_multi_token_route_from_warm_table(
+                expert_pager,
+                layer_index,
+                route_token_count,
+                expert_capacity,
+                production_default_paging,
+                routed_expert_ids,
+                performance_attribution,
+            )? {
+                return Ok(warm_table_page);
+            }
+        }
         let (streamed_weights, streamed_manifest) = expert_pager
             .stream_selected_expert_page_from_ssd(
                 &self.runtime,
@@ -296,9 +317,74 @@ impl Qwen3_5Model {
                 streamed_manifest.source_manifests.len(),
             );
             let warm_slot_count = self.hot_expert_warm_slot_count();
-            let layer_has_complete_table = retained_experts
-                .borrow()
-                .has_complete_layer(layer_index, expert_capacity);
+            let (resident_expert_count, layer_has_complete_table) = {
+                let retained_experts = retained_experts.borrow();
+                (
+                    retained_experts.occupied_slot_count(layer_index),
+                    retained_experts.has_complete_layer(layer_index, expert_capacity),
+                )
+            };
+            // A multi-token chunk whose union covers the whole layer has
+            // already paid the complete-layer read cost; offering it to
+            // retained ownership is pure reuse. Without this offer every
+            // later chunk re-read the same bytes from storage — the
+            // 2026-10-23 Ornith flight streamed 389 GB for one 23,976-token
+            // prompt while 26.95 GB of ceiling sat unused. Budget admission
+            // inside the cache remains the only refusal path.
+            if !layer_has_complete_table
+                && should_commit_multi_token_union_as_complete_layer(
+                    route_token_count,
+                    production_default_paging,
+                    self.expert_residency_target(layer_index),
+                    routed_expert_ids.len(),
+                    expert_capacity,
+                )
+            {
+                let seated = retained_experts.borrow_mut().try_adopt_complete_layer(
+                    &self.runtime,
+                    layer_index,
+                    routed_expert_ids,
+                    &streamed_weights,
+                )?;
+                tracing::debug!(
+                    layer_index,
+                    seated,
+                    routed_expert_count = routed_expert_ids.len(),
+                    expert_capacity,
+                    streamed_payload_bytes = streamed_manifest.payload_byte_count,
+                    "multi-token union offered to retained ownership",
+                );
+                if seated {
+                    performance_attribution.record_counter(
+                        PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
+                        streamed_manifest.payload_byte_count,
+                    );
+                }
+            } else if should_seed_partial_layer_on_prefill_read(
+                route_token_count,
+                production_default_paging,
+                self.expert_residency_target(layer_index),
+                resident_expert_count,
+                routed_expert_ids.len(),
+                expert_capacity,
+            ) {
+                let inserted_expert_count = retained_experts.borrow_mut().insert_streamed_experts(
+                    &self.runtime,
+                    layer_index,
+                    routed_expert_ids,
+                    &streamed_weights,
+                    routed_expert_ids,
+                    expert_capacity,
+                )?;
+                tracing::debug!(
+                    layer_index,
+                    inserted_expert_count,
+                    routed_expert_count = routed_expert_ids.len(),
+                    expert_capacity,
+                    streamed_payload_bytes = streamed_manifest.payload_byte_count,
+                    "multi-token prefill union offered to retained ownership as a completion seed",
+                );
+            }
             if route_token_count == 1 && warm_slot_count > 0 && !layer_has_complete_table {
                 if should_commit_mandatory_routed_page(
                     route_token_count,
@@ -329,6 +415,134 @@ impl Qwen3_5Model {
             }
         }
         Ok((streamed_weights, streamed_manifest))
+    }
+
+    /// Serves a multi-token routed union from the warm table, streaming only
+    /// what the table lacks. Returns `None` when the layer has no table (the
+    /// caller owns cold-union seeding or adoption) or when budget
+    /// admission refused enough table growth that the route still is not
+    /// covered (the caller falls back to the full union stream).
+    #[allow(clippy::too_many_arguments)]
+    fn serve_multi_token_route_from_warm_table(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        route_token_count: i32,
+        expert_capacity: usize,
+        production_default_paging: bool,
+        routed_expert_ids: &[usize],
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<
+        Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
+        Qwen3_5ExecutionError,
+    > {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return Ok(None);
+        };
+        let Some(missing_route_expert_ids) = retained_experts
+            .borrow()
+            .missing_route_expert_ids(layer_index, routed_expert_ids)
+        else {
+            return Ok(None);
+        };
+        if missing_route_expert_ids.is_empty() {
+            // The table already covers the whole union: serve the routed
+            // subset from RAM. The subset page — not the whole table — is
+            // the contract multi-token decoding needs, because the chunk
+            // materializes exactly the page it multiplies; handing it the
+            // full table would decode every resident expert whatever the
+            // route size.
+            retained_experts
+                .borrow_mut()
+                .record_routed_reads(layer_index, routed_expert_ids);
+            if let Some(subset_page) =
+                self.routed_subset_of_cached_page(layer_index, routed_expert_ids, expert_capacity)?
+            {
+                performance_attribution.record_counter(
+                    PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
+                    subset_page.1.payload_byte_count,
+                );
+                return Ok(Some(subset_page));
+            }
+            return Ok(None);
+        }
+        let resident_expert_count = retained_experts.borrow().occupied_slot_count(layer_index);
+        let read_expert_ids = if should_complete_partial_layer_on_prefill_read(
+            production_default_paging,
+            self.expert_residency_target(layer_index),
+            resident_expert_count,
+            expert_capacity,
+        ) {
+            retained_experts
+                .borrow()
+                .non_resident_expert_ids(layer_index, expert_capacity)
+                .unwrap_or_else(|| missing_route_expert_ids.clone())
+        } else {
+            missing_route_expert_ids.clone()
+        };
+        let (streamed_weights, streamed_manifest) = expert_pager
+            .stream_selected_expert_page_from_ssd(
+                &self.runtime,
+                layer_index,
+                &read_expert_ids,
+                Qwen3_5ExpertStreamingRequestShape {
+                    route_token_count,
+                    routed_expert_count: read_expert_ids.len(),
+                },
+                performance_attribution,
+            )?;
+        retained_experts.borrow_mut().record_disk_load(
+            read_expert_ids.len(),
+            streamed_manifest.source_manifests.len(),
+        );
+        // Growth is bounded by the cache ceiling and the structural slot
+        // count; the expert capacity is the largest honest slot bound, and
+        // passing it deliberately rides the warm-insert counter for
+        // completion reads — the growth cap and the insert-evidence counter
+        // share this parameter, and refusing growth entirely to keep the
+        // metric pure would defeat the completion this path exists for.
+        // The routed experts are protected so completing the table can never
+        // evict a resident expert this forward is about to serve.
+        let inserted_expert_count = retained_experts.borrow_mut().insert_streamed_experts(
+            &self.runtime,
+            layer_index,
+            &read_expert_ids,
+            &streamed_weights,
+            routed_expert_ids,
+            expert_capacity,
+        )?;
+        if inserted_expert_count > 0
+            && retained_experts
+                .borrow()
+                .has_complete_layer(layer_index, expert_capacity)
+        {
+            performance_attribution.record_counter(
+                PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
+                streamed_manifest.payload_byte_count,
+            );
+        }
+        if let Some(subset_page) = {
+            retained_experts
+                .borrow_mut()
+                .record_routed_reads(layer_index, routed_expert_ids);
+            self.routed_subset_of_cached_page(layer_index, routed_expert_ids, expert_capacity)?
+        } {
+            performance_attribution.record_counter(
+                PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
+                subset_page.1.payload_byte_count,
+            );
+            return Ok(Some(subset_page));
+        }
+        // Budget admission refused part of the growth, so the table still
+        // misses part of the route; the caller's full union stream stays
+        // correct and merely re-reads what this pass could not seat.
+        tracing::debug!(
+            layer_index,
+            inserted_expert_count,
+            missing_route_expert_count = missing_route_expert_ids.len(),
+            "warm-table growth could not cover the multi-token route"
+        );
+        Ok(None)
     }
 
     /// Returns the warm-table page when it covers every routed expert of this

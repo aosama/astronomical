@@ -9,6 +9,9 @@
 mod completion;
 
 #[cfg(feature = "performance_throughput")]
+mod decode_cache_experiment;
+
+#[cfg(feature = "performance_throughput")]
 mod historical_record;
 
 #[cfg(feature = "performance_throughput")]

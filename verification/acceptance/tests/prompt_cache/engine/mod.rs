@@ -8,7 +8,7 @@
 //! cache acceptance journey:
 //!
 //! ```sh
-//! cargo test -p astronomical-model-serving --test prompt_cache_acceptance_tests --features direct-mlx -- --ignored --test-threads=1
+//! cargo xtask test-run --package astronomical-acceptance --test engine_prompt_cache --features direct-mlx --release --configuration PATH --filter <full_test_name> --exact --ignored
 //! ```
 
 mod cache_disabled;

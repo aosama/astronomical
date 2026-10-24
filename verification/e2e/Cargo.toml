@@ -27,5 +27,6 @@ astronomical-test-harness = { path = "../../crates/test-harness" }
 base64.workspace = true
 image.workspace = true
 serde_json.workspace = true
+serial_test.workspace = true
 tempfile = "=3.27.0"
 tokio.workspace = true

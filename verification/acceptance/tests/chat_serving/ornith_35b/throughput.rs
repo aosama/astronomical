@@ -15,8 +15,10 @@
 //! from attribution reports: their `decode_advance_span` counts chunk spans
 //! rather than wall-clock decode time and under-reports the rate.
 
+use astronomical_test_harness::test_run::TestRunContext;
 use serde_json::Value;
 use serde_json::json;
+use serial_test::serial;
 use tokio::time::timeout;
 
 use crate::serving_acceptance::chat::openai_rest::{
@@ -33,6 +35,7 @@ const MEASURED_MAXIMUM_OUTPUT_TOKENS: u16 = 128;
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "loads the resident 35B sparse-MoE model and measures serving prompt-processing and decode throughput"]
+#[serial]
 async fn should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput() {
     timeout(JOURNEY_TIMEOUT, run_throughput_journey())
         .await
@@ -136,9 +139,10 @@ async fn run_throughput_journey() {
 /// restore spans on every cache-hit completion; arm A (adoption on) shows
 /// zero restore-span occurrences — the live state was adopted instead.
 fn report_prefix_adoption_evidence(isolated_home: &std::path::Path) {
-    let adoption_arm_enabled = std::env::var("ORNITH_JOURNEY_PREFIX_ADOPTION")
-        .map(|value| value == "1")
-        .unwrap_or(false);
+    let adoption_arm_enabled = TestRunContext::current()
+        .configuration
+        .prefix_adoption_enabled
+        == Some(true);
     let attribution_log_path = isolated_home
         .join(".astronomical-dev")
         .join("logs")

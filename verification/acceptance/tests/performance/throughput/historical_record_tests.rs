@@ -13,7 +13,7 @@ fn should_anchor_the_default_history_ledger_to_the_workspace_root_regardless_of_
     // source-controlled file. The compile-time manifest anchor makes the
     // absolute path itself the regression signal: a launch-directory-relative
     // resolution can never produce one.
-    let resolved_ledger = default_history_log_path();
+    let resolved_ledger = resolve_history_log_path(None);
 
     assert!(
         resolved_ledger.is_absolute(),
@@ -42,34 +42,47 @@ fn should_anchor_the_default_history_ledger_to_the_workspace_root_regardless_of_
 }
 
 #[test]
-fn should_prefer_the_history_environment_variable_over_the_workspace_default() {
-    // The override exists so a machine can divert measurements to a scratch
-    // ledger without touching the source-controlled one; presence wins, which
-    // matches the historical semantics of the resolution (an empty value is
-    // honored as the empty relative path rather than silently ignored).
-    let override_directory =
-        tempfile::tempdir().expect("the override ledger directory should be created");
-    let override_ledger = override_directory.path().join("throughput-history.jsonl");
-
-    // SAFETY: this test reads the previous value and restores it before
-    // returning; the acceptance binaries run this module's tests in one
-    // process, so the window without the variable is this assertion only.
-    let previous_override = std::env::var_os(HISTORY_ENV_VAR);
-    unsafe {
-        std::env::set_var(HISTORY_ENV_VAR, &override_ledger);
-    }
-    let resolved_ledger = history_log_path();
-    match previous_override {
-        Some(previous) => unsafe {
-            std::env::set_var(HISTORY_ENV_VAR, previous);
-        },
-        None => unsafe {
-            std::env::remove_var(HISTORY_ENV_VAR);
-        },
-    }
-
+fn should_prefer_the_explicit_history_path_over_the_workspace_default() {
+    let override_ledger =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("target/selected-throughput-history.jsonl");
+    let resolved_ledger = resolve_history_log_path(Some(&override_ledger));
     assert_eq!(
         resolved_ledger, override_ledger,
         "an explicit ledger override must take precedence over the anchored default"
     );
+}
+
+#[test]
+fn should_preserve_spaces_in_the_explicit_history_path() {
+    let configured_history_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("target/measurement evidence/selected-throughput-history.jsonl");
+
+    assert_eq!(
+        resolve_history_log_path(Some(&configured_history_path)),
+        configured_history_path
+    );
+}
+
+#[test]
+fn should_record_actual_worker_digest_and_dirty_source_state() {
+    let mut run_context = TestRunContext {
+        source_commit: Some("fixture-commit".to_owned()),
+        source_is_dirty: true,
+        ..TestRunContext::default()
+    };
+    run_context
+        .workspace_binary_sha256
+        .insert("astronomical-inference-worker".to_owned(), "ab".repeat(32));
+    let build_identity = worker_build_identity(&run_context).expect("worker identity");
+    assert_eq!(build_identity.source_commit, "fixture-commit");
+    assert!(build_identity.source_is_dirty);
+    assert_eq!(build_identity.executable_sha256, "ab".repeat(32));
+}
+
+#[test]
+fn should_reject_missing_source_commit_or_worker_identity_before_measurement() {
+    let mut run_context = TestRunContext::default();
+    assert!(worker_build_identity(&run_context).is_err());
+    run_context.source_commit = Some("fixture-commit".to_owned());
+    assert!(worker_build_identity(&run_context).is_err());
 }

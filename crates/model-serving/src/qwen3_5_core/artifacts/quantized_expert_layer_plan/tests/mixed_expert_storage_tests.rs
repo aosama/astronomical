@@ -209,11 +209,10 @@ fn should_plan_stacked_jangtq2_codebook_projections_from_float16_row_scales() {
 }
 
 #[test]
-#[ignore = "requires ASTRONOMICAL_JANGTQ2_MODEL_DIR pointing to the downloaded JANGH2 artifact"]
+#[ignore = "requires a JANGH2 model_directory selected through cargo xtask test-run"]
 fn should_plan_every_jangtq2_projection_from_the_real_artifact_headers() {
-    let model_directory = std::env::var_os("ASTRONOMICAL_JANGTQ2_MODEL_DIR")
-        .map(std::path::PathBuf::from)
-        .expect("ASTRONOMICAL_JANGTQ2_MODEL_DIR should name the local JANGH2 artifact");
+    let model_directory =
+        astronomical_test_harness::test_run::TestRunContext::current().required_model_directory();
     let config_bytes = std::fs::read(model_directory.join("config.json"))
         .expect("the JANGH2 config should be readable");
     let config = Qwen3_5Config::from_json_bytes(&config_bytes)
