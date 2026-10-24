@@ -53,4 +53,4 @@
 
 ## Verification Suites Live Under verification
 
-- `<repo-root>/verification/` houses repository-wide checks that no package owns: real-model acceptance journeys and graphics processing unit contracts in `verification/acceptance`, whole-product daemon journeys in `verification/e2e`, and shell contracts required before any Rust build in `verification/tooling_contracts;`.
+- `<repo-root>/verification/` is for repository-wide checks that no single package owns; it exists because Cargo reserves integration-test `tests/` directories for packages, the root manifest is a virtual workspace with no package, and the name aligns with `cargo verify` and the macOS offline verification lane. Put real-model acceptance journeys and graphics processing unit contracts in `verification/acceptance`, whole-product daemon journeys in `verification/e2e`, and shell contracts required before any Rust build in `verification/tooling_contracts`; keep package-owned unit tests and integration-test binaries in `crates/*/` or `apps/*/`, and put repository tooling expressible as typed Rust in `xtask`.
