@@ -31,6 +31,8 @@ mod complete_residency_headroom_boundary_tests;
 #[cfg(test)]
 mod expert_residency_policy_tests;
 #[cfg(test)]
+mod foundation_overlay_accounting_tests;
+#[cfg(test)]
 mod paged_prefill_seat_oversubscription_tests;
 #[cfg(test)]
 mod phase_aware_expert_residency_tests;

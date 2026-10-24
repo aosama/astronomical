@@ -7,6 +7,9 @@
 pub mod expert_cache_statistics;
 pub mod safetensors_header;
 
+#[cfg(test)]
+mod safetensors_header_tests;
+
 pub use expert_cache_statistics::ExpertWeightMemoryCacheStatistics;
 pub use safetensors_header::{
     SafetensorsDtype, SafetensorsHeader, SafetensorsHeaderError, TensorHeaderEntry,
