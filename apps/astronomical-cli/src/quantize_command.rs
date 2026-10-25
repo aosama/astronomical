@@ -1,7 +1,7 @@
 //! The `astronomical quantize` verb bodies.
 //!
 //! `plan` and `inspect` are pure and testable with stubbed documents in the
-//! offline lane. `convert` is behind the `quantize-convert` feature because
+//! integration lane. `convert` is behind the `quantize-convert` feature because
 //! it links MLX and the model-serving engine; without the feature it prints
 //! how to obtain a build that has it and exits with failure, so the verb is
 //! never silently absent from a default binary.

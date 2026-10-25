@@ -47,9 +47,9 @@
 use mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernel};
 use serial_test::serial;
 
-use super::super::codebook;
-use super::super::mlx_decode;
-use super::super::mlx_decode::decode_expert_weight_rows;
+use astronomical_jangtq2_qwen35::codebook;
+use astronomical_jangtq2_qwen35::mlx_decode;
+use astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows;
 use fixtures::{
     deterministic_packed_words, deterministic_row_scales, deterministic_token_activations,
     expert_sorted_assignments, median_duration_millis, prototype_runtime,
@@ -411,7 +411,7 @@ fn measure_prefill_gathered_dequant(
     let mut sampled_pair_count = 0_usize;
     for &assignment_index in &sampled_assignments {
         let expert_index = assignments.assignment_expert_ids[assignment_index] as usize;
-        let rotated_row = super::super::hadamard32::reference_transform_vector(
+        let rotated_row = astronomical_jangtq2_qwen35::hadamard32::reference_transform_vector(
             &unrotated_assignment_rows
                 [assignment_index * input_width..(assignment_index + 1) * input_width],
         )

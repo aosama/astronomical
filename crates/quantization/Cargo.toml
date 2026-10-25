@@ -8,9 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
-# One explicit offline test binary: unit tests live beside their source as
-# `*_tests.rs` modules inside `src/`, and the offline integration journeys
-# stay under tests/offline/ behind tests/offline_tests.rs. `autotests = false`
+# One explicit integration test binary: unit tests live beside their source as
+# `*_tests.rs` modules inside `src/`, and the integration journeys
+# stay under tests/integration/ behind tests/integration_tests.rs. `autotests = false`
 # keeps stray .rs files under tests/ from auto-discovering as extra binaries.
 autotests = false
 
@@ -44,8 +44,8 @@ serial_test.workspace = true
 tempfile = "=3.27.0"
 
 [[test]]
-name = "offline_tests"
-path = "tests/offline_tests.rs"
+name = "integration_tests"
+path = "tests/integration_tests.rs"
 
 # GPU contract tests for the encoder and the shard-wise requantizer. They need
 # a Metal device, so they only exist in the direct-MLX feature world and run

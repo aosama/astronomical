@@ -4,7 +4,7 @@
 //! This crate is the memory-management home the `AGENTS.md` ownership rule
 //! names ("all memory management code lives in the memory package"). It is a
 //! deliberate dependency-graph fact: it depends on nothing graphics-processor
-//! related, so its tests build and run in the offline lane in a fraction of a
+//! related, so its tests build and run in the integration lane in a fraction of a
 //! second and a budget or residency change never pulls in the MLX bindings.
 //!
 //! The layering contract (`cargo xtask check-architecture`) fails if a MLX

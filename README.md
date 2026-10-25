@@ -152,10 +152,10 @@ Point an OpenAI-compatible local client at that address, select a discovered mod
 
 ## Verification
 
-Check Rust formatting, then run the Rust offline and REST suites:
+Check Rust formatting, then run the Rust integration and REST suites:
 
     cargo fmt --all -- --check
-    cargo test-offline-and-rest
+    cargo test-integration-and-rest
 
 Run the macOS menu contracts:
 

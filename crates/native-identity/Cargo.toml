@@ -22,6 +22,6 @@ sha2.workspace = true
 astronomical-test-harness = { path = "../test-harness" }
 
 [[test]]
-name = "offline_tests"
-path = "tests/offline/source_identity.rs"
+name = "integration_tests"
+path = "tests/integration/source_identity.rs"
 

@@ -1,9 +1,11 @@
 //! Shared test harness: deterministic-time and timeout scaffolding, plus
 //! workspace binary resolution, for the repository's test tiers.
 //!
-//! Vocabulary (issue #1208): **offline** names the property — sealed and
-//! deterministic, no real network beyond localhost, no real model artifacts,
-//! everything scripted. Scope words name the seam: **unit** (in-process,
+//! Vocabulary (issue #1208): the lane that runs every unit and integration
+//! test is the **integration** lane; **offline** survives only as the property
+//! those tests carry — sealed and deterministic, no real network beyond
+//! localhost, no real model artifacts, everything scripted. Scope words name
+//! the seam: **unit** (in-process,
 //! fakes), **integration** (stubs or fixture binaries), **end-to-end (E2E)**
 //! (the real `astronomicald` binary over real HTTP), **acceptance** (real
 //! model artifacts).

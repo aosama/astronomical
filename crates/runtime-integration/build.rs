@@ -56,7 +56,7 @@
 //! **every** freshness check, which re-ran this script — and rebuilt
 //! runtime-integration and its dependents — in every later cargo invocation
 //! of a CI job: a measured 25 seconds per step. The offline wiring contract
-//! (`tests/offline/native_build_wiring.rs`) now fails if a watched path does
+//! (`tests/integration/native_build_wiring.rs`) now fails if a watched path does
 //! not exist, so the class of failure cannot return silently.
 
 use std::{env, error::Error, path::Path, time::Instant};

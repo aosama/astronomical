@@ -62,7 +62,7 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 scripts/release/tests/test-release-contracts.sh
 cargo test-app-builder
 cargo fmt --all -- --check
-cargo test-offline-and-rest
+cargo test-integration-and-rest
 ```
 
 The packaging contract suite split in two (issue #1346): the publication journeys stayed in `test-release-contracts.sh`, while the app-builder packaging journey became the `cargo test-app-builder` lane, so a release run must invoke both to exercise every packaging contract explicitly.
@@ -144,7 +144,7 @@ Publication intentionally leaves the old public appcast active and writes the ne
 ```sh
 scripts/release/accept-sparkle-update.sh
 cargo fmt --all -- --check
-cargo test-offline-and-rest
+cargo test-integration-and-rest
 ```
 
 4. Inspect status, diff, and recent log; commit only `site/appcast.xml` with `release: activate v${VERSION} update feed`.
@@ -190,4 +190,4 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - Why is the macOS offline verification check "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full offline run. The remaining required checks must still reach a terminal success state.
 - Why does the `## Linked issue` section reject my body? Every `#N` inside the section must carry a canonical keyword (`Fixes|Closes|Resolves|Refs`); a bare `#N` buried in prose fails so release provenance stays auditable. Keyword-free narrative is accepted; keep it above the heading.
 - Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; the script resumes the matching draft publication safely.
-- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-offline-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): the publication journeys in `scripts/release/tests/test-release-contracts.sh` run on every pull request through the macOS Swift and Node contracts check, and the app-builder journey runs there as `cargo test-app-builder` through the macOS offline verification check — running them explicitly before release work is now defense in depth, not the only line.
+- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-integration-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): the publication journeys in `scripts/release/tests/test-release-contracts.sh` run on every pull request through the macOS Swift and Node contracts check, and the app-builder journey runs there as `cargo test-app-builder` through the macOS offline verification check — running them explicitly before release work is now defense in depth, not the only line.
