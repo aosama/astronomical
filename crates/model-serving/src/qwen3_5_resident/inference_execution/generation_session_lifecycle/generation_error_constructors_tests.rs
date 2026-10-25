@@ -123,3 +123,13 @@ fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
         crate::InferenceEngineError::Fatal { reason } if reason == "completed_prefill_chunk_tokens exceeds the u32 range"
     ));
 }
+
+#[test]
+fn should_carry_the_exact_generated_token_counter_overflow_failure_text() {
+    let engine_error = generated_token_counter_overflowed_error();
+
+    assert!(matches!(
+        engine_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "generated-token counter overflowed"
+    ));
+}
