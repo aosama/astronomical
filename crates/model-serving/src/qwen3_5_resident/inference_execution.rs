@@ -16,18 +16,9 @@ mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
 mod persistent_prompt_cache_tail_capture;
 mod persistent_prompt_cache_visual_identity;
-mod prefill_advance;
-mod prefill_chunk_planning;
-mod prefill_execution_context;
-mod prefill_forward_dispatch;
-mod prefill_memory_admission;
-mod prompt_prefill;
-mod prompt_prefill_counters;
-mod prompt_prefill_errors;
-mod prompt_processing_chunk_sizer;
+mod prompt_prefill_lifecycle;
 mod request_memory_release;
 pub(super) mod retained_live_prefix;
-mod terminal_prefill_seed;
 mod test_controls;
 mod visual_embeddings_runtime;
 use retained_live_prefix::RetainedLiveDecoderPrefix;
@@ -56,8 +47,8 @@ use super::model::Qwen3_5ResidentModel;
 
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
-pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
-pub use prompt_processing_chunk_sizer::{
+pub use prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext;
+pub use prompt_prefill_lifecycle::prompt_processing_chunk_sizer::{
     Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5ResidentPromptProcessingChunkSizerError,
 };
 

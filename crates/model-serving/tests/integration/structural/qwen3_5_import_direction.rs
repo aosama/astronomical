@@ -50,7 +50,9 @@ async fn should_keep_qwen3_5_imports_directed_through_shared_core() {
             ],
         );
         assert_source_excludes_source_fragments(
-            &qwen3_5_resident.join("inference_execution/prompt_processing_chunk_sizer.rs"),
+            &qwen3_5_resident.join(
+                "inference_execution/prompt_prefill_lifecycle/prompt_processing_chunk_sizer.rs",
+            ),
             &["AdaptiveRamGrowthExecutionProfile", "ssd_streaming"],
         );
         assert_source_excludes_source_fragments(

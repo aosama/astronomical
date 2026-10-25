@@ -95,3 +95,31 @@ fn should_carry_the_exact_visual_embedding_and_restored_prefix_range_failure_tex
         crate::InferenceEngineError::Fatal { reason } if reason == "restored prompt prefix exceeds the u32 range"
     ));
 }
+
+#[test]
+fn should_carry_the_exact_prefill_workspace_overflow_failure_texts() {
+    let eligible_capture_error =
+        eligible_prompt_cache_capture_has_no_persistent_cache_owner_error();
+    let boundary_workspace_error = boundary_checkpoint_workspace_bytes_overflowed_error();
+    let publication_workspace_error = prompt_cache_publication_workspace_bytes_overflowed_error();
+    let completed_chunk_tokens_error = completed_prefill_chunk_tokens_exceed_u32_range_error(
+        u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32"),
+    );
+
+    assert!(matches!(
+        eligible_capture_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "eligible prompt-cache capture has no persistent cache owner"
+    ));
+    assert!(matches!(
+        boundary_workspace_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "boundary checkpoint workspace bytes overflowed"
+    ));
+    assert!(matches!(
+        publication_workspace_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "prompt-cache publication workspace bytes overflowed"
+    ));
+    assert!(matches!(
+        completed_chunk_tokens_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "completed_prefill_chunk_tokens exceeds the u32 range"
+    ));
+}

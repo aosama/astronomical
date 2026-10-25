@@ -36,6 +36,8 @@ List the exact focused and repository checks that passed. State any hardware-dep
 
 ## Safety
 
+- [ ] All unit tests passed locally before I opened this PR.
+- [ ] All integration tests passed locally before I opened this PR.
 - [ ] No credentials, personal paths, prompts, model inventories, proprietary artifacts, or machine logs are included.
 - [ ] Model precision and output semantics are preserved or explicitly justified.
 - [ ] Performance and memory effects are measured when you changed code in the critical path for inference.

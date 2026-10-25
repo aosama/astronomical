@@ -26,7 +26,11 @@ impl Qwen3_5PrefillExecutionContext {
         }
     }
 
-    pub(super) const fn context_identifier_flags(self) -> u64 {
+    // One level wider than the phase: the engine's token-injection path reads
+    // these flags to build feedback contexts outside the prefill phase.
+    pub(in crate::qwen3_5_resident::inference_execution) const fn context_identifier_flags(
+        self,
+    ) -> u64 {
         let mut context_identifier_flags = 0;
         if self.has_visual_embeddings {
             context_identifier_flags |= VISUAL_PREFILL_CONTEXT_FLAG;

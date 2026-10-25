@@ -33,7 +33,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let target_expert_payload_bytes_before_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
@@ -63,7 +63,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let target_expert_payload_bytes_after_context_admission = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
