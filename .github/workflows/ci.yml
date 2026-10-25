@@ -265,25 +265,22 @@ jobs:
           restore-keys: |
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
-      - name: Verify CI native cache contracts
+      - name: Run the app-builder packaging journey
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin ci-cache-contracts
+          trap 'scripts/ci/ci-step-timing.sh end app-builder-journey' EXIT
+          scripts/ci/ci-step-timing.sh begin app-builder-journey
           # This step runs before sccache is installed, so cargo must not try
-          # to exec the not-yet-existing wrapper binary; these small crates
-          # compile from the restored cargo-downloads registry in well under
-          # the step budget.
+          # to exec the not-yet-existing wrapper binary; the journey compiles
+          # from the restored cargo-downloads registry in well under the step
+          # budget. The host-agnostic workflow and cache contracts moved to
+          # the config-contracts lane (issue #1553); what stays here is the
+          # one contract that exercises macOS packaging tooling: the real
+          # build-macos-app.sh in a sandbox with fixture-bin tool shims,
+          # deterministic and done in seconds, so it enforces the packaging
+          # contract on every pull request instead of only before releases.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
-          cargo test --locked -p xtask --test workflow_structural_contract
-          cargo test --locked -p xtask --test workflow_verdict_contract
-          cargo test --locked -p xtask --test workflow_cache_owner_contract
-          # The app-builder journey runs the real build-macos-app.sh in a
-          # sandbox with fixture-bin tool shims; it is deterministic and takes
-          # seconds, so it enforces the packaging contract on every pull
-          # request instead of only before releases.
           cargo test --locked -p xtask --test integration_app_builder_journeys
-          scripts/ci/tests/test-ci-native-cache-coordination.sh
-        timeout-minutes: 2
+        timeout-minutes: 5
       - name: Prepare durable test-log directory
         run: mkdir -p "$RUNNER_TEMP/test-logs"
       - name: Install verification tools
@@ -422,27 +419,10 @@ jobs:
           set -o pipefail
           cargo test --no-fail-fast -p astronomical-e2e --test e2e 2>&1 | tee "$RUNNER_TEMP/test-logs/root-e2e.log"
         timeout-minutes: 5
-      # Workstream 5 of issue #1198: the tier pyramid is a metric. The step
-      # counts tests per tier, reports the distribution, and fails when a tier
-      # drifts beyond tolerance from the committed baseline — the earliest
-      # warning that tests are migrating to the expensive tiers.
-      - name: Report test tier pyramid
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end test-tier-pyramid' EXIT
-          scripts/ci/ci-step-timing.sh begin test-tier-pyramid
-          cargo xtask tier-pyramid
-        timeout-minutes: 5
-      - name: Run repository contract scripts
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin repository-contracts
-          export PATH="$PWD/scripts/ci:$PATH"
-          verification/tooling_contracts/test-cargo-citation-contract.sh
-          verification/tooling_contracts/test-channel-isolation-checker-contract.sh
-          verification/tooling_contracts/test-source-size-check.sh
-          scripts/ci/tests/test-report-tier-pyramid-contract.sh
-          cargo xtask check-architecture
-        timeout-minutes: 5
+      # The tier pyramid and repository contract scripts moved to the
+      # config-contracts lane (issue #1553): they parse inventory and
+      # configuration, so ubuntu runs them in parallel instead of extending
+      # this job's critical path.
       # Observatory contracts may migrate to swift-node at any time — the CI
       # verdict fans in both macOS jobs, so job membership no longer touches
       # branch protection. They stay here while this job owns the test-log
@@ -746,6 +726,58 @@ jobs:
           node scripts/check-site-links.js
         timeout-minutes: 2
 
+  # Host-agnostic configuration contracts (issue #1553, phase 2a): these
+  # steps parse configuration and inventory — they do not exercise the
+  # product — so an ubuntu runner runs them in parallel with the macOS
+  # lanes instead of extending the macOS critical path. Like detect-changes,
+  # this job restores no caches: the macOS-owned cache entries are keyed to
+  # runner.os, so an ubuntu restore would always miss and the cold xtask
+  # compile costs less than the wasted download would.
+  config-contracts:
+    name: Configuration contracts
+    needs: detect-changes
+    if: ${{ always() && needs.detect-changes.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Configure step timing attribution
+        run: printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Run workflow and cache contracts
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end ci-cache-contracts' EXIT
+          scripts/ci/ci-step-timing.sh begin ci-cache-contracts
+          cargo test --locked -p xtask --test workflow_structural_contract
+          cargo test --locked -p xtask --test workflow_verdict_contract
+          cargo test --locked -p xtask --test workflow_cache_owner_contract
+          scripts/ci/tests/test-ci-native-cache-coordination.sh
+        timeout-minutes: 5
+      - name: Report test tier pyramid
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end test-tier-pyramid' EXIT
+          scripts/ci/ci-step-timing.sh begin test-tier-pyramid
+          cargo xtask tier-pyramid
+        timeout-minutes: 5
+      - name: Run repository contract scripts
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
+          scripts/ci/ci-step-timing.sh begin repository-contracts
+          export PATH="$PWD/scripts/ci:$PATH"
+          verification/tooling_contracts/test-cargo-citation-contract.sh
+          verification/tooling_contracts/test-channel-isolation-checker-contract.sh
+          verification/tooling_contracts/test-source-size-check.sh
+          scripts/ci/tests/test-report-tier-pyramid-contract.sh
+          cargo xtask check-architecture
+        timeout-minutes: 5
+      - name: Publish step timing summary
+        if: always()
+        run: scripts/ci/publish-ci-timing-summary.sh
+        timeout-minutes: 1
+
   # The one required check of this workflow (issue #1553): a fan-in verdict
   # that fails closed over every lane, so branch protection and the ruleset
   # list exactly one check whose name never changes and jobs above stay free
@@ -762,7 +794,7 @@ jobs:
   # lane skipped for any other reason fails the gate.
   verdict:
     name: CI verdict
-    needs: [detect-changes, rust-core, swift-node, static]
+    needs: [detect-changes, rust-core, swift-node, static, config-contracts]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -779,6 +811,7 @@ jobs:
           rust_core_result="${{ needs.rust-core.result }}"
           swift_node_result="${{ needs.swift-node.result }}"
           static_result="${{ needs.static.result }}"
+          config_contracts_result="${{ needs.config-contracts.result }}"
           [ "$classification_result" = "success" ] \
             || fail "classification-result=$classification_result"
           macos_lanes_may_skip=false
@@ -807,5 +840,9 @@ jobs:
           case "$static_result" in
             success) printf '[ci-verdict] lane=static result=success\n' ;;
             *) fail "lane=static result=$static_result" ;;
+          esac
+          case "$config_contracts_result" in
+            success) printf '[ci-verdict] lane=config-contracts result=success\n' ;;
+            *) fail "lane=config-contracts result=$config_contracts_result" ;;
           esac
           printf '[ci-verdict] status=pass\n'

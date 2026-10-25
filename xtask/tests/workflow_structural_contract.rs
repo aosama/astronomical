@@ -185,6 +185,26 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
         required_text(static_job, "if", "job static").contains("needs.detect-changes.result =="),
         "static checks must require successful classification"
     );
+    let config_contracts_job = required_job(&workflow, "config-contracts");
+    assert_eq!(
+        required_text(config_contracts_job, "name", "job config-contracts"),
+        "Configuration contracts",
+        "the config-contracts lane name changed"
+    );
+    assert_eq!(
+        required_u64(
+            config_contracts_job,
+            "timeout-minutes",
+            "job config-contracts"
+        ),
+        8,
+        "config-contracts exceeded its hard cap"
+    );
+    assert!(
+        required_text(config_contracts_job, "if", "job config-contracts")
+            .contains("needs.detect-changes.result =="),
+        "config contracts must require successful classification"
+    );
 }
 
 #[test]
@@ -329,13 +349,34 @@ fn packaging_contracts_run_on_required_checks() {
     // day, which is exactly what issue #1346 set out to end.
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    let cache_contract_step =
-        find_step_by_name(&verification_steps, "Verify CI native cache contracts");
+    let app_builder_step =
+        find_step_by_name(&verification_steps, "Run the app-builder packaging journey");
     assert!(
-        run_text_of(cache_contract_step, "ci-cache-contracts")
+        run_text_of(app_builder_step, "app-builder")
             .contains("--test integration_app_builder_journeys"),
-        "the app-builder journey is not enforced on the required verification check"
+        "the app-builder journey is not enforced on the macOS verification lane"
     );
+
+    // The host-agnostic workflow contracts live in the config-contracts lane
+    // (issue #1553 phase 2a); they must stay enforced somewhere the verdict
+    // fans in, so a lane deletion cannot silently retire them.
+    let config_contracts_steps = steps_of(
+        required_job(&workflow, "config-contracts"),
+        "config-contracts",
+    );
+    let contracts_step =
+        find_step_by_name(&config_contracts_steps, "Run workflow and cache contracts");
+    let contracts_text = run_text_of(contracts_step, "config-contracts");
+    for contract_binary in [
+        "--test workflow_structural_contract",
+        "--test workflow_verdict_contract",
+        "--test workflow_cache_owner_contract",
+    ] {
+        assert!(
+            contracts_text.contains(contract_binary),
+            "the {contract_binary} binary is not enforced on the config-contracts lane"
+        );
+    }
 
     let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
     let release_contracts_step =
@@ -399,6 +440,10 @@ fn every_timed_step_pairs_its_begin_and_end_calls() {
         ("rust-core", required_job(&workflow, "rust-core")),
         ("swift-node", required_job(&workflow, "swift-node")),
         ("static", required_job(&workflow, "static")),
+        (
+            "config-contracts",
+            required_job(&workflow, "config-contracts"),
+        ),
     ] {
         total_timed_steps += assert_timed_steps_pair_begin_and_end(&steps_of(job, job_id), job_id);
     }
