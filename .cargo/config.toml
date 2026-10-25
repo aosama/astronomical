@@ -295,3 +295,12 @@ test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-
 # containing the selected model_directory. The runner builds the exact
 # optimized worker and records the source identity itself.
 test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter jangtq2 --ignored"
+# test-resident-memory-ceiling-probe: the resident 35B sparse-MoE comparison
+# probe — the same 5,000-token Romeo and Juliet summarization into 300 output
+# tokens served twice, once under a 24 GB assigned MLX ceiling and once under
+# 22 GB, both cells serialized and recorded under the
+# resident_memory_ceiling_probe journey kind in the durable throughput
+# history. The probe shape (5,000/300) is a directed deviation from the
+# canonical 10,000/500 series, kept in its own kind so the text series stays
+# clean. The runner builds the exact optimized worker itself.
+test-resident-memory-ceiling-probe = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter resident_memory_ceiling_probe --ignored"

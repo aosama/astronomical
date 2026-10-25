@@ -30,6 +30,9 @@ mod memory_ceiling_sweep;
 mod prism_hadamard_qwen35;
 
 #[cfg(feature = "performance_throughput")]
+mod resident_memory_ceiling_probe;
+
+#[cfg(feature = "performance_throughput")]
 mod qwen3_5_moe;
 
 #[cfg(feature = "performance_throughput")]

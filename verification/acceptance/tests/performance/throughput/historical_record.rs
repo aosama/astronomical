@@ -49,6 +49,10 @@ pub enum ThroughputJourneyKind {
     Vision,
     MemoryCeilingSweep,
     DecodeFullFit,
+    /// The directed 5,000-input/300-output resident-model comparison probe at
+    /// two assigned memory ceilings; kept distinct from Text so the canonical
+    /// >=10,000-input/500-output series stays clean.
+    ResidentMemoryCeilingProbe,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
