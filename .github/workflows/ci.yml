@@ -640,6 +640,33 @@ jobs:
           printf '[swiftpm-timestamps] status=start\n'
           find apps/astronomical-menu/.build -type f -exec touch -c {} +
           printf '[swiftpm-timestamps] status=success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
+      # Thin Talk has its own package build directory and its own `swift test`
+      # run. It is a path dependency of astronomical-menu, so the menu build
+      # already compiles it, but into apps/astronomical-menu/.build — a
+      # separate directory from the one `swift test --package-path
+      # apps/thin-talk` writes, so the menu cache cannot serve it. Without
+      # this cache the thin-talk lane recompiles cold every run (~40s of the
+      # ~48s it takes, for tests that execute in well under a second). The key
+      # hashes thin-talk's own sources so a thin-talk change invalidates only
+      # this cache, not the menu cache.
+      - name: Restore thin-talk swiftpm-cache
+        id: thin-talk-cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: thin-talk
+          path: apps/thin-talk/.build
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/tests/**/*.swift') }}
+          restore-keys: |
+            astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-
+      - name: Keep restored Thin Talk artifacts newer than checkout
+        if: ${{ steps.thin-talk-cache.outputs.cache-hit == 'true' }}
+        run: |
+          set -euo pipefail
+          started_at_seconds="$(date +%s)"
+          printf '[swiftpm-timestamps] status=thin-talk-start\n'
+          find apps/thin-talk/.build -type f -exec touch -c {} +
+          printf '[swiftpm-timestamps] status=thin-talk-success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
       - name: Prepare durable test-log directory
         run: mkdir -p "$RUNNER_TEMP/test-logs"
       - name: Set up Node for Thin Talk web assets
@@ -719,6 +746,15 @@ jobs:
           owner: swiftpm
           path: apps/astronomical-menu/.build
           key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+      - name: Save thin-talk swiftpm-cache
+        id: thin-talk-cache-save
+        if: ${{ !cancelled() && steps.thin-talk-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: save
+          owner: thin-talk
+          path: apps/thin-talk/.build
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/tests/**/*.swift') }}
       - name: Publish step timing summary
         if: always()
         run: scripts/ci/publish-ci-timing-summary.sh
