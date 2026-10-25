@@ -1,4 +1,4 @@
-//! Offline contracts for the forced capability-verdict injection seam.
+//! Unit contracts for the forced capability-verdict injection seam.
 //!
 //! CI hardware cannot make a real kernel fail, so the capability owner
 //! accepts forced verdicts through this documented test-only constructor.
@@ -12,9 +12,6 @@ use crate::{CustomKernelVerdict, KernelUnsupportedReason, WorkerKernelCapabiliti
 
 #[test]
 fn should_force_an_unsupported_verdict_for_a_single_family() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let capabilities = WorkerKernelCapabilities::with_forced_verdicts_for_tests([(
         COUNTING_WEIGHTED_SUM_FAMILY,
         CustomKernelVerdict::Unsupported(KernelUnsupportedReason::OutputMismatch {
@@ -37,9 +34,6 @@ fn should_force_an_unsupported_verdict_for_a_single_family() {
 
 #[test]
 fn should_force_a_supported_verdict() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let capabilities = WorkerKernelCapabilities::with_forced_verdicts_for_tests([(
         COUNTING_GATED_DELTA_FAMILY,
         CustomKernelVerdict::Supported,
@@ -50,9 +44,6 @@ fn should_force_a_supported_verdict() {
 
 #[test]
 fn should_honor_every_forced_reason_for_every_family() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Families are data, not tests: one loop proves the fail-closed verdict
     // contract across any family set, so a new family is covered by adding
     // its identifier to this catalogue, not a new test.

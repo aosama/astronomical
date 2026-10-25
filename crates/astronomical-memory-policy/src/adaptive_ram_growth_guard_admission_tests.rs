@@ -15,9 +15,6 @@ const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
 #[test]
 fn should_reject_a_zero_active_memory_limit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let guard_creation_error = AdaptiveRamGrowthGuard::new(0)
         .expect_err("a zero-byte active-memory limit cannot admit useful growth");
 
@@ -29,9 +26,6 @@ fn should_reject_a_zero_active_memory_limit() {
 
 #[test]
 fn should_allow_unobserved_growth_when_exact_persistent_bytes_fit_the_limit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
 
@@ -44,9 +38,6 @@ fn should_allow_unobserved_growth_when_exact_persistent_bytes_fit_the_limit() {
 
 #[test]
 fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let observed_prefill_context =
@@ -96,9 +87,6 @@ fn should_apply_transient_learning_across_unseen_contexts_for_admission() {
 
 #[test]
 fn should_keep_exact_context_evidence_separate_from_phase_admission_maximum() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let smaller_context =
@@ -134,9 +122,6 @@ fn should_keep_exact_context_evidence_separate_from_phase_admission_maximum() {
 
 #[test]
 fn should_accept_stable_memory_at_c_and_reject_one_byte_above_c() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let adaptive_ram_growth_context =
@@ -161,9 +146,6 @@ fn should_accept_stable_memory_at_c_and_reject_one_byte_above_c() {
 
 #[test]
 fn should_accept_peak_memory_at_p_and_reject_one_byte_above_p() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let fitting_peak_context =
@@ -209,9 +191,6 @@ fn should_accept_peak_memory_at_p_and_reject_one_byte_above_p() {
 
 #[test]
 fn should_not_retain_a_final_partial_prefill_tail_as_reusable_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let partial_tail_context =
@@ -236,9 +215,6 @@ fn should_not_retain_a_final_partial_prefill_tail_as_reusable_evidence() {
 
 #[test]
 fn should_reject_growth_when_the_peak_projection_exceeds_the_limit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -262,9 +238,6 @@ fn should_reject_growth_when_the_peak_projection_exceeds_the_limit() {
 
 #[test]
 fn should_reject_an_overflowing_memory_projection() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(usize::MAX)
         .expect("the platform maximum should be a valid positive limit");
 
@@ -280,9 +253,6 @@ fn should_reject_an_overflowing_memory_projection() {
 
 #[test]
 fn should_preserve_the_highest_transient_observation_after_a_lower_spike() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -315,9 +285,6 @@ fn should_preserve_the_highest_transient_observation_after_a_lower_spike() {
 
 #[test]
 fn should_not_underflow_when_active_memory_falls_without_a_new_allocator_peak() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(

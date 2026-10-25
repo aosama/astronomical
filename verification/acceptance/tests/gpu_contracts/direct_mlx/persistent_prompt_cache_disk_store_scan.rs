@@ -1,4 +1,4 @@
-//! Offline filesystem-only tests for persistent prompt-cache disk-store
+//! Integration filesystem-only tests for persistent prompt-cache disk-store
 //! startup scan: invalid-file deletion and quota enforcement.
 //!
 //! These tests exercise `PersistentPromptCacheDiskStore::open()` and quota

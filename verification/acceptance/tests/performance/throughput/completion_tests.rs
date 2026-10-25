@@ -2,8 +2,6 @@ use super::*;
 
 #[test]
 fn should_parse_the_measured_generation_cache_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");
     let warmup_report = serde_json::json!({
@@ -187,8 +185,6 @@ fn should_parse_the_measured_generation_cache_evidence() {
 
 #[test]
 fn should_not_use_warmup_evidence_when_the_measured_report_is_missing() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");
     let warmup_report = serde_json::json!({
@@ -212,8 +208,6 @@ fn should_not_use_warmup_evidence_when_the_measured_report_is_missing() {
 
 #[test]
 fn should_treat_omitted_zero_counters_as_zero() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");
     let measured_report = serde_json::json!({

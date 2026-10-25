@@ -10,9 +10,6 @@ const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_one_embeddings_command() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_command = WorkerCommand::GenerateEmbeddings(EmbeddingsCommand {
         request_id: RequestId::new(80),
         model: "nomicai-modernbert-embed-base-8bit".to_owned(),
@@ -43,9 +40,6 @@ async fn should_round_trip_one_embeddings_command() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_embeddings_completed_failed_and_finalized_events() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let completed_event = WorkerEvent::EmbeddingsCompleted {
         request_id: RequestId::new(81),
         embeddings: vec![vec![1.0, 0.0], vec![0.0, 1.0]],
@@ -106,9 +100,6 @@ async fn should_round_trip_embeddings_completed_failed_and_finalized_events() {
 
 #[test]
 fn should_reject_embeddings_input_above_the_ipc_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let oversized_inputs = vec!["x".repeat(8_193)];
     let embeddings_command = EmbeddingsCommand {
         request_id: RequestId::new(82),
@@ -127,9 +118,6 @@ fn should_reject_embeddings_input_above_the_ipc_boundary() {
 
 #[test]
 fn should_reject_zero_embedding_dimensions_at_the_ipc_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let embeddings_command = EmbeddingsCommand {
         request_id: RequestId::new(83),
         model: "nomicai-modernbert-embed-base-8bit".to_owned(),

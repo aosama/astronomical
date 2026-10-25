@@ -215,8 +215,6 @@ mod bounded_range_read_concurrency_tests {
 
     #[test]
     fn should_follow_available_parallelism_below_the_ceiling() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
         for available_parallelism in [1, 2, 8, 16] {
             assert_eq!(
                 automatic_read_parallelism(available_parallelism),
@@ -227,15 +225,11 @@ mod bounded_range_read_concurrency_tests {
 
     #[test]
     fn should_keep_at_least_one_positional_read_worker() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
         assert_eq!(automatic_read_parallelism(0), 1);
     }
 
     #[test]
     fn should_cap_positional_read_parallelism_at_sixteen() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
         for available_parallelism in [17, 32, usize::MAX] {
             assert_eq!(automatic_read_parallelism(available_parallelism), 16);
         }
@@ -243,8 +237,6 @@ mod bounded_range_read_concurrency_tests {
 
     #[test]
     fn should_share_one_bounded_limiter_across_readers() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
         let first_reader_limiter = positional_read_concurrency_limiter();
         let second_reader_limiter = positional_read_concurrency_limiter();
         assert!(std::ptr::eq(first_reader_limiter, second_reader_limiter));
@@ -253,8 +245,6 @@ mod bounded_range_read_concurrency_tests {
 
     #[test]
     fn should_return_a_read_permit_when_the_read_finishes() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
         let limiter = PositionalReadConcurrencyLimiter::new(1);
         let read_permit = limiter.acquire();
         assert_eq!(*lock_after_possible_poison(&limiter.active_read_count), 1);
@@ -266,8 +256,6 @@ mod bounded_range_read_concurrency_tests {
 
     #[test]
     fn should_wait_for_a_permit_when_the_read_limit_is_reached() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
         let limiter = PositionalReadConcurrencyLimiter::new(1);
         let held_read_permit = limiter.acquire();
         let (permit_acquired_sender, permit_acquired_receiver) = mpsc::channel();

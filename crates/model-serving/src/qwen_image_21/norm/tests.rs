@@ -1,4 +1,4 @@
-//! Offline tests for the Qwen-Image-2.1 zero-centered RMSNorm, compared against the diffusers
+//! Unit tests for the Qwen-Image-2.1 zero-centered RMSNorm, compared against the diffusers
 //! reference reimplementation in `norm_fixture.rs`.
 
 /// Slack for the f32 output: both sides compute in f64 and cast, so the gap is sub-ULP.

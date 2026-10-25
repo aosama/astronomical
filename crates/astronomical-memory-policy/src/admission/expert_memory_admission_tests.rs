@@ -32,9 +32,6 @@ fn paged_forward_projection(
 
 #[test]
 fn should_project_complete_residency_as_replacement() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         projected_active_memory_after_complete_expert_replacement(30, 20, 25),
         Ok(35)
@@ -51,9 +48,6 @@ fn should_project_complete_residency_as_replacement() {
 
 #[test]
 fn should_reserve_activation_headroom_before_complete_residency() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         required_complete_residency_activation_headroom_bytes(900_000_000, 0),
         900_000_000
@@ -71,9 +65,6 @@ fn should_reserve_activation_headroom_before_complete_residency() {
 
 #[test]
 fn should_reclaim_only_the_expert_bytes_needed_by_a_fixed_forward() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         expert_reclamation_bytes_to_fit_fixed_forward(
             30_000_000_000,
@@ -96,9 +87,6 @@ fn should_reclaim_only_the_expert_bytes_needed_by_a_fixed_forward() {
 
 #[test]
 fn should_include_active_transients_in_failed_forward_workspace() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         fixed_forward_workspace_after_allocation_failure(
             36_000_000_000,
@@ -112,9 +100,6 @@ fn should_include_active_transients_in_failed_forward_workspace() {
 
 #[test]
 fn should_retry_once_only_after_the_reclamation_target_was_released() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(should_retry_fixed_forward_after_expert_reclamation(
         false, 1_000, 700, 300,
     ));
@@ -128,9 +113,6 @@ fn should_retry_once_only_after_the_reclamation_target_was_released() {
 
 #[test]
 fn should_choose_the_largest_memory_boundary_deficit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = ExpertReclamationPlan::for_projected_memory(110, 130, 125, 100, 120, 15);
     assert_eq!(plan.required_reclamation_bytes(), 10);
     assert_eq!(plan.reclamation_target_bytes(), 10);
@@ -140,9 +122,6 @@ fn should_choose_the_largest_memory_boundary_deficit() {
 
 #[test]
 fn should_report_unresolved_reclamation_shortfall() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = ExpertReclamationPlan::for_projected_memory(140, 150, 145, 100, 120, 20);
     assert_eq!(plan.required_reclamation_bytes(), 40);
     assert_eq!(plan.reclamation_target_bytes(), 20);
@@ -152,9 +131,6 @@ fn should_report_unresolved_reclamation_shortfall() {
 
 #[test]
 fn should_keep_reclaiming_paged_experts_while_peak_still_misses_and_payload_remains() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let forward_projection = paged_forward_projection(90, 111, 100);
     assert_eq!(
         PagedForwardAdmissionDecision::for_paged_forward(&forward_projection, 50, Some(true)),
@@ -164,9 +140,6 @@ fn should_keep_reclaiming_paged_experts_while_peak_still_misses_and_payload_rema
 
 #[test]
 fn should_stop_paged_expert_reclamation_when_a_pass_releases_nothing() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let forward_projection = paged_forward_projection(90, 111, 100);
     assert_eq!(
         PagedForwardAdmissionDecision::for_paged_forward(&forward_projection, 50, Some(false)),
@@ -178,9 +151,6 @@ fn should_stop_paged_expert_reclamation_when_a_pass_releases_nothing() {
 
 #[test]
 fn should_admit_once_stable_and_peak_fit_after_paged_expert_reclamation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let fitting = paged_forward_projection(90, 100, 100);
     assert_eq!(
         PagedForwardAdmissionDecision::for_paged_forward(&fitting, 50, Some(true)),

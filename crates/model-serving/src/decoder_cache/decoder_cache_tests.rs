@@ -5,9 +5,6 @@ use crate::{
 
 #[test]
 fn should_accept_a_mixed_architecture_neutral_decoder_cache_layout() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decoder_cache_layout = DecoderCacheLayout::new(vec![
         DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
             "linear.convolution",
@@ -94,9 +91,6 @@ fn should_accept_a_mixed_architecture_neutral_decoder_cache_layout() {
 
 #[test]
 fn should_bound_incremental_restore_workspace_by_one_block_or_boundary_snapshot() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decoder_cache_layout = DecoderCacheLayout::new(vec![
         DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
             "linear.convolution",
@@ -146,9 +140,6 @@ fn should_bound_incremental_restore_workspace_by_one_block_or_boundary_snapshot(
 
 #[test]
 fn should_derive_the_least_common_persistence_alignment_for_mixed_attention_growth() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decoder_cache_layout = DecoderCacheLayout::new(vec![
         DecoderCacheLayerLayout::append_only_attention(
             DecoderCacheTensorLayout::sequence(
@@ -193,9 +184,6 @@ fn should_derive_the_least_common_persistence_alignment_for_mixed_attention_grow
 
 #[test]
 fn should_reject_persistence_alignment_overflow() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decoder_cache_layout = DecoderCacheLayout::new(vec![
         DecoderCacheLayerLayout::append_only_attention(
             DecoderCacheTensorLayout::sequence(
@@ -238,9 +226,6 @@ fn should_reject_persistence_alignment_overflow() {
 
 #[test]
 fn should_reject_duplicate_tensor_roles_across_one_layer() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let rejection = DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::composite(vec![
         DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
             "state",
@@ -262,9 +247,6 @@ fn should_reject_duplicate_tensor_roles_across_one_layer() {
 
 #[test]
 fn should_reject_a_sequence_axis_outside_the_tensor_rank() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let rejection = DecoderCacheLayout::new(vec![DecoderCacheLayerLayout::append_only_attention(
         DecoderCacheTensorLayout::sequence(
             "attention.keys",

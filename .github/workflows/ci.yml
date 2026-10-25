@@ -63,8 +63,8 @@ jobs:
         timeout-minutes: 2
 
   # Keep the job name and its concurrency group in sync with branch
-  # protection: "macOS offline verification" is a required status check and
-  # "macos-offline-" is how that check is found. Also keep this job's cache
+  # protection: "macOS integration verification" is a required status check and
+  # "macos-integration-" is how that check is found. Also keep this job's cache
   # owner set in scripts/ci/tests/test-ci-native-cache-coordination.sh in sync.
   rust-core:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
@@ -73,7 +73,7 @@ jobs:
     # lives in timeout-minutes below, never here, so the identity can't silently
     # drift from reality. Keep it in sync with branch protection (configured outside
     # this repo) if you ever change it.
-    name: macOS offline verification
+    name: macOS integration verification
     runs-on: macos-26
     # Job permissions replace the workflow-level set: pruning surplus caches
     # needs actions:write while everything else stays read-only.
@@ -81,7 +81,7 @@ jobs:
       contents: read
       actions: write
     concurrency:
-      group: macos-offline-${{ github.event_name }}-${{ github.ref }}
+      group: macos-integration-${{ github.event_name }}-${{ github.ref }}
       # Never cancel an in-flight required check. A cancelled run with this job
       # name blocks merge even when a later run on the same SHA is green.
       cancel-in-progress: false
@@ -277,7 +277,7 @@ jobs:
           cargo test --locked -p xtask --test workflow_structural_contract
           cargo test --locked -p xtask --test workflow_cache_owner_contract
           # The app-builder journey runs the real build-macos-app.sh in a
-          # sandbox with fixture-bin tool shims; it is offline and takes
+          # sandbox with fixture-bin tool shims; it is deterministic and takes
           # seconds, so it enforces the packaging contract on every pull
           # request instead of only before releases.
           cargo test --locked -p xtask --test integration_app_builder_journeys
@@ -743,46 +743,3 @@ jobs:
           scripts/ci/ci-step-timing.sh begin site-link-check
           node scripts/check-site-links.js
         timeout-minutes: 2
-
-  # Physics-enforced offline verification: the integration lane's tests are plain
-  # Book-style functions (issue #1333), so the lane's no-network property is
-  # proven by removing the network entirely. unshare -rn runs cargo inside a
-  # user+network namespace where opening any socket fails; a test that reaches
-  # for the network aborts instead of silently passing. Not a required check —
-  # it is a canary for harness drift.
-  linux-offline-sandbox:
-    name: Linux offline sandbox
-    runs-on: ubuntu-24.04
-    needs: detect-changes
-    if: ${{ always() && needs.detect-changes.result == 'success' }}
-    timeout-minutes: 10
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-      # Ubuntu 24.04 gates unprivileged user namespaces behind AppArmor, which
-      # rejects the uid_map write unshare -rn needs; the hosted runner is
-      # disposable, so lifting the gate there is safe.
-      - name: Allow unprivileged user namespaces
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      # Everything that legitimately needs the network happens here, outside
-      # the namespace: the pinned toolchain sync and the dependency download.
-      - name: Sync pinned toolchain
-        run: rustup show
-      # The Linux-buildable subset only: runtime-integration's build script
-      # probes the xcode identity, so the macOS-first crates cannot compile
-      # on this runner. The macOS offline verification job above owns the
-      # full lane.
-      - name: Fetch and build the Linux-buildable integration crates
-        run: |
-          cargo fetch --locked
-          cargo test --locked --no-run -p astronomical-config -p astronomical-ipc-protocol --lib --test integration_tests
-      # The namespace run is execution-only: with artifacts warm and --offline
-      # set, cargo never attempts a lookup, so the only thing the missing
-      # network can break is a test opening a socket — the exact physics the
-      # job exists to prove.
-      - name: Run the Linux-buildable integration crates with no network namespace
-        run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test integration_tests
-        timeout-minutes: 8

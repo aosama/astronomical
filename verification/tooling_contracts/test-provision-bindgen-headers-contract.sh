@@ -6,8 +6,8 @@
 # without any network access, and compares extracted MLX-C headers byte for
 # byte against a completed native build's staged headers. Fixture archives,
 # manifests, patches, and a fixture native build store keep every contract
-# offline; one contract pins the CMakeLists patch-pipeline parser so a
-# restructure fails loudly.
+# free of network access; one contract pins the CMakeLists patch-pipeline
+# parser so a restructure fails loudly.
 
 set -eu
 
@@ -241,9 +241,9 @@ assert_contains "$PROVISION_OUTPUT_FILE" "cargo xtask bootstrap-native-dependenc
 }
 mv "${SANDBOX_DIRECTORY}/mlx-c-fake-0.1.tar.gz.pristine" "${CACHE_DIRECTORY}/mlx-c-fake-0.1.tar.gz"
 
-# Contract 5: a cache missing a pinned archive fails offline with an
-# actionable message; the fixture URLs are intentionally unreachable, so any
-# download attempt would surface as a different failure.
+# Contract 5: a cache missing a pinned archive fails without network access
+# and reports an actionable message; the fixture URLs are intentionally
+# unreachable, so any download attempt would surface as a different failure.
 EMPTY_CACHE_DIRECTORY="${SANDBOX_DIRECTORY}/empty-cache"
 mkdir -p "$EMPTY_CACHE_DIRECTORY"
 assert_run_fails "a cache missing the pinned archives" \

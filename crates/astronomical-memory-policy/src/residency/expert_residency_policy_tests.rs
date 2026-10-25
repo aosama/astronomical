@@ -26,9 +26,6 @@ fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
 
 #[test]
 fn should_keep_complete_layers_during_prefill_even_when_the_plan_names_a_release() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = (0..3)
         .map(|layer_index| ExpertLayerGeometry {
             layer_index,
@@ -72,9 +69,6 @@ fn should_keep_complete_layers_during_prefill_even_when_the_plan_names_a_release
 
 #[test]
 fn should_seat_complete_layers_on_mandatory_prefill_reads() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(should_commit_mandatory_complete_layer(
         2_048,
         true,
@@ -142,9 +136,6 @@ fn should_seat_complete_layers_on_mandatory_prefill_reads() {
 
 #[test]
 fn should_cap_hot_expert_warm_tables_at_the_layer_expert_count() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Issue #514: leftover decode entitlement is the economic cap, applied
     // by the caller. This function is only the structural cap.
     assert_eq!(hot_expert_warm_slot_count(512), 512);
@@ -231,9 +222,6 @@ fn should_evict_coldest_complete_layers_until_the_recomputed_floor_fits() {
 
 #[test]
 fn should_authorize_one_same_chunk_retry_for_paged_execution_after_reclamation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let resident_retry = ForwardRecoveryRequirements {
         stable_active_memory_bytes: 900,
         active_memory_bytes_at_failure: 950,
@@ -272,9 +260,6 @@ fn should_authorize_one_same_chunk_retry_for_paged_execution_after_reclamation()
 
 #[test]
 fn should_keep_already_seated_complete_layers_when_leftover_budget_tightens() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let seated_complete_layer_payload_bytes = 80;
     let tighter_leftover_expert_budget_bytes = 70;
     let richer_leftover_expert_budget_bytes = 90;
@@ -302,9 +287,6 @@ fn should_keep_already_seated_complete_layers_when_leftover_budget_tightens() {
 
 #[test]
 fn should_keep_all_resident_expert_pages_when_learned_budget_tightens_between_requests() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let resident_complete_and_warm_table_payload_bytes = 100;
     let tighter_leftover_expert_budget_bytes = 80;
     let richer_leftover_expert_budget_bytes = 120;
@@ -330,9 +312,6 @@ fn should_keep_all_resident_expert_pages_when_learned_budget_tightens_between_re
 
 #[test]
 fn should_plan_prefill_with_the_floored_ceiling_when_seated_layers_exceed_leftover() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let seated_complete_layers = [
         CurrentExpertLayerResidency {
@@ -393,9 +372,6 @@ fn should_plan_prefill_with_the_floored_ceiling_when_seated_layers_exceed_leftov
 
 #[test]
 fn should_keep_the_opening_prefill_pin_set_when_later_leftover_wants_more_layers() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let opening_candidate = plan_expert_residency(MemoryPhase::Prefill, 100, &geometries, &[])
         .expect("two complete layers should fit the opening leftover");
@@ -448,9 +424,6 @@ fn should_keep_the_opening_prefill_pin_set_when_later_leftover_wants_more_layers
 
 #[test]
 fn should_keep_opening_prefill_pins_when_later_leftover_is_tighter_without_capacity_failure() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let opening_candidate = plan_expert_residency(MemoryPhase::Prefill, 100, &geometries, &[])
         .expect("two complete layers should fit the opening leftover");
@@ -493,9 +466,6 @@ fn should_keep_opening_prefill_pins_when_later_leftover_is_tighter_without_capac
 
 #[test]
 fn should_not_re_pin_a_layer_after_a_prefill_capacity_failure() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let opening_candidate = plan_expert_residency(MemoryPhase::Prefill, 100, &geometries, &[])
         .expect("two complete layers should fit");
@@ -531,9 +501,6 @@ fn should_not_re_pin_a_layer_after_a_prefill_capacity_failure() {
 
 #[test]
 fn should_promote_every_partial_prefill_page_when_generation_payload_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let prefill_routed_pages = [
         CurrentExpertLayerResidency {

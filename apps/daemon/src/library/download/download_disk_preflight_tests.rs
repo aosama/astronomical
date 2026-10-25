@@ -1,4 +1,4 @@
-//! Offline admission contracts for Library download disk capacity.
+//! Unit admission contracts for Library download disk capacity.
 
 use std::{
     io,

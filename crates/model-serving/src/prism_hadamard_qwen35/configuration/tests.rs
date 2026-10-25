@@ -1,4 +1,4 @@
-//! Offline contracts for folded-pack configuration parsing.
+//! Unit contracts for folded-pack configuration parsing.
 //!
 //! Fixtures are small synthetic documents shaped exactly like the shipped
 //! 27B pack (same keys, same wire conventions, tiny dimensions).

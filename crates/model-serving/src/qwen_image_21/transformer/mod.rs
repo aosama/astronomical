@@ -4,7 +4,7 @@
 //! `causal_condition` modulation, one shared modulation projection for all 32 blocks). Every
 //! projection is the artifact's 4-bit affine quantization, loaded directly into MLX's quantized
 //! matmul layout. The high-risk index logic — 3-axis RoPE, block-causal segmentation, target
-//! masks, the timestep sinusoid — reuses the family's offline-tested pure modules; this
+//! masks, the timestep sinusoid — reuses the family's unit-tested pure modules; this
 //! module owns the MLX binding and the block equations.
 
 mod blocks;

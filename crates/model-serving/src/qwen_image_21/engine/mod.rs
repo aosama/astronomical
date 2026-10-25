@@ -6,7 +6,7 @@
 //! `advance_generation` call. The lifecycle maps those boundaries onto the IPC progress phases
 //! so a worker stays responsive between denoising steps and can cancel between any two.
 //!
-//! `components.rs` holds the architecture-neutral seam (real MLX owner or an offline fake),
+//! `components.rs` holds the architecture-neutral seam (real MLX owner or a scripted fake),
 //! `request_validation.rs` pins the official request envelope, `lifecycle.rs` is the engine,
 //! and `mlx_components.rs` is the production owner.
 

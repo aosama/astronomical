@@ -1,4 +1,4 @@
-//! Offline contracts for bounded immutable Hugging Face manifest discovery.
+//! Unit contracts for bounded immutable Hugging Face manifest discovery.
 
 use std::{future::Future, time::Duration};
 
@@ -483,5 +483,5 @@ async fn should_reject_pagination_outside_the_exact_hugging_face_tree() {
 async fn bounded<T>(operation: impl Future<Output = T>) -> T {
     tokio::time::timeout(Duration::from_secs(2), operation)
         .await
-        .expect("the offline Hub operation should finish within two seconds")
+        .expect("the scripted Hub operation should finish within two seconds")
 }

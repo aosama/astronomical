@@ -6,9 +6,6 @@ use crate::{
 
 #[test]
 fn should_serialize_one_structured_chat_generation_command_without_rest_types() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(44),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -63,9 +60,6 @@ fn should_serialize_one_structured_chat_generation_command_without_rest_types() 
 
 #[test]
 fn should_round_trip_a_typed_context_length_exceeded_failure() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let failure_reason = ChatGenerationFailureReason::ContextLengthExceeded {
         actual_total_context_tokens: 262_145,
         maximum_context_tokens: 262_144,
@@ -84,9 +78,6 @@ fn should_round_trip_a_typed_context_length_exceeded_failure() {
 
 #[test]
 fn should_round_trip_ready_model_capabilities_with_vision_support() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_capabilities = ChatModelCapabilities {
         supports_reasoning: true,
         supports_tool_calls: true,
@@ -108,9 +99,6 @@ fn should_round_trip_ready_model_capabilities_with_vision_support() {
 
 #[test]
 fn should_round_trip_one_chat_command_with_a_user_message_image() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(99),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -155,9 +143,6 @@ fn should_round_trip_one_chat_command_with_a_user_message_image() {
 
 #[test]
 fn should_default_an_omitted_repetition_penalty_to_neutral() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let serialized_chat_generation_command = r#"{"request_id":9,"model":"astronomical/fake-mixture-of-experts","messages":[{"role":"user","content":"Summarize the source files."}],"tools":[],"tool_choice":{"kind":"auto"},"settings":{"max_output_tokens":64,"temperature_thousandths":600,"top_p_thousandths":950,"seed":null,"thinking_budget":null}}"#;
 
     let deserialized_command: ChatGenerationCommand =

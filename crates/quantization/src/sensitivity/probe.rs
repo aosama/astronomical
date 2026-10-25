@@ -6,7 +6,7 @@
 //! dependency: this crate defines what a probe model must be able to do, and
 //! each engine implements it where it has access to its own weights.
 //! model-serving provides the Qwen3.5 implementation behind its `direct-mlx`
-//! feature; the offline tests here use a scripted fake.
+//! feature; the integration tests here use a scripted fake.
 //!
 //! Logits never cross this boundary as a concrete array type, which is what
 //! keeps the sweep driver free of MLX. The probe returns an opaque

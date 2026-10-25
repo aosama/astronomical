@@ -7,7 +7,7 @@
 //! **target image's** tokens take their own sample's row.
 //!
 //! This is subtle, high-risk bookkeeping (an off-by-one here silently corrupts every denoise step), so it
-//! is pure integer logic with no runtime dependency and is tested offline against the diffusers
+//! is pure integer logic with no runtime dependency and is unit-tested against the diffusers
 //! reference.
 
 #[cfg(test)]

@@ -8,7 +8,7 @@ use super::super::{Flux2KleinFlowSchedule, Flux2KleinFlowStep, Flux2KleinImageDi
 use crate::memory::telemetry::MlxMemoryLimitAdjustment;
 use crate::memory::telemetry::MlxMemoryTelemetry;
 
-/// Loaded identity supplied by either native components or an offline lifecycle fake.
+/// Loaded identity supplied by either native components or an scripted lifecycle fake.
 #[doc(hidden)]
 pub struct Flux2KleinComponentLoad {
     pub(super) model_id: String,
@@ -34,7 +34,7 @@ impl Flux2KleinComponentLoad {
     }
 }
 
-/// Component seam keeps lifecycle tests offline while production retains one concrete owner.
+/// Component seam keeps lifecycle tests scripted while production retains one concrete owner.
 /// It deliberately has no `Send` bound because MLX component state is runtime-thread-affine.
 #[doc(hidden)]
 pub trait Flux2KleinEngineComponents {

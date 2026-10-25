@@ -10,7 +10,7 @@
 //! (Inheriting cargo's count directly would starve either the native build
 //! or the concurrent Rust compile on small machines.)
 
-// Referenced by build.rs, which is not part of the offline test target that
+// Referenced by build.rs, which is not part of the integration test target that
 // includes this module through #[path]; the warning would otherwise fire there.
 #[allow(dead_code)]
 pub const NATIVE_BUILD_JOBS_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_JOBS";

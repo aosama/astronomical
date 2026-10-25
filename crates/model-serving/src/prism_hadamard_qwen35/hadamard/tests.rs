@@ -1,4 +1,4 @@
-//! Offline contracts for the Hadamard transform manifest.
+//! Unit contracts for the Hadamard transform manifest.
 //!
 //! Grouped by concern under one `tests` child of the contract owner; every
 //! file in this folder carries the `_tests.rs` suffix. Fixtures are small

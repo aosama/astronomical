@@ -1,4 +1,4 @@
-//! Offline tests for the Qwen-Image-2.1 VAE latent geometry: the channel counts and the
+//! Unit tests for the Qwen-Image-2.1 VAE latent geometry: the channel counts and the
 //! latent-grid-to-pixel-grid expansion the decoder contract rests on.
 //!
 //! These constants are the decode side of the family's geometry: the transformer emits the

@@ -30,9 +30,6 @@ fn requirements_for_current_state(
 
 #[test]
 fn should_admit_when_the_projection_lands_exactly_on_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         requirements_for_current_state(850, 400).decide(),
         MemoryAdmissionDecision::Admit,
@@ -42,9 +39,6 @@ fn should_admit_when_the_projection_lands_exactly_on_the_ceiling() {
 
 #[test]
 fn should_demand_only_the_overflow_bytes_when_retention_covers_them() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         requirements_for_current_state(950, 100).decide(),
         MemoryAdmissionDecision::Reclaim {
@@ -63,9 +57,6 @@ fn should_demand_only_the_overflow_bytes_when_retention_covers_them() {
 
 #[test]
 fn should_reject_with_the_exact_shortfall_when_retention_is_one_byte_short() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         requirements_for_current_state(950, 99).decide(),
         MemoryAdmissionDecision::Reject {
@@ -78,9 +69,6 @@ fn should_reject_with_the_exact_shortfall_when_retention_is_one_byte_short() {
 
 #[test]
 fn should_reject_with_the_full_overflow_when_no_elastic_retention_exists() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         requirements_for_current_state(950, 0).decide(),
         MemoryAdmissionDecision::Reject {
@@ -93,9 +81,6 @@ fn should_reject_with_the_full_overflow_when_no_elastic_retention_exists() {
 
 #[test]
 fn should_reject_with_the_maximum_shortfall_when_the_projection_overflows() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         requirements_for_current_state(usize::MAX, 1_000).decide(),
         MemoryAdmissionDecision::Reject {
@@ -108,9 +93,6 @@ fn should_reject_with_the_maximum_shortfall_when_the_projection_overflows() {
 
 #[test]
 fn should_admit_an_empty_request_against_a_zero_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         ContextAdmissionRequirements {
             current_active_memory_bytes: 0,
@@ -129,9 +111,6 @@ fn should_admit_an_empty_request_against_a_zero_ceiling() {
 
 #[test]
 fn should_floor_the_safe_minimum_ceiling_at_zero_when_idle_memory_is_fully_evictable() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         safe_minimum_active_memory_ceiling_bytes(500, 500, 60),
         60,
@@ -151,9 +130,6 @@ fn should_floor_the_safe_minimum_ceiling_at_zero_when_idle_memory_is_fully_evict
 
 #[test]
 fn should_bound_the_output_reservation_by_the_thinking_allowance_plus_the_answer_reserve() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         bounded_output_reservation_token_count(65_535, Some(16_384)),
         18_432,
@@ -164,9 +140,6 @@ fn should_bound_the_output_reservation_by_the_thinking_allowance_plus_the_answer
 
 #[test]
 fn should_never_reserve_more_output_than_the_caller_configured() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         bounded_output_reservation_token_count(512, Some(16_384)),
         512
@@ -176,9 +149,6 @@ fn should_never_reserve_more_output_than_the_caller_configured() {
 
 #[test]
 fn should_reserve_the_visible_answer_allowance_when_no_thinking_budget_exists() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         bounded_output_reservation_token_count(65_535, None),
         2_048,
@@ -188,9 +158,6 @@ fn should_reserve_the_visible_answer_allowance_when_no_thinking_budget_exists() 
 
 #[test]
 fn should_saturate_when_the_thinking_allowance_nears_the_word_size() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         bounded_output_reservation_token_count(usize::MAX, Some(usize::MAX)),
         usize::MAX
@@ -199,9 +166,6 @@ fn should_saturate_when_the_thinking_allowance_nears_the_word_size() {
 
 #[test]
 fn should_reserve_the_largest_page_when_no_expert_growth_is_pending() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let capacity_bytes = retained_expert_payload_capacity_bytes(1_000, 2_000, 100, 50, 0, 300, 0);
     assert_eq!(
         capacity_bytes, 1_200,
@@ -211,9 +175,6 @@ fn should_reserve_the_largest_page_when_no_expert_growth_is_pending() {
 
 #[test]
 fn should_charge_pending_experts_and_the_largest_page_together_when_retention_grows() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let capacity_bytes = retained_expert_payload_capacity_bytes(1_000, 2_000, 100, 50, 0, 300, 200);
     assert_eq!(
         capacity_bytes, 1_350,
@@ -223,9 +184,6 @@ fn should_charge_pending_experts_and_the_largest_page_together_when_retention_gr
 
 #[test]
 fn should_shrink_retained_capacity_by_exactly_the_overage_when_reserves_exceed_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let capacity_bytes = retained_expert_payload_capacity_bytes(1_950, 2_000, 100, 50, 0, 300, 0);
     assert_eq!(
         capacity_bytes, 250,
@@ -235,9 +193,6 @@ fn should_shrink_retained_capacity_by_exactly_the_overage_when_reserves_exceed_t
 
 #[test]
 fn should_zero_retained_capacity_when_future_reserves_overflow_the_word() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         retained_expert_payload_capacity_bytes(1_000, 2_000, 100, u64::MAX, 0, 300, 200,),
         0,

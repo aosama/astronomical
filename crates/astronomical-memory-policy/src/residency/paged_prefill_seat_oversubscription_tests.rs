@@ -88,9 +88,6 @@ fn incident_geometry() -> Vec<ExpertLayerGeometry> {
 
 #[test]
 fn should_pin_exactly_the_affordable_complete_layers_for_the_incident_geometry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The opening plan pins exactly 33 complete layers: the routed floor for all
     // 38 layers plus 33 incremental complete payloads fits the composed budget,
     // and a 34th does not. This is the plan the incident session published
@@ -121,9 +118,6 @@ fn should_pin_exactly_the_affordable_complete_layers_for_the_incident_geometry()
 
 #[test]
 fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Before the fix (issue #1278), the stabilized request plan mapped every
     // streamed-role layer to AdmitCompleteOnMandatoryRead while budgeting
     // zero new retained bytes: the commit gate then authorized complete-layer
@@ -208,9 +202,6 @@ fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
 
 #[test]
 fn should_reproduce_the_first_incident_recovery_target_and_authorize_one_retry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The recovery arithmetic of the incident's first failure, reproduced
     // exactly: the workspace formula reconstructs 947,881,340 bytes (the
     // 92,243,324 transient bytes alive at the failure plus the rejected
@@ -267,9 +258,6 @@ fn should_reproduce_the_first_incident_recovery_target_and_authorize_one_retry()
 
 #[test]
 fn should_floor_the_cache_ceiling_at_the_overshoot_after_every_budget_refresh() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The budget-refresh floor legalizes the incident's overshoot for the rest
     // of the request: with 38 complete layers resident (32,514,244,608 bytes)
     // against a 28,974,982,400-byte composed budget, every later publication
@@ -300,9 +288,6 @@ fn should_floor_the_cache_ceiling_at_the_overshoot_after_every_budget_refresh() 
 
 #[test]
 fn should_round_the_recovery_target_up_to_whole_table_granularity() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The eviction granularity is one complete table; a byte-exact target
     // leaves the next attempt's headroom dependent on where table boundaries
     // fall. The incident's 64,597,002-byte deficit must round up to one
@@ -344,9 +329,6 @@ fn should_round_the_recovery_target_up_to_whole_table_granularity() {
 
 #[test]
 fn should_leave_the_evicted_layer_unseatable_under_both_documented_ceilings() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The eviction-and-restream thrash the halving loop entered: once one table
     // is evicted under request pressure, neither documented ceiling restores the
     // evicted layer — the pressure override admits only

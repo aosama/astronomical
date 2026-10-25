@@ -19,7 +19,7 @@ pub(crate) const MAXIMUM_HEADER_VALUE_BYTES: usize = 8_192;
 pub type HubTransportFuture<'a> =
     Pin<Box<dyn Future<Output = Result<HubHttpResponse, HubTransportError>> + Send + 'a>>;
 
-/// Narrow asynchronous transport implemented by production HTTP and scripted offline doubles.
+/// Narrow asynchronous transport implemented by production HTTP and scripted doubles.
 pub trait HubTransport: Send + Sync {
     fn execute(&self, request: HubHttpRequest) -> HubTransportFuture<'_>;
 }

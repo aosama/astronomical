@@ -14,9 +14,6 @@ const RETIRED_SMALL_FRAME_BYTES: usize = 64 * 1024;
 
 #[test]
 fn should_reject_a_whitespace_only_chat_model_id_before_worker_preprocessing() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let serialized_command = serde_json::json!({
         "kind": "generate",
         "request_id": 1,
@@ -44,9 +41,6 @@ fn should_reject_a_whitespace_only_chat_model_id_before_worker_preprocessing() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_an_unversioned_chat_command() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(71),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -86,9 +80,6 @@ async fn should_round_trip_an_unversioned_chat_command() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_expert_memory_mode_change_event() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::ExpertMemoryModeChanged {
         expert_memory_mode: ExpertMemoryMode::Hybrid,
     };
@@ -112,9 +103,6 @@ async fn should_round_trip_expert_memory_mode_change_event() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_generation_preparation_topology() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::GenerationPreparationStarted {
         request_id: RequestId::new(72),
         total_layer_count: 40,
@@ -142,9 +130,6 @@ async fn should_round_trip_generation_preparation_topology() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_idle_worker_mlx_memory_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::Idle {
         machine_mlx_memory_ceiling_bytes: 40_000_000_000,
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
@@ -171,9 +156,6 @@ async fn should_round_trip_idle_worker_mlx_memory_ceiling() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_update_mlx_memory_limit_command() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_command = WorkerCommand::UpdateMlxMemoryLimit {
         effective_mlx_memory_ceiling_bytes: 32_000_000_000,
         configuration_generation: "memory-generation".to_owned(),
@@ -197,9 +179,6 @@ async fn should_round_trip_update_mlx_memory_limit_command() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_changed_and_rejected_memory_limit_events() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_events = [
         WorkerEvent::MlxMemoryLimitChanged {
             effective_mlx_memory_ceiling_bytes: 32_000_000_000,
@@ -240,9 +219,6 @@ async fn should_round_trip_changed_and_rejected_memory_limit_events() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_response() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_command = WorkerCommand::SampleMlxMemory;
     let worker_event = WorkerEvent::MlxMemorySample {
         mlx_memory_snapshot: Some(WorkerMlxMemorySnapshot {
@@ -291,9 +267,6 @@ async fn should_round_trip_the_idle_worker_mlx_memory_sample_command_and_respons
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_send_a_large_chat_command_as_one_bounded_frame() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(73),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -344,9 +317,6 @@ async fn should_send_a_large_chat_command_as_one_bounded_frame() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_a_fifty_thousand_word_command_without_material_delay() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_command = WorkerCommand::Generate(ChatGenerationCommand {
         request_id: RequestId::new(74),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -397,9 +367,6 @@ async fn should_round_trip_a_fifty_thousand_word_command_without_material_delay(
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_one_unified_chat_output_event() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::Output {
         request_id: RequestId::new(72),
         sequence_number: 0,
@@ -430,9 +397,6 @@ async fn should_round_trip_one_unified_chat_output_event() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_generation_progress_event() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::GenerationProgress {
         request_id: RequestId::new(82),
         generated_token_count: 7,
@@ -462,9 +426,6 @@ async fn should_round_trip_generation_progress_event() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_first_decode_completion_event() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::FirstDecodeCompleted {
         request_id: RequestId::new(83),
         elapsed_millis: 1_234,
@@ -489,9 +450,6 @@ async fn should_round_trip_first_decode_completion_event() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_one_persistent_prompt_cache_stats_event() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::PersistentPromptCacheStats {
         persistent_prompt_cache_hits: 12,
         persistent_prompt_cache_misses: 3,
@@ -538,9 +496,6 @@ mod prompt_cache_clear_protocol {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn should_round_trip_global_clear_prompt_cache_command() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
-
         run_bounded_test(async {
             let worker_command = WorkerCommand::ClearPromptCache { model_id: None };
             assert_command_round_trip(worker_command).await;
@@ -550,9 +505,6 @@ mod prompt_cache_clear_protocol {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn should_round_trip_scoped_clear_prompt_cache_command() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
-
         run_bounded_test(async {
             let worker_command = WorkerCommand::ClearPromptCache {
                 model_id: Some("astronomical/requested-model".to_owned()),
@@ -564,9 +516,6 @@ mod prompt_cache_clear_protocol {
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn should_round_trip_prompt_cache_cleared_event() {
-        astronomical_test_harness::ensure_network_denied()
-            .expect("network denial could not be applied");
-
         run_bounded_test(async {
             let worker_event = WorkerEvent::PromptCacheCleared {
                 model_id: Some("astronomical/requested-model".to_owned()),

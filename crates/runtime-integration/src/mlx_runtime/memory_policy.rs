@@ -31,7 +31,7 @@
 //! references; on affected macOS releases that removal can panic IOGPU with a
 //! prepare-count underflow. The worker's wired-residency claim (a single
 //! up-front budget in `apps/inference-worker/src/worker_startup.rs`) achieves
-//! the same protection without the per-buffer hazard, and an offline contract
+//! the same protection without the per-buffer hazard, and a unit contract
 //! test asserts this module never re-enables the per-buffer path.
 
 use std::sync::Mutex;

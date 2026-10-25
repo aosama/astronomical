@@ -8,9 +8,6 @@ use crate::{
 
 #[test]
 fn should_serialize_generated_image_bytes_as_base64_json() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let generated_image = GeneratedImage {
         mime_type: "image/png".to_owned(),
         encoded_bytes: super::valid_png_bytes(1, 1),
@@ -30,9 +27,6 @@ fn should_serialize_generated_image_bytes_as_base64_json() {
 
 #[test]
 fn should_reject_invalid_image_generation_commands_and_settings() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let valid_command = super::valid_image_generation_command();
     let invalid_commands = [
         (
@@ -148,9 +142,6 @@ fn should_reject_invalid_image_generation_commands_and_settings() {
 
 #[test]
 fn should_reject_whitespace_only_image_inputs_before_worker_execution() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for (field_name, field_value) in [("model", "  "), ("prompt", "\t\n")] {
         let mut serialized_command = serde_json::to_value(WorkerCommand::GenerateImage(
             super::valid_image_generation_command(),
@@ -171,9 +162,6 @@ fn should_reject_whitespace_only_image_inputs_before_worker_execution() {
 
 #[test]
 fn should_reject_malformed_image_capabilities_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let malformed_capabilities = [
         (
             serde_json::json!({

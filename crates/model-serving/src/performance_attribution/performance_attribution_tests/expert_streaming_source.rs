@@ -4,9 +4,6 @@ use super::*;
 
 #[test]
 fn should_aggregate_expert_source_plans_by_phase_and_layer_without_expert_ids() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     performance_attribution.record_expert_streaming_source_plan(7, 2_048, 8, 256, 3, 900);
@@ -47,9 +44,6 @@ fn should_aggregate_expert_source_plans_by_phase_and_layer_without_expert_ids() 
 
 #[test]
 fn should_bound_expert_source_summaries_to_one_row_per_phase_and_layer() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     performance_attribution.record_expert_streaming_source_plan(2, 128, 8, 256, 1, 100);

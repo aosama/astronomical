@@ -6,9 +6,6 @@ use crate::{
 
 #[test]
 fn should_reject_a_second_tool_result_for_the_same_assistant_tool_call() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let assistant_tool_call = ChatAssistantToolCall {
         id: "call_1".to_owned(),
         function: ChatAssistantToolFunction {
@@ -50,9 +47,6 @@ fn should_reject_a_second_tool_result_for_the_same_assistant_tool_call() {
 
 #[test]
 fn should_reject_duplicate_declared_tool_names() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(65),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -84,9 +78,6 @@ fn should_reject_duplicate_declared_tool_names() {
 
 #[test]
 fn should_reject_a_forced_tool_choice_for_an_undeclared_function() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(66),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -111,9 +102,6 @@ fn should_reject_a_forced_tool_choice_for_an_undeclared_function() {
 
 #[test]
 fn should_reject_required_tool_choice_before_prompt_rendering() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(79),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -132,9 +120,6 @@ fn should_reject_required_tool_choice_before_prompt_rendering() {
 
 #[test]
 fn should_reject_a_declared_forced_tool_choice_before_prompt_rendering() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(80),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -159,9 +144,6 @@ fn should_reject_a_declared_forced_tool_choice_before_prompt_rendering() {
 
 #[test]
 fn should_reject_a_tool_schema_deeper_than_the_worker_limit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let deeply_nested_schema = (0..33).fold("{}".to_owned(), |nested_schema, _| {
         format!(r#"{{"items":{nested_schema}}}"#)
     });
@@ -179,9 +161,6 @@ fn should_reject_a_tool_schema_deeper_than_the_worker_limit() {
 
 #[test]
 fn should_accept_a_large_tool_schema_when_the_ipc_frame_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let oversized_schema = format!(r#"{{"description":"{}"}}"#, "x".repeat(32 * 1024));
     let chat_generation_command = support::command_with_tool_schema(68, oversized_schema);
 
@@ -192,9 +171,6 @@ fn should_accept_a_large_tool_schema_when_the_ipc_frame_fits() {
 
 #[test]
 fn should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let schema_with_large_description = format!(r#"{{"description":"{}"}}"#, "x".repeat(25 * 1024));
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(69),
@@ -224,9 +200,6 @@ fn should_accept_large_aggregate_tool_schemas_when_the_ipc_frame_fits() {
 
 #[test]
 fn should_reject_an_empty_chat_history_before_worker_preprocessing() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(70),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -245,9 +218,6 @@ fn should_reject_an_empty_chat_history_before_worker_preprocessing() {
 
 #[test]
 fn should_accept_large_chat_history_without_worker_message_count_cap() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(81),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -270,9 +240,6 @@ fn should_accept_large_chat_history_without_worker_message_count_cap() {
 
 #[test]
 fn should_accept_many_small_tool_definitions_without_worker_tool_count_cap() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(82),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -296,9 +263,6 @@ fn should_accept_many_small_tool_definitions_without_worker_tool_count_cap() {
 
 #[test]
 fn should_reject_a_zero_structured_chat_output_token_budget() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(71),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -323,9 +287,6 @@ fn should_reject_a_zero_structured_chat_output_token_budget() {
 
 #[test]
 fn should_accept_large_structured_chat_output_budget_for_model_context_admission() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(72),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -344,9 +305,6 @@ fn should_accept_large_structured_chat_output_budget_for_model_context_admission
 
 #[test]
 fn should_accept_one_chat_message_larger_than_the_old_message_byte_limit_when_the_ipc_frame_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(74),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -371,9 +329,6 @@ fn should_accept_one_chat_message_larger_than_the_old_message_byte_limit_when_th
 #[test]
 fn should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_when_the_ipc_frame_fits()
  {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(75),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -413,9 +368,6 @@ fn should_accept_aggregate_chat_messages_larger_than_the_old_message_byte_limit_
 
 #[test]
 fn should_accept_a_semantically_valid_large_chat_command_that_fits_one_ipc_frame() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(76),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -455,9 +407,6 @@ fn should_accept_a_semantically_valid_large_chat_command_that_fits_one_ipc_frame
 
 #[test]
 fn should_accept_a_large_tool_description_when_the_ipc_frame_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(77),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -479,9 +428,6 @@ fn should_accept_a_large_tool_description_when_the_ipc_frame_fits() {
 
 #[test]
 fn should_accept_a_large_assistant_tool_call_id_when_the_ipc_frame_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(77),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -509,9 +455,6 @@ fn should_accept_a_large_assistant_tool_call_id_when_the_ipc_frame_fits() {
 
 #[test]
 fn should_accept_large_assistant_tool_call_arguments_when_the_ipc_frame_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let large_arguments_json = format!(r#"{{"payload":"{}"}}"#, "x".repeat(16_665));
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(83),

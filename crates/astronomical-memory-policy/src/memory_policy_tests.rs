@@ -18,9 +18,6 @@ use astronomical_ipc_protocol::ExpertMemoryMode;
 
 #[test]
 fn should_identify_the_allocation_boundary_and_required_shortfall() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let observation = AllocationAdmissionObservation::new(900, 0, 125, 1_000);
 
     assert_eq!(
@@ -34,9 +31,6 @@ fn should_identify_the_allocation_boundary_and_required_shortfall() {
 
 #[test]
 fn should_plan_demotion_before_installing_a_lower_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 25_000,
         requested_ceiling_bytes: 23_000,
@@ -59,9 +53,6 @@ fn should_plan_demotion_before_installing_a_lower_ceiling() {
 
 #[test]
 fn should_demote_complete_residency_when_only_the_idle_snapshot_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 38_000,
         requested_ceiling_bytes: 30_000,
@@ -84,9 +75,6 @@ fn should_demote_complete_residency_when_only_the_idle_snapshot_fits() {
 
 #[test]
 fn should_keep_complete_residency_when_idle_memory_and_serving_headroom_fit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 38_000,
         requested_ceiling_bytes: 32_000,
@@ -109,9 +97,6 @@ fn should_keep_complete_residency_when_idle_memory_and_serving_headroom_fit() {
 
 #[test]
 fn should_preserve_paged_reclamation_when_complete_residency_headroom_is_irrelevant() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 38_000,
         requested_ceiling_bytes: 30_000,
@@ -134,9 +119,6 @@ fn should_preserve_paged_reclamation_when_complete_residency_headroom_is_irrelev
 
 #[test]
 fn should_not_request_demotion_for_raised_or_unchanged_ceilings() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let requirements = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 30_000,
         requested_ceiling_bytes: 38_000,
@@ -165,9 +147,6 @@ fn should_not_request_demotion_for_raised_or_unchanged_ceilings() {
 
 #[test]
 fn should_request_allocator_cleanup_without_confusing_cache_with_active_memory() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let observation = AllocationAdmissionObservation::new(800, 300, 100, 1_000);
 
     assert_eq!(
@@ -178,9 +157,6 @@ fn should_request_allocator_cleanup_without_confusing_cache_with_active_memory()
 
 #[test]
 fn should_decide_complete_residency_from_one_replacement_aware_policy() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let requirements = CompleteResidencyRequirements {
         current_active_memory_bytes: 2_000,
         retained_paged_expert_payload_bytes: 600,
@@ -200,9 +176,6 @@ fn should_decide_complete_residency_from_one_replacement_aware_policy() {
 
 #[test]
 fn should_authorize_only_one_retry_after_required_experts_were_reclaimed() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let requirements = ForwardRecoveryRequirements {
         stable_active_memory_bytes: 900,
         active_memory_bytes_at_failure: 950,
@@ -234,9 +207,6 @@ fn should_authorize_only_one_retry_after_required_experts_were_reclaimed() {
 
 #[test]
 fn should_admit_decode_when_only_a_temporary_cache_restore_workspace_forced_demotion() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A fitting resident model plus a large prompt-cache restore workspace can
     // exceed the ceiling even though decode itself still fits. Demote for the
     // restore, then admit once that workspace is gone.
@@ -272,9 +242,6 @@ fn should_admit_decode_when_only_a_temporary_cache_restore_workspace_forced_demo
 
 #[test]
 fn should_keep_complete_residency_when_cache_restore_overlap_excludes_output_budget() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Live agent turn on resident sparse MoE at a 35 GB ceiling: 15,399 prompt tokens,
     // 65,535 max output, cache on, 21.59 GB experts already seated. Charging
     // restore overlap on prompt+output demoted; charging it on prompt tokens
@@ -343,9 +310,6 @@ fn should_keep_complete_residency_when_cache_restore_overlap_excludes_output_bud
 
 #[test]
 fn should_take_the_larger_exclusive_request_phase_instead_of_summing_them() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Live 33 GB turn: restore 0.32 GB and serving KV 1.67 GB do not coexist.
     const CURRENT_ACTIVE_MEMORY_BYTES: usize = 26_488_988_934;
     const CONTEXT_GROWTH_BYTES: usize = 1_665_556_480;
@@ -375,9 +339,6 @@ fn should_take_the_larger_exclusive_request_phase_instead_of_summing_them() {
 
 #[test]
 fn should_admit_seated_complete_experts_at_a_33_gb_ceiling_without_stacked_layer_weight_headroom() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     const CURRENT_ACTIVE_MEMORY_BYTES: usize = 26_488_988_934;
     const CONTEXT_GROWTH_BYTES: usize = 1_665_556_480;
     const RESTORE_OVERLAP_WORKSPACE_BYTES: usize = 323_399_680;
@@ -409,9 +370,6 @@ fn should_admit_seated_complete_experts_at_a_33_gb_ceiling_without_stacked_layer
 
 #[test]
 fn should_admit_complete_residency_without_prefill_three_layer_weight_headroom() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     const PROJECTED_RESIDENT_ACTIVE_MEMORY_BYTES: u64 = 28_193_105_290;
     const ACTIVE_MEMORY_CEILING_BYTES: u64 = 33_000_000_000;
     const GATE_UP_FUSION_TRANSIENT_PAYLOAD_BYTES: u64 = 1_073_741_824;
@@ -433,9 +391,6 @@ fn should_admit_complete_residency_without_prefill_three_layer_weight_headroom()
 
 #[test]
 fn should_classify_complete_owner_as_resident_and_empty_pager_cache_as_paged() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         classify_expert_memory_mode(true, true, 0),
         ExpertMemoryMode::Resident
@@ -456,9 +411,6 @@ fn should_classify_complete_owner_as_resident_and_empty_pager_cache_as_paged() {
 
 #[test]
 fn should_include_chunk_activation_workspace_when_complete_experts_are_already_seated() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     const PUBLICATION_WORKSPACE_BYTES: usize = 3_407_872;
     const RESTORE_OVERLAP_WORKSPACE_BYTES: usize = 323_399_680;
     const PREFILL_ACTIVATION_WORKSPACE_BYTES: usize = 4_831_838_208;
@@ -495,9 +447,6 @@ fn should_include_chunk_activation_workspace_when_complete_experts_are_already_s
 
 #[test]
 fn should_not_charge_the_complete_layer_scratch_in_addition_to_the_expert_page_reservation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The admission projection adds `expert_page_reservation_bytes` (the largest
     // complete expert layer) as its own owner. The paged workspace must not add
     // the same layer bytes again, so the composition carries activation only

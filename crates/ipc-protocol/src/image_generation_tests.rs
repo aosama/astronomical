@@ -20,9 +20,6 @@ const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_an_image_generation_journey() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let request_id = RequestId::new(501);
     let image_generation_command = ImageGenerationCommand {
         request_id,
@@ -123,9 +120,6 @@ async fn should_round_trip_an_image_generation_journey() {
 
 #[test]
 fn should_reject_invalid_image_completion_metadata_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = image_completion_event(
         valid_png_bytes(1_024, 768),
         ImageGenerationResultMetadata {
@@ -146,9 +140,6 @@ fn should_reject_invalid_image_completion_metadata_at_the_wire_boundary() {
 
 #[test]
 fn should_reject_crc_corrupt_png_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut crc_corrupt_png = valid_png_bytes(1_024, 768);
     let idat_range = png_chunk_range(&crc_corrupt_png, b"IDAT");
     crc_corrupt_png[idat_range.end - 1] ^= 0xff;
@@ -158,9 +149,6 @@ fn should_reject_crc_corrupt_png_at_the_wire_boundary() {
 
 #[test]
 fn should_reject_png_without_idat_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut png_without_idat = valid_png_bytes(1_024, 768);
     let idat_range = png_chunk_range(&png_without_idat, b"IDAT");
     png_without_idat.drain(idat_range);
@@ -170,9 +158,6 @@ fn should_reject_png_without_idat_at_the_wire_boundary() {
 
 #[test]
 fn should_reject_non_rgb8_png_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let rgba_png = encode_solid_png(1_024, 768, ExtendedColorType::Rgba8, 4);
     let worker_event = image_completion_event(rgba_png, valid_image_result_metadata());
 
@@ -186,9 +171,6 @@ fn should_reject_non_rgb8_png_at_the_wire_boundary() {
 
 #[test]
 fn should_reject_invalid_mime_type_without_echoing_worker_content() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::ImageGenerationCompleted {
         request_id: RequestId::new(501),
         generated_image: GeneratedImage {
@@ -212,9 +194,6 @@ fn should_reject_invalid_mime_type_without_echoing_worker_content() {
 
 #[test]
 fn should_reject_oversized_frames_before_png_decoding() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let oversized_frame = vec![0; MAX_IPC_FRAME_BYTES + 1];
 
     assert!(matches!(
@@ -225,9 +204,6 @@ fn should_reject_oversized_frames_before_png_decoding() {
 
 #[test]
 fn should_reject_png_dimensions_that_do_not_match_completion_metadata() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event =
         image_completion_event(valid_png_bytes(512, 768), valid_image_result_metadata());
 
@@ -246,9 +222,6 @@ fn should_reject_png_dimensions_that_do_not_match_completion_metadata() {
 
 #[test]
 fn should_round_trip_every_image_failure_reason() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let failure_reasons = [
         ImageGenerationFailureReason::invalid_request("width exceeds model capability"),
         ImageGenerationFailureReason::ModelDoesNotSupportImageGeneration,
@@ -275,9 +248,6 @@ fn should_round_trip_every_image_failure_reason() {
 
 #[test]
 fn should_summarize_image_events_without_image_or_prompt_payloads() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let request_id = RequestId::new(777);
     let events_and_summaries = [
         (

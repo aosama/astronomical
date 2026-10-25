@@ -22,9 +22,6 @@ fn small_layer_geometry() -> MlxRamBudgetModelGeometry {
 
 #[test]
 fn should_forget_learned_activation_evidence_when_the_live_ceiling_changes() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -84,9 +81,6 @@ fn should_forget_learned_activation_evidence_when_the_live_ceiling_changes() {
 
 #[test]
 fn should_keep_learned_activation_evidence_when_the_ceiling_value_is_unchanged() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(19_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {

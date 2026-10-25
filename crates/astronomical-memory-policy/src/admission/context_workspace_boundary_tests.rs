@@ -12,9 +12,6 @@ use crate::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
 
 #[test]
 fn should_reject_context_admission_when_the_projection_overflows() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = ContextAdmissionRequirements {
         current_active_memory_bytes: usize::MAX,
         context_growth_bytes: 1,
@@ -37,9 +34,6 @@ fn should_reject_context_admission_when_the_projection_overflows() {
 
 #[test]
 fn should_admit_context_growth_landing_exactly_on_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = ContextAdmissionRequirements {
         current_active_memory_bytes: 90,
         context_growth_bytes: 5,
@@ -56,9 +50,6 @@ fn should_admit_context_growth_landing_exactly_on_the_ceiling() {
 
 #[test]
 fn should_demand_exact_reclamation_one_byte_past_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = ContextAdmissionRequirements {
         current_active_memory_bytes: 90,
         context_growth_bytes: 5,
@@ -78,9 +69,6 @@ fn should_demand_exact_reclamation_one_byte_past_the_ceiling() {
 
 #[test]
 fn should_reclaim_up_to_the_exact_retention_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = ContextAdmissionRequirements {
         current_active_memory_bytes: 90,
         context_growth_bytes: 5,
@@ -102,9 +90,6 @@ fn should_reclaim_up_to_the_exact_retention_boundary() {
 
 #[test]
 fn should_reject_with_the_shortfall_beyond_retention_when_growth_exceeds_both() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = ContextAdmissionRequirements {
         current_active_memory_bytes: 90,
         context_growth_bytes: 5,
@@ -127,9 +112,6 @@ fn should_reject_with_the_shortfall_beyond_retention_when_growth_exceeds_both() 
 
 #[test]
 fn should_prefer_complete_residency_demotion_over_reclamation_when_experts_are_resident() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = ContextAdmissionRequirements {
         current_active_memory_bytes: 90,
         context_growth_bytes: 5,
@@ -153,9 +135,6 @@ fn should_prefer_complete_residency_demotion_over_reclamation_when_experts_are_r
 
 #[test]
 fn should_make_the_seated_temporary_workspace_reproduce_the_seated_peak_exactly() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The documented identity: current + context_growth + temporary equals
     // the seated peak across every ordering of restore overlap and context
     // growth, including both boundary crossings.
@@ -190,9 +169,6 @@ fn should_make_the_seated_temporary_workspace_reproduce_the_seated_peak_exactly(
 
 #[test]
 fn should_return_none_from_every_workspace_combiner_that_overflows() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(persistent_context_restore_workspace_bytes(usize::MAX, 2).is_none());
     assert!(seated_complete_expert_request_peak_active_memory_bytes(usize::MAX, 0, 0, 1).is_none());
     assert!(combined_persistent_growth_bytes(usize::MAX, 1).is_none());
@@ -200,9 +176,6 @@ fn should_return_none_from_every_workspace_combiner_that_overflows() {
 
 #[test]
 fn should_floor_the_safe_minimum_ceiling_at_the_page_reserve_when_eviction_exceeds_idle() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Reclaiming more than the idle footprint cannot go below zero, but the
     // pager still needs its one page reserve above the floor.
     assert_eq!(

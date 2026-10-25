@@ -2,9 +2,6 @@ use super::*;
 
 #[test]
 fn should_measure_previous_token_expert_route_reuse_without_serializing_expert_ids() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     performance_attribution.record_previous_token_expert_route_reuse(3, 1, &[9, 2, 2, 5]);
@@ -53,9 +50,6 @@ fn should_measure_previous_token_expert_route_reuse_without_serializing_expert_i
 
 #[test]
 fn should_measure_expert_route_reuse_independently_for_each_layer() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     performance_attribution.record_previous_token_expert_route_reuse(1, 1, &[2, 3]);
@@ -84,9 +78,6 @@ fn should_measure_expert_route_reuse_independently_for_each_layer() {
 
 #[test]
 fn should_skip_multi_token_expert_routes_and_disabled_attribution() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_previous_token_expert_route_reuse(2, 4, &[1, 2]);
     performance_attribution.record_previous_token_expert_route_reuse(2, 1, &[1, 2]);

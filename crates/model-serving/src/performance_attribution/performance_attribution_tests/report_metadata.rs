@@ -2,9 +2,6 @@ use super::*;
 
 #[test]
 fn should_serialize_rejected_generation_outcome_and_failure_description() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Rejected,
@@ -21,9 +18,6 @@ fn should_serialize_rejected_generation_outcome_and_failure_description() {
 
 #[test]
 fn should_serialize_unobserved_prefill_state_in_model_loading_report() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let performance_attribution_json = serialize_model_loading_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -41,9 +35,6 @@ fn should_serialize_unobserved_prefill_state_in_model_loading_report() {
 
 #[test]
 fn should_serialize_prefill_evidence_in_generation_report() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -61,9 +52,6 @@ fn should_serialize_prefill_evidence_in_generation_report() {
 
 #[test]
 fn should_serialize_decode_token_forward_p95_and_histogram() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     for elapsed_nanoseconds in [100_000, 1_000_000, 1_500_000, 2_000_001] {
         performance_attribution.record_decode_token_forward_elapsed(
@@ -91,9 +79,6 @@ fn should_serialize_decode_token_forward_p95_and_histogram() {
 
 #[test]
 fn should_serialize_decode_expert_route_host_materialization_timing() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     for operation in [
         PerformanceOperation::DecodeExpertRouteHostMaterialization,
@@ -125,9 +110,6 @@ fn should_serialize_decode_expert_route_host_materialization_timing() {
 
 #[test]
 fn should_omit_decode_latency_when_no_token_forward_was_recorded() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -147,9 +129,6 @@ fn should_omit_decode_latency_when_no_token_forward_was_recorded() {
 
 #[test]
 fn should_serialize_process_io_as_an_all_or_unavailable_pair() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let performance_attribution_json = serialize_generation_report(
         PerformanceAttribution::enabled(),
         PerformanceAttributionOutcome::Success,
@@ -176,9 +155,6 @@ fn should_serialize_process_io_as_an_all_or_unavailable_pair() {
 
 #[test]
 fn should_finish_cancelled_generation_process_io_from_the_final_sample() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let initial_process_io =
             crate::performance_attribution::macos_process_io::MacosProcessIoSnapshot::from_cumulative_bytes(10_000, 4_000);
     let final_process_io = crate::performance_attribution::macos_process_io::MacosProcessIoSnapshot::from_cumulative_bytes(90_000, 14_000);
@@ -199,9 +175,6 @@ fn should_finish_cancelled_generation_process_io_from_the_final_sample() {
 
 #[test]
 fn should_keep_the_cancelled_outcome_independent_from_process_io_availability() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A cancelled request must reach the same serialization path as a completed
     // one, so its I/O fields obey the identical all-or-unavailable contract
     // instead of being dropped by an early return.
@@ -230,9 +203,6 @@ fn should_keep_the_cancelled_outcome_independent_from_process_io_availability() 
 
 #[test]
 fn should_exclude_outer_diagnostic_spans_from_attributed_elapsed_time() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_completed_operation(
         PerformanceOperation::PromptPrefillAdvanceSpan,

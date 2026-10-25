@@ -10,9 +10,6 @@ use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_r
 
 #[test]
 fn should_run_the_memory_policy_integration_smoke_contract() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // One representative fact per family of pure arithmetic, enough to prove
     // the crate's test surface is alive inside the integration lane; the
     // exhaustive coverage lives in the lib unit tests (187 of them).

@@ -44,9 +44,6 @@ fn candidate_plan(complete_layer_targets: Vec<usize>, ceiling_bytes: u64) -> Exp
 
 #[test]
 fn should_demote_every_pinned_layer_when_the_reclamation_exceeds_all_pins() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let request_residency =
         RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1, 2], 120));
@@ -71,9 +68,6 @@ fn should_demote_every_pinned_layer_when_the_reclamation_exceeds_all_pins() {
 
 #[test]
 fn should_leave_the_contract_unchanged_when_nothing_must_yield() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1], 80));
 
@@ -88,9 +82,6 @@ fn should_leave_the_contract_unchanged_when_nothing_must_yield() {
 
 #[test]
 fn should_never_reseat_a_streamed_layer_when_pinned_claims_exhaust_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     // Pins claim 80 of an 80-byte ceiling, leaving zero headroom for layer 2.
     let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0, 1], 80));
@@ -109,9 +100,6 @@ fn should_never_reseat_a_streamed_layer_when_pinned_claims_exhaust_the_ceiling()
 
 #[test]
 fn should_admit_a_streamed_layer_at_the_exact_headroom_boundary_only() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     // One pin claims 40 of 80, leaving exactly one 40-byte complete layer of headroom.
     let request_residency = RequestExpertResidency::open_prefill(&candidate_plan(vec![0], 80));
@@ -134,9 +122,6 @@ fn should_admit_a_streamed_layer_at_the_exact_headroom_boundary_only() {
 
 #[test]
 fn should_floor_a_refreshed_ceiling_at_payload_already_resident() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         retained_complete_layer_ceiling_after_prefill_budget_refresh(30, 40),
         40,
@@ -157,9 +142,6 @@ fn should_floor_a_refreshed_ceiling_at_payload_already_resident() {
 
 #[test]
 fn should_discard_the_prefill_contract_for_generation_phases() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
     let candidate = candidate_plan(vec![0], 80);
 
@@ -184,9 +166,6 @@ fn should_discard_the_prefill_contract_for_generation_phases() {
 
 #[test]
 fn should_shrink_but_never_expand_an_open_prefill_contract() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(3);
 
     let (opened_residency, _) = publish_request_stable_residency_plan(
@@ -267,9 +246,6 @@ fn streamed_target_count(plan: &ExpertResidencyPlan) -> usize {
 
 #[test]
 fn should_keep_authorizing_new_retention_until_every_streamed_layer_is_seated() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The 2026-10-24 flight: a multi-chunk request's retention allowance read
     // zero on every chunk after the first while two thirds of the paid ceiling
     // sat unused, because nothing pinned the allowance to the unseated target.
@@ -378,9 +354,6 @@ fn should_keep_authorizing_new_retention_until_every_streamed_layer_is_seated() 
 
 #[test]
 fn should_count_only_actually_resident_complete_layers_as_seated() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The 2026-10-24 flight logged pinned_complete_layer_count=34 beside
     // current_residency_count=9: the contract's pin count (intent) was
     // published as if it were occupancy. The seated count must come from the
@@ -419,9 +392,6 @@ fn should_count_only_actually_resident_complete_layers_as_seated() {
 
 #[test]
 fn should_count_only_seated_complete_pins_in_expected_preserved_bytes() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // expected_preserved_bytes feeds the utilization telemetry, so it must
     // count exactly the complete-layer payload preserved by the plan. Warm
     // partial tables (elastic routed experts) are retention too, but they are
@@ -460,9 +430,6 @@ fn should_count_only_seated_complete_pins_in_expected_preserved_bytes() {
 
 #[test]
 fn should_never_grow_the_streamed_layer_count_across_chunks_of_one_request() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // With a constant budget, seating progress must never plan MORE streamed
     // layers than the previous chunk planned. The count is structurally
     // stable — a seated streamed layer keeps its idempotent adopt-on-read
@@ -531,9 +498,6 @@ pub(super) fn four_layer_candidate(
 
 #[test]
 fn should_not_claim_pinned_layers_beyond_the_composed_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The 2026-10-23 under-utilization flight: 34 pins claimed
     // 29,091,692,544 bytes against a 28,938,405,632-byte ceiling. Pins
     // frozen at request open must not keep claiming past a ceiling that
@@ -569,9 +533,6 @@ fn should_not_claim_pinned_layers_beyond_the_composed_ceiling() {
 
 #[test]
 fn should_keep_a_seated_pinned_layer_claimed_even_when_unseated_pins_cannot_fit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A seated pin's bytes are already resident: its claim always holds, and
     // only the unseated pins compete for whatever ceiling remains.
     let geometries = uniform_geometry(4);
@@ -607,9 +568,6 @@ fn should_keep_a_seated_pinned_layer_claimed_even_when_unseated_pins_cannot_fit(
 
 #[test]
 fn should_demote_only_the_tail_pin_when_one_claim_misses_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Boundary: three pins claim exactly 120 of 120. All fit; none demotes.
     let geometries = uniform_geometry(4);
     let request_residency =
@@ -636,9 +594,6 @@ fn should_demote_only_the_tail_pin_when_one_claim_misses_the_ceiling() {
 
 #[test]
 fn should_keep_planner_targets_beyond_the_contract_span_instead_of_truncating() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A candidate plan longer than the opened contract must never be
     // truncated down to the contract's span: layers beyond the roles keep
     // the planner's disposition for them. Truncating dropped those layers'
