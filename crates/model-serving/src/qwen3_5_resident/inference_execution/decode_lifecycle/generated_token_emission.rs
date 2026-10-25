@@ -33,7 +33,7 @@ impl Qwen3_5EngineState {
         active_request.generated_token_count = active_request
             .generated_token_count
             .checked_add(1)
-            .ok_or_else(|| super::fatal_engine_error("generated-token counter overflowed"))?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generated_token_counter_overflowed_error)?;
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::GeneratedTokenCount, 1);
@@ -60,9 +60,9 @@ impl Qwen3_5EngineState {
             .map(|completed_forward_memory| {
                 let mlx_memory_snapshot = &completed_forward_memory.mlx_memory_snapshot;
                 let mlx_active_memory_bytes =
-                    u64::try_from(mlx_memory_snapshot.active_memory_bytes()).map_err(|_| {
-                        super::fatal_engine_error("MLX active memory bytes exceed the u64 range")
-                    })?;
+                    u64::try_from(mlx_memory_snapshot.active_memory_bytes()).map_err(
+                        super::super::generation_session_lifecycle::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error,
+                    )?;
                 let active_memory_breakdown = model.active_memory_breakdown(
                     &active_request.request_decoder_state,
                     0,
@@ -77,15 +77,11 @@ impl Qwen3_5EngineState {
                     crate::memory::telemetry::MlxMemoryTelemetry::new(
                         mlx_active_memory_bytes,
                         u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(
-                            |_| {
-                                super::fatal_engine_error(
-                                    "MLX allocator-cache memory bytes exceed the u64 range",
-                                )
-                            },
+                            super::super::generation_session_lifecycle::generation_error_constructors::mlx_allocator_cache_memory_bytes_exceed_u64_range_error,
                         )?,
-                        u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(|_| {
-                            super::fatal_engine_error("MLX peak memory bytes exceed the u64 range")
-                        })?,
+                        u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
+                            super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error,
+                        )?,
                         active_memory_breakdown,
                     )
                     .with_expert_residency_telemetry(

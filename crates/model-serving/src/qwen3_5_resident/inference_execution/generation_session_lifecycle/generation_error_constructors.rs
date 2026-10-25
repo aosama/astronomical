@@ -90,6 +90,11 @@ pub(in crate::qwen3_5_resident::inference_execution) fn prompt_cache_publication
     super::fatal_engine_error("prompt-cache publication workspace bytes overflowed")
 }
 
+pub(in crate::qwen3_5_resident::inference_execution) fn generated_token_counter_overflowed_error()
+-> InferenceEngineError {
+    super::fatal_engine_error("generated-token counter overflowed")
+}
+
 #[cfg(test)]
 #[path = "generation_error_constructors_tests.rs"]
 mod generation_error_constructors_tests;

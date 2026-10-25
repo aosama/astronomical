@@ -19,7 +19,7 @@ use super::completed_forward_memory::{
 use super::generated_token_emission;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 impl Qwen3_5EngineState {
-    pub(super) fn advance_generation(
+    pub(in crate::qwen3_5_resident::inference_execution) fn advance_generation(
         &mut self,
         request_id: RequestId,
     ) -> Result<GeneratedToken, InferenceEngineError> {
@@ -93,19 +93,20 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
             let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry()?;
             // The telemetry carries the residency derived from its own reconciled
             // breakdown, so the announced claim and snapshot describe one instant
             // (issue #337).
-            let expert_residency = mlx_memory_telemetry
+            let expert_residency = match mlx_memory_telemetry
                 .as_ref()
                 .and_then(|telemetry| telemetry.expert_residency_telemetry())
-                .unwrap_or_else(|| {
-                    model.expert_residency_telemetry_for_breakdown(
-                        &crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
-                    )
-                });
+            {
+                Some(expert_residency_telemetry) => expert_residency_telemetry,
+                None => model.expert_residency_telemetry_for_breakdown(
+                    &crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
+                ),
+            };
             return Ok(ActiveRequestAdvance::Continue(
                 crate::GeneratedToken::GenerationPreparationStarted {
                     total_layer_count: expert_residency.total_layer_count,
@@ -130,7 +131,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
             let forced_generated_token = active_request
                 .performance_attribution
                 .measure_operation(
@@ -152,9 +153,10 @@ impl Qwen3_5EngineState {
                 Some(pending_generated_token) => {
                     // Final prefill already produced this token; report a truthful
                     // zero rather than attributing later output handling to decode.
-                    if active_request.generated_token_count == 0
-                        && active_request.first_decode_forward_elapsed_millis.is_none()
-                    {
+                    if super::decode_step_decisions::pending_successor_reports_zero_first_decode_time(
+                        active_request.generated_token_count,
+                        active_request.first_decode_forward_elapsed_millis,
+                    ) {
                         active_request.first_decode_forward_elapsed_millis = Some(0);
                     }
                     pending_generated_token
@@ -177,9 +179,10 @@ impl Qwen3_5EngineState {
                         admitted_baseline.retained_expert_payload_bytes;
                     let streamed_expert_page_bytes_before_growth =
                         admitted_baseline.streamed_expert_page_bytes;
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
+                    let model = self
+                        .model
+                        .as_ref()
+                        .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
                     // This log is the first-token decode seam after prompt restore.
                     tracing::info!(
                         request_id = request_id.value(),
@@ -246,7 +249,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
             let completed_forward_memory = if self.adaptive_ram_growth_guard_enabled {
                 Some(capture_completed_forward_memory_observation(model)?)
             } else {
@@ -279,7 +282,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         // Prefetch samples the successor before this token is accepted. A live
         // mask must see the commit first or Juliet/Romeo prefixes stay allowed.
         let mut generated_token_emission = if active_request.structured_generation.is_some() {
