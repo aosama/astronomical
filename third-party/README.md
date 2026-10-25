@@ -172,14 +172,14 @@ To bump a pinned dependency:
    A broad `cargo update` can silently re-resolve that edge onto the syn 2
    entry already in the graph and fail deep inside bindgen; a crate bump
    that turns the edge must set it back.
- 5. Run the offline lanes, then invoke each real-model acceptance Cargo
+ 5. Run the integration lanes, then invoke each real-model acceptance Cargo
    command directly with `--test-threads=1` (GPU journeys are never parallel).
 6. Prove performance parity for the `resident_sparse_moe` registry model
    with the performance-throughput journeys and compare against the recorded
    band in `apps/inference-worker/tests/performance_throughput/throughput-history.jsonl`.
 7. Update this registry and the repo discovery guide, then commit
    after `cargo fmt --all -- --check` and
-   `cargo test-offline-and-rest` pass.
+   `cargo test-integration-and-rest` pass.
 
 ## Bindgen headers and the C surface diff
 
@@ -248,5 +248,5 @@ it first. Offline verification afterwards needs no network and no model
 weights:
 
 ```bash
-cargo test -p astronomical-runtime-integration --test offline_tests
+cargo test -p astronomical-runtime-integration --test integration_tests
 ```

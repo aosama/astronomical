@@ -8,7 +8,7 @@
 //! process-wide and one-way: once the first denied test applies it, every
 //! later socket attempt in that test binary fails. On other platforms the
 //! harness defers to platform sandboxing — the CI Linux job already runs the
-//! offline suite under `unshare -rn`, which removes the network at the kernel
+//! integration lane under `unshare -rn`, which removes the network at the kernel
 //! level.
 //!
 //! Denial is deliberately a separate opt-in macro pair
@@ -98,7 +98,7 @@ mod seatbelt {
 #[cfg(not(target_os = "macos"))]
 mod seatbelt {
     pub(super) fn platform_apply() -> Result<(), String> {
-        // Linux CI removes the network for the offline suite with
+        // Linux CI removes the network for the integration lane with
         // `unshare -rn`; other platforms have no harness-level mechanism yet,
         // and an absent mechanism must not masquerade as an applied denial.
         Ok(())

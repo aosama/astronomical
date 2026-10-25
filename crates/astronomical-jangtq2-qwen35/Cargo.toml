@@ -7,6 +7,14 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+# Unit tests stay in `src/` beside the code they pin — inline `mod tests`
+# blocks plus the cross-module golden-vector contract in
+# `src/golden_vector_tests.rs` — and need no graphics processor. Every
+# graphics-processor contract and measurement test lives under
+# tests/direct_mlx/ behind tests/direct_mlx.rs. `autotests = false` keeps
+# stray .rs files under tests/ from auto-discovering as extra binaries.
+autotests = false
+
 [lints]
 workspace = true
 
@@ -15,7 +23,7 @@ default = []
 # The graphics-processor worlds: the Metal codebook decode kernels, the fused
 # gathered projection kernel, and their serial measurement tests. The pure
 # format contract (entry parsing, codebook math, Hadamard rotation, on-disk
-# tensor inventory, golden vectors) builds and tests in the offline lane
+# tensor inventory, golden vectors) builds and tests in the integration lane
 # without any of this, so a contract change never rebuilds the graphics-
 # processor world.
 direct-mlx = ["dep:astronomical-runtime-integration", "dep:mlx-c-rust", "dep:astronomical-mlx-c-fork"]
@@ -30,3 +38,11 @@ thiserror.workspace = true
 
 [dev-dependencies]
 serial_test.workspace = true
+
+# The graphics-processor contract and measurement tests: they need the Metal
+# decode kernels, so the target only builds with the direct-mlx feature and
+# never enters the default integration lane.
+[[test]]
+name = "direct_mlx"
+path = "tests/direct_mlx.rs"
+required-features = ["direct-mlx"]

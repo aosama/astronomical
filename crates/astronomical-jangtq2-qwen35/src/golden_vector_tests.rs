@@ -1,6 +1,6 @@
 //! Golden-vector tests against the reference jangtq2 implementation.
 //!
-//! The fixture (`tests/golden_reference_vectors.json`) was produced by
+//! The fixture (`src/golden_reference_vectors.json`) was produced by
 //! running the reference `format.py` under its own MLX environment:
 //! codebook tables, packed words, a Hadamard-32 transform, and two complete
 //! encode-then-dequant matrices. Regenerating the fixture requires that
@@ -11,8 +11,8 @@
 
 use serde_json::Value;
 
-use super::super::codebook;
-use super::super::hadamard32;
+use crate::codebook;
+use crate::hadamard32;
 
 fn golden_vectors() -> Value {
     serde_json::from_str(include_str!("golden_reference_vectors.json"))

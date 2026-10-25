@@ -9,13 +9,15 @@
 //! page shape, the pair it replaces on the decode path. Every test is
 //! `#[serial]` because MLX graphics-processor tests never run in parallel.
 
-use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;
 
-use super::super::codebook;
-use super::super::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
-use super::super::mlx_decode;
+use astronomical_jangtq2_qwen35::codebook;
+use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
+use astronomical_jangtq2_qwen35::mlx_decode;
+
+use super::support::contract_runtime;
 
 const TWO_BIT_WIDTH: u32 = 2;
 const THREE_BIT_WIDTH: u32 = 3;
@@ -23,8 +25,8 @@ const FOUR_BIT_WIDTH: u32 = 4;
 /// Real top-8 routing and gate/up input width of the 122B bundle. The row
 /// count is a quarter of the real 1024 so the materializing reference decode
 /// (about four full-width uint32 temporaries per projection) fits the
-/// 512 MB limit every direct-MLX test in this process shares; the kernel's
-/// per-row work is identical at any row count.
+/// shared contract memory limit in `support`; the kernel's per-row work is
+/// identical at any row count.
 const TOP_K_EXPERT_COUNT: usize = 8;
 const GATE_UP_OUTPUT_ROWS: usize = 256;
 const GATE_UP_INPUT_WIDTH: usize = 3072;
@@ -33,17 +35,6 @@ const FLOAT32_RELATIVE_TOLERANCE: f64 = 1e-4;
 /// bfloat16 weights in the materializing path carry ~3 significant digits;
 /// the fused path keeps float32 levels, so the two differ at that scale.
 const BFLOAT16_RELATIVE_TOLERANCE: f64 = 2.5e-2;
-
-/// The memory limit every direct-MLX unit test in this crate initializes
-/// with: the runtime configures its limits once per process and refuses a
-/// different limit afterwards, so a test file cannot choose its own.
-fn test_runtime() -> MlxRuntime {
-    MlxRuntime::initialize(
-        MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
-            .expect("the fused projection test memory limits should be valid"),
-    )
-    .expect("the direct MLX runtime should initialize")
-}
 
 /// Deterministic splitmix64 words so every run multiplies the same codes.
 fn deterministic_packed_words(seed: u64, word_count: usize) -> Vec<u32> {
@@ -195,7 +186,7 @@ fn run_host_reference_contract(
     per_assignment_rows: bool,
     context: &str,
 ) {
-    let runtime = test_runtime();
+    let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
         .expect("the fused projection kernel should compile");
     let fixture = build_fixture(&runtime, 5, 64, input_width, bit_width);
@@ -308,7 +299,7 @@ fn should_project_a_single_assignment_route() {
 #[test]
 #[serial]
 fn should_match_materializing_decode_and_gather_matmul_on_a_top_k_page() {
-    let runtime = test_runtime();
+    let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
         .expect("the fused projection kernel should compile");
     let fixture = build_fixture(
@@ -405,7 +396,7 @@ fn should_match_materializing_decode_and_gather_matmul_on_a_top_k_page() {
 #[test]
 #[serial]
 fn should_reject_an_unsupported_bit_width() {
-    let runtime = test_runtime();
+    let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
         .expect("the fused projection kernel should compile");
     let fixture = build_fixture(&runtime, 2, 32, 64, TWO_BIT_WIDTH);
@@ -433,7 +424,7 @@ fn should_reject_an_unsupported_bit_width() {
 #[test]
 #[serial]
 fn should_reject_activations_whose_width_disagrees_with_the_packed_rows() {
-    let runtime = test_runtime();
+    let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
         .expect("the fused projection kernel should compile");
     let fixture = build_fixture(&runtime, 2, 32, 64, TWO_BIT_WIDTH);
@@ -457,7 +448,7 @@ fn should_reject_activations_whose_width_disagrees_with_the_packed_rows() {
 #[test]
 #[serial]
 fn should_reject_activation_row_counts_that_match_neither_one_nor_the_assignment_count() {
-    let runtime = test_runtime();
+    let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
         .expect("the fused projection kernel should compile");
     let fixture = build_fixture(&runtime, 2, 32, 64, TWO_BIT_WIDTH);
@@ -482,7 +473,7 @@ fn should_reject_activation_row_counts_that_match_neither_one_nor_the_assignment
 #[test]
 #[serial]
 fn should_reject_floating_point_expert_indices() {
-    let runtime = test_runtime();
+    let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
         .expect("the fused projection kernel should compile");
     let fixture = build_fixture(&runtime, 2, 32, 64, TWO_BIT_WIDTH);

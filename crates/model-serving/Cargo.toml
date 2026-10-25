@@ -26,7 +26,7 @@ astronomical-ipc-protocol = { path = "../ipc-protocol" }
 astronomical-memory-policy = { path = "../astronomical-memory-policy" }
 # The jangtq2 weight family as its own crate (issue #1427): format contract,
 # codebook math, Hadamard rotation, Metal page decoder, fused gathered
-# projection kernel. The pure contract builds in the offline lane; this edge
+# projection kernel. The pure contract builds in the integration lane; this edge
 # is one way (the family never depends back on the serving crate, enforced by
 # `cargo xtask check-architecture`), and the Qwen3.5 streaming engine keeps
 # the serving integration (page loading, slot writes, dispatch) here.
@@ -37,7 +37,7 @@ astronomical-jangtq2-qwen35 = { path = "../astronomical-jangtq2-qwen35" }
 # and MLX bindings, so the dependency direction stays quantization <-
 # model-serving and the quantization crate never learns about an engine.
 # Optional because only the direct-MLX probe uses it in production code;
-# the offline artifact round-trip test reaches it as a dev-dependency.
+# the integration artifact round-trip test reaches it as a dev-dependency.
 astronomical-quantization = { path = "../quantization", optional = true }
 astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-c-rust = { workspace = true, optional = true }

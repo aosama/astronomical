@@ -25,14 +25,14 @@ struct ForbiddenDependencyRule {
 /// The memory policy crate must stay free of the MLX binding crate: pulling
 /// the graphics-processor bindings in would force the policy crate to
 /// rebuild the graphics-processor world and drag the serving crate's
-/// graphics-processor tests into the offline lane, defeating the extraction
+/// graphics-processor tests into the integration lane, defeating the extraction
 /// the crate exists for.
 const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-bindings",
         source_crate: "astronomical-memory-policy",
         forbidden_crate: "mlx-c-rust",
-        rationale: "the memory policy crate must build and test in the offline lane without ever pulling in the serving crate or its graphics-processor tests",
+        rationale: "the memory policy crate must build and test in the integration lane without ever pulling in the serving crate or its graphics-processor tests",
     },
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-fork-bindings",

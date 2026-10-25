@@ -34,16 +34,17 @@ warnings = "deny"
 # a silent test-name filter, and fails the pre-push hook. The string form
 # merges by replacement, so a nested worktree runs each alias exactly once.
 #
-# Lane vocabulary (issue #1208): "offline" names the property — sealed and
-# deterministic, no real network beyond localhost, no real model artifacts,
-# everything scripted. Loopback and Unix Domain Socket inter-process
-# communication are local, not network, so they stay inside the property:
-# the macOS seatbelt profile and the Linux network-namespace job enforce
-# exactly that boundary. The offline lane runs each package's offline_tests
-# binary AND its beside-source lib unit tests (--lib); the property-named
-# aliases from before the vocabulary campaign were retired with the
-# campaign's final batch.
-# test-offline: every package's offline_tests binary plus lib unit tests.
+# Lane vocabulary (issue #1208): the "integration" lane is the test kind; its
+# tests are sealed and deterministic — no real network beyond localhost, no
+# real model artifacts, everything scripted. "Offline" survives only as the
+# no-network guarantee those tests carry, enforced below. Loopback and Unix
+# Domain Socket inter-process communication are local, not network, so they
+# stay inside the property: the macOS seatbelt profile and the Linux
+# network-namespace job enforce exactly that boundary. The integration lane
+# runs each package's integration_tests binary AND its beside-source lib unit
+# tests (--lib); the property-named aliases from before the vocabulary
+# campaign were retired with the campaign's final batch.
+# test-integration: every package's integration_tests binary plus lib unit tests.
 # test-test-harness-fixtures: the shared fixture registry and leaf-id
 # contracts, with the test-fixtures feature enabled.
 # test-rest-api: the REST contract and daemon rest_api_tests binaries.
@@ -54,27 +55,27 @@ warnings = "deny"
 # matching `cargo build --bin` command if the build was skipped.
 # `cargo xtask test-run --package astronomical-e2e --test e2e
 # [--configuration PATH]` instead builds and supplies exact executables.
-# test-app-builder: the macOS app-builder packaging journey as an offline
+# test-app-builder: the macOS app-builder packaging journey as an
 # integration test — a sandboxed repository copy runs the real
 # scripts/internal/build-macos-app.sh with fixture-bin tool shims on PATH,
 # and typed assertions read the produced bundle through plutil and the shim
 # argv logs. macOS-only (the whole file is target_os = "macos" gated); it
 # runs in CI inside the required macOS offline verification check, so drift
 # fails the lane instead of rotting until release day.
-# test-offline-and-rest: both offline-property lanes together; run this
+# test-integration-and-rest: both lanes together; run this
 # before committing.
 # Memory-policy memory-equation and reserve compile-time contracts: run
 # `cargo test -p astronomical-memory-policy` to include unit tests and doctests.
-test-offline = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test offline_tests"
+test-integration = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test integration_tests"
 test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures --lib"
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
-test-app-builder = "test -p xtask --test offline_app_builder_journeys"
-test-offline-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-rest-contract --lib --test offline_tests --test rest_api_tests"
+test-app-builder = "test -p xtask --test integration_app_builder_journeys"
+test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-rest-contract --lib --test integration_tests --test rest_api_tests"
 # Quantization lanes (the OptiQ port in crates/quantization). The crate's
-# unit tests and offline journeys (allocator parity against the Python
+# unit tests and integration journeys (allocator parity against the Python
 # reference, taxonomy, calibration, artifact round trips) ride in the
-# offline aliases above. These two aliases cover what needs a Metal device.
+# integration aliases above. These two aliases cover what needs a Metal device.
 # test-quantization-direct-mlx: the GPU encoder against the pure reference
 # encoder and the shard-wise requantizer on a synthetic two-shard source;
 # seconds, no model artifacts, serial because MLX tests never parallelize.
@@ -163,13 +164,13 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # "resident"; `cargo xtask test-run --package astronomical-acceptance
 # --features serving-acceptance --test chat_serving --release --filter
 # live_ceiling_lowering_rest --ignored`.
-# Request-demotion re-promotion worker tests (offline, scripted engines): a
+# Request-demotion re-promotion worker tests (integration, scripted engines): a
 # worker demoted by one request returns to the resident engine for a strictly
 # smaller request once complete residency plus that request's decoder state
 # fits the effective ceiling, and stays streaming for a smaller request that
 # still cannot run resident;
 # `cargo test -p astronomical-model-serving --features direct-mlx --test
-# offline_tests resident_promotion`.
+# integration_tests resident_promotion`.
 xtask = "run -p xtask --"
 # verify: compile the whole workspace across ALL targets (libs, tests,
 # examples, benches) without running anything. This is the pre-push gate —
@@ -266,7 +267,7 @@ test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-a
 # installed jangtq2 bundle against real shard headers, and the complete-layer
 # page-peak reservation guard. Append --configuration PATH containing the
 # selected model_directory; the tests are ignored by default so
-# every offline lane runs without any model artifact. The lane builds the
+# every integration lane runs without any model artifact. The lane builds the
 # direct-mlx library test binary (the tests themselves need no graphics
 # processor) so it shares an artifact variant with the other jangtq2 lanes
 # instead of adding a default-feature test binary to the local edit loop.
@@ -286,7 +287,15 @@ test-jangtq2-plan = "run -p xtask -- test-run --package astronomical-model-servi
 # so the optimized build is part of the alias. The `throughput` filter
 # matches both the decode-throughput tests and the prefill prototype tests.
 # Serial by rule: graphics-processor tests never run in parallel.
-test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib throughput -- --ignored --nocapture --test-threads=1"
+test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --test direct_mlx throughput -- --ignored --nocapture --test-threads=1"
+# test-jangtq2-direct-mlx: the jangtq2 graphics-processor correctness
+# contracts (codebook decode, Hadamard-32 activation rotation, fused gathered
+# projection) plus the crate's library unit tests built with the direct-mlx
+# feature; seconds, no model artifacts. The ignored throughput measurements
+# stay out: they initialize a larger memory limit than these contracts and
+# the runtime accepts one limit per process, so they run only through
+# test-jangtq2-decode-throughput.
+test-jangtq2-direct-mlx = "test --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"
 # test-jangtq2-serving-throughput: the top tier of the jangtq2 performance
 # pyramid — serving prompt-processing and decode throughput of the real 122B
 # bundle over the daemon IPC boundary (warmup 500/50, measured 10,000/500,

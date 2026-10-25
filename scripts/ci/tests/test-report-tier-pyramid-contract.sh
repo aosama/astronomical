@@ -25,7 +25,7 @@ trap cleanup 0
 write_unit_fixture() {
     fixture_root="$1"
     mkdir -p "${fixture_root}/crates/example/src" \
-        "${fixture_root}/crates/example/tests/offline" \
+        "${fixture_root}/crates/example/tests/integration" \
         "${fixture_root}/crates/example/tests/support" \
         "${fixture_root}/verification/e2e/tests"
     cat > "${fixture_root}/crates/example/src/example_tests.rs" <<'EOF'
@@ -39,7 +39,7 @@ async fn second_unit_case() {
     assert_eq!(2 + 2, 4);
 }
 EOF
-    cat > "${fixture_root}/crates/example/tests/offline/journeys.rs" <<'EOF'
+    cat > "${fixture_root}/crates/example/tests/integration/journeys.rs" <<'EOF'
 #[test]
 fn first_integration_case() {
     assert_eq!(1, 1);
@@ -125,7 +125,7 @@ main() {
     }
 
     printf '%s\n' '[tier-pyramid-contract] case=fails-naming-the-drifted-tier status=start'
-    cat > "${fixture_root}/crates/example/tests/offline/more_journeys.rs" <<'EOF'
+    cat > "${fixture_root}/crates/example/tests/integration/more_journeys.rs" <<'EOF'
 #[test]
 fn third_integration_case() {
     assert_eq!(1, 1);
