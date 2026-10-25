@@ -49,8 +49,9 @@ pub struct MlxRamBudgetSnapshot {
 pub struct MlxRamBudgetMeasurement {
     /// Execution class whose activation high-water this sample may raise.
     pub phase: MemoryPhase,
-    /// Context size used to choose a monotonic coarse learning bucket.
-    pub context_token_count: u64,
+    /// Tokens this forward processed. It keys prefill activation learning and
+    /// sizes the per-token sequence state the forward itself appended.
+    pub forward_token_count: u64,
     /// Measured request-owned persistent and transient bytes above model core.
     pub measured_context_and_activation_bytes: u64,
     /// Transient-only high-water independently learned by forward admission.

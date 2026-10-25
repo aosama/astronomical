@@ -109,10 +109,7 @@ impl Qwen3_5EngineState {
             // sample, so a split-less telemetry here would overwrite the
             // load-complete split on the status the menu paints.
             .with_memory_ceiling_utilization(
-                model.memory_ceiling_utilization_for_breakdown(
-                    crate::MemoryPhase::Decode,
-                    0,
-                    1,
+                model.between_request_memory_ceiling_utilization_for_breakdown(
                     active_memory_bytes,
                     active_memory_breakdown,
                 ),

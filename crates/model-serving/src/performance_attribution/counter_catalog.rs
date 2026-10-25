@@ -127,16 +127,16 @@ pub enum PerformanceCounter {
     Jangtq2CodebookDecodedOutputByteCount,
     /// Candidate-policy demand inserts that replaced an occupied decode slot.
     DecodeExpertCacheSlotEvictionCount,
-    /// Resident prefill chunks halved because admission accepted the stable
-    /// footprint but rejected only the transient peak of the larger chunk.
-    ResidentPrefillTransientPeakChunkShrinkCount,
+    /// Complete-layer payload a prefill chunk read ahead of its route while
+    /// earlier layers computed on the graphics processor.
+    PrefillCompleteLayerPrefetchPayloadBytes,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
     /// Number of distinct counters the enabled report storage reserves.
-    pub const COUNT: usize = Self::ResidentPrefillTransientPeakChunkShrinkCount as usize + 1;
+    pub const COUNT: usize = Self::PrefillCompleteLayerPrefetchPayloadBytes as usize + 1;
     /// Every counter in declaration order, so report serialization can pair a
     /// counter with its stored value by position without an allocation.
     pub const ALL: [Self; Self::COUNT] = [
@@ -211,7 +211,7 @@ impl PerformanceCounter {
         Self::AdmissionReserveGlobalMaximumSourceCount,
         Self::Jangtq2CodebookDecodedOutputByteCount,
         Self::DecodeExpertCacheSlotEvictionCount,
-        Self::ResidentPrefillTransientPeakChunkShrinkCount,
+        Self::PrefillCompleteLayerPrefetchPayloadBytes,
     ];
 
     /// Stable report identifier for this counter.
@@ -370,8 +370,8 @@ impl PerformanceCounter {
                 "jangtq2_codebook_decoded_output_byte_count"
             }
             Self::DecodeExpertCacheSlotEvictionCount => "decode_expert_cache_slot_eviction_count",
-            Self::ResidentPrefillTransientPeakChunkShrinkCount => {
-                "resident_prefill_transient_peak_chunk_shrink_count"
+            Self::PrefillCompleteLayerPrefetchPayloadBytes => {
+                "prefill_complete_layer_prefetch_payload_bytes"
             }
         }
     }

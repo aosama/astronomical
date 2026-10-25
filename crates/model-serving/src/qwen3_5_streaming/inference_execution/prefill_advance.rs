@@ -267,6 +267,10 @@ impl Qwen3_5EngineState {
         // their previous parent, allowing restart to reproduce valid state.
         active_request.advance_position(prefill_token_count)?;
         active_request.prefill_cursor = prefill_end;
+        model.learn_context_state_payload(
+            active_request.next_position_tokens,
+            &active_request.request_decoder_state,
+        );
         // Retire the chunk tape. Reclaim the allocator cache only when it is
         // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunk_cleanup =
@@ -319,6 +323,7 @@ impl Qwen3_5EngineState {
             adaptive_ram_growth_context,
             should_retain_adaptive_ram_growth_observation,
             model,
+            active_request.request_context_extent(),
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             exact_temporary_workspace_bytes,

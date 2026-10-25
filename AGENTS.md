@@ -28,7 +28,7 @@
 
 ## Performance Instructions
 
-- A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable.
+- A performance measurement should send at least 10,000 tokens of input and acquire 500 output tokens; plus or minus 10 percent is acceptable. Exceptions can be made if the user specifies it explicitly.
 - A warmup run should be performed before the actual test; the desired warmup is 500 tokens of input and 50 tokens of output.
 - SSD Cache must be disabled during performance throughput tests and measurements.
 - Those performance throughput tests must run through a Rust optimized build.

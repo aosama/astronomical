@@ -81,3 +81,45 @@ fn should_cap_the_guard_floor_at_what_the_model_core_can_coexist_with() {
         1_000
     );
 }
+
+#[test]
+fn should_replace_the_static_three_layer_prefill_floor_with_the_diagnostic_floor() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+    let mut mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
+
+    mlx_ram_budget.set_diagnostic_prefill_activation_floor_bytes(1_241_335_884);
+
+    assert_eq!(
+        mlx_ram_budget.activation_headroom_bytes(MemoryPhase::Prefill, 2_048),
+        1_241_335_884
+    );
+}
+
+#[test]
+fn should_reserve_nothing_for_an_unobserved_prefill_when_the_diagnostic_floor_is_zero() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+    let mut mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
+
+    mlx_ram_budget.set_diagnostic_prefill_activation_floor_bytes(0);
+
+    assert_eq!(
+        mlx_ram_budget.adaptive_growth_unobserved_scope_transient_floor_bytes(
+            resident_prefill_context(2_048)
+        ),
+        0
+    );
+}
+
+#[test]
+fn should_keep_the_static_three_layer_prefill_floor_without_a_diagnostic_floor() {
+    astronomical_test_harness::ensure_network_denied()
+        .expect("network denial could not be applied");
+    let mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
+
+    assert_eq!(
+        mlx_ram_budget.activation_headroom_bytes(MemoryPhase::Prefill, 2_048),
+        FOUR_BIT_LARGEST_COMPLETE_EXPERT_LAYER_BYTES * 3
+    );
+}

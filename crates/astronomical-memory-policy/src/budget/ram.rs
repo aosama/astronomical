@@ -48,10 +48,10 @@ use crate::phase::MemoryPhase;
 /// (1 GB on the user-facing sticker scale, 2³⁰ bytes).
 pub const BOOTSTRAP_CONTEXT_WINDOW_RESERVE_BYTES: u64 = 1_073_741_824;
 
-/// Coarse token buckets used for high-water context-window learning.
+/// Width of the prefill activation learning buckets, in forwarded tokens.
 pub(crate) const CONTEXT_TOKEN_BUCKET_WIDTH: u64 = 1_024;
 
-/// Extra safety margin applied on top of measured context-window need.
+/// Extra safety margin applied on top of the projected and learned context need.
 const CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES: u64 = 64_000_000;
 
 use crate::budget::ram_values::{
@@ -65,10 +65,13 @@ pub struct MlxRamBudget {
     pub(super) mlx_active_memory_ceiling_bytes: u64,
     /// Startup-validated payload geometry for the currently loaded model.
     pub(super) model_geometry: MlxRamBudgetModelGeometry,
-    /// Conservative floor used until at least one real context measurement exists.
+    /// Conservative floor used only before any real context measurement exists.
     pub(super) bootstrap_context_window_reserve_bytes: u64,
-    /// High-water request workspace keyed by 1,024-token context buckets.
-    pub(super) measured_context_window_high_water_by_token_bucket: BTreeMap<u64, u64>,
+    /// High-water persistent bytes a forward left behind beyond the per-token
+    /// sequence state the geometry projects for its own tokens (fixed
+    /// recurrent state, allocator rounding). Independent of context length, so
+    /// it adds to the projection for any request size.
+    pub(super) measured_context_overhead_beyond_projection_high_water_bytes: u64,
     /// Phase-specific activation evidence. Decode keeps one scalar high-water;
     /// prefill evidence is keyed by 1,024-token context buckets so one large
     /// request's workspace does not size every later promise (issue #623
@@ -87,6 +90,11 @@ pub struct MlxRamBudget {
     /// prefill residency budget subtracts this so experts are never seated
     /// into the space the next chunk's decode needs back.
     pub(super) prefill_complete_layer_stream_slot_bytes: Option<u64>,
+    /// Diagnostic replacement for the static three-layer prefill activation
+    /// floor; `None` keeps the production floor. Exists so a worker can be
+    /// launched to measure whether learned activation evidence alone admits a
+    /// shape the static floor rejects, without rebuilding the policy.
+    pub(super) diagnostic_prefill_activation_floor_bytes: Option<u64>,
 }
 
 impl MlxRamBudget {
@@ -97,6 +105,15 @@ impl MlxRamBudget {
     /// per layer and never part of resident payload.
     pub fn set_prefill_complete_layer_stream_slot_bytes(&mut self, stream_slot_bytes: u64) {
         self.prefill_complete_layer_stream_slot_bytes = Some(stream_slot_bytes);
+    }
+
+    /// Replaces the static three-layer prefill activation floor for diagnosis.
+    pub fn set_diagnostic_prefill_activation_floor_bytes(
+        &mut self,
+        diagnostic_prefill_activation_floor_bytes: u64,
+    ) {
+        self.diagnostic_prefill_activation_floor_bytes =
+            Some(diagnostic_prefill_activation_floor_bytes);
     }
 
     /// The prefill streaming slot: the forward-time page peak when the family
@@ -131,10 +148,11 @@ impl MlxRamBudget {
             mlx_active_memory_ceiling_bytes,
             model_geometry,
             bootstrap_context_window_reserve_bytes,
-            measured_context_window_high_water_by_token_bucket: BTreeMap::new(),
+            measured_context_overhead_beyond_projection_high_water_bytes: 0,
             prefill_activation_high_water_by_token_bucket: BTreeMap::new(),
             decode_activation_headroom_bytes: 0,
             prefill_complete_layer_stream_slot_bytes: None,
+            diagnostic_prefill_activation_floor_bytes: None,
             has_prefill_activation_measurement: false,
             has_decode_activation_measurement: false,
             has_context_window_measurement: false,
@@ -192,10 +210,11 @@ impl MlxRamBudget {
 
     /// Context-window reserve for `context_token_count` tokens.
     ///
-    /// Before measurements: the larger of the 1 GB SI bootstrap and the
+    /// Before measurements: the larger of the 1 GB bootstrap and the
     /// geometry-projected sequence-state payload.
-    /// After measurements: conservative high-water by token bucket, plus a
-    /// geometry projection for any tokens beyond the highest measured bucket.
+    /// After measurements: the geometry projection for the whole context, plus
+    /// the learned high-water overhead beyond the projection, plus a fixed
+    /// safety buffer.
     #[must_use]
     pub fn context_window_reserve_bytes(&self, context_token_count: u64) -> u64 {
         let projected_sequence_state_bytes =
@@ -205,64 +224,44 @@ impl MlxRamBudget {
                 .bootstrap_context_window_reserve_bytes
                 .max(projected_sequence_state_bytes);
         }
-        let token_bucket = context_token_bucket(context_token_count);
-        // Prefer the highest evidence at or below the requested bucket. Context
-        // memory normally grows with position, so a smaller earlier observation
-        // must not override a larger known lower-bucket high-water.
-        let at_or_below_bucket_bytes = self
-            .measured_context_window_high_water_by_token_bucket
-            .range(..=token_bucket)
-            .map(|(_, measured_bytes)| *measured_bytes)
-            .max()
-            .unwrap_or(0);
-        let larger_bucket_floor_bytes = self
-            .measured_context_window_high_water_by_token_bucket
-            .range(token_bucket..)
-            .map(|(_, measured_bytes)| *measured_bytes)
-            .min()
-            .unwrap_or(0);
-        // If this process has measured only larger requests, reuse the smallest
-        // larger measurement rather than pretending the new smaller bucket has no
-        // cost. This is conservative until direct evidence for the bucket exists.
-        let learned_context_window_reserve_bytes = if at_or_below_bucket_bytes > 0 {
-            at_or_below_bucket_bytes
-        } else {
-            larger_bucket_floor_bytes
-        };
-        let measured_or_bootstrap_reserve_bytes =
-            learned_context_window_reserve_bytes.max(self.bootstrap_context_window_reserve_bytes);
-        let highest_measured_token_bucket = self
-            .measured_context_window_high_water_by_token_bucket
-            .keys()
-            .next_back()
-            .copied()
-            .unwrap_or(0);
-        let highest_measured_token_count =
-            highest_measured_token_bucket.saturating_add(1) * CONTEXT_TOKEN_BUCKET_WIDTH;
-        if context_token_count > highest_measured_token_count {
-            let unmeasured_token_count =
-                context_token_count.saturating_sub(highest_measured_token_count);
-            // The same geometry-projection floor that protects the
-            // within-range tail applies here: a learned measurement that
-            // disagrees with the sequence-state projection may not silently
-            // under-reserve context for the unmeasured span.
-            return measured_or_bootstrap_reserve_bytes
-                .saturating_add(
-                    unmeasured_token_count
-                        .saturating_mul(self.model_geometry.sequence_state_bytes_per_token),
-                )
-                .max(projected_sequence_state_bytes);
-        }
-        measured_or_bootstrap_reserve_bytes.max(projected_sequence_state_bytes)
+        // The projection is exact per-token state from the decoder cache
+        // layout, so it carries the length-dependent part; measurements only
+        // supply what the layout does not describe. The earlier design keyed
+        // whole-forward measurements by the forward's own token count but was
+        // queried by context length, so no measurement ever covered a context
+        // past one prefill chunk and the 1 GB bootstrap stayed forever. At a
+        // 21 GB ceiling that floor held about 0.9 GB more than a 5,242-token
+        // request needed, which was exactly what kept the last two complete
+        // expert layers out of decode residency.
+        projected_sequence_state_bytes
+            .saturating_add(self.measured_context_overhead_beyond_projection_high_water_bytes)
+            .saturating_add(CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES)
+    }
+
+    /// Learns context overhead from the request's exact decoder-state payload.
+    ///
+    /// The payload is read from live tensor shapes, so it includes what a
+    /// forward's peak-delta measurement cannot isolate: fixed recurrent and
+    /// convolution state allocated once per request, and attention slab
+    /// capacity rounded past the current position. Peak deltas subtract the
+    /// activation high-water and saturate to almost nothing, which left the
+    /// reserve short of the live context state by a few megabytes.
+    pub fn record_context_state_payload(
+        &mut self,
+        context_token_count: u64,
+        context_state_payload_bytes: u64,
+    ) {
+        self.has_context_window_measurement = true;
+        let projected_sequence_state_bytes =
+            context_token_count.saturating_mul(self.model_geometry.sequence_state_bytes_per_token);
+        self.measured_context_overhead_beyond_projection_high_water_bytes = self
+            .measured_context_overhead_beyond_projection_high_water_bytes
+            .max(context_state_payload_bytes.saturating_sub(projected_sequence_state_bytes));
     }
 
     /// Records one live observation and never lowers prior high-water evidence.
     pub fn record_measurement(&mut self, measurement: MlxRamBudgetMeasurement) {
-        // The fixed buffer absorbs measurement jitter and small untracked MLX
-        // bookkeeping. It is added before high-water comparison so every stored
-        // bucket is directly usable as a future reserve.
         self.has_context_window_measurement = true;
-        let token_bucket = context_token_bucket(measurement.context_token_count);
         // The forward sample includes both persistent context and transient
         // activation bytes. Activation has its own separately composed owner, so
         // subtract that evidence before learning context or the same workspace is
@@ -272,19 +271,22 @@ impl MlxRamBudget {
             .measured_context_and_activation_bytes
             .saturating_sub(measurement.observed_activation_headroom_bytes)
             .saturating_sub(measurement.exact_temporary_workspace_bytes);
-        let measured_with_buffer = measured_persistent_context_bytes
-            .saturating_add(CONTEXT_WINDOW_MEASUREMENT_SAFETY_BUFFER_BYTES);
-        self.measured_context_window_high_water_by_token_bucket
-            .entry(token_bucket)
-            .and_modify(|existing_high_water_bytes| {
-                *existing_high_water_bytes = (*existing_high_water_bytes).max(measured_with_buffer);
-            })
-            .or_insert(measured_with_buffer);
+        // Only the persistent bytes beyond this forward's own projected
+        // sequence state are learned; the projection already reserves the
+        // per-token part for every context length.
+        let projected_forward_sequence_state_bytes = measurement
+            .forward_token_count
+            .saturating_mul(self.model_geometry.sequence_state_bytes_per_token);
+        let measured_context_overhead_beyond_projection_bytes = measured_persistent_context_bytes
+            .saturating_sub(projected_forward_sequence_state_bytes);
+        self.measured_context_overhead_beyond_projection_high_water_bytes = self
+            .measured_context_overhead_beyond_projection_high_water_bytes
+            .max(measured_context_overhead_beyond_projection_bytes);
 
         match measurement.phase {
             MemoryPhase::Prefill => {
                 self.has_prefill_activation_measurement = true;
-                let token_bucket = context_token_bucket(measurement.context_token_count);
+                let token_bucket = context_token_bucket(measurement.forward_token_count);
                 self.prefill_activation_high_water_by_token_bucket
                     .entry(token_bucket)
                     .and_modify(|existing_high_water_bytes| {
@@ -367,15 +369,44 @@ impl MlxRamBudget {
         operation_token_count: u64,
         other_fixed_bytes: u64,
     ) -> MlxRamBudgetSnapshot {
+        self.plan_holding_live_context_state(
+            phase,
+            context_token_count,
+            operation_token_count,
+            other_fixed_bytes,
+            0,
+        )
+    }
+
+    /// [`Self::plan`] for an instant where decoder state outlives its request.
+    ///
+    /// A between-request sample plans the next request from a fresh context,
+    /// but a retained live prefix (kept for in-memory prefix adoption) still
+    /// holds its KV in active memory. Those bytes belong to the context owner,
+    /// so its reserve is at least the live payload. Without this floor the
+    /// reserve for a zero-token context undercounts the held prefix and the
+    /// published split reports a phantom owner overrun; the old permanent
+    /// 1 GB context floor hid that until the reserve became exact.
+    #[must_use]
+    pub fn plan_holding_live_context_state(
+        &self,
+        phase: MemoryPhase,
+        context_token_count: u64,
+        operation_token_count: u64,
+        other_fixed_bytes: u64,
+        live_context_state_payload_bytes: u64,
+    ) -> MlxRamBudgetSnapshot {
         // Idle refill happens after request arrays are released, so it needs no
         // live context reserve. Prefill/decode plans protect the next operation's
         // context even if the current allocator snapshot is temporarily lower.
-        let context_window_reserve_bytes = match phase {
+        let planned_context_window_reserve_bytes = match phase {
             MemoryPhase::Idle => 0,
             MemoryPhase::Prefill | MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
                 self.context_window_reserve_bytes(context_token_count)
             }
         };
+        let context_window_reserve_bytes =
+            planned_context_window_reserve_bytes.max(live_context_state_payload_bytes);
         let activation_headroom_bytes =
             self.activation_headroom_bytes(phase, operation_token_count);
         let complete_layer_stream_slot_bytes = match phase {

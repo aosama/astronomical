@@ -102,9 +102,11 @@ impl MlxRamBudget {
                 // measured first-chunk overshoot on that shape. Keep the
                 // learned high-water when it is larger.
                 reclamation::required_complete_residency_activation_headroom_bytes(
-                    self.model_geometry
-                        .largest_complete_expert_layer_bytes
-                        .saturating_mul(3),
+                    self.diagnostic_prefill_activation_floor_bytes.unwrap_or(
+                        self.model_geometry
+                            .largest_complete_expert_layer_bytes
+                            .saturating_mul(3),
+                    ),
                     self.learned_prefill_activation_headroom_bytes(operation_token_count),
                 )
             }

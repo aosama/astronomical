@@ -41,6 +41,21 @@ pub(in crate::qwen3_5_streaming) struct CompletedForwardMemoryObservation {
     pub(in crate::qwen3_5_streaming) mlx_memory_snapshot: MlxMemorySnapshot,
 }
 
+/// How much decoder context the active request owns when a forward completes.
+///
+/// The post-forward budget refresh reserves context for the request's whole
+/// sequence, not for the forward that just ran: a one-token decode forward
+/// would otherwise reserve one token of context while the request's KV cache
+/// holds thousands, letting the retained-expert ceiling grow into memory the
+/// live context already occupies.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::qwen3_5_streaming) struct RequestContextExtent {
+    /// Tokens the request's context spans once the next forward runs.
+    pub(in crate::qwen3_5_streaming) context_token_count: u64,
+    /// Exact payload of the request's live decoder state, read from tensor shapes.
+    pub(in crate::qwen3_5_streaming) live_context_state_payload_bytes: u64,
+}
+
 /// Captures the raw MLX snapshot at one instant.
 pub(in crate::qwen3_5_streaming) fn capture_completed_forward_memory_observation(
     model: &Qwen3_5Model,
@@ -64,6 +79,7 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     should_retain_adaptive_ram_growth_observation: bool,
     model: &Qwen3_5Model,
+    request_context_extent: RequestContextExtent,
     active_memory_bytes_before_growth: usize,
     retained_expert_payload_bytes_before_growth: u64,
     exact_temporary_workspace_bytes: usize,
@@ -123,6 +139,7 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
             adaptive_ram_growth_guard,
             adaptive_ram_growth_context,
             model,
+            request_context_extent,
             active_memory_bytes_before_growth,
             retained_expert_payload_bytes_before_growth,
             context_observed_transient_high_water_bytes,
@@ -143,6 +160,7 @@ pub(in crate::qwen3_5_streaming) fn record_completed_adaptive_ram_growth(
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     should_retain_adaptive_ram_growth_observation: bool,
     model: &Qwen3_5Model,
+    request_context_extent: RequestContextExtent,
     active_memory_bytes_before_growth: usize,
     retained_expert_payload_bytes_before_growth: u64,
     exact_temporary_workspace_bytes: usize,
@@ -157,6 +175,7 @@ pub(in crate::qwen3_5_streaming) fn record_completed_adaptive_ram_growth(
         adaptive_ram_growth_context,
         should_retain_adaptive_ram_growth_observation,
         model,
+        request_context_extent,
         active_memory_bytes_before_growth,
         retained_expert_payload_bytes_before_growth,
         exact_temporary_workspace_bytes,
@@ -170,6 +189,7 @@ fn record_composed_ram_budget_measurement(
     adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,
     model: &Qwen3_5Model,
+    request_context_extent: RequestContextExtent,
     active_memory_bytes_before_growth: usize,
     retained_expert_payload_bytes_before_growth: u64,
     observed_transient_high_water_bytes: usize,
@@ -193,7 +213,7 @@ fn record_composed_ram_budget_measurement(
         .mlx_ram_budget_mut()
         .record_measurement(MlxRamBudgetMeasurement {
             phase: mlx_ram_budget_phase,
-            context_token_count: u64::try_from(adaptive_ram_growth_context.forward_token_count())
+            forward_token_count: u64::try_from(adaptive_ram_growth_context.forward_token_count())
                 .unwrap_or(u64::MAX),
             measured_context_and_activation_bytes,
             observed_activation_headroom_bytes: u64::try_from(observed_transient_high_water_bytes)
@@ -206,12 +226,15 @@ fn record_composed_ram_budget_measurement(
     // the single-source split. Execution policy—not this numeric owner—decides
     // whether a mandatory page remains operation-local or transfers to retention.
     // The forward token count is this chunk's own operation size, so the
-    // activation reserve resolves at the operation scope (issue #644).
-    let retained_expert_budget = model.mlx_ram_budget().plan(
+    // activation reserve resolves at the operation scope (issue #644). The
+    // context reserve covers the request's whole sequence and never drops
+    // below the decoder state it already holds.
+    let retained_expert_budget = model.mlx_ram_budget().plan_holding_live_context_state(
         mlx_ram_budget_phase,
-        u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
+        request_context_extent.context_token_count,
         u64::try_from(adaptive_ram_growth_context.forward_token_count()).unwrap_or(u64::MAX),
         0,
+        request_context_extent.live_context_state_payload_bytes,
     );
     // The per-forward budget refresh floors at all resident expert payload,
     // warm tables included: learned reserve growth between forwards must not

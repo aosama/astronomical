@@ -156,6 +156,9 @@ pub(super) fn startup_configuration(
         configured_maximum_mlx_memory_bytes,
         performance_attribution_enabled: true,
         decode_expert_cache_policy: WorkerDecodeExpertCachePolicy::Baseline,
+        diagnostic_qwen3_5_engine_override:
+            astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
         logging_directory: temporary_directory.to_path_buf(),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,

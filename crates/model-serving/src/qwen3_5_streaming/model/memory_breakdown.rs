@@ -60,6 +60,33 @@ impl Qwen3_5Model {
         )
     }
 
+    /// Composes the split for a sample taken between requests.
+    ///
+    /// Plans the next request's decode budget from a fresh context while the
+    /// context owner keeps the retained live prefix it still holds; the
+    /// finalized breakdown's context term is exactly that prefix payload.
+    /// Planning against a zero-byte context instead would promise the retained
+    /// prefix's bytes to the next request a second time.
+    pub(crate) fn between_request_memory_ceiling_utilization_for_breakdown(
+        &self,
+        mlx_active_memory_bytes: u64,
+        finalized_active_breakdown: MlxActiveMemoryBreakdown,
+    ) -> MemoryCeilingUtilization {
+        MemoryCeilingUtilization::compose(
+            self.mlx_ram_budget
+                .borrow()
+                .plan_holding_live_context_state(
+                    crate::MemoryPhase::Decode,
+                    0,
+                    1,
+                    0,
+                    finalized_active_breakdown.context_state_payload_bytes,
+                ),
+            mlx_active_memory_bytes,
+            finalized_active_breakdown,
+        )
+    }
+
     /// Records why part of the MLX ceiling is unused at one decode step (issue #507).
     ///
     /// Only the step with the largest unused headroom is kept, and all terms are

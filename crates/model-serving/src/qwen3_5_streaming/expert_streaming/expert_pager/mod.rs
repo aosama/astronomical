@@ -1,10 +1,14 @@
 //! Rust-owned Qwen expert streaming and resident-promotion source metadata.
 
+mod complete_page_multiplication;
 mod expert_page_streaming;
 
 #[cfg(all(test, feature = "direct-mlx"))]
+mod complete_page_multiplication_tests;
+#[cfg(all(test, feature = "direct-mlx"))]
 mod expert_subset_tests;
 
+pub(crate) use complete_page_multiplication::codebook_page_multiplies_without_transient_decode;
 pub(crate) use expert_page_streaming::Qwen3_5ExpertStreamingRequestShape;
 
 use std::cell::Cell;

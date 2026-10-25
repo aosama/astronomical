@@ -64,22 +64,31 @@ impl Qwen3_5Model {
                 completion_roots.push(pending_route_array);
             }
         }
+        // Routes of seated layers multiplied on-device join the same wait so
+        // demand recording afterwards is a host copy, not another evaluation.
+        let deferred_expert_demand = self.deferred_expert_demand.borrow();
+        completion_roots.extend(deferred_expert_demand.pending_route_array_refs());
 
         // Attribute the blocking MLX evaluation boundary separately from graph
         // construction. With experimental solid-state-drive paging interval 0,
         // or any fully resident model, this single wait owns the entire
         // multi-layer multi-token tape, including first-use Metal compile and
         // any memory-pressure thrash.
+        let completion_root_count = completion_roots.len();
         let eval_started_at = std::time::Instant::now();
         performance_attribution.measure_operation(
             PerformanceOperation::PrefillStateGraphicsProcessorCompletionWait,
             |_performance_attribution| self.runtime.evaluate_arrays(&completion_roots),
         )?;
         let eval_elapsed = eval_started_at.elapsed();
+        drop(completion_roots);
+        drop(deferred_expert_demand);
+        drop(pending_route_observation);
+        self.record_deferred_expert_demand();
         if eval_elapsed > std::time::Duration::from_millis(500) {
             tracing::info!(
                 eval_elapsed_millis = eval_elapsed.as_millis(),
-                completion_root_count = completion_roots.len(),
+                completion_root_count,
                 "slow evaluate_arrays for paged forward"
             );
         }

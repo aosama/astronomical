@@ -105,9 +105,8 @@ pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_by
 // direct-MLX admission callers and the offline artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
 pub use astronomical_memory_policy::forward_admission::{
-    MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT, PagedForwardAdmissionDecision,
-    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection,
-    StreamingEngineRequirement, next_smaller_resident_prefill_chunk_token_count,
+    PagedForwardAdmissionDecision, ResidentForwardAdmissionDecision,
+    ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
 pub use astronomical_memory_policy::geometry_floor::geometry_safe_minimum_mlx_memory_ceiling_bytes;
 pub use astronomical_memory_policy::memory_equation::MemoryEquation;

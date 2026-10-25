@@ -1,6 +1,8 @@
 #[cfg(feature = "direct-mlx")]
 mod cached_plus_streamed_page_route;
 #[cfg(feature = "direct-mlx")]
+mod deferred_expert_demand;
+#[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
@@ -11,6 +13,10 @@ mod expert_retention_memory_pressure;
 pub(crate) mod expert_reuse;
 #[cfg(feature = "direct-mlx")]
 mod expert_storage_streaming;
+// Reads the next streamed layer while the graphics processor computes.
+pub(crate) mod prefill_complete_layer_prefetch;
+#[cfg(test)]
+mod prefill_complete_layer_prefetch_tests;
 #[cfg(feature = "direct-mlx")]
 mod request_expert_storage_read_tally;
 #[cfg(feature = "direct-mlx")]

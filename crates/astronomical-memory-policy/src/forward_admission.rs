@@ -1,23 +1,24 @@
 //! Typed choices for admitting resident and paged forward operations.
 //!
 //! One enum cannot span both engines: the resident engine can never reclaim
-//! paged experts, and the paged engine can never shrink a resident prefill
-//! chunk or demand a streaming fork. Separate enums keep every impossible
+//! paged experts, and the paged engine can never demand a streaming fork. Separate enums keep every impossible
 //! state unrepresentable, so callers match their own engine's decisions
 //! exhaustively instead of carrying fallback arms for the other engine.
 
 use crate::budget::AdaptiveRamGrowthProjection;
-
-/// Smallest resident prefill chunk allowed by transient-peak retries.
-pub const MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT: usize = 256;
 
 /// Why a resident forward must leave the complete-residency engine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StreamingEngineRequirement {
     /// Persistent ownership alone exceeds the strict active-memory ceiling.
     StableShortfall { shortfall_bytes: usize },
-    /// A transient peak remains too large at the smallest allowed prefill chunk.
-    TransientPeakShortfallAtMinimumPrefillChunk {
+    /// The configured prefill chunk's transient peak exceeds the ceiling.
+    ///
+    /// The chunk is never shrunk to make it fit: smaller chunks re-pay every
+    /// per-chunk fixed cost (complete-layer decode and storage reads on the
+    /// streaming side, publication and synchronization on both), so a
+    /// halving ladder trades a clear engine decision for a slow request.
+    TransientPeakShortfallAtPrefillChunk {
         shortfall_bytes: usize,
         prefill_chunk_token_count: usize,
     },
@@ -45,8 +46,6 @@ pub enum StreamingEngineRequirement {
 pub enum ResidentForwardAdmissionDecision {
     /// Stable ownership and expected peak fit.
     Admit,
-    /// Retry resident prefill with no more than this many tokens.
-    ShrinkPrefillChunk { maximum_token_count: usize },
     /// The resident engine cannot admit this forward without changing engines.
     RequireStreamingEngine { cause: StreamingEngineRequirement },
 }
@@ -54,14 +53,12 @@ pub enum ResidentForwardAdmissionDecision {
 /// A resident forward decision that did not admit the forward.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResidentForwardAdmissionRejection {
-    /// Retry resident prefill with no more than this many tokens.
-    ShrinkPrefillChunk { maximum_token_count: usize },
     /// The resident engine cannot admit this forward without changing engines.
     RequireStreamingEngine { cause: StreamingEngineRequirement },
 }
 
 impl ResidentForwardAdmissionDecision {
-    /// Chooses whether a resident forward may proceed, shrink, or needs streaming.
+    /// Chooses whether a resident forward may proceed or needs streaming.
     #[must_use]
     pub fn for_resident_forward(
         forward_projection: &AdaptiveRamGrowthProjection,
@@ -81,15 +78,8 @@ impl ResidentForwardAdmissionDecision {
         }
         let shortfall_bytes = forward_projection.memory_equation().peak_shortfall_bytes();
         if let Some(prefill_chunk_token_count) = prefill_chunk_token_count {
-            if let Some(maximum_token_count) =
-                next_smaller_resident_prefill_chunk_token_count(prefill_chunk_token_count)
-            {
-                return Self::ShrinkPrefillChunk {
-                    maximum_token_count,
-                };
-            }
             return Self::RequireStreamingEngine {
-                cause: StreamingEngineRequirement::TransientPeakShortfallAtMinimumPrefillChunk {
+                cause: StreamingEngineRequirement::TransientPeakShortfallAtPrefillChunk {
                     shortfall_bytes,
                     prefill_chunk_token_count,
                 },
@@ -115,11 +105,6 @@ impl ResidentForwardAdmissionDecision {
     pub const fn rejection(self) -> Option<ResidentForwardAdmissionRejection> {
         match self {
             Self::Admit => None,
-            Self::ShrinkPrefillChunk {
-                maximum_token_count,
-            } => Some(ResidentForwardAdmissionRejection::ShrinkPrefillChunk {
-                maximum_token_count,
-            }),
             Self::RequireStreamingEngine { cause } => {
                 Some(ResidentForwardAdmissionRejection::RequireStreamingEngine { cause })
             }
@@ -131,7 +116,6 @@ impl ResidentForwardAdmissionDecision {
     pub const fn resident_log_label(self) -> &'static str {
         match self {
             Self::Admit => "admit_resident_forward",
-            Self::ShrinkPrefillChunk { .. } => "reject_resident_transient_peak",
             Self::RequireStreamingEngine { .. } => "request_streaming_engine",
         }
     }
@@ -209,24 +193,6 @@ impl PagedForwardAdmissionDecision {
             Self::ReclaimRetainedExperts { .. } | Self::Reject { .. } => "reclaim_paged_experts",
         }
     }
-}
-
-/// Halves a resident prefill chunk without crossing its minimum token count.
-#[must_use]
-pub const fn next_smaller_resident_prefill_chunk_token_count(
-    rejected_prefill_chunk_token_count: usize,
-) -> Option<usize> {
-    if rejected_prefill_chunk_token_count <= MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT {
-        return None;
-    }
-    let half_token_count = rejected_prefill_chunk_token_count / 2;
-    Some(
-        if half_token_count > MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT {
-            half_token_count
-        } else {
-            MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT
-        },
-    )
 }
 
 #[cfg(test)]

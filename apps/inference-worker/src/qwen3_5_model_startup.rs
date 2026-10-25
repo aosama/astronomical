@@ -1,7 +1,10 @@
 use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;
-use astronomical_ipc_protocol::{WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy};
+use astronomical_ipc_protocol::{
+    WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy,
+    WorkerDiagnosticQwen3_5EngineOverride,
+};
 use astronomical_model_serving::{
     CompleteResidencyRequirements, EnginePlacement, ModelFamilyInferenceEngine,
     PerformanceAttribution, PerformanceAttributionLog, PerformanceAttributionOutcome,
@@ -17,12 +20,15 @@ use astronomical_model_serving::ModelLoadingPerformanceAttributionMetadata;
 
 #[derive(Clone, Copy)]
 pub(crate) enum Qwen3_5EngineSelection {
-    Automatic,
+    /// Startup selection from the complete-residency fit. A diagnostic
+    /// journey may force the engine family; the computed placement is kept
+    /// either way so the worker lifecycle stays identical to production.
+    Automatic(WorkerDiagnosticQwen3_5EngineOverride),
     StreamingRetry,
     ResidentPromotion,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Qwen3_5SelectedEngine {
     Resident,
     Streaming,
@@ -43,6 +49,7 @@ pub(crate) fn initialize_qwen3_5_model(
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
     engine_selection: Qwen3_5EngineSelection,
+    diagnostic_resident_prefill_activation_floor_bytes: Option<u64>,
 ) -> Result<
     (
         Qwen3_5GenerationProcessor,
@@ -99,7 +106,7 @@ pub(crate) fn initialize_qwen3_5_model(
     let artifact_payload_bytes = validated_artifact.total_payload_bytes();
     let artifact_shard_count = validated_artifact.shard_count();
     let (selected_engine, engine_placement) = match engine_selection {
-        Qwen3_5EngineSelection::Automatic => {
+        Qwen3_5EngineSelection::Automatic(diagnostic_engine_override) => {
             match model_loading_performance_attribution.measure_operation(
                 PerformanceOperation::ArtifactRamBudgetGeometry,
                 |_performance_attribution| {
@@ -110,7 +117,11 @@ pub(crate) fn initialize_qwen3_5_model(
                     )
                 },
             ) {
-                Ok((selected_engine, engine_placement)) => {
+                Ok((automatically_selected_engine, engine_placement)) => {
+                    let selected_engine = apply_diagnostic_engine_override(
+                        automatically_selected_engine,
+                        diagnostic_engine_override,
+                    );
                     (selected_engine, Some(engine_placement))
                 }
                 Err(selection_error) => {
@@ -222,6 +233,7 @@ pub(crate) fn initialize_qwen3_5_model(
                 true,
                 model_loading_performance_attribution,
                 performance_attribution_log,
+                diagnostic_resident_prefill_activation_floor_bytes,
             )
             .map(ModelFamilyInferenceEngine::Qwen3_5)
         }
@@ -271,6 +283,23 @@ pub(crate) fn initialize_qwen3_5_model(
     Ok((generation_processor, qwen3_5_engine, engine_placement))
 }
 
+fn apply_diagnostic_engine_override(
+    automatically_selected_engine: Qwen3_5SelectedEngine,
+    diagnostic_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
+) -> Qwen3_5SelectedEngine {
+    let forced_engine = match diagnostic_engine_override {
+        WorkerDiagnosticQwen3_5EngineOverride::Automatic => return automatically_selected_engine,
+        WorkerDiagnosticQwen3_5EngineOverride::Resident => Qwen3_5SelectedEngine::Resident,
+        WorkerDiagnosticQwen3_5EngineOverride::Streaming => Qwen3_5SelectedEngine::Streaming,
+    };
+    tracing::warn!(
+        automatically_selected_engine = ?automatically_selected_engine,
+        forced_engine = ?forced_engine,
+        "diagnostic Qwen3.5 engine override applied at startup"
+    );
+    forced_engine
+}
+
 fn select_qwen3_5_engine_from_artifact(
     validated_artifact: &astronomical_model_serving::ValidatedQwen3_5Artifact,
     model_directory_path: &std::path::Path,
@@ -303,6 +332,15 @@ fn select_qwen3_5_engine_from_artifact(
         active_memory_ceiling_bytes: u64::try_from(active_memory_limit_bytes).unwrap_or(u64::MAX),
     }
     .decide();
+    tracing::info!(
+        model_core_payload_bytes = model_geometry.model_core_payload_bytes,
+        complete_expert_payload_bytes = model_geometry.complete_expert_payload_bytes,
+        largest_complete_expert_layer_bytes = model_geometry.largest_complete_expert_layer_bytes,
+        required_headroom_bytes,
+        active_memory_limit_bytes,
+        complete_residency_decision = ?complete_residency_decision,
+        "Qwen3.5 startup complete-residency decision"
+    );
     let engine_placement =
         EnginePlacement::from_startup_complete_residency_decision(complete_residency_decision)
             .map_err(

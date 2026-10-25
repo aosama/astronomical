@@ -2,9 +2,7 @@ use crate::budget::{
     AdaptiveRamGrowthContext, AdaptiveRamGrowthExecutionProfile, AdaptiveRamGrowthGuard,
 };
 use crate::forward_admission::{
-    MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT, ResidentForwardAdmissionDecision,
-    ResidentForwardAdmissionRejection, StreamingEngineRequirement,
-    next_smaller_resident_prefill_chunk_token_count,
+    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
 
 const ACTIVE_MEMORY_CEILING_BYTES: usize = 10_000;
@@ -42,48 +40,42 @@ fn should_admit_a_resident_forward_when_stable_and_peak_limits_fit() {
 }
 
 #[test]
-fn should_shrink_a_transient_only_miss_while_the_prefill_chunk_can_shrink() {
+fn should_require_streaming_for_a_transient_peak_miss_at_the_configured_chunk() {
     let forward_projection = resident_prefill_projection(ACTIVE_MEMORY_CEILING_BYTES, 101);
 
     assert_eq!(
-        ResidentForwardAdmissionDecision::for_resident_forward(&forward_projection, Some(1_024)),
-        ResidentForwardAdmissionDecision::ShrinkPrefillChunk {
-            maximum_token_count: 512,
+        ResidentForwardAdmissionDecision::for_resident_forward(&forward_projection, Some(2_048)),
+        ResidentForwardAdmissionDecision::RequireStreamingEngine {
+            cause: StreamingEngineRequirement::TransientPeakShortfallAtPrefillChunk {
+                shortfall_bytes: 1,
+                prefill_chunk_token_count: 2_048,
+            },
         }
     );
 }
 
 #[test]
-fn should_never_route_a_shrinkable_transient_peak_miss_to_streaming() {
-    let forward_projection = resident_prefill_projection(ACTIVE_MEMORY_CEILING_BYTES, 101);
-    let forward_admission_decision =
-        ResidentForwardAdmissionDecision::for_resident_forward(&forward_projection, Some(512));
-
-    assert!(matches!(
-        forward_admission_decision,
-        ResidentForwardAdmissionDecision::ShrinkPrefillChunk { .. }
-    ));
-    assert!(!matches!(
-        forward_admission_decision,
-        ResidentForwardAdmissionDecision::RequireStreamingEngine { .. }
-    ));
-}
-
-#[test]
-fn should_require_streaming_only_for_a_transient_peak_at_the_minimum_chunk() {
+fn should_require_streaming_for_a_transient_peak_miss_at_a_single_token_chunk() {
     let forward_projection = resident_prefill_projection(ACTIVE_MEMORY_CEILING_BYTES, 101);
 
     assert_eq!(
-        ResidentForwardAdmissionDecision::for_resident_forward(
-            &forward_projection,
-            Some(MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT),
-        ),
+        ResidentForwardAdmissionDecision::for_resident_forward(&forward_projection, Some(1)),
         ResidentForwardAdmissionDecision::RequireStreamingEngine {
-            cause: StreamingEngineRequirement::TransientPeakShortfallAtMinimumPrefillChunk {
+            cause: StreamingEngineRequirement::TransientPeakShortfallAtPrefillChunk {
                 shortfall_bytes: 1,
-                prefill_chunk_token_count: MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT,
+                prefill_chunk_token_count: 1,
             },
         }
+    );
+}
+
+#[test]
+fn should_admit_a_transient_peak_exactly_at_the_ceiling_without_rejecting() {
+    let forward_projection = resident_prefill_projection(ACTIVE_MEMORY_CEILING_BYTES - 100, 100);
+
+    assert_eq!(
+        ResidentForwardAdmissionDecision::for_resident_forward(&forward_projection, Some(2_048)),
+        ResidentForwardAdmissionDecision::Admit
     );
 }
 
@@ -125,44 +117,8 @@ fn should_use_a_decode_cause_when_no_prefill_chunk_can_shrink() {
 }
 
 #[test]
-fn should_halve_chunks_down_to_but_never_below_the_minimum() {
-    assert_eq!(
-        next_smaller_resident_prefill_chunk_token_count(2_048),
-        Some(1_024)
-    );
-    assert_eq!(
-        next_smaller_resident_prefill_chunk_token_count(400),
-        Some(MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT)
-    );
-    assert_eq!(
-        next_smaller_resident_prefill_chunk_token_count(
-            MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT + 1
-        ),
-        Some(MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT)
-    );
-    assert_eq!(
-        next_smaller_resident_prefill_chunk_token_count(MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT),
-        None
-    );
-    assert_eq!(next_smaller_resident_prefill_chunk_token_count(0), None);
-}
-
-#[test]
 fn should_carry_no_rejection_for_an_admitted_resident_forward() {
     assert_eq!(ResidentForwardAdmissionDecision::Admit.rejection(), None);
-}
-
-#[test]
-fn should_carry_the_shrink_bound_into_the_resident_rejection() {
-    assert_eq!(
-        ResidentForwardAdmissionDecision::ShrinkPrefillChunk {
-            maximum_token_count: MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT,
-        }
-        .rejection(),
-        Some(ResidentForwardAdmissionRejection::ShrinkPrefillChunk {
-            maximum_token_count: MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT,
-        })
-    );
 }
 
 #[test]
