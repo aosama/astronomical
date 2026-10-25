@@ -62,17 +62,17 @@ jobs:
         run: node --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js .github/scripts/pull-request-issue-compliance-publish.test.js
         timeout-minutes: 2
 
-  # Keep the job name and its concurrency group in sync with branch
-  # protection: "macOS integration verification" is a required status check and
-  # "macos-integration-" is how that check is found. Also keep this job's cache
-  # owner set in scripts/ci/tests/test-ci-native-cache-coordination.sh in sync.
+  # The merge gate keys on the "CI verdict" fan-in job below, not on this
+  # job's name: this job may split or rename without branch-protection
+  # coordination. Keep the concurrency group's cache owner set in
+  # scripts/ci/tests/test-ci-native-cache-coordination.sh in sync.
   rust-core:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
-    # Protect-main required-check identity: stable, duration-free. The runtime cap
-    # lives in timeout-minutes below, never here, so the identity can't silently
-    # drift from reality. Keep it in sync with branch protection (configured outside
-    # this repo) if you ever change it.
+    # Descriptive job name, duration-free: the runtime cap lives in
+    # timeout-minutes below, never here, so the name can't silently drift
+    # from reality. The merge gate keys on the CI verdict, so renaming this
+    # job no longer touches branch protection.
     name: macOS integration verification
     runs-on: macos-26
     # Job permissions replace the workflow-level set: pruning surplus caches
@@ -275,6 +275,7 @@ jobs:
           # the step budget.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo test --locked -p xtask --test workflow_structural_contract
+          cargo test --locked -p xtask --test workflow_verdict_contract
           cargo test --locked -p xtask --test workflow_cache_owner_contract
           # The app-builder journey runs the real build-macos-app.sh in a
           # sandbox with fixture-bin tool shims; it is deterministic and takes
@@ -442,8 +443,10 @@ jobs:
           scripts/ci/tests/test-report-tier-pyramid-contract.sh
           cargo xtask check-architecture
         timeout-minutes: 5
-      # Observatory contracts stay in this required job until branch
-      # protection also requires swift-node; then this step can migrate.
+      # Observatory contracts may migrate to swift-node at any time — the CI
+      # verdict fans in both macOS jobs, so job membership no longer touches
+      # branch protection. They stay here while this job owns the test-log
+      # artifact wiring they tee into.
       - name: Run Observatory contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end observatory-contracts' EXIT
@@ -550,12 +553,11 @@ jobs:
         run: scripts/ci/publish-ci-timing-summary.sh
         timeout-minutes: 1
 
-  # New parallel job, not yet a required status check. Once it has proven
-  # stable, add "macOS Swift and Node contracts" to branch protection and move
-  # the Observatory step out of rust-core. The Swift toolchain identity is
-  # resolved here (not inherited) because GitHub Actions does not share
-  # GITHUB_ENV across jobs and the SwiftPM cache key must match the toolchain
-  # that would build.
+  # Parallel macOS contract job, fanned in by the CI verdict rather than
+  # listed in branch protection: it may split or rename freely. The Swift
+  # toolchain identity is resolved here (not inherited) because GitHub
+  # Actions does not share GITHUB_ENV across jobs and the SwiftPM cache key
+  # must match the toolchain that would build.
   swift-node:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
@@ -743,3 +745,67 @@ jobs:
           scripts/ci/ci-step-timing.sh begin site-link-check
           node scripts/check-site-links.js
         timeout-minutes: 2
+
+  # The one required check of this workflow (issue #1553): a fan-in verdict
+  # that fails closed over every lane, so branch protection and the ruleset
+  # list exactly one check whose name never changes and jobs above stay free
+  # to split, merge, or rename without protection coordination.
+  #
+  # `if: always()` is load-bearing: without it, a failed needed job would
+  # skip this verdict, and GitHub treats a skipped required check as
+  # satisfied — a failing lane would merge. The step below therefore sees
+  # every lane's terminal result and decides.
+  #
+  # Skip legitimacy: the two macOS lanes legitimately skip when the
+  # classifier marked macOS verification not required (site-only changes);
+  # the verdict accepts a skip only under that classifier decision, so a
+  # lane skipped for any other reason fails the gate.
+  verdict:
+    name: CI verdict
+    needs: [detect-changes, rust-core, swift-node, static]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Fail closed unless every lane is green or legitimately skipped
+        run: |
+          set -euo pipefail
+          fail() {
+            printf '[ci-verdict] status=fail reason=%s\n' "$1" >&2
+            exit 1
+          }
+          classification_result="${{ needs.detect-changes.result }}"
+          macos_verification_required="${{ needs.detect-changes.outputs.macos_verification_required }}"
+          rust_core_result="${{ needs.rust-core.result }}"
+          swift_node_result="${{ needs.swift-node.result }}"
+          static_result="${{ needs.static.result }}"
+          [ "$classification_result" = "success" ] \
+            || fail "classification-result=$classification_result"
+          macos_lanes_may_skip=false
+          if [ "$macos_verification_required" != "true" ]; then
+            macos_lanes_may_skip=true
+          fi
+          for lane_result_pair in "rust-core:$rust_core_result" "swift-node:$swift_node_result"; do
+            lane_name="${lane_result_pair%%:*}"
+            lane_result="${lane_result_pair##*:}"
+            case "$lane_result" in
+              success)
+                printf '[ci-verdict] lane=%s result=success\n' "$lane_name"
+                ;;
+              skipped)
+                if [ "$macos_lanes_may_skip" = true ]; then
+                  printf '[ci-verdict] lane=%s result=skipped classification=macos-not-required\n' "$lane_name"
+                else
+                  fail "lane=$lane_name skipped while classification requires macOS verification"
+                fi
+                ;;
+              *)
+                fail "lane=$lane_name result=$lane_result"
+                ;;
+            esac
+          done
+          case "$static_result" in
+            success) printf '[ci-verdict] lane=static result=success\n' ;;
+            *) fail "lane=static result=$static_result" ;;
+          esac
+          printf '[ci-verdict] status=pass\n'
