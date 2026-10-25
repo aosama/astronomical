@@ -23,6 +23,12 @@ pub(crate) struct ChunkingConfigFile {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) prompt_cache_block_tokens: Option<Option<u32>>,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_nullable_usize",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) speculative_decoding_block_length_tokens: Option<Option<usize>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) prompt_cache_common_prefix_stride_blocks: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -47,6 +53,7 @@ pub struct ConfiguredChunkingFields {
     pub experimental_ssd_paging_prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
     pub prompt_cache_block_tokens: bool,
+    pub speculative_decoding_block_length_tokens: bool,
     pub prompt_cache_common_prefix_stride_blocks: bool,
     pub experimental_decode_stage_attribution_enabled: bool,
     pub experimental_prefill_stage_attribution_enabled: bool,
@@ -62,6 +69,15 @@ where
     Deserializer: serde::Deserializer<'de>,
 {
     Option::<u32>::deserialize(deserializer).map(Some)
+}
+
+fn deserialize_present_nullable_usize<'de, Deserializer>(
+    deserializer: Deserializer,
+) -> Result<Option<Option<usize>>, Deserializer::Error>
+where
+    Deserializer: serde::Deserializer<'de>,
+{
+    Option::<usize>::deserialize(deserializer).map(Some)
 }
 
 impl ChunkingConfigFile {
@@ -86,6 +102,9 @@ impl ChunkingConfigFile {
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .is_some(),
             prompt_cache_block_tokens: self.prompt_cache_block_tokens.is_some(),
+            speculative_decoding_block_length_tokens: self
+                .speculative_decoding_block_length_tokens
+                .is_some(),
             prompt_cache_common_prefix_stride_blocks: self
                 .prompt_cache_common_prefix_stride_blocks
                 .is_some(),
@@ -133,6 +152,9 @@ impl ChunkingConfigFile {
             prompt_cache_block_tokens: model
                 .prompt_cache_block_tokens
                 .or(global.prompt_cache_block_tokens),
+            speculative_decoding_block_length_tokens: model
+                .speculative_decoding_block_length_tokens
+                .or(global.speculative_decoding_block_length_tokens),
             prompt_cache_common_prefix_stride_blocks: model
                 .prompt_cache_common_prefix_stride_blocks
                 .or(global.prompt_cache_common_prefix_stride_blocks),
@@ -186,6 +208,7 @@ pub struct ChunkingConfig {
     experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     prompt_cache_block_tokens: Option<u32>,
+    speculative_decoding_block_length_tokens: Option<usize>,
     prompt_cache_common_prefix_stride_blocks: u32,
     experimental_decode_stage_attribution_enabled: bool,
     experimental_prefill_stage_attribution_enabled: bool,
@@ -224,6 +247,9 @@ impl ChunkingConfig {
                     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
                 ),
             prompt_cache_block_tokens: configured.prompt_cache_block_tokens.unwrap_or(None),
+            speculative_decoding_block_length_tokens: configured
+                .speculative_decoding_block_length_tokens
+                .unwrap_or(None),
             prompt_cache_common_prefix_stride_blocks: configured
                 .prompt_cache_common_prefix_stride_blocks
                 .unwrap_or(DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
@@ -248,6 +274,18 @@ impl ChunkingConfig {
     }
 
     fn validate(&self) -> Result<(), AstronomicalConfigError> {
+        if let Some(speculative_decoding_block_length_tokens) =
+            self.speculative_decoding_block_length_tokens
+        {
+            if speculative_decoding_block_length_tokens == 0
+                || speculative_decoding_block_length_tokens > 64
+            {
+                return Err(AstronomicalConfigError::InvalidChunkingValue {
+                    field_name: "chunking.speculative_decoding_block_length_tokens",
+                    description: "must be between 1 and 64",
+                });
+            }
+        }
         for (field_name, field_value) in [
             (
                 "chunking.fixed_prompt_processing_chunk_size_tokens",
@@ -324,6 +362,10 @@ impl ChunkingConfig {
     }
 
     #[must_use]
+    pub const fn speculative_decoding_block_length_tokens(&self) -> Option<usize> {
+        self.speculative_decoding_block_length_tokens
+    }
+
     pub const fn prompt_cache_block_tokens(&self) -> Option<u32> {
         self.prompt_cache_block_tokens
     }
@@ -385,6 +427,7 @@ impl ChunkingConfig {
 impl Default for ChunkingConfig {
     fn default() -> Self {
         Self {
+            speculative_decoding_block_length_tokens: None,
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: true,

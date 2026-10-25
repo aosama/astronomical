@@ -166,6 +166,7 @@ fn worker_model_configuration() -> WorkerModelConfiguration {
         maximum_context_tokens: 16_384,
         maximum_output_tokens: 4_096,
         chunking: WorkerChunkingConfiguration {
+            speculative_decoding_block_length: None,
             fixed_prompt_processing_chunk_size_tokens: 2_048,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
             full_attention_key_value_growth_tokens: 256,

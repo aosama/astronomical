@@ -25,6 +25,10 @@ pub struct SpeculationSessionRequestProperties {
     /// A forced thinking transition replaces the conditioned successor with
     /// a chosen token; the classic path handles those boundaries exactly.
     pub forced_thinking_transition_is_pending: bool,
+    /// An active repetition penalty transforms the logits before the argmax
+    /// the classic path emits; the greedy block contract compares raw
+    /// argmax only, so penalized sessions stay classic.
+    pub repetition_penalty_is_active: bool,
     /// Visual embedding injection changes the input path mid-request.
     pub visual_embeddings_are_active: bool,
 }
@@ -38,6 +42,7 @@ pub fn should_admit_speculation_for_session(
         && !request_properties.structured_generation_is_active
         && !request_properties.forced_thinking_transition_is_pending
         && !request_properties.visual_embeddings_are_active
+        && !request_properties.repetition_penalty_is_active
 }
 
 /// The pairing contract between one draft configuration and one target

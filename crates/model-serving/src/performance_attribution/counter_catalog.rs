@@ -130,13 +130,19 @@ pub enum PerformanceCounter {
     /// Complete-layer payload a prefill chunk read ahead of its route while
     /// earlier layers computed on the graphics processor.
     PrefillCompleteLayerPrefetchPayloadBytes,
+    /// Draft-and-verify rounds one speculative session executed.
+    SpeculativeRoundCount,
+    /// Tokens those rounds drafted as proposals.
+    SpeculativeProposedTokenCount,
+    /// Proposals the target confirmed and accepted into the context.
+    SpeculativeAcceptedTokenCount,
 }
 
 impl PerformanceCounter {
     // The final discriminant makes enabled storage exact while disabled
     // attribution remains pointer-sized and performs no counter allocation.
     /// Number of distinct counters the enabled report storage reserves.
-    pub const COUNT: usize = Self::PrefillCompleteLayerPrefetchPayloadBytes as usize + 1;
+    pub const COUNT: usize = Self::SpeculativeAcceptedTokenCount as usize + 1;
     /// Every counter in declaration order, so report serialization can pair a
     /// counter with its stored value by position without an allocation.
     pub const ALL: [Self; Self::COUNT] = [
@@ -212,6 +218,9 @@ impl PerformanceCounter {
         Self::Jangtq2CodebookDecodedOutputByteCount,
         Self::DecodeExpertCacheSlotEvictionCount,
         Self::PrefillCompleteLayerPrefetchPayloadBytes,
+        Self::SpeculativeRoundCount,
+        Self::SpeculativeProposedTokenCount,
+        Self::SpeculativeAcceptedTokenCount,
     ];
 
     /// Stable report identifier for this counter.
@@ -370,6 +379,9 @@ impl PerformanceCounter {
                 "jangtq2_codebook_decoded_output_byte_count"
             }
             Self::DecodeExpertCacheSlotEvictionCount => "decode_expert_cache_slot_eviction_count",
+            Self::SpeculativeRoundCount => "speculative_round_count",
+            Self::SpeculativeProposedTokenCount => "speculative_proposed_token_count",
+            Self::SpeculativeAcceptedTokenCount => "speculative_accepted_token_count",
             Self::PrefillCompleteLayerPrefetchPayloadBytes => {
                 "prefill_complete_layer_prefetch_payload_bytes"
             }

@@ -151,6 +151,17 @@ impl Qwen3_5EngineState {
             .checked_sub(context_length_tokens)
             .unwrap_or(0) as usize;
         active_request.advance_position(accepted_context_growth)?;
+        active_request
+            .performance_attribution
+            .record_counter(crate::PerformanceCounter::SpeculativeRoundCount, 1);
+        active_request.performance_attribution.record_counter(
+            crate::PerformanceCounter::SpeculativeProposedTokenCount,
+            speculation_token_count as u64,
+        );
+        active_request.performance_attribution.record_counter(
+            crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
+            round_outcome.accepted_proposal_count as u64,
+        );
         tracing::debug!(
             request_id = request_id.value(),
             accepted_proposal_count = round_outcome.accepted_proposal_count,

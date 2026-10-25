@@ -85,6 +85,7 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
 pub(crate) fn standard_worker_chunking_configuration()
 -> astronomical_ipc_protocol::WorkerChunkingConfiguration {
     astronomical_ipc_protocol::WorkerChunkingConfiguration {
+        speculative_decoding_block_length: None,
         fixed_prompt_processing_chunk_size_tokens: 2_048,
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
         full_attention_key_value_growth_tokens: 256,

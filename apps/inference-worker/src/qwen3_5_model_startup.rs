@@ -48,6 +48,7 @@ pub(crate) fn initialize_qwen3_5_model(
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
     chunking: WorkerChunkingConfiguration,
+
     engine_selection: Qwen3_5EngineSelection,
     diagnostic_resident_prefill_activation_floor_bytes: Option<u64>,
 ) -> Result<
@@ -220,6 +221,10 @@ pub(crate) fn initialize_qwen3_5_model(
                         ));
                     }
                 };
+            // The draft loads only for the resident placement: the
+            // streaming engine pages experts from SSD and has no spare
+            // residency for a second resident weight set.
+            let speculative_decoding_block_length = chunking.speculative_decoding_block_length;
             Qwen3_5ResidentEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
                 validated_artifact,
                 active_memory_limit_bytes,
@@ -234,10 +239,7 @@ pub(crate) fn initialize_qwen3_5_model(
                 model_loading_performance_attribution,
                 performance_attribution_log,
                 diagnostic_resident_prefill_activation_floor_bytes,
-                // Speculative decoding stays off until the configuration
-                // surface threads the requested block length; the engine
-                // and its draft loading are ready the moment it arrives.
-                None,
+                speculative_decoding_block_length,
             )
             .map(ModelFamilyInferenceEngine::Qwen3_5)
         }

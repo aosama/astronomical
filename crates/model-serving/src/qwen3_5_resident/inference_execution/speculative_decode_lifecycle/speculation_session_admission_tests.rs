@@ -11,6 +11,7 @@ fn plain_greedy_request() -> SpeculationSessionRequestProperties {
         structured_generation_is_active: false,
         forced_thinking_transition_is_pending: false,
         visual_embeddings_are_active: false,
+        repetition_penalty_is_active: false,
     }
 }
 
@@ -40,6 +41,10 @@ fn should_reject_sessions_the_greedy_block_contract_cannot_preserve() {
     let mut visual = plain_greedy_request();
     visual.visual_embeddings_are_active = true;
     assert!(!should_admit_speculation_for_session(&visual));
+
+    let mut penalized = plain_greedy_request();
+    penalized.repetition_penalty_is_active = true;
+    assert!(!should_admit_speculation_for_session(&penalized));
 }
 
 #[test]

@@ -87,7 +87,7 @@ fn should_keep_counter_catalog_positions_aligned_with_report_storage() {
     }
 
     assert_eq!(
-        PerformanceCounter::PrefillCompleteLayerPrefetchPayloadBytes as usize,
+        PerformanceCounter::SpeculativeAcceptedTokenCount as usize,
         PerformanceCounter::COUNT - 1,
         "declare a new counter by appending its variant and taking COUNT from it, so a stale COUNT cannot leave it unaddressable"
     );

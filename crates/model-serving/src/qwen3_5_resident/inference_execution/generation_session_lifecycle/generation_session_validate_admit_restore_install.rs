@@ -207,6 +207,9 @@ impl Qwen3_5EngineState {
                         forced_thinking_transition_is_pending: false,
                         visual_embeddings_are_active: has_precomputed_visual_embeddings
                             || has_processed_visual_images,
+                        repetition_penalty_is_active: inference_request
+                            .repetition_penalty_thousandths()
+                            != 1_000,
                     },
                 )
             });
