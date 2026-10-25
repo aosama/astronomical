@@ -29,7 +29,10 @@ ABSOLUTE_PATH] [--verify]`, and `cargo xtask disposable-target --lane NAME
 -- COMMAND [ARGUMENT ...]` (see `.cargo/config.toml`). The native identity
 policy itself lives in
 the `astronomical-native-identity` crate (`crates/native-identity`),
-consumed in-process by the Cargo build scripts.
+consumed in-process by the Cargo build scripts. The tier pyramid is a local
+tool: run `cargo xtask tier-pyramid` to see the per-tier test distribution
+against the committed baseline; CI runs only the tool's own fixture contract
+(`tests/test-report-tier-pyramid-contract.sh`), not the repository count.
 
 The workflow structural contract is the typed Rust test
 `cargo test -p xtask --test workflow_structural_contract`; the restoration-reporter

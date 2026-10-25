@@ -439,26 +439,35 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end rest-library-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin rest-library-contracts
           set -o pipefail
-          cargo test --timings -p astronomical-daemon --test rest_api_tests library -- --nocapture 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-library.log"
+          cargo nextest run -p astronomical-daemon --test rest_api_tests library 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-library.log"
         timeout-minutes: 2
       - name: Verify menu-facing status wire contract
         run: |
           trap 'scripts/ci/ci-step-timing.sh end rest-wire-contract' EXIT
           scripts/ci/ci-step-timing.sh begin rest-wire-contract
           set -o pipefail
-          cargo test -p astronomical-daemon --test rest_api_tests rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active -- --exact 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-wire-contract.log"
+          # An exact-name filter under nextest fails the step when it matches
+          # no test (exit code 4), so renaming this contract breaks the check
+          # loudly; cargo test --exact passed silently with zero tests run.
+          cargo nextest run -p astronomical-daemon --test rest_api_tests -E 'test(=rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active)' 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-wire-contract.log"
         timeout-minutes: 2
       - name: Run root E2E journeys
         run: |
           trap 'scripts/ci/ci-step-timing.sh end root-e2e-journeys' EXIT
           scripts/ci/ci-step-timing.sh begin root-e2e-journeys
           set -o pipefail
-          cargo test --no-fail-fast -p astronomical-e2e --test e2e 2>&1 | tee "$RUNNER_TEMP/test-logs/root-e2e.log"
+          # One process per journey: in the scripted fidelity CI runs, each
+          # journey owns its daemon, state directory, and ports, so the
+          # in-process #[serial] locks (still binding for the real-model
+          # fidelity run locally through cargo xtask test-run) are not
+          # needed here.
+          cargo nextest run --no-fail-fast -p astronomical-e2e --test e2e 2>&1 | tee "$RUNNER_TEMP/test-logs/root-e2e.log"
         timeout-minutes: 5
-      # The tier pyramid and repository contract scripts moved to the
-      # config-contracts lane (issue #1553): they parse inventory and
-      # configuration, so ubuntu runs them in parallel instead of extending
-      # this job's critical path.
+      # The repository contract scripts moved to the config-contracts lane
+      # (issue #1553): they parse configuration, so ubuntu runs them in
+      # parallel instead of extending this job's critical path. The tier
+      # pyramid itself is a local tool (cargo xtask tier-pyramid), not a CI
+      # step.
       # Observatory contracts may migrate to swift-node at any time — the CI
       # verdict fans in both macOS jobs, so job membership no longer touches
       # branch protection. They stay here while this job owns the test-log
@@ -792,12 +801,9 @@ jobs:
           cargo test --locked -p xtask --test workflow_cache_owner_contract
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
-      - name: Report test tier pyramid
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end test-tier-pyramid' EXIT
-          scripts/ci/ci-step-timing.sh begin test-tier-pyramid
-          cargo xtask tier-pyramid
-        timeout-minutes: 5
+      # The tier-pyramid contract below tests the local tool's behavior on a
+      # fixture tree; the pyramid count over this repository is local-only
+      # (cargo xtask tier-pyramid), not a CI step.
       - name: Run repository contract scripts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
