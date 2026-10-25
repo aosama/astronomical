@@ -218,13 +218,6 @@ fn resident_forward_admission_reason(
 ) -> String {
     let equation = forward_projection.memory_equation();
     match forward_admission_rejection {
-        ResidentForwardAdmissionRejection::ShrinkPrefillChunk {
-            maximum_token_count,
-        } => format!(
-            "resident forward peak of {} bytes exceeds the allowed ceiling of {} bytes; retry with at most {maximum_token_count} prefill tokens",
-            equation.peak_projected_bytes(),
-            equation.allowed_active_memory_bytes(),
-        ),
         ResidentForwardAdmissionRejection::RequireStreamingEngine {
             cause: StreamingEngineRequirement::StableShortfall { shortfall_bytes },
         } => format!(
@@ -234,7 +227,7 @@ fn resident_forward_admission_reason(
         ),
         ResidentForwardAdmissionRejection::RequireStreamingEngine {
             cause:
-                StreamingEngineRequirement::TransientPeakShortfallAtMinimumPrefillChunk {
+                StreamingEngineRequirement::TransientPeakShortfallAtPrefillChunk {
                     shortfall_bytes,
                     prefill_chunk_token_count,
                 },

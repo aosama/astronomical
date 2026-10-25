@@ -16,7 +16,7 @@ use crate::residency::{
     retained_resident_ceiling_after_budget_refresh, seated_complete_layer_count,
 };
 
-fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
+pub(super) fn uniform_geometry(layer_count: usize) -> Vec<ExpertLayerGeometry> {
     (0..layer_count)
         .map(|layer_index| ExpertLayerGeometry {
             layer_index,
@@ -512,7 +512,7 @@ fn should_never_grow_the_streamed_layer_count_across_chunks_of_one_request() {
     );
 }
 
-fn four_layer_candidate(
+pub(super) fn four_layer_candidate(
     complete_layer_targets: Vec<usize>,
     ceiling_bytes: u64,
 ) -> ExpertResidencyPlan {

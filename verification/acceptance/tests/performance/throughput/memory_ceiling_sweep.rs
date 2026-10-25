@@ -213,6 +213,7 @@ async fn append_memory_cell_record(
         cached_tokens: measurement.cached_tokens,
         prefill_time_seconds: measurement.prefill_time_seconds,
         decode_time_seconds: measurement.decode_time_seconds,
+        configured_maximum_mlx_memory_bytes: Some(configured_maximum_mlx_memory_bytes),
         memory_cell: Some(memory_cell),
     };
     eprintln!(
@@ -312,6 +313,9 @@ fn cell_journey(configured_maximum_mlx_memory_bytes: u64) -> ThroughputJourney {
         attribution_enabled: true,
         journey_timeout: MEMORY_CELL_SERVING_BUDGET,
         model_directory: None,
+        diagnostic_qwen3_5_engine_override:
+            astronomical_ipc_protocol::WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
     }
 }
 

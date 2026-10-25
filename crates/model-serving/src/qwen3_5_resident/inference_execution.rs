@@ -125,6 +125,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             adaptive_ram_growth_guard_enabled,
             model_loading_performance_attribution,
             performance_attribution_log,
+            None,
         )
     }
 
@@ -143,6 +144,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         adaptive_ram_growth_guard_enabled: bool,
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
+        diagnostic_prefill_activation_floor_bytes: Option<u64>,
     ) -> Result<Qwen3_5ResidentEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
@@ -180,6 +182,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             active_request: None,
             adaptive_ram_growth_guard,
             adaptive_ram_growth_guard_enabled,
+            diagnostic_prefill_activation_floor_bytes,
             persistent_prompt_cache_disk_store_config,
             persistent_prompt_cache_counters: PersistentPromptCacheCounters::default(),
             context_memory_reservation_bytes_per_token,
@@ -211,6 +214,9 @@ pub struct Qwen3_5InferenceExecution {
     pub(super) active_request: Option<Qwen3_5EngineRequest>,
     pub(super) adaptive_ram_growth_guard: AdaptiveRamGrowthGuard,
     pub(super) adaptive_ram_growth_guard_enabled: bool,
+    /// Diagnostic replacement for the static prefill activation floor applied to
+    /// the loaded model's RAM budget; `None` keeps the production floor.
+    diagnostic_prefill_activation_floor_bytes: Option<u64>,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     pub(crate) persistent_prompt_cache_counters: PersistentPromptCacheCounters,
     pub(super) context_memory_reservation_bytes_per_token: usize,

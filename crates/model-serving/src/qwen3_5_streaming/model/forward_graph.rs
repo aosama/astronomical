@@ -309,6 +309,10 @@ impl Qwen3_5Model {
         self.route_observation
             .borrow_mut()
             .discard_pending_layer_route_arrays();
+        self.deferred_expert_demand
+            .borrow_mut()
+            .discard_pending_layer_routes();
+        self.discard_prefill_complete_layer_prefetch();
         let rope_offset_tokens = i32::try_from(starting_position_tokens).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {
                 description: "starting position exceeds the MLX int32 range",
@@ -372,10 +376,23 @@ impl Qwen3_5Model {
                     |_performance_attribution| self.runtime.async_eval_arrays(&[&hidden_states]),
                 )?;
             }
-            // Do not start a second complete-layer host read here. The positional
-            // reader is synchronous on this thread, so a prefetch stalls GPU
-            // submission and holds an unbudgeted extra complete layer.
+            // Expert pages are lazy loads on MLX's own stream, so this read
+            // overlaps the layers still computing instead of stalling graph
+            // submission; its bytes are the plan's second prefill stream slot.
+            if token_count > 1
+                && matches!(
+                    paged_execution_mode,
+                    Qwen3_5MoEPagedExecutionMode::ProductionDefault
+                )
+            {
+                self.issue_prefill_complete_layer_prefetch(
+                    layer_index,
+                    token_count,
+                    performance_attribution,
+                );
+            }
         }
+        self.discard_prefill_complete_layer_prefetch();
 
         if !should_materialize_vocabulary_logits {
             return Ok(Qwen3_5TargetForwardOutput {

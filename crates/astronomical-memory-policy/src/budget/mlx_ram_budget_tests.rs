@@ -102,14 +102,14 @@ fn should_raise_context_window_reserve_from_measurements_and_never_under_shoot()
 
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 1_500_000_000,
         observed_activation_headroom_bytes: 400_000_000,
         exact_temporary_workspace_bytes: 0,
     });
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 2_200_000_000,
         observed_activation_headroom_bytes: 700_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -149,7 +149,7 @@ fn should_not_charge_transient_workspace_as_both_context_and_activation() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 7_000,
+        forward_token_count: 7_000,
         measured_context_and_activation_bytes: 2_100_000_000,
         observed_activation_headroom_bytes: 2_000_000_000,
         exact_temporary_workspace_bytes: 100_000_000,
@@ -157,7 +157,9 @@ fn should_not_charge_transient_workspace_as_both_context_and_activation() {
 
     let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 7_000, 7_000, 0);
 
-    assert_eq!(planned_budget.context_window_reserve_bytes, 1_073_741_824);
+    // Zero persistent bytes leave only the measurement safety buffer once the
+    // measured span covers the request.
+    assert_eq!(planned_budget.context_window_reserve_bytes, 64_000_000);
     assert_eq!(
         planned_budget.activation_headroom_bytes,
         unmeasured_prefill_activation_headroom_bytes(fable_class_geometry()).max(2_000_000_000)
@@ -173,7 +175,7 @@ fn should_not_charge_exact_temporary_workspace_as_persistent_context() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 7_000,
+        forward_token_count: 7_000,
         measured_context_and_activation_bytes: 3_000_000_000,
         observed_activation_headroom_bytes: 500_000_000,
         exact_temporary_workspace_bytes: 500_000_000,
@@ -194,7 +196,7 @@ fn should_protect_the_first_decode_with_prefill_activation_evidence() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 7_000,
+        forward_token_count: 7_000,
         measured_context_and_activation_bytes: 2_000_000_000,
         observed_activation_headroom_bytes: 1_900_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -216,14 +218,14 @@ fn should_use_decode_activation_evidence_after_decode_is_observed() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 7_000,
+        forward_token_count: 7_000,
         measured_context_and_activation_bytes: 2_000_000_000,
         observed_activation_headroom_bytes: 1_900_000_000,
         exact_temporary_workspace_bytes: 0,
     });
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Decode,
-        context_token_count: 7_000,
+        forward_token_count: 7_000,
         measured_context_and_activation_bytes: 500_000_000,
         observed_activation_headroom_bytes: 400_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -265,7 +267,7 @@ fn should_limit_retained_experts_to_leave_the_exact_admitted_prefill_reserve() {
 }
 
 #[test]
-fn should_project_unmeasured_suffix_tokens_on_top_of_learned_context_reserve() {
+fn should_project_every_context_token_on_top_of_the_learned_context_overhead() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
@@ -275,21 +277,25 @@ fn should_project_unmeasured_suffix_tokens_on_top_of_learned_context_reserve() {
         MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 10_000,
+        forward_token_count: 10_000,
         measured_context_and_activation_bytes: 400_000_000,
         observed_activation_headroom_bytes: 100_000_000,
         exact_temporary_workspace_bytes: 0,
     });
 
-    let reserved_for_measured_bucket = mlx_ram_budget.context_window_reserve_bytes(10_000);
-    let reserved_for_unmeasured_suffix = mlx_ram_budget.context_window_reserve_bytes(26_000);
+    let reserved_for_measured_context = mlx_ram_budget.context_window_reserve_bytes(10_000);
+    let reserved_for_longer_context = mlx_ram_budget.context_window_reserve_bytes(26_000);
 
-    assert_eq!(reserved_for_measured_bucket, 1_073_741_824);
-    let highest_measured_token_count = (10_000 / 1_024 + 1) * 1_024;
+    // 300 MB persistent minus the forward's own 200 MB projection leaves 100 MB
+    // of learned overhead that every context length carries on top of its
+    // projection and the 64 MB buffer.
     assert_eq!(
-        reserved_for_unmeasured_suffix,
-        reserved_for_measured_bucket
-            .saturating_add((26_000 - highest_measured_token_count) * 20_000)
+        reserved_for_measured_context,
+        200_000_000 + 100_000_000 + 64_000_000
+    );
+    assert_eq!(
+        reserved_for_longer_context,
+        520_000_000 + 100_000_000 + 64_000_000
     );
 }
 
@@ -327,14 +333,14 @@ fn should_resolve_the_prefill_activation_promise_from_the_planned_operation_buck
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 1_500_000_000,
         observed_activation_headroom_bytes: 400_000_000,
         exact_temporary_workspace_bytes: 0,
     });
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 2_200_000_000,
         observed_activation_headroom_bytes: 700_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -356,7 +362,7 @@ fn should_not_inflate_the_prefill_activation_promise_beyond_measured_evidence() 
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 2_200_000_000,
         observed_activation_headroom_bytes: 700_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -394,7 +400,7 @@ fn should_keep_the_prefill_activation_promise_independent_of_the_prompt_context(
         MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 1_500_000_000,
         observed_activation_headroom_bytes: 400_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -422,14 +428,14 @@ fn should_keep_the_first_decode_protected_by_the_largest_prefill_evidence() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 1_500_000_000,
         observed_activation_headroom_bytes: 400_000_000,
         exact_temporary_workspace_bytes: 0,
     });
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 2_200_000_000,
         observed_activation_headroom_bytes: 700_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -467,7 +473,7 @@ fn should_keep_the_admission_workspace_activation_reserve_independent_of_the_pro
         MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 1_500_000_000,
         observed_activation_headroom_bytes: 400_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -520,7 +526,7 @@ fn should_cap_the_activation_reserve_below_the_irrevocable_model_core() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 1_500_000_000,
         observed_activation_headroom_bytes: ceiling_bytes * 10,
         exact_temporary_workspace_bytes: 0,

@@ -39,6 +39,8 @@ mod release_boundary_tests;
 #[cfg(test)]
 mod request_plan_boundary_tests;
 #[cfg(test)]
+mod request_plan_seated_charge_boundary_tests;
+#[cfg(test)]
 mod validation_boundary_tests;
 
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;

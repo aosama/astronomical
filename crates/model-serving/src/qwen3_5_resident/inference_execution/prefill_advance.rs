@@ -4,21 +4,19 @@
 //!
 //! 1. Choose a deterministic fixed chunk from resolved configuration.
 //! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
-//! 3. Execute that chunk under adaptive memory admission; when admission rejects
-//!    only its transient peak, halve it (never below 256 tokens) and retry.
+//! 3. Execute exactly that chunk under adaptive memory admission.
 //! 4. Publish required prompt-cache state before advancing the in-memory cursor.
 //! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
 //! 7. Emit progress only after all required state transitions succeeded.
 //!
-//! A stable-footprint miss, a minimum-size transient miss, and an execution
-//! out-of-memory failure are terminal: the request reports the mismatch. The
-//! retired streaming ladder halved the chunk after every failure, collapsing
-//! real requests into dozens of forwards that each re-paid complete-layer
-//! storage reads. The resident shrink differs on both counts: every expert is
-//! already in RAM, so a smaller forward reads nothing from storage, and the
-//! shrink happens at admission before any forward executes, halving toward a
-//! 256-token minimum (three halvings from a 2,048-token chunk).
+//! A stable-footprint miss, a transient-peak miss, and an execution
+//! out-of-memory failure are terminal for the resident engine: the request
+//! reports the typed cause and moves to the streaming engine. The chunk is
+//! never shrunk to make a forward fit. Halving ladders on both engines turned
+//! one clear capacity decision into many smaller forwards that each re-paid
+//! every per-chunk fixed cost, so throughput collapsed exactly when memory
+//! was tight; the configured chunk size is the only prefill chunk size.
 
 use std::time::Instant;
 
@@ -85,55 +83,25 @@ impl Qwen3_5EngineState {
             requested_prefill_chunk_end
         };
         let forward_chunk_started_at = Instant::now();
-        let mut attempted_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
-        let (prompt_prefill_chunk_outcome, prefill_end) = loop {
-            tracing::info!(
-                request_id = request_id.value(),
-                prefill_start,
-                attempted_prefill_chunk_token_count,
-                "executing prompt-prefill chunk"
-            );
-            let prefill_end = prefill_start
-                .checked_add(attempted_prefill_chunk_token_count)
-                .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
+        let attempted_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
+        tracing::info!(
+            request_id = request_id.value(),
+            prefill_start,
+            attempted_prefill_chunk_token_count,
+            "executing prompt-prefill chunk"
+        );
+        let prefill_end = requested_prefill_chunk_end;
+        let prompt_prefill_chunk_outcome =
             match self.execute_prompt_prefill_chunk(active_request, prefill_start, prefill_end) {
-                Ok(prompt_prefill_chunk_outcome) => {
-                    break (prompt_prefill_chunk_outcome, prefill_end);
-                }
+                Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
                 Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
                     return Err(generation_error);
-                }
-                // Only the transient peak missed: every expert is already in RAM,
-                // so a smaller forward re-reads nothing and fits the same request
-                // without abandoning the resident engine. Admission rejected
-                // before any state changed, so the retry starts clean.
-                Err(PromptPrefillChunkAttemptError::AdaptiveForwardAdmissionRejected {
-                    rejection:
-                        ResidentForwardAdmissionRejection::ShrinkPrefillChunk {
-                            maximum_token_count,
-                        },
-                    reason,
-                }) => {
-                    tracing::info!(
-                        request_id = request_id.value(),
-                        prefill_start,
-                        attempted_prefill_chunk_token_count,
-                        shrunk_prefill_chunk_token_count = maximum_token_count,
-                        reason = %reason,
-                        "shrinking resident prefill chunk after the adaptive RAM growth guard rejected only its transient peak"
-                    );
-                    active_request.performance_attribution.record_counter(
-                        PerformanceCounter::ResidentPrefillTransientPeakChunkShrinkCount,
-                        1,
-                    );
-                    attempted_prefill_chunk_token_count = maximum_token_count;
-                    continue;
                 }
                 Err(PromptPrefillChunkAttemptError::AdaptiveForwardAdmissionRejected {
                     rejection:
                         ResidentForwardAdmissionRejection::RequireStreamingEngine {
                             cause:
-                                prefill_admission_cause @ (StreamingEngineRequirement::TransientPeakShortfallAtMinimumPrefillChunk {
+                                prefill_admission_cause @ (StreamingEngineRequirement::TransientPeakShortfallAtPrefillChunk {
                                     ..
                                 }
                                 | StreamingEngineRequirement::TransientPeakShortfallWithoutPrefillChunk {
@@ -147,7 +115,7 @@ impl Qwen3_5EngineState {
                         prefill_start,
                         attempted_prefill_chunk_token_count,
                         reason = %reason,
-                        "prefill admission rejected the transient peak of the smallest resident chunk"
+                        "prefill admission rejected the transient peak of the configured resident chunk"
                     );
                     let model = self.model.as_ref().ok_or_else(|| {
                         fatal_engine_error("Qwen3.5 engine lost its loaded model")
@@ -156,7 +124,7 @@ impl Qwen3_5EngineState {
                         model,
                         prefill_admission_cause,
                         format!(
-                            "smallest resident prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit its transient peak under the MLX ceiling: {reason}"
+                            "resident prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit its transient peak under the MLX ceiling: {reason}"
                         ),
                     ));
                 }
@@ -277,8 +245,7 @@ impl Qwen3_5EngineState {
                         ),
                     ));
                 }
-            }
-        };
+            };
         let active_memory_bytes_before_growth =
             prompt_prefill_chunk_outcome.active_memory_bytes_before_growth;
         let retained_expert_payload_bytes_before_growth =
@@ -327,6 +294,10 @@ impl Qwen3_5EngineState {
         // their previous parent, allowing restart to reproduce valid state.
         active_request.advance_position(prefill_token_count)?;
         active_request.prefill_cursor = prefill_end;
+        model.learn_context_state_payload(
+            active_request.next_position_tokens,
+            &active_request.request_decoder_state,
+        );
         // Retire the chunk tape. Reclaim the allocator cache only when it is
         // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunk_cleanup =

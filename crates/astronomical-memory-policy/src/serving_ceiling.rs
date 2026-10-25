@@ -70,17 +70,50 @@ pub const fn effective_mlx_memory_ceiling_bytes(
 /// inside the ceiling it is handed — a truthful ceiling keeps that headroom
 /// real. `None` means serving without a wired pool (claim disabled or
 /// failed), where pages stay swappable and the ceiling stands unchanged.
+///
+/// The bound the engine receives is the plannable wired residency, not the
+/// raw claim; see [`plannable_wired_residency_bytes`].
 #[must_use]
 pub const fn effective_mlx_memory_ceiling_after_wired_claim(
     effective_mlx_memory_ceiling_bytes: u64,
     claimed_wired_residency_budget_bytes: Option<u64>,
 ) -> u64 {
     match claimed_wired_residency_budget_bytes {
-        Some(claimed_wired_residency_budget_bytes)
-            if claimed_wired_residency_budget_bytes < effective_mlx_memory_ceiling_bytes =>
-        {
-            claimed_wired_residency_budget_bytes
+        Some(claimed_wired_residency_budget_bytes) => {
+            let plannable_wired_residency_bytes =
+                plannable_wired_residency_bytes(claimed_wired_residency_budget_bytes);
+            if plannable_wired_residency_bytes < effective_mlx_memory_ceiling_bytes {
+                plannable_wired_residency_bytes
+            } else {
+                effective_mlx_memory_ceiling_bytes
+            }
         }
-        _ => effective_mlx_memory_ceiling_bytes,
+        None => effective_mlx_memory_ceiling_bytes,
     }
+}
+
+/// Share of the wired-residency budget kept free of MLX planning, in parts
+/// per thousand (25 = 2.5%).
+const METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND: u64 = 25;
+
+/// Wired residency the MLX residency planner may fill: the claimed budget
+/// minus a 2.5% Metal working-set margin.
+///
+/// MLX `active_memory` does not count everything Metal charges against the
+/// wired budget: allocator-cache buffers, driver command-buffer scratch, and
+/// other GPU clients sharing the system-wide wired pool. A planner that packs
+/// MLX arrays to the raw claim therefore fails the command buffer with
+/// `kIOGPUCommandBufferCallbackErrorOutOfMemory`. Measured 2026-10-24 on a
+/// 48 GB machine with a 40,200,896,512-byte claim: a 122B decode peaked at
+/// 40,051,177,002 MLX bytes (99.6% of the claim) and the worker died, while
+/// the same model at 37.4 GB peaks (93%) never failed. Upstream MLX makes the
+/// same judgement, starting cache garbage collection at 95% of Metal's
+/// recommended working set. The margin used to exist only by accident inside
+/// an oversized 1 GB context-reserve floor; it lives here, named, so the
+/// context reserve can stay exact.
+#[must_use]
+pub const fn plannable_wired_residency_bytes(claimed_wired_residency_budget_bytes: u64) -> u64 {
+    claimed_wired_residency_budget_bytes.saturating_sub(
+        claimed_wired_residency_budget_bytes / 1_000 * METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND,
+    )
 }

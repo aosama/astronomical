@@ -29,21 +29,21 @@ fn should_forget_learned_activation_evidence_when_the_live_ceiling_changes() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 2_000_000_000,
         observed_activation_headroom_bytes: 0,
         exact_temporary_workspace_bytes: 0,
     });
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 6_000_000_000,
         observed_activation_headroom_bytes: 6_000_000_000,
         exact_temporary_workspace_bytes: 0,
     });
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Decode,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 500_000_000,
         observed_activation_headroom_bytes: 500_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -91,7 +91,7 @@ fn should_keep_learned_activation_evidence_when_the_ceiling_value_is_unchanged()
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 4_096,
+        forward_token_count: 4_096,
         measured_context_and_activation_bytes: 6_000_000_000,
         observed_activation_headroom_bytes: 6_000_000_000,
         exact_temporary_workspace_bytes: 0,

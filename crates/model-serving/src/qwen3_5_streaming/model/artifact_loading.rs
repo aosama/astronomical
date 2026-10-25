@@ -428,8 +428,24 @@ impl Qwen3_5Model {
             // (packed source plus decoded output) out of the expert budget;
             // the packed-source slot alone seated experts into the decode's
             // space and every chunk had to reclaim a layer before it could run.
+            // The second slot funds the one complete layer a chunk reads ahead
+            // of its route while earlier layers compute
+            // (`prefill_complete_layer_prefetch`). That prefetch is only issued
+            // for pages multiplied without a transient decode, so it holds the
+            // packed source alone, and only of layers it can pick: codebook
+            // layers are never eligible in prefill, so an all-codebook bundle
+            // reserves no read-ahead bytes at all. Charging it the full
+            // decoded peak instead doubled a 5.74 GB JANGTQ2 slot to 11.48 GB
+            // and cut 122B prefill throughput nearly in two (measured
+            // 2026-10-24: 134 versus 232–273 tokens per second).
             mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(
-                expert_pager.maximum_expert_page_bytes(),
+                super::prefill_complete_layer_prefetch::prefill_complete_layer_stream_slot_bytes(
+                    expert_pager.maximum_expert_page_bytes(),
+                    super::prefill_complete_layer_prefetch::largest_prefill_prefetchable_complete_source_payload_bytes(
+                        expert_pager.layer_plans(),
+                    )
+                    .map_err(qwen3_5_streaming::expert_streaming::ExpertPagingError::from)?,
+                ),
             );
         }
         Ok(Self {
@@ -458,6 +474,8 @@ impl Qwen3_5Model {
                 crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector::new(
                 ),
             ),
+            deferred_expert_demand: RefCell::default(),
+            prefill_complete_layer_prefetch: RefCell::default(),
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),
             paged_forward_missing_route_collector:

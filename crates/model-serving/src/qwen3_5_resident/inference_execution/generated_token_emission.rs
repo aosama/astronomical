@@ -37,6 +37,12 @@ impl Qwen3_5EngineState {
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::GeneratedTokenCount, 1);
+        // The decode forward that produced this token has completed and
+        // advanced the position, so the decoder state is the live context.
+        model.learn_context_state_payload(
+            active_request.next_position_tokens,
+            &active_request.request_decoder_state,
+        );
 
         let was_already_in_visible_answer = !active_request.is_inside_thinking();
         let is_reasoning_token =

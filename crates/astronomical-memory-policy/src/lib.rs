@@ -71,9 +71,8 @@ pub mod strict_json;
 pub mod vocabulary;
 
 pub use forward_admission::{
-    MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT, PagedForwardAdmissionDecision,
-    ResidentForwardAdmissionDecision, ResidentForwardAdmissionRejection,
-    StreamingEngineRequirement, next_smaller_resident_prefill_chunk_token_count,
+    PagedForwardAdmissionDecision, ResidentForwardAdmissionDecision,
+    ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
 pub use memory_equation::MemoryEquation;
 pub use placement::{

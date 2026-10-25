@@ -49,12 +49,9 @@ impl Qwen3_5EngineState {
             )
             // Issue #510: the idle sample answers "is the remaining headroom
             // free or promised" by planning the next request's decode budget
-            // against a fresh zero-token context.
+            // against a fresh zero-token context, plus the live prefix it holds.
             .with_memory_ceiling_utilization(
-                model.memory_ceiling_utilization_for_breakdown(
-                    crate::MemoryPhase::Decode,
-                    0,
-                    1,
+                model.between_request_memory_ceiling_utilization_for_breakdown(
                     active_memory_bytes,
                     active_memory_breakdown,
                 ),
@@ -210,10 +207,7 @@ impl Qwen3_5EngineState {
                                 active_memory_breakdown,
                             )
                             .with_memory_ceiling_utilization(
-                                model.memory_ceiling_utilization_for_breakdown(
-                                    crate::MemoryPhase::Decode,
-                                    0,
-                                    1,
+                                model.between_request_memory_ceiling_utilization_for_breakdown(
                                     active_memory_bytes,
                                     active_memory_breakdown,
                                 ),

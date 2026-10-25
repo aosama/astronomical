@@ -62,43 +62,25 @@ fn should_admit_a_resident_forward_whose_peak_lands_on_the_transient_allowance()
 }
 
 #[test]
-fn should_offer_a_shrunk_chunk_for_a_peak_one_byte_over_the_allowance() {
-    let forward_projection = resident_prefill_projection(
-        TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES,
-        ONE_PERCENT_TRANSIENT_ALLOWANCE_BYTES + 1,
-    );
-
-    assert_eq!(
-        ResidentForwardAdmissionDecision::for_resident_forward(
-            &forward_projection,
-            Some(CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT),
-        ),
-        ResidentForwardAdmissionDecision::ShrinkPrefillChunk {
-            maximum_token_count: 1_024,
-        }
-    );
-}
-
-#[test]
-fn should_require_streaming_for_a_transient_peak_at_the_minimum_chunk() {
+fn should_require_streaming_for_a_peak_one_byte_over_the_allowance_at_the_configured_chunk() {
     let forward_projection = resident_prefill_projection(
         TEN_BILLION_BYTE_ACTIVE_MEMORY_CEILING_BYTES,
         ONE_PERCENT_TRANSIENT_ALLOWANCE_BYTES + 1,
     );
     let forward_admission_decision = ResidentForwardAdmissionDecision::for_resident_forward(
         &forward_projection,
-        Some(crate::MINIMUM_RESIDENT_PREFILL_CHUNK_TOKEN_COUNT),
+        Some(CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT),
     );
 
-    assert!(matches!(
+    assert_eq!(
         forward_admission_decision,
         ResidentForwardAdmissionDecision::RequireStreamingEngine {
-            cause: StreamingEngineRequirement::TransientPeakShortfallAtMinimumPrefillChunk {
+            cause: StreamingEngineRequirement::TransientPeakShortfallAtPrefillChunk {
                 shortfall_bytes: 1,
-                ..
+                prefill_chunk_token_count: CONFIGURED_PREFILL_CHUNK_TOKEN_COUNT,
             }
         }
-    ));
+    );
     assert!(
         resident_forward_admission_reason(
             &forward_projection,

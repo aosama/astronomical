@@ -73,6 +73,21 @@ impl Qwen3_5ModelBase {
         self.mlx_ram_budget.borrow_mut()
     }
 
+    /// Teaches the context reserve the live decoder-state payload at
+    /// `context_token_count`, after the forward that produced it completed.
+    pub(crate) fn learn_context_state_payload(
+        &self,
+        context_token_count: u32,
+        request_decoder_state: &crate::RequestDecoderStateStack,
+    ) {
+        self.mlx_ram_budget
+            .borrow_mut()
+            .record_context_state_payload(
+                u64::from(context_token_count),
+                request_decoder_state.payload_byte_count(),
+            );
+    }
+
     pub(crate) fn sorted_expert_weighted_sum_kernel(
         &self,
     ) -> Result<&MlxMetalKernel, Qwen3_5ExecutionError> {
