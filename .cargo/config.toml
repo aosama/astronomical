@@ -78,8 +78,8 @@ test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astro
 # integration aliases above. These two aliases cover what needs a Metal device.
 # test-quantization-direct-mlx: the GPU encoder against the pure reference
 # encoder and the shard-wise requantizer on a synthetic two-shard source;
-# seconds, no model artifacts, serial because MLX tests never parallelize.
-test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization --features direct-mlx --test direct_mlx -- --test-threads=1"
+# seconds, no model artifacts, contracts in parallel.
+test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization --features direct-mlx --test direct_mlx"
 # test-quantization-acceptance: real-model journeys (static and exact
 # conversions of an installed bf16 Qwen3.5 artifact, parity against an
 # artifact the Python tool produced from the same source, requantizer
@@ -220,7 +220,7 @@ audit-unused-public-bins = "clippy --workspace --bins -- -A clippy::all -D dead_
 # carries the fork surface regardless of caller count.
 audit-unused-public-workspace = "workspace-unused-pub"
 # Acceptance lanes (issue #1198 workstream 8): one alias per GPU lane, so the
-# packages, features, targets, and the GPU serial rule (`--test-threads=1`)
+# packages, features, targets, and the real-model serial rule (`--test-threads=1`)
 # cannot be forgotten. Acceptance journeys are `#[ignore]`d: they need real
 # model artifacts, an Apple-Silicon host, and run through `--ignored` here.
 # A bare `cargo test -p astronomical-acceptance` without features runs

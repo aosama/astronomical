@@ -8,6 +8,13 @@ use super::warm_expert_slot_table_cache_tests::{
 };
 use super::*;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+// Both tests sample the process-global MLX allocator (active-memory bytes)
+// and assert exact deltas with a tight slack. serial_test's lock does not
+// fence unannotated tests, so serializing only these two is not enough:
+// every MLX-allocating test in this binary must carry #[serial] for these
+// samples to stay clean — freeing the others proved this by failing here.
+// Serial in this crate guards global allocator accounting, not the
+// real-model load rule.
 use serial_test::serial;
 
 /// Issue #955 invariant: after every flush, a table's real payload must equal

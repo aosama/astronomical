@@ -20,7 +20,7 @@
 
 ## Testing Instructions For Astronomical
 
-- End to End or Acceptance tests that excersise an inference journey must never run in parallel. Those tests must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests and performance tests. However for integration tests that use MLX/GPU those can be parallelized.
+- Tests that use real full sized models and loads them in memory for further use by the GPU must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests and performance tests.
 
 - SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level tests to identify the slow call path rather than increasing the budget or repeating long model runs.
 

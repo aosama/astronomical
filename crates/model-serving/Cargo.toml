@@ -60,6 +60,10 @@ astronomical-test-harness = { path = "../test-harness", features = ["test-fixtur
 libc.workspace = true
 # start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
+# Serial across this crate's MLX-allocating test family is load-bearing:
+# the accounting tests sample the process-global MLX allocator, and
+# serial_test does not fence unannotated tests — the whole family must
+# serialize (see memory_behavior_tests.rs).
 serial_test.workspace = true
 tempfile = "=3.27.0"
 tracing-subscriber.workspace = true

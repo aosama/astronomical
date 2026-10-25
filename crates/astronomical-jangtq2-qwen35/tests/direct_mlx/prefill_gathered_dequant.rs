@@ -39,8 +39,8 @@
 //! stay alive across the measurement — a dropped, freed output can return a
 //! stale or zeroed graph result on a later identical launch.
 //!
-//! Every test is `#[serial]` because graphics-processor tests never run in
-//! parallel, and they are `#[ignore]`d: run them optimized through
+//! Every test is `#[serial]` because these are throughput measurements,
+//! and they are `#[ignore]`d: run them optimized through
 //! `cargo test-jangtq2-decode-throughput` (the filter matches this module's
 //! `..._throughput` names).
 

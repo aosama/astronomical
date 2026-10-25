@@ -6,12 +6,11 @@
 //! and accumulate against the activation in float64 — so the kernel is pinned
 //! to the format contract and not merely to the materializing decoder. A
 //! second contract pins it to that decoder plus `gather_mm` on a real top-8
-//! page shape, the pair it replaces on the decode path. Every test is
-//! `#[serial]` because MLX graphics-processor tests never run in parallel.
+//! page shape, the pair it replaces on the decode path; the contracts run in
+//! parallel on small synthetic tensors.
 
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype};
-use serial_test::serial;
 
 use astronomical_jangtq2_qwen35::codebook;
 use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
@@ -239,7 +238,6 @@ fn run_host_reference_contract(
 const UNSORTED_DUPLICATE_ROUTE: &[i32] = &[3, 0, 4, 3];
 
 #[test]
-#[serial]
 fn should_match_host_reference_for_two_bit_codes_with_one_shared_activation_row() {
     run_host_reference_contract(
         TWO_BIT_WIDTH,
@@ -251,7 +249,6 @@ fn should_match_host_reference_for_two_bit_codes_with_one_shared_activation_row(
 }
 
 #[test]
-#[serial]
 fn should_match_host_reference_for_three_bit_codes_that_straddle_words() {
     // At 3 bits every 32-code group spans three words and ten codes straddle
     // a word boundary, the layout the kernel's spread-and-mask must honor.
@@ -265,7 +262,6 @@ fn should_match_host_reference_for_three_bit_codes_that_straddle_words() {
 }
 
 #[test]
-#[serial]
 fn should_match_host_reference_for_four_bit_codes() {
     run_host_reference_contract(
         FOUR_BIT_WIDTH,
@@ -277,7 +273,6 @@ fn should_match_host_reference_for_four_bit_codes() {
 }
 
 #[test]
-#[serial]
 fn should_match_host_reference_with_one_activation_row_per_assignment() {
     run_host_reference_contract(
         TWO_BIT_WIDTH,
@@ -289,7 +284,6 @@ fn should_match_host_reference_with_one_activation_row_per_assignment() {
 }
 
 #[test]
-#[serial]
 fn should_project_a_single_assignment_route() {
     // The one-assignment boundary: the grid is exactly one expert's rows and
     // the shared-row and per-assignment layouts coincide.
@@ -297,7 +291,6 @@ fn should_project_a_single_assignment_route() {
 }
 
 #[test]
-#[serial]
 fn should_match_materializing_decode_and_gather_matmul_on_a_top_k_page() {
     let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
@@ -394,7 +387,6 @@ fn should_match_materializing_decode_and_gather_matmul_on_a_top_k_page() {
 }
 
 #[test]
-#[serial]
 fn should_reject_an_unsupported_bit_width() {
     let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
@@ -422,7 +414,6 @@ fn should_reject_an_unsupported_bit_width() {
 }
 
 #[test]
-#[serial]
 fn should_reject_activations_whose_width_disagrees_with_the_packed_rows() {
     let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
@@ -446,7 +437,6 @@ fn should_reject_activations_whose_width_disagrees_with_the_packed_rows() {
 }
 
 #[test]
-#[serial]
 fn should_reject_activation_row_counts_that_match_neither_one_nor_the_assignment_count() {
     let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
@@ -471,7 +461,6 @@ fn should_reject_activation_row_counts_that_match_neither_one_nor_the_assignment
 }
 
 #[test]
-#[serial]
 fn should_reject_floating_point_expert_indices() {
     let runtime = contract_runtime();
     let kernel = FusedJangtq2GatheredProjectionKernel::new()
