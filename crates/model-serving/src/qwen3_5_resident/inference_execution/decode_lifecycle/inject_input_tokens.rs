@@ -104,15 +104,7 @@ impl Qwen3_5EngineState {
         // The injected prefill bypasses the tap-capturing forward that grows
         // the draft's context cache, so speculation suspends for the session's
         // remainder; the classic path below owns feedback exactly.
-        if active_request.speculative_session_admitted {
-            active_request.speculative_session_admitted = false;
-            active_request.speculative_emission_queue.clear();
-            active_request.speculative_draft_key_value_states = None;
-            tracing::info!(
-                request_id = active_request.request_id.value(),
-                "suspending speculative decoding for the session at feedback injection"
-            );
-        }
+        active_request.suspend_speculative_session("feedback_injection");
         active_request.pending_generated_token = None;
         let final_input_token_position = input_token_ids.len() - 1;
         if final_input_token_position > 0 {

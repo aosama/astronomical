@@ -113,7 +113,8 @@ async fn should_serve_through_speculative_decoding() {
         .find(|report| attribution_counter(report, "speculative_round_count") > 0)
         .unwrap_or_else(|| {
             panic!(
-                "at least one generation report must carry speculative round counters; reports={generation_reports:?}"
+                "at least one generation report must carry speculative round counters; report_count={}; reports={generation_reports:?}",
+                generation_reports.len()
             )
         });
     let speculative_round_count =
@@ -152,7 +153,10 @@ fn write_speculative_acceptance_config(
             "model_directories": [acceptance_model_scan_root(model_directory)],
             "maximum_mlx_memory_gb": speculative_memory_ceiling_bytes.div_ceil(1_000_000_000),
         },
-        "prompt_cache": {"enabled": false},
+        // The cache stays enabled to match the control journey's working
+        // attribution path; admitted speculative sessions bypass it in both
+        // directions regardless (decided at session admission).
+        "prompt_cache": {"enabled": true},
         "diagnostics": {"performance_attribution_enabled": true},
         "chunking": {
             "speculative_decoding_block_length_tokens": SPECULATIVE_BLOCK_LENGTH_TOKENS,
@@ -204,16 +208,37 @@ async fn complete_greedy_chat_request(
         }
     };
     let mut assistant_response = String::new();
+    let mut observed_finish_reasons = Vec::new();
+    let mut observed_stream_error = Option::<String>::None;
     while let Some(stream_item) = streamed_completion.next().await {
-        let stream_chunk = stream_item.unwrap_or_else(|stream_error| {
-            panic!("{request_label} should stream a valid response: {stream_error}")
-        });
+        let stream_chunk = match stream_item {
+            Ok(stream_chunk) => stream_chunk,
+            Err(stream_error) => {
+                observed_stream_error = Some(stream_error.to_string());
+                break;
+            }
+        };
         for choice in stream_chunk["choices"].as_array().into_iter().flatten() {
             if let Some(text_fragment) = choice["delta"]["content"].as_str() {
                 assistant_response.push_str(text_fragment);
             }
+            if let Some(finish_reason) = choice["finish_reason"].as_str() {
+                observed_finish_reasons.push(finish_reason.to_owned());
+            }
+        }
+        if stream_chunk.get("error").is_some() {
+            observed_stream_error = Some(stream_chunk["error"].to_string());
         }
     }
+    assert!(
+        observed_stream_error.is_none(),
+        "{request_label} stream must not end in an error: {observed_stream_error:?}"
+    );
+    assert_eq!(
+        observed_finish_reasons,
+        vec!["stop".to_owned()],
+        "{request_label} must finish with a natural stop, saw {observed_finish_reasons:?}"
+    );
     assistant_response
 }
 

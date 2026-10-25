@@ -113,11 +113,12 @@ fn resolve_draft_directory_for_target(
     Ok(None)
 }
 
-/// Draft leaf directory names this engine recognizes. The companion-draft
-/// naming convention carries the family name; the explicit configuration
-/// surface (daemon-side enable flag plus draft name) replaces this default
-/// when it lands, and until then the family default keeps a paired library
-/// working with zero configuration.
+/// Draft leaf directory names this engine recognizes. The v1 pairing rule
+/// is the companion-draft naming convention: the draft ships beside its
+/// target family under the family's exact leaf name, so this list changes
+/// only when the library retargets checkpoints — the same event that
+/// updates the e2e registry roles. An explicit draft-name configuration
+/// key would supersede it if libraries ever carry more than one family.
 fn installed_draft_leaf_ids() -> [String; 1] {
     [String::from("Ornith-1.5-35B-A3B-DFlash")]
 }

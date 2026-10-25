@@ -25,6 +25,8 @@ pub use speculation_session_admission::{
 pub use verification_decisions::GreedyVerificationDecision;
 
 #[cfg(test)]
+mod speculation_round_tests;
+#[cfg(test)]
 mod speculation_session_admission_tests;
 #[cfg(test)]
 mod verification_decisions_tests;

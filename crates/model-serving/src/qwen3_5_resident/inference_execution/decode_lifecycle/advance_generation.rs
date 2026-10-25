@@ -128,13 +128,7 @@ impl Qwen3_5EngineState {
         // below already handles that boundary exactly.
         if active_request.speculative_session_admitted {
             if forced_thinking_transition_token_id.is_some() {
-                active_request.speculative_session_admitted = false;
-                active_request.speculative_emission_queue.clear();
-                active_request.speculative_draft_key_value_states = None;
-                tracing::info!(
-                    request_id = request_id.value(),
-                    "suspending speculative decoding for the session at a forced thinking transition"
-                );
+                active_request.suspend_speculative_session("forced_thinking_transition");
             } else if active_request.pending_generated_token.is_some()
                 || !active_request.speculative_emission_queue.is_empty()
             {

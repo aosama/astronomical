@@ -36,7 +36,10 @@ pub struct SpeculationRoundRequest {
     pub request_id: RequestId,
     /// The token the target itself endorsed last; it seeds the draft block.
     pub bonus_token_id: u32,
-    /// How many proposals the draft drafts (`k`).
+    /// How many proposals the draft drafts this round (`k`). This is the
+    /// configured speculative decoding block length clamped by the
+    /// session's remaining output budget — the configured ceiling, not
+    /// necessarily the per-round value.
     pub speculation_token_count: usize,
     /// The shared context length: target and draft key-value offsets.
     pub context_length_tokens: u32,
@@ -288,6 +291,36 @@ fn assemble_block_token_ids(
         block_token_ids.push(mask_token_id_u32);
     }
     block_token_ids
+}
+
+/// Test-visible assembly mirrors: the production helpers stay private to
+/// keep the round's token flow in one place; these thin re-exports exist
+/// so the assembly tests lock the exact token orders without graphics
+/// machinery.
+#[cfg(test)]
+pub(super) fn assemble_verification_tokens_for_tests(
+    bonus_token_id: u32,
+    proposals: &[u32],
+) -> Vec<u32> {
+    assemble_verification_tokens(bonus_token_id, proposals)
+}
+
+#[cfg(test)]
+pub(super) fn assemble_replay_tokens_for_tests(
+    bonus_token_id: u32,
+    proposals: &[u32],
+    verification_decision: &GreedyVerificationDecision,
+) -> Vec<u32> {
+    assemble_replay_tokens(bonus_token_id, proposals, verification_decision)
+}
+
+#[cfg(test)]
+pub(super) fn assemble_block_token_ids_for_tests(
+    bonus_token_id: u32,
+    mask_token_id: i32,
+    speculation_token_count: usize,
+) -> Vec<u32> {
+    assemble_block_token_ids(bonus_token_id, mask_token_id, speculation_token_count)
 }
 
 fn assemble_verification_tokens(bonus_token_id: u32, proposals: &[u32]) -> Vec<u32> {

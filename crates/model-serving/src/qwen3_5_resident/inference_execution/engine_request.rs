@@ -86,6 +86,28 @@ pub(in crate::qwen3_5_resident) struct Qwen3_5EngineRequest {
 }
 
 impl Qwen3_5EngineRequest {
+    /// Suspends speculative decoding for this session's remainder.
+    ///
+    /// Called when a path the block contract cannot preserve takes over:
+    /// a forced thinking transition replaces the conditioned successor, and
+    /// feedback injection's prefill bypasses the tap-capturing forward that
+    /// grows the draft's context cache. The queue (including its uncommitted
+    /// tail) and the draft states drop; the classic path owns everything
+    /// from here.
+    pub(super) fn suspend_speculative_session(&mut self, suspension_reason: &'static str) {
+        if !self.speculative_session_admitted {
+            return;
+        }
+        self.speculative_session_admitted = false;
+        self.speculative_emission_queue.clear();
+        self.speculative_draft_key_value_states = None;
+        tracing::info!(
+            request_id = self.request_id.value(),
+            suspension_reason,
+            "suspending speculative decoding for the session's remainder"
+        );
+    }
+
     /// Records one generated token in the penalty history, keeping it sorted and unique.
     ///
     /// Only requests with an active penalty call this, so the common path never

@@ -88,12 +88,15 @@ fn dispatch_speculative_forward(
     model: &Qwen3_5ResidentModel,
     prefill_start: usize,
     prefill_end: usize,
-) -> Result<NonSpeculativeOutcome, PrefillForwardError> {
+) -> Result<ChunkForwardOutcome, PrefillForwardError> {
     let draft_runtime = engine_state.speculative_draft_runtime.as_ref().ok_or(
         Qwen3_5ExecutionError::InvalidInput {
             description: "speculative prefill requires the resident draft runtime",
         },
     )?;
+    // Admission guarantees a text-only session (visual inputs stay classic),
+    // so every admitted chunk takes the plain text path — no image-pad
+    // tokens can appear here.
     let chunk_includes_final_prompt_token = prefill_end == active_request.input_token_ids.len();
     let logits_mode = if chunk_includes_final_prompt_token {
         VerificationLogitsMode::LastRowOnly
@@ -147,12 +150,16 @@ fn dispatch_speculative_forward(
             )?;
         active_request.set_pending_generated_token(first_generated_token);
     }
-    Ok(NonSpeculativeOutcome {
+    Ok(ChunkForwardOutcome {
         boundary_checkpoints: Vec::new(),
     })
 }
 
-struct NonSpeculativeOutcome {
+/// What either prefill dispatch path produced for one chunk. Named for the
+/// payload, not either path: the speculative branch returns the same shape
+/// (its checkpoint list is always empty — admitted sessions forfeit
+/// prompt-cache capture by decision at admission).
+struct ChunkForwardOutcome {
     boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
 }
 
@@ -162,7 +169,7 @@ fn dispatch_non_speculative_forward(
     prefill_start: usize,
     prefill_end: usize,
     plan: &PrefillChunkPlan,
-) -> Result<NonSpeculativeOutcome, PrefillForwardError> {
+) -> Result<ChunkForwardOutcome, PrefillForwardError> {
     let boundary_checkpoints;
     // Request-owned visual embeddings stay attached after every image-pad in this
     // prompt has already been consumed. Dispatching on that tensor made a cached
@@ -204,7 +211,7 @@ fn dispatch_non_speculative_forward(
         )?;
     }
 
-    Ok(NonSpeculativeOutcome {
+    Ok(ChunkForwardOutcome {
         boundary_checkpoints,
     })
 }

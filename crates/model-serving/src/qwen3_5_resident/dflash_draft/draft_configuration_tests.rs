@@ -173,3 +173,53 @@ fn should_reject_layer_types_that_do_not_cover_every_layer() {
             if description.contains("exactly num_hidden_layers layers")
     ));
 }
+
+#[test]
+fn should_reject_a_non_positive_block_size() {
+    let mut config_document = ornith_dflash_draft_config_document();
+    config_document["dflash_config"]["block_size"] = serde_json::json!(0);
+
+    let parse_error = DFlashDraftConfiguration::from_config_value(&config_document)
+        .expect_err("a zero training block size cannot be valid");
+
+    assert!(matches!(
+        parse_error,
+        DFlashDraftConfigurationError::InvalidGeometry { description }
+            if description.contains("block_size must be positive")
+    ));
+}
+
+#[test]
+fn should_reject_non_positive_normalization_and_rope_parameters() {
+    let mut non_positive_epsilon = ornith_dflash_draft_config_document();
+    non_positive_epsilon["rms_norm_eps"] = serde_json::json!(0.0);
+    assert!(matches!(
+        DFlashDraftConfiguration::from_config_value(&non_positive_epsilon),
+        Err(DFlashDraftConfigurationError::InvalidGeometry { description })
+            if description.contains("rms_norm_eps must be positive")
+    ));
+
+    let mut non_positive_rope_theta = ornith_dflash_draft_config_document();
+    non_positive_rope_theta["rope_parameters"]["rope_theta"] = serde_json::json!(0.0);
+    assert!(matches!(
+        DFlashDraftConfiguration::from_config_value(&non_positive_rope_theta),
+        Err(DFlashDraftConfigurationError::InvalidGeometry { description })
+            if description.contains("rope_theta must be positive")
+    ));
+}
+
+#[test]
+fn should_derive_head_dimension_from_the_trunk_when_absent() {
+    // A hidden size of 2,048 over 16 heads derives a head dimension of 128
+    // without an explicit head_dim field.
+    let mut config_document = ornith_dflash_draft_config_document();
+    config_document
+        .as_object_mut()
+        .expect("the fixture is an object")
+        .remove("head_dim");
+    config_document["num_attention_heads"] = serde_json::json!(16);
+    let configuration = DFlashDraftConfiguration::from_config_value(&config_document)
+        .expect("the derived head dimension should parse");
+
+    assert_eq!(configuration.head_dimension(), 128);
+}
