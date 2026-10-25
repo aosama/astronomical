@@ -1,0 +1,9 @@
+# cargo-nextest configuration (issue #1553 phase 3). CI runs the integration
+# lane through the nextest-integration alias in .cargo/config.toml.
+
+[profile.default]
+# Per-test hang budget: a test running for 30 seconds is reported slow, and
+# one still running after four periods (120 seconds, the repository's
+# default test timeout) is terminated. This is the per-test successor to the
+# job-level budgets of issue #1333, which could only name the job that hung.
+slow-timeout = { period = "30s", terminate-after = 4 }

@@ -67,6 +67,16 @@ warnings = "deny"
 # Memory-policy memory-equation and reserve compile-time contracts: run
 # `cargo test -p astronomical-memory-policy` to include unit tests and doctests.
 test-integration = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test integration_tests"
+# nextest-integration: the identical integration-lane selection executed by
+# cargo-nextest (issue #1553 phase 3) — the engine CI uses. One process per
+# test, so process-global state (environment variables, signal handlers,
+# the MLX allocator the model-serving accounting tests sample) cannot leak
+# between tests, which is why those tests pass here in parallel even under
+# --features direct-mlx; .config/nextest.toml adds a per-test hang budget.
+# Requires cargo-nextest on PATH (CI provisions a pinned, checksum-verified
+# build). The workflow structural contract pins that this selection and
+# test-integration's stay identical.
+nextest-integration = "nextest run --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test integration_tests"
 test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures --lib"
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"

@@ -292,6 +292,36 @@ jobs:
           # binary does not exist yet.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo run --quiet -p xtask -- install-verification-tools
+      # cargo-nextest executes the integration lane (issue #1553 phase 3).
+      # Pinned version and digest, verified before use like every other
+      # native dependency: a digest mismatch fails the job instead of running
+      # an unverified binary. Bump procedure: update both values together
+      # from the release's published .sha256 for the universal-apple-darwin
+      # archive.
+      - name: Provision pinned cargo-nextest
+        env:
+          NEXTEST_VERSION: "0.9.149"
+          NEXTEST_SHA256: 47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217507
+        run: |
+          set -euo pipefail
+          trap 'scripts/ci/ci-step-timing.sh end provision-nextest' EXIT
+          scripts/ci/ci-step-timing.sh begin provision-nextest
+          nextest_directory="$RUNNER_TEMP/cargo-nextest"
+          mkdir -p "$nextest_directory"
+          nextest_archive="$nextest_directory/cargo-nextest.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 \
+            --output "$nextest_archive" \
+            "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-universal-apple-darwin.tar.gz"
+          actual_nextest_sha256="$(shasum -a 256 "$nextest_archive" | awk '{print $1}')"
+          if [ "$actual_nextest_sha256" != "$NEXTEST_SHA256" ]; then
+            printf 'Error: cargo-nextest archive digest mismatch: expected %s, got %s\n' \
+              "$NEXTEST_SHA256" "$actual_nextest_sha256" >&2
+            exit 1
+          fi
+          tar -xzf "$nextest_archive" -C "$nextest_directory"
+          printf '%s\n' "$nextest_directory" >> "$GITHUB_PATH"
+          "$nextest_directory/cargo-nextest" nextest --version
+        timeout-minutes: 2
       # Default-branch and dispatch builds bundle the app, so they refresh
       # the notices in place: a bot-merged dependency update can land one
       # regeneration behind, and the bundle must never ship stale notices.
@@ -395,7 +425,13 @@ jobs:
           # this required check; the default GitHub bash shell sets pipefail, but
           # state it explicitly so the invariant survives a shell change.
           set -o pipefail
-          cargo test-integration -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/integration.log"
+          # nextest runs one process per test, so process-global state
+          # (environment variables, signal handlers, and the MLX allocator
+          # the model-serving accounting tests sample) cannot leak between
+          # tests, and .config/nextest.toml enforces a per-test hang budget.
+          # It reuses the binaries the compile step above already built: the
+          # nextest-integration alias carries the identical selection.
+          cargo nextest-integration 2>&1 | tee "$RUNNER_TEMP/test-logs/integration.log"
           cargo test-test-harness-fixtures 2>&1 | tee "$RUNNER_TEMP/test-logs/test-harness-fixtures.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
