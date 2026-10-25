@@ -4,39 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.81</title>
-            <pubDate>Sat, 24 Oct 2026 19:24:51 -0400</pubDate>
-            <sparkle:version>1669</sparkle:version>
-            <sparkle:shortVersionString>0.2.81</sparkle:shortVersionString>
+            <title>0.2.82</title>
+            <pubDate>Sun, 25 Oct 2026 00:13:55 -0400</pubDate>
+            <sparkle:version>1674</sparkle:version>
+            <sparkle:shortVersionString>0.2.82</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.81
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.82
 
-## What's new
+## Changes
 
-- **Typed memory decisions across the serving stack.** Every request now flows through a memory equation, a transient workspace reserve, typed admission verdicts, and typed engine placement. Resident prompts that fit the live ceiling stay resident instead of being demoted, and a streaming engine demoted under memory pressure returns to resident once pressure clears.
-- **Smoother long generations.** Decode expert sets are seated before handoff, the status surface stays honest during long requests, and default-budget generations render indeterminate progress.
-- **Persistent SSD prompt cache for folded-ternary models**, with MLX memory telemetry reported on finalization and limit changes.
-- **OpenAI-compatible request ceilings aligned with mainstream providers.**
-- **Codex CLI integration:** start Codex CLI against a local chat model.
-- **Accessibility:** every Thin Talk interactive control now carries a stable accessibility identifier.
-- **Native MLX runtime upgraded to v0.32.4**, and the jangtq2 weight family (JANGH2 bundle) is now supported with fused codebook decode.
+- **Prefill memory exhaustion recovery for SSD streaming inference.** Streaming prefill chunk sizes are capped and prefill now recovers when a memory ceiling is exceeded mid-flight, so long prompts under tight memory ceilings no longer fail the request (#1542).
+- **Seated streaming engine performance and exact memory reserves.** When sparse mixture-of-experts layers are already resident in memory, the streaming engine removes per-layer host round-trips and handles routing on-device, bringing prefill and decode throughput closer to the resident engine. Context and reserve accounting is now an exact geometry-plus-measured-overhead projection, so admission under tight memory ceilings is predictable and no longer rejects work that would have fit (#1544).
+
+No other user-visible changes ship in this release.
 
 ## Compatibility
 
-- macOS 14.0 and later on Apple silicon (arm64).
-- The K2 Horizon MoVA model family is retired: it is no longer served, downloadable, or discovered; an installed copy classifies as an unknown model type and fails closed at discovery.
-- Existing configuration, state, and other installed models are preserved; no migration is required.
+- No configuration schema changes; existing configuration files remain valid.
+- No migration steps; models, caches, and settings are preserved in place.
+- macOS 14.0 or later on Apple silicon (arm64).
 
 ## Distribution
 
-- The application and every nested executable are signed with Astronomical's Developer ID Application certificate (Hardened Runtime, timestamped), and the disk image is notarized with Apple and carries a stapled notarization ticket.
-- Existing installs receive this update through the signed Sparkle feed; new installs download `Astronomical-0.2.81-macOS-arm64.dmg` from the releases page.
+This release is distributed as a Developer ID signed, notarized, and stapled disk image. SHA-256 digests for every artifact are recorded in the release manifest, and updates are delivered through the Sparkle feed signed with the project's EdDSA key.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.81/Astronomical-0.2.81-macOS-arm64.dmg" length="18432085" type="application/octet-stream" sparkle:edSignature="mqaWDe9qqWOqE8vOAxMrmdIM6ELQeXAff9MFQQAkZyT0iQOGrOXJ72XJMBrHvJFaBynqHMw17x0jTui+aPNqAQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.82/Astronomical-0.2.82-macOS-arm64.dmg" length="18453515" type="application/octet-stream" sparkle:edSignature="DYMII3XVYDW6WYHW/uFeMgNwi3ktSzoIrfJXWIcPm4v5T6asWiPUgL4WvdRjNde9qQAuPChaHhlExjUxGyVgBg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: nEBbhSjf21phaU416hqq2z3d1x+sutpXP7ZnADQMwB2vr0Db1MKWDfglrW+ANBFaRFUX4enVRhcQBF+N3r9lBQ==
-length: 3113
+edSignature: PUvfn+b8PFtH5bvN9sIxGhPxq4FXPcNEpDWjdjP3blrhpgCsRqjQKvVNDOEr2f37EPbygNOyLYcYksTlaiHfCQ==
+length: 2565
 -->
