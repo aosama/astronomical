@@ -1,10 +1,12 @@
 //! The workflow structural contract, as typed Rust: parses
 //! `.github/workflows/ci.yml` and pins the required check's triggers,
 //! fail-closed macOS authority, bounded timeouts, integration-lane compile
-//! contract, and attributable timing. Cache-ownership structure lives in the
-//! companion `workflow_cache_owner_contract` test; both replace the
-//! Ruby-in-shell section of
-//! `scripts/ci/tests/test-ci-native-cache-coordination.sh` (issue #1250).
+//! contract, and attributable timing. The verdict fan-in that owns the
+//! merge gate is pinned by the companion `workflow_verdict_contract` test;
+//! cache-ownership structure lives in the companion
+//! `workflow_cache_owner_contract` test; both replace the Ruby-in-shell
+//! section of `scripts/ci/tests/test-ci-native-cache-coordination.sh`
+//! (issue #1250).
 
 mod contract_support;
 
