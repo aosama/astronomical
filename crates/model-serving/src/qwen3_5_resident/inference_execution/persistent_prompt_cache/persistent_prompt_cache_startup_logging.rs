@@ -2,7 +2,7 @@
 
 use crate::PersistentPromptCacheDiskStore;
 
-pub(super) fn log_persistent_prompt_cache_startup_cleanup(
+pub(in crate::qwen3_5_resident::inference_execution) fn log_persistent_prompt_cache_startup_cleanup(
     cache_role: &'static str,
     persistent_prompt_cache: &PersistentPromptCacheDiskStore,
 ) {
