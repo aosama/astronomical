@@ -150,3 +150,48 @@ fn should_carry_the_exact_construction_failure_texts() {
         crate::InferenceEngineError::Fatal { reason } if reason == "Qwen3.5 context memory reservation overflowed"
     ));
 }
+
+#[test]
+fn should_carry_the_exact_memory_governance_failure_texts() {
+    let try_from_int_error = u32::try_from(usize::MAX).expect_err("usize maximum must exceed u32");
+
+    let context_reservation_error = generation_context_memory_reservation_overflowed_error();
+    let prefill_workspace_error =
+        prefill_activation_workspace_exceeds_platform_range_error(try_from_int_error);
+    let context_workspace_error = generation_context_workspace_reservation_overflowed_error();
+    let ceiling_range_error =
+        current_mlx_memory_ceiling_exceeds_u64_range_error(try_from_int_error);
+    let active_memory_error = mlx_active_memory_exceeds_u64_range_error(try_from_int_error);
+    let allocator_cache_error =
+        mlx_allocator_cache_memory_exceeds_u64_range_error(try_from_int_error);
+    let peak_memory_error = mlx_peak_memory_exceeds_u64_range_error(try_from_int_error);
+
+    assert!(matches!(
+        context_reservation_error,
+        crate::InferenceEngineError::InvalidRequest { reason } if reason == "generation context memory reservation overflowed"
+    ));
+    assert!(matches!(
+        prefill_workspace_error,
+        crate::InferenceEngineError::InvalidRequest { reason } if reason == "prefill activation workspace exceeds the platform range"
+    ));
+    assert!(matches!(
+        context_workspace_error,
+        crate::InferenceEngineError::InvalidRequest { reason } if reason == "generation context workspace reservation overflowed"
+    ));
+    assert!(matches!(
+        ceiling_range_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "current MLX memory ceiling exceeds the u64 range"
+    ));
+    assert!(matches!(
+        active_memory_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "MLX active memory exceeds the u64 range"
+    ));
+    assert!(matches!(
+        allocator_cache_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "MLX allocator-cache memory exceeds the u64 range"
+    ));
+    assert!(matches!(
+        peak_memory_error,
+        crate::InferenceEngineError::Fatal { reason } if reason == "MLX peak memory exceeds the u64 range"
+    ));
+}
