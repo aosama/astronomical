@@ -47,8 +47,15 @@ const PROOF_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
 const MEASURED_OUTPUT_TOKENS: usize = 500;
 /// The warmup contract for throughput journeys: untimed decode tokens.
 const WARMUP_OUTPUT_TOKENS: usize = 50;
-/// Draft block length used by the reference serving recipes.
-const SPECULATION_TOKEN_COUNT: usize = 8;
+/// Draft block length used by the reference serving recipes. Overridable
+/// through `DFLASH_PROOF_SPECULATION_TOKENS` so one build sweeps block
+/// lengths; the measurement itself never changes.
+fn speculation_token_count() -> usize {
+    std::env::var("DFLASH_PROOF_SPECULATION_TOKENS")
+        .ok()
+        .and_then(|block_length_text| block_length_text.parse().ok())
+        .unwrap_or(8)
+}
 /// Prefill chunk length for the tap-capturing bootstrap, matching the
 /// resident engine's default prompt-processing granularity.
 const PREFILL_CHUNK_TOKENS: usize = 2048;
@@ -114,6 +121,26 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
         journey_started_at,
     );
 
+    // Speculative first: only it requires the draft and target caches to
+    // stay in lockstep, and every phase before it preserved that sync.
+    // Baseline runs last because one-token forwards advance only the
+    // target's cache — the draft would be left behind and could not be
+    // cheaply re-synced without contaminating the baseline timing.
+    println!(
+        "[dflash-proof {:>4}s] measuring speculative: {MEASURED_OUTPUT_TOKENS} tokens at k={}",
+        journey_started_at.elapsed().as_secs(),
+        speculation_token_count()
+    );
+    let speculative_started_at = Instant::now();
+    let speculative_outcome = decode_speculative(
+        &mut journey,
+        warmup_bonus_token_id,
+        warmup_outcome.context_length_after,
+        MEASURED_OUTPUT_TOKENS,
+        journey_started_at,
+    );
+    let speculative_elapsed = speculative_started_at.elapsed();
+
     println!(
         "[dflash-proof {:>4}s] measuring baseline: {MEASURED_OUTPUT_TOKENS} one-token-at-a-time tokens",
         journey_started_at.elapsed().as_secs()
@@ -121,25 +148,11 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
     let baseline_started_at = Instant::now();
     let baseline_outcome = decode_baseline(
         &mut journey,
-        warmup_outcome.next_bonus_token_id,
-        warmup_outcome.context_length_after,
+        speculative_outcome.next_bonus_token_id,
+        speculative_outcome.context_length_after,
         MEASURED_OUTPUT_TOKENS,
     );
     let baseline_elapsed = baseline_started_at.elapsed();
-
-    println!(
-        "[dflash-proof {:>4}s] measuring speculative: {MEASURED_OUTPUT_TOKENS} tokens at k={SPECULATION_TOKEN_COUNT}",
-        journey_started_at.elapsed().as_secs()
-    );
-    let speculative_started_at = Instant::now();
-    let speculative_outcome = decode_speculative(
-        &mut journey,
-        baseline_outcome.next_bonus_token_id,
-        baseline_outcome.context_length_after,
-        MEASURED_OUTPUT_TOKENS,
-        journey_started_at,
-    );
-    let speculative_elapsed = speculative_started_at.elapsed();
 
     let baseline_tokens_per_second = MEASURED_OUTPUT_TOKENS as f64 / baseline_elapsed.as_secs_f64();
     let speculative_tokens_per_second =
@@ -157,7 +170,8 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
         journey.draft_directory.display()
     );
     println!(
-        "prompt tokens: {context_length_tokens} | measured output: {MEASURED_OUTPUT_TOKENS} per mode | k = {SPECULATION_TOKEN_COUNT}"
+        "prompt tokens: {context_length_tokens} | measured output: {MEASURED_OUTPUT_TOKENS} per mode | k = {}",
+        speculation_token_count()
     );
     println!("baseline decode:     {baseline_tokens_per_second:.2} tokens/second");
     println!("speculative decode:  {speculative_tokens_per_second:.2} tokens/second");
@@ -174,19 +188,20 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
         speculative_outcome.accepted_proposal_count as f64
             / speculative_outcome.round_count.max(1) as f64
     );
+    println!(
+        "final context length after both phases: {} tokens",
+        baseline_outcome.context_length_after
+    );
     println!("===========================================================");
 }
 
 fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     let target_directory =
         configured_installed_model_directory_by_id(resident_sparse_moe_model_id());
-    let draft_directory = target_directory
-        .parent()
-        .expect("the target model directory has a library parent")
-        .join(ornith_dflash_draft_model_id());
+    let draft_directory = resolve_draft_library_directory(&target_directory);
     assert!(
         draft_directory.join("model.safetensors").is_file(),
-        "the DFlash draft must sit beside its target in the model library"
+        "the resolved DFlash draft directory must carry model.safetensors"
     );
 
     let runtime = MlxRuntime::initialize(
@@ -207,7 +222,7 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     let model_chunking = Qwen3_5ModelChunkingConfiguration::new(256, 0, 1, 0)
         .expect("the proof chunking configuration should validate");
     let mut disabled_attribution = PerformanceAttribution::disabled();
-    let target_model = Qwen3_5ResidentModel::load_with_performance_attribution(
+    let mut target_model = Qwen3_5ResidentModel::load_with_performance_attribution(
         runtime,
         validated_artifact,
         &target_directory,
@@ -217,8 +232,8 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     )
     .expect("the resident target model should load");
     target_model
-        .materialize_target_weights()
-        .expect("the target weights should materialize");
+        .materialize_complete_weights_matching_production()
+        .expect("the target weights and resident experts should materialize");
     println!(
         "[dflash-proof {:>4}s] target loaded",
         journey_started_at.elapsed().as_secs()
@@ -283,6 +298,32 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
 
 fn bound_draft_tensor_count(draft: &DFlashDraftLoadedWeights) -> usize {
     11 * draft.weights.layers.len() + 3
+}
+
+/// Resolves the draft's directory by leaf id across the library's
+/// organization directories: the target and its draft may ship under
+/// different organizations (the OptiQ target sits under one, the draft
+/// under another), so only the library root is a safe search base.
+fn resolve_draft_library_directory(target_directory: &std::path::Path) -> PathBuf {
+    let library_root = target_directory
+        .parent()
+        .and_then(|organization_directory| organization_directory.parent())
+        .expect("the target model directory must sit inside a library organization directory");
+    let draft_leaf_id = ornith_dflash_draft_model_id();
+    let organization_directories = std::fs::read_dir(library_root)
+        .expect("the model library root should list")
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_dir());
+    for organization_entry in organization_directories {
+        let candidate_directory = organization_entry.path().join(draft_leaf_id);
+        if candidate_directory.join("model.safetensors").is_file() {
+            return candidate_directory;
+        }
+    }
+    panic!(
+        "the DFlash draft {draft_leaf_id} must be installed under one organization directory of {}",
+        library_root.display()
+    );
 }
 
 /// The shared Romeo-and-Juliet fixture, truncated by word count exactly as
@@ -438,7 +479,7 @@ fn decode_speculative(
     let mut attribution = PerformanceAttribution::disabled();
     while emitted_tokens < output_token_count {
         let remaining_tokens = output_token_count - emitted_tokens;
-        let speculation_token_count = SPECULATION_TOKEN_COUNT.min(remaining_tokens);
+        let speculation_token_count = speculation_token_count().min(remaining_tokens);
         let round_request = SpeculationRoundRequest {
             request_id: RequestId::new(0),
             bonus_token_id,
