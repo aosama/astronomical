@@ -157,7 +157,7 @@ pub struct DaemonListedModel {
     pub supports_embeddings: bool,
     /// True when this model is currently resident in the worker.
     pub is_resident: bool,
-    /// Artifact size in bytes; the CLI renders decimal SI gigabytes.
+    /// Artifact size in bytes; the CLI renders gigabytes of 2³⁰ bytes.
     pub size_bytes: u64,
 }
 
@@ -168,7 +168,7 @@ pub struct DaemonCatalogEntry {
     pub huggingface_id: String,
     pub display_name: String,
     pub family: String,
-    /// Approximate download size in bytes; the CLI renders decimal SI GB.
+    /// Approximate download size in bytes; the CLI renders GB of 2³⁰ bytes.
     pub approximate_size_bytes: u64,
     /// True when the entry is discovered or has a validated publication here.
     pub ready_on_this_mac: bool,

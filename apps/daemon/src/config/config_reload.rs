@@ -41,7 +41,7 @@ pub struct ResolvedRuntimeConfig {
     pub model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     /// Configured preferences retained while their canonical target is absent.
     pub unmatched_model_config_ids: Vec<String>,
-    /// Optional user-configured MLX memory ceiling in exact decimal SI bytes.
+    /// Optional user-configured MLX memory ceiling in exact bytes.
     pub maximum_mlx_memory_bytes: Option<u64>,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
