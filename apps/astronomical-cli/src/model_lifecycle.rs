@@ -330,7 +330,7 @@ pub(crate) fn unknown_model_reason(
 }
 
 /// One live-progress line: the terminal re-uses the line while the download
-/// runs. Sizes render in decimal SI gigabytes (1 GB = 1,000,000,000 bytes).
+/// runs. Sizes render in marketed gigabytes (1 GB = 1,073,741,824 bytes).
 pub(crate) fn render_download_progress(download_job: &DaemonDownloadJob) -> String {
     if download_job.bytes_total == 0 {
         return format!("{}: {}", download_job.huggingface_id, download_job.state);

@@ -56,7 +56,7 @@ async fn should_use_the_streaming_chunk_size_for_admission_and_execution() {
 }
 
 #[tokio::test]
-async fn should_fold_a_short_streaming_remainder_into_the_current_forward() {
+async fn should_never_exceed_the_configured_chunk_when_a_short_remainder_follows() {
     timeout(Duration::from_secs(5), async {
         let chunk_sizer =
             Qwen3_5StreamingPromptProcessingChunkSizer::for_ssd_streaming_chunk_size_tokens(2_048)
@@ -68,6 +68,10 @@ async fn should_fold_a_short_streaming_remainder_into_the_current_forward() {
         );
         assert_eq!(
             chunk_sizer.next_prompt_processing_chunk_end(2_048, 4_401),
+            4_096
+        );
+        assert_eq!(
+            chunk_sizer.next_prompt_processing_chunk_end(4_096, 4_401),
             4_401
         );
     })
@@ -96,6 +100,10 @@ async fn should_keep_full_streaming_chunks_when_the_remainder_fills_another_chun
         );
         assert_eq!(
             chunk_sizer.next_prompt_processing_chunk_end(6_144, 10_000),
+            8_192
+        );
+        assert_eq!(
+            chunk_sizer.next_prompt_processing_chunk_end(8_192, 10_000),
             10_000
         );
     })

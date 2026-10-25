@@ -342,7 +342,7 @@ impl AstronomicalConfig {
             .collect()
     }
 
-    /// Resolves the optional user MLX memory ceiling in decimal SI bytes.
+    /// Resolves the optional user MLX memory ceiling in exact bytes.
     ///
     /// `None` means that startup or live runtime control should use the machine maximum.
     pub fn maximum_mlx_memory_bytes(&self) -> Result<Option<u64>, AstronomicalConfigError> {
