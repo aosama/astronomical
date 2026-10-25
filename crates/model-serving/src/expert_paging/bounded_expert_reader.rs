@@ -22,10 +22,8 @@
 //!    page builder, which gives the arrays their gate/up/down meaning.
 //!
 //! The optional positional-read metrics count logical reads issued by this path.
-//! They are not proof of equal physical SSD traffic. The bounded reader sets
-//! `F_NOCACHE` on its descriptor, so macOS does not retain these pages in its
-//! file cache, but the kernel may still serve a read whose pages were already
-//! cached by another descriptor.
+//! They are not proof of equal physical SSD traffic; macOS may satisfy reads from
+//! its file cache.
 
 use std::{collections::HashMap, sync::Arc};
 

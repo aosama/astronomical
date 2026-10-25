@@ -76,12 +76,6 @@ pub(crate) fn load_safetensors_from_bounded_ranges(
     stream: &MlxStream,
     expert_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
 ) -> Result<SafetensorsLoadResult, MlxRuntimeError> {
-    crate::safetensors::page_cache_bypass::disable_file_cache_retention(&source_file).map_err(
-        |source| MlxRuntimeError::RuntimeOperation {
-            operation: "disable file cache retention for expert page reads",
-            description: source.to_string(),
-        },
-    )?;
     let reader_state = BoundedMultiRangeReaderState::new(
         source_file,
         synthetic_header_bytes,
