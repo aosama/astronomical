@@ -234,6 +234,10 @@ pub(crate) fn initialize_qwen3_5_model(
                 model_loading_performance_attribution,
                 performance_attribution_log,
                 diagnostic_resident_prefill_activation_floor_bytes,
+                // Speculative decoding stays off until the configuration
+                // surface threads the requested block length; the engine
+                // and its draft loading are ready the moment it arrives.
+                None,
             )
             .map(ModelFamilyInferenceEngine::Qwen3_5)
         }

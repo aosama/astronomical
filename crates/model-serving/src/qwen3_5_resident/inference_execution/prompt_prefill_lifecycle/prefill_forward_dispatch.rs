@@ -20,6 +20,7 @@ use super::terminal_prefill_seed::{
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use crate::qwen3_5_resident::model::VerificationLogitsMode;
 
 /// Outcome of visual, history-capture, or text prefill.
 pub(super) struct ForwardDispatchOutcome {
@@ -56,18 +57,99 @@ impl Qwen3_5EngineState {
             super::prefill_invalid_input_error_constructors::engine_lost_loaded_model_invalid_input,
         )?;
 
-        let dispatch_outcome = dispatch_non_speculative_forward(
-            active_request,
-            model,
-            prefill_start,
-            prefill_end,
-            plan,
-        )?;
+        let dispatch_outcome = if active_request.speculative_session_admitted {
+            dispatch_speculative_forward(self, active_request, model, prefill_start, prefill_end)?
+        } else {
+            dispatch_non_speculative_forward(
+                active_request,
+                model,
+                prefill_start,
+                prefill_end,
+                plan,
+            )?
+        };
 
         Ok(ForwardDispatchOutcome {
             boundary_checkpoints: dispatch_outcome.boundary_checkpoints,
         })
     }
+}
+
+/// The speculative counterpart of the non-speculative dispatch: every
+/// admitted text chunk runs through the tap-capturing verification forward
+/// so the draft's context key-value cache grows from the target's hidden
+/// states chunk by chunk. The terminal chunk additionally seeds the first
+/// generated token exactly as the classic terminal path does. Boundary
+/// checkpoints are not produced: a speculative session forgoes prompt-cache
+/// capture in both directions by decision at admission.
+fn dispatch_speculative_forward(
+    engine_state: &Qwen3_5EngineState,
+    active_request: &mut Qwen3_5EngineRequest,
+    model: &Qwen3_5ResidentModel,
+    prefill_start: usize,
+    prefill_end: usize,
+) -> Result<NonSpeculativeOutcome, PrefillForwardError> {
+    let draft_runtime = engine_state.speculative_draft_runtime.as_ref().ok_or(
+        Qwen3_5ExecutionError::InvalidInput {
+            description: "speculative prefill requires the resident draft runtime",
+        },
+    )?;
+    let chunk_includes_final_prompt_token = prefill_end == active_request.input_token_ids.len();
+    let logits_mode = if chunk_includes_final_prompt_token {
+        VerificationLogitsMode::LastRowOnly
+    } else {
+        VerificationLogitsMode::NoLogits
+    };
+    let chunk_token_ids = active_request.input_token_ids[prefill_start..prefill_end].to_vec();
+    let chunk_output = model.build_speculative_verification_forward(
+        &chunk_token_ids,
+        active_request.next_position_tokens,
+        &mut active_request.request_decoder_state,
+        draft_runtime.draft_configuration.target_layer_ids(),
+        logits_mode,
+        &mut active_request.performance_attribution,
+    )?;
+    let mut draft_key_value_states = active_request
+        .speculative_draft_key_value_states
+        .take()
+        .ok_or(Qwen3_5ExecutionError::InvalidInput {
+            description: "speculative prefill requires the request's draft key-value states",
+        })?;
+    let conditioned_states =
+        crate::qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states(
+            model.runtime(),
+            &draft_runtime.draft.weights,
+            &chunk_output.hidden_state_taps,
+            draft_runtime.draft_configuration.rms_norm_epsilon(),
+        )
+        .map_err(Qwen3_5ExecutionError::from)?;
+    crate::qwen3_5_resident::dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values(
+        model.runtime(),
+        &draft_runtime.draft.weights,
+        &draft_runtime.draft_configuration,
+        &mut draft_key_value_states,
+        &conditioned_states,
+        prefill_start as i32,
+    )
+    .map_err(Qwen3_5ExecutionError::from)?;
+    active_request.speculative_draft_key_value_states = Some(draft_key_value_states);
+    if chunk_includes_final_prompt_token {
+        let terminal_logits =
+            chunk_output
+                .per_position_logits
+                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "the terminal speculative chunk must produce its seeding logits",
+                })?;
+        let first_generated_token = active_request
+            .build_generated_token(model, &terminal_logits)
+            .map_err(
+                super::prefill_invalid_input_error_constructors::terminal_prefill_first_generated_token_sampling_failed_invalid_input,
+            )?;
+        active_request.set_pending_generated_token(first_generated_token);
+    }
+    Ok(NonSpeculativeOutcome {
+        boundary_checkpoints: Vec::new(),
+    })
 }
 
 struct NonSpeculativeOutcome {

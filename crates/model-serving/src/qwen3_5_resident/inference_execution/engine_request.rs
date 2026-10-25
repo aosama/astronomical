@@ -69,6 +69,20 @@ pub(in crate::qwen3_5_resident) struct Qwen3_5EngineRequest {
     pub(super) generation_preparation_announced: bool,
     pub(super) structured_generation:
         Option<crate::structured_generation::StructuredTokenConstraint>,
+    /// Draft key-value states for the speculative session; present only
+    /// while the session was admitted for draft-and-verify decoding.
+    pub(super) speculative_draft_key_value_states: Option<
+        crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
+    >,
+    /// Tokens one accepted speculative round still owes the caller, in
+    /// emission order. The tail entry seeds the next round and is the only
+    /// queued token absent from the target's decoder state.
+    pub(super) speculative_emission_queue: std::collections::VecDeque<mlx_c_rust::MlxArray>,
+    /// Whether this session runs draft-and-verify; decided once at install
+    /// and only ever cleared when a path the block contract cannot preserve
+    /// (forced thinking transition, mid-decode feedback injection) suspends
+    /// speculation for the remainder of the session.
+    pub(super) speculative_session_admitted: bool,
 }
 
 impl Qwen3_5EngineRequest {
