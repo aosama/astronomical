@@ -13,7 +13,7 @@ use astronomical_ipc_protocol::RequestId;
 use super::Qwen3_5EngineState;
 
 impl Qwen3_5EngineState {
-    pub(super) fn admit_initial_generation_context_or_record_rejection(
+    pub(in crate::qwen3_5_resident::inference_execution) fn admit_initial_generation_context_or_record_rejection(
         &mut self,
         request_id: RequestId,
         configured_maximum_output_tokens: u16,
@@ -52,16 +52,12 @@ impl Qwen3_5EngineState {
     ) -> Result<(), InferenceEngineError> {
         let context_growth_bytes = total_context_tokens
             .checked_mul(self.context_memory_reservation_bytes_per_token)
-            .ok_or_else(|| {
-                memory_admission::invalid_request_error(
-                    "generation context memory reservation overflowed",
-                )
-            })?;
+            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generation_context_memory_reservation_overflowed_error)?;
         let (prefill_activation_workspace_bytes, complete_experts_are_resident) = {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
             let complete_experts_are_resident = model.resident_expert_weights.is_some();
             let ram_budget = model.mlx_ram_budget();
             // The activation reserve belongs to one forward, so it is sized
@@ -95,11 +91,7 @@ impl Qwen3_5EngineState {
                     MemoryPhase::Prefill,
                     planned_prefill_operation_token_count,
                 ))
-                .map_err(|_| {
-                    memory_admission::invalid_request_error(
-                        "prefill activation workspace exceeds the platform range",
-                    )
-                })?;
+                .map_err(super::super::generation_session_lifecycle::generation_error_constructors::prefill_activation_workspace_exceeds_platform_range_error)?;
             (
                 prefill_activation_workspace_bytes,
                 complete_experts_are_resident,
@@ -112,11 +104,7 @@ impl Qwen3_5EngineState {
             0,
             prefill_activation_workspace_bytes,
         )
-        .ok_or_else(|| {
-            memory_admission::invalid_request_error(
-                "generation context workspace reservation overflowed",
-            )
-        })?;
+        .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generation_context_workspace_reservation_overflowed_error)?;
         crate::memory::log_generation_context_workspace_reservation(
             total_context_tokens,
             prompt_token_count,
@@ -131,7 +119,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         memory_admission::validate_context_memory_admission(
             model,
             self.memory_limits,

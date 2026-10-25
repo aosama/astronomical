@@ -22,8 +22,15 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
     )
 }
 
+/// Wraps one adaptive-RAM-growth ceiling-update failure as a fatal engine error.
+fn adaptive_ram_growth_ceiling_update_error(
+    adaptive_ram_growth_guard_error: impl std::fmt::Display,
+) -> InferenceEngineError {
+    super::fatal_engine_error(adaptive_ram_growth_guard_error.to_string())
+}
+
 impl Qwen3_5EngineState {
-    pub(super) fn update_mlx_memory_limit(
+    pub(in crate::qwen3_5_resident::inference_execution) fn update_mlx_memory_limit(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
@@ -38,9 +45,9 @@ impl Qwen3_5EngineState {
             ));
         };
         let old_mlx_memory_ceiling_bytes =
-            u64::try_from(self.memory_limits.active_memory_limit_bytes()).map_err(|_| {
-                super::fatal_engine_error("current MLX memory ceiling exceeds the u64 range")
-            })?;
+            u64::try_from(self.memory_limits.active_memory_limit_bytes()).map_err(
+                super::super::generation_session_lifecycle::generation_error_constructors::current_mlx_memory_ceiling_exceeds_u64_range_error,
+            )?;
         let mlx_memory_snapshot_before_adjustment = model
             .runtime()
             .memory_snapshot()
@@ -53,9 +60,7 @@ impl Qwen3_5EngineState {
             .update_active_memory_ceiling_bytes(
                 updated_mlx_memory_limits.active_memory_limit_bytes(),
             )
-            .map_err(|adaptive_ram_growth_guard_error| {
-                super::fatal_engine_error(adaptive_ram_growth_guard_error.to_string())
-            })?;
+            .map_err(adaptive_ram_growth_ceiling_update_error)?;
         self.memory_limits = updated_mlx_memory_limits;
 
         let mlx_memory_snapshot_after_adjustment = model
@@ -65,15 +70,13 @@ impl Qwen3_5EngineState {
         let active_memory_bytes = u64::try_from(
             mlx_memory_snapshot_after_adjustment.active_memory_bytes(),
         )
-        .map_err(|_| super::fatal_engine_error("MLX active memory exceeds the u64 range"))?;
+        .map_err(super::super::generation_session_lifecycle::generation_error_constructors::mlx_active_memory_exceeds_u64_range_error)?;
         let allocator_cache_memory_bytes =
             u64::try_from(mlx_memory_snapshot_after_adjustment.allocator_cache_memory_bytes())
-                .map_err(|_| {
-                    super::fatal_engine_error("MLX allocator-cache memory exceeds the u64 range")
-                })?;
+.map_err(super::super::generation_session_lifecycle::generation_error_constructors::mlx_allocator_cache_memory_exceeds_u64_range_error)?;
         let peak_memory_bytes =
             u64::try_from(mlx_memory_snapshot_after_adjustment.peak_memory_bytes())
-                .map_err(|_| super::fatal_engine_error("MLX peak memory exceeds the u64 range"))?;
+                .map_err(super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_exceeds_u64_range_error)?;
         let active_memory_breakdown = model.finalized_active_memory_breakdown(
             active_memory_bytes,
             live_retained_context_state_payload_bytes,

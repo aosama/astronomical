@@ -129,7 +129,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let target_persistent_state_growth_bytes = request_decoder_state
             .projected_persistent_state_growth_bytes(
                 model.decoder_cache_layout(),
