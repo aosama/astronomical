@@ -22,22 +22,26 @@ use serde_yaml::Value;
 fn should_use_the_canonical_integration_package_selection_for_compile_and_execution() {
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    for step_name in [
-        "Compile integration lane tests",
-        "Run integration lane tests",
+    // The compile step builds through cargo's own alias; the run step
+    // executes the same binaries through cargo-nextest (issue #1553 phase 3).
+    for (step_name, canonical_alias) in [
+        ("Compile integration lane tests", "cargo test-integration "),
+        ("Run integration lane tests", "cargo nextest-integration"),
     ] {
         let step = find_step_by_name(&verification_steps, step_name);
         let command = run_text_of(step, step_name);
         assert!(
             command
                 .lines()
-                .any(|line| line.trim_start().starts_with("cargo test-integration ")),
-            "{step_name} must use cargo test-integration so extracted policy packages cannot disappear"
+                .any(|line| line.trim_start().starts_with(canonical_alias)),
+            "{step_name} must use {canonical_alias} so extracted policy packages cannot disappear"
         );
         assert!(
             !command.lines().any(|line| {
-                line.trim_start().starts_with("cargo test ")
-                    && line.contains("--test integration_tests")
+                let command_line = line.trim_start();
+                (command_line.starts_with("cargo test ")
+                    || command_line.starts_with("cargo nextest run "))
+                    && command_line.contains("--test integration_tests")
             }),
             "{step_name} duplicates the canonical integration package selection"
         );
@@ -49,12 +53,92 @@ fn should_use_the_canonical_integration_package_selection_for_compile_and_execut
     let configuration =
         std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
             .expect("the canonical Cargo configuration should be readable");
-    let integration_alias = configuration
-        .lines()
-        .find(|line| line.starts_with("test-integration = "))
-        .expect("the canonical integration alias should exist");
-    assert!(integration_alias.contains("-p astronomical-memory-policy "));
-    assert!(integration_alias.contains("--lib --test integration_tests"));
+    let alias_selection = |alias_prefix: &str, command_prefix: &str| -> String {
+        let alias_line = configuration
+            .lines()
+            .find(|line| line.starts_with(alias_prefix))
+            .unwrap_or_else(|| panic!("the {alias_prefix} alias should exist"));
+        alias_line
+            .trim_start_matches(alias_prefix)
+            .trim_matches('"')
+            .strip_prefix(command_prefix)
+            .unwrap_or_else(|| {
+                panic!("the {alias_prefix} alias should start with {command_prefix}")
+            })
+            .to_owned()
+    };
+    let compile_selection = alias_selection("test-integration = ", "test ");
+    let execution_selection = alias_selection("nextest-integration = ", "nextest run ");
+    assert!(compile_selection.contains("-p astronomical-memory-policy "));
+    assert!(compile_selection.contains("--lib --test integration_tests"));
+    // The compile step builds what the run step executes: if the
+    // selections drifted, nextest would silently rebuild (or skip) packages
+    // the compile step's timing and native-progress attribution never saw.
+    assert_eq!(
+        compile_selection, execution_selection,
+        "the test-integration and nextest-integration aliases must carry the identical selection"
+    );
+}
+
+// The nextest provisioning contract (issue #1553 phase 3): the runner binary
+// is pinned by version and digest and verified before use, like every other
+// native dependency, and it lands on PATH before the lane that needs it.
+#[test]
+fn nextest_is_provisioned_pinned_and_checksum_verified() {
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    let provision_step = find_step_by_name(&verification_steps, "Provision pinned cargo-nextest");
+    let provision_environment = required_field(provision_step, "env", "nextest provisioning");
+    let pinned_version = required_text(
+        provision_environment,
+        "NEXTEST_VERSION",
+        "nextest provisioning env",
+    );
+    assert!(
+        !pinned_version.is_empty()
+            && pinned_version
+                .chars()
+                .all(|character| character.is_ascii_digit() || character == '.'),
+        "the nextest pin must be a bare version, got {pinned_version}"
+    );
+    let pinned_digest = required_text(
+        provision_environment,
+        "NEXTEST_SHA256",
+        "nextest provisioning env",
+    );
+    assert!(
+        pinned_digest.len() == 64
+            && pinned_digest
+                .chars()
+                .all(|character| character.is_ascii_hexdigit()),
+        "the nextest digest must be a SHA-256 hex string"
+    );
+    let provision_text = run_text_of(provision_step, "provision-nextest");
+    for verification_marker in ["shasum -a 256", "$NEXTEST_SHA256", "exit 1", "$GITHUB_PATH"] {
+        assert!(
+            provision_text.contains(verification_marker),
+            "nextest provisioning lost {verification_marker}"
+        );
+    }
+    let step_position = |step_name: &str| {
+        verification_steps
+            .iter()
+            .position(|step| step.get("name").and_then(Value::as_str) == Some(step_name))
+            .unwrap_or_else(|| panic!("step {step_name} should exist"))
+    };
+    assert!(
+        step_position("Provision pinned cargo-nextest")
+            < step_position("Run integration lane tests"),
+        "nextest must be provisioned before the lane that runs it"
+    );
+    let nextest_configuration =
+        std::fs::read_to_string(contract_support::repository_root().join(".config/nextest.toml"))
+            .expect("the nextest configuration should be readable");
+    assert!(
+        nextest_configuration.contains("slow-timeout")
+            && nextest_configuration.contains("terminate-after"),
+        "the per-test hang budget left the nextest configuration"
+    );
 }
 
 #[test]
