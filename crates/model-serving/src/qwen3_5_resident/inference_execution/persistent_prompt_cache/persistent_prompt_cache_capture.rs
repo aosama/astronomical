@@ -25,7 +25,7 @@ use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 const PUBLICATION_COMFORT_HEADROOM_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// Converts a required persistence failure into the user-visible engine error.
-pub(super) fn required_prompt_state_persistence_failure(
+pub(in crate::qwen3_5_resident::inference_execution) fn required_prompt_state_persistence_failure(
     active_request: &Qwen3_5EngineRequest,
     failure_stage: &'static str,
     internal_error: impl std::fmt::Display,
@@ -44,7 +44,7 @@ pub(super) fn required_prompt_state_persistence_failure(
 }
 
 impl Qwen3_5EngineState {
-    pub(super) fn capture_persistent_prompt_cache_blocks(
+    pub(in crate::qwen3_5_resident::inference_execution) fn capture_persistent_prompt_cache_blocks(
         &self,
         persistent_prompt_cache: &PersistentPromptCacheDiskStore,
         model: &Qwen3_5ResidentModel,

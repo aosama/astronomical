@@ -22,7 +22,7 @@ impl Qwen3_5EngineState {
     /// Captures the prompt's final partial block after the terminal prefill
     /// chunk, extending the last durable full block of this request's chain.
     /// A tail is a leaf: it is never recorded as a capture parent.
-    pub(super) fn capture_persistent_prompt_cache_partial_tail_block(
+    pub(in crate::qwen3_5_resident::inference_execution) fn capture_persistent_prompt_cache_partial_tail_block(
         &self,
         persistent_prompt_cache: &PersistentPromptCacheDiskStore,
         model: &Qwen3_5ResidentModel,

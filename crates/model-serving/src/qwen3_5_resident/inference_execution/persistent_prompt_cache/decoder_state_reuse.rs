@@ -30,17 +30,18 @@ use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 /// reported in the public generation usage contract. Keeping the final block
 /// key lets later cold-prefilled blocks extend the same content-addressed
 /// chain instead of creating an unrelated root block.
-pub(super) struct PersistentPromptCacheRestoreOutcome {
-    pub(super) persistent_prompt_cache_token_count: u32,
-    pub(super) restored_token_count: usize,
-    pub(super) last_restored_persistent_prompt_cache_block_key:
+pub(in crate::qwen3_5_resident::inference_execution) struct PersistentPromptCacheRestoreOutcome {
+    pub(in crate::qwen3_5_resident::inference_execution) persistent_prompt_cache_token_count: u32,
+    pub(in crate::qwen3_5_resident::inference_execution) restored_token_count: usize,
+    pub(in crate::qwen3_5_resident::inference_execution) last_restored_persistent_prompt_cache_block_key:
         Option<PersistentPromptCacheBlockKey>,
-    pub(super) persistent_prompt_cache_diagnostics: WorkerPersistentPromptCacheRequestDiagnostics,
+    pub(in crate::qwen3_5_resident::inference_execution) persistent_prompt_cache_diagnostics:
+        WorkerPersistentPromptCacheRequestDiagnostics,
 }
 
 impl Qwen3_5EngineState {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn restore_persistent_prompt_cache_prefix(
+    pub(in crate::qwen3_5_resident::inference_execution) fn restore_persistent_prompt_cache_prefix(
         &mut self,
         request_id: RequestId,
         persistent_prompt_cache: &PersistentPromptCacheDiskStore,
@@ -80,45 +81,52 @@ impl Qwen3_5EngineState {
         // against the retained live state before touching the disk store. An
         // adopted prefix can even rescue a disk miss, because the live state
         // may outlive blocks the store evicted.
-        let mut in_memory_prefix_adoption_outcome =
-            if !self.chunking.experimental_in_memory_prefix_adoption_enabled {
-                None
-            } else if self.retained_live_prefix.is_none() {
-                Some(WorkerInMemoryPrefixAdoptionOutcome::NoRetainedState)
-            } else {
-                let retained_live_prefix = self
-                    .retained_live_prefix
-                    .take()
-                    .unwrap_or_else(|| unreachable!("the holder was just proven present"));
-                let retained_lookup =
-                    PersistentPromptCachePrefixLookup::for_retained_complete_block_keys(
-                        &persistent_prompt_cache.model_contract,
-                        prompt_token_ids,
-                        block_causal_inputs,
-                        &retained_live_prefix.complete_block_keys,
-                        |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
-                    );
-                if retained_lookup.restored_token_count() > 0
-                    && retained_lookup.restored_token_count() >= restored_token_count
-                {
-                    return self.install_adopted_live_prefix(
-                        persistent_prompt_cache,
-                        retained_live_prefix,
-                        retained_lookup,
-                        request_decoder_state,
-                        performance_attribution,
-                    );
-                }
-                // The retained state lost to the disk store or diverged from
-                // this prompt's chain: drop it. Its arrays return to the
-                // allocator cache here rather than serving a conversation
-                // they no longer match.
-                if retained_lookup.restored_token_count() == 0 {
-                    Some(WorkerInMemoryPrefixAdoptionOutcome::ChainMismatch)
-                } else {
-                    Some(WorkerInMemoryPrefixAdoptionOutcome::RetainedStateShorter)
-                }
+        let mut in_memory_prefix_adoption_outcome = if !self
+            .chunking
+            .experimental_in_memory_prefix_adoption_enabled
+        {
+            None
+        } else if self.retained_live_prefix.is_none() {
+            Some(WorkerInMemoryPrefixAdoptionOutcome::NoRetainedState)
+        } else {
+            let retained_live_prefix = match self.retained_live_prefix.take() {
+                Some(retained_live_prefix) => retained_live_prefix,
+                None => unreachable!("the holder was just proven present"),
             };
+            let retained_lookup =
+                PersistentPromptCachePrefixLookup::for_retained_complete_block_keys(
+                    &persistent_prompt_cache.model_contract,
+                    prompt_token_ids,
+                    block_causal_inputs,
+                    &retained_live_prefix.complete_block_keys,
+                    |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
+                );
+            match super::in_memory_adoption_decision::decide_in_memory_prefix_adoption(
+                    retained_lookup.restored_token_count(),
+                    restored_token_count,
+                ) {
+                    super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::AdoptRetainedState =>
+                    {
+                        return self.install_adopted_live_prefix(
+                            persistent_prompt_cache,
+                            retained_live_prefix,
+                            retained_lookup,
+                            request_decoder_state,
+                            performance_attribution,
+                        );
+                    }
+                    // The retained state lost to the disk store or diverged from
+                    // this prompt's chain: drop it. Its arrays return to the
+                    // allocator cache here rather than serving a conversation
+                    // they no longer match.
+                    super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::ChainMismatch => {
+                        Some(WorkerInMemoryPrefixAdoptionOutcome::ChainMismatch)
+                    }
+                    super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::RetainedStateShorter => {
+                        Some(WorkerInMemoryPrefixAdoptionOutcome::RetainedStateShorter)
+                    }
+                }
+        };
         persistent_prompt_cache_diagnostics.in_memory_prefix_adoption =
             in_memory_prefix_adoption_outcome.take();
         if restored_token_count == 0 {
@@ -218,22 +226,24 @@ impl Qwen3_5EngineState {
         // The snapshot loads only after the concatenated KV materializes and
         // releases the source blocks, so the two phases never hold both at
         // once; the workspace is the larger of the two.
-        let recurrent_snapshot_file_size_bytes = recurrent_snapshot_source_block_key
-            .map(|recurrent_snapshot_block_key| {
-                persistent_prompt_cache
-                    .recurrent_snapshot_file_size_bytes(&recurrent_snapshot_block_key.block_hash())
-                    .unwrap_or(0)
-            })
-            .unwrap_or(0);
-        let _persistent_prompt_cache_restore_temporary_workspace_bytes = usize::try_from(
-            total_sequence_block_file_size_bytes.max(recurrent_snapshot_file_size_bytes),
-        )
-        .unwrap_or(usize::MAX);
+        let recurrent_snapshot_file_size_bytes = match recurrent_snapshot_source_block_key {
+            Some(recurrent_snapshot_block_key) => persistent_prompt_cache
+                .recurrent_snapshot_file_size_bytes(&recurrent_snapshot_block_key.block_hash())
+                .unwrap_or(0),
+            None => 0,
+        };
+        let _persistent_prompt_cache_restore_temporary_workspace_bytes =
+            super::restore_transient_workspace::restore_transient_workspace_bytes(
+                total_sequence_block_file_size_bytes,
+                recurrent_snapshot_file_size_bytes,
+            );
         let target_expert_payload_bytes_reclaimed_before_restore = 0_u64;
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(
+                super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
+            )?;
 
         // Lookup already proved every block exists. Load the complete block
         // set, then reconstruct each full-attention layer with one
