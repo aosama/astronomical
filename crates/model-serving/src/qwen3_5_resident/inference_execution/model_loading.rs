@@ -221,6 +221,19 @@ impl Qwen3_5EngineState {
                 let mlx_memory_snapshot = model.runtime().memory_snapshot().ok();
                 let resident_model_payload_bytes = Some(model.resident_model_payload_byte_count());
                 let minimum_mlx_memory_ceiling_bytes = model.minimum_mlx_memory_ceiling_bytes()?;
+                if let Some(diagnostic_prefill_activation_floor_bytes) =
+                    self.diagnostic_prefill_activation_floor_bytes
+                {
+                    model
+                        .mlx_ram_budget_mut()
+                        .set_diagnostic_prefill_activation_floor_bytes(
+                            diagnostic_prefill_activation_floor_bytes,
+                        );
+                    tracing::warn!(
+                        diagnostic_prefill_activation_floor_bytes,
+                        "diagnostic resident prefill activation floor applied to the loaded model"
+                    );
+                }
                 self.model = Some(model);
                 if let Err(performance_attribution_error) = self
                     .record_model_loading_performance_attribution(

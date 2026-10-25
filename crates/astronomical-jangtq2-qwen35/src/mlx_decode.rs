@@ -268,9 +268,13 @@ pub fn rotate_activations_hadamard32(
     let blocked_activations = runtime.reshape(&activations_float32, &blocked_activation_shape)?;
     let rotated_blocks = runtime.hadamard_transform(&blocked_activations, None)?;
     let rotated_activation_float32 = runtime.reshape(&rotated_blocks, &activation_shape)?;
-    let rotated_activations = runtime.astype(&rotated_activation_float32, activation_dtype)?;
-    materialize_and_detach_jangtq2_array(runtime, &rotated_activations)?;
-    Ok(rotated_activations)
+    // The rotation stays lazy on purpose: the projection kernel consumes it in
+    // the same graph, and forcing an evaluation here drained the whole pending
+    // decode graph once per expert projection (~109 synchronous waits per
+    // token on the 122B bundle, about 1 ms each), which dominated decode time.
+    runtime
+        .astype(&rotated_activation_float32, activation_dtype)
+        .map_err(MlxRuntimeError::from)
 }
 
 fn decode_error(description: String) -> MlxRuntimeError {

@@ -295,3 +295,20 @@ test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-
 # containing the selected model_directory. The runner builds the exact
 # optimized worker and records the source identity itself.
 test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter jangtq2 --ignored"
+# test-engine-versus-memory-ceiling: separates the streaming engine's own cost
+# from the memory ceiling's cost on the resident 35B sparse-MoE model, all
+# cells serving the same 5,000-token Romeo and Juliet summarization into 300
+# output tokens, serialized, persistent prompt cache disabled. The
+# automatic_engine_ceiling_sweep cells run the production engine choice at 24,
+# 22, 21, 20, and 19 GB (resident_memory_ceiling_probe history kind); the
+# forced_engine_isolation cells force the streaming engine at 24 and 32 GB and
+# the resident engine at 22 GB, with and without the static prefill
+# activation floor; forced cells print their record but never append it to
+# the durable history.
+# Narrow with `--filter engine_versus_memory_ceiling::forced_engine_isolation`
+# or `::automatic_engine_ceiling_sweep`; add `--configuration PATH` with
+# {"diagnostics": true} for performance attribution. The 5,000/300 shape is a
+# directed deviation from the canonical 10,000/500 series, kept in its own
+# kind so the text series stays clean. The runner builds the exact optimized
+# worker itself.
+test-engine-versus-memory-ceiling = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter engine_versus_memory_ceiling --ignored"

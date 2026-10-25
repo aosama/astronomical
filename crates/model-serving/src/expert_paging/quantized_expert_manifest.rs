@@ -451,6 +451,18 @@ impl QuantizedExpertLayerPlan {
         }
     }
 
+    /// True when any projection of this layer stores jangtq2 codebook codes.
+    ///
+    /// Lets planners predict, before any storage read or memory admission,
+    /// that a multi-token forward must decode a transient bfloat16 copy of
+    /// this layer's page.
+    #[must_use]
+    pub fn stores_jangtq2_codebook_projection(&self) -> bool {
+        self.tensor_sources
+            .iter()
+            .any(|tensor_source| tensor_source.parameter_name == "tq2_packed")
+    }
+
     /// Returns a codebook projection's activation rotation, when the plan
     /// carries a jangtq2 codebook projection under this name.
     #[must_use]

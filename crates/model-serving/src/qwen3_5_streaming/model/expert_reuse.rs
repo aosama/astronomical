@@ -121,9 +121,8 @@ impl Qwen3_5Model {
     /// A multi-token chunk (or a decode token on a worker without the fused
     /// kernel) decodes the packed page it multiplies, so handing it the
     /// complete table would decode every expert of the layer (about 4.8 GB
-    /// on the 122B bundle) whatever the route size — which defeats prefill's
-    /// chunk halving, whose premise is that a smaller chunk needs less
-    /// memory. The subset page holds exactly the routed union and its
+    /// on the 122B bundle) whatever the route size, so the transient peak
+    /// would no longer scale with the chunk's routed union. The subset page holds exactly the routed union and its
     /// manifest maps those global ids to slots 0.., so the caller gathers
     /// with `routed_expert_ids` exactly as it does for a streamed union.
     pub(super) fn routed_subset_of_cached_page(
@@ -186,8 +185,8 @@ impl Qwen3_5Model {
     ///
     /// Leftover-RAM adopt during the first multi-token chunk seats more
     /// complete layers than activation headroom plus the stream slot can share
-    /// with the MLX ceiling. The next complete-layer read then fails, and
-    /// prefill halves down to one-token chunks.
+    /// with the MLX ceiling. The next complete-layer read then fails, so
+    /// promotion stays limited to the phase plan's mandatory layers.
     pub(super) fn stream_complete_expert_layer(
         &self,
         expert_pager: &Qwen3_5ExpertPager,

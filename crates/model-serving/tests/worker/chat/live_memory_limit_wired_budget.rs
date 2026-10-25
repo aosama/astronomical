@@ -12,6 +12,8 @@ use tokio::io::{duplex, split};
 
 const MACHINE_MLX_MEMORY_CEILING_BYTES: u64 = 42_949_672_960;
 const WIRED_RESIDENCY_BUDGET_BYTES: u64 = 42_097_180_672;
+/// The wired budget minus its 2.5% Metal working-set margin.
+const PLANNABLE_WIRED_RESIDENCY_BYTES: u64 = 41_044_751_172;
 const STARTUP_MLX_MEMORY_CEILING_BYTES: u64 = 23_622_320_128;
 
 async fn applied_live_mlx_memory_ceiling_bytes(
@@ -80,26 +82,38 @@ async fn should_apply_a_live_raise_above_the_startup_ceiling_inside_the_wired_bu
 }
 
 #[tokio::test]
-async fn should_apply_a_live_raise_that_equals_the_wired_budget_exactly() {
+async fn should_apply_a_live_raise_that_equals_the_plannable_wired_residency_exactly() {
+    assert_eq!(
+        applied_live_mlx_memory_ceiling_bytes(
+            Some(WIRED_RESIDENCY_BUDGET_BYTES),
+            PLANNABLE_WIRED_RESIDENCY_BYTES
+        )
+        .await,
+        PLANNABLE_WIRED_RESIDENCY_BYTES
+    );
+}
+
+#[tokio::test]
+async fn should_clamp_a_live_raise_to_the_wired_budget_to_its_plannable_part() {
     assert_eq!(
         applied_live_mlx_memory_ceiling_bytes(
             Some(WIRED_RESIDENCY_BUDGET_BYTES),
             WIRED_RESIDENCY_BUDGET_BYTES
         )
         .await,
-        WIRED_RESIDENCY_BUDGET_BYTES
+        PLANNABLE_WIRED_RESIDENCY_BYTES
     );
 }
 
 #[tokio::test]
-async fn should_clamp_a_live_raise_above_the_wired_budget_to_the_wired_budget() {
+async fn should_clamp_a_live_raise_above_the_wired_budget_to_the_plannable_wired_residency() {
     assert_eq!(
         applied_live_mlx_memory_ceiling_bytes(
             Some(WIRED_RESIDENCY_BUDGET_BYTES),
             MACHINE_MLX_MEMORY_CEILING_BYTES
         )
         .await,
-        WIRED_RESIDENCY_BUDGET_BYTES
+        PLANNABLE_WIRED_RESIDENCY_BYTES
     );
 }
 

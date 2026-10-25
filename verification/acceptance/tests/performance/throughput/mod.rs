@@ -15,6 +15,9 @@ mod decode_cache_experiment;
 mod decode_full_fit;
 
 #[cfg(feature = "performance_throughput")]
+mod engine_versus_memory_ceiling;
+
+#[cfg(feature = "performance_throughput")]
 mod historical_record;
 
 #[cfg(feature = "performance_throughput")]

@@ -184,6 +184,22 @@ impl Qwen3_5EngineRequest {
         generated_token_outcome
     }
 
+    /// The context the post-forward budget refresh must reserve for.
+    ///
+    /// Prefill reserves the whole prompt, as the chunk-start residency refresh
+    /// does; decode reserves through the next token's position.
+    pub(super) fn request_context_extent(
+        &self,
+    ) -> super::completed_forward_memory::RequestContextExtent {
+        let prompt_token_count = u64::try_from(self.input_token_ids.len()).unwrap_or(u64::MAX);
+        let next_forward_context_token_count =
+            u64::from(self.next_position_tokens).saturating_add(1);
+        super::completed_forward_memory::RequestContextExtent {
+            context_token_count: prompt_token_count.max(next_forward_context_token_count),
+            live_context_state_payload_bytes: self.request_decoder_state.payload_byte_count(),
+        }
+    }
+
     pub(crate) fn advance_position(
         &mut self,
         forwarded_token_count: usize,

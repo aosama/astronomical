@@ -36,7 +36,8 @@ pub fn plan_expert_residency(
     }
     // A full-fit completion preserves the existing pages and funds only their
     // missing experts. Below full fit, preserve paid-for generation pages
-    // instead of displacing them with new complete layers.
+    // instead of displacing them, then fund complete layers only from the
+    // leftover that preservation did not claim.
     if matches!(
         phase,
         MemoryPhase::GenerationPreparation | MemoryPhase::Decode
@@ -131,39 +132,44 @@ fn preserve_existing_expert_pages_for_generation(
                 .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
     }
+    let promoted = generation_completion_promotions(
+        ceiling_bytes.saturating_sub(preserved_bytes),
+        geometries,
+        current_by_layer,
+        &selected,
+    )?;
     let layer_targets = current_by_layer
         .iter()
         .enumerate()
-        .map(
-            |(layer_index, residency)| match (residency, selected[layer_index]) {
-                (Some(residency), true)
+        .map(|(layer_index, residency)| {
+            match (residency, selected[layer_index], promoted[layer_index]) {
+                (_, _, true) => ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead,
+                (Some(residency), true, false)
                     if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
                 {
                     ExpertLayerResidencyTarget::PreserveComplete
                 }
-                (Some(_), true) => ExpertLayerResidencyTarget::PreservePartial,
-                (Some(residency), false)
+                (Some(_), true, false) => ExpertLayerResidencyTarget::PreservePartial,
+                (Some(residency), false, false)
                     if residency.class == RetainedExpertPageClass::StableCompleteLayer =>
                 {
                     ExpertLayerResidencyTarget::ReleaseCompleteForExactDeficit
                 }
-                (Some(_), false) => ExpertLayerResidencyTarget::ReleasePartial,
-                (None, _) => ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
-            },
-        )
+                (Some(_), false, false) => ExpertLayerResidencyTarget::ReleasePartial,
+                (None, _, false) => ExpertLayerResidencyTarget::AdmitPartialOnMandatoryRouteRead,
+            }
+        })
         .collect();
     Ok(ExpertResidencyPlan {
         phase,
         retained_expert_ceiling_bytes: ceiling_bytes,
-        complete_layer_targets: selected
-            .iter()
-            .enumerate()
-            .filter_map(|(layer_index, is_selected)| {
-                (*is_selected
-                    && current_by_layer[layer_index].is_some_and(|residency| {
-                        residency.class == RetainedExpertPageClass::StableCompleteLayer
-                    }))
-                .then_some(layer_index)
+        complete_layer_targets: (0..geometries.len())
+            .filter(|&layer_index| {
+                promoted[layer_index]
+                    || (selected[layer_index]
+                        && current_by_layer[layer_index].is_some_and(|residency| {
+                            residency.class == RetainedExpertPageClass::StableCompleteLayer
+                        }))
             })
             .collect(),
         layer_targets,
@@ -173,6 +179,67 @@ fn preserve_existing_expert_pages_for_generation(
         deterministic_release_order: release_order(current_by_layer),
         is_low_budget_partial_mode: false,
     })
+}
+
+/// Layers whose complete page the generation leftover can fund after preservation.
+///
+/// Decode multiplies a complete layer in place on the device, but every
+/// incomplete layer forces a per-token route copy to the host plus SSD reads
+/// for its misses. Leaving the leftover entitlement idle below full fit is
+/// what kept a 21 GB ceiling at 50 decode tokens per second with 4 GB unused
+/// (the 2026-10-25 flight: 2.9 GB of funded new retention, zero layers
+/// seated). Completions are funded cheapest first because each completed
+/// layer removes the same per-token synchronization regardless of its size,
+/// so the count of complete layers is what decode speed follows. Every layer
+/// that stays unretained keeps its routed floor reserved, so a promotion never
+/// starves the per-token routed pages an incomplete layer still needs.
+fn generation_completion_promotions(
+    leftover_bytes: u64,
+    geometries: &[ExpertLayerGeometry],
+    current_by_layer: &[Option<&CurrentExpertLayerResidency>],
+    selected: &[bool],
+) -> Result<Vec<bool>, ExpertResidencyPlanError> {
+    let mut completion_candidates = Vec::new();
+    let mut unretained_routed_floor_bytes = 0_u64;
+    for (layer_index, geometry) in geometries.iter().enumerate() {
+        let (completion_cost_bytes, routed_floor_bytes) = match current_by_layer[layer_index] {
+            None => {
+                let routed_floor_bytes = routed_floor_payload_bytes(geometry)?;
+                unretained_routed_floor_bytes = unretained_routed_floor_bytes
+                    .checked_add(routed_floor_bytes)
+                    .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
+                (geometry.complete_layer_payload_bytes, routed_floor_bytes)
+            }
+            Some(residency)
+                if selected[layer_index]
+                    && residency.class == RetainedExpertPageClass::ElasticRoutedExperts =>
+            {
+                (
+                    geometry
+                        .complete_layer_payload_bytes
+                        .saturating_sub(residency.payload_bytes),
+                    0,
+                )
+            }
+            Some(_) => continue,
+        };
+        completion_candidates.push((completion_cost_bytes, layer_index, routed_floor_bytes));
+    }
+    completion_candidates.sort_unstable();
+    let mut promoted = vec![false; geometries.len()];
+    let mut remaining_leftover_bytes = leftover_bytes;
+    for (completion_cost_bytes, layer_index, routed_floor_bytes) in completion_candidates {
+        let reserve_after_promotion_bytes =
+            unretained_routed_floor_bytes.saturating_sub(routed_floor_bytes);
+        if completion_cost_bytes.saturating_add(reserve_after_promotion_bytes)
+            <= remaining_leftover_bytes
+        {
+            promoted[layer_index] = true;
+            remaining_leftover_bytes -= completion_cost_bytes;
+            unretained_routed_floor_bytes = reserve_after_promotion_bytes;
+        }
+    }
+    Ok(promoted)
 }
 
 fn low_budget_partial_plan(

@@ -37,7 +37,7 @@ fn should_reclaim_instead_of_rejecting_the_follow_up_context_after_chunk_shaped_
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 9_900_000_000,
         observed_activation_headroom_bytes: 9_000_000_000,
         exact_temporary_workspace_bytes: 0,
@@ -83,14 +83,14 @@ fn should_resolve_the_follow_up_reserve_from_evidence_at_the_operation_scope() {
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 2_048,
+        forward_token_count: 2_048,
         measured_context_and_activation_bytes: 9_900_000_000,
         observed_activation_headroom_bytes: 9_000_000_000,
         exact_temporary_workspace_bytes: 0,
     });
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
         phase: MemoryPhase::Prefill,
-        context_token_count: 8_192,
+        forward_token_count: 8_192,
         measured_context_and_activation_bytes: 3_400_000_000,
         observed_activation_headroom_bytes: 3_000_000_000,
         exact_temporary_workspace_bytes: 0,

@@ -227,8 +227,8 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
             streaming_retry_report_count, 0,
             "no request may retry on the streaming engine when the resident engine fits it"
         );
-        // Without these, a regression back to token-ratio upscaling could stay
-        // green by silently halving the chunk until the phantom reserve fits.
+        // Without this, a regression back to token-ratio upscaling could stay
+        // green by reserving a phantom activation span the chunk never uses.
         let multi_chunk_report = generation_reports
             .last()
             .expect("the multi-chunk request should have the latest generation report");
@@ -238,14 +238,6 @@ async fn should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt() {
                 "admission_reserve_beyond_observed_token_span_source_count"
             ) > 0,
             "the first 2,048-token chunk must reserve from the evidence beyond the observed token span"
-        );
-        assert_eq!(
-            attribution_counter(
-                multi_chunk_report,
-                "resident_prefill_transient_peak_chunk_shrink_count"
-            ),
-            0,
-            "a prompt that fits by construction must execute its configured chunks unshrunk"
         );
     })
     .await

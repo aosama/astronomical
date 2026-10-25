@@ -6,11 +6,13 @@
 //! the serving function it lands in, so a reader can trace any layer's forward
 //! from here without hunting across directories:
 //!
-//! 1. **Seated complete layer, single decode token, fused kernel** — the whole
-//!    layer is served from the warm slot tables with the route remapped
-//!    on-device: zero host copies, zero SSD reads. The fast path before any
-//!    host-side route materialization.
-//! 2. **Seated complete layer, multi-token (or no fused kernel)** — the
+//! 1. **Seated complete layer, page multiplies without a transient decode** —
+//!    affine or bfloat16 pages for any chunk, codebook pages for a single
+//!    decode token with the fused kernel. The whole layer is served from the
+//!    warm slot tables with the route remapped on-device: zero host copies,
+//!    zero SSD reads, and demand recorded after the forward's single
+//!    completion wait (`deferred_expert_demand.rs`).
+//! 2. **Seated complete codebook layer that would decode the table** — the
 //!    chunk's routed union is gathered as a subset of the seated layer
 //!    (`routed_subset_of_cached_page`, this file's sibling `expert_reuse.rs`).
 //! 3. **Multi-token miss (prefill chunk)** — the chunk's routed-expert union is
@@ -106,28 +108,57 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .retain_layer_route(layer_index, &selected_indices);
         }
-        // A seated complete layer serves a decode token straight from the
-        // table through the fused kernel, remapping the route on-device: no
-        // router indices are copied to the host for that layer. Multi-token
-        // chunks, and decode tokens on a worker without the fused kernel,
-        // fall through to the host-side route so they decode only their
+        // A seated complete layer whose page multiplies without a transient
+        // decode (affine or bfloat16 pages for any chunk, codebook pages for a
+        // decode token with the fused kernel) is served straight from the
+        // table with the route remapped on-device. No router indices reach
+        // the host and no routed-subset copy is gathered, so the forward keeps
+        // one graphics-processor wait instead of one per layer; at 40 layers
+        // the per-layer route copy cost decode about 20 ms per token. The
+        // route still feeds demand learning, deferred to the forward's single
+        // completion evaluation. Codebook pages that would decode the whole
+        // table fall through to the host-side route and decode only their
         // routed union.
         let decode_tokens_multiply_packed_pages =
             self.fused_jangtq2_gathered_projection_kernel.is_some();
         if should_use_loaded_model_mode
-            && token_count == 1
-            && decode_tokens_multiply_packed_pages
-            && self.retained_experts.is_some()
+            && token_count > 1
+            && let Some((prefetched_weights, prefetched_manifest)) =
+                self.take_prefetched_complete_layer(layer_index)
         {
+            return self.forward_moe_with_prefetched_complete_layer(
+                hidden_states,
+                mixture_of_experts_weights,
+                expert_pager,
+                layer_index,
+                token_count,
+                prefetched_weights,
+                prefetched_manifest,
+                &selected_indices,
+                &selected_scores,
+                should_use_compiled_elementwise_graphs,
+                performance_attribution,
+            );
+        }
+        if should_use_loaded_model_mode && self.retained_experts.is_some() {
             let expert_capacity = expert_pager.layer_plan(layer_index)?.expert_capacity;
-            let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
             if matches!(
                 self.expert_page_disposition(layer_index, expert_capacity),
                 ExpertPageDisposition::FullHit,
             ) {
+                let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
                 if let Some((packed_weights, packed_manifest)) =
                     self.cached_packed_page(layer_index, &complete_expert_ids, expert_capacity)
+                    && packed_weights.multiplies_complete_page_without_transient_decode(
+                        token_count,
+                        decode_tokens_multiply_packed_pages,
+                    )
                 {
+                    self.defer_expert_demand(layer_index, expert_capacity, &selected_indices);
+                    performance_attribution.record_counter(
+                        PerformanceCounter::RetainedRouteAssignmentHitCount,
+                        u64::try_from(selected_indices.element_count()).unwrap_or(u64::MAX),
+                    );
                     performance_attribution.record_counter(
                         PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
                         packed_manifest.payload_byte_count,

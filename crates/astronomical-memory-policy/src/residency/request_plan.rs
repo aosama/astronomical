@@ -146,29 +146,42 @@ impl RequestExpertResidency {
         // Unfunded pins fall through to streamed handling below; funding is
         // spent in ascending layer order, so the loss of funding lands on
         // the tail pins first, mirroring the contract's shrink order.
+        //
+        // Every seated layer the plan preserves — pinned or streamed role —
+        // is charged here, before anything new is funded. A seated streamed
+        // layer is preserved without a fresh admission, so leaving its bytes
+        // out of the headroom let every chunk admit one more complete layer
+        // past the ceiling (the 2026-10-25 cached-suffix flight: a 12-layer
+        // contract grew to 14 seated layers and 14.5 GB of retained experts
+        // against an 11.16 GB ceiling, then the 2,048-token chunk ran out of
+        // active memory twice and the request failed).
         let mut pin_claim_is_funded = vec![false; self.layer_roles.len()];
         let mut stream_admission_headroom_bytes = candidate_plan.retained_expert_ceiling_bytes;
         let mut expected_preserved_bytes = 0_u64;
         let mut maximum_new_retained_bytes = 0_u64;
         for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
-            if *layer_role != RequestExpertLayerRole::PinnedComplete {
+            let is_preserved_seated_layer = matches!(
+                layer_role,
+                RequestExpertLayerRole::PinnedComplete | RequestExpertLayerRole::Streamed
+            ) && layer_is_currently_complete[layer_index];
+            if !is_preserved_seated_layer {
                 continue;
             }
-            let pinned_complete_claim_bytes = layer_geometries
+            if *layer_role == RequestExpertLayerRole::PinnedComplete {
+                pin_claim_is_funded[layer_index] = true;
+            }
+            let seated_complete_claim_bytes = layer_geometries
                 .get(layer_index)
                 .map(|geometry| geometry.complete_layer_payload_bytes)
                 .unwrap_or(0);
-            if layer_is_currently_complete[layer_index] {
-                pin_claim_is_funded[layer_index] = true;
-                stream_admission_headroom_bytes =
-                    stream_admission_headroom_bytes.saturating_sub(pinned_complete_claim_bytes);
-                if let Some(current_residency) = current_residencies
-                    .iter()
-                    .find(|residency| residency.layer_index == layer_index)
-                {
-                    expected_preserved_bytes =
-                        expected_preserved_bytes.saturating_add(current_residency.payload_bytes);
-                }
+            stream_admission_headroom_bytes =
+                stream_admission_headroom_bytes.saturating_sub(seated_complete_claim_bytes);
+            if let Some(current_residency) = current_residencies
+                .iter()
+                .find(|residency| residency.layer_index == layer_index)
+            {
+                expected_preserved_bytes =
+                    expected_preserved_bytes.saturating_add(current_residency.payload_bytes);
             }
         }
         for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
@@ -201,19 +214,11 @@ impl RequestExpertResidency {
                 // the mandatory read paid the complete-layer cost in an
                 // earlier chunk, and evicting it would make every later chunk
                 // re-stream the same bytes. Preserve it the way a seated pin
-                // is preserved — funded once at seating time, never again —
-                // so its payload stops re-consuming stream-admission
-                // headroom every chunk (the 2026-10-24 flight: 31 streamed
-                // layers froze the allowance while 19.6 GB of the paid
-                // ceiling sat unused and 90 GB were re-streamed).
+                // is preserved so it is never evicted and re-streamed (the 2026-10-24
+                // flight: 31 streamed layers froze the allowance while
+                // 19.6 GB of the paid ceiling sat unused and 90 GB were
+                // re-streamed). Its bytes were charged with the seated pins.
                 RequestExpertLayerRole::Streamed if layer_is_currently_complete[layer_index] => {
-                    if let Some(current_residency) = current_residencies
-                        .iter()
-                        .find(|residency| residency.layer_index == layer_index)
-                    {
-                        expected_preserved_bytes = expected_preserved_bytes
-                            .saturating_add(current_residency.payload_bytes);
-                    }
                     ExpertLayerResidencyTarget::PreserveComplete
                 }
                 RequestExpertLayerRole::Streamed | RequestExpertLayerRole::PinnedComplete => {

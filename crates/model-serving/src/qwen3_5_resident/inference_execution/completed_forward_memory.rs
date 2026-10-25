@@ -181,7 +181,7 @@ fn record_composed_ram_budget_measurement(
         .mlx_ram_budget_mut()
         .record_measurement(MlxRamBudgetMeasurement {
             phase: mlx_ram_budget_phase,
-            context_token_count: u64::try_from(adaptive_ram_growth_context.forward_token_count())
+            forward_token_count: u64::try_from(adaptive_ram_growth_context.forward_token_count())
                 .unwrap_or(u64::MAX),
             measured_context_and_activation_bytes,
             observed_activation_headroom_bytes: u64::try_from(observed_transient_high_water_bytes)

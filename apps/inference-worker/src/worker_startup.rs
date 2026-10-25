@@ -184,7 +184,7 @@ where
             effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes_u64,
             claimed_wired_residency_budget_bytes,
             machine_mlx_memory_ceiling_bytes,
-            "serving ceiling clamped to the wired-residency budget the driver can honor"
+            "serving ceiling clamped to the plannable wired residency (wired budget minus the Metal working-set margin)"
         );
     }
     let effective_mlx_memory_ceiling_bytes =
@@ -197,6 +197,8 @@ where
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
         decode_expert_cache_policy = ?worker_startup_configuration.decode_expert_cache_policy,
+        diagnostic_qwen3_5_engine_override = ?worker_startup_configuration.diagnostic_qwen3_5_engine_override,
+        diagnostic_qwen3_5_resident_prefill_activation_floor_bytes = ?worker_startup_configuration.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes,
         machine_mlx_memory_ceiling_bytes,
         configured_maximum_mlx_memory_bytes,
         effective_mlx_memory_ceiling_bytes,
@@ -212,6 +214,12 @@ where
         worker_startup_configuration.decode_expert_cache_policy,
         performance_attribution_log_path,
         persistent_prompt_cache_enabled,
+    )
+    .with_diagnostic_qwen3_5_engine_override(
+        worker_startup_configuration.diagnostic_qwen3_5_engine_override,
+    )
+    .with_diagnostic_qwen3_5_resident_prefill_activation_floor_bytes(
+        worker_startup_configuration.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes,
     );
     let engine_worker: InferenceWorker =
         InferenceWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(

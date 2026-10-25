@@ -52,6 +52,14 @@ pub struct Qwen3_5StreamingModel {
     /// Decode route capture for the expert-predictor program: lazy pending
     /// route arrays plus the bounded observation history (issue #536).
     pub(crate) route_observation: RefCell<RouteObservationCollector>,
+    /// Routes of seated complete layers multiplied on-device, recorded as
+    /// expert demand after the forward's completion evaluation.
+    pub(crate) deferred_expert_demand:
+        RefCell<crate::qwen3_5_streaming::model::deferred_expert_demand::DeferredExpertDemandCollector>,
+    /// The one complete layer a prefill chunk read ahead of its route.
+    pub(crate) prefill_complete_layer_prefetch: RefCell<
+        Option<crate::qwen3_5_streaming::model::prefill_complete_layer_prefetch::PrefetchedCompleteLayer>,
+    >,
     /// The fused jangtq2 decode-token projection kernel; `None` for models
     /// without codebook experts or when the capability probe or compilation failed.
     /// Without it decode tokens decode a transient bfloat16 page like prefill.
