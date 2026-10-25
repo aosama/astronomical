@@ -94,6 +94,90 @@ final class DaemonClientContractTests: XCTestCase {
       loadedModelConfiguration?.maximumContextTokens, 32_768)
   }
 
+  func test_should_decode_the_speculative_decoding_block_length_from_the_worker_policy() throws {
+    let policyWithSpeculation = """
+      {
+        "fixed_prompt_processing_chunk_size_tokens": 2048,
+        "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 256,
+        "full_attention_key_value_growth_tokens": 256,
+        "prefill_graph_submission_layer_interval": 0,
+        "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
+        "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
+        "prompt_cache_block_tokens": 128,
+        "speculative_decoding_block_length": 4,
+        "prompt_cache_common_prefix_stride_blocks": 4,
+        "experimental_decode_stage_attribution_enabled": false,
+        "experimental_prefill_stage_attribution_enabled": false,
+        "experimental_in_memory_prefix_adoption_enabled": false,
+        "experimental_quantized_kv_cache_enabled": false,
+        "experimental_fused_moe_decode_enabled": false
+      }
+      """
+    let policyWithoutSpeculation = """
+      {
+        "fixed_prompt_processing_chunk_size_tokens": 2048,
+        "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 256,
+        "full_attention_key_value_growth_tokens": 256,
+        "prefill_graph_submission_layer_interval": 0,
+        "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
+        "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
+        "prompt_cache_block_tokens": 128,
+        "prompt_cache_common_prefix_stride_blocks": 4,
+        "experimental_decode_stage_attribution_enabled": false,
+        "experimental_prefill_stage_attribution_enabled": false,
+        "experimental_in_memory_prefix_adoption_enabled": false,
+        "experimental_quantized_kv_cache_enabled": false,
+        "experimental_fused_moe_decode_enabled": false
+      }
+      """
+
+    // A speculating worker carries the key; a classic-decoding worker omits
+    // it entirely because the Rust DTO skips serialization for None.
+    let admittedDecoding = try JSONDecoder().decode(
+      WorkerChunkingConfiguration.self, from: Data(policyWithSpeculation.utf8))
+    let classicDecoding = try JSONDecoder().decode(
+      WorkerChunkingConfiguration.self, from: Data(policyWithoutSpeculation.utf8))
+
+    XCTAssertEqual(admittedDecoding.speculativeDecodingBlockLength, 4)
+    XCTAssertNil(classicDecoding.speculativeDecodingBlockLength)
+  }
+
+  func test_should_reject_a_truly_unknown_worker_policy_field() throws {
+    let policyWithAnUnknownField = """
+      {
+        "fixed_prompt_processing_chunk_size_tokens": 2048,
+        "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 256,
+        "full_attention_key_value_growth_tokens": 256,
+        "prefill_graph_submission_layer_interval": 0,
+        "experimental_ssd_paging_prefill_graph_submission_layer_interval": 1,
+        "experimental_ssd_paging_generation_graph_submission_layer_interval": 0,
+        "prompt_cache_block_tokens": 128,
+        "prompt_cache_common_prefix_stride_blocks": 4,
+        "experimental_decode_stage_attribution_enabled": false,
+        "experimental_prefill_stage_attribution_enabled": false,
+        "experimental_in_memory_prefix_adoption_enabled": false,
+        "experimental_quantized_kv_cache_enabled": false,
+        "experimental_fused_moe_decode_enabled": false,
+        "time_travel_chunk_size_tokens": 12
+      }
+      """
+
+    XCTAssertThrowsError(
+      try JSONDecoder().decode(
+        WorkerChunkingConfiguration.self, from: Data(policyWithAnUnknownField.utf8))
+    ) { decodingError in
+      // Strict decoding is the point of this decoder: an unrecognized
+      // policy field must fail with the unknown-field diagnosis instead of
+      // silently misreading the worker contract.
+      guard case DecodingError.dataCorrupted(let context) = decodingError else {
+        return XCTFail("expected the strict unknown-field rejection, got \(decodingError)")
+      }
+      XCTAssertTrue(
+        context.debugDescription.contains("Unexpected worker runtime policy field"),
+        "the rejection must diagnose the unknown field, got: \(context.debugDescription)")
+    }
+  }
+
   func test_should_reject_status_from_the_opposite_runtime_instance() async {
     StubDaemonURLProtocol.statusResponseConfiguration = .init(
       statusCode: 200,
