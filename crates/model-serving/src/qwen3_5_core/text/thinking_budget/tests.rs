@@ -114,3 +114,19 @@ fn should_reject_a_forced_transition_with_an_early_reasoning_boundary() {
         Qwen3_5ThinkingBudgetError::TransitionEndsReasoningEarly
     );
 }
+
+#[test]
+fn should_reject_a_positive_thinking_budget_without_any_forced_transition() {
+    let configuration_error = Qwen3_5ThinkingBudgetState::new(
+        true,
+        Some(3),
+        Vec::new(),
+        vec![THINK_END_TOKEN_ID, TOOL_CALL_START_TOKEN_ID],
+    )
+    .expect_err("a positive thinking budget requires a forced reasoning transition");
+
+    assert_eq!(
+        configuration_error,
+        Qwen3_5ThinkingBudgetError::MissingForcedTransition
+    );
+}

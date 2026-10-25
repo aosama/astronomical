@@ -109,3 +109,7 @@ impl Qwen3_5PersistentPromptCacheVisualIdentity {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "persistent_prompt_cache_visual_identity_tests.rs"]
+mod persistent_prompt_cache_visual_identity_tests;
