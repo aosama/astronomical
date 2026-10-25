@@ -36,6 +36,10 @@ fn should_require_reclamation_only_when_additional_growth_is_added_to_fitting_ta
             target_persistent_state_growth_bytes,
             0,
             0,
+            // No analytic per-operation workspace exists for this boundary
+            // check, and the decode observation covers the token count, so the
+            // unobserved-scope floor never applies.
+            0,
         )
         .expect("the target-only projection should not overflow");
     let combined_growth_bytes =
@@ -49,6 +53,7 @@ fn should_require_reclamation_only_when_additional_growth_is_added_to_fitting_ta
             ),
             700,
             combined_growth_bytes,
+            0,
             0,
             0,
         )
