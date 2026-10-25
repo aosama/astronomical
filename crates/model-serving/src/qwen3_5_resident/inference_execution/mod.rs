@@ -11,6 +11,7 @@ mod model_loading;
 mod model_loading_finalization;
 mod persistent_prompt_cache;
 mod prompt_prefill_lifecycle;
+pub(crate) mod speculative_decode_lifecycle;
 mod test_controls;
 mod visual_embeddings_runtime;
 // Downward bindings so the phase folders keep their pre-move one-level

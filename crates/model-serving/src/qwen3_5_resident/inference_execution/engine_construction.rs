@@ -87,6 +87,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             model_loading_performance_attribution,
             performance_attribution_log,
             None,
+            None,
         )
     }
 
@@ -106,6 +107,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
         model_loading_performance_attribution: PerformanceAttribution,
         performance_attribution_log: PerformanceAttributionLog,
         diagnostic_prefill_activation_floor_bytes: Option<u64>,
+        speculative_decoding_block_length: Option<usize>,
     ) -> Result<Qwen3_5ResidentEngine, InferenceEngineError> {
         let full_attention_kv_state_growth_tokens =
             i32::try_from(chunking.full_attention_key_value_growth_tokens)
@@ -162,6 +164,8 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             retained_live_prefix: None,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,
+            speculative_decoding_block_length,
+            speculative_draft_runtime: None,
         })
     }
 }

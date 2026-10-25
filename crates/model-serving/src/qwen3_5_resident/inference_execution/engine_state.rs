@@ -19,6 +19,7 @@ use super::super::model::Qwen3_5ResidentModel;
 use super::Qwen3_5ResidentPromptProcessingChunkSizer;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::persistent_prompt_cache::retained_live_prefix::RetainedLiveDecoderPrefix;
+use super::speculative_decode_lifecycle::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime;
 
 pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) active_request:
@@ -69,6 +70,15 @@ pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) validated_artifact:
         Option<ValidatedQwen3_5Artifact>,
     pub(in crate::qwen3_5_resident::inference_execution) vocabulary_size: u32,
+    /// Requested speculation block length; `None` keeps the engine on the
+    /// classic decode path with no draft resident.
+    pub(in crate::qwen3_5_resident::inference_execution) speculative_decoding_block_length:
+        Option<usize>,
+    /// The loaded draft runtime; present only when loading found a paired
+    /// draft artifact and the active limit had headroom for it.
+    pub(in crate::qwen3_5_resident::inference_execution) speculative_draft_runtime: Option<
+        super::speculative_decode_lifecycle::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime,
+    >,
 }
 
 pub(crate) type Qwen3_5EngineState = Qwen3_5InferenceExecution;

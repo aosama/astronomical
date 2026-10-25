@@ -3,3 +3,4 @@
 mod automatic_engine_selection_rest;
 mod live_ceiling_lowering_rest;
 mod queued_live_ceiling_demotion_rest;
+mod speculative_decoding_rest;

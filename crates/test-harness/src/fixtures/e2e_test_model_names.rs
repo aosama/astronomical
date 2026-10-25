@@ -15,11 +15,13 @@ const E2E_TEST_MODEL_NAMES_JSON: &str = include_str!(concat!(
 ));
 const LARGE_SPARSE_MOE_STREAMING_ROLE: &str = "large_sparse_moe_streaming";
 const RESIDENT_SPARSE_MOE_ROLE: &str = "resident_sparse_moe";
+const ORNITH_DFLASH_DRAFT_ROLE: &str = "ornith_dflash_draft";
 const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
-const E2E_TEST_MODEL_ROLES: [&str; 4] = [
+const E2E_TEST_MODEL_ROLES: [&str; 5] = [
     LARGE_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
+    ORNITH_DFLASH_DRAFT_ROLE,
     SMALL_DENSE_ROLE,
     FLUX2_KLEIN_ROLE,
 ];
@@ -73,6 +75,10 @@ pub fn large_sparse_moe_streaming_model_id() -> &'static str {
     model_id_for_role(LARGE_SPARSE_MOE_STREAMING_ROLE)
 }
 
+pub fn ornith_dflash_draft_model_id() -> &'static str {
+    model_id_for_role(ORNITH_DFLASH_DRAFT_ROLE)
+}
+
 pub fn resident_sparse_moe_model_id() -> &'static str {
     model_id_for_role(RESIDENT_SPARSE_MOE_ROLE)
 }
@@ -85,10 +91,11 @@ pub fn flux2_klein_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_ROLE)
 }
 
-pub fn e2e_test_model_ids() -> [&'static str; 4] {
+pub fn e2e_test_model_ids() -> [&'static str; 5] {
     [
         large_sparse_moe_streaming_model_id(),
         resident_sparse_moe_model_id(),
+        ornith_dflash_draft_model_id(),
         small_dense_model_id(),
         flux2_klein_model_id(),
     ]

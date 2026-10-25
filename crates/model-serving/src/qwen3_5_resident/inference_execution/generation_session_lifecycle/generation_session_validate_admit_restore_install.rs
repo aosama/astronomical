@@ -184,6 +184,37 @@ impl Qwen3_5EngineState {
                 persistent_prompt_cache_is_available,
                 has_precomputed_visual_embeddings,
             );
+        // Speculative admission, decided once from request properties plus
+        // draft residency. An admitted session also forgoes the persistent
+        // prompt cache in both directions: restored prefixes would bypass
+        // the tap-capturing prefill that conditions the draft, and captured
+        // boundaries do not exist on the speculative forward path.
+        let speculative_session_admitted = self
+            .speculative_draft_runtime
+            .as_ref()
+            .is_some_and(|_| {
+                super::super::speculative_decode_lifecycle::speculation_session_admission::should_admit_speculation_for_session(
+                    &super::super::speculative_decode_lifecycle::speculation_session_admission::SpeculationSessionRequestProperties {
+                        sampling_strategy: match sampling_strategy {
+                            crate::Qwen3_5SamplingStrategy::HighestLogit => Some(
+                                super::super::speculative_decode_lifecycle::speculation_session_admission::SpeculationCompatibleSampling::HighestLogit,
+                            ),
+                            crate::Qwen3_5SamplingStrategy::TopKTopP { .. } => None,
+                        },
+                        structured_generation_is_active: inference_request
+                            .structured_generation()
+                            .is_some(),
+                        forced_thinking_transition_is_pending: false,
+                        visual_embeddings_are_active: has_precomputed_visual_embeddings
+                            || has_processed_visual_images,
+                        repetition_penalty_is_active: inference_request
+                            .repetition_penalty_thousandths()
+                            != 1_000,
+                    },
+                )
+            });
+        let can_use_persistent_prompt_cache =
+            can_use_persistent_prompt_cache && !speculative_session_admitted;
         // Computes which prompt blocks are cache-eligible and how many
         // visual embedding rows each image contributes, so text and image
         // reuse decisions come from one consistent identity.
@@ -418,6 +449,17 @@ impl Qwen3_5EngineState {
             first_decode_forward_elapsed_millis: None,
             generation_preparation_announced: false,
             structured_generation: inference_request.take_structured_generation(),
+            speculative_draft_key_value_states: self
+                .speculative_draft_runtime
+                .as_ref()
+                .filter(|_| speculative_session_admitted)
+                .map(|draft_runtime| {
+                    crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates::empty(
+                        draft_runtime.draft_configuration.layer_count() as usize,
+                    )
+                }),
+            speculative_emission_queue: std::collections::VecDeque::new(),
+            speculative_session_admitted,
         });
         let restored_prompt_prefix_token_count = u32::try_from(prefill_cursor).map_err(
             super::generation_error_constructors::restored_prompt_prefix_exceeds_u32_range_error,
