@@ -1,8 +1,7 @@
 //! Correctness contracts for the jangtq2 graphics-processor codebook decoder
 //! and the blockwise Hadamard-32 activation rotation in `mlx_decode`, pinned
-//! to the checked-in golden vectors and to the format's host arithmetic.
-//! Every test is `#[serial]` because MLX graphics-processor tests never run
-//! in parallel.
+//! to the checked-in golden vectors and to the format's host arithmetic;
+//! they run in parallel on small synthetic tensors.
 
 use astronomical_jangtq2_qwen35::codebook;
 use astronomical_jangtq2_qwen35::hadamard32;
@@ -10,7 +9,6 @@ use astronomical_jangtq2_qwen35::mlx_decode::{
     decode_expert_weight_rows, rotate_activations_hadamard32,
 };
 use mlx_c_rust::{MlxArray, MlxDtype};
-use serial_test::serial;
 
 use super::support::contract_runtime;
 
@@ -30,7 +28,6 @@ fn reference_golden_u32_values(key: &str) -> Vec<u32> {
 }
 
 #[test]
-#[serial]
 fn should_decode_a_multi_expert_page_identically_to_per_expert_pages() {
     let runtime = contract_runtime();
     // Forty experts on a 3-bit, 64-wide page: every row of the page is
@@ -116,7 +113,6 @@ fn should_decode_a_multi_expert_page_identically_to_per_expert_pages() {
 }
 
 #[test]
-#[serial]
 fn should_decode_reference_packed_three_bit_codes_on_mlx() {
     let runtime = contract_runtime();
     let packed_words = reference_golden_u32_values("pack3_random_words");
@@ -152,7 +148,6 @@ fn should_decode_reference_packed_three_bit_codes_on_mlx() {
 }
 
 #[test]
-#[serial]
 fn should_apply_blockwise_hadamard32_to_mlx_activations() {
     let runtime = contract_runtime();
     let activation_values = (0..64)

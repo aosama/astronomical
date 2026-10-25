@@ -5,7 +5,6 @@ use astronomical_quantization::bit_width::{BitWidth, GroupSize};
 use astronomical_quantization::encoder::RangeSearchPolicy;
 use astronomical_quantization::encoder::mlx::quantize_best;
 use astronomical_quantization::encoder::reference::{dequantize_slab, encode_slab};
-use serial_test::serial;
 
 use super::support::{contract_runtime, outlier_heavy_weights};
 
@@ -13,7 +12,6 @@ const ROWS: usize = 16;
 const COLUMNS: usize = 256;
 
 #[test]
-#[serial]
 #[ignore = "pending implementation of quantize_best and the reference encoder"]
 fn should_match_the_reference_encoder_bit_for_bit_on_packed_codes_at_two_bits() {
     let runtime = contract_runtime();
@@ -53,7 +51,6 @@ fn should_match_the_reference_encoder_bit_for_bit_on_packed_codes_at_two_bits() 
 }
 
 #[test]
-#[serial]
 #[ignore = "pending implementation of quantize_best"]
 fn should_produce_the_stock_mlx_layout_above_four_bits() {
     // At 8 bits the search is bypassed and the output must equal
@@ -83,7 +80,6 @@ fn should_produce_the_stock_mlx_layout_above_four_bits() {
 }
 
 #[test]
-#[serial]
 #[ignore = "pending implementation of quantize_best"]
 fn should_never_have_higher_squared_error_than_stock_min_max() {
     let runtime = contract_runtime();
@@ -125,7 +121,6 @@ fn should_never_have_higher_squared_error_than_stock_min_max() {
 }
 
 #[test]
-#[serial]
 #[ignore = "pending implementation of quantize_best"]
 fn should_dequantize_through_mlx_to_the_same_values_as_the_reference() {
     // The GPU-encoded artifact must read back through MLX's own dequantize
