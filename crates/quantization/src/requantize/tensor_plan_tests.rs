@@ -1,5 +1,5 @@
 //! Unit tests for output-size estimation; plan construction against written
-//! shards lives in `tests/offline/requantize_plan.rs`.
+//! shards lives in `tests/integration/requantize_plan.rs`.
 
 use super::*;
 use crate::bit_width::{BitWidth, GroupSize};

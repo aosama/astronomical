@@ -1,5 +1,5 @@
 //! Unit tests for the pure reference encoder. Numeric parity with the Python
-//! tool on a fixed tensor lives in `tests/offline/encoder_parity.rs`.
+//! tool on a fixed tensor lives in `tests/integration/encoder_parity.rs`.
 
 use super::*;
 

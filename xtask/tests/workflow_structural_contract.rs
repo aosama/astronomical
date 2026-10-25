@@ -1,6 +1,6 @@
 //! The workflow structural contract, as typed Rust: parses
 //! `.github/workflows/ci.yml` and pins the required check's triggers,
-//! fail-closed macOS authority, bounded timeouts, offline-lane compile
+//! fail-closed macOS authority, bounded timeouts, integration-lane compile
 //! contract, and attributable timing. Cache-ownership structure lives in the
 //! companion `workflow_cache_owner_contract` test; both replace the
 //! Ruby-in-shell section of
@@ -17,39 +17,42 @@ use contract_support::{
 use serde_yaml::Value;
 
 #[test]
-fn should_use_the_canonical_offline_package_selection_for_compile_and_execution() {
+fn should_use_the_canonical_integration_package_selection_for_compile_and_execution() {
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    for step_name in ["Compile offline lane tests", "Run offline lane tests"] {
+    for step_name in [
+        "Compile integration lane tests",
+        "Run integration lane tests",
+    ] {
         let step = find_step_by_name(&verification_steps, step_name);
         let command = run_text_of(step, step_name);
         assert!(
             command
                 .lines()
-                .any(|line| line.trim_start().starts_with("cargo test-offline ")),
-            "{step_name} must use cargo test-offline so extracted policy packages cannot disappear"
+                .any(|line| line.trim_start().starts_with("cargo test-integration ")),
+            "{step_name} must use cargo test-integration so extracted policy packages cannot disappear"
         );
         assert!(
             !command.lines().any(|line| {
                 line.trim_start().starts_with("cargo test ")
-                    && line.contains("--test offline_tests")
+                    && line.contains("--test integration_tests")
             }),
-            "{step_name} duplicates the canonical offline package selection"
+            "{step_name} duplicates the canonical integration package selection"
         );
         assert!(
             command.contains("cargo test-test-harness-fixtures"),
-            "{step_name} must cover the shared real-model evidence assertions offline"
+            "{step_name} must cover the shared real-model evidence assertions without a network"
         );
     }
     let configuration =
         std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
             .expect("the canonical Cargo configuration should be readable");
-    let offline_alias = configuration
+    let integration_alias = configuration
         .lines()
-        .find(|line| line.starts_with("test-offline = "))
-        .expect("the canonical offline alias should exist");
-    assert!(offline_alias.contains("-p astronomical-memory-policy "));
-    assert!(offline_alias.contains("--lib --test offline_tests"));
+        .find(|line| line.starts_with("test-integration = "))
+        .expect("the canonical integration alias should exist");
+    assert!(integration_alias.contains("-p astronomical-memory-policy "));
+    assert!(integration_alias.contains("--lib --test integration_tests"));
 }
 
 #[test]
@@ -229,19 +232,19 @@ fn required_check_steps_keep_their_bounded_contracts() {
         "Library REST contracts exceeded their bounded timeout"
     );
 
-    let compile_step = find_step_by_name(&verification_steps, "Compile offline lane tests");
-    let compile_command = run_text_of(compile_step, "compile-offline");
+    let compile_step = find_step_by_name(&verification_steps, "Compile integration lane tests");
+    let compile_command = run_text_of(compile_step, "compile-integration");
     assert!(
         compile_command.contains("--no-run"),
-        "offline compile does not use --no-run"
+        "integration compile does not use --no-run"
     );
     assert!(
-        compile_command.contains("cargo test-offline "),
-        "offline compile omits the canonical offline alias"
+        compile_command.contains("cargo test-integration "),
+        "integration compile omits the canonical integration alias"
     );
     assert!(
         compile_command.contains("--test rest_api_tests"),
-        "offline compile omits rest_api_tests"
+        "integration compile omits rest_api_tests"
     );
     let timing_step = find_step_by_name(&verification_steps, "Configure step timing attribution");
     assert!(
@@ -261,11 +264,11 @@ fn required_check_steps_keep_their_bounded_contracts() {
     );
     assert!(
         compile_command.contains(r#"tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE""#),
-        "offline compile does not tail the native build progress stream"
+        "integration compile does not tail the native build progress stream"
     );
     assert!(
         compile_command.contains(r#"kill "$progress_tail_pid""#),
-        "offline compile does not stop the progress tail on exit"
+        "integration compile does not stop the progress tail on exit"
     );
     find_step_by_id(&verification_steps, "native-build-identity");
 
@@ -328,7 +331,7 @@ fn packaging_contracts_run_on_required_checks() {
         find_step_by_name(&verification_steps, "Verify CI native cache contracts");
     assert!(
         run_text_of(cache_contract_step, "ci-cache-contracts")
-            .contains("--test offline_app_builder_journeys"),
+            .contains("--test integration_app_builder_journeys"),
         "the app-builder journey is not enforced on the required verification check"
     );
 

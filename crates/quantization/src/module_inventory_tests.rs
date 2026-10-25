@@ -1,6 +1,6 @@
 //! Unit tests for the header-only module inventory. Integration coverage with
 //! real safetensors files written to a temporary directory lives under
-//! `tests/offline/module_inventory_journeys.rs`.
+//! `tests/integration/module_inventory_journeys.rs`.
 
 use super::*;
 

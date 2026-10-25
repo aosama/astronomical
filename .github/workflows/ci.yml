@@ -280,7 +280,7 @@ jobs:
           # sandbox with fixture-bin tool shims; it is offline and takes
           # seconds, so it enforces the packaging contract on every pull
           # request instead of only before releases.
-          cargo test --locked -p xtask --test offline_app_builder_journeys
+          cargo test --locked -p xtask --test integration_app_builder_journeys
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 2
       - name: Prepare durable test-log directory
@@ -347,7 +347,7 @@ jobs:
           esac
           printf '[native-build-prewarm] status=%s\n' "$native_build_status"
         timeout-minutes: 12
-      - name: Compile offline lane tests
+      - name: Compile integration lane tests
         shell: bash
         run: |
           set -euo pipefail
@@ -362,9 +362,9 @@ jobs:
           : > "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE"
           tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE" &
           progress_tail_pid=$!
-          trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-offline-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin compile-offline-tests
-          cargo test-offline --timings --no-run
+          trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-integration-tests' EXIT
+          scripts/ci/ci-step-timing.sh begin compile-integration-tests
+          cargo test-integration --timings --no-run
           cargo test-test-harness-fixtures --no-run
           cargo test --timings --no-fail-fast --no-run -p astronomical-daemon --test rest_api_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-e2e --test e2e
@@ -389,15 +389,15 @@ jobs:
             *) printf '%s\n' 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
           esac
           printf '[native-build-result] status=%s\n' "$native_build_status"
-      - name: Run offline lane tests
+      - name: Run integration lane tests
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end offline-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin offline-tests
+          trap 'scripts/ci/ci-step-timing.sh end integration-tests' EXIT
+          scripts/ci/ci-step-timing.sh begin integration-tests
           # Preserve cargo's exit code through tee so a failing test still fails
           # this required check; the default GitHub bash shell sets pipefail, but
           # state it explicitly so the invariant survives a shell change.
           set -o pipefail
-          cargo test-offline -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/offline.log"
+          cargo test-integration -- --test-threads "$(sysctl -n hw.logicalcpu)" 2>&1 | tee "$RUNNER_TEMP/test-logs/integration.log"
           cargo test-test-harness-fixtures 2>&1 | tee "$RUNNER_TEMP/test-logs/test-harness-fixtures.log"
         timeout-minutes: 2
       - name: Run Library REST contracts
@@ -684,7 +684,7 @@ jobs:
           swift test --package-path apps/thin-talk -Xswiftc -warnings-as-errors 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk.log"
         timeout-minutes: 6
       # The packaging publication contracts (DMG, notarization, App Store
-      # pkg, installer promotion) are offline sandbox journeys like the
+      # pkg, installer promotion) are sandbox integration journeys like the
       # app-builder one on the verification job; wiring them here keeps the
       # release scripts from rotting between releases (issue #1346). The
       # suite takes about half a minute with its faked toolchain. macOS
@@ -744,7 +744,7 @@ jobs:
           node scripts/check-site-links.js
         timeout-minutes: 2
 
-  # Physics-enforced offline verification: the offline lane's tests are plain
+  # Physics-enforced offline verification: the integration lane's tests are plain
   # Book-style functions (issue #1333), so the lane's no-network property is
   # proven by removing the network entirely. unshare -rn runs cargo inside a
   # user+network namespace where opening any socket fails; a test that reaches
@@ -775,14 +775,14 @@ jobs:
       # probes the xcode identity, so the macOS-first crates cannot compile
       # on this runner. The macOS offline verification job above owns the
       # full lane.
-      - name: Fetch and build the Linux-buildable offline crates
+      - name: Fetch and build the Linux-buildable integration crates
         run: |
           cargo fetch --locked
-          cargo test --locked --no-run -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
+          cargo test --locked --no-run -p astronomical-config -p astronomical-ipc-protocol --lib --test integration_tests
       # The namespace run is execution-only: with artifacts warm and --offline
       # set, cargo never attempts a lookup, so the only thing the missing
       # network can break is a test opening a socket — the exact physics the
       # job exists to prove.
-      - name: Run the Linux-buildable offline crates with no network namespace
-        run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test offline_tests
+      - name: Run the Linux-buildable integration crates with no network namespace
+        run: unshare -rn cargo test --offline --locked --no-fail-fast -p astronomical-config -p astronomical-ipc-protocol --lib --test integration_tests
         timeout-minutes: 8

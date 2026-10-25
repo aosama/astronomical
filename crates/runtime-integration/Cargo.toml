@@ -30,7 +30,7 @@ unused_must_use = "deny"
 # contract (the feature enables the crate; the contract test target carries
 # required-features). Cargo cannot express an optional dev-dependency, so
 # the manifest lint stays allowed here rather than dragging the
-# graphics-processor build into the offline lane.
+# graphics-processor build into the integration lane.
 [lints.cargo]
 unused_dependencies = "allow"
 
@@ -63,7 +63,7 @@ tempfile = "=3.27.0"
 
 # The live MLX-C coverage contract: the provisioned pinned headers and the
 # compiled bridge inventory (stock crate plus the fork's symbols) must agree
-# exactly. Requires the mlx feature, so it never builds in the offline lane.
+# exactly. Requires the mlx feature, so it never builds in the integration lane.
 [[test]]
 name = "mlx_c_coverage_contract_tests"
 required-features = ["mlx"]

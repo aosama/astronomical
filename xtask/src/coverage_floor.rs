@@ -3,8 +3,8 @@
 //!
 //! This gate is deliberately local-only (`.githooks/pre-commit`); it is not
 //! a continuous-integration step, so a cold instrumented build never slows a
-//! pull request. The command runs cargo-llvm-cov with the package's offline
-//! test scope, parses the summary `TOTAL` row, and compares line coverage
+//! pull request. The command runs cargo-llvm-cov with the package's unit and
+//! integration test scope, parses the summary `TOTAL` row, and compares line coverage
 //! against the floor, failing closed on any parsing or tooling failure.
 
 use std::fs::File;
@@ -133,7 +133,7 @@ pub fn parse_summary_total_row(summary_text: &str) -> Result<CoverageSummary, St
 pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let invocation = CoverageFloorInvocation::parse(arguments)?;
     println!(
-        "[coverage-floor] status=start package={} floor_percent={:.2} timeout_seconds={} scope=\"--lib --test offline_tests\"",
+        "[coverage-floor] status=start package={} floor_percent={:.2} timeout_seconds={} scope=\"--lib --test integration_tests\"",
         invocation.package_name, invocation.minimum_line_coverage_percent, MAXIMUM_ELAPSED_SECONDS
     );
     let started_at = Instant::now();
@@ -198,7 +198,7 @@ fn measure_line_coverage(
         .arg(&invocation.package_name)
         .arg("--lib")
         .arg("--test")
-        .arg("offline_tests")
+        .arg("integration_tests")
         .arg("--summary-only")
         .current_dir(repository_root)
         .stdout(Stdio::from(summary_file))

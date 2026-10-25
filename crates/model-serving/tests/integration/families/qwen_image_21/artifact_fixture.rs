@@ -2,7 +2,7 @@
 //!
 //! The config documents are the reviewed package's exact JSON (the strict validator pins them to
 //! these values), and the three weight files are sparse — a real safetensors header plus a
-//! zero-filled payload extent — so the offline suite never materializes the 10.5 GB of weights.
+//! zero-filled payload extent — so the integration suite never materializes the 10.5 GB of weights.
 //! Tensor names, dtypes, and shapes come from the crate's own profile generators, the same
 //! single source of truth the validator checks against.
 

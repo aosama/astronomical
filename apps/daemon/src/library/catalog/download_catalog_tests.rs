@@ -18,7 +18,7 @@ const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 
 /// Guards that the shipped, compiled-in catalog parses, validates, and is non-empty.
 /// `include_str!` only proves the file exists at compile time; this proves its contents
-/// are a valid catalog in the cheap offline lane, not only at e2e startup time.
+/// are a valid catalog in the cheap integration lane, not only at e2e startup time.
 #[test]
 fn should_parse_and_load_the_shipped_bundled_catalog() {
     let download_catalog =

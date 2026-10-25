@@ -7,7 +7,7 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 # One explicit test target: unit tests live inside src/ (lib test binary) and
-# the verb journeys stay in tests/cli_journeys/ behind tests/offline_tests.rs.
+# the verb journeys stay in tests/cli_journeys/ behind tests/integration_tests.rs.
 # autotests = false keeps stray .rs files under tests/ from auto-discovering as
 # extra linked test binaries.
 autotests = false
@@ -17,8 +17,8 @@ name = "astronomical"
 path = "src/main.rs"
 
 [[test]]
-name = "offline_tests"
-path = "tests/offline_tests.rs"
+name = "integration_tests"
+path = "tests/integration_tests.rs"
 
 [lints]
 workspace = true

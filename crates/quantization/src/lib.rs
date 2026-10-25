@@ -46,7 +46,7 @@
 //! Everything that needs a Metal device sits behind the `direct-mlx` feature:
 //! the encoder, the requantizer, and the MLX implementation of KL divergence.
 //! The rest of the crate is pure Rust, which keeps the allocator, the schemas,
-//! the calibration loader, and the sweep driver testable in the offline lane
+//! the calibration loader, and the sweep driver testable in the integration lane
 //! and usable from the CLI's `quantize plan` sub-verb on any host.
 //!
 //! # Progress reporting

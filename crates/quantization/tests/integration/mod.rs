@@ -1,4 +1,4 @@
-//! Offline integration journeys, one module per seam:
+//! Integration journeys, one module per seam:
 //!
 //! - `fixtures`: loaders for the Python-generated parity documents.
 //! - `allocation_parity`: the Rust allocator reproduces the Python
@@ -18,7 +18,7 @@
 //!   files.
 //! - `artifact_round_trip`: the writers produce documents this crate's own
 //!   readers parse back; the cross-crate contract with model-serving's
-//!   strict readers lives in model-serving's offline tests.
+//!   strict readers lives in model-serving's integration tests.
 
 mod allocation_parity;
 mod artifact_round_trip;

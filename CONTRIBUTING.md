@@ -21,12 +21,12 @@ Add the smallest meaningful behavior test for functional changes. Every test pro
 Run focused tests while developing. Before proposing a pull request, run:
 
     cargo fmt --all -- --check
-    cargo test-offline-and-rest
+    cargo test-integration-and-rest
     scripts/ci/test-macos-menu-contracts.sh
 
 Run direct MLX or model-artifact acceptance only when the change crosses those boundaries. State exactly which checks ran and which hardware-dependent checks could not run.
 
-Routine offline, Representational State Transfer (REST), and commit verification tests retain one stable Cargo graph for warm iteration. Commit verification preserves caller-selected Cargo and compiler-cache configuration. Release and acceptance Cargo commands can use marker-owned disposable targets that are removed automatically. Use the `full-debug` profile only when complete packed symbols are required.
+Routine integration, Representational State Transfer (REST), and commit verification tests retain one stable Cargo graph for warm iteration. Commit verification preserves caller-selected Cargo and compiler-cache configuration. Release and acceptance Cargo commands can use marker-owned disposable targets that are removed automatically. Use the `full-debug` profile only when complete packed symbols are required.
 
 Cargo aliases in `.cargo/config.toml` are string-valued on purpose. Cargo merges the config file of every ancestor directory, and a git worktree nested under the repository (for example under `.claude/worktrees/`) sees the file twice; string aliases merge by replacement, while array aliases would concatenate and double. If cargo stops with `failed to merge config value ... expected string, but found array` inside a nested worktree, the worktree and the main checkout disagree on the alias form: merge `main` into the worktree branch, or update the main checkout, so both carry the string form.
 

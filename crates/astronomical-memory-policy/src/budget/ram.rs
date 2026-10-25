@@ -318,7 +318,7 @@ impl MlxRamBudget {
     /// workspace, prefill activation) but historically computed the activation
     /// component from the total context token count, reintroducing the #644
     /// scaling defect `plan()` had already fixed. Exposing the composition here
-    /// gives the offline suite a direct contract on the numbers admission
+    /// gives the integration suite a direct contract on the numbers admission
     /// actually charges, so the two paths cannot silently diverge again.
     #[must_use]
     pub fn context_admission_workspace_snapshot(

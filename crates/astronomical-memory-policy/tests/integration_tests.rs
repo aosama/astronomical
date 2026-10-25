@@ -1,20 +1,20 @@
-//! The policy crate's offline-lane entry: the same network-denied,
+//! The policy crate's integration-lane entry: the same network-denied,
 //! graphics-processor-free contract the other workspace packages honor, over
 //! a representative slice of the pure arithmetic (the layering contract
 //! guarantees nothing in this crate can reach the network or the MLX
-//! bindings, so these tests run anywhere the offline lane runs).
+//! bindings, so these tests run anywhere the integration lane runs).
 
 use astronomical_memory_policy::budget::adaptive_growth::AdaptiveRamGrowthGuard;
 use astronomical_memory_policy::phase::MemoryPhase;
 use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_ram_bytes;
 
 #[test]
-fn should_run_the_memory_policy_offline_smoke_contract() {
+fn should_run_the_memory_policy_integration_smoke_contract() {
     astronomical_test_harness::ensure_network_denied()
         .expect("network denial could not be applied");
 
     // One representative fact per family of pure arithmetic, enough to prove
-    // the crate's test surface is alive inside the offline lane; the
+    // the crate's test surface is alive inside the integration lane; the
     // exhaustive coverage lives in the lib unit tests (187 of them).
     assert_eq!(
         machine_ceiling_from_physical_ram_bytes(51_539_607_552),
