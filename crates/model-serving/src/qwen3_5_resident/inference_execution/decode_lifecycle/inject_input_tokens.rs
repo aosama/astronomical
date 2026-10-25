@@ -10,7 +10,7 @@ use super::completed_forward_memory;
 use crate::qwen3_5_resident::model::memory_admission;
 
 impl Qwen3_5EngineState {
-    pub(super) fn inject_input_tokens(
+    pub(in crate::qwen3_5_resident::inference_execution) fn inject_input_tokens(
         &mut self,
         request_id: RequestId,
         input_token_ids: Vec<u32>,
@@ -68,9 +68,7 @@ impl Qwen3_5EngineState {
         let projected_context_tokens = (active_request.next_position_tokens as usize)
             .checked_add(input_token_ids.len())
             .and_then(|context_tokens| context_tokens.checked_add(remaining_output_tokens))
-            .ok_or_else(|| {
-                memory_admission::invalid_request_error("generation context token count overflowed")
-            })?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::generation_context_token_count_overflow_error)?;
         if projected_context_tokens > self.hard_maximum_position_count {
             return Err(memory_admission::invalid_request_error(
                 "generation context exceeds the model maximum position count",
@@ -90,7 +88,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         memory_admission::validate_context_memory_admission(
             model,
             self.memory_limits,
@@ -109,10 +107,10 @@ impl Qwen3_5EngineState {
             let _model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
             let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
             let injected_prefill_execution_context =
-                super::prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
+                super::super::prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
                     false,
                     AdaptiveRamGrowthExecutionProfile::Resident,
                     self.persistent_prompt_cache.is_some()
@@ -139,7 +137,7 @@ impl Qwen3_5EngineState {
             let model = self
                 .model
                 .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+                .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
             model
                 .prefill_chunk_with_performance_attribution(
                     feedback_prefix_token_ids,
@@ -178,7 +176,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let feedback_logits = model
             .build_forward_chunk_with_performance_attribution(
                 &[final_input_token_id],

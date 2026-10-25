@@ -1,11 +1,9 @@
 /// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
-mod advance_generation;
 mod completed_forward_memory;
+mod decode_lifecycle;
 pub(crate) mod engine_request;
-pub(in crate::qwen3_5_resident) mod generated_token_emission;
 mod generation_session_lifecycle;
 mod initial_context_memory_admission;
-mod inject_input_tokens;
 pub(in crate::qwen3_5_resident) mod memory_admission;
 mod memory_limit;
 mod model_loading;
