@@ -3,6 +3,7 @@ mod attention_prefill_performance;
 mod context_memory_admission;
 mod convolution_prefill_performance;
 mod convolution_state;
+mod dflash_speculative_proof;
 mod elementwise_fusion_probe;
 mod error_logging;
 mod full_attention;

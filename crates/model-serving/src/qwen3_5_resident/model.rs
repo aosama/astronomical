@@ -26,6 +26,8 @@ mod memory_breakdown;
 mod resident_execution;
 #[cfg(feature = "direct-mlx")]
 mod resident_model;
+#[cfg(feature = "direct-mlx")]
+mod verification_forward;
 
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::qwen3_5_core::artifacts::{Qwen3_5ShardIndex, ValidatedQwen3_5Artifact};
@@ -60,3 +62,5 @@ pub use forward_graph::Qwen3_5TargetForwardOutput;
 pub use resident_model::Qwen3_5ResidentModel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use resident_model::Qwen3_5ResidentModel as Qwen3_5Model;
+#[cfg(feature = "direct-mlx")]
+pub use verification_forward::VerificationLogitsMode;

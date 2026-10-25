@@ -106,7 +106,7 @@ impl Qwen3_5ModelBase {
 
     /// Returns the validated decoder-cache layout bound to this model artifact.
     #[must_use]
-    pub(crate) const fn decoder_cache_layout(&self) -> &DecoderCacheLayout {
+    pub const fn decoder_cache_layout(&self) -> &DecoderCacheLayout {
         &self.decoder_cache_layout
     }
 
@@ -122,7 +122,7 @@ impl Qwen3_5ModelBase {
         self.weights.total_payload_bytes()
     }
 
-    pub(crate) fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
+    pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
         self.weights.materialize(&self.runtime)?;
         self.runtime.evaluate_arrays(&[
             &self.inverse_linear_head_dimension_scale,
