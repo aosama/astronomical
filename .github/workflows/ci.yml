@@ -69,11 +69,11 @@ jobs:
   rust-core:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
-    # Descriptive job name, duration-free: the runtime cap lives in
-    # timeout-minutes below, never here, so the name can't silently drift
-    # from reality. The merge gate keys on the CI verdict, so renaming this
-    # job no longer touches branch protection.
-    name: macOS integration verification
+    # Descriptive job name, duration-free: this job builds everything and
+    # packs the nextest archives the per-tier test jobs consume; test
+    # execution lives in the tier lanes below. The merge gate keys on the CI
+    # verdict, so renaming this job no longer touches branch protection.
+    name: macOS build
     runs-on: macos-26
     # Job permissions replace the workflow-level set: pruning surplus caches
     # needs actions:write while everything else stays read-only.
@@ -281,8 +281,6 @@ jobs:
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo test --locked -p xtask --test integration_app_builder_journeys
         timeout-minutes: 5
-      - name: Prepare durable test-log directory
-        run: mkdir -p "$RUNNER_TEMP/test-logs"
       - name: Install verification tools
         run: |
           trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
@@ -292,36 +290,8 @@ jobs:
           # binary does not exist yet.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo run --quiet -p xtask -- install-verification-tools
-      # cargo-nextest executes the integration lane (issue #1553 phase 3).
-      # Pinned version and digest, verified before use like every other
-      # native dependency: a digest mismatch fails the job instead of running
-      # an unverified binary. Bump procedure: update both values together
-      # from the release's published .sha256 for the universal-apple-darwin
-      # archive.
       - name: Provision pinned cargo-nextest
-        env:
-          NEXTEST_VERSION: "0.9.149"
-          NEXTEST_SHA256: 47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217507
-        run: |
-          set -euo pipefail
-          trap 'scripts/ci/ci-step-timing.sh end provision-nextest' EXIT
-          scripts/ci/ci-step-timing.sh begin provision-nextest
-          nextest_directory="$RUNNER_TEMP/cargo-nextest"
-          mkdir -p "$nextest_directory"
-          nextest_archive="$nextest_directory/cargo-nextest.tar.gz"
-          curl --fail --silent --show-error --location --retry 3 \
-            --output "$nextest_archive" \
-            "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-universal-apple-darwin.tar.gz"
-          actual_nextest_sha256="$(shasum -a 256 "$nextest_archive" | awk '{print $1}')"
-          if [ "$actual_nextest_sha256" != "$NEXTEST_SHA256" ]; then
-            printf 'Error: cargo-nextest archive digest mismatch: expected %s, got %s\n' \
-              "$NEXTEST_SHA256" "$actual_nextest_sha256" >&2
-            exit 1
-          fi
-          tar -xzf "$nextest_archive" -C "$nextest_directory"
-          printf '%s\n' "$nextest_directory" >> "$GITHUB_PATH"
-          "$nextest_directory/cargo-nextest" nextest --version
-        timeout-minutes: 2
+        uses: ./.github/actions/provision-cargo-nextest
       # Default-branch and dispatch builds bundle the app, so they refresh
       # the notices in place: a bot-merged dependency update can land one
       # regeneration behind, and the bundle must never ship stale notices.
@@ -371,7 +341,7 @@ jobs:
           case "$native_build_status" in
             built) printf 'was_built=true\n' >> "$GITHUB_OUTPUT" ;;
             reused) printf 'was_built=false\n' >> "$GITHUB_OUTPUT" ;;
-            *) printf '%s\n' 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
+            *) printf 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
           esac
           printf '[native-build-prewarm] status=%s\n' "$native_build_status"
         timeout-minutes: 12
@@ -414,79 +384,60 @@ jobs:
           case "$native_build_status" in
             built) printf 'was_built=true\n' >> "$GITHUB_OUTPUT" ;;
             reused) printf 'was_built=false\n' >> "$GITHUB_OUTPUT" ;;
-            *) printf '%s\n' 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
+            *) printf 'Error: unsupported native build status: %s\n' "$native_build_status" >&2; exit 1 ;;
           esac
           printf '[native-build-result] status=%s\n' "$native_build_status"
-      - name: Run integration lane tests
+      # The compiled test binaries and the daemon executables the journeys
+      # launch are packed into portable nextest archives (one per tier lane)
+      # and uploaded for the per-tier test jobs below: those jobs check out
+      # the source, download one archive, and run their filters without
+      # recompiling (issue #1553 phase 2b). The archive aliases carry the
+      # same package selections the compile step built.
+      - name: Archive test binaries
         run: |
-          trap 'scripts/ci/ci-step-timing.sh end integration-tests' EXIT
-          scripts/ci/ci-step-timing.sh begin integration-tests
-          # Preserve cargo's exit code through tee so a failing test still fails
-          # this required check; the default GitHub bash shell sets pipefail, but
-          # state it explicitly so the invariant survives a shell change.
-          set -o pipefail
-          # nextest runs one process per test, so process-global state
-          # (environment variables, signal handlers, and the MLX allocator
-          # the model-serving accounting tests sample) cannot leak between
-          # tests, and .config/nextest.toml enforces a per-test hang budget.
-          # It reuses the binaries the compile step above already built: the
-          # nextest-integration alias carries the identical selection.
-          cargo nextest-integration 2>&1 | tee "$RUNNER_TEMP/test-logs/integration.log"
-          cargo test-test-harness-fixtures 2>&1 | tee "$RUNNER_TEMP/test-logs/test-harness-fixtures.log"
-        timeout-minutes: 2
-      - name: Run Library REST contracts
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end rest-library-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin rest-library-contracts
-          set -o pipefail
-          cargo nextest run -p astronomical-daemon --test rest_api_tests library 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-library.log"
-        timeout-minutes: 2
-      - name: Verify menu-facing status wire contract
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end rest-wire-contract' EXIT
-          scripts/ci/ci-step-timing.sh begin rest-wire-contract
-          set -o pipefail
-          # An exact-name filter under nextest fails the step when it matches
-          # no test (exit code 4), so renaming this contract breaks the check
-          # loudly; cargo test --exact passed silently with zero tests run.
-          cargo nextest run -p astronomical-daemon --test rest_api_tests -E 'test(=rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active)' 2>&1 | tee "$RUNNER_TEMP/test-logs/rest-wire-contract.log"
-        timeout-minutes: 2
-      - name: Run root E2E journeys
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end root-e2e-journeys' EXIT
-          scripts/ci/ci-step-timing.sh begin root-e2e-journeys
-          set -o pipefail
-          # One process per journey: in the scripted fidelity CI runs, each
-          # journey owns its daemon, state directory, and ports, so the
-          # in-process #[serial] locks (still binding for the real-model
-          # fidelity run locally through cargo xtask test-run) are not
-          # needed here.
-          cargo nextest run --no-fail-fast -p astronomical-e2e --test e2e 2>&1 | tee "$RUNNER_TEMP/test-logs/root-e2e.log"
+          trap 'scripts/ci/ci-step-timing.sh end archive-test-binaries' EXIT
+          scripts/ci/ci-step-timing.sh begin archive-test-binaries
+          mkdir -p target/nextest-archives
+          cargo nextest-archive-integration
+          cargo nextest-archive-test-harness
+          cargo nextest-archive-rest-api
+          cargo nextest-archive-e2e
         timeout-minutes: 5
-      # The repository contract scripts moved to the config-contracts lane
-      # (issue #1553): they parse configuration, so ubuntu runs them in
-      # parallel instead of extending this job's critical path. The tier
-      # pyramid itself is a local tool (cargo xtask tier-pyramid), not a CI
-      # step.
-      # Observatory contracts may migrate to swift-node at any time — the CI
-      # verdict fans in both macOS jobs, so job membership no longer touches
-      # branch protection. They stay here while this job owns the test-log
-      # artifact wiring they tee into.
-      - name: Run Observatory contracts
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end observatory-contracts' EXIT
-          scripts/ci/ci-step-timing.sh begin observatory-contracts
-          set -o pipefail
-          node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
-        timeout-minutes: 2
-      - name: Upload test logs
-        if: always()
+      - name: Upload integration test archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-logs-macos-rust-core-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/test-logs/
-          if-no-files-found: warn
-          retention-days: 30
+          name: nextest-archive-integration
+          path: target/nextest-archives/integration.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 0
+      - name: Upload test-harness test archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nextest-archive-test-harness
+          path: target/nextest-archives/test-harness.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 0
+      - name: Upload REST test archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nextest-archive-rest-api
+          path: target/nextest-archives/rest-api.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 0
+      - name: Upload E2E test archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nextest-archive-e2e
+          path: target/nextest-archives/e2e.tar.zst
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 0
+      # Test execution moved to the per-tier jobs below; the repository
+      # contract scripts run in the config-contracts lane (issue #1553), and
+      # the tier pyramid is a local tool (cargo xtask tier-pyramid).
       - name: Save cargo-downloads-cache
         id: cargo-downloads-cache-save
         if: ${{ !cancelled() && steps.cargo-downloads-cache.outputs.cache-hit != 'true' }}
@@ -700,6 +651,18 @@ jobs:
           set -o pipefail
           scripts/ci/test-macos-menu-contracts.sh 2>&1 | tee "$RUNNER_TEMP/test-logs/menu-status.log"
         timeout-minutes: 2
+      # Observatory moved here from the macOS build job when test execution
+      # split into per-tier lanes: it is a Node contract suite, and this job
+      # already owns the Node toolchain and the test-log artifact it tees
+      # into. The CI verdict fans in both macOS jobs, so membership changes
+      # never touch branch protection.
+      - name: Run Observatory contracts
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end observatory-contracts' EXIT
+          scripts/ci/ci-step-timing.sh begin observatory-contracts
+          set -o pipefail
+          node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
+        timeout-minutes: 2
       - name: Run Thin Talk conversation canvas contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end thin-talk-contracts' EXIT
@@ -798,6 +761,7 @@ jobs:
           scripts/ci/ci-step-timing.sh begin ci-cache-contracts
           cargo test --locked -p xtask --test workflow_structural_contract
           cargo test --locked -p xtask --test workflow_verdict_contract
+          cargo test --locked -p xtask --test workflow_lane_split_contract
           cargo test --locked -p xtask --test workflow_cache_owner_contract
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
@@ -820,6 +784,129 @@ jobs:
         run: scripts/ci/publish-ci-timing-summary.sh
         timeout-minutes: 1
 
+  # Per-tier test lanes (issue #1553 phase 2b): the macOS build job above
+  # compiles once and uploads one nextest archive per lane; each lane checks
+  # out the source (same absolute workspace path as the builder, which the
+  # compiled CARGO_MANIFEST_DIR values rely on), provisions the pinned
+  # cargo-nextest, downloads exactly its own archive, and runs its filters
+  # without compiling — no Rust toolchain is exercised. The lanes have no
+  # explicit `if`: with the default success() semantics a failed build skips
+  # every lane, and a legitimately skipped build (site-only change) skips
+  # them with it; the CI verdict fails the first case and accepts the second
+  # under the classifier's decision.
+  unit-tests:
+    name: Unit tests
+    needs: [detect-changes, rust-core]
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Provision pinned cargo-nextest
+        uses: ./.github/actions/provision-cargo-nextest
+      - name: Download integration test archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nextest-archive-integration
+          path: ${{ runner.temp }}/nextest-archive
+      - name: Download test-harness test archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nextest-archive-test-harness
+          path: ${{ runner.temp }}/nextest-archive
+      - name: Run Unit tests from the build archive
+        run: |
+          set -o pipefail
+          # nextest canonicalizes the extract destination and refuses a
+          # missing directory, so every extract target is created first.
+          mkdir -p "$RUNNER_TEMP/nextest-extract" "$RUNNER_TEMP/nextest-extract-harness"
+          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/integration.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'kind(lib)'
+          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/test-harness.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract-harness" --extract-overwrite
+
+  integration-tests:
+    name: Integration tests
+    needs: [detect-changes, rust-core]
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Provision pinned cargo-nextest
+        uses: ./.github/actions/provision-cargo-nextest
+      - name: Download integration test archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nextest-archive-integration
+          path: ${{ runner.temp }}/nextest-archive
+      - name: Run Integration tests from the build archive
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/nextest-extract"
+          cargo-nextest nextest run --no-fail-fast --archive-file "$RUNNER_TEMP/nextest-archive/integration.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'kind(test)'
+
+  rest-contracts:
+    name: REST contracts
+    needs: [detect-changes, rust-core]
+    runs-on: macos-26
+    timeout-minutes: 6
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Provision pinned cargo-nextest
+        uses: ./.github/actions/provision-cargo-nextest
+      - name: Download REST test archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nextest-archive-rest-api
+          path: ${{ runner.temp }}/nextest-archive
+      - name: Run REST contracts from the build archive
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/nextest-extract"
+          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/rest-api.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite library
+          # An exact-name filter under nextest fails the step when it matches
+          # no test (exit code 4), so renaming this contract breaks the check
+          # loudly; cargo test --exact passed silently with zero tests run.
+          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/rest-api.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'test(=rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active)'
+
+  e2e-journeys:
+    name: End-to-end journeys
+    needs: [detect-changes, rust-core]
+    runs-on: macos-26
+    timeout-minutes: 6
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Provision pinned cargo-nextest
+        uses: ./.github/actions/provision-cargo-nextest
+      - name: Download E2E test archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nextest-archive-e2e
+          path: ${{ runner.temp }}/nextest-archive
+      - name: Run End-to-end journeys from the build archive
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/nextest-extract"
+          # One process per journey: in the scripted fidelity CI runs, each
+          # journey owns its daemon, state directory, and ports, so the
+          # in-process #[serial] locks (still binding for the real-model
+          # fidelity run locally through cargo xtask test-run) are not
+          # needed here.
+          cargo-nextest nextest run --no-fail-fast --archive-file "$RUNNER_TEMP/nextest-archive/e2e.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite
+
   # The one required check of this workflow (issue #1553): a fan-in verdict
   # that fails closed over every lane, so branch protection and the ruleset
   # list exactly one check whose name never changes and jobs above stay free
@@ -836,7 +923,7 @@ jobs:
   # lane skipped for any other reason fails the gate.
   verdict:
     name: CI verdict
-    needs: [detect-changes, rust-core, swift-node, static, config-contracts]
+    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, swift-node, static, config-contracts]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -851,6 +938,10 @@ jobs:
           classification_result="${{ needs.detect-changes.result }}"
           macos_verification_required="${{ needs.detect-changes.outputs.macos_verification_required }}"
           rust_core_result="${{ needs.rust-core.result }}"
+          unit_tests_result="${{ needs.unit-tests.result }}"
+          integration_tests_result="${{ needs.integration-tests.result }}"
+          rest_contracts_result="${{ needs.rest-contracts.result }}"
+          e2e_journeys_result="${{ needs.e2e-journeys.result }}"
           swift_node_result="${{ needs.swift-node.result }}"
           static_result="${{ needs.static.result }}"
           config_contracts_result="${{ needs.config-contracts.result }}"
@@ -860,7 +951,7 @@ jobs:
           if [ "$macos_verification_required" != "true" ]; then
             macos_lanes_may_skip=true
           fi
-          for lane_result_pair in "rust-core:$rust_core_result" "swift-node:$swift_node_result"; do
+          for lane_result_pair in "rust-core:$rust_core_result" "unit-tests:$unit_tests_result" "integration-tests:$integration_tests_result" "rest-contracts:$rest_contracts_result" "e2e-journeys:$e2e_journeys_result" "swift-node:$swift_node_result"; do
             lane_name="${lane_result_pair%%:*}"
             lane_result="${lane_result_pair##*:}"
             case "$lane_result" in
