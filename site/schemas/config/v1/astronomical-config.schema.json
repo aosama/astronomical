@@ -63,7 +63,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 18446744073,
-          "description": "Optional MLX memory ceiling in decimal SI gigabytes; omission selects the machine maximum.",
+          "description": "Optional MLX memory ceiling in gigabytes of 1,073,741,824 bytes (2^30), the unit Apple uses to market the Mac; omission selects the machine maximum.",
           "x-astronomical-apply-mode": "live"
         },
         "default_model": {
@@ -97,7 +97,7 @@
           "minimum": 1,
           "maximum": 18446744073,
           "default": 50,
-          "description": "Global prompt-cache capacity in decimal SI gigabytes.",
+          "description": "Global prompt-cache capacity in gigabytes of 1,073,741,824 bytes (2^30), the unit Apple uses to market the Mac.",
           "x-astronomical-apply-mode": "worker-replacement"
         }
       }

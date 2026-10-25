@@ -16,7 +16,7 @@ fn should_leave_maximum_mlx_memory_unset_when_omitted() {
 }
 
 #[test]
-fn should_convert_maximum_mlx_memory_decimal_gigabytes_to_bytes() {
+fn should_convert_maximum_mlx_memory_marketed_gigabytes_to_bytes() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
     write_config(
         temporary_home_directory.path(),

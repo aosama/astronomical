@@ -13,7 +13,7 @@ use crate::legacy_config_migration;
 /// the machine: 1 GB = 1,073,741,824 bytes (2³⁰).
 const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
 
-/// Converts a positive decimal SI gigabyte setting to exact bytes.
+/// Converts a positive marketed-gigabyte setting (2³⁰ bytes each) to exact bytes.
 pub fn maximum_mlx_memory_gb_to_bytes(
     maximum_mlx_memory_gb: u64,
 ) -> Result<u64, AstronomicalConfigError> {

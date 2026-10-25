@@ -25,17 +25,24 @@ impl Qwen3_5StreamingPromptProcessingChunkSizer {
         })
     }
 
+    /// Returns the end of the next chunk, never more than the configured size.
+    ///
+    /// The configured size is a hard cap because the expert residency plan
+    /// reserves activation memory for exactly
+    /// [`Self::maximum_prompt_processing_chunk_size_tokens`]. An earlier
+    /// version folded a short remainder into the current chunk to save one
+    /// SSD streaming pass, which produced forwards of up to twice the
+    /// configured size against a one-chunk reserve and exhausted GPU memory
+    /// mid-request.
     #[must_use]
     pub fn next_prompt_processing_chunk_end(
         &self,
         chunk_start_token_position: usize,
         final_prompt_end_token_position_exclusive: usize,
     ) -> usize {
-        paged_chunk_end_after_folding_short_remainder(
-            chunk_start_token_position,
-            final_prompt_end_token_position_exclusive,
-            self.ssd_streaming_prompt_processing_chunk_size_tokens,
-        )
+        chunk_start_token_position
+            .saturating_add(self.ssd_streaming_prompt_processing_chunk_size_tokens)
+            .min(final_prompt_end_token_position_exclusive)
     }
 
     #[must_use]
@@ -46,23 +53,5 @@ impl Qwen3_5StreamingPromptProcessingChunkSizer {
     #[must_use]
     pub fn prompt_processing_operation_bound_tokens(&self) -> usize {
         self.ssd_streaming_prompt_processing_chunk_size_tokens
-    }
-}
-
-fn paged_chunk_end_after_folding_short_remainder(
-    chunk_start_token_position: usize,
-    final_prompt_end_token_position_exclusive: usize,
-    executable_chunk_size_tokens: usize,
-) -> usize {
-    let remaining_prompt_token_count =
-        final_prompt_end_token_position_exclusive.saturating_sub(chunk_start_token_position);
-    if remaining_prompt_token_count <= executable_chunk_size_tokens {
-        return chunk_start_token_position.saturating_add(remaining_prompt_token_count);
-    }
-    let remainder_after_full_chunk = remaining_prompt_token_count - executable_chunk_size_tokens;
-    if remainder_after_full_chunk < executable_chunk_size_tokens {
-        chunk_start_token_position.saturating_add(remaining_prompt_token_count)
-    } else {
-        chunk_start_token_position.saturating_add(executable_chunk_size_tokens)
     }
 }
