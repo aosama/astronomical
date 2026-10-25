@@ -187,6 +187,23 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # "resident"; `cargo xtask test-run --package astronomical-acceptance
 # --features serving-acceptance --test chat_serving --release --filter
 # live_ceiling_lowering_rest --ignored`.
+# DFlash speculative-decoding serving cell (manual, serial, real resident
+# sparse artifact plus its paired DFlash draft, 120-second budget): a greedy
+# chat must stream to a natural stop on the resident engine with multiple
+# speculative rounds and at least one confirmed proposal in its generation
+# attribution report; `cargo xtask test-run --package astronomical-acceptance
+# --features serving-acceptance --test chat_serving --release --filter
+# should_serve_a_chat_through_speculative_decoding_with_the_paired_draft
+# --ignored`.
+# DFlash speculative-decoding proof journey (manual, serial, real resident
+# sparse artifact plus draft, ~30 seconds per block length, 900-second
+# budget): measures acceptance rate and both decode throughputs (baseline
+# one-token-per-forward versus draft-and-verify at DFLASH_PROOF_
+# SPECULATION_TOKENS, default eight) over a 10,000-token Romeo and Juliet
+# prefill with 500 measured output tokens per mode; `cargo test --release
+# -p astronomical-acceptance --features direct-mlx --test direct_mlx
+# should_measure_dflash_speculative_acceptance_and_decode_throughput --
+# --ignored --nocapture --test-threads=1`.
 # Request-demotion re-promotion worker tests (integration, scripted engines): a
 # worker demoted by one request returns to the resident engine for a strictly
 # smaller request once complete residency plus that request's decoder state

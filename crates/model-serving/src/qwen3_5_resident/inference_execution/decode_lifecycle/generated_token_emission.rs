@@ -127,7 +127,7 @@ impl Qwen3_5EngineState {
     }
 }
 
-pub(super) fn synchronize_generated_token_id(
+pub(in crate::qwen3_5_resident) fn synchronize_generated_token_id(
     active_request: &mut Qwen3_5EngineRequest,
     generated_token: &MlxArray,
 ) -> Result<u32, InferenceEngineError> {

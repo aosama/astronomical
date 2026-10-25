@@ -194,6 +194,21 @@
           ],
           "x-astronomical-apply-mode": "model-reload"
         },
+        "speculative_decoding_block_length_tokens": {
+          "description": "Speculative-decoding block length the resident engine drafts per round when a paired DFlash draft artifact is installed beside the target model; absent keeps classic decoding.",
+          "default": null,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "x-astronomical-apply-mode": "model-reload"
+        },
         "prompt_cache_common_prefix_stride_blocks": {
           "type": "integer",
           "minimum": 1,

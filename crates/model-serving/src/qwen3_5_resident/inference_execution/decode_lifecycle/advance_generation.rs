@@ -120,6 +120,21 @@ impl Qwen3_5EngineState {
 
         let forced_thinking_transition_token_id =
             active_request.next_forced_thinking_transition_token_id()?;
+        // Speculative sessions run their own advance: accepted blocks drain
+        // through the ordinary emission machinery, and an empty queue means
+        // one draft-and-verify round. A forced thinking boundary suspends
+        // speculation for the session's remainder — the block contract
+        // cannot re-seed a mid-block forced token, and the classic path
+        // below already handles that boundary exactly.
+        if active_request.speculative_session_admitted {
+            if forced_thinking_transition_token_id.is_some() {
+                active_request.suspend_speculative_session("forced_thinking_transition");
+            } else if active_request.pending_generated_token.is_some()
+                || !active_request.speculative_emission_queue.is_empty()
+            {
+                return self.advance_speculative_generation(request_id, active_request);
+            }
+        }
         let mut first_decode_forward_started_at = None;
         let current_generated_token = if let Some(forced_thinking_transition_token_id) =
             forced_thinking_transition_token_id
@@ -362,7 +377,7 @@ impl Qwen3_5EngineState {
     }
 }
 
-pub(super) enum ActiveRequestAdvance {
+pub(in crate::qwen3_5_resident::inference_execution) enum ActiveRequestAdvance {
     Continue(GeneratedToken),
     Complete(GeneratedToken),
 }

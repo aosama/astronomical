@@ -515,6 +515,33 @@ pub use qwen3_5_resident::{
 };
 
 #[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::dflash_draft::draft_configuration::{
+    DFlashDraftConfiguration, DFlashDraftConfigurationError, DFlashDraftLayerAttentionKind,
+};
+
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates;
+
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::dflash_draft::draft_weights::{
+    DFlashDraftLayerWeights, DFlashDraftWeights,
+};
+
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::dflash_draft::draft_weights_loading::DFlashDraftLoadedWeights;
+
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values;
+
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states;
+
+#[cfg(feature = "direct-mlx")]
+pub use qwen3_5_resident::{
+    SpeculationRoundOutcome, SpeculationRoundRequest, VerificationLogitsMode, run_speculative_round,
+};
+
+#[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
     ResidentLayerArraysForTests, ResidentProjectionArraysForTests, resident_layer_arrays_for_tests,
 };

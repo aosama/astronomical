@@ -21,7 +21,7 @@ use crate::support::{
     exact_model_prompt, large_sparse_moe_streaming_model_id, resident_sparse_moe_model_id,
 };
 
-const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
+pub(super) const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
 const FIXED_PREFILL_CHUNK_SIZE_TOKENS: u32 = 2_048;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
 const SMALL_PROMPT_TOKEN_COUNT: usize = 256;
@@ -29,7 +29,8 @@ const SHORT_PROMPT_TOKEN_COUNT: usize = 40;
 const MULTI_CHUNK_PROMPT_TOKEN_COUNT: usize = 5_000;
 const CACHE_SEED_PROMPT_TOKEN_COUNT: usize = FIXED_PREFILL_CHUNK_SIZE_TOKENS as usize;
 const CACHE_APPEND_PROMPT_TOKEN_COUNT: usize = 512;
-const ROMEO_AND_JULIET_SOURCE: &str =
+/// Shared with the speculative-decoding sibling journey in this module.
+pub(super) const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 const RESIDENT_SELECTION_TIMEOUT: Duration = Duration::from_secs(115);
 
@@ -461,14 +462,14 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
     .expect("the retry/cache SSD journey must finish within 120 seconds");
 }
 
-struct SparseArtifactResidencyGeometry {
-    complete_residency_with_headroom_bytes: u64,
+pub(super) struct SparseArtifactResidencyGeometry {
+    pub(super) complete_residency_with_headroom_bytes: u64,
     /// The measured geometry the RAM budget (and therefore the request-time
     /// activation reserve) is composed from.
-    model_geometry: MlxRamBudgetModelGeometry,
+    pub(super) model_geometry: MlxRamBudgetModelGeometry,
 }
 
-fn measure_sparse_artifact_residency_geometry(
+pub(super) fn measure_sparse_artifact_residency_geometry(
     model_directory: &Path,
 ) -> SparseArtifactResidencyGeometry {
     let validated_artifact = Qwen3_5ArtifactValidator::new()
@@ -587,7 +588,7 @@ async fn complete_chat_request(
     assistant_response
 }
 
-fn read_generation_attribution_reports(worker_home: &Path) -> Vec<Value> {
+pub(super) fn read_generation_attribution_reports(worker_home: &Path) -> Vec<Value> {
     let attribution_log_path =
         worker_home.join(".astronomical-dev/logs/performance-attribution.jsonl");
     fs::read_to_string(&attribution_log_path)

@@ -221,6 +221,15 @@ impl Qwen3_5InferenceRequest {
         self.structured_generation.take()
     }
 
+    /// Peeks whether structured generation is attached, without consuming it.
+    /// Session admission reads this before the request object is installed.
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn structured_generation(
+        &self,
+    ) -> Option<&crate::structured_generation::StructuredTokenConstraint> {
+        self.structured_generation.as_ref()
+    }
+
     /// Attaches the request-local critical-path performance accumulator.
     #[must_use]
     pub fn with_performance_attribution(

@@ -342,3 +342,80 @@ fn should_reject_retired_top_level_prefill_chunking_fields() {
         ));
     }
 }
+
+#[test]
+fn should_resolve_and_persist_the_speculative_decoding_block_length() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "chunking": {
+            "speculative_decoding_block_length_tokens": 4
+          }
+        }"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("the speculative chunking configuration should load");
+    let chunking = astronomical_config
+        .chunking()
+        .expect("chunking configuration should resolve");
+
+    assert_eq!(
+        chunking.speculative_decoding_block_length_tokens(),
+        Some(4_usize)
+    );
+
+    let persisted_chunking = persisted_chunking_object(temporary_home_directory.path());
+    assert_eq!(
+        persisted_chunking["speculative_decoding_block_length_tokens"],
+        4
+    );
+}
+
+#[test]
+fn should_default_the_speculative_decoding_block_length_to_disabled() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "chunking": {}
+        }"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("the empty chunking configuration should load");
+    let chunking = astronomical_config
+        .chunking()
+        .expect("chunking configuration should resolve");
+
+    assert_eq!(chunking.speculative_decoding_block_length_tokens(), None);
+}
+
+#[test]
+fn should_reject_out_of_range_speculative_decoding_block_lengths() {
+    for invalid_block_length in [0_usize, 65] {
+        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+        write_config(
+            temporary_home_directory.path(),
+            &format!(
+                r#"{{
+                  "chunking": {{
+                    "speculative_decoding_block_length_tokens": {}
+                  }}
+                }}"#,
+                invalid_block_length
+            ),
+        );
+
+        assert!(matches!(
+            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+            Err(AstronomicalConfigError::InvalidChunkingValue {
+                field_name: "chunking.speculative_decoding_block_length_tokens",
+                ..
+            })
+        ));
+    }
+}

@@ -69,9 +69,45 @@ pub(in crate::qwen3_5_resident) struct Qwen3_5EngineRequest {
     pub(super) generation_preparation_announced: bool,
     pub(super) structured_generation:
         Option<crate::structured_generation::StructuredTokenConstraint>,
+    /// Draft key-value states for the speculative session; present only
+    /// while the session was admitted for draft-and-verify decoding.
+    pub(super) speculative_draft_key_value_states: Option<
+        crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
+    >,
+    /// Tokens one accepted speculative round still owes the caller, in
+    /// emission order. The tail entry seeds the next round and is the only
+    /// queued token absent from the target's decoder state.
+    pub(super) speculative_emission_queue: std::collections::VecDeque<mlx_c_rust::MlxArray>,
+    /// Whether this session runs draft-and-verify; decided once at install
+    /// and only ever cleared when a path the block contract cannot preserve
+    /// (forced thinking transition, mid-decode feedback injection) suspends
+    /// speculation for the remainder of the session.
+    pub(super) speculative_session_admitted: bool,
 }
 
 impl Qwen3_5EngineRequest {
+    /// Suspends speculative decoding for this session's remainder.
+    ///
+    /// Called when a path the block contract cannot preserve takes over:
+    /// a forced thinking transition replaces the conditioned successor, and
+    /// feedback injection's prefill bypasses the tap-capturing forward that
+    /// grows the draft's context cache. The queue (including its uncommitted
+    /// tail) and the draft states drop; the classic path owns everything
+    /// from here.
+    pub(super) fn suspend_speculative_session(&mut self, suspension_reason: &'static str) {
+        if !self.speculative_session_admitted {
+            return;
+        }
+        self.speculative_session_admitted = false;
+        self.speculative_emission_queue.clear();
+        self.speculative_draft_key_value_states = None;
+        tracing::info!(
+            request_id = self.request_id.value(),
+            suspension_reason,
+            "suspending speculative decoding for the session's remainder"
+        );
+    }
+
     /// Records one generated token in the penalty history, keeping it sorted and unique.
     ///
     /// Only requests with an active penalty call this, so the common path never

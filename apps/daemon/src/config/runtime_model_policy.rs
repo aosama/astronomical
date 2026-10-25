@@ -65,6 +65,7 @@ pub(crate) fn worker_chunking_configuration(
             .experimental_ssd_paging_prefill_graph_submission_layer_interval(),
         experimental_ssd_paging_generation_graph_submission_layer_interval: chunking
             .experimental_ssd_paging_generation_graph_submission_layer_interval(),
+        speculative_decoding_block_length: chunking.speculative_decoding_block_length_tokens(),
         prompt_cache_block_tokens: chunking.prompt_cache_block_tokens(),
         prompt_cache_common_prefix_stride_blocks: chunking
             .prompt_cache_common_prefix_stride_blocks(),

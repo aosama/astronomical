@@ -1,7 +1,8 @@
 #[allow(unused_imports)]
 pub(crate) use astronomical_test_harness::fixtures::{
     e2e_test_model_ids, flux2_klein_model_id, large_sparse_moe_streaming_model_id,
-    required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
+    ornith_dflash_draft_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
+    small_dense_model_id,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -84,6 +85,7 @@ pub(crate) fn forced_unsupported_worker_kernel_capabilities()
 pub(crate) fn standard_worker_chunking_configuration()
 -> astronomical_ipc_protocol::WorkerChunkingConfiguration {
     astronomical_ipc_protocol::WorkerChunkingConfiguration {
+        speculative_decoding_block_length: None,
         fixed_prompt_processing_chunk_size_tokens: 2_048,
         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
         full_attention_key_value_growth_tokens: 256,

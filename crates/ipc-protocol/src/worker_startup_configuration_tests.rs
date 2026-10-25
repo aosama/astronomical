@@ -73,6 +73,7 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
                 maximum_context_tokens: 32_768,
                 maximum_output_tokens: 4_096,
                 chunking: WorkerChunkingConfiguration {
+                    speculative_decoding_block_length: None,
                     fixed_prompt_processing_chunk_size_tokens: 4_096,
                     fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
                     full_attention_key_value_growth_tokens: 256,
@@ -116,6 +117,7 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
             maximum_context_tokens: 32_768,
             maximum_output_tokens: 4_096,
             chunking: WorkerChunkingConfiguration {
+                speculative_decoding_block_length: None,
                 fixed_prompt_processing_chunk_size_tokens: 4_096,
                 fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
                 full_attention_key_value_growth_tokens: 256,
