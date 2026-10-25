@@ -43,7 +43,13 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
         .collect();
     assert_eq!(
         needed_lanes,
-        ["detect-changes", "rust-core", "swift-node", "static"],
+        [
+            "detect-changes",
+            "rust-core",
+            "swift-node",
+            "static",
+            "config-contracts"
+        ],
         "the verdict must fan in every lane; a lane outside its needs list escapes the merge gate"
     );
     assert_eq!(
@@ -68,6 +74,7 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
         "needs.rust-core.result",
         "needs.swift-node.result",
         "needs.static.result",
+        "needs.config-contracts.result",
     ] {
         assert!(
             verdict_text.contains(lane_marker),
@@ -88,6 +95,10 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
     assert!(
         verdict_text.contains("lane=static"),
         "the static lane escaped the verdict"
+    );
+    assert!(
+        verdict_text.contains("lane=config-contracts"),
+        "the config-contracts lane escaped the verdict"
     );
 }
 
@@ -115,6 +126,7 @@ fn verdict_script_decides_every_scenario_correctly() {
         rust_core: &'static str,
         swift_node: &'static str,
         static_checks: &'static str,
+        config_contracts: &'static str,
         expected_pass: bool,
     }
     let scenarios = [
@@ -125,6 +137,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             rust_core: "success",
             swift_node: "success",
             static_checks: "success",
+            config_contracts: "success",
             expected_pass: true,
         },
         Scenario {
@@ -134,6 +147,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             rust_core: "skipped",
             swift_node: "skipped",
             static_checks: "success",
+            config_contracts: "success",
             expected_pass: true,
         },
         Scenario {
@@ -143,6 +157,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             rust_core: "failure",
             swift_node: "success",
             static_checks: "success",
+            config_contracts: "success",
             expected_pass: false,
         },
         Scenario {
@@ -152,6 +167,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             rust_core: "skipped",
             swift_node: "success",
             static_checks: "success",
+            config_contracts: "success",
             expected_pass: false,
         },
         Scenario {
@@ -161,6 +177,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             rust_core: "success",
             swift_node: "success",
             static_checks: "success",
+            config_contracts: "success",
             expected_pass: false,
         },
         Scenario {
@@ -170,6 +187,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             rust_core: "skipped",
             swift_node: "skipped",
             static_checks: "skipped",
+            config_contracts: "success",
             expected_pass: false,
         },
         Scenario {
@@ -179,6 +197,17 @@ fn verdict_script_decides_every_scenario_correctly() {
             rust_core: "success",
             swift_node: "cancelled",
             static_checks: "success",
+            config_contracts: "success",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a failed config-contracts lane fails the gate",
+            classification: "success",
+            macos_required: "true",
+            rust_core: "success",
+            swift_node: "success",
+            static_checks: "success",
+            config_contracts: "failure",
             expected_pass: false,
         },
     ];
@@ -194,7 +223,11 @@ fn verdict_script_decides_every_scenario_correctly() {
             )
             .replace("${{ needs.rust-core.result }}", scenario.rust_core)
             .replace("${{ needs.swift-node.result }}", scenario.swift_node)
-            .replace("${{ needs.static.result }}", scenario.static_checks);
+            .replace("${{ needs.static.result }}", scenario.static_checks)
+            .replace(
+                "${{ needs.config-contracts.result }}",
+                scenario.config_contracts,
+            );
         let script_path = std::env::temp_dir().join("astronomical-verdict-scenario.sh");
         std::fs::write(&script_path, scenario_script)
             .expect("the verdict scenario script should persist");
