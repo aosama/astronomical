@@ -1,5 +1,9 @@
 //! Bottom-tier throughput measurements for the jangtq2 graphics-processor
-//! codebook decoder.
+//! kernels: the codebook decoder on decode-step and complete-layer pages, the
+//! Hadamard-32 activation rotation, and the fused gathered projection against
+//! the materializing decode it replaces on the decode-token path. The
+//! fused-projection measurement lives here rather than beside its correctness
+//! contracts because it shares this file's tier-0 harness and memory limit.
 //!
 //! This is the lowest layer of the jangtq2 serving call stack (the decode
 //! kernels in `mlx_decode`); per the repository's performance instructions,
@@ -19,15 +23,10 @@
 //! test is `#[serial]` because MLX graphics-processor tests never run in
 //! parallel.
 
-use super::super::codebook;
-#[cfg(feature = "direct-mlx")]
-use super::super::mlx_decode;
-use astronomical_runtime_integration::MlxMemoryLimits;
-#[cfg(feature = "direct-mlx")]
-use astronomical_runtime_integration::MlxRuntime;
-#[cfg(feature = "direct-mlx")]
+use astronomical_jangtq2_qwen35::codebook;
+use astronomical_jangtq2_qwen35::mlx_decode;
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_c_rust::{MlxArray, MlxDtype};
-#[cfg(feature = "direct-mlx")]
 use serial_test::serial;
 
 /// Routed experts serving one decode token (Qwen3.5 `num_experts_per_tok`).
@@ -55,7 +54,7 @@ const MEASURED_ITERATIONS: usize = 10;
 /// throughput measurement, used here only to size the rotation input.
 const PREFILL_CHUNK_TOKENS: usize = 2_048;
 
-fn test_runtime() -> astronomical_runtime_integration::MlxRuntime {
+fn test_runtime() -> MlxRuntime {
     // The complete-layer cases allocate the packed source plus a 1.5 GB
     // decoded projection; the limit stays well above that so the lane also
     // measures a regressed decoder that reintroduced workspace arrays.
@@ -105,7 +104,6 @@ fn median_duration_millis(durations_ms: &[f64]) -> f64 {
 ///
 /// The decoder evaluates and detaches its output, so each call is already
 /// fully synchronous and per-call wall time is honest without extra evaluation.
-#[cfg(feature = "direct-mlx")]
 fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u32) {
     let runtime = test_runtime();
     let expert_count = packed_shape[0] as usize;
@@ -254,7 +252,6 @@ fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u
     );
 }
 
-#[cfg(feature = "direct-mlx")]
 #[test]
 #[serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
@@ -270,7 +267,6 @@ fn should_measure_decode_step_top_k_page_codebook_decode_throughput() {
     );
 }
 
-#[cfg(feature = "direct-mlx")]
 #[test]
 #[serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
@@ -286,7 +282,6 @@ fn should_measure_complete_layer_gate_projection_codebook_decode_throughput() {
     );
 }
 
-#[cfg(feature = "direct-mlx")]
 #[test]
 #[serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
@@ -314,7 +309,6 @@ fn should_measure_complete_layer_down_projection_codebook_decode_throughput() {
 /// The blockwise Hadamard-32 activation rotation, at the decode-step shape
 /// (one token) and the pinned prefill chunk shape, so its share of the
 /// per-token cost is visible beside the decoder's.
-#[cfg(feature = "direct-mlx")]
 #[test]
 #[serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
@@ -367,13 +361,12 @@ fn should_measure_hadamard32_activation_rotation_throughput() {
 /// two medians are directly comparable. Reports the ratio so the decode-token
 /// cost model (three projections per layer, 48 layers) can be read straight
 /// off the tier-0 line.
-#[cfg(feature = "direct-mlx")]
 fn measure_fused_gathered_projection_throughput(
     case_name: &str,
     packed_shape: &[i32],
     bit_width: u32,
 ) {
-    use super::super::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
+    use astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel;
 
     let runtime = test_runtime();
     let fused_kernel = FusedJangtq2GatheredProjectionKernel::new()
@@ -501,7 +494,6 @@ fn measure_fused_gathered_projection_throughput(
     );
 }
 
-#[cfg(feature = "direct-mlx")]
 #[test]
 #[serial]
 #[ignore = "graphics-processor throughput measurement: run optimized via cargo test-jangtq2-decode-throughput"]
