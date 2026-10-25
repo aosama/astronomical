@@ -13,8 +13,6 @@ pub(crate) const EXPECTED_MACOS_CONCURRENCY_GROUP: &str =
 pub(crate) const EXPECTED_SWIFT_CONCURRENCY_GROUP: &str =
     "macos-swift-node-${{ github.event_name }}-${{ github.ref }}";
 pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str = "node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js";
-pub(crate) const EXPECTED_LIBRARY_REST_COMMAND: &str =
-    "cargo nextest run -p astronomical-daemon --test rest_api_tests library";
 
 pub(crate) fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

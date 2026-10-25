@@ -11,10 +11,10 @@
 mod contract_support;
 
 use contract_support::{
-    EXPECTED_LIBRARY_REST_COMMAND, EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP,
-    EXPECTED_OBSERVATORY_COMMAND, EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id,
-    find_step_by_name, required_bool, required_field, required_job, required_text, required_u64,
-    run_text_of, steps_of, triggers_of, workflow_contract,
+    EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP, EXPECTED_OBSERVATORY_COMMAND,
+    EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id, find_step_by_name, required_bool,
+    required_field, required_job, required_text, required_u64, run_text_of, steps_of, triggers_of,
+    workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -22,161 +22,38 @@ use serde_yaml::Value;
 fn should_use_the_canonical_integration_package_selection_for_compile_and_execution() {
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    // The compile step builds through cargo's own alias; the run step
-    // executes the same binaries through cargo-nextest (issue #1553 phase 3).
-    for (step_name, canonical_alias) in [
-        ("Compile integration lane tests", "cargo test-integration "),
-        ("Run integration lane tests", "cargo nextest-integration"),
-    ] {
-        let step = find_step_by_name(&verification_steps, step_name);
-        let command = run_text_of(step, step_name);
-        assert!(
-            command
-                .lines()
-                .any(|line| line.trim_start().starts_with(canonical_alias)),
-            "{step_name} must use {canonical_alias} so extracted policy packages cannot disappear"
-        );
-        assert!(
-            !command.lines().any(|line| {
-                let command_line = line.trim_start();
-                (command_line.starts_with("cargo test ")
-                    || command_line.starts_with("cargo nextest run "))
-                    && command_line.contains("--test integration_tests")
-            }),
-            "{step_name} duplicates the canonical integration package selection"
-        );
-        assert!(
-            command.contains("cargo test-test-harness-fixtures"),
-            "{step_name} must cover the shared real-model evidence assertions without a network"
-        );
-    }
+    // The compile step builds through cargo's own alias; the archive step
+    // packs what was built and the per-tier lanes run it (pinned by the
+    // workflow_lane_split_contract binary). This pin keeps the canonical
+    // build selection so extracted policy packages cannot disappear.
+    let compile_step = find_step_by_name(&verification_steps, "Compile integration lane tests");
+    let compile_text = run_text_of(compile_step, "compile-integration");
+    assert!(
+        compile_text
+            .lines()
+            .any(|line| line.trim_start().starts_with("cargo test-integration ")),
+        "the compile step must use cargo test-integration so extracted policy packages cannot disappear"
+    );
+    assert!(
+        !compile_text.lines().any(|line| {
+            line.trim_start().starts_with("cargo test ")
+                && line.contains("--test integration_tests")
+        }),
+        "the compile step duplicates the canonical integration package selection"
+    );
+    assert!(
+        compile_text.contains("cargo test-test-harness-fixtures"),
+        "the compile step must build the shared harness-fixture tests too"
+    );
     let configuration =
         std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
             .expect("the canonical Cargo configuration should be readable");
-    let alias_selection = |alias_prefix: &str, command_prefix: &str| -> String {
-        let alias_line = configuration
-            .lines()
-            .find(|line| line.starts_with(alias_prefix))
-            .unwrap_or_else(|| panic!("the {alias_prefix} alias should exist"));
-        alias_line
-            .trim_start_matches(alias_prefix)
-            .trim_matches('"')
-            .strip_prefix(command_prefix)
-            .unwrap_or_else(|| {
-                panic!("the {alias_prefix} alias should start with {command_prefix}")
-            })
-            .to_owned()
-    };
-    let compile_selection = alias_selection("test-integration = ", "test ");
-    let execution_selection = alias_selection("nextest-integration = ", "nextest run ");
-    assert!(compile_selection.contains("-p astronomical-memory-policy "));
-    assert!(compile_selection.contains("--lib --test integration_tests"));
-    // The compile step builds what the run step executes: if the
-    // selections drifted, nextest would silently rebuild (or skip) packages
-    // the compile step's timing and native-progress attribution never saw.
-    assert_eq!(
-        compile_selection, execution_selection,
-        "the test-integration and nextest-integration aliases must carry the identical selection"
-    );
-}
-
-// The remaining macOS test steps run through cargo-nextest too (issue #1553
-// phase 3): one process per test, the per-test hang budget, and for the
-// wire contract an exact-name filter that fails when it matches no test —
-// the silent zero-test pass of `cargo test --exact` cannot return.
-#[test]
-fn remaining_test_steps_run_through_nextest() {
-    let workflow = workflow_contract();
-    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    for step_name in [
-        "Run Library REST contracts",
-        "Verify menu-facing status wire contract",
-        "Run root E2E journeys",
-    ] {
-        let step_text = run_text_of(find_step_by_name(&verification_steps, step_name), step_name);
-        assert!(
-            step_text.contains("cargo nextest run "),
-            "{step_name} must execute through cargo-nextest"
-        );
-        assert!(
-            !step_text
-                .lines()
-                .any(|line| line.trim_start().starts_with("cargo test ")),
-            "{step_name} slipped back to cargo test"
-        );
-    }
-    let wire_text = run_text_of(
-        find_step_by_name(
-            &verification_steps,
-            "Verify menu-facing status wire contract",
-        ),
-        "wire-contract",
-    );
-    assert!(
-        wire_text.contains("-E 'test(=rest_api::application::image_status::"),
-        "the wire contract must select its test by exact name so a rename fails the step"
-    );
-}
-
-// The nextest provisioning contract (issue #1553 phase 3): the runner binary
-// is pinned by version and digest and verified before use, like every other
-// native dependency, and it lands on PATH before the lane that needs it.
-#[test]
-fn nextest_is_provisioned_pinned_and_checksum_verified() {
-    let workflow = workflow_contract();
-    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    let provision_step = find_step_by_name(&verification_steps, "Provision pinned cargo-nextest");
-    let provision_environment = required_field(provision_step, "env", "nextest provisioning");
-    let pinned_version = required_text(
-        provision_environment,
-        "NEXTEST_VERSION",
-        "nextest provisioning env",
-    );
-    assert!(
-        !pinned_version.is_empty()
-            && pinned_version
-                .chars()
-                .all(|character| character.is_ascii_digit() || character == '.'),
-        "the nextest pin must be a bare version, got {pinned_version}"
-    );
-    let pinned_digest = required_text(
-        provision_environment,
-        "NEXTEST_SHA256",
-        "nextest provisioning env",
-    );
-    assert!(
-        pinned_digest.len() == 64
-            && pinned_digest
-                .chars()
-                .all(|character| character.is_ascii_hexdigit()),
-        "the nextest digest must be a SHA-256 hex string"
-    );
-    let provision_text = run_text_of(provision_step, "provision-nextest");
-    for verification_marker in ["shasum -a 256", "$NEXTEST_SHA256", "exit 1", "$GITHUB_PATH"] {
-        assert!(
-            provision_text.contains(verification_marker),
-            "nextest provisioning lost {verification_marker}"
-        );
-    }
-    let step_position = |step_name: &str| {
-        verification_steps
-            .iter()
-            .position(|step| step.get("name").and_then(Value::as_str) == Some(step_name))
-            .unwrap_or_else(|| panic!("step {step_name} should exist"))
-    };
-    assert!(
-        step_position("Provision pinned cargo-nextest")
-            < step_position("Run integration lane tests"),
-        "nextest must be provisioned before the lane that runs it"
-    );
-    let nextest_configuration =
-        std::fs::read_to_string(contract_support::repository_root().join(".config/nextest.toml"))
-            .expect("the nextest configuration should be readable");
-    assert!(
-        nextest_configuration.contains("slow-timeout")
-            && nextest_configuration.contains("terminate-after"),
-        "the per-test hang budget left the nextest configuration"
-    );
+    let integration_alias = configuration
+        .lines()
+        .find(|line| line.starts_with("test-integration = "))
+        .expect("the canonical integration alias should exist");
+    assert!(integration_alias.contains("-p astronomical-memory-policy "));
+    assert!(integration_alias.contains("--lib --test integration_tests"));
 }
 
 #[test]
@@ -252,8 +129,8 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
     let static_job = required_job(&workflow, "static");
     assert_eq!(
         required_text(verification_job, "name", "job rust-core"),
-        "macOS integration verification",
-        "required check name changed"
+        "macOS build",
+        "the build job name changed"
     );
     assert_eq!(
         required_u64(verification_job, "timeout-minutes", "job rust-core"),
@@ -349,7 +226,10 @@ fn required_check_steps_keep_their_bounded_contracts() {
         "classification guard does not fail the required check"
     );
 
-    let observatory_step = find_step_by_name(&verification_steps, "Run Observatory contracts");
+    // Observatory lives in swift-node since the lane split: it is a Node
+    // contract suite and that job owns the Node toolchain and test-log
+    // artifact it tees into.
+    let observatory_step = find_step_by_name(&swift_steps, "Run Observatory contracts");
     // The required-CI command tees to a durable log for rerun-safe debugging,
     // so assert the test invocation is present rather than the exact shell
     // wrapper, which would couple the guard to log plumbing.
@@ -362,72 +242,21 @@ fn required_check_steps_keep_their_bounded_contracts() {
         "Observatory contracts exceeded their bounded timeout"
     );
 
-    let library_rest_step = find_step_by_name(&verification_steps, "Run Library REST contracts");
+    let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
+    let release_contracts_step =
+        find_step_by_name(&swift_steps, "Run macOS packaging release contracts");
+    let release_contracts_text = run_text_of(release_contracts_step, "release-contracts");
     assert!(
-        run_text_of(library_rest_step, "library-rest").contains(EXPECTED_LIBRARY_REST_COMMAND),
-        "Library REST required-CI command changed"
+        release_contracts_text.contains("scripts/release/tests/test-release-contracts.sh"),
+        "the release packaging contracts are not enforced on the required swift-node check"
     );
     assert!(
         required_u64(
-            library_rest_step,
+            release_contracts_step,
             "timeout-minutes",
-            "Library REST contracts"
-        ) <= 2,
-        "Library REST contracts exceeded their bounded timeout"
-    );
-
-    let compile_step = find_step_by_name(&verification_steps, "Compile integration lane tests");
-    let compile_command = run_text_of(compile_step, "compile-integration");
-    assert!(
-        compile_command.contains("--no-run"),
-        "integration compile does not use --no-run"
-    );
-    assert!(
-        compile_command.contains("cargo test-integration "),
-        "integration compile omits the canonical integration alias"
-    );
-    assert!(
-        compile_command.contains("--test rest_api_tests"),
-        "integration compile omits rest_api_tests"
-    );
-    let timing_step = find_step_by_name(&verification_steps, "Configure step timing attribution");
-    assert!(
-        run_text_of(timing_step, "ci-timing").contains("ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
-        "native build progress file is not exported job-wide before the first cargo step"
-    );
-    // The runtime-integration build script declares rerun-if-env-changed for
-    // the progress file variable: exporting it in the compile step alone flips
-    // the build script fingerprint and re-runs the script in every later cargo
-    // step of the job (one of two measured-rebuild triggers; the other, a
-    // phantom rerun-if-changed path, is removed in that build script). The
-    // job-wide export above keeps the value constant, and the compile step
-    // must keep hands off so the flip cannot return.
-    assert!(
-        !compile_command.contains("export ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE="),
-        "the compile step must not re-export the native build progress file variable"
-    );
-    assert!(
-        compile_command.contains(r#"tail -f "$ASTRONOMICAL_NATIVE_BUILD_PROGRESS_FILE""#),
-        "integration compile does not tail the native build progress stream"
-    );
-    assert!(
-        compile_command.contains(r#"kill "$progress_tail_pid""#),
-        "integration compile does not stop the progress tail on exit"
-    );
-    find_step_by_id(&verification_steps, "native-build-identity");
-
-    let swiftpm_timestamp_step = find_step_by_name(
-        &swift_steps,
-        "Keep restored SwiftPM artifacts newer than checkout",
-    );
-    assert!(
-        required_text(swiftpm_timestamp_step, "if", "SwiftPM timestamp step")
-            .contains("swiftpm-cache.outputs.cache-hit"),
-        "SwiftPM timestamp reuse is not gated on a cache hit"
-    );
-    assert!(
-        run_text_of(swiftpm_timestamp_step, "swiftpm-timestamp").contains("touch -c"),
-        "SwiftPM timestamp reuse does not touch restored artifacts"
+            "release contracts"
+        ) <= 4,
+        "release contracts exceeded their bounded timeout"
     );
 }
 
@@ -492,6 +321,7 @@ fn packaging_contracts_run_on_required_checks() {
     for contract_binary in [
         "--test workflow_structural_contract",
         "--test workflow_verdict_contract",
+        "--test workflow_lane_split_contract",
         "--test workflow_cache_owner_contract",
     ] {
         assert!(
