@@ -119,6 +119,13 @@ impl Qwen3_5EngineState {
                 restored_next_position_tokens = restore_outcome.persistent_prompt_cache_token_count;
                 restored_last_persistent_prompt_cache_block_key =
                     restore_outcome.last_restored_persistent_prompt_cache_block_key;
+                // The re-restore replaced the prompt-cache frontier, so the
+                // request's reported diagnostics and reuse counts must describe
+                // this restore, not the one from request start.
+                active_request.persistent_prompt_cache_diagnostics =
+                    Some(restore_outcome.persistent_prompt_cache_diagnostics);
+                active_request.prompt_work_reuse.target_restored_token_count =
+                    u64::from(restore_outcome.persistent_prompt_cache_token_count);
             }
         }
         active_request.prefill_cursor = restored_prefill_cursor;
