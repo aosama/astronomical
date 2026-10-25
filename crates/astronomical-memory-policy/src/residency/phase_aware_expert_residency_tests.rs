@@ -44,9 +44,6 @@ fn complete_residency(layer_index: usize) -> CurrentExpertLayerResidency {
 
 #[test]
 fn should_target_every_layer_complete_when_the_composed_budget_fits_the_model() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(MemoryPhase::Prefill, 120, &uniform_geometry(3), &[])
         .expect("complete model geometry should fit");
 
@@ -61,9 +58,6 @@ fn should_target_every_layer_complete_when_the_composed_budget_fits_the_model() 
 
 #[test]
 fn should_preserve_existing_complete_layers_before_selecting_new_targets() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(
         MemoryPhase::GenerationPreparation,
         80,
@@ -86,9 +80,6 @@ fn should_preserve_existing_complete_layers_before_selecting_new_targets() {
 
 #[test]
 fn should_reserve_one_model_derived_routed_page_for_each_incomplete_layer() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(
         MemoryPhase::Decode,
         80,
@@ -107,9 +98,6 @@ fn should_reserve_one_model_derived_routed_page_for_each_incomplete_layer() {
 
 #[test]
 fn should_select_additional_complete_layers_by_incremental_payload_then_layer_index() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = vec![
         ExpertLayerGeometry {
             layer_index: 0,
@@ -134,9 +122,6 @@ fn should_select_additional_complete_layers_by_incremental_payload_then_layer_in
 
 #[test]
 fn should_use_low_budget_partial_mode_when_routed_floors_do_not_fit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(
         MemoryPhase::Decode,
         10,
@@ -157,9 +142,6 @@ fn should_use_low_budget_partial_mode_when_routed_floors_do_not_fit() {
 
 #[test]
 fn should_preserve_a_fitting_partial_page_without_exact_set_equality() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let current_page = partial_residency(1, &[0, 3], 8);
     let plan = plan_expert_residency(
         MemoryPhase::GenerationPreparation,
@@ -178,9 +160,6 @@ fn should_preserve_a_fitting_partial_page_without_exact_set_equality() {
 
 #[test]
 fn should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(MemoryPhase::Decode, 60, &uniform_geometry(3), &[])
         .expect("routed floors should fit exactly");
 
@@ -194,9 +173,6 @@ fn should_not_plan_eager_io_for_an_empty_partial_layer_without_route_evidence() 
 
 #[test]
 fn should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_them() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(
         MemoryPhase::GenerationPreparation,
         80,
@@ -223,9 +199,6 @@ fn should_seat_complete_layers_after_empty_demotion_when_leftover_budget_fits_th
 // making decode seating read the identical payload again.
 #[test]
 fn should_name_every_admissible_complete_layer_after_a_prefill_demotion() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let layer_geometries = uniform_geometry(3);
     let complete_model_payload_bytes = layer_geometries
         .iter()
@@ -275,9 +248,6 @@ fn should_name_every_admissible_complete_layer_after_a_prefill_demotion() {
 
 #[test]
 fn should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_model() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let layer_geometries = (0..40)
         .map(|layer_index| {
             let complete_layer_payload_bytes =
@@ -314,9 +284,6 @@ fn should_keep_most_complete_layers_when_leftover_is_slightly_under_the_full_mod
 
 #[test]
 fn should_require_unseated_complete_layers_to_be_loaded_before_decode() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(
         MemoryPhase::GenerationPreparation,
         80,
@@ -332,9 +299,6 @@ fn should_require_unseated_complete_layers_to_be_loaded_before_decode() {
 
 #[test]
 fn should_not_require_already_preserved_complete_layers_to_be_loaded_again() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(
         MemoryPhase::GenerationPreparation,
         80,
@@ -349,9 +313,6 @@ fn should_not_require_already_preserved_complete_layers_to_be_loaded_again() {
 
 #[test]
 fn should_release_low_coverage_partial_pages_before_any_complete_layer() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let current_residencies = vec![
         partial_residency(0, &[0], 10),
         partial_residency(1, &[1], 1),
@@ -370,9 +331,6 @@ fn should_release_low_coverage_partial_pages_before_any_complete_layer() {
 
 #[test]
 fn should_release_complete_layers_only_for_the_remaining_exact_deficit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan = plan_expert_residency(
         MemoryPhase::Prefill,
         60,
@@ -390,9 +348,6 @@ fn should_release_complete_layers_only_for_the_remaining_exact_deficit() {
 
 #[test]
 fn should_fail_closed_for_invalid_geometry_residency_and_overflow() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let duplicate_residencies = vec![complete_residency(0), complete_residency(0)];
     assert!(matches!(
         plan_expert_residency(
@@ -426,9 +381,6 @@ fn should_fail_closed_for_invalid_geometry_residency_and_overflow() {
 
 #[test]
 fn should_keep_every_planned_owner_and_reservation_within_the_retained_budget() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = uniform_geometry(4);
     let plan = plan_expert_residency(
         MemoryPhase::Decode,

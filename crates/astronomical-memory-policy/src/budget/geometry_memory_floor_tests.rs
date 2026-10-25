@@ -2,9 +2,6 @@ use crate::budget::ram_values::MlxRamBudgetModelGeometry;
 
 #[test]
 fn should_derive_the_geometry_floor_from_core_context_and_one_routed_page() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_geometry = MlxRamBudgetModelGeometry {
         model_core_payload_bytes: 2_000_000_000,
         complete_expert_payload_bytes: 18_000_000_000,
@@ -21,9 +18,6 @@ fn should_derive_the_geometry_floor_from_core_context_and_one_routed_page() {
 
 #[test]
 fn should_keep_a_dense_model_floor_below_its_core_plus_reserve() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let dense_model_geometry = MlxRamBudgetModelGeometry {
         model_core_payload_bytes: 3_000_000_000,
         complete_expert_payload_bytes: 0,
@@ -42,9 +36,6 @@ fn should_keep_a_dense_model_floor_below_its_core_plus_reserve() {
 
 #[test]
 fn should_ignore_disk_scale_of_fully_paged_experts_in_the_floor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The floor must describe what the NEXT request needs under streaming, not
     // the residency a prior ceiling happened to produce. A 20 GB-on-disk
     // sparse artifact whose core is small must therefore report a small floor.
@@ -66,9 +57,6 @@ fn should_ignore_disk_scale_of_fully_paged_experts_in_the_floor() {
 
 #[test]
 fn should_saturate_instead_of_overflowing_on_hostile_geometry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let saturated_model_geometry = MlxRamBudgetModelGeometry {
         model_core_payload_bytes: u64::MAX,
         complete_expert_payload_bytes: 0,

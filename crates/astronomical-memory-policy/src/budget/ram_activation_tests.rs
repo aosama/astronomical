@@ -39,8 +39,6 @@ fn resident_prefill_context(forward_token_count: usize) -> AdaptiveRamGrowthCont
 
 #[test]
 fn should_give_the_guard_the_same_prefill_promise_request_admission_made() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
 
     let guard_floor_bytes = mlx_ram_budget
@@ -55,8 +53,6 @@ fn should_give_the_guard_the_same_prefill_promise_request_admission_made() {
 
 #[test]
 fn should_give_decode_forwards_a_zero_floor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
 
     assert_eq!(
@@ -69,8 +65,6 @@ fn should_give_decode_forwards_a_zero_floor() {
 
 #[test]
 fn should_cap_the_guard_floor_at_what_the_model_core_can_coexist_with() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mlx_ram_budget =
         twenty_seven_gigabyte_budget(TWENTY_SEVEN_GIGABYTE_ACTIVE_MEMORY_CEILING_BYTES - 1_000);
 
@@ -84,8 +78,6 @@ fn should_cap_the_guard_floor_at_what_the_model_core_can_coexist_with() {
 
 #[test]
 fn should_replace_the_static_three_layer_prefill_floor_with_the_diagnostic_floor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mut mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
 
     mlx_ram_budget.set_diagnostic_prefill_activation_floor_bytes(1_241_335_884);
@@ -98,8 +90,6 @@ fn should_replace_the_static_three_layer_prefill_floor_with_the_diagnostic_floor
 
 #[test]
 fn should_reserve_nothing_for_an_unobserved_prefill_when_the_diagnostic_floor_is_zero() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mut mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
 
     mlx_ram_budget.set_diagnostic_prefill_activation_floor_bytes(0);
@@ -114,8 +104,6 @@ fn should_reserve_nothing_for_an_unobserved_prefill_when_the_diagnostic_floor_is
 
 #[test]
 fn should_keep_the_static_three_layer_prefill_floor_without_a_diagnostic_floor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mlx_ram_budget = twenty_seven_gigabyte_budget(2_568_911_104);
 
     assert_eq!(

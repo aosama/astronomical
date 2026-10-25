@@ -1,4 +1,4 @@
-//! Independent FLUX RGB oracle contract shared by offline and real-model acceptance.
+//! Independent FLUX RGB oracle contract shared by integration and real-model acceptance.
 //!
 //! Set `reference_artifact_path` in the explicit test-run configuration to a JSON bundle produced outside
 //! Astronomical by the pinned Black Forest Labs and Diffusers implementations. The bundle

@@ -12,7 +12,7 @@ mod counter_catalog;
 mod expert_streaming_source;
 mod log;
 mod measurement_catalog;
-// Public so the offline tree can exercise the sampling and delta evidence
+// Public so the integration tree can exercise the sampling and delta evidence
 // path in every feature mode; production consumers remain direct-MLX gated.
 pub mod macos_process_io;
 mod report;

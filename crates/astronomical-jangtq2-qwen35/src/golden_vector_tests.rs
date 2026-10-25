@@ -4,7 +4,7 @@
 //! running the reference `format.py` under its own MLX environment:
 //! codebook tables, packed words, a Hadamard-32 transform, and two complete
 //! encode-then-dequant matrices. Regenerating the fixture requires that
-//! repository; it is checked in so these tests stay offline and stable.
+//! repository; it is checked in so these tests stay self-contained and stable.
 //!
 //! All tests in this module are pure arithmetic — no GPU, no MLX — so they
 //! are safe to run in parallel.

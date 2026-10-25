@@ -1,4 +1,4 @@
-//! Offline contracts for quantized expert layer planning.
+//! Unit contracts for quantized expert layer planning.
 //!
 //! Both groups exercise this module's builders and the shared plan geometry:
 //! pure payload arithmetic (no files opened) and mixed native/affine storage

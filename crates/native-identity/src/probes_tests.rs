@@ -6,7 +6,7 @@ use crate::{FingerprintRequest, IdentityScope, NativeBuildProfile};
 
 fn overridden_request() -> FingerprintRequest<'static> {
     FingerprintRequest {
-        // Every probe is overridden, so the values are offline-deterministic
+        // Every probe is overridden, so the values are deterministic
         // and no real toolchain is invoked.
         repository_root: Path::new("/"),
         profile: NativeBuildProfile::Core,

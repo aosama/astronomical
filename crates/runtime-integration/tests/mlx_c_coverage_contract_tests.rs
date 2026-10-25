@@ -1,4 +1,4 @@
-//! Coverage engine contracts that stay offline: gap naming, drift
+//! Coverage engine contracts that stay deterministic: gap naming, drift
 //! detection, and the exclusions registry.
 
 mod mlx_c_coverage;

@@ -1,4 +1,4 @@
-//! Offline tests for the Qwen-Image-2.1 latent and pipeline geometry.
+//! Unit tests for the Qwen-Image-2.1 latent and pipeline geometry.
 //!
 //! These pin the weights-free index math of `qwen_image_21::latent_layout`: how a request's
 //! pixel dimensions floor onto the 32-pixel multiple, how the reference's area/aspect-ratio

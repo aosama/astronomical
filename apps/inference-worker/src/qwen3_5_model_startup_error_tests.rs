@@ -9,9 +9,6 @@ use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 
 #[test]
 fn should_explain_the_root_model_validation_failure_without_exposing_its_local_path() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let local_model_directory = PathBuf::from("/private/models/example-optiq-model");
     let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: local_model_directory.clone(),
@@ -34,9 +31,6 @@ fn should_explain_the_root_model_validation_failure_without_exposing_its_local_p
 
 #[test]
 fn should_omit_local_model_paths_from_other_artifact_validation_failures() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let local_model_directory = PathBuf::from("/private/models/missing-checkpoint");
     let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: local_model_directory.clone(),
@@ -56,9 +50,6 @@ fn should_omit_local_model_paths_from_other_artifact_validation_failures() {
 
 #[test]
 fn should_explain_safe_model_configuration_validation_failures() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/text-only-qwen"),
         source: Qwen3_5ArtifactValidationError::Config(Qwen3_5ConfigError::MissingActivationDtype),
@@ -72,9 +63,6 @@ fn should_explain_safe_model_configuration_validation_failures() {
 
 #[test]
 fn should_explain_visual_tensors_without_a_vision_config() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/text-only-qwen"),
         source: Qwen3_5ArtifactValidationError::Qwen3_5ShardIndex(
@@ -90,9 +78,6 @@ fn should_explain_visual_tensors_without_a_vision_config() {
 
 #[test]
 fn should_bound_optiq_metadata_failure_reason_length() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let untrusted_module_name = "untrusted_module_name_".repeat(64);
     let model_startup_error = Qwen3_5ModelStartupError::ArtifactValidation {
         model_directory: PathBuf::from("/private/models/example-optiq-model"),

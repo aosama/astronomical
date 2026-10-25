@@ -3,7 +3,7 @@
 
 Run with a Python environment that has ``mlx-optiq`` (the version is recorded
 in every fixture) and MLX installed. The fixtures are small JSON documents
-checked into ``crates/quantization/tests/fixtures/``; the Rust offline tests
+checked into ``crates/quantization/tests/fixtures/``; the Rust integration tests
 read them and assert that the ported allocator, static scorer, taxonomy, and
 reference encoder reproduce the Python results exactly (allocation, taxonomy,
 packed codes) or within float rounding (scales, biases, KL).

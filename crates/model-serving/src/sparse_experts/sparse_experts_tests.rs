@@ -2,9 +2,6 @@ use crate::SparseExpertError;
 
 #[test]
 fn should_invert_a_complete_assignment_permutation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // sorted_order[sorted_slot] = original_slot for the characterization example
     // selected_indices [5,0,4,1,3,2] argsort -> [1,3,5,4,2,0]
     let sorted_order = [1_u32, 3, 5, 4, 2, 0];
@@ -15,9 +12,6 @@ fn should_invert_a_complete_assignment_permutation() {
 
 #[test]
 fn should_invert_an_empty_assignment_set() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let inverse_order =
         crate::invert_assignment_order(&[]).expect("an empty permutation should invert to empty");
     assert!(inverse_order.is_empty());
@@ -25,9 +19,6 @@ fn should_invert_an_empty_assignment_set() {
 
 #[test]
 fn should_reject_a_duplicate_or_out_of_range_permutation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         crate::invert_assignment_order(&[0, 0]),
         Err(SparseExpertError::InvalidAssignmentGeometry {

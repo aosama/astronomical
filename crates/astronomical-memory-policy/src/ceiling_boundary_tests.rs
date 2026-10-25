@@ -7,9 +7,6 @@ use crate::vocabulary::MemoryBoundary;
 
 #[test]
 fn should_reject_a_ceiling_below_the_minimum_safe_bound() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 100,
         requested_ceiling_bytes: 79,
@@ -32,9 +29,6 @@ fn should_reject_a_ceiling_below_the_minimum_safe_bound() {
 
 #[test]
 fn should_accept_a_raise_arriving_exactly_at_the_minimum_safe_bound() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 60,
         requested_ceiling_bytes: 80,
@@ -56,9 +50,6 @@ fn should_accept_a_raise_arriving_exactly_at_the_minimum_safe_bound() {
 
 #[test]
 fn should_return_unchanged_when_the_requested_ceiling_matches_current() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 90,
         requested_ceiling_bytes: 90,
@@ -75,9 +66,6 @@ fn should_return_unchanged_when_the_requested_ceiling_matches_current() {
 
 #[test]
 fn should_reject_an_unchanged_request_when_current_already_sits_below_the_minimum() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The minimum bound is checked before the no-op: keeping a ceiling that
     // violates safe ownership is still a rejection, never a silent pass.
     let decision = MemoryCeilingChangeRequirements {
@@ -102,9 +90,6 @@ fn should_reject_an_unchanged_request_when_current_already_sits_below_the_minimu
 
 #[test]
 fn should_lower_without_reclamation_when_active_memory_already_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 100,
         requested_ceiling_bytes: 90,
@@ -127,9 +112,6 @@ fn should_lower_without_reclamation_when_active_memory_already_fits() {
 
 #[test]
 fn should_reclaim_exactly_the_active_deficit_when_it_is_below_the_retained_payload() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 100,
         requested_ceiling_bytes: 70,
@@ -152,9 +134,6 @@ fn should_reclaim_exactly_the_active_deficit_when_it_is_below_the_retained_paylo
 
 #[test]
 fn should_clamp_reclamation_to_the_retained_paged_payload_at_and_beyond_it() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let requirements_at_the_boundary = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 100,
         requested_ceiling_bytes: 50,
@@ -190,9 +169,6 @@ fn should_clamp_reclamation_to_the_retained_paged_payload_at_and_beyond_it() {
 
 #[test]
 fn should_keep_complete_ownership_when_headroom_fits_exactly_at_the_lower_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 100,
         requested_ceiling_bytes: 90,
@@ -216,9 +192,6 @@ fn should_keep_complete_ownership_when_headroom_fits_exactly_at_the_lower_ceilin
 
 #[test]
 fn should_demand_complete_demotion_one_byte_of_headroom_past_the_lower_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = MemoryCeilingChangeRequirements {
         current_ceiling_bytes: 100,
         requested_ceiling_bytes: 90,

@@ -2,7 +2,7 @@
 //! weight components.
 //!
 //! These profiles are the single source of truth shared by the artifact inventory validator and
-//! the offline test fixtures: a package validates only if its safetensors header contains
+//! the integration test fixtures: a package validates only if its safetensors header contains
 //! exactly this set, and the synthetic fixtures are generated from the same generator, so
 //! neither side is coupled to hand-transcribed golden constants.
 //!

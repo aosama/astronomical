@@ -58,7 +58,7 @@ tracing.workspace = true
 astronomical-quantization = { path = "../quantization" }
 astronomical-test-harness = { path = "../test-harness", features = ["test-fixtures"] }
 libc.workspace = true
-# start_paused virtual time for harness offline_tokio_test! bodies.
+# start_paused virtual time for #[tokio::test(start_paused = true)] bodies.
 tokio = { workspace = true, features = ["test-util"] }
 serial_test.workspace = true
 tempfile = "=3.27.0"

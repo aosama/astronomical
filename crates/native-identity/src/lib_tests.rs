@@ -117,7 +117,7 @@ fn should_reject_non_release_build_types_for_full_scope() {
 }
 
 #[test]
-fn should_keep_direct_toolchain_fixtures_offline_deterministic() {
+fn should_keep_direct_toolchain_fixtures_deterministic() {
     // Every toolchain probe is overridden, so no real tool is invoked and the
     // identity is a pure function of the inputs: identical requests must
     // agree, and a changed override must change the identity.

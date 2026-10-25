@@ -7,15 +7,8 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
-# The network-denial keystone talks to Apple's Seatbelt through a contained
-# dlsym FFI shim; that is this crate's one sanctioned use of unsafe, kept out
-# of every production crate where the workspace-wide denial stays absolute.
-[lints.rust]
-unsafe_code = "allow"
-unused_must_use = "deny"
-
-[lints.clippy]
-all = { level = "warn", priority = -1 }
+[lints]
+workspace = true
 
 [features]
 # The FLUX reference-oracle contract is shared by the worker's integration suite

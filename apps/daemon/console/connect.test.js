@@ -275,7 +275,7 @@ test("states that the local endpoint performs no authorization check and needs o
 });
 
 // This is the published command, executed the way a user would paste it. A stub
-// OpenAI-compatible server keeps the check offline: no model weights are loaded.
+// OpenAI-compatible server keeps the check light: no model weights are loaded.
 test("publishes a verification command that reaches an OpenAI-compatible endpoint", async () => {
     const scriptContext = createConnectContext();
     const receivedRequests = [];

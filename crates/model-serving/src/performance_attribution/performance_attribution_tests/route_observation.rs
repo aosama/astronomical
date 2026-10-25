@@ -2,9 +2,6 @@ use crate::PerformanceAttribution;
 
 #[test]
 fn disabled_attribution_does_not_record_a_route_observation_chain() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::disabled();
     let previous_route =
         performance_attribution.advance_route_observation_chain(vec![Some(vec![1, 2])]);
@@ -16,9 +13,6 @@ fn disabled_attribution_does_not_record_a_route_observation_chain() {
 
 #[test]
 fn enabled_attribution_chains_the_previous_observed_route_within_one_request() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     let first_previous =
         performance_attribution.advance_route_observation_chain(vec![Some(vec![3, 7])]);

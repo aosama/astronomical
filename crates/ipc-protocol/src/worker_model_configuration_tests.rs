@@ -5,9 +5,6 @@ const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_preserve_generation_and_chunking_configuration_in_acknowledgement() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     use crate::{
         WorkerChunkingConfiguration, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
         WorkerLoadedModelRuntimeConfiguration,

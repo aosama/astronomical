@@ -1,4 +1,4 @@
-//! Offline tests for quantized expert manifest validation and construction.
+//! Integration tests for quantized expert manifest validation and construction.
 //!
 //! These tests exercise the pure validation functions and the manifest builder
 //! `build_quantized_expert_page_manifest_from_plan` from the expert_paging module.

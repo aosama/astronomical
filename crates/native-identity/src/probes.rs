@@ -284,7 +284,7 @@ fn coarsened_cmake_version_line(
     Ok(format!("version={major_segment}.{minor_segment}"))
 }
 
-/// Test-only exposure so offline tests can pin the coarsening contract
+/// Test-only exposure so unit tests can pin the coarsening contract
 /// without invoking a real `cmake` binary.
 #[cfg(test)]
 pub(crate) fn coarsened_cmake_version_line_for_tests(

@@ -25,7 +25,7 @@ default = []
 # calibration loading, artifact schemas, the roofline latency model, the KV
 # cache allocator, and the sensitivity sweep driver) is pure Rust so it
 # compiles, unit-tests, and runs on any host, including the CLI's `plan`
-# sub-verb and the Linux offline sandbox lane.
+# sub-verb.
 direct-mlx = ["dep:mlx-c-rust", "dep:astronomical-runtime-integration"]
 
 [dependencies]

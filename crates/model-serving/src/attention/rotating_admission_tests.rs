@@ -6,9 +6,6 @@ use crate::{
 
 #[test]
 fn should_charge_window_plus_chunk_minus_one_for_rotating_prefill() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for (window_size, chunk_tokens, expected_peak_tokens) in [
         (8_u32, 1_u32, 8_u32),
         (8, 3, 10),
@@ -26,18 +23,12 @@ fn should_charge_window_plus_chunk_minus_one_for_rotating_prefill() {
 
 #[test]
 fn should_bound_committed_tokens_to_the_window() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(rotating_committed_token_count(8, 3), 3);
     assert_eq!(rotating_committed_token_count(8, 40), 8);
 }
 
 #[test]
 fn should_validate_and_persist_rotating_boundary_geometry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let zero_window = DecoderCacheLayout::new(vec![rotating_layout(0)]);
     assert_eq!(
         zero_window,
@@ -66,9 +57,6 @@ fn should_validate_and_persist_rotating_boundary_geometry() {
 
 #[test]
 fn should_reject_zero_window_and_overflowing_transient_geometry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(rotating_prefill_transient_token_count(0, 4).is_err());
     assert!(rotating_prefill_transient_token_count(u32::MAX, 2).is_err());
 }

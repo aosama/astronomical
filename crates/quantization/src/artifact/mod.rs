@@ -6,7 +6,7 @@
 //! own tools (through `optiq/metadata.json` and `optiq/sensitivity.json`),
 //! and Astronomical's model-serving crate, whose `OptiQQuantizationConfig`
 //! and `OptiQMetadata` parse these documents strictly and validate them
-//! against each other at load. The offline round-trip test in model-serving
+//! against each other at load. The integration round-trip test in model-serving
 //! feeds this module's output straight into those readers.
 //!
 //! One rule from OptiQ's `artifacts.py`: anything OptiQ-specific goes in the

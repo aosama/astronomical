@@ -1,6 +1,6 @@
 //! Unit tests for the metadata document. The cross-crate contract (that
 //! model-serving's strict reader accepts it) lives in model-serving's
-//! offline tests.
+//! integration tests.
 
 use super::*;
 

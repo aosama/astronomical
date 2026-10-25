@@ -10,9 +10,6 @@ use super::*;
 /// forgets `COUNT`'s derivation would leave it unaddressable.
 #[test]
 fn should_keep_operation_catalog_positions_aligned_with_report_storage() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         PerformanceOperation::ALL.len(),
         PerformanceOperation::COUNT,
@@ -39,9 +36,6 @@ fn should_keep_operation_catalog_positions_aligned_with_report_storage() {
 
 #[test]
 fn should_keep_the_disabled_attribution_handle_pointer_sized() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(
         std::mem::size_of::<PerformanceAttribution>() <= std::mem::size_of::<usize>(),
         "disabled attribution travels through every engine command and must not enlarge the command queue"
@@ -50,9 +44,6 @@ fn should_keep_the_disabled_attribution_handle_pointer_sized() {
 
 #[test]
 fn should_execute_measured_work_without_recording_when_attribution_is_disabled() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::disabled();
 
     let operation_output = performance_attribution.measure_operation(
@@ -70,9 +61,6 @@ fn should_execute_measured_work_without_recording_when_attribution_is_disabled()
 
 #[test]
 fn should_record_an_error_returning_operation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
 
     let operation_outcome: Result<(), &'static str> = performance_attribution.measure_operation(
@@ -91,9 +79,6 @@ fn should_record_an_error_returning_operation() {
 
 #[test]
 fn should_aggregate_repeated_operation_measurements() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_completed_operation(
         PerformanceOperation::PromptTokenization,
@@ -120,9 +105,6 @@ fn should_aggregate_repeated_operation_measurements() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_record_an_external_operation_interval_only_when_attribution_is_enabled() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         let operation_started_at = std::time::Instant::now() + std::time::Duration::from_secs(1);
         let operation_ended_at = operation_started_at + std::time::Duration::from_millis(7);
@@ -163,9 +145,6 @@ async fn should_record_an_external_operation_interval_only_when_attribution_is_e
 
 #[test]
 fn should_saturate_repeated_operation_elapsed_time() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     let maximum_elapsed_duration = std::time::Duration::from_nanos(u64::MAX);
     for _operation_occurrence_index in 0..2 {
@@ -189,9 +168,6 @@ fn should_saturate_repeated_operation_elapsed_time() {
 
 #[test]
 fn should_aggregate_performance_counters_with_saturation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     performance_attribution.record_counter(PerformanceCounter::GeneratedTokenCount, u64::MAX);
     performance_attribution.record_counter(PerformanceCounter::GeneratedTokenCount, 1);
@@ -204,9 +180,6 @@ fn should_aggregate_performance_counters_with_saturation() {
 
 #[test]
 fn should_retain_the_largest_maximum_counter_observation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut performance_attribution = PerformanceAttribution::enabled();
     let maximum_counter = PerformanceCounter::PositionalFileReadMaximumElapsedNanoseconds;
     performance_attribution.record_maximum_counter(maximum_counter, 40);

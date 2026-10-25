@@ -56,9 +56,6 @@ fn budget_with_production_bootstrap_floor(sequence_state_bytes_per_token: u64) -
 
 #[test]
 fn should_keep_the_bootstrap_floor_before_any_measurement() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mlx_ram_budget =
         budget_with_production_bootstrap_floor(MEASURED_SEQUENCE_STATE_BYTES_PER_TOKEN);
 
@@ -70,9 +67,6 @@ fn should_keep_the_bootstrap_floor_before_any_measurement() {
 
 #[test]
 fn should_let_the_projection_exceed_the_bootstrap_floor_before_any_measurement() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mlx_ram_budget = budget_with_production_bootstrap_floor(SEQUENCE_STATE_BYTES_PER_TOKEN);
 
     assert_eq!(
@@ -83,9 +77,6 @@ fn should_let_the_projection_exceed_the_bootstrap_floor_before_any_measurement()
 
 #[test]
 fn should_replace_the_bootstrap_floor_with_projection_plus_learned_overhead_after_a_measurement() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A 2,048-token chunk left its own sequence state plus 50 MB of fixed
     // state behind. A 5,242-token request then needs its whole projection,
     // the 50 MB, and the buffer, not the 1 GB floor: the measurement no longer
@@ -105,9 +96,6 @@ fn should_replace_the_bootstrap_floor_with_projection_plus_learned_overhead_afte
 
 #[test]
 fn should_learn_zero_overhead_when_a_forward_grows_less_than_its_projection() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget =
         budget_with_production_bootstrap_floor(MEASURED_SEQUENCE_STATE_BYTES_PER_TOKEN);
     mlx_ram_budget.record_measurement(prefill_measurement_of_persistent_context(2_048, 1_000));
@@ -120,9 +108,6 @@ fn should_learn_zero_overhead_when_a_forward_grows_less_than_its_projection() {
 
 #[test]
 fn should_keep_the_overhead_high_water_when_a_later_forward_measures_less() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget =
         budget_with_production_bootstrap_floor(MEASURED_SEQUENCE_STATE_BYTES_PER_TOKEN);
     mlx_ram_budget.record_measurement(prefill_measurement_of_persistent_context(
@@ -142,9 +127,6 @@ fn should_keep_the_overhead_high_water_when_a_later_forward_measures_less() {
 
 #[test]
 fn should_saturate_instead_of_wrapping_for_an_extreme_context_length() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = budget_with_production_bootstrap_floor(SEQUENCE_STATE_BYTES_PER_TOKEN);
     mlx_ram_budget.record_measurement(prefill_measurement_of_persistent_context(1, u64::MAX));
 
@@ -156,9 +138,6 @@ fn should_saturate_instead_of_wrapping_for_an_extreme_context_length() {
 
 #[test]
 fn should_learn_the_fixed_state_beyond_the_projection_from_the_live_decoder_payload() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // 5,242 tokens of projected state plus 60 MB of fixed recurrent state and
     // slab rounding: the reserve for a longer context carries that 60 MB on
     // top of its own projection.
@@ -178,9 +157,6 @@ fn should_learn_the_fixed_state_beyond_the_projection_from_the_live_decoder_payl
 
 #[test]
 fn should_learn_zero_overhead_from_a_live_payload_smaller_than_its_projection() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget =
         budget_with_production_bootstrap_floor(MEASURED_SEQUENCE_STATE_BYTES_PER_TOKEN);
     mlx_ram_budget.record_context_state_payload(5_242, 0);
@@ -193,9 +169,6 @@ fn should_learn_zero_overhead_from_a_live_payload_smaller_than_its_projection() 
 
 #[test]
 fn should_keep_the_larger_overhead_across_live_payload_and_forward_measurements() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget =
         budget_with_production_bootstrap_floor(MEASURED_SEQUENCE_STATE_BYTES_PER_TOKEN);
     mlx_ram_budget.record_context_state_payload(
@@ -217,9 +190,6 @@ fn should_keep_the_larger_overhead_across_live_payload_and_forward_measurements(
 
 #[test]
 fn should_cap_activation_headroom_at_what_the_model_core_can_coexist_with() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A learned activation observation of 500 MB under a model core that
     // leaves only 10 bytes of the ceiling is paper: the reserve caps at the
     // coexistence bound so it stays grantable.
@@ -249,9 +219,6 @@ fn should_cap_activation_headroom_at_what_the_model_core_can_coexist_with() {
 
 #[test]
 fn should_return_zero_activation_headroom_when_the_model_fills_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_geometry = MlxRamBudgetModelGeometry {
         model_core_payload_bytes: 8_000_000_000,
         complete_expert_payload_bytes: 4_000_000_000,
@@ -271,9 +238,6 @@ fn should_return_zero_activation_headroom_when_the_model_fills_the_ceiling() {
 
 #[test]
 fn should_keep_the_declared_prefill_stream_slot_at_least_one_packed_complete_layer() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = budget_with_geometry(geometry_with_sequence_state(0));
     mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(10);
 
@@ -293,9 +257,6 @@ fn should_keep_the_declared_prefill_stream_slot_at_least_one_packed_complete_lay
 
 #[test]
 fn should_refine_the_retained_expert_budget_at_the_exact_admitted_boundaries() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mlx_ram_budget = budget_with_geometry(geometry_with_sequence_state(0));
     let mlx_active_memory_ceiling_bytes = 8_000_000_000_u64;
 
@@ -343,9 +304,6 @@ fn measured_budget_with_fifty_megabyte_overhead() -> MlxRamBudget {
 
 #[test]
 fn should_reserve_the_live_prefix_a_between_request_sample_still_holds() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A 15,512-token retained live prefix outweighs the zero-token reserve,
     // so the context owner must hold the prefix and the expert budget shrinks
     // by exactly the difference.
@@ -373,9 +331,6 @@ fn should_reserve_the_live_prefix_a_between_request_sample_still_holds() {
 
 #[test]
 fn should_keep_the_planned_reserve_when_no_live_state_is_held() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mlx_ram_budget = measured_budget_with_fifty_megabyte_overhead();
 
     assert_eq!(
@@ -387,9 +342,6 @@ fn should_keep_the_planned_reserve_when_no_live_state_is_held() {
 
 #[test]
 fn should_keep_the_planned_reserve_at_the_exact_live_payload_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Live payload equal to the planned reserve: the floor neither adds nor
     // removes a byte; one byte more raises the reserve by exactly one byte.
     let mlx_ram_budget = measured_budget_with_fifty_megabyte_overhead();

@@ -9,7 +9,7 @@
 //!   `latent_layout`, `text_conditioning`): the index and formula logic that is easy to get wrong
 //!   and cheap to verify — 3-axis RoPE, the block-causal mask, `causal_condition` modulation-row
 //!   selection, sinusoidal timesteps, the flow-matching schedule, latent packing, and the chat
-//!   template. They take no runtime dependency, so offline tests check them against the diffusers
+//!   template. They take no runtime dependency, so unit tests check them against the diffusers
 //!   reference on the CPU.
 //! - **Artifact layer** (`artifact`, `configuration`, `inventory`, `tensor_profiles`): validates the
 //!   reviewed MLX package — strict component configs, exact physical tensor profiles for all three

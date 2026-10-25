@@ -4,9 +4,6 @@ use crate::budget::adaptive_growth::{
 
 #[test]
 fn should_reserve_transient_headroom_for_unseen_prefill_contexts() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     let observed_prefill_context =

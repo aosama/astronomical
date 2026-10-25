@@ -7,7 +7,7 @@
 //! `[base_seq_len, max_seq_len]`. The reviewed artifact's `scheduler_config.json` additionally sets
 //! `shift_terminal = 0.02`, so after the dynamic shift the schedule is stretched to end one step
 //! above `0` at sigma `shift_terminal` before the terminal `0.0` is appended. This module holds
-//! the pure, offline-testable schedule math — the dynamic shift, the sigma/timestep schedule
+//! the pure, unit-testable schedule math — the dynamic shift, the sigma/timestep schedule
 //! with the terminal stretch, and the Euler step — that drives the denoise loop; the tensor work
 //! that consumes it lands with the GPU runtime.
 
@@ -33,7 +33,7 @@ pub const NUM_TRAIN_TIMESTEPS: f32 = 1000.0;
 ///
 /// The engine reads these from the validated artifact's `scheduler/scheduler_config.json`; the
 /// defaults here are the reviewed `mlx-community/Qwen-Image-2.1-MLX-4bit` values and are what the
-/// offline oracle is generated from.
+/// committed oracle is generated from.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlowMatchSchedulerParams {
     pub base_seq_len: f64,

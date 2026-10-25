@@ -143,7 +143,7 @@ async fn should_exit_after_the_worker_future_finishes_while_stdin_remains_blocke
         .take()
         .expect("the parent should keep worker stdin open");
 
-    // The child only waits 100 milliseconds before its future completes, but parallel offline
+    // The child only waits 100 milliseconds before its future completes, but parallel test
     // execution can delay process scheduling. Keep the test bounded while allowing the operating
     // system enough time to observe the runtime's deliberate shutdown rather than failing on a
     // one-second scheduling race.

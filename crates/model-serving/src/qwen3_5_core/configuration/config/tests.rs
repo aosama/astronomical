@@ -1,4 +1,4 @@
-//! Offline contracts for Qwen3.5 configuration parsing and validation.
+//! Unit contracts for Qwen3.5 configuration parsing and validation.
 //!
 //! Grouped by concern under one `tests` child of the config owner; every file
 //! in this folder carries the `_tests.rs` suffix. Fixtures come from the

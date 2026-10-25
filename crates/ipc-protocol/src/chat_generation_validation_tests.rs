@@ -6,9 +6,6 @@ use crate::{
 
 #[test]
 fn should_reject_an_empty_model_id_before_worker_preprocessing() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: String::new(),
@@ -37,9 +34,6 @@ fn should_reject_an_empty_model_id_before_worker_preprocessing() {
 
 #[test]
 fn should_accept_a_large_model_id_when_the_ipc_frame_fits() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "m".repeat(257),
@@ -67,9 +61,6 @@ fn should_accept_a_large_model_id_when_the_ipc_frame_fits() {
 
 #[test]
 fn should_reject_a_temperature_above_the_supported_sampling_range() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -101,9 +92,6 @@ fn should_reject_a_temperature_above_the_supported_sampling_range() {
 
 #[test]
 fn should_reject_a_top_p_above_the_supported_sampling_range() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -135,9 +123,6 @@ fn should_reject_a_top_p_above_the_supported_sampling_range() {
 
 #[test]
 fn should_reject_malformed_assistant_tool_call_arguments() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -177,9 +162,6 @@ fn should_reject_malformed_assistant_tool_call_arguments() {
 
 #[test]
 fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_object() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -219,9 +201,6 @@ fn should_reject_an_assistant_tool_call_argument_json_value_that_is_not_an_objec
 
 #[test]
 fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(60),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -254,9 +233,6 @@ fn should_reject_an_empty_declared_tool_name_before_prompt_rendering() {
 
 #[test]
 fn should_reject_a_duplicate_assistant_tool_call_id() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(61),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -311,9 +287,6 @@ fn should_reject_a_duplicate_assistant_tool_call_id() {
 
 #[test]
 fn should_accept_a_reused_tool_call_id_after_its_previous_result() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let tool_call = || ChatAssistantToolCall {
         id: "call_chatcmpl-5_0".to_owned(),
         function: ChatAssistantToolFunction {
@@ -375,9 +348,6 @@ fn should_accept_a_reused_tool_call_id_after_its_previous_result() {
 
 #[test]
 fn should_reject_a_system_message_after_conversation_history_begins() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(62),
         model: "astronomical/fake-mixture-of-experts".to_owned(),
@@ -411,9 +381,6 @@ fn should_reject_a_system_message_after_conversation_history_begins() {
 
 #[test]
 fn should_reject_a_tool_result_without_a_prior_assistant_tool_call() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(63),
         model: "astronomical/fake-mixture-of-experts".to_owned(),

@@ -23,7 +23,7 @@ pub fn frozen_ornith_1_0_vision_config() -> Qwen3_5VisionConfig {
 
 pub fn persistent_prompt_cache_model_contract() -> PersistentPromptCacheModelContract {
     let frozen_ornith_1_0_config = frozen_ornith_1_0_config();
-    // This offline fixture has no bound MLX arrays. Supply its frozen BF16
+    // This fixture has no bound MLX arrays. Supply its frozen BF16
     // state contract explicitly; real engine acceptance uses load-derived
     // dtypes and read the resulting block geometry back from the engine.
     let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&frozen_ornith_1_0_config);

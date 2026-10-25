@@ -1,4 +1,4 @@
-//! Zero-centered RMSNorm for Qwen-Image-2.1: the pure CPU reference the offline oracle compares
+//! Zero-centered RMSNorm for Qwen-Image-2.1: the pure CPU reference the oracle compares
 //! against.
 //!
 //! Mirrors diffusers [`QwenImage21ZeroCenterRMSNorm`]: the learnable weight is stored zero-centered

@@ -1,4 +1,4 @@
-//! Offline contracts for the decode route-observation history (#536).
+//! Unit contracts for the decode route-observation history (#536).
 
 use crate::{
     ObservedExpertRoute, RouteObservationRecord, RouteObservationRing,
@@ -15,9 +15,6 @@ fn observation(input_token_id: u32, route_marker: u16) -> RouteObservationRecord
 
 #[test]
 fn ring_retains_observations_in_arrival_order() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut ring = RouteObservationRing::new(4);
     for token_id in 0..3_u32 {
         ring.record_observation(observation(token_id, u16::try_from(token_id).unwrap()));
@@ -31,9 +28,6 @@ fn ring_retains_observations_in_arrival_order() {
 
 #[test]
 fn ring_overwrites_oldest_observation_when_full() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut ring = RouteObservationRing::new(3);
     for token_id in 0..7_u32 {
         ring.record_observation(observation(token_id, u16::try_from(token_id).unwrap()));
@@ -47,9 +41,6 @@ fn ring_overwrites_oldest_observation_when_full() {
 
 #[test]
 fn ring_preserves_complete_record_contents() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let previous_route: ObservedExpertRoute = vec![Some(vec![3, 9]), None, Some(vec![41])];
     let token_route: ObservedExpertRoute = vec![Some(vec![1, 2, 3]), None, Some(vec![7])];
     let record = RouteObservationRecord {
@@ -69,9 +60,6 @@ fn ring_preserves_complete_record_contents() {
 
 #[test]
 fn single_observation_capacity_still_admits_every_newest_observation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut ring = RouteObservationRing::new(1);
     for token_id in 0..5_u32 {
         ring.record_observation(observation(token_id, u16::try_from(token_id).unwrap()));
@@ -83,9 +71,6 @@ fn single_observation_capacity_still_admits_every_newest_observation() {
 
 #[test]
 fn zero_capacity_is_clamped_to_one_so_capture_never_stalls() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut ring = RouteObservationRing::new(0);
     ring.record_observation(observation(9, 9));
     assert_eq!(ring.capacity(), 1);
@@ -94,27 +79,18 @@ fn zero_capacity_is_clamped_to_one_so_capture_never_stalls() {
 
 #[test]
 fn compaction_sorts_and_deduplicates_one_layer_route() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let compacted = sorted_unique_layer_routed_expert_ids(&[40, 8, 40, 15, 8]);
     assert_eq!(compacted, Some(vec![8_u16, 15, 40]));
 }
 
 #[test]
 fn compaction_rejects_identifiers_beyond_the_expert_population() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let compacted = sorted_unique_layer_routed_expert_ids(&[8, u32::from(u16::MAX) + 1]);
     assert_eq!(compacted, None);
 }
 
 #[test]
 fn compaction_of_an_empty_route_is_an_empty_layer_selection() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let compacted = sorted_unique_layer_routed_expert_ids(&[]);
     assert_eq!(compacted, Some(Vec::new()));
 }

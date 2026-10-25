@@ -88,7 +88,7 @@ pub enum CustomKernelVerdict {
 ///
 /// Implementations compile the kernel and execute a representative launch on
 /// minimal inputs, validating the output against fixed deterministic expected
-/// values. The runtime binding lives inside each implementation so offline
+/// values. The runtime binding lives inside each implementation so unit
 /// tests can drive the capability owner with fake probes.
 pub trait CustomMetalKernelProbe {
     fn family(&self) -> CustomMetalKernelFamily;
@@ -210,7 +210,7 @@ impl WorkerKernelCapabilities {
     }
 
     /// Builds an owner from explicit verdicts. CI hardware cannot make a real
-    /// kernel fail, so offline and direct-MLX journeys force verdicts through
+    /// kernel fail, so unit and direct-MLX journeys force verdicts through
     /// this documented test-only constructor; production must never call it.
     #[doc(hidden)]
     pub fn with_forced_verdicts_for_tests(

@@ -1,4 +1,4 @@
-//! Native MLX decoder owners plus offline packed-latent and tile geometry contracts.
+//! Native MLX decoder owners plus scripted packed-latent and tile geometry contracts.
 
 #[cfg(feature = "direct-mlx")]
 mod error;

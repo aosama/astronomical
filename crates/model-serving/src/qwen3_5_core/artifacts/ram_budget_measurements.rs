@@ -92,7 +92,7 @@ fn measured_layer_payloads(
 /// Transient payload expected to coexist with complete residency at startup.
 ///
 /// With MLX linked, the gate-up fusion transient is the observed worst case;
-/// without it, the largest complete layer stands in so offline tests still
+/// without it, the largest complete layer stands in so unit tests still
 /// reserve a meaningful floor.
 fn complete_residency_transient_bytes(
     layer_plans: &[QuantizedExpertLayerPlan],

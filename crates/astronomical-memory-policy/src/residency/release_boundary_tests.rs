@@ -24,9 +24,6 @@ const EVERY_TARGET: [ExpertLayerResidencyTarget; 8] = [
 
 #[test]
 fn should_enact_a_partial_release_only_during_prefill_and_idle() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for phase in EVERY_PHASE {
         let expected_release_may_run = matches!(phase, MemoryPhase::Prefill | MemoryPhase::Idle);
         assert_eq!(
@@ -39,9 +36,6 @@ fn should_enact_a_partial_release_only_during_prefill_and_idle() {
 
 #[test]
 fn should_enact_an_exact_deficit_complete_release_only_when_idle() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for phase in EVERY_PHASE {
         assert_eq!(
             should_enact_planned_expert_release(
@@ -56,9 +50,6 @@ fn should_enact_an_exact_deficit_complete_release_only_when_idle() {
 
 #[test]
 fn should_never_enact_a_preserve_admit_promote_or_stream_target_in_any_phase() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for phase in EVERY_PHASE {
         for target in EVERY_TARGET {
             let target_names_a_release = matches!(

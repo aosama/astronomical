@@ -36,9 +36,6 @@ fn small_layer_geometry() -> MlxRamBudgetModelGeometry {
 
 #[test]
 fn should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
 
@@ -60,9 +57,6 @@ fn should_bootstrap_context_window_reserve_at_one_gigabyte_before_measurements()
 
 #[test]
 fn should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
 
@@ -94,9 +88,6 @@ fn should_compose_retained_expert_budget_from_ceiling_minus_fixed_owners() {
 
 #[test]
 fn should_raise_context_window_reserve_from_measurements_and_never_under_shoot() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
 
@@ -142,9 +133,6 @@ fn should_raise_context_window_reserve_from_measurements_and_never_under_shoot()
 
 #[test]
 fn should_not_charge_transient_workspace_as_both_context_and_activation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -168,9 +156,6 @@ fn should_not_charge_transient_workspace_as_both_context_and_activation() {
 
 #[test]
 fn should_not_charge_exact_temporary_workspace_as_persistent_context() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -189,9 +174,6 @@ fn should_not_charge_exact_temporary_workspace_as_persistent_context() {
 
 #[test]
 fn should_protect_the_first_decode_with_prefill_activation_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -211,9 +193,6 @@ fn should_protect_the_first_decode_with_prefill_activation_evidence() {
 
 #[test]
 fn should_use_decode_activation_evidence_after_decode_is_observed() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(23_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -238,9 +217,6 @@ fn should_use_decode_activation_evidence_after_decode_is_observed() {
 
 #[test]
 fn should_limit_retained_experts_to_leave_the_exact_admitted_prefill_reserve() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mlx_ram_budget = MlxRamBudget::new(38_000_000_000, fable_class_geometry())
         .expect("positive ceiling should construct");
     let current_active_memory_bytes = 35_879_800_070;
@@ -268,9 +244,6 @@ fn should_limit_retained_experts_to_leave_the_exact_admitted_prefill_reserve() {
 
 #[test]
 fn should_project_every_context_token_on_top_of_the_learned_context_overhead() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut geometry = fable_class_geometry();
     geometry.sequence_state_bytes_per_token = 20_000;
     let mut mlx_ram_budget =
@@ -301,9 +274,6 @@ fn should_project_every_context_token_on_top_of_the_learned_context_overhead() {
 
 #[test]
 fn should_exclude_newly_retained_experts_from_context_and_activation_learning() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         measured_non_expert_forward_growth_bytes(2_358_922_508, 36_867_500_000, 0, 33_520_877_568,),
         987_699_924,
@@ -326,9 +296,6 @@ fn should_exclude_newly_retained_experts_from_context_and_activation_learning() 
 
 #[test]
 fn should_resolve_the_prefill_activation_promise_from_the_planned_operation_bucket() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -355,9 +322,6 @@ fn should_resolve_the_prefill_activation_promise_from_the_planned_operation_buck
 
 #[test]
 fn should_not_inflate_the_prefill_activation_promise_beyond_measured_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -385,9 +349,6 @@ fn should_not_inflate_the_prefill_activation_promise_beyond_measured_evidence() 
 
 #[test]
 fn should_keep_the_prefill_activation_promise_independent_of_the_prompt_context() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Issue #644 regression: the activation reserve is operation-scoped. The
     // production failure planned a 50,400-token prompt's activation from a
     // per-chunk observation, multiplying it ~49x into a reserve several times
@@ -421,9 +382,6 @@ fn should_keep_the_prefill_activation_promise_independent_of_the_prompt_context(
 
 #[test]
 fn should_keep_the_first_decode_protected_by_the_largest_prefill_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(39_000_000_000, small_layer_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -460,9 +418,6 @@ fn should_keep_the_first_decode_protected_by_the_largest_prefill_evidence() {
 // activation reserve at the operation scope exactly like `plan()` does.
 #[test]
 fn should_keep_the_admission_workspace_activation_reserve_independent_of_the_prompt_context() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The learned evidence is chunk-shaped (2,048-token prefill chunks), and
     // the geometry's small layer floor lets learned evidence dominate so the
     // scaling defect is observable. Real per-token state bytes make the
@@ -518,9 +473,6 @@ fn should_keep_the_admission_workspace_activation_reserve_independent_of_the_pro
 // any current active memory overflow the projection).
 #[test]
 fn should_cap_the_activation_reserve_below_the_irrevocable_model_core() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let ceiling_bytes = 39_000_000_000_u64;
     let mut mlx_ram_budget = MlxRamBudget::new(ceiling_bytes, small_layer_geometry())
         .expect("positive ceiling should construct");
@@ -542,9 +494,6 @@ fn should_cap_the_activation_reserve_below_the_irrevocable_model_core() {
 
 #[test]
 fn should_exclude_mandatory_expert_page_streaming_from_the_learned_context_growth() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Issue #691: the composed context/activation learning sees a peak that
     // includes mandatory streamed page traffic. With a zero resident delta the
     // whole stream must leave the residual; the pre-fix formula would charge
@@ -559,9 +508,6 @@ fn should_exclude_mandatory_expert_page_streaming_from_the_learned_context_growt
 
 #[test]
 fn should_charge_retained_expert_growth_as_one_beyond_baseline_owner_while_streaming() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Retained (300) and streamed (500) promotion overlap: the peak's expert
     // component beyond the pre-growth baseline is the larger of the two, so
     // the residual keeps only the genuine non-expert growth.
@@ -575,9 +521,6 @@ fn should_charge_retained_expert_growth_as_one_beyond_baseline_owner_while_strea
 
 #[test]
 fn should_match_the_stream_free_contract_when_no_expert_page_stream_occurred() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Identical measurements to the pre-#691 formula when zero pages streamed:
     // the pinned #623/#644 contracts must keep holding byte for byte.
     let learned_growth_bytes =
@@ -592,9 +535,6 @@ fn should_match_the_stream_free_contract_when_no_expert_page_stream_occurred() {
 
 #[test]
 fn should_saturate_context_growth_to_zero_when_stream_evidence_dominates() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Churn can make stream evidence exceed the whole recorded window; the
     // budget must clamp instead of wrapping (fail safe, recoverable by design).
     let learned_growth_bytes =
@@ -607,8 +547,6 @@ fn should_saturate_context_growth_to_zero_when_stream_evidence_dominates() {
 
 #[test]
 fn should_reserve_the_prefill_stream_slot_at_the_decoded_page_peak_once_declared() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let geometry = fable_class_geometry();
     let mut mlx_ram_budget =
         MlxRamBudget::new(39_000_000_000, geometry).expect("positive ceiling should construct");

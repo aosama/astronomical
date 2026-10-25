@@ -1,4 +1,4 @@
-//! Offline reproduction of the issue #596 tokenizer gap.
+//! Unit reproduction of the issue #596 tokenizer gap.
 //!
 //! The nomicai-modernbert-embed-base artifact declares a `TemplateProcessing`
 //! post-processor that wraps every input as `[CLS] content [SEP]`, and its
@@ -10,8 +10,8 @@
 //! This test builds a fixture tokenizer carrying the same post-processor
 //! declaration, drives the real production `encode_embedding_input`, and
 //! asserts the encoded sequence contains both declared specials and that
-//! pooling exclusion has real tokens to act on. It runs offline: no GPU,
-//! no installed checkpoint, no Python.
+//! pooling exclusion has real tokens to act on. It runs without a graphics processor, installed
+//! checkpoint, or Python.
 
 use crate::modernbert::configuration::ModernBertConfiguration;
 use tokenizers::Tokenizer;

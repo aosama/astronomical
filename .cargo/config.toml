@@ -35,15 +35,15 @@ warnings = "deny"
 # merges by replacement, so a nested worktree runs each alias exactly once.
 #
 # Lane vocabulary (issue #1208): the "integration" lane is the test kind; its
-# tests are sealed and deterministic — no real network beyond localhost, no
-# real model artifacts, everything scripted. "Offline" survives only as the
-# no-network guarantee those tests carry, enforced below. Loopback and Unix
-# Domain Socket inter-process communication are local, not network, so they
-# stay inside the property: the macOS seatbelt profile and the Linux
-# network-namespace job enforce exactly that boundary. The integration lane
-# runs each package's integration_tests binary AND its beside-source lib unit
-# tests (--lib); the property-named aliases from before the vocabulary
-# campaign were retired with the campaign's final batch.
+# tests are scripted and deterministic — no external network, no real model
+# artifacts, everything stubbed or fixture-driven. Loopback and Unix Domain
+# Socket inter-process communication are local transport, not network, so
+# they stay inside the lane by design rather than by runtime enforcement.
+# The integration lane runs each package's integration_tests binary AND its
+# beside-source lib unit tests (--lib); the property-named aliases from
+# before the vocabulary campaign were retired with the campaign's final
+# batch, and the no-network enforcement layer (the Seatbelt harness and the
+# Linux network-namespace job) was retired with issue #1551.
 # test-integration: every package's integration_tests binary plus lib unit tests.
 # test-test-harness-fixtures: the shared fixture registry and leaf-id
 # contracts, with the test-fixtures feature enabled.
@@ -60,8 +60,8 @@ warnings = "deny"
 # scripts/internal/build-macos-app.sh with fixture-bin tool shims on PATH,
 # and typed assertions read the produced bundle through plutil and the shim
 # argv logs. macOS-only (the whole file is target_os = "macos" gated); it
-# runs in CI inside the required macOS offline verification check, so drift
-# fails the lane instead of rotting until release day.
+# runs in CI inside the required macOS integration verification check, so
+# drift fails the lane instead of rotting until release day.
 # test-integration-and-rest: both lanes together; run this
 # before committing.
 # Memory-policy memory-equation and reserve compile-time contracts: run

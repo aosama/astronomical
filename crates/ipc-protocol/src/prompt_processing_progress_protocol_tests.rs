@@ -8,9 +8,6 @@ const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_prefill_progress_event() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(81),
         prompt_processing_phase: WorkerPromptProcessingPhase::Target,
@@ -41,9 +38,6 @@ async fn should_round_trip_prefill_progress_event() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_prefill_progress_before_the_first_completed_forward() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = WorkerEvent::PrefillProgress {
         request_id: RequestId::new(82),
         prompt_processing_phase: WorkerPromptProcessingPhase::Target,

@@ -3,7 +3,7 @@
 //! Mirrors OptiQ's `run_llm_pipeline` with the stages typed and the
 //! engine-specific parts injected. The pipeline itself is pure control flow
 //! so its branching (reference-mode resolution, static versus exact,
-//! baseline reuse, sidecar handling) is testable with fakes in the offline
+//! baseline reuse, sidecar handling) is testable with fakes in the integration
 //! lane; the GPU stages are reached through the `direct-mlx` feature.
 
 use std::path::{Path, PathBuf};

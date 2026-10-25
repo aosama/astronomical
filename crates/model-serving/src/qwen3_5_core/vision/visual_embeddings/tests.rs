@@ -1,7 +1,7 @@
 use super::{Qwen3_5VisualEmbeddingRequiredImage, plan_qwen3_5_visual_embedding_suffix};
 
 /// The image pad token ID for Qwen3.5-MoE family models.
-/// Used in offline tests where no model directory is available.
+/// Used in unit tests where no model directory is available.
 const IMAGE_PAD_TOKEN_ID: u32 = 248_056;
 
 #[test]

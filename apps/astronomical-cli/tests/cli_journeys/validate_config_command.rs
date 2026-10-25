@@ -1,4 +1,4 @@
-//! Offline acceptance journeys for `astronomical validate config` (issue #821
+//! Integration acceptance journeys for `astronomical validate config` (issue #821
 //! slice 1). The verb must load a configuration file in-process, report its
 //! effective values, and fail with a recovery message on missing or invalid
 //! documents. No daemon, no GPU, no network.

@@ -1,10 +1,10 @@
 //! Expert-cache owner in the serving crate: the page-materialization byte
-//! arithmetic is compiled only with the direct-MLX feature (plus the offline
+//! arithmetic is compiled only with the direct-MLX feature (plus the unit
 //! artifact-contract tests) and stays beside the bindings.
 
 // Pure checked byte arithmetic over validated shapes with no MLX (Metal
 // Performance Shaders graph engine) dependency. The direct-MLX admission
-// callers and the offline artifact-contract tests (cfg(test)) are its only
+// callers and the unit artifact-contract tests (cfg(test)) are its only
 // consumers, so the plain default-feature lib builds without it.
 #[cfg(any(feature = "direct-mlx", test))]
 mod page_materialization;

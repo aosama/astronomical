@@ -11,9 +11,6 @@ use crate::mlx_runtime_types::{
 
 #[test]
 fn should_leave_small_allocator_cache_pooled_after_a_prefill_chunk() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(!allocator_cache_exceeds_reclaim_threshold(
         ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES - 1,
         ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
@@ -22,9 +19,6 @@ fn should_leave_small_allocator_cache_pooled_after_a_prefill_chunk() {
 
 #[test]
 fn should_reclaim_allocator_cache_at_the_policy_threshold() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(allocator_cache_exceeds_reclaim_threshold(
         ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
         ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES,
