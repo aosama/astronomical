@@ -98,7 +98,8 @@ test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization
 # Python-produced artifact directory; ignored by default.
 test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --ignored"
 # xtask: repository tooling (CI reporting and verification glue as typed
-# Rust). `cargo xtask tier-pyramid [--update-baseline]`, `cargo xtask
+# Rust). `cargo xtask tier-pyramid [--update-baseline]` (local-only: counts
+# tests per tier against the committed baseline; not a CI step), `cargo xtask
 # source-size [--staged] [root]`, `cargo xtask coverage-floor [--package
 # NAME] [--minimum-percent N]` (the local-only pre-commit llvm-cov
 # line-coverage floor for astronomical-memory-policy, at or above 90% by default;
