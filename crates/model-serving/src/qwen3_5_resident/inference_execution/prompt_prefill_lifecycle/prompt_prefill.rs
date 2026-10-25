@@ -93,7 +93,7 @@ impl Qwen3_5EngineState {
         let _model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
 
         Ok(PromptPrefillChunkOutcome {
             active_memory_bytes_before_growth: admission_outcome.active_memory_bytes_before_growth,

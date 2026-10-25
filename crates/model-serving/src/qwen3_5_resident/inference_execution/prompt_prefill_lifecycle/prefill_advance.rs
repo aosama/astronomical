@@ -27,12 +27,17 @@ use crate::{
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
 
+use super::super::generation_session_lifecycle::generation_error_constructors::completed_prefill_chunk_tokens_exceed_u32_range_error;
+use super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error;
+use super::super::generation_session_lifecycle::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error;
+use super::super::generation_session_lifecycle::generation_error_constructors::mlx_allocator_cache_memory_bytes_exceed_u64_range_error;
+use super::super::generation_session_lifecycle::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error;
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_resident::model::memory_admission;
 impl Qwen3_5EngineState {
-    pub(super) fn advance_prompt_prefill_if_pending(
+    pub(in crate::qwen3_5_resident::inference_execution) fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,
@@ -117,14 +122,16 @@ impl Qwen3_5EngineState {
                         reason = %reason,
                         "prefill admission rejected the transient peak of the configured resident chunk"
                     );
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
+                    let model = self
+                        .model
+                        .as_ref()
+                        .ok_or_else(engine_lost_loaded_model_error)?;
                     return Err(memory_admission::resident_capacity_error(
                         model,
                         prefill_admission_cause,
-                        format!(
-                            "resident prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit its transient peak under the MLX ceiling: {reason}"
+                        super::prefill_terminal_failure_descriptions::transient_peak_shortfall_failure_description(
+                            attempted_prefill_chunk_token_count,
+                            &reason,
                         ),
                     ));
                 }
@@ -147,14 +154,16 @@ impl Qwen3_5EngineState {
                         reason = %reason,
                         "prefill admission rejected the stable footprint of the attempted chunk"
                     );
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
+                    let model = self
+                        .model
+                        .as_ref()
+                        .ok_or_else(engine_lost_loaded_model_error)?;
                     return Err(memory_admission::resident_capacity_error(
                         model,
                         prefill_admission_cause,
-                        format!(
-                            "attempted prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
+                        super::prefill_terminal_failure_descriptions::stable_footprint_shortfall_failure_description(
+                            attempted_prefill_chunk_token_count,
+                            &reason,
                         ),
                     ));
                 }
@@ -184,14 +193,16 @@ impl Qwen3_5EngineState {
                         reason = %reason,
                         "prefill admission rejected the request context or a runtime allocation"
                     );
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
+                    let model = self
+                        .model
+                        .as_ref()
+                        .ok_or_else(engine_lost_loaded_model_error)?;
                     return Err(memory_admission::resident_capacity_error(
                         model,
                         prefill_admission_cause,
-                        format!(
-                            "attempted prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot proceed on the resident engine: {reason}"
+                        super::prefill_terminal_failure_descriptions::request_context_or_allocation_shortfall_failure_description(
+                            attempted_prefill_chunk_token_count,
+                            &reason,
                         ),
                     ));
                 }
@@ -209,18 +220,24 @@ impl Qwen3_5EngineState {
                         allowed_active_memory_bytes,
                         "prefill chunk forward exceeded the MLX active-memory limit"
                     );
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
+                    let model = self
+                        .model
+                        .as_ref()
+                        .ok_or_else(engine_lost_loaded_model_error)?;
                     return Err(memory_admission::resident_capacity_error(
                         model,
                         StreamingEngineRequirement::ForwardAllocationShortfall {
-                            shortfall_bytes: active_memory_bytes
-                                .saturating_add(attempted_allocation_bytes)
-                                .saturating_sub(allowed_active_memory_bytes),
+                            shortfall_bytes: super::prefill_terminal_failure_descriptions::active_memory_limit_shortfall_bytes(
+                                active_memory_bytes,
+                                attempted_allocation_bytes,
+                                allowed_active_memory_bytes,
+                            ),
                         },
-                        format!(
-                            "attempted prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
+                        super::prefill_terminal_failure_descriptions::active_memory_limit_exceeded_failure_description(
+                            attempted_prefill_chunk_token_count,
+                            active_memory_bytes,
+                            attempted_allocation_bytes,
+                            allowed_active_memory_bytes,
                         ),
                     ));
                 }
@@ -234,14 +251,16 @@ impl Qwen3_5EngineState {
                         reason = %reason,
                         "prefill chunk forward exhausted graphics-processor memory"
                     );
-                    let model = self.model.as_ref().ok_or_else(|| {
-                        fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                    })?;
+                    let model = self
+                        .model
+                        .as_ref()
+                        .ok_or_else(engine_lost_loaded_model_error)?;
                     return Err(memory_admission::resident_capacity_error(
                         model,
                         StreamingEngineRequirement::ForwardGraphicsProcessorMemoryExhausted,
-                        format!(
-                            "attempted prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
+                        super::prefill_terminal_failure_descriptions::graphics_processor_memory_exhausted_failure_description(
+                            attempted_prefill_chunk_token_count,
+                            &reason,
                         ),
                     ));
                 }
@@ -261,7 +280,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            .ok_or_else(engine_lost_loaded_model_error)?;
         let prefill_token_count = prefill_end - prefill_start;
         // Every completed forward is valid model-local transient evidence. Cache
         // boundaries and terminal tails deliberately produce smaller chunks; if
@@ -373,9 +392,7 @@ impl Qwen3_5EngineState {
         let mlx_memory_telemetry = mlx_memory_snapshot
             .map(|mlx_memory_snapshot| {
                 let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
-                    .map_err(|_| {
-                        fatal_engine_error("MLX active memory bytes exceed the u64 range")
-                    })?;
+                    .map_err(mlx_active_memory_bytes_exceed_u64_range_error)?;
                 let active_memory_breakdown = model.active_memory_breakdown(
                     &active_request.request_decoder_state,
                     0,
@@ -385,16 +402,10 @@ impl Qwen3_5EngineState {
                 Ok::<crate::memory::telemetry::MlxMemoryTelemetry, InferenceEngineError>(
                     crate::memory::telemetry::MlxMemoryTelemetry::new(
                         active_memory_bytes,
-                        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(
-                            |_| {
-                                fatal_engine_error(
-                                    "MLX allocator-cache memory bytes exceed the u64 range",
-                                )
-                            },
-                        )?,
-                        u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(|_| {
-                            fatal_engine_error("MLX peak memory bytes exceed the u64 range")
-                        })?,
+                        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes())
+                            .map_err(mlx_allocator_cache_memory_bytes_exceed_u64_range_error)?,
+                        u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
+                            .map_err(mlx_peak_memory_bytes_exceed_u64_range_error)?,
                         active_memory_breakdown,
                     )
                     // The claim derives from the breakdown of this exact snapshot
@@ -427,9 +438,8 @@ impl Qwen3_5EngineState {
             processed_token_count: prefill_token_count as u32,
             elapsed_millis: prefill_chunk_elapsed_millis,
             forward_prefill_chunk_elapsed_millis: forward_chunk_elapsed_millis,
-            completed_prefill_chunk_tokens: u32::try_from(prefill_token_count).map_err(|_| {
-                fatal_engine_error("completed_prefill_chunk_tokens exceeds the u32 range")
-            })?,
+            completed_prefill_chunk_tokens: u32::try_from(prefill_token_count)
+                .map_err(completed_prefill_chunk_tokens_exceed_u32_range_error)?,
             mlx_memory_telemetry,
             expert_residency_telemetry: expert_residency,
             expert_memory_mode: Some(model.expert_memory_mode()),

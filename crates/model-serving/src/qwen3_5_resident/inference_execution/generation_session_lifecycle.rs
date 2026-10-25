@@ -5,7 +5,9 @@
 //! them into the engine's inference_execution module and re-binds the
 //! engine-level owners below so the children keep one-level `super::` paths.
 
-mod generation_error_constructors;
+// Shared with the sibling prompt_prefill_lifecycle folder so both phases use
+// one named-constructor surface for identical failure texts.
+pub(in crate::qwen3_5_resident::inference_execution) mod generation_error_constructors;
 mod generation_finalization;
 mod generation_request_validation;
 mod generation_restore_position_derivation;

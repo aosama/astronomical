@@ -112,7 +112,7 @@ impl Qwen3_5EngineState {
                 .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
             let feedback_prefix_token_ids = &input_token_ids[..final_input_token_position];
             let injected_prefill_execution_context =
-                super::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
+                super::prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext::new(
                     false,
                     AdaptiveRamGrowthExecutionProfile::Resident,
                     self.persistent_prompt_cache.is_some()

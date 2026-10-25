@@ -52,12 +52,9 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
         plan: &PrefillChunkPlan,
     ) -> Result<ForwardDispatchOutcome, PrefillForwardError> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| Qwen3_5ExecutionError::InvalidInput {
-                description: "Qwen3.5 engine lost its loaded model",
-            })?;
+        let model = self.model.as_ref().ok_or_else(
+            super::prefill_invalid_input_error_constructors::engine_lost_loaded_model_invalid_input,
+        )?;
 
         let dispatch_outcome = dispatch_non_speculative_forward(
             active_request,
@@ -168,11 +165,7 @@ fn dispatch_visual_prefill(
             .map(|consumed_visual_embedding_count| (consumed_visual_embedding_count, Vec::new()))
     } else {
         let persistent_prompt_cache_block_token_count = persistent_prompt_cache_block_token_count
-            .ok_or_else(|| {
-            Qwen3_5ExecutionError::InvalidInput {
-                description: "planned visual prompt-cache checkpoints have no block contract",
-            }
-        })?;
+.ok_or_else(super::prefill_invalid_input_error_constructors::visual_prompt_cache_checkpoints_have_no_block_contract_invalid_input)?;
         model
             .prefill_chunk_with_visual_embeddings_and_boundary_checkpoints_with_performance_attribution(
                 &active_request.input_token_ids[prefill_start..prefill_end],
@@ -226,11 +219,7 @@ fn dispatch_text_prefill(
             .map(|()| Vec::new())
     } else {
         let persistent_prompt_cache_block_token_count = persistent_prompt_cache_block_token_count
-            .ok_or_else(|| {
-            Qwen3_5ExecutionError::InvalidInput {
-                description: "planned text prompt-cache checkpoints have no block contract",
-            }
-        })?;
+.ok_or_else(super::prefill_invalid_input_error_constructors::text_prompt_cache_checkpoints_have_no_block_contract_invalid_input)?;
         if chunk_includes_final_prompt_token {
             return seed_terminal_text_prefill_after_prompt_cache_boundaries(
                 active_request,
