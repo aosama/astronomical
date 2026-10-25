@@ -37,11 +37,21 @@ watchdog_fired_marker="${TMPDIR:-/tmp}/astronomical-timeout-fired.$$.${bounded_s
 
 "$@" &
 bounded_child_process_id="$!"
+# The watchdog's own stdout/stderr are sent to /dev/null on purpose. When the
+# child exits early, the kill below terminates the watchdog *subshell*, but a
+# killed subshell leaves its `sleep` child running, reparented to init. That
+# orphan inherits whatever file descriptors the subshell held — and if it held
+# the step's output pipe, the runner keeps reading until the orphan `sleep`
+# runs out its full bound, stalling the step long after the real work ended
+# (observed on the release-contracts step: ~81s of stall for a ~54s suite).
+# Redirecting the watchdog's fds means a leaked sleep can no longer hold the
+# caller's pipe open; the bounded child's own output still flows to the caller
+# unchanged.
 (
     sleep "$bounded_seconds"
     printf '%s\n' fired > "$watchdog_fired_marker"
     kill -TERM "$bounded_child_process_id" 2>/dev/null || true
-) &
+) > /dev/null 2>&1 &
 watchdog_process_id="$!"
 
 child_exit_status=0

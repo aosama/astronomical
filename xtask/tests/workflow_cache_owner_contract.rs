@@ -166,6 +166,12 @@ fn cache_owners_are_disjoint_composite_users() {
         &["apps/astronomical-menu/.build"],
         &mut restored_paths,
     );
+    assert_composite_cache_owner(
+        &swift_steps,
+        "thin-talk-cache",
+        &["apps/thin-talk/.build"],
+        &mut restored_paths,
+    );
     let mut deduplicated_paths = restored_paths.clone();
     deduplicated_paths.sort();
     deduplicated_paths.dedup();
@@ -252,6 +258,24 @@ fn native_and_sccache_keys_keep_their_identity_couplings() {
     assert!(
         swift_key.contains("SWIFT_TOOLCHAIN_IDENTITY"),
         "Swift cache omits toolchain compatibility"
+    );
+
+    let thin_talk_configuration = required_field(
+        find_step_by_id(
+            &steps_of(required_job(&workflow, "swift-node"), "swift-node"),
+            "thin-talk-cache",
+        ),
+        "with",
+        "thin-talk-cache restore",
+    );
+    let thin_talk_key = required_text(thin_talk_configuration, "key", "thin-talk-cache restore");
+    assert!(
+        !thin_talk_key.contains("Cargo"),
+        "Thin Talk Swift state must not be coupled to Rust"
+    );
+    assert!(
+        thin_talk_key.contains("SWIFT_TOOLCHAIN_IDENTITY"),
+        "Thin Talk cache omits toolchain compatibility"
     );
 }
 
