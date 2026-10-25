@@ -2,7 +2,7 @@
 //!
 //! Port of everything the reference `QwenImage21Transformer2DModel.forward` computes before its
 //! block loop. The heavy index bookkeeping (RoPE frequencies, image ids, target mask, prefix
-//! segments, the timestep sinusoid) reuses the family's offline-tested pure modules; this
+//! segments, the timestep sinusoid) reuses the family's unit-tested pure modules; this
 //! file binds their results to MLX arrays and builds the once-per-forward tensors all 32 blocks
 //! share.
 //!
@@ -118,7 +118,7 @@ pub(super) fn prepare_forward(
     )?;
     let sequence_length = joint_mask.len();
 
-    // 3. Rotary tables from the offline-tested pure module, uploaded and pair-repeated.
+    // 3. Rotary tables from the unit-tested pure module, uploaded and pair-repeated.
     let (cosine_values, sine_values) = rope.frequencies(request.img_shapes, &joint_mask);
     let rope_half_width = (HEAD_WIDTH / 2) as i32;
     let rope_cosines =

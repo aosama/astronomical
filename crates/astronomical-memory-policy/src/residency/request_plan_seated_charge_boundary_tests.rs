@@ -14,9 +14,6 @@ use super::request_plan_boundary_tests::{four_layer_candidate, uniform_geometry}
 
 #[test]
 fn should_stop_admitting_streamed_layers_once_seated_streamed_layers_fill_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The 2026-10-25 cached-suffix flight: a seated streamed layer was
     // preserved without charging its bytes, so every chunk admitted one more
     // complete layer past the ceiling. One pin plus one seated streamed layer
@@ -72,9 +69,6 @@ fn should_stop_admitting_streamed_layers_once_seated_streamed_layers_fill_the_ce
 
 #[test]
 fn should_fund_unseated_pins_only_after_charging_seated_streamed_layers() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Edge: a seated streamed layer holds real bytes, so an unseated pin
     // competing for the same 40 bytes of headroom must lose its claim.
     let geometries = uniform_geometry(4);

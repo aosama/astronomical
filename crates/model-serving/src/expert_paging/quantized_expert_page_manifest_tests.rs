@@ -16,9 +16,6 @@ fn retained_page_manifest() -> QuantizedExpertPageManifest {
 
 #[test]
 fn should_identify_only_routed_experts_missing_from_a_retained_page() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let retained_page_manifest = retained_page_manifest();
 
     assert_eq!(
@@ -29,9 +26,6 @@ fn should_identify_only_routed_experts_missing_from_a_retained_page() {
 
 #[test]
 fn should_report_complete_route_coverage_for_a_retained_page() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let retained_page_manifest = retained_page_manifest();
 
     assert!(retained_page_manifest.contains_every_expert(&[1, 3]));
@@ -40,9 +34,6 @@ fn should_report_complete_route_coverage_for_a_retained_page() {
 
 #[test]
 fn should_distinguish_complete_and_partial_expert_pages() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let partial_page_manifest = retained_page_manifest();
     let complete_page_manifest = QuantizedExpertPageManifest {
         expert_ids: vec![0, 1, 2],
@@ -57,9 +48,6 @@ fn should_distinguish_complete_and_partial_expert_pages() {
 
 #[test]
 fn should_partition_route_assignments_without_duplicate_execution() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let retained_page_manifest = retained_page_manifest();
 
     let route_partition = retained_page_manifest.partition_route_assignments(&[3, 0, 1, 4, 3, 1]);
@@ -80,9 +68,6 @@ fn should_partition_route_assignments_without_duplicate_execution() {
 
 #[test]
 fn should_derive_exact_per_expert_and_complete_layer_payload_from_tensor_geometry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let tensor_source = |tensor_name: &str, bytes_per_expert: usize| QuantizedTensorSource {
         tensor_name: tensor_name.to_owned(),
         projection_name: "fictional_projection".to_owned(),

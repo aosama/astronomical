@@ -31,9 +31,6 @@ fn geometry(
 
 #[test]
 fn should_cap_the_routed_floor_at_the_complete_payload_for_adversarial_routing_width() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Routing width wider than the expert population: the per-layer floor is
     // min(experts_per_token, capacity) experts, so the floor equals the
     // complete payload and the overlay's complete-minus-floor subtraction
@@ -53,9 +50,6 @@ fn should_cap_the_routed_floor_at_the_complete_payload_for_adversarial_routing_w
 
 #[test]
 fn should_admit_a_complete_layer_at_the_exact_leftover_boundary_only() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Two uniform layers: floor 20 + complete 40 each. Floor sum 40.
     let geometries = vec![geometry(0, 10, 4, 2), geometry(1, 10, 4, 2)];
 
@@ -78,9 +72,6 @@ fn should_admit_a_complete_layer_at_the_exact_leftover_boundary_only() {
 
 #[test]
 fn should_preserve_every_seated_generation_page_when_the_seating_ceiling_covers_it() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = vec![
         geometry(0, 10, 4, 2),
         geometry(1, 10, 4, 2),
@@ -136,9 +127,6 @@ fn should_preserve_every_seated_generation_page_when_the_seating_ceiling_covers_
 
 #[test]
 fn should_reject_generation_seating_when_the_leftover_ceiling_shrinks_below_current_retention() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = vec![geometry(0, 10, 4, 2)];
     let current_residency = CurrentExpertLayerResidency {
         layer_index: 0,
@@ -160,9 +148,6 @@ fn should_reject_generation_seating_when_the_leftover_ceiling_shrinks_below_curr
 
 #[test]
 fn should_stream_every_layer_when_the_budget_cannot_hold_even_one_routed_floor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = vec![geometry(0, 10, 4, 2), geometry(1, 10, 4, 2)];
 
     let plan = plan_expert_residency(MemoryPhase::Decode, 5, &geometries, &[])
@@ -181,9 +166,6 @@ fn should_stream_every_layer_when_the_budget_cannot_hold_even_one_routed_floor()
 
 #[test]
 fn should_reject_current_residency_one_byte_above_the_planning_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = vec![geometry(0, 10, 4, 2)];
     let current_residency = CurrentExpertLayerResidency {
         layer_index: 0,

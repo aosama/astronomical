@@ -8,9 +8,6 @@ use crate::residency::{
 
 #[test]
 fn should_commit_a_multi_token_union_as_a_complete_layer_when_the_plan_funds_it() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The 2026-10-23 Ornith under-utilization flight: a 2,048-token chunk
     // routes every expert of the layer, paying the complete-layer read cost,
     // and the plan funds the claim, so the union must be offered to retained
@@ -33,9 +30,6 @@ fn should_commit_a_multi_token_union_as_a_complete_layer_when_the_plan_funds_it(
 
 #[test]
 fn should_never_commit_a_multi_token_union_that_is_not_the_whole_layer() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A partial union is not a complete layer: adopting it as one would
     // claim the whole layer's payload budget for a fraction of the experts.
     assert!(!should_commit_multi_token_union_as_complete_layer(
@@ -64,9 +58,6 @@ fn should_never_commit_a_multi_token_union_that_is_not_the_whole_layer() {
 
 #[test]
 fn should_not_commit_a_multi_token_union_for_unfunded_or_non_production_plans() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Unfunded or streaming targets never authorize the adoption offer.
     for unfunded_target in [
         ExpertLayerResidencyTarget::StreamOperationLocal,
@@ -116,9 +107,6 @@ fn should_not_commit_a_multi_token_union_for_unfunded_or_non_production_plans() 
 
 #[test]
 fn should_seed_a_partial_prefill_union_for_a_funded_complete_layer_target() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for funded_target in [
         ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead,
         ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
@@ -142,9 +130,6 @@ fn should_seed_a_partial_prefill_union_for_a_funded_complete_layer_target() {
 
 #[test]
 fn should_not_seed_a_partial_prefill_union_outside_its_funded_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let funded_target = Some(ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead);
     for routed_expert_count in [0, 128, 129] {
         assert!(!should_seed_partial_layer_on_prefill_read(

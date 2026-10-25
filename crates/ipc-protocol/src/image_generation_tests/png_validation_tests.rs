@@ -10,17 +10,11 @@ use image::{ExtendedColorType, ImageEncoder, codecs::png::PngEncoder};
 
 #[test]
 fn should_reject_empty_idat_data_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_invalid_png_encoding(png_bytes_from_chunks(1_024, 768, 8, 2, &[]));
 }
 
 #[test]
 fn should_reject_decoded_rgb_bomb_before_allocation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_event = image_completion_event(
         png_bytes_from_chunks(16_384, 16_384, 8, 2, &[0]),
         ImageGenerationResultMetadata {
@@ -40,9 +34,6 @@ fn should_reject_decoded_rgb_bomb_before_allocation() {
 
 #[test]
 fn should_reject_source_palette_png_even_when_the_decoder_expands_it_to_rgb8() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut palette_png = encode_solid_luma_png(1_024, 768);
     let ihdr_range = png_chunk_range(&palette_png, b"IHDR");
     palette_png[ihdr_range.start + 17] = 3;
@@ -61,9 +52,6 @@ fn should_reject_source_palette_png_even_when_the_decoder_expands_it_to_rgb8() {
 
 #[test]
 fn should_reject_corrupt_missing_and_trailing_iend_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let valid_png = valid_rgb_png(1_024, 768);
     let iend_range = png_chunk_range(&valid_png, b"IEND");
 
@@ -82,9 +70,6 @@ fn should_reject_corrupt_missing_and_trailing_iend_at_the_wire_boundary() {
 
 #[test]
 fn should_reject_nonzero_length_iend_at_the_wire_boundary() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut png = png_bytes_from_chunks(1_024, 768, 8, 2, &[0]);
     let iend_range = png_chunk_range(&png, b"IEND");
     png.splice(iend_range, png_chunk_bytes(b"IEND", &[0]));
@@ -94,9 +79,6 @@ fn should_reject_nonzero_length_iend_at_the_wire_boundary() {
 
 #[test]
 fn should_reject_malformed_deflate_with_valid_chunk_crcs() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_invalid_png_encoding(png_bytes_from_chunks(
         1_024,
         768,

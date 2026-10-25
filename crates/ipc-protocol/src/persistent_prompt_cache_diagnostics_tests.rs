@@ -8,9 +8,6 @@ use crate::{
 
 #[test]
 fn should_round_trip_bounded_persistent_prompt_cache_request_diagnostics_on_completion() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let completed_event = WorkerEvent::Completed {
         request_id: RequestId::new(42),
         prompt_token_count: 40_001,
@@ -50,9 +47,6 @@ fn should_round_trip_bounded_persistent_prompt_cache_request_diagnostics_on_comp
 
 #[test]
 fn should_reject_unknown_startup_cleanup_evidence_fields() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let serialized_diagnostics = serde_json::json!({
         "lookup_outcome": "miss",
         "block_token_count": 2048,
@@ -90,9 +84,6 @@ fn should_reject_unknown_startup_cleanup_evidence_fields() {
 
 #[test]
 fn should_round_trip_null_startup_cleanup_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let serialized_diagnostics = serde_json::json!({
         "lookup_outcome": "miss",
         "block_token_count": 2048,

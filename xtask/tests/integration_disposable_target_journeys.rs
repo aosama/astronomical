@@ -1,4 +1,4 @@
-//! Offline contract journeys for `cargo xtask disposable-target`, the
+//! Integration contract journeys for `cargo xtask disposable-target`, the
 //! typed port of the retired `scripts/run-in-disposable-cargo-target.sh`.
 //!
 //! These journeys absorb the two retired shell contracts

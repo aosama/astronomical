@@ -17,7 +17,7 @@ mod tests;
 /// The only accepted Hadamard manifest schema version.
 const SUPPORTED_CONTRACT_VERSION: u32 = 1;
 /// The only accepted orthonormal transform. The rotation is folded into the
-/// stored weights offline, so the runtime transform must match it exactly.
+/// stored weights at packaging time, so the runtime transform must match it exactly.
 const SUPPORTED_TRANSFORM: &str = "normalized-sylvester-walsh-hadamard";
 /// The only accepted application axis: the activation input dimension of each
 /// rotated projection.

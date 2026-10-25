@@ -1,4 +1,4 @@
-//! Offline contracts for the generated language tensor profiles.
+//! Unit contracts for the generated language tensor profiles.
 //!
 //! The exact profile inventories pin the mixed-precision OptiQ layout of the
 //! frozen Ornith 1.0 contract, including the resident profile that must never

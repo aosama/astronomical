@@ -65,8 +65,6 @@ fn guard_after_the_short_prompt() -> AdaptiveRamGrowthGuard {
 #[test]
 fn should_keep_a_resident_long_prompt_chunk_inside_the_ceiling_after_a_one_token_prefill_observation()
  {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let adaptive_ram_growth_guard = guard_after_the_short_prompt();
 
     let long_chunk_projection = adaptive_ram_growth_guard
@@ -100,8 +98,6 @@ fn should_keep_a_resident_long_prompt_chunk_inside_the_ceiling_after_a_one_token
 
 #[test]
 fn should_never_scale_a_smaller_observation_up_by_the_token_ratio() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let adaptive_ram_growth_guard = guard_after_the_short_prompt();
 
     let long_chunk_reserve = adaptive_ram_growth_guard.admission_transient_reserve_for_context(
@@ -121,8 +117,6 @@ fn should_never_scale_a_smaller_observation_up_by_the_token_ratio() {
 
 #[test]
 fn should_prefer_an_unscaled_smaller_observation_that_exceeds_the_analytic_floor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mut adaptive_ram_growth_guard =
         AdaptiveRamGrowthGuard::new(TWENTY_SEVEN_GIGABYTE_ACTIVE_MEMORY_CEILING_BYTES)
             .expect("the reproduced 27 GB ceiling should create a guard");
@@ -146,8 +140,6 @@ fn should_prefer_an_unscaled_smaller_observation_that_exceeds_the_analytic_floor
 
 #[test]
 fn should_trust_covering_evidence_over_the_analytic_floor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mut adaptive_ram_growth_guard =
         AdaptiveRamGrowthGuard::new(TWENTY_SEVEN_GIGABYTE_ACTIVE_MEMORY_CEILING_BYTES)
             .expect("the reproduced 27 GB ceiling should create a guard");
@@ -178,8 +170,6 @@ fn should_trust_covering_evidence_over_the_analytic_floor() {
 
 #[test]
 fn should_reserve_the_analytic_floor_when_no_forward_has_completed() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let adaptive_ram_growth_guard =
         AdaptiveRamGrowthGuard::new(TWENTY_SEVEN_GIGABYTE_ACTIVE_MEMORY_CEILING_BYTES)
             .expect("the reproduced 27 GB ceiling should create a guard");
@@ -201,8 +191,6 @@ fn should_reserve_the_analytic_floor_when_no_forward_has_completed() {
 
 #[test]
 fn should_use_the_global_maximum_for_a_zero_token_forward() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let adaptive_ram_growth_guard = guard_after_the_short_prompt();
 
     let zero_token_reserve = adaptive_ram_growth_guard
@@ -220,8 +208,6 @@ fn should_use_the_global_maximum_for_a_zero_token_forward() {
 
 #[test]
 fn should_count_a_zero_token_observation_only_toward_the_global_maximum() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mut adaptive_ram_growth_guard =
         AdaptiveRamGrowthGuard::new(TWENTY_SEVEN_GIGABYTE_ACTIVE_MEMORY_CEILING_BYTES)
             .expect("the reproduced 27 GB ceiling should create a guard");
@@ -245,8 +231,6 @@ fn should_count_a_zero_token_observation_only_toward_the_global_maximum() {
 
 #[test]
 fn should_still_reject_a_forward_whose_own_measured_window_does_not_fit() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let mut adaptive_ram_growth_guard = guard_after_the_short_prompt();
     record_transient_window(
         &mut adaptive_ram_growth_guard,
@@ -277,8 +261,6 @@ fn should_still_reject_a_forward_whose_own_measured_window_does_not_fit() {
 
 #[test]
 fn should_report_a_stable_shortfall_that_no_smaller_forward_can_fix() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let adaptive_ram_growth_guard = guard_after_the_short_prompt();
 
     let overfull_projection = adaptive_ram_growth_guard
@@ -298,8 +280,6 @@ fn should_report_a_stable_shortfall_that_no_smaller_forward_can_fix() {
 
 #[test]
 fn should_fit_the_stable_limit_at_exactly_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let adaptive_ram_growth_guard = guard_after_the_short_prompt();
 
     let boundary_projection = adaptive_ram_growth_guard
@@ -323,9 +303,6 @@ fn should_fit_the_stable_limit_at_exactly_the_ceiling() {
 
 #[test]
 fn should_refuse_to_scale_an_observation_up_to_a_larger_forward() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         scale_transient_to_token_count(
             ONE_TOKEN_PREFILL_TRANSIENT_BYTES,
@@ -338,9 +315,6 @@ fn should_refuse_to_scale_an_observation_up_to_a_larger_forward() {
 
 #[test]
 fn should_scale_a_larger_observation_down_with_ceiling_division() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(scale_transient_to_token_count(10, 3, 1), Some(4));
     assert_eq!(
         scale_transient_to_token_count(THIRTY_EIGHT_TOKEN_PREFILL_TRANSIENT_BYTES, 38, 38),
@@ -350,9 +324,6 @@ fn should_scale_a_larger_observation_down_with_ceiling_division() {
 
 #[test]
 fn should_refuse_to_scale_with_a_zero_token_count() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(scale_transient_to_token_count(10, 0, 1), None);
     assert_eq!(scale_transient_to_token_count(10, 3, 0), None);
 }

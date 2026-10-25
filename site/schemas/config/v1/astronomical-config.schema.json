@@ -9,7 +9,7 @@
   "properties": {
     "$schema": {
       "const": "./astronomical-config.schema.json",
-      "description": "Relative path to the offline schema written beside this configuration."
+      "description": "Relative path to the local schema written beside this configuration."
     },
     "schema_version": {
       "const": 1,

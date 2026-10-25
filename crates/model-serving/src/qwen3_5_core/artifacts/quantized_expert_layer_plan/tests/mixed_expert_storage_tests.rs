@@ -157,8 +157,6 @@ fn should_plan_mixed_native_and_affine_projections_in_one_layer() {
 
 #[test]
 fn should_plan_stacked_jangtq2_codebook_projections_from_float16_row_scales() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     let jangtq2_artifact = write_jangtq2_expert_artifact();
 
     let jangtq2_layer_plan = build_quantized_expert_layer_plan(

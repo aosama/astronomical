@@ -225,7 +225,7 @@ what the build actually staged.
 
 The contract suite in `verification/tooling_contracts/test-provision-bindgen-headers-contract.sh`
 covers extraction, patch application, idempotent reuse, self-healing,
-tampered-archive refusal, offline behavior, and verification against offline
+tampered-archive refusal, no-network behavior, and verification against local
 store fixtures.
 
 ## Reproducing a native build from scratch
@@ -244,7 +244,7 @@ platform cache. The second configures and compiles the native runtime image
 (static MLX, MLX-C, and the Astronomical bridges) and publishes it to the
 content-addressed native build store. The third links the worker against the
 published store; if the store is empty, the cargo artifact lifecycle builds
-it first. Offline verification afterwards needs no network and no model
+it first. Verification afterwards needs no network and no model
 weights:
 
 ```bash

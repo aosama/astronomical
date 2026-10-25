@@ -39,9 +39,6 @@ fn plan_with(
 
 #[test]
 fn should_reject_a_non_contiguous_layer_index() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut geometries = valid_geometry(2);
     geometries[0].layer_index = 1;
 
@@ -56,9 +53,6 @@ fn should_reject_a_non_contiguous_layer_index() {
 
 #[test]
 fn should_reject_every_zero_geometry_field_independently() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for zeroed_field in [
         (0_u64, 10_usize, 40_u64, 2_usize),
         (10, 0, 40, 2),
@@ -86,9 +80,6 @@ fn should_reject_every_zero_geometry_field_independently() {
 
 #[test]
 fn should_reject_a_complete_payload_that_disagrees_with_the_expert_geometry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut geometries = valid_geometry(1);
     geometries[0].complete_layer_payload_bytes = 41;
 
@@ -100,9 +91,6 @@ fn should_reject_a_complete_payload_that_disagrees_with_the_expert_geometry() {
 
 #[test]
 fn should_reject_duplicate_or_descending_current_layers() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = valid_geometry(3);
     assert!(matches!(
         plan_with(&geometries, &[complete_residency(1), complete_residency(1)]),
@@ -116,9 +104,6 @@ fn should_reject_duplicate_or_descending_current_layers() {
 
 #[test]
 fn should_reject_a_current_layer_beyond_the_geometry() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert!(matches!(
         plan_with(&valid_geometry(1), &[complete_residency(3)]),
         Err(ExpertResidencyPlanError::CurrentLayerOutOfRange { layer_index: 3 })
@@ -127,9 +112,6 @@ fn should_reject_a_current_layer_beyond_the_geometry() {
 
 #[test]
 fn should_reject_every_invalid_retained_expert_identifier_shape() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = valid_geometry(1);
     for invalid_ids in [vec![], vec![1, 0], vec![0, 0], vec![0, 4]] {
         let retained_count = invalid_ids.len();
@@ -152,9 +134,6 @@ fn should_reject_every_invalid_retained_expert_identifier_shape() {
 
 #[test]
 fn should_reject_a_current_payload_or_class_that_disagrees_with_retention() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometries = valid_geometry(1);
 
     // Payload byte count disagrees with the retained identifier count.
@@ -194,9 +173,6 @@ fn should_reject_a_current_payload_or_class_that_disagrees_with_retention() {
 
 #[test]
 fn should_reject_current_ownership_one_byte_over_the_planning_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let plan_error = plan_expert_residency(
         MemoryPhase::Prefill,
         39,
@@ -213,9 +189,6 @@ fn should_reject_current_ownership_one_byte_over_the_planning_ceiling() {
 
 #[test]
 fn should_reject_layer_facts_whose_current_payload_sum_overflows() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Two layers each holding one expert of u64::MAX bytes: the sum
     // overflows before any plan arithmetic can begin.
     let geometries = vec![

@@ -17,9 +17,6 @@ fn sparse_geometry() -> MlxRamBudgetModelGeometry {
 
 #[test]
 fn should_return_no_paging_ceiling_when_the_artifact_has_no_headroom_gap() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let geometry_without_experts = MlxRamBudgetModelGeometry {
         complete_expert_payload_bytes: 0,
         ..sparse_geometry()
@@ -38,9 +35,6 @@ fn should_return_no_paging_ceiling_when_the_artifact_has_no_headroom_gap() {
 
 #[test]
 fn should_place_the_paging_ceiling_where_static_weights_fit_and_headroom_does_not() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let required_headroom_bytes = 40;
     let boundary = CompleteResidencyHeadroomBoundary::from_model_geometry(
         sparse_geometry(),

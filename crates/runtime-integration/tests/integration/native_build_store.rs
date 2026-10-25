@@ -1,6 +1,6 @@
 //! User-journey contracts for safe reuse of compiled native products.
 //!
-//! Fake native payloads keep this suite offline while exercising the same
+//! Fake native payloads keep this suite scripted while exercising the same
 //! locking, validation, and publication owner used by the Cargo build script.
 
 use std::{

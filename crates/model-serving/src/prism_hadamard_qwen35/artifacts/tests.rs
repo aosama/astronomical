@@ -1,4 +1,4 @@
-//! Offline contracts for folded-pack validation.
+//! Unit contracts for folded-pack validation.
 //!
 //! The fixture builds a tiny but structurally exact pack: real safetensors
 //! bytes, a real Hadamard manifest, and the full module/auxiliary inventory

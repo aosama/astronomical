@@ -25,9 +25,6 @@ fn graph_submission_chunking(
 
 #[test]
 fn should_use_resident_prefill_interval_and_keep_decode_on_one_tape() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chunking = graph_submission_chunking(0, 1, 3);
 
     assert_eq!(chunking.graph_submission_layer_interval(2_048, false), 0);
@@ -40,9 +37,6 @@ fn should_use_resident_prefill_interval_and_keep_decode_on_one_tape() {
 
 #[test]
 fn should_honor_a_positive_resident_prefill_interval_without_changing_ssd_paging() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chunking = graph_submission_chunking(2, 1, 3);
 
     assert_eq!(chunking.graph_submission_layer_interval(2_048, false), 2);
@@ -53,9 +47,6 @@ fn should_honor_a_positive_resident_prefill_interval_without_changing_ssd_paging
 
 #[test]
 fn should_apply_paged_prefill_and_generation_intervals_while_experts_stream_from_storage() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chunking = graph_submission_chunking(0, 1, 3);
 
     assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 1);
@@ -64,9 +55,6 @@ fn should_apply_paged_prefill_and_generation_intervals_while_experts_stream_from
 
 #[test]
 fn should_keep_one_lazy_tape_when_ssd_paging_intervals_are_zero() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let chunking = graph_submission_chunking(0, 0, 0);
 
     assert_eq!(chunking.graph_submission_layer_interval(2_048, true), 0);

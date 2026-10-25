@@ -14,9 +14,6 @@ const DEFAULT_DECODE_CONTEXT: AdaptiveRamGrowthContext =
     AdaptiveRamGrowthContext::decode(1, AdaptiveRamGrowthExecutionProfile::Resident);
 #[test]
 fn should_admit_growth_without_expert_reclamation_when_only_the_recovery_reserve_is_short() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     // Learn a 150-byte transient window.
@@ -54,9 +51,6 @@ fn should_admit_growth_without_expert_reclamation_when_only_the_recovery_reserve
 
 #[test]
 fn should_report_only_the_measured_peak_shortfall_as_required_reclamation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000)
         .expect("a positive active-memory limit should create a guard");
     // Learn a 200-byte transient window.
@@ -90,9 +84,6 @@ fn should_report_only_the_measured_peak_shortfall_as_required_reclamation() {
 
 #[test]
 fn should_reject_a_recovery_projection_overflow() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(usize::MAX)
         .expect("the platform maximum should be a valid positive limit");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -121,9 +112,6 @@ fn should_reject_a_recovery_projection_overflow() {
 // global maximum kept only for a phase that has no evidence at all.
 #[test]
 fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
         .expect("a positive active-memory limit should create a guard");
     let large_paged_prefill_context = AdaptiveRamGrowthContext::prefill(
@@ -162,9 +150,6 @@ fn should_scale_an_unobserved_shape_reserve_by_its_own_token_count() {
 
 #[test]
 fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
         .expect("a positive active-memory limit should create a guard");
     let large_paged_prefill_context = AdaptiveRamGrowthContext::prefill(
@@ -209,9 +194,6 @@ fn should_prefer_exact_context_evidence_over_the_scaled_phase_estimate() {
 
 #[test]
 fn should_bound_an_unobserved_shape_by_scaled_down_larger_and_unscaled_smaller_observations() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -270,9 +252,6 @@ fn should_bound_an_unobserved_shape_by_scaled_down_larger_and_unscaled_smaller_o
 
 #[test]
 fn should_keep_the_global_maximum_for_a_phase_without_any_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(1_000_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(

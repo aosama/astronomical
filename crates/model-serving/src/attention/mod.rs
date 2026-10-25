@@ -1,6 +1,6 @@
 //! Architecture-neutral attention math used by more than one model family.
 //!
-//! CPU helpers live here so offline tests can prove YaRN denominators and
+//! CPU helpers live here so unit tests can prove YaRN denominators and
 //! sliding-window visibility without linking MLX or importing a concrete
 //! family. Family owners supply geometry; they do not fork these formulas.
 

@@ -128,7 +128,7 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
     let static_job = required_job(&workflow, "static");
     assert_eq!(
         required_text(verification_job, "name", "job rust-core"),
-        "macOS offline verification",
+        "macOS integration verification",
         "required check name changed"
     );
     assert_eq!(

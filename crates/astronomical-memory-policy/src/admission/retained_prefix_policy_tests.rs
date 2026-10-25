@@ -4,9 +4,6 @@ use crate::admission::retained_prefix::{
 
 #[test]
 fn should_retain_an_adoptable_state_when_adoption_is_enabled() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: true,
         adoptable_token_count: 20_480,
@@ -22,9 +19,6 @@ fn should_retain_an_adoptable_state_when_adoption_is_enabled() {
 
 #[test]
 fn should_retain_a_state_of_exactly_half_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: true,
         adoptable_token_count: 98_304,
@@ -40,9 +34,6 @@ fn should_retain_a_state_of_exactly_half_the_ceiling() {
 
 #[test]
 fn should_drop_the_retained_state_when_adoption_is_disabled() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: false,
         adoptable_token_count: 20_480,
@@ -58,9 +49,6 @@ fn should_drop_the_retained_state_when_adoption_is_disabled() {
 
 #[test]
 fn should_drop_a_state_with_nothing_adoptable() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: true,
         adoptable_token_count: 0,
@@ -76,9 +64,6 @@ fn should_drop_a_state_with_nothing_adoptable() {
 
 #[test]
 fn should_drop_a_state_that_would_pin_more_than_half_the_ceiling() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: true,
         adoptable_token_count: 196_352,
@@ -94,9 +79,6 @@ fn should_drop_a_state_that_would_pin_more_than_half_the_ceiling() {
 
 #[test]
 fn should_not_wrap_when_the_state_payload_doubles_past_the_word() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let decision = RetainedPrefixRetentionRequirements {
         adoption_enabled: true,
         adoptable_token_count: 98_304,

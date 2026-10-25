@@ -1,4 +1,4 @@
-//! The macOS app-builder packaging journey as an offline integration test
+//! The macOS app-builder packaging journey as an integration test
 //! (issue #1346): a sandboxed repository copy runs the real
 //! `scripts/internal/build-macos-app.sh` with fixture-bin tool shims on PATH,
 //! and the produced bundle is asserted through `plutil` extraction the same

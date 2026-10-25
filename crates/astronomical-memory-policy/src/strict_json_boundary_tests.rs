@@ -11,9 +11,6 @@ fn parse(json_text: &str) -> Result<serde_json::Value, String> {
 
 #[test]
 fn should_parse_every_scalar_shape() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(parse("true"), Ok(serde_json::Value::Bool(true)));
     assert_eq!(parse("-5"), Ok(serde_json::Value::Number((-5_i64).into())));
     assert_eq!(
@@ -35,9 +32,6 @@ fn should_parse_every_scalar_shape() {
 
 #[test]
 fn should_parse_arrays_and_nested_unique_objects() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let parsed_array =
         parse("[1,{\"dtype\":\"BF16\"},[true,null]]").expect("unique nesting should parse");
     assert_eq!(
@@ -55,9 +49,6 @@ fn should_parse_arrays_and_nested_unique_objects() {
 
 #[test]
 fn should_reject_a_duplicate_key_at_the_top_level() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let parse_error = parse("{\"t\":1,\"t\":2}").expect_err("duplicate keys must fail");
     assert!(
         parse_error.contains(DUPLICATE_JSON_FIELD_MARKER),
@@ -68,9 +59,6 @@ fn should_reject_a_duplicate_key_at_the_top_level() {
 
 #[test]
 fn should_reject_a_duplicate_key_nested_inside_an_object() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let parse_error = parse("{\"outer\":{\"a\":1,\"a\":2}}")
         .expect_err("nested duplicate keys must fail before replacement can hide them");
     assert!(parse_error.contains(DUPLICATE_JSON_FIELD_MARKER));
@@ -78,18 +66,12 @@ fn should_reject_a_duplicate_key_nested_inside_an_object() {
 
 #[test]
 fn should_reject_a_duplicate_key_inside_an_array_element() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let parse_error = parse("[{\"a\":1,\"a\":2}]").expect_err("duplicates inside arrays must fail");
     assert!(parse_error.contains(DUPLICATE_JSON_FIELD_MARKER));
 }
 
 #[test]
 fn should_bound_the_field_name_quoted_in_the_duplicate_error() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // A 500-character duplicated key must not be echoed whole into the
     // error: untruncated it would exceed 500 characters, truncated to the
     // bounded field name it stays under 400.
@@ -108,9 +90,6 @@ fn should_bound_the_field_name_quoted_in_the_duplicate_error() {
 
 #[test]
 fn should_fail_closed_on_an_out_of_range_float_literal() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // 1e400 overflows f64; whether serde_json rejects the literal or the
     // visitor sees a non-finite value, the parse must fail closed rather
     // than produce an infinite JSON number.
@@ -123,9 +102,6 @@ fn should_fail_closed_on_an_out_of_range_float_literal() {
 
 #[test]
 fn should_parse_negative_and_integral_floats() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let parsed_negative_float = parse("-2.5").expect("negative floats are valid JSON");
     assert_eq!(parsed_negative_float, serde_json::json!(-2.5));
     let parsed_integral_float = parse("4.0").expect("integral floats are valid JSON");

@@ -15,9 +15,6 @@ const TEST_TRANSPORT_CAPACITY_BYTES: usize = 256 * 1024;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_worker_startup_configuration() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Exercise every nested startup owner together so a newly added field cannot
     // silently disappear between the daemon and worker process boundary.
     let worker_command = WorkerCommand::InitializeWorker(WorkerStartupConfiguration {
@@ -54,9 +51,6 @@ async fn should_round_trip_worker_startup_configuration() {
 
 #[test]
 fn should_serialize_the_candidate_decode_expert_cache_policy() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         serde_json::to_value(WorkerDecodeExpertCachePolicy::Candidate)
             .expect("candidate policy should serialize"),
@@ -71,9 +65,6 @@ fn should_serialize_the_candidate_decode_expert_cache_policy() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn should_round_trip_selected_model_policy_on_swap_model() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let worker_command = WorkerCommand::SwapModel {
         model_directory: "/tmp/fictional-target".to_owned(),
         model_configuration: WorkerModelConfiguration::Autoregressive(
@@ -119,9 +110,6 @@ async fn should_round_trip_selected_model_policy_on_swap_model() {
 
 #[test]
 fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_configuration =
         WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
             model_id: "organization/target".to_owned(),
@@ -177,9 +165,6 @@ fn should_serialize_autoregressive_configuration_with_an_explicit_discriminator(
 
 #[test]
 fn should_reject_the_retired_untagged_model_configuration_wire_shape() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let retired_configuration = serde_json::json!({
         "model_id": "FLUX.2-klein-4B",
         "model_family": "flux2_klein",
@@ -199,9 +184,6 @@ fn should_reject_the_retired_untagged_model_configuration_wire_shape() {
 
 #[test]
 fn should_acknowledge_the_exact_tagged_flux_runtime_configuration_without_chat_fields() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_configuration =
         WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
             model_id: "FLUX.2-klein-4B".to_owned(),
@@ -233,9 +215,6 @@ fn should_acknowledge_the_exact_tagged_flux_runtime_configuration_without_chat_f
 
 #[test]
 fn should_acknowledge_the_exact_tagged_qwen_image_runtime_configuration_without_chat_fields() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let model_configuration =
         WorkerModelConfiguration::QwenImage21(WorkerQwenImage21ModelConfiguration {
             model_id: "qwen-image-2.1".to_owned(),

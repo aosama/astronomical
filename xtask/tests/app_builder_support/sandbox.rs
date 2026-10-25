@@ -1,6 +1,6 @@
 //! The sandboxed repository copy that runs the real
 //! `scripts/internal/build-macos-app.sh` against fixture-bin tool shims, so
-//! the journey is offline, deterministic, and side-effect free.
+//! the journey is deterministic and side-effect free.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

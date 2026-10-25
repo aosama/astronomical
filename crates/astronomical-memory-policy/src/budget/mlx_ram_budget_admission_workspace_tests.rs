@@ -30,9 +30,6 @@ fn production_failure_geometry() -> MlxRamBudgetModelGeometry {
 #[test]
 fn should_reclaim_instead_of_rejecting_the_follow_up_context_after_chunk_shaped_activation_evidence()
  {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(32_000_000_000, production_failure_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {
@@ -76,9 +73,6 @@ fn should_reclaim_instead_of_rejecting_the_follow_up_context_after_chunk_shaped_
 
 #[test]
 fn should_resolve_the_follow_up_reserve_from_evidence_at_the_operation_scope() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut mlx_ram_budget = MlxRamBudget::new(32_000_000_000, production_failure_geometry())
         .expect("positive ceiling should construct");
     mlx_ram_budget.record_measurement(MlxRamBudgetMeasurement {

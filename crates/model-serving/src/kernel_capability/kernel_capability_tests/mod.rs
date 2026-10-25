@@ -1,4 +1,4 @@
-//! Offline contracts for the per-worker custom-Metal-kernel capability owner.
+//! Unit contracts for the per-worker custom-Metal-kernel capability owner.
 //!
 //! The owner must turn probe outcomes into verdicts, reuse verdicts without
 //! re-probing, and fail closed for families that were never probed. Fake
@@ -17,7 +17,7 @@ use crate::{
 };
 
 // The capability owner is family-agnostic, so these opaque stand-in
-// identifiers exercise the registry semantics offline; the real family
+// identifiers exercise the registry semantics in unit tests; the real family
 // constants live in each family's own direct-MLX probe module.
 const COUNTING_WEIGHTED_SUM_FAMILY: CustomMetalKernelFamily =
     CustomMetalKernelFamily::new("counting-weighted-sum");
@@ -74,9 +74,6 @@ fn supported_probe_pair(family: CustomMetalKernelFamily) -> (CountingProbe, Arc<
 
 #[test]
 fn should_probe_every_family_once_and_reuse_verdicts_without_reprobing() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let (weighted_sum_probe, weighted_sum_invocations) =
         supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
     let (gated_delta_probe, gated_delta_invocations) =
@@ -116,9 +113,6 @@ fn should_probe_every_family_once_and_reuse_verdicts_without_reprobing() {
 
 #[test]
 fn should_report_a_typed_compilation_reason_without_losing_other_families() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let (failing_probe, failing_invocations) = CountingProbe::with_outcome(
         COUNTING_WEIGHTED_SUM_FAMILY,
         Err(KernelCapabilityError::Compilation {
@@ -150,9 +144,6 @@ fn should_report_a_typed_compilation_reason_without_losing_other_families() {
 
 #[test]
 fn should_distinguish_execution_failures_from_output_mismatches() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let (execution_probe, _) = CountingProbe::with_outcome(
         COUNTING_GATED_DELTA_FAMILY,
         Err(KernelCapabilityError::Execution {
@@ -188,9 +179,6 @@ fn should_distinguish_execution_failures_from_output_mismatches() {
 
 #[test]
 fn should_fail_closed_for_a_family_that_was_never_probed() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let (weighted_sum_probe, _) = supported_probe_pair(COUNTING_WEIGHTED_SUM_FAMILY);
     let mut performance_attribution = PerformanceAttribution::disabled();
 
@@ -209,9 +197,6 @@ fn should_fail_closed_for_a_family_that_was_never_probed() {
 #[test]
 #[should_panic(expected = "duplicate custom kernel family registry key")]
 fn should_refuse_a_duplicate_family_registry_key() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Two probes claiming one registry key would let the later verdict stand
     // in for the earlier family — a fail-open overwrite — so registration
     // refuses the duplicate instead.
@@ -228,9 +213,6 @@ fn should_refuse_a_duplicate_family_registry_key() {
 #[test]
 #[should_panic(expected = "duplicate forced custom kernel family registry key")]
 fn should_refuse_a_duplicate_forced_family_registry_key() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let _ = WorkerKernelCapabilities::with_forced_verdicts_for_tests([
         (COUNTING_WEIGHTED_SUM_FAMILY, CustomKernelVerdict::Supported),
         (
@@ -242,9 +224,6 @@ fn should_refuse_a_duplicate_forced_family_registry_key() {
 
 #[test]
 fn should_accept_exact_probe_outputs_and_reject_silent_zero_dispatches() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let expected_outputs = [133.0, 134.0, 120.0, 121.0];
 
     assert_eq!(

@@ -47,28 +47,20 @@ fn should_treat_a_missing_history_as_a_cold_start_impl() {
 
 #[test]
 fn should_round_trip_sparse_demand_counts() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     should_round_trip_sparse_demand_counts_impl();
 }
 
 #[test]
 fn should_reject_a_history_written_for_a_different_layer_count() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     should_reject_a_history_written_for_a_different_layer_count_impl();
 }
 
 #[test]
 fn should_reject_a_corrupt_history_file() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     should_reject_a_corrupt_history_file_impl();
 }
 
 #[test]
 fn should_treat_a_missing_history_as_a_cold_start() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
     should_treat_a_missing_history_as_a_cold_start_impl();
 }

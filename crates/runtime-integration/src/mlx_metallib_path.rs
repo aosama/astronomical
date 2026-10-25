@@ -24,7 +24,7 @@
 //!
 //! # Why this module is not behind the `mlx` feature
 //!
-//! The rules are pure path logic with no native dependency, and the offline
+//! The rules are pure path logic with no native dependency, and the integration
 //! test suite (which runs on machines without a compiled native image)
 //! asserts every branch: bundled preference, environment override, symlink
 //! rejection, and the user-facing failure message.

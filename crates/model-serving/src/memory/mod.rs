@@ -102,7 +102,7 @@ pub use budget::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use dense_resident::dense_resident_safe_minimum_mlx_memory_ceiling_bytes;
 // Byte-arithmetic page-peaking is pure planning over validated shapes; the
-// direct-MLX admission callers and the offline artifact-contract tests share
+// direct-MLX admission callers and the unit artifact-contract tests share
 // it, while the plain default-feature lib omits the module entirely.
 pub use astronomical_memory_policy::forward_admission::{
     PagedForwardAdmissionDecision, ResidentForwardAdmissionDecision,

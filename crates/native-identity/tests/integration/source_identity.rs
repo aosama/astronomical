@@ -1,5 +1,5 @@
 //! Source-only identity over the real repository tree: the git enumeration
-//! seam is the subject, so this stays an offline integration journey rather
+//! seam is the subject, so this stays an integration journey rather
 //! than a beside-source unit test (real filesystem, no network, no model
 //! artifacts).
 

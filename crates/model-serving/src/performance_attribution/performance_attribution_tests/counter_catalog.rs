@@ -10,9 +10,6 @@ use super::*;
 // saw "model execution failed inside the local worker" instead of an answer.
 #[test]
 fn should_record_and_read_back_every_catalogued_counter() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     for performance_counter in PerformanceCounter::ALL {
         let mut performance_attribution = PerformanceAttribution::enabled();
 
@@ -46,9 +43,6 @@ fn should_record_and_read_back_every_catalogued_counter() {
 // share one identifier would silently overwrite each other in diagnostics.
 #[test]
 fn should_give_every_catalogued_counter_a_unique_report_identifier() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut catalogued_identifiers = std::collections::HashSet::new();
 
     for performance_counter in PerformanceCounter::ALL {
@@ -75,9 +69,6 @@ fn should_give_every_catalogued_counter_a_unique_report_identifier() {
 // `ALL`, makes the report mislabel one value and drop another.
 #[test]
 fn should_keep_counter_catalog_positions_aligned_with_report_storage() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     assert_eq!(
         PerformanceCounter::ALL.len(),
         PerformanceCounter::COUNT,

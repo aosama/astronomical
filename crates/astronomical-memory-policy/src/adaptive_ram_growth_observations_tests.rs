@@ -16,9 +16,6 @@ const DEFAULT_PREFILL_CONTEXT: AdaptiveRamGrowthContext =
 
 #[test]
 fn should_keep_prefill_and_decode_transient_high_water_values_independent() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
         .expect("a positive active-memory limit should create a guard");
 
@@ -51,9 +48,6 @@ fn should_keep_prefill_and_decode_transient_high_water_values_independent() {
 
 #[test]
 fn should_cap_decode_warming_with_decode_evidence_instead_of_the_all_phase_maximum() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
         .expect("a positive active-memory limit should create a guard");
 
@@ -102,9 +96,6 @@ fn should_cap_decode_warming_with_decode_evidence_instead_of_the_all_phase_maxim
 
 #[test]
 fn should_fall_back_to_the_all_phase_maximum_before_the_phase_has_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
         .expect("a positive active-memory limit should create a guard");
 
@@ -131,9 +122,6 @@ fn should_fall_back_to_the_all_phase_maximum_before_the_phase_has_evidence() {
 
 #[test]
 fn should_record_a_completed_zero_transient_prefill_observation() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
         .expect("a positive active-memory limit should create a guard");
 
@@ -165,9 +153,6 @@ fn should_record_a_completed_zero_transient_prefill_observation() {
 
 #[test]
 fn should_preserve_adaptive_high_water_observations_when_the_limit_changes() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -205,9 +190,6 @@ fn should_preserve_adaptive_high_water_observations_when_the_limit_changes() {
 
 #[test]
 fn should_project_exact_temporary_workspace_without_double_counting_learned_residual_growth() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(2_000)
         .expect("a positive active-memory limit should create a guard");
     adaptive_ram_growth_guard.record_completed_growth_for_context(
@@ -237,9 +219,6 @@ fn should_project_exact_temporary_workspace_without_double_counting_learned_resi
 
 #[test]
 fn should_not_subtract_stable_expert_growth_twice_from_prefill_headroom() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(40_000)
         .expect("a positive active-memory limit should create a guard");
 
@@ -265,9 +244,6 @@ fn should_not_subtract_stable_expert_growth_twice_from_prefill_headroom() {
 #[test]
 fn should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_live_limit_reduction()
  {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(28_000_000_000)
         .expect("the reproduced live MLX limit should create a guard");
 
@@ -295,9 +271,6 @@ fn should_reserve_a_routed_expert_page_alongside_lazy_persistent_growth_after_a_
 
 #[test]
 fn should_exclude_streamed_and_evicted_expert_pages_from_the_learned_prefill_transient() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Issue #691: paged prefill promotes expert pages that appear in the MLX
     // peak but are evicted before completion (net resident delta zero). The
     // subtract chain must charge them to expert ownership, not activation:
@@ -325,9 +298,6 @@ fn should_exclude_streamed_and_evicted_expert_pages_from_the_learned_prefill_tra
 
 #[test]
 fn should_exclude_only_the_stream_bytes_beyond_the_retained_expert_delta() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // One forward promotes 500 page bytes and retains 300 of them: the retained
     // delta already sits inside the post-forward active baseline, so only the
     // 200 evicted stream bytes leave the residual. peak = 1,300 stable
@@ -354,9 +324,6 @@ fn should_exclude_only_the_stream_bytes_beyond_the_retained_expert_delta() {
 
 #[test]
 fn should_never_subtract_retained_pages_twice_from_the_learned_transient() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Fully retained promotion with zero eviction: peak - stable already
     // excludes the retained pages through the post-forward active sample, so
     // the stream evidence must cost the residual nothing (issue #691 guard:
@@ -385,9 +352,6 @@ fn should_never_subtract_retained_pages_twice_from_the_learned_transient() {
 
 #[test]
 fn should_keep_the_older_learning_contract_unchanged_without_expert_page_stream_evidence() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // The pre-#691 method delegates to the same core with zero stream bytes, so
     // every existing observation shape is preserved verbatim (#623/#644 pins).
     let mut adaptive_ram_growth_guard = AdaptiveRamGrowthGuard::new(10_000)
@@ -410,9 +374,6 @@ fn should_keep_the_older_learning_contract_unchanged_without_expert_page_stream_
 
 #[test]
 fn should_saturate_to_zero_when_stream_evidence_exceeds_the_whole_residual() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     // Expert churn plus streaming can leave sampled stream bytes larger than
     // the observed peak window (allocator timing differences across events).
     // Under-projection is recoverable by design; the learned high-water must

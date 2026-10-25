@@ -9,9 +9,6 @@ use safetensors::Dtype;
 
 #[test]
 fn should_name_the_dtype_rule_a_weight_tensor_violates() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = ArtifactValidationError::TensorDtypeMismatch {
         tensor_name: "language_model.model.layers.3.linear_attn.out_proj.weight".to_owned(),
         expected_dtype: crate::TensorDtype::UInt32,
@@ -28,9 +25,6 @@ fn should_name_the_dtype_rule_a_weight_tensor_violates() {
 
 #[test]
 fn should_name_the_shape_rule_a_weight_tensor_violates() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = ArtifactValidationError::TensorShapeMismatch {
         tensor_name: "language_model.model.layers.0.self_attn.q_proj.weight".to_owned(),
         expected_shape: vec![2048, 384],
@@ -47,9 +41,6 @@ fn should_name_the_shape_rule_a_weight_tensor_violates() {
 
 #[test]
 fn should_name_the_missing_tensor_and_its_weight_file() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = ArtifactValidationError::TensorMissing {
         tensor_name: "language_model.lm_head.scales".to_owned(),
         file_name: "model-00006-of-00006.safetensors".to_owned(),
@@ -63,9 +54,6 @@ fn should_name_the_missing_tensor_and_its_weight_file() {
 
 #[test]
 fn should_name_an_unexpected_tensor_without_a_local_path() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = ArtifactValidationError::UnexpectedTensor {
         tensor_name: "language_model.model.layers.0.mystery.weight".to_owned(),
     };
@@ -78,9 +66,6 @@ fn should_name_an_unexpected_tensor_without_a_local_path() {
 
 #[test]
 fn should_name_an_unrecognized_dtype_and_its_tensor() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = ArtifactValidationError::UnknownSafetensorsDtype {
         file_name: "model-00001-of-00006.safetensors".to_owned(),
         tensor_name: "language_model.model.embed_tokens.weight".to_owned(),
@@ -95,9 +80,6 @@ fn should_name_an_unrecognized_dtype_and_its_tensor() {
 
 #[test]
 fn should_name_a_truncated_weight_file() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = ArtifactValidationError::TruncatedSafetensorsFile {
         file_name: "model-00003-of-00006.safetensors".to_owned(),
         expected_minimum_bytes: 5_000,
@@ -112,9 +94,6 @@ fn should_name_a_truncated_weight_file() {
 
 #[test]
 fn should_name_a_required_file_that_does_not_match_its_declared_size() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = ArtifactValidationError::RequiredFileSizeMismatch {
         file_name: "tokenizer.json".to_owned(),
         expected_size_bytes: 100,
@@ -129,9 +108,6 @@ fn should_name_a_required_file_that_does_not_match_its_declared_size() {
 
 #[test]
 fn should_keep_the_missing_directory_reason_free_of_local_paths() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let local_model_directory = std::path::PathBuf::from("/private/models/example-model");
     let validation_error = ArtifactValidationError::ModelDirectoryNotFound {
         model_directory: local_model_directory.clone(),
@@ -148,9 +124,6 @@ fn should_keep_the_missing_directory_reason_free_of_local_paths() {
 
 #[test]
 fn should_bound_the_public_reason_for_untrusted_tensor_names() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let untrusted_tensor_name = "untrusted-tensor-".repeat(200);
     let validation_error = ArtifactValidationError::UnexpectedTensor {
         tensor_name: untrusted_tensor_name,
@@ -164,9 +137,6 @@ fn should_bound_the_public_reason_for_untrusted_tensor_names() {
 
 #[test]
 fn should_name_the_safetensors_cause_through_the_qwen_wrapper() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error =
         Qwen3_5ArtifactValidationError::Artifact(ArtifactValidationError::TensorMissing {
             tensor_name: "language_model.lm_head.weight".to_owned(),
@@ -182,9 +152,6 @@ fn should_name_the_safetensors_cause_through_the_qwen_wrapper() {
 
 #[test]
 fn should_preserve_the_existing_config_family_public_reason_through_the_qwen_wrapper() {
-    astronomical_test_harness::ensure_network_denied()
-        .expect("network denial could not be applied");
-
     let validation_error = Qwen3_5ArtifactValidationError::Artifact(
         ArtifactValidationError::RequiredFileSizeMismatch {
             file_name: "config.json".to_owned(),

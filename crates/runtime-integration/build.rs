@@ -21,7 +21,7 @@
 //! # The module map (and the multi-includer rule)
 //!
 //! The modules under `build-orchestration/` are shared verbatim with the
-//! standalone `astronomical-native-build-tool` and the offline test target
+//! standalone `astronomical-native-build-tool` and the integration test target
 //! through `#[path]` includes, so a pre-warmed out-of-Cargo build and the
 //! in-Cargo build execute byte-identical code. Because a `#[path]`-included
 //! file must not declare sibling modules itself, **every includer declares
@@ -55,7 +55,7 @@
 //! after that file was deleted. Cargo reports a missing watched path at
 //! **every** freshness check, which re-ran this script — and rebuilt
 //! runtime-integration and its dependents — in every later cargo invocation
-//! of a CI job: a measured 25 seconds per step. The offline wiring contract
+//! of a CI job: a measured 25 seconds per step. The integration wiring contract
 //! (`tests/integration/native_build_wiring.rs`) now fails if a watched path does
 //! not exist, so the class of failure cannot return silently.
 
@@ -172,7 +172,7 @@ fn selected_native_build_profile() -> NativeBuildProfile {
 /// Two rules govern this list:
 ///
 /// - **Every watched path must exist** (see the phantom-path lesson in the
-///   module documentation); the offline wiring contract asserts it.
+///   module documentation); the integration wiring contract asserts it.
 /// - The identity policy's own sources are watched so an edit to the
 ///   pathspec policy or manifest assembly re-runs the build script and the
 ///   store lookup uses the new identity.
