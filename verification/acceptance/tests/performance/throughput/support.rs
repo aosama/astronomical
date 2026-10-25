@@ -27,7 +27,9 @@ use std::time::{Duration, Instant};
 use astronomical_daemon::{
     ChatGenerationExecutor, GenerationPerformanceLog, WorkerHandle, WorkerHealthSnapshot,
 };
-use astronomical_ipc_protocol::{ChatImageInput, RequestId, WorkerDecodeExpertCachePolicy};
+use astronomical_ipc_protocol::{
+    ChatImageInput, RequestId, WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+};
 use tokio::time::sleep;
 
 pub(crate) use crate::performance_throughput::completion::{
@@ -121,6 +123,14 @@ pub(crate) struct ThroughputJourney {
     /// (an environment-addressed pack); `None` resolves the model id through
     /// the Development configuration's model directories.
     pub(crate) model_directory: Option<PathBuf>,
+    /// Forces the Qwen3.5 engine family so a diagnostic journey can separate
+    /// the memory ceiling from the engine architecture; `Automatic` is the
+    /// production startup selection.
+    pub(crate) diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
+    /// Replaces the resident engine's static prefill activation floor so a
+    /// diagnostic journey can test whether learned activation evidence alone
+    /// admits the shape; `None` is the production floor.
+    pub(crate) diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
 }
 
 impl ThroughputJourney {
@@ -150,6 +160,8 @@ impl ThroughputJourney {
             attribution_enabled: false,
             journey_timeout: JOURNEY_TIMEOUT,
             model_directory: None,
+            diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
+            diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
         }
     }
 }
@@ -257,6 +269,7 @@ pub(crate) async fn run_throughput_journey(
         cached_tokens: measurement.cached_tokens,
         prefill_time_seconds: measurement.prefill_time_seconds,
         decode_time_seconds: measurement.decode_time_seconds,
+        configured_maximum_mlx_memory_bytes: journey.maximum_mlx_memory_bytes,
         memory_cell: None,
     };
     eprintln!(
@@ -267,6 +280,19 @@ pub(crate) async fn run_throughput_journey(
     if diagnostics_enabled() || journey.attribution_enabled {
         eprintln!(
             "[performance-throughput] diagnostics run: durable history append skipped because attribution distorts throughput"
+        );
+        return measurement;
+    }
+    if journey.diagnostic_qwen3_5_engine_override
+        != WorkerDiagnosticQwen3_5EngineOverride::Automatic
+        || journey
+            .diagnostic_qwen3_5_resident_prefill_activation_floor_bytes
+            .is_some()
+    {
+        eprintln!(
+            "[performance-throughput] forced-engine diagnostic run ({:?}, resident prefill activation floor {:?}): durable history append skipped because production never runs this configuration",
+            journey.diagnostic_qwen3_5_engine_override,
+            journey.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes
         );
         return measurement;
     }
@@ -308,6 +334,10 @@ pub(crate) async fn measure_throughput(
     worker_startup_configuration.configured_maximum_mlx_memory_bytes =
         journey.maximum_mlx_memory_bytes;
     worker_startup_configuration.decode_expert_cache_policy = journey.decode_expert_cache_policy;
+    worker_startup_configuration.diagnostic_qwen3_5_engine_override =
+        journey.diagnostic_qwen3_5_engine_override;
+    worker_startup_configuration.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes =
+        journey.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes;
     let performance_log_path = logging_directory.join("performance.jsonl");
     fs::create_dir_all(&logging_directory)
         .expect("the throughput performance log directory should be created");

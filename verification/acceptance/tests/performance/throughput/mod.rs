@@ -15,6 +15,9 @@ mod decode_cache_experiment;
 mod decode_full_fit;
 
 #[cfg(feature = "performance_throughput")]
+mod engine_versus_memory_ceiling;
+
+#[cfg(feature = "performance_throughput")]
 mod historical_record;
 
 #[cfg(feature = "performance_throughput")]
@@ -28,9 +31,6 @@ mod memory_ceiling_sweep;
 
 #[cfg(feature = "performance_throughput")]
 mod prism_hadamard_qwen35;
-
-#[cfg(feature = "performance_throughput")]
-mod resident_memory_ceiling_probe;
 
 #[cfg(feature = "performance_throughput")]
 mod qwen3_5_moe;

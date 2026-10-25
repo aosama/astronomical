@@ -49,9 +49,13 @@ pub enum ThroughputJourneyKind {
     Vision,
     MemoryCeilingSweep,
     DecodeFullFit,
-    /// The directed 5,000-input/300-output resident-model comparison probe at
-    /// two assigned memory ceilings; kept distinct from Text so the canonical
-    /// >=10,000-input/500-output series stays clean.
+    /// The directed 5,000-input/300-output resident-model summarization under
+    /// the automatic engine choice at every assigned memory ceiling, whether
+    /// it selects the resident or the streaming engine; kept distinct from
+    /// Text so the canonical >=10,000-input/500-output series stays clean.
+    /// The name predates the streaming cells and is kept so earlier history
+    /// lines stay in the same series. Forced-engine diagnostic runs are never
+    /// appended, so this kind only ever holds production engine choices.
     ResidentMemoryCeilingProbe,
 }
 
@@ -126,6 +130,13 @@ pub struct ThroughputRecord {
     pub cached_tokens: u32,
     pub prefill_time_seconds: f64,
     pub decode_time_seconds: f64,
+    /// The MLX memory ceiling the journey assigned to the worker, in bytes.
+    /// Several ceilings share one journey kind (the engine-versus-ceiling
+    /// cells all record as `resident_memory_ceiling_probe`), so without it
+    /// their history lines could not be told apart. Omitted when the journey
+    /// ran under the default serving ceiling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configured_maximum_mlx_memory_bytes: Option<u64>,
     /// Present only on memory-ceiling-sweep records; omitted on every other
     /// journey so historical lines stay additive-compatible.
     #[serde(skip_serializing_if = "Option::is_none")]
