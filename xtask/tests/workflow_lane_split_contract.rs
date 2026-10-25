@@ -171,6 +171,39 @@ fn tier_lanes_run_their_own_archives_without_compiling() {
         unit_text.contains("-E 'kind(lib)'") && unit_text.contains("test-harness.tar.zst"),
         "the unit lane lost its lib-kind filter or the harness-fixtures archive"
     );
+    // The direct-MLX runtime tests need the metallib: the archive layout
+    // shifts the beside-the-executable lookup, so the unit lane must
+    // download the builder's metallib and point the environment override
+    // at it — and the build job must upload it.
+    assert!(
+        unit_text.contains("export ASTRONOMICAL_MLX_METALLIB_PATH="),
+        "the unit lane lost its metallib override"
+    );
+    assert!(
+        unit_steps.iter().any(|step| {
+            step.get("uses")
+                .and_then(Value::as_str)
+                .map(|uses_text| uses_text.contains("actions/download-artifact"))
+                .unwrap_or(false)
+                && step
+                    .get("with")
+                    .and_then(|with| with.get("name"))
+                    .and_then(Value::as_str)
+                    .map(|name| name == "native-metallib")
+                    .unwrap_or(false)
+        }),
+        "the unit lane does not download the native metallib artifact"
+    );
+    let build_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    assert!(
+        build_steps.iter().any(|step| {
+            step.get("name")
+                .and_then(Value::as_str)
+                .map(|name| name == "Upload native metallib")
+                .unwrap_or(false)
+        }),
+        "the build job does not upload the native metallib artifact"
+    );
     let integration_steps = steps_of(
         required_job(&workflow, "integration-tests"),
         "integration-tests",
