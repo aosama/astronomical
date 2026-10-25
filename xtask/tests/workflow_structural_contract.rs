@@ -80,6 +80,44 @@ fn should_use_the_canonical_integration_package_selection_for_compile_and_execut
     );
 }
 
+// The remaining macOS test steps run through cargo-nextest too (issue #1553
+// phase 3): one process per test, the per-test hang budget, and for the
+// wire contract an exact-name filter that fails when it matches no test —
+// the silent zero-test pass of `cargo test --exact` cannot return.
+#[test]
+fn remaining_test_steps_run_through_nextest() {
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    for step_name in [
+        "Run Library REST contracts",
+        "Verify menu-facing status wire contract",
+        "Run root E2E journeys",
+    ] {
+        let step_text = run_text_of(find_step_by_name(&verification_steps, step_name), step_name);
+        assert!(
+            step_text.contains("cargo nextest run "),
+            "{step_name} must execute through cargo-nextest"
+        );
+        assert!(
+            !step_text
+                .lines()
+                .any(|line| line.trim_start().starts_with("cargo test ")),
+            "{step_name} slipped back to cargo test"
+        );
+    }
+    let wire_text = run_text_of(
+        find_step_by_name(
+            &verification_steps,
+            "Verify menu-facing status wire contract",
+        ),
+        "wire-contract",
+    );
+    assert!(
+        wire_text.contains("-E 'test(=rest_api::application::image_status::"),
+        "the wire contract must select its test by exact name so a rename fails the step"
+    );
+}
+
 // The nextest provisioning contract (issue #1553 phase 3): the runner binary
 // is pinned by version and digest and verified before use, like every other
 // native dependency, and it lands on PATH before the lane that needs it.
