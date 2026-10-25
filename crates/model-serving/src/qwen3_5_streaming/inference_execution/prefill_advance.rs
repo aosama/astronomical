@@ -10,10 +10,12 @@
 //! 6. Retain request-local capacity evidence; decode fills demand-selected pages after prefill.
 //! 7. Emit progress only after all required state transitions succeeded.
 //!
-//! A capacity failure is terminal: the request reports the mismatch instead of
-//! retrying a smaller chunk. The retired ladder halved the executable chunk
-//! after each failure, which collapsed real requests into dozens of forwards
-//! that re-paid complete-layer storage reads while making no visible progress.
+//! A capacity failure never retries a smaller chunk. The retired ladder halved
+//! the executable chunk after each failure, which collapsed real requests into
+//! dozens of forwards that re-paid complete-layer storage reads while making no
+//! visible progress. Instead, the first memory failure of a text request sheds
+//! retained expert residency and re-seeds from the persistent prompt cache
+//! (`prefill_memory_recovery`); only a second failure is terminal.
 
 use std::time::Instant;
 
@@ -26,6 +28,7 @@ use crate::{
 };
 
 use super::completed_forward_memory;
+use super::prefill_memory_recovery;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_streaming::model::memory_admission;
@@ -136,61 +139,79 @@ impl Qwen3_5EngineState {
             prefill_end,
         ) {
             Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
-            Err(PromptPrefillChunkAttemptError::Engine(generation_error)) => {
-                return Err(generation_error);
-            }
-            Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
-                decision: crate::PagedForwardAdmissionDecision::Reject { .. },
-                reason,
-            }) => {
-                tracing::warn!(
-                    request_id = request_id.value(),
+            Err(prompt_prefill_chunk_attempt_error) => {
+                let prefill_memory_failure_error = match prompt_prefill_chunk_attempt_error {
+                    PromptPrefillChunkAttemptError::Engine(generation_error) => {
+                        return Err(generation_error);
+                    }
+                    PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
+                        decision: crate::PagedForwardAdmissionDecision::Reject { .. },
+                        reason,
+                    } => {
+                        tracing::warn!(
+                            request_id = request_id.value(),
+                            prefill_start,
+                            attempted_prefill_chunk_token_count,
+                            reason = %reason,
+                            "prefill admission rejected the configured chunk"
+                        );
+                        memory_admission::invalid_request_error(format!(
+                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
+                        ))
+                    }
+                    PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
+                        decision,
+                        reason,
+                    } => {
+                        return Err(memory_admission::invalid_request_error(format!(
+                            "unexpected paged forward admission decision {decision:?}: {reason}"
+                        )));
+                    }
+                    PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+                        active_memory_bytes,
+                        attempted_allocation_bytes,
+                        allowed_active_memory_bytes,
+                    } => {
+                        tracing::warn!(
+                            request_id = request_id.value(),
+                            prefill_start,
+                            attempted_prefill_chunk_token_count,
+                            active_memory_bytes,
+                            attempted_allocation_bytes,
+                            allowed_active_memory_bytes,
+                            "prefill chunk forward exceeded the MLX active-memory limit"
+                        );
+                        memory_admission::invalid_request_error(format!(
+                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
+                        ))
+                    }
+                    PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { reason } => {
+                        tracing::warn!(
+                            request_id = request_id.value(),
+                            prefill_start,
+                            attempted_prefill_chunk_token_count,
+                            reason = %reason,
+                            "prefill chunk forward exhausted graphics-processor memory"
+                        );
+                        memory_admission::invalid_request_error(format!(
+                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
+                        ))
+                    }
+                };
+                if !prefill_memory_recovery::should_attempt_prefill_memory_recovery(
+                    active_request.completed_prefill_memory_recovery_attempt_count,
+                    active_request.has_visual_inputs,
+                ) {
+                    return Err(prefill_memory_failure_error);
+                }
+                self.recover_prefill_after_memory_exhaustion(
+                    request_id,
+                    active_request,
                     prefill_start,
-                    attempted_prefill_chunk_token_count,
-                    reason = %reason,
-                    "prefill admission rejected the configured chunk"
-                );
-                return Err(memory_admission::invalid_request_error(format!(
-                    "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
-                )));
-            }
-            Err(PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
-                decision,
-                reason,
-            }) => {
-                return Err(memory_admission::invalid_request_error(format!(
-                    "unexpected paged forward admission decision {decision:?}: {reason}"
-                )));
-            }
-            Err(PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-                active_memory_bytes,
-                attempted_allocation_bytes,
-                allowed_active_memory_bytes,
-            }) => {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    prefill_start,
-                    attempted_prefill_chunk_token_count,
-                    active_memory_bytes,
-                    attempted_allocation_bytes,
-                    allowed_active_memory_bytes,
-                    "prefill chunk forward exceeded the MLX active-memory limit"
-                );
-                return Err(memory_admission::invalid_request_error(format!(
-                    "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
-                )));
-            }
-            Err(PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { reason }) => {
-                tracing::warn!(
-                    request_id = request_id.value(),
-                    prefill_start,
-                    attempted_prefill_chunk_token_count,
-                    reason = %reason,
-                    "prefill chunk forward exhausted graphics-processor memory"
-                );
-                return Err(memory_admission::invalid_request_error(format!(
-                    "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
-                )));
+                )?;
+                // Recursion depth is bounded by the one-recovery-per-request
+                // counter incremented inside the recovery.
+                return self.advance_prompt_prefill_if_pending(request_id, active_request);
             }
         };
         // Decode records its own route demand at plain assignment weight; the

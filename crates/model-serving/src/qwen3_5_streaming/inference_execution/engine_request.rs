@@ -67,6 +67,12 @@ pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     /// one; the final chunk records boosted. A failed attempt reopens the
     /// window so a retry never mixes discarded evidence.
     pub(super) has_opened_expert_demand_window: bool,
+    /// Context tokens admitted at request start; prefill memory recovery
+    /// re-seeds the persistent prompt cache against this same total.
+    pub(super) reserved_context_tokens: usize,
+    /// Prefill memory recoveries already spent; bounds recovery to one so a
+    /// genuinely oversized prompt still fails instead of looping.
+    pub(super) completed_prefill_memory_recovery_attempt_count: u8,
     /// First decode-forward latency waiting to be emitted with its generated token.
     pub(super) first_decode_forward_elapsed_millis: Option<u64>,
     /// Ensures the worker observes generation preparation before blocking handoff work.
