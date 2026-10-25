@@ -3,8 +3,8 @@
 //! the merge gate from every lane's terminal result (issue #1553), then
 //! executes the workflow's real verdict script under every lane-outcome
 //! scenario so the decision logic is proven, not merely quoted. The general
-//! workflow structure lives in the companion
-//! `workflow_structural_contract` test binary.
+//! workflow structure lives in the companion `workflow_structural_contract`
+//! test binary; the per-tier lane split in `workflow_lane_split_contract`.
 
 mod contract_support;
 
@@ -13,13 +13,22 @@ use contract_support::{
     steps_of, workflow_contract,
 };
 
-// The structural half: one required check — "CI verdict" — so lane jobs may
-// split or rename without branch-protection coordination. The `if:
-// always()` pin is the security-critical piece: a verdict that inherited the
-// default success-only condition would be skipped whenever a lane failed,
-// and GitHub treats a skipped required check as satisfied — a failing lane
-// would merge. The needs pin is the other half: a lane removed from the
-// needs list escapes the gate entirely.
+/// The lanes the verdict must fan in, in workflow order: the classifier, the
+/// macOS build job, the four per-tier test lanes it feeds, the second macOS
+/// contract job, and the two ubuntu lanes. A lane removed from this list
+/// escapes the merge gate entirely.
+const EXPECTED_VERDICT_LANES: [&str; 9] = [
+    "detect-changes",
+    "rust-core",
+    "unit-tests",
+    "integration-tests",
+    "rest-contracts",
+    "e2e-journeys",
+    "swift-node",
+    "static",
+    "config-contracts",
+];
+
 #[test]
 fn verdict_fan_in_fails_closed_over_every_lane() {
     let workflow = workflow_contract();
@@ -42,14 +51,7 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
         .map(|lane| lane.as_str().expect("verdict needs must be strings"))
         .collect();
     assert_eq!(
-        needed_lanes,
-        [
-            "detect-changes",
-            "rust-core",
-            "swift-node",
-            "static",
-            "config-contracts"
-        ],
+        needed_lanes, EXPECTED_VERDICT_LANES,
         "the verdict must fan in every lane; a lane outside its needs list escapes the merge gate"
     );
     assert_eq!(
@@ -68,47 +70,56 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
         "Fail closed unless every lane is green or legitimately skipped",
     );
     let verdict_text = run_text_of(verdict_step, "verdict");
-    for lane_marker in [
-        "needs.detect-changes.result",
-        "needs.detect-changes.outputs.macos_verification_required",
-        "needs.rust-core.result",
-        "needs.swift-node.result",
-        "needs.static.result",
-        "needs.config-contracts.result",
-    ] {
+    for lane in EXPECTED_VERDICT_LANES {
         assert!(
-            verdict_text.contains(lane_marker),
-            "the verdict stopped consulting {lane_marker}"
+            verdict_text.contains(&format!("needs.{lane}.result")),
+            "the verdict stopped consulting {lane}"
         );
     }
+    assert!(
+        verdict_text.contains("needs.detect-changes.outputs.macos_verification_required"),
+        "the verdict lost its classifier input"
+    );
     assert!(
         verdict_text.contains("exit 1"),
         "the verdict does not fail closed"
     );
     // A skip is legitimate only under the classifier's decision: the macOS
-    // lanes may skip when macOS verification is not required; every other
-    // lane must reach success on its own.
+    // build job and every lane it feeds may skip when macOS verification is
+    // not required; each other lane must reach success on its own.
     assert!(
         verdict_text.contains("skipped while classification requires macOS verification"),
         "the verdict lost its skip-legitimacy check"
     );
-    assert!(
-        verdict_text.contains("lane=static"),
-        "the static lane escaped the verdict"
-    );
-    assert!(
-        verdict_text.contains("lane=config-contracts"),
-        "the config-contracts lane escaped the verdict"
-    );
+    for lane in ["static", "config-contracts"] {
+        assert!(
+            verdict_text.contains(&format!("lane={lane}")),
+            "the {lane} lane escaped the verdict"
+        );
+    }
 }
 
-// The behavioral half: executes the verdict step's real script (pulled from
-// the parsed workflow, so it cannot drift) under every lane-outcome
-// scenario. A pin proves the script says the right things; this proves it
-// decides correctly: the fail-closed paths (lane failure, illegitimate
-// skip, classification failure, static not green, a cancelled lane) and the
-// two legitimate outcomes (all green; classifier-approved macOS skips for
-// site-only changes).
+/// A scenario's per-lane results for the six macOS-gated lanes; scenarios
+/// omit a lane to mean `success`.
+struct Scenario<'a> {
+    name: &'static str,
+    classification: &'static str,
+    macos_required: &'static str,
+    macos_lane_results: &'a [(&'static str, &'static str)],
+    static_checks: &'static str,
+    config_contracts: &'static str,
+    expected_pass: bool,
+}
+
+const MACOS_GATED_LANES: [&str; 6] = [
+    "rust-core",
+    "unit-tests",
+    "integration-tests",
+    "rest-contracts",
+    "e2e-journeys",
+    "swift-node",
+];
+
 #[test]
 fn verdict_script_decides_every_scenario_correctly() {
     let workflow = workflow_contract();
@@ -119,23 +130,12 @@ fn verdict_script_decides_every_scenario_correctly() {
         "Fail closed unless every lane is green or legitimately skipped",
     );
     let verdict_template = run_text_of(verdict_step, "verdict");
-    struct Scenario {
-        name: &'static str,
-        classification: &'static str,
-        macos_required: &'static str,
-        rust_core: &'static str,
-        swift_node: &'static str,
-        static_checks: &'static str,
-        config_contracts: &'static str,
-        expected_pass: bool,
-    }
     let scenarios = [
         Scenario {
             name: "every lane green",
             classification: "success",
             macos_required: "true",
-            rust_core: "success",
-            swift_node: "success",
+            macos_lane_results: &[],
             static_checks: "success",
             config_contracts: "success",
             expected_pass: true,
@@ -144,18 +144,34 @@ fn verdict_script_decides_every_scenario_correctly() {
             name: "classifier-approved macOS skips for a site-only change",
             classification: "success",
             macos_required: "false",
-            rust_core: "skipped",
-            swift_node: "skipped",
+            macos_lane_results: &MACOS_GATED_LANES.map(|lane| (lane, "skipped")),
             static_checks: "success",
             config_contracts: "success",
             expected_pass: true,
         },
         Scenario {
-            name: "a failed macOS lane fails the gate",
+            name: "a failed build job fails the gate",
             classification: "success",
             macos_required: "true",
-            rust_core: "failure",
-            swift_node: "success",
+            macos_lane_results: &[("rust-core", "failure")],
+            static_checks: "success",
+            config_contracts: "success",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a failed unit-test lane fails the gate",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[("unit-tests", "failure")],
+            static_checks: "success",
+            config_contracts: "success",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a failed integration-test lane fails the gate",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[("integration-tests", "failure")],
             static_checks: "success",
             config_contracts: "success",
             expected_pass: false,
@@ -164,8 +180,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             name: "a lane skipped while classification requires macOS work",
             classification: "success",
             macos_required: "true",
-            rust_core: "skipped",
-            swift_node: "success",
+            macos_lane_results: &[("e2e-journeys", "skipped")],
             static_checks: "success",
             config_contracts: "success",
             expected_pass: false,
@@ -174,8 +189,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             name: "classification failure fails the gate",
             classification: "failure",
             macos_required: "true",
-            rust_core: "success",
-            swift_node: "success",
+            macos_lane_results: &[],
             static_checks: "success",
             config_contracts: "success",
             expected_pass: false,
@@ -184,8 +198,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             name: "a skipped static lane fails the gate",
             classification: "success",
             macos_required: "false",
-            rust_core: "skipped",
-            swift_node: "skipped",
+            macos_lane_results: &MACOS_GATED_LANES.map(|lane| (lane, "skipped")),
             static_checks: "skipped",
             config_contracts: "success",
             expected_pass: false,
@@ -194,8 +207,7 @@ fn verdict_script_decides_every_scenario_correctly() {
             name: "a cancelled lane fails the gate",
             classification: "success",
             macos_required: "true",
-            rust_core: "success",
-            swift_node: "cancelled",
+            macos_lane_results: &[("swift-node", "cancelled")],
             static_checks: "success",
             config_contracts: "success",
             expected_pass: false,
@@ -204,15 +216,14 @@ fn verdict_script_decides_every_scenario_correctly() {
             name: "a failed config-contracts lane fails the gate",
             classification: "success",
             macos_required: "true",
-            rust_core: "success",
-            swift_node: "success",
+            macos_lane_results: &[],
             static_checks: "success",
             config_contracts: "failure",
             expected_pass: false,
         },
     ];
     for scenario in scenarios {
-        let scenario_script = verdict_template
+        let mut scenario_script = verdict_template
             .replace(
                 "${{ needs.detect-changes.outputs.macos_verification_required }}",
                 scenario.macos_required,
@@ -221,13 +232,21 @@ fn verdict_script_decides_every_scenario_correctly() {
                 "${{ needs.detect-changes.result }}",
                 scenario.classification,
             )
-            .replace("${{ needs.rust-core.result }}", scenario.rust_core)
-            .replace("${{ needs.swift-node.result }}", scenario.swift_node)
             .replace("${{ needs.static.result }}", scenario.static_checks)
             .replace(
                 "${{ needs.config-contracts.result }}",
                 scenario.config_contracts,
             );
+        for lane in MACOS_GATED_LANES {
+            let lane_result = scenario
+                .macos_lane_results
+                .iter()
+                .find(|(result_lane, _)| *result_lane == lane)
+                .map(|(_, lane_result)| *lane_result)
+                .unwrap_or("success");
+            scenario_script =
+                scenario_script.replace(&format!("${{{{ needs.{lane}.result }}}}"), lane_result);
+        }
         let script_path = std::env::temp_dir().join("astronomical-verdict-scenario.sh");
         std::fs::write(&script_path, scenario_script)
             .expect("the verdict scenario script should persist");

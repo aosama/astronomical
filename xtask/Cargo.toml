@@ -61,5 +61,9 @@ name = "workflow_verdict_contract"
 path = "tests/workflow_verdict_contract.rs"
 
 [[test]]
+name = "workflow_lane_split_contract"
+path = "tests/workflow_lane_split_contract.rs"
+
+[[test]]
 name = "workflow_cache_owner_contract"
 path = "tests/workflow_cache_owner_contract.rs"

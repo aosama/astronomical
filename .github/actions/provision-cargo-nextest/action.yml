@@ -1,0 +1,44 @@
+name: Provision pinned cargo-nextest
+description: >
+  Installs the pinned cargo-nextest release, verifying the archive digest
+  before use the way other native dependencies are verified. A digest
+  mismatch fails the calling step instead of running an unverified binary.
+  Bump procedure: update both input defaults together from the release's
+  published .sha256 for the universal-apple-darwin archive.
+
+inputs:
+  version:
+    description: The cargo-nextest version to install.
+    required: false
+    default: "0.9.149"
+  sha256:
+    description: The SHA-256 digest of the universal-apple-darwin archive.
+    required: false
+    default: 47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217507
+
+runs:
+  using: composite
+  steps:
+    - name: Download, verify, and install cargo-nextest
+      shell: bash
+      env:
+        NEXTEST_VERSION: ${{ inputs.version }}
+        NEXTEST_SHA256: ${{ inputs.sha256 }}
+      run: |
+        set -euo pipefail
+        nextest_directory="$RUNNER_TEMP/cargo-nextest"
+        rm -rf "$nextest_directory"
+        mkdir -p "$nextest_directory"
+        nextest_archive="$nextest_directory/cargo-nextest.tar.gz"
+        curl --fail --silent --show-error --location --retry 3 \
+          --output "$nextest_archive" \
+          "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${NEXTEST_VERSION}/cargo-nextest-${NEXTEST_VERSION}-universal-apple-darwin.tar.gz"
+        actual_nextest_sha256="$(shasum -a 256 "$nextest_archive" | awk '{print $1}')"
+        if [ "$actual_nextest_sha256" != "$NEXTEST_SHA256" ]; then
+          printf 'Error: cargo-nextest archive digest mismatch: expected %s, got %s\n' \
+            "$NEXTEST_SHA256" "$actual_nextest_sha256" >&2
+          exit 1
+        fi
+        tar -xzf "$nextest_archive" -C "$nextest_directory"
+        printf '%s\n' "$nextest_directory" >> "$GITHUB_PATH"
+        "$nextest_directory/cargo-nextest" nextest --version

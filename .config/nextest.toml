@@ -1,5 +1,6 @@
-# cargo-nextest configuration (issue #1553 phase 3). CI runs the integration
-# lane through the nextest-integration alias in .cargo/config.toml.
+# cargo-nextest configuration (issue #1553). CI builds the test binaries once
+# in the macOS build job, packs them into nextest archives, and the per-tier
+# test jobs run their filters against those archives without recompiling.
 
 [profile.default]
 # Per-test hang budget: a test running for 30 seconds is reported slow, and
@@ -7,3 +8,25 @@
 # default test timeout) is terminated. This is the per-test successor to the
 # job-level budgets of issue #1333, which could only name the job that hung.
 slow-timeout = { period = "30s", terminate-after = 4 }
+
+[profile.ci]
+# Archives carry test binaries and the same-package binaries Cargo exposes
+# through CARGO_BIN_EXE_*, but not binaries of other packages. The E2E and
+# REST journeys launch the daemon package's executables through the test
+# harness's workspace_binary, which looks beside the test binary's own
+# profile directory, and the fixture daemon starts its workers from its own
+# directory, so every daemon executable rides inside the archive at the same
+# target-relative path. A missing one fails the archive step instead of a
+# journey on another machine.
+archive.include = [
+    { path = "debug/astronomicald", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-test-worker", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-idle-worker", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-test-daemon", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-loading-forever-worker", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-delayed-engine-ready-worker", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-mismatched-ready-worker", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-stderr-probe-worker", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-replacement-ready-worker", relative-to = "target", on-missing = "error" },
+    { path = "debug/astronomical-daemon-memory-demotion-worker", relative-to = "target", on-missing = "error" },
+]
