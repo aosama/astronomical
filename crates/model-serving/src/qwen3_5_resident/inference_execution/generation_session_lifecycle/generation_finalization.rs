@@ -20,8 +20,29 @@ use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 
+/// Converts one memory snapshot's peak counter to a u64 when it fits.
+fn snapshot_peak_memory_bytes_option(
+    memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
+) -> Option<u64> {
+    u64::try_from(memory_snapshot.peak_memory_bytes()).ok()
+}
+
+/// Converts one memory snapshot's active counter to a u64 when it fits.
+fn snapshot_active_memory_bytes_option(
+    memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
+) -> Option<u64> {
+    u64::try_from(memory_snapshot.active_memory_bytes()).ok()
+}
+
+/// Converts one memory snapshot's allocator-cache counter to a u64 when it fits.
+fn snapshot_allocator_cache_memory_bytes_option(
+    memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
+) -> Option<u64> {
+    u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()
+}
+
 impl Qwen3_5EngineState {
-    pub(super) fn collect_current_mlx_memory_telemetry(
+    pub(in crate::qwen3_5_resident::inference_execution) fn collect_current_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
         let Some(model) = self.model.as_ref() else {
@@ -32,15 +53,18 @@ impl Qwen3_5EngineState {
             .memory_snapshot()
             .map_err(super::qwen3_5_runtime_error)?;
         let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
-            .map_err(|_| {
-                super::fatal_engine_error("MLX active memory bytes exceed the u64 range")
-            })?;
-        let allocator_cache_memory_bytes =
-            u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes()).map_err(|_| {
-                super::fatal_engine_error("MLX allocator-cache memory bytes exceed the u64 range")
-            })?;
-        let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
-            .map_err(|_| super::fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
+            .map_err(
+            super::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error,
+        )?;
+        let allocator_cache_memory_bytes = u64::try_from(
+            mlx_memory_snapshot.allocator_cache_memory_bytes(),
+        )
+        .map_err(
+            super::generation_error_constructors::mlx_allocator_cache_memory_bytes_exceed_u64_range_error,
+        )?;
+        let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes()).map_err(
+            super::generation_error_constructors::mlx_peak_memory_bytes_exceed_u64_range_error,
+        )?;
         let active_memory_breakdown = model.finalized_active_memory_breakdown(
             active_memory_bytes,
             self.live_retained_context_state_payload_bytes(),
@@ -71,7 +95,7 @@ impl Qwen3_5EngineState {
         ))
     }
 
-    pub(super) fn finalize_generation_request_after_error(
+    pub(in crate::qwen3_5_resident::inference_execution) fn finalize_generation_request_after_error(
         &mut self,
         active_request: Qwen3_5EngineRequest,
         generation_error: &InferenceEngineError,
@@ -100,7 +124,7 @@ impl Qwen3_5EngineState {
         );
     }
 
-    pub(super) fn finalize_generation_request(
+    pub(in crate::qwen3_5_resident::inference_execution) fn finalize_generation_request(
         &mut self,
         mut active_request: Qwen3_5EngineRequest,
         outcome: PerformanceAttributionOutcome,
@@ -134,7 +158,7 @@ impl Qwen3_5EngineState {
             &mut performance_attribution,
             mlx_memory_snapshot
                 .as_ref()
-                .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
+                .and_then(snapshot_peak_memory_bytes_option),
         );
         self.record_generation_performance_attribution(
             performance_attribution,
@@ -261,12 +285,12 @@ impl Qwen3_5EngineState {
                     // than the synchronized release sample taken moments
                     // earlier. The finalized claim is a request maximum, so it
                     // must retain the higher of the two windows.
-                    let peak_memory_bytes = release_peak_memory_bytes.map_or(
-                        sampled_peak_memory_bytes,
-                        |release_peak_memory_bytes| {
+                    let peak_memory_bytes = match release_peak_memory_bytes {
+                        Some(release_peak_memory_bytes) => {
                             release_peak_memory_bytes.max(sampled_peak_memory_bytes)
-                        },
-                    );
+                        }
+                        None => sampled_peak_memory_bytes,
+                    };
                     // The finalized claim derives from the breakdown reconciling
                     // this exact snapshot, so the pair cannot straddle a
                     // promotion or demote (issue #337).
@@ -320,7 +344,28 @@ impl Qwen3_5EngineState {
         )
     }
 
-    pub(super) fn record_generation_performance_attribution(
+    /// Converts one memory snapshot's peak counter to a u64 when it fits.
+    fn snapshot_peak_memory_bytes_option(
+        memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
+    ) -> Option<u64> {
+        u64::try_from(memory_snapshot.peak_memory_bytes()).ok()
+    }
+
+    /// Converts one memory snapshot's active counter to a u64 when it fits.
+    fn snapshot_active_memory_bytes_option(
+        memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
+    ) -> Option<u64> {
+        u64::try_from(memory_snapshot.active_memory_bytes()).ok()
+    }
+
+    /// Converts one memory snapshot's allocator-cache counter to a u64 when it fits.
+    fn snapshot_allocator_cache_memory_bytes_option(
+        memory_snapshot: &astronomical_runtime_integration::MlxMemorySnapshot,
+    ) -> Option<u64> {
+        u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).ok()
+    }
+
+    pub(in crate::qwen3_5_resident::inference_execution) fn record_generation_performance_attribution(
         &mut self,
         performance_attribution: PerformanceAttribution,
         outcome: PerformanceAttributionOutcome,
@@ -358,13 +403,13 @@ impl Qwen3_5EngineState {
                 configured_maximum_output_tokens,
                 mlx_active_memory_bytes: mlx_memory_snapshot
                     .as_ref()
-                    .and_then(|snapshot| u64::try_from(snapshot.active_memory_bytes()).ok()),
-                mlx_allocator_cache_memory_bytes: mlx_memory_snapshot.as_ref().and_then(
-                    |snapshot| u64::try_from(snapshot.allocator_cache_memory_bytes()).ok(),
-                ),
+                    .and_then(snapshot_active_memory_bytes_option),
+                mlx_allocator_cache_memory_bytes: mlx_memory_snapshot
+                    .as_ref()
+                    .and_then(snapshot_allocator_cache_memory_bytes_option),
                 mlx_peak_memory_bytes: mlx_memory_snapshot
                     .as_ref()
-                    .and_then(|snapshot| u64::try_from(snapshot.peak_memory_bytes()).ok()),
+                    .and_then(snapshot_peak_memory_bytes_option),
                 failure_description: failure_description.map(str::to_owned),
             })
         else {

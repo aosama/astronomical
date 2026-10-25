@@ -33,7 +33,10 @@ impl Qwen3_5EngineState {
         if let Some(thinking_budget) = inference_request.thinking_budget() {
             let forced_transition_token_ids =
                 inference_request.forced_thinking_transition_token_ids();
-            if forced_transition_token_ids.last().copied() != Some(self.think_end_token_id) {
+            if !super::generation_thinking_end_markers::forced_thinking_transition_ends_with_model_marker(
+                forced_transition_token_ids,
+                self.think_end_token_id,
+            ) {
                 return Err(memory_admission::invalid_request_error(
                     "thinking budget requires a model-owned transition ending with the model thinking marker",
                 ));
@@ -42,32 +45,30 @@ impl Qwen3_5EngineState {
                 thinking_budget,
                 forced_transition_token_ids.len(),
             )
-            .ok_or_else(|| {
-                memory_admission::invalid_request_error(
-                    "thinking-budget output reservation overflowed",
-                )
-            })?;
+            .ok_or_else(
+                super::generation_error_constructors::thinking_budget_output_reservation_overflow_error,
+            )?;
             if usize::from(inference_request.max_output_tokens()) < minimum_bounded_output_tokens {
                 return Err(memory_admission::invalid_request_error(format!(
                     "output-token budget must reserve {minimum_bounded_output_tokens} positions for the thinking allowance, forced transition, and final answer"
                 )));
             }
         }
-        if inference_request
-            .input_token_ids()
-            .iter()
-            .any(|token_id| *token_id >= self.vocabulary_size)
-        {
+        if super::generation_vocabulary_boundaries::contains_token_id_outside_vocabulary(
+            inference_request.input_token_ids(),
+            self.vocabulary_size,
+        ) {
             return Err(super::fatal_engine_error(
                 "generation prompt contains a token outside the model vocabulary",
             ));
         }
-        if inference_request
-            .forced_thinking_transition_token_ids()
-            .iter()
-            .chain(inference_request.natural_reasoning_end_token_ids())
-            .any(|token_id| *token_id >= self.vocabulary_size)
-        {
+        if super::generation_vocabulary_boundaries::contains_token_id_outside_vocabulary(
+            inference_request.forced_thinking_transition_token_ids(),
+            self.vocabulary_size,
+        ) || super::generation_vocabulary_boundaries::contains_token_id_outside_vocabulary(
+            inference_request.natural_reasoning_end_token_ids(),
+            self.vocabulary_size,
+        ) {
             return Err(memory_admission::invalid_request_error(
                 "thinking-budget configuration contains a token outside the model vocabulary",
             ));
@@ -77,9 +78,9 @@ impl Qwen3_5EngineState {
         let thinking_budget_token_count = inference_request.thinking_budget().map(usize::from);
         let total_context_tokens = prompt_token_count
             .checked_add(maximum_output_token_count)
-            .ok_or_else(|| {
-                memory_admission::invalid_request_error("generation context token count overflowed")
-            })?;
+            .ok_or_else(
+                super::generation_error_constructors::generation_context_token_count_overflow_error,
+            )?;
         if total_context_tokens > self.hard_maximum_position_count {
             return Err(memory_admission::invalid_request_error(
                 "generation context exceeds the model maximum position count",
