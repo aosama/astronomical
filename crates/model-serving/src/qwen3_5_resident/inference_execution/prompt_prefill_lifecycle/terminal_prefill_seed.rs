@@ -66,9 +66,7 @@ pub(super) fn seed_first_generated_token_from_terminal_prefill_chunk(
     )?;
     let first_generated_token = active_request
         .build_generated_token(model, &final_prompt_logits)
-        .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-            description: "failed to sample the first generated token from terminal prefill logits",
-        })?;
+.map_err(super::prefill_invalid_input_error_constructors::terminal_prefill_first_generated_token_sampling_failed_invalid_input)?;
     active_request.set_pending_generated_token(first_generated_token);
     Ok(())
 }
@@ -85,9 +83,7 @@ fn seed_first_generated_token_from_terminal_forward_output(
 ) -> Result<(), Qwen3_5ExecutionError> {
     let first_generated_token = active_request
         .build_generated_token(model, target_forward_output.final_logits())
-        .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-            description: "failed to sample the first generated token from terminal prefill logits",
-        })?;
+.map_err(super::prefill_invalid_input_error_constructors::terminal_prefill_first_generated_token_sampling_failed_invalid_input)?;
     active_request.set_pending_generated_token(first_generated_token);
     Ok(())
 }

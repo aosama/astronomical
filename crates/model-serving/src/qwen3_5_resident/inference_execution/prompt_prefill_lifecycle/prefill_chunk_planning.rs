@@ -58,7 +58,7 @@ impl Qwen3_5EngineState {
         let model = self
             .model
             .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error)?;
         let prefill_token_count = prefill_end - prefill_start;
         let capture_is_eligible = self.persistent_prompt_cache.is_some()
             && active_request.can_use_persistent_prompt_cache;
@@ -72,11 +72,7 @@ impl Qwen3_5EngineState {
                 let persistent_prompt_cache_block_token_count = self
                     .persistent_prompt_cache
                     .as_ref()
-                    .ok_or_else(|| {
-                        super::fatal_engine_error(
-                            "eligible prompt-cache capture has no persistent cache owner",
-                        )
-                    })?
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::eligible_prompt_cache_capture_has_no_persistent_cache_owner_error)?
                     .model_contract_ref()
                     .block_token_count();
                 (
@@ -98,11 +94,12 @@ impl Qwen3_5EngineState {
             intermediate_completed_prefill_chunk_tokens.pop();
         }
 
-        let boundary_checkpoint_workspace_bytes =
-            if intermediate_completed_prefill_chunk_tokens.is_empty() {
-                0
-            } else {
-                model
+        let boundary_checkpoint_workspace_bytes = if intermediate_completed_prefill_chunk_tokens
+            .is_empty()
+        {
+            0
+        } else {
+            model
                     .decoder_cache_layout()
                     .boundary_snapshot_payload_byte_count()
                     .map_err(|error| {
@@ -111,10 +108,8 @@ impl Qwen3_5EngineState {
                         ))
                     })?
                     .checked_mul(intermediate_completed_prefill_chunk_tokens.len())
-                    .ok_or_else(|| {
-                        super::fatal_engine_error("boundary checkpoint workspace bytes overflowed")
-                    })?
-            };
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::boundary_checkpoint_workspace_bytes_overflowed_error)?
+        };
 
         let direct_publication_workspace_bytes = if !all_completed_prefill_chunk_tokens.is_empty() {
             self.persistent_prompt_cache
@@ -131,9 +126,7 @@ impl Qwen3_5EngineState {
 
         let exact_temporary_workspace_bytes = boundary_checkpoint_workspace_bytes
             .checked_add(direct_publication_workspace_bytes)
-            .ok_or_else(|| {
-                super::fatal_engine_error("prompt-cache publication workspace bytes overflowed")
-            })?;
+.ok_or_else(super::super::generation_session_lifecycle::generation_error_constructors::prompt_cache_publication_workspace_bytes_overflowed_error)?;
 
         let adaptive_ram_growth_context = AdaptiveRamGrowthContext::prefill(
             // The real chunk token count, not zero: admission keys its
