@@ -12,7 +12,6 @@ use astronomical_quantization::progress::SilentProgressReporter;
 use astronomical_quantization::requantize::bit_policy::BitPolicy;
 use astronomical_quantization::requantize::driver::run_requantize;
 use astronomical_quantization::requantize::tensor_plan::RequantizeTensorPlan;
-use serial_test::serial;
 
 use super::support::{contract_runtime, outlier_heavy_weights};
 
@@ -25,7 +24,6 @@ fn write_two_shard_source(directory: &std::path::Path) {
 }
 
 #[test]
-#[serial]
 #[ignore = "pending implementation of run_requantize"]
 fn should_requantize_a_two_shard_source_into_a_loadable_mixed_precision_artifact() {
     let runtime = contract_runtime();
@@ -71,7 +69,6 @@ fn should_requantize_a_two_shard_source_into_a_loadable_mixed_precision_artifact
 }
 
 #[test]
-#[serial]
 #[ignore = "pending implementation of run_requantize"]
 fn should_keep_peak_mlx_memory_near_one_tensor_regardless_of_tensor_count() {
     // Requantize a source with N copies of the same tensor and assert the
@@ -79,6 +76,10 @@ fn should_keep_peak_mlx_memory_near_one_tensor_regardless_of_tensor_count() {
     // working copy, the property that lets a 300B checkpoint convert on a
     // laptop. The bound is deliberately loose (8x one tensor) so allocator
     // slack cannot flake it; the point is that it does not scale with N.
+    // Peak memory is process-global: when this contract gains its
+    // implementation and other MLX tests run concurrently in this binary,
+    // it needs #[serial] for the same reason as model-serving's
+    // memory_behavior_tests (the sample, not the load rule).
     let runtime = contract_runtime();
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
     let output = tempfile::tempdir().expect("a temporary directory should be creatable");

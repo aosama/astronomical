@@ -40,7 +40,6 @@ tracing.workspace = true
 
 [dev-dependencies]
 astronomical-test-harness = { path = "../test-harness" }
-serial_test.workspace = true
 tempfile = "=3.27.0"
 
 [[test]]
@@ -49,7 +48,7 @@ path = "tests/integration_tests.rs"
 
 # GPU contract tests for the encoder and the shard-wise requantizer. They need
 # a Metal device, so they only exist in the direct-MLX feature world and run
-# serially through the `cargo test-quantization-direct-mlx` alias.
+# in parallel through the `cargo test-quantization-direct-mlx` alias.
 [[test]]
 name = "direct_mlx"
 path = "tests/direct_mlx.rs"

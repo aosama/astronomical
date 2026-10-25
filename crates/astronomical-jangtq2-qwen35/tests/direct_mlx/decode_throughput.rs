@@ -20,8 +20,7 @@
 //! Run through an optimized build with `cargo test-jangtq2-decode-throughput`
 //! (see `.cargo/config.toml`): the decoder is memory-traffic bound, so
 //! debug-build numbers understate every ratio and must not be recorded. Every
-//! test is `#[serial]` because MLX graphics-processor tests never run in
-//! parallel.
+//! test is `#[serial]` because these are throughput measurements.
 
 use astronomical_jangtq2_qwen35::codebook;
 use astronomical_jangtq2_qwen35::mlx_decode;
