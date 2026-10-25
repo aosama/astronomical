@@ -32,12 +32,15 @@ fn should_return_registry_model_ids_in_the_declared_role_order() {
     assert_eq!(small_dense_model_id(), expected_model_ids[3]);
     assert_eq!(flux2_klein_model_id(), expected_model_ids[4]);
     assert_eq!(e2e_test_model_ids(), expected_model_ids);
+    // The required set keeps its original three members; the draft role at
+    // index two is deliberately absent because a companion draft is never
+    // itself a served model.
     assert_eq!(
         required_e2e_test_model_ids(),
         [
             expected_model_ids[0],
             expected_model_ids[1],
-            expected_model_ids[2],
+            expected_model_ids[3],
         ]
     );
 }
