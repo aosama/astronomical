@@ -12,22 +12,28 @@ use crate::{
 
 use crate::qwen3_5_resident::model::memory_admission;
 
-pub(super) struct Qwen3_5PersistentPromptCacheVisualIdentity {
-    pub(super) ordered_image_visual_embedding_row_counts: Vec<usize>,
-    pub(super) block_causal_inputs: Vec<PersistentPromptCacheBlockCausalInput>,
+pub(in crate::qwen3_5_resident::inference_execution) struct Qwen3_5PersistentPromptCacheVisualIdentity
+{
+    pub(in crate::qwen3_5_resident::inference_execution) ordered_image_visual_embedding_row_counts:
+        Vec<usize>,
+    pub(in crate::qwen3_5_resident::inference_execution) block_causal_inputs:
+        Vec<PersistentPromptCacheBlockCausalInput>,
 }
 
 /// Borrowed request context keeps prompt scanning and cache-policy decisions in their existing owners.
-pub(super) struct Qwen3_5PersistentPromptCacheVisualIdentityInput<'a> {
-    pub(super) prompt_token_ids: &'a [u32],
-    pub(super) prompt_image_pad_token_count: usize,
-    pub(super) image_pad_token_id: u32,
-    pub(super) persistent_prompt_cache: Option<&'a PersistentPromptCacheDiskStore>,
-    pub(super) can_use_persistent_prompt_cache: bool,
+pub(in crate::qwen3_5_resident::inference_execution) struct Qwen3_5PersistentPromptCacheVisualIdentityInput<
+    'a,
+> {
+    pub(in crate::qwen3_5_resident::inference_execution) prompt_token_ids: &'a [u32],
+    pub(in crate::qwen3_5_resident::inference_execution) prompt_image_pad_token_count: usize,
+    pub(in crate::qwen3_5_resident::inference_execution) image_pad_token_id: u32,
+    pub(in crate::qwen3_5_resident::inference_execution) persistent_prompt_cache:
+        Option<&'a PersistentPromptCacheDiskStore>,
+    pub(in crate::qwen3_5_resident::inference_execution) can_use_persistent_prompt_cache: bool,
 }
 
 impl Qwen3_5PersistentPromptCacheVisualIdentity {
-    pub(super) fn prepare(
+    pub(in crate::qwen3_5_resident::inference_execution) fn prepare(
         inference_request: &Qwen3_5InferenceRequest,
         visual_identity_input: Qwen3_5PersistentPromptCacheVisualIdentityInput<'_>,
         performance_attribution: &mut PerformanceAttribution,

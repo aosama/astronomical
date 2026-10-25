@@ -1,8 +1,6 @@
 /// Prefill-to-decode no-I/O reconciliation: lift pressure and preserve topology.
-mod adopt_retained_live_prefix;
 mod advance_generation;
 mod completed_forward_memory;
-mod decoder_state_reuse;
 pub(crate) mod engine_request;
 pub(in crate::qwen3_5_resident) mod generated_token_emission;
 mod generation_session_lifecycle;
@@ -12,15 +10,18 @@ pub(in crate::qwen3_5_resident) mod memory_admission;
 mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
-mod persistent_prompt_cache_capture;
-mod persistent_prompt_cache_startup_logging;
-mod persistent_prompt_cache_tail_capture;
-mod persistent_prompt_cache_visual_identity;
+mod persistent_prompt_cache;
 mod prompt_prefill_lifecycle;
 mod request_memory_release;
-pub(super) mod retained_live_prefix;
 mod test_controls;
 mod visual_embeddings_runtime;
+// Downward bindings so the phase folders keep their pre-move one-level
+// `super::<module>` paths into the persistent prompt-cache machinery.
+use persistent_prompt_cache::decoder_state_reuse;
+use persistent_prompt_cache::persistent_prompt_cache_capture;
+use persistent_prompt_cache::persistent_prompt_cache_startup_logging;
+use persistent_prompt_cache::persistent_prompt_cache_visual_identity;
+use persistent_prompt_cache::retained_live_prefix;
 use retained_live_prefix::RetainedLiveDecoderPrefix;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -46,7 +47,7 @@ use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5ResidentModel;
 
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
-pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
+pub use persistent_prompt_cache::persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 pub use prompt_prefill_lifecycle::prompt_processing_chunk_sizer::{
     Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5ResidentPromptProcessingChunkSizerError,
