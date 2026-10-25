@@ -91,10 +91,11 @@ pub fn flux2_klein_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_ROLE)
 }
 
-pub fn e2e_test_model_ids() -> [&'static str; 4] {
+pub fn e2e_test_model_ids() -> [&'static str; 5] {
     [
         large_sparse_moe_streaming_model_id(),
         resident_sparse_moe_model_id(),
+        ornith_dflash_draft_model_id(),
         small_dense_model_id(),
         flux2_klein_model_id(),
     ]
