@@ -97,7 +97,10 @@ pub fn tensor_inventory_for_module(
     geometry: &Jangtq2ModuleGeometry,
 ) -> Result<Jangtq2ModuleTensorInventory, Jangtq2ConfigurationError> {
     let packing_alignment_multiple = codebook::codes_per_group();
-    if !geometry.input_width.is_multiple_of(packing_alignment_multiple) {
+    if !geometry
+        .input_width
+        .is_multiple_of(packing_alignment_multiple)
+    {
         return Err(Jangtq2ConfigurationError::InputWidthNotPackingAligned {
             actual_input_width: geometry.input_width,
             required_alignment_multiple: packing_alignment_multiple,
