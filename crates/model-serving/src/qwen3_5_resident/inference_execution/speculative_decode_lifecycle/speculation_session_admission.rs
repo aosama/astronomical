@@ -3,22 +3,28 @@
 //! Speculation buys throughput only when its assumptions hold. These rules
 //! decide, from request properties alone, whether one generation session may
 //! run draft-and-verify: the engine must host a draft, and the request must
-//! not combine verification with semantics the greedy block contract cannot
-//! preserve. Everything here is values in, values out, so every rule is unit
-//! testable without a graphics processor.
+//! not combine verification with semantics the token-equality contract
+//! cannot preserve. Greedy and sampled decoding both preserve exactly —
+//! every emitted token is the target's own argmax or tempered sample —
+//! while structured generation, active repetition penalties, and visual
+//! embedding injection transform or bypass the logits the verifier reads,
+//! so those sessions stay classic. Everything here is values in, values
+//! out, so every rule is unit testable without a graphics processor.
 
-/// The sampling strategies the greedy verification contract supports.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpeculationCompatibleSampling {
-    /// Argmax decoding: the acceptance rule compares the target's argmax
-    /// against each proposal, which is exactly the greedy contract.
-    HighestLogit,
-}
+/// The request sampling strategies token-equality verification supports,
+/// carrying the parameters the verifier needs to reproduce the classic
+/// per-token choice.
+pub use super::verification_decisions::VerificationTokenChoice;
 
 /// Properties of one generation request that speculation admission reads.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpeculationSessionRequestProperties {
-    pub sampling_strategy: Option<SpeculationCompatibleSampling>,
+    /// The request's sampling strategy when token-equality verification can
+    /// reproduce it: greedy argmax, or top-k top-p sampling at the request's
+    /// temperature. `None` means the strategy transforms logits in ways the
+    /// verification forward does not apply (structured generation and
+    /// repetition penalties raise their own flags below).
+    pub sampling_strategy: Option<VerificationTokenChoice>,
     /// Structured generation applies per-token constraints; the drafted
     /// block would bypass them, so such sessions fall back to classic decode.
     pub structured_generation_is_active: bool,
@@ -38,11 +44,63 @@ pub struct SpeculationSessionRequestProperties {
 pub fn should_admit_speculation_for_session(
     request_properties: &SpeculationSessionRequestProperties,
 ) -> bool {
-    request_properties.sampling_strategy == Some(SpeculationCompatibleSampling::HighestLogit)
+    request_properties.sampling_strategy.is_some()
         && !request_properties.structured_generation_is_active
         && !request_properties.forced_thinking_transition_is_pending
         && !request_properties.visual_embeddings_are_active
         && !request_properties.repetition_penalty_is_active
+}
+
+/// Rounds of acceptance evidence the low-acceptance guard requires before
+/// it may suspend speculation for a session. A full window keeps early
+/// noisy rounds from suspending a healthy session.
+pub const ACCEPTANCE_WINDOW_ROUND_COUNT: usize = 8;
+/// Rolling acceptance below this fraction (thousandths) means the block
+/// pays more verification cost than it commits: the measured break-even on
+/// this target-and-draft pair sits near forty percent at block length
+/// four (fifty-seven percent acceptance measured 1.09x, sixteen percent
+/// measured 0.70x), so sessions under thirty-five percent finish on
+/// classic decode, which is never slower than speculating at that rate.
+pub const MINIMUM_ROLLING_ACCEPTANCE_THOUSANDTHS: u64 = 350;
+
+/// Whether one session's recent rounds acceptance is poor enough that
+/// starting further speculative rounds costs more than it commits. Pure:
+/// the caller supplies the most recent `ACCEPTANCE_WINDOW_ROUND_COUNT`
+/// rounds as `(proposed, accepted)` pairs.
+#[must_use]
+pub fn should_suspend_speculation_for_poor_acceptance(recent_rounds: &[(u64, u64)]) -> bool {
+    if recent_rounds.len() < ACCEPTANCE_WINDOW_ROUND_COUNT {
+        return false;
+    }
+    let window_proposed_token_count: u64 = recent_rounds.iter().map(|round| round.0).sum();
+    let window_accepted_token_count: u64 = recent_rounds.iter().map(|round| round.1).sum();
+    window_proposed_token_count > 0
+        && window_accepted_token_count * 1_000
+            < MINIMUM_ROLLING_ACCEPTANCE_THOUSANDTHS * window_proposed_token_count
+}
+
+/// Maps one request sampling strategy onto the verification token choice
+/// that reproduces it. Greedy maps to per-position argmax; top-k top-p
+/// sampling maps to one tempered sample per position through the same
+/// parameters. Every strategy the engine supports today is reproducible,
+/// so this returns `None` only for future strategies.
+#[must_use]
+pub fn verification_token_choice_for_strategy(
+    sampling_strategy: &crate::Qwen3_5SamplingStrategy,
+) -> Option<VerificationTokenChoice> {
+    match sampling_strategy {
+        crate::Qwen3_5SamplingStrategy::HighestLogit => Some(VerificationTokenChoice::HighestLogit),
+        crate::Qwen3_5SamplingStrategy::TopKTopP {
+            temperature_thousandths,
+            top_k,
+            top_p_thousandths,
+            ..
+        } => Some(VerificationTokenChoice::TopKTopP {
+            temperature_thousandths: *temperature_thousandths,
+            top_k: *top_k,
+            top_p_thousandths: *top_p_thousandths,
+        }),
+    }
 }
 
 /// The pairing contract between one draft configuration and one target

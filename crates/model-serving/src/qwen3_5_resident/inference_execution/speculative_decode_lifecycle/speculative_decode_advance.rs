@@ -27,11 +27,15 @@ use super::super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error
 use super::speculation_round::{SpeculationRoundRequest, run_speculative_round};
 
 impl Qwen3_5EngineState {
+    /// One speculative advance step. `Ok(None)` means the session just
+    /// measured itself out of speculation: the seed token moved to the
+    /// classic pending slot, the session suspended, and the caller must
+    /// take the classic advance path for this and every later token.
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_speculative_generation(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
-    ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
+    ) -> Result<Option<ActiveRequestAdvance>, crate::InferenceEngineError> {
         // The queue holds committed tokens in front and exactly one
         // uncommitted token at the tail: the last round's correction, which
         // the target endorsed but no forward has committed yet. Draining a
@@ -41,13 +45,45 @@ impl Qwen3_5EngineState {
         // verify forward commits it. An admitted session therefore never
         // falls through to the classic advance: falling through with a
         // drained queue would re-forward a stale token at the wrong
-        // position and corrupt the request.
+        // position and corrupt the request. The one sanctioned exit is the
+        // low-acceptance guard below, which hands the uncommitted seed to
+        // the classic pending slot first, so the classic path commits it
+        // exactly as a verify forward would have.
         if active_request.speculative_emission_queue.len() > 1 {
             let committed_generated_token = active_request
                 .speculative_emission_queue
                 .pop_front()
                 .expect("the queue length was just proven above one");
-            return self.emit_one_speculative_token(active_request, committed_generated_token);
+            return self
+                .emit_one_speculative_token(active_request, committed_generated_token)
+                .map(Some);
+        }
+        // A full window of rounds below the break-even acceptance floor
+        // means further rounds cost more than they commit — high-temperature
+        // sessions flatten the target distribution until the draft rarely
+        // matches. The seed (queue tail or pending) becomes the classic
+        // pending token; committed queue tokens are all emitted already.
+        if super::speculation_session_admission::should_suspend_speculation_for_poor_acceptance(
+            &active_request
+                .speculative_acceptance_window
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+        ) {
+            let seed_generated_token = if let Some(correction_token) =
+                active_request.speculative_emission_queue.pop_front()
+            {
+                correction_token
+            } else {
+                active_request.pending_generated_token.take().ok_or_else(|| {
+                        fatal_engine_error(
+                            "a speculative advance requires a queued correction or pending bonus token",
+                        )
+                    })?
+            };
+            active_request.pending_generated_token = Some(seed_generated_token);
+            active_request.suspend_speculative_session("poor_acceptance");
+            return Ok(None);
         }
         let bonus_generated_token =
             if let Some(correction_token) = active_request.speculative_emission_queue.pop_front() {
@@ -63,6 +99,7 @@ impl Qwen3_5EngineState {
                 })?
             };
         self.run_one_speculative_round(request_id, active_request, bonus_generated_token)
+            .map(Some)
     }
 
     /// Drains one queued token through the classic emission machinery;
@@ -179,6 +216,17 @@ impl Qwen3_5EngineState {
             bonus_token_id,
             speculation_token_count,
             context_length_tokens,
+            // Admission guarantees the strategy is reproducible; the error
+            // arm is the defensive boundary if a future strategy lands.
+            target_token_choice:
+                super::speculation_session_admission::verification_token_choice_for_strategy(
+                    &active_request.sampling_strategy,
+                )
+                .ok_or_else(|| {
+                    fatal_engine_error(
+                        "a speculative round requires a reproducible sampling strategy",
+                    )
+                })?,
         };
         let round_outcome = run_speculative_round(
             model,
@@ -187,6 +235,7 @@ impl Qwen3_5EngineState {
             &draft_runtime.draft_configuration,
             &mut draft_key_value_states,
             &round_request,
+            &mut active_request.random_state,
             &mut active_request.performance_attribution,
         )
         .map_err(crate::InferenceEngineError::from)?;
@@ -207,6 +256,17 @@ impl Qwen3_5EngineState {
             crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
             round_outcome.accepted_proposal_count as u64,
         );
+        // Feed the rolling acceptance window the low-acceptance guard
+        // reads; the cap keeps the window at the admission module's length.
+        active_request.speculative_acceptance_window.push_back((
+            speculation_token_count as u64,
+            round_outcome.accepted_proposal_count as u64,
+        ));
+        while active_request.speculative_acceptance_window.len()
+            > super::speculation_session_admission::ACCEPTANCE_WINDOW_ROUND_COUNT
+        {
+            active_request.speculative_acceptance_window.pop_front();
+        }
         tracing::debug!(
             request_id = request_id.value(),
             accepted_proposal_count = round_outcome.accepted_proposal_count,

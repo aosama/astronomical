@@ -4,10 +4,12 @@ use super::speculation_round::{
     assemble_block_token_ids_for_tests, assemble_replay_tokens_for_tests,
     assemble_verification_tokens_for_tests,
 };
-use super::verification_decisions::{GreedyVerificationDecision, decide_greedy_verification};
+use super::verification_decisions::{
+    TokenEqualityVerificationDecision, decide_token_equality_verification,
+};
 
-fn full_acceptance_decision(proposal_count: usize) -> GreedyVerificationDecision {
-    decide_greedy_verification(&vec![7_u32; proposal_count], &vec![7_u32; proposal_count])
+fn full_acceptance_decision(proposal_count: usize) -> TokenEqualityVerificationDecision {
+    decide_token_equality_verification(&vec![7_u32; proposal_count], &vec![7_u32; proposal_count])
 }
 
 #[test]
@@ -27,7 +29,7 @@ fn should_assemble_block_tokens_as_bonus_plus_mask_slots() {
 #[test]
 fn should_replay_only_the_accepted_prefix_plus_the_bonus() {
     let proposals = [7_u32, 8, 111, 10];
-    let decision = decide_greedy_verification(&proposals, &[7, 8, 9, 10]);
+    let decision = decide_token_equality_verification(&proposals, &[7, 8, 9, 10]);
 
     let replay_tokens = assemble_replay_tokens_for_tests(6, &proposals, &decision);
 
@@ -39,7 +41,7 @@ fn should_replay_only_the_accepted_prefix_plus_the_bonus() {
 #[test]
 fn should_replay_only_the_bonus_when_nothing_was_accepted() {
     let proposals = [111_u32, 8];
-    let decision = decide_greedy_verification(&proposals, &[7, 8]);
+    let decision = decide_token_equality_verification(&proposals, &[7, 8]);
 
     let replay_tokens = assemble_replay_tokens_for_tests(6, &proposals, &decision);
 

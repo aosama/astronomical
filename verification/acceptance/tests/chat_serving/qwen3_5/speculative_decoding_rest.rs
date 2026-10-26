@@ -3,8 +3,10 @@
 //! This journey proves the production wiring end to end: the daemon resolves
 //! the chunking configuration's speculative block length, the worker passes
 //! it into the resident engine, the engine loads the paired DFlash draft
-//! beside its target, an admitted greedy session prefills through the
-//! tap-capturing path, and decode runs draft-and-verify rounds. The proof is
+//! beside its target, an admitted session prefills through the
+//! tap-capturing path, and decode runs draft-and-verify rounds — greedily
+//! at temperature zero, or with one tempered target sample per position at
+//! positive temperature (the exact sampled output law). The proof is
 //! the generation attribution report: the speculative counters must show
 //! rounds ran and the target confirmed part of what the draft proposed.
 
@@ -48,13 +50,28 @@ const DRAFT_RESIDENCY_HEADROOM_BYTES: u64 = 2_000_000_000;
 async fn should_serve_a_chat_through_speculative_decoding_with_the_paired_draft() {
     timeout(
         SPECULATIVE_JOURNEY_TIMEOUT,
-        should_serve_through_speculative_decoding(),
+        should_serve_through_speculative_decoding(0, "greedy-speculative-decoding"),
     )
     .await
     .expect("the speculative serving journey must finish within 120 seconds");
 }
 
-async fn should_serve_through_speculative_decoding() {
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "serves a temperature 0.7 chat through speculative decoding with exact sampled semantics"]
+#[serial]
+async fn should_serve_a_sampled_chat_through_speculative_decoding() {
+    timeout(
+        SPECULATIVE_JOURNEY_TIMEOUT,
+        should_serve_through_speculative_decoding(700, "sampled-speculative-decoding"),
+    )
+    .await
+    .expect("the sampled speculative serving journey must finish within 120 seconds");
+}
+
+async fn should_serve_through_speculative_decoding(
+    temperature_thousandths: u64,
+    request_label: &str,
+) {
     let model_id = resident_sparse_moe_model_id();
     let model_directory = configured_installed_model_directory_by_id(model_id);
     let residency_geometry = measure_sparse_artifact_residency_geometry(&model_directory);
@@ -87,11 +104,12 @@ async fn should_serve_through_speculative_decoding() {
         "Name the two families in one short sentence.",
         SPECULATIVE_PROMPT_TOKEN_COUNT,
     );
-    let assistant_response = complete_greedy_chat_request(
+    let assistant_response = complete_chat_request(
         real_model_rest_server.server_address,
         model_id,
         json!([{"role": "user", "content": prompt_content}]),
-        "speculative-decoding",
+        temperature_thousandths,
+        request_label,
     )
     .await;
 
@@ -177,10 +195,11 @@ fn write_speculative_acceptance_config(
     .expect("the speculative acceptance configuration should be written");
 }
 
-async fn complete_greedy_chat_request(
+async fn complete_chat_request(
     server_address: std::net::SocketAddr,
     model_id: &str,
     messages: Value,
+    temperature_thousandths: u64,
     request_label: &str,
 ) -> String {
     let openai_client = LocalOpenAiClient::new(server_address, "local-acceptance-client");
@@ -189,9 +208,10 @@ async fn complete_greedy_chat_request(
         "messages": messages,
         "stream": true,
         "stream_options": {"include_usage": true},
-        // Temperature zero is greedy argmax — the sampling strategy the
-        // speculative block contract is admitted for.
-        "temperature": 0,
+        // Temperature zero is greedy argmax; a positive temperature runs
+        // sampled verification — one tempered target sample per position —
+        // which preserves the sampled output law exactly.
+        "temperature": temperature_thousandths as f64 / 1_000.0,
         "thinking_budget": 0,
         "max_tokens": SPECULATIVE_OUTPUT_TOKEN_COUNT,
     });

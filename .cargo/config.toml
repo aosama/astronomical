@@ -189,18 +189,25 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # live_ceiling_lowering_rest --ignored`.
 # DFlash speculative-decoding serving cell (manual, serial, real resident
 # sparse artifact plus its paired DFlash draft, 120-second budget): a greedy
-# chat must stream to a natural stop on the resident engine with multiple
-# speculative rounds and at least one confirmed proposal in its generation
-# attribution report; `cargo xtask test-run --package astronomical-acceptance
-# --features serving-acceptance --test chat_serving --release --filter
+# chat and a temperature 0.7 sampled chat must each stream to a natural
+# stop on the resident engine with multiple speculative rounds and at least
+# one confirmed proposal in each generation attribution report; `cargo
+# xtask test-run --package astronomical-acceptance --features
+# serving-acceptance --test chat_serving --release --filter
 # should_serve_a_chat_through_speculative_decoding_with_the_paired_draft
-# --ignored`.
+# --ignored` and the same with
+# should_serve_a_sampled_chat_through_speculative_decoding.
 # DFlash speculative-decoding proof journey (manual, serial, real resident
 # sparse artifact plus draft, ~30 seconds per block length, 900-second
 # budget): measures acceptance rate and both decode throughputs (baseline
 # one-token-per-forward versus draft-and-verify at DFLASH_PROOF_
 # SPECULATION_TOKENS, default eight) over a 10,000-token Romeo and Juliet
-# prefill with 500 measured output tokens per mode; `cargo test --release
+# prefill with 500 measured output tokens per mode. DFLASH_PROOF_
+# TEMPERATURE_THOUSANDTHS selects the verification mode: zero (default)
+# runs greedy argmax verification; a positive value runs sampled
+# verification — one tempered target sample per position, the exact
+# sampled output law — so the same journey measures how acceptance and
+# throughput decay as the distribution flattens; `cargo test --release
 # -p astronomical-acceptance --features direct-mlx --test direct_mlx
 # should_measure_dflash_speculative_acceptance_and_decode_throughput --
 # --ignored --nocapture --test-threads=1`.
