@@ -858,17 +858,17 @@ jobs:
       - name: Provision pinned cargo-nextest
         uses: ./.github/actions/provision-cargo-nextest
       - name: Download integration test archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-archive-integration
           path: ${{ runner.temp }}/nextest-archive
       - name: Download test-harness test archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-archive-test-harness
           path: ${{ runner.temp }}/nextest-archive
       - name: Download native metallib
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: native-metallib
           path: ${{ runner.temp }}/native-metallib
@@ -900,7 +900,7 @@ jobs:
       - name: Provision pinned cargo-nextest
         uses: ./.github/actions/provision-cargo-nextest
       - name: Download integration test archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-archive-integration
           path: ${{ runner.temp }}/nextest-archive
@@ -924,7 +924,7 @@ jobs:
       - name: Provision pinned cargo-nextest
         uses: ./.github/actions/provision-cargo-nextest
       - name: Download REST test archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-archive-rest-api
           path: ${{ runner.temp }}/nextest-archive
@@ -952,7 +952,7 @@ jobs:
       - name: Provision pinned cargo-nextest
         uses: ./.github/actions/provision-cargo-nextest
       - name: Download E2E test archive
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: nextest-archive-e2e
           path: ${{ runner.temp }}/nextest-archive
