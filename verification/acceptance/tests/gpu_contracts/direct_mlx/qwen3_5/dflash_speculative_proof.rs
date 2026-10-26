@@ -1,19 +1,28 @@
 //! DFlash speculative-decoding proof: acceptance rate and decode throughput.
 //!
-//! This is the measurement gate for onboarding DFlash into Astronomical. It
-//! loads the real resident target (the OptiQ 4-bit Ornith-1.5-35B-A3B from
-//! the e2e registry) beside the real DFlash draft (resolved as the draft's
-//! library sibling directory, because a draft artifact is intentionally
-//! invisible to executable model discovery), bootstraps the draft's
-//! context key-value cache from the target's hidden-state taps, then
-//! measures greedy decode two ways on the same continued context: one
-//! token per forward (baseline) and draft-and-verify with eight
-//! speculative tokens per round.
+//! This is the diagnostic instrument for the DFlash compartment, which is
+//! disabled by design and unreachable from engine wiring (see the
+//! speculative-decode lifecycle module): the journey loads the real resident
+//! target (the OptiQ 4-bit Ornith-1.5-35B-A3B from the e2e registry) beside
+//! the real DFlash draft (resolved as the draft's library sibling directory,
+//! because a draft artifact is intentionally invisible to executable model
+//! discovery), bootstraps the draft's context key-value cache from the
+//! target's hidden-state taps, then measures decode two ways on the same
+//! continued context: one token per forward (baseline) and draft-and-verify,
+//! both under the scenario's verification temperature. The committed
+//! scenario is the realistic serving point — temperature 1.0 (the artifact
+//! default users get), block length 4 (the historical engine
+//! configuration).
 //!
 //! The journey reports acceptance rate, per-mode tokens per second, and the
 //! speedup ratio. It asserts only accounting invariants — token counts and
 //! context bookkeeping — because the performance numbers are evidence, not
 //! thresholds, and they decide whether the integration proceeds.
+//!
+//! Run via `cargo test --release -p astronomical-acceptance --features
+//! direct-mlx --test direct_mlx
+//! should_measure_dflash_speculative_acceptance_and_decode_throughput --
+//! --ignored --nocapture --test-threads=1`.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -31,6 +40,10 @@ use mlx_c_rust::MlxArray;
 use serial_test::serial;
 use tokio::time::timeout;
 
+use super::dflash_proof_scenario::{
+    ProofFixtureKind, ProofScenario, load_proof_scenario, progressive_source_code_excerpt,
+    romeo_and_juliet_excerpt,
+};
 use crate::common::{
     configured_installed_model_directory_by_id, direct_mlx_test_guard,
     ornith_dflash_draft_model_id, resident_sparse_moe_model_id,
@@ -43,37 +56,15 @@ use crate::common::{
 const PROOF_ACTIVE_MEMORY_LIMIT_BYTES: usize = 34 * 1024 * 1024 * 1024;
 const PROOF_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES: usize = 4 * 1024 * 1024 * 1024;
 
-/// One side of the measured comparison.
-const MEASURED_OUTPUT_TOKENS: usize = 500;
 /// The warmup contract for throughput journeys: untimed decode tokens.
 const WARMUP_OUTPUT_TOKENS: usize = 50;
-/// Draft block length used by the reference serving recipes. Overridable
-/// through `DFLASH_PROOF_SPECULATION_TOKENS` so one build sweeps block
-/// lengths; the measurement itself never changes.
-fn speculation_token_count() -> usize {
-    std::env::var("DFLASH_PROOF_SPECULATION_TOKENS")
-        .ok()
-        .and_then(|block_length_text| block_length_text.parse().ok())
-        .unwrap_or(8)
-}
-/// Verification temperature in thousandths. Zero (the default) runs the
-/// greedy argmax contract; a positive value runs sampled verification —
-/// one tempered target sample per position, the exact sampled output law —
-/// so one build measures how acceptance and throughput decay as the
-/// distribution flattens. Top-k and top-p stay at the engine's serving
-/// defaults.
-fn verification_temperature_thousandths() -> u16 {
-    std::env::var("DFLASH_PROOF_TEMPERATURE_THOUSANDTHS")
-        .ok()
-        .and_then(|temperature_text| temperature_text.parse().ok())
-        .unwrap_or(0)
-}
 /// The serving default top-k the classic path applies alongside
 /// temperature.
 const VERIFICATION_TOP_K: u16 = 40;
 /// The serving default nucleus the classic path applies alongside
 /// temperature.
 const VERIFICATION_TOP_P_THOUSANDTHS: u16 = 1_000;
+
 /// The journey's random-state seed for sampled verification; fixed so
 /// reruns of the same temperature are comparable.
 const VERIFICATION_SAMPLING_SEED: u64 = 20_260_925;
@@ -103,7 +94,13 @@ struct ProofJourney {
     draft: DFlashDraftLoadedWeights,
     draft_configuration: DFlashDraftConfiguration,
     draft_key_value_states: DFlashDraftKeyValueStates,
+    /// The measurement scenario this journey runs; the decode phases read
+    /// their block length and verification mode from it.
+    scenario: ProofScenario,
     prompt_token_ids: Vec<u32>,
+    /// Detokenizes the measured phases' output for the regime-classification
+    /// tail print.
+    tokenizer: Qwen3_5Tokenizer,
     /// The target's greedy preference at the terminal prefill position:
     /// the first bonus token every decode phase chains from.
     prefill_terminal_bonus_token_id: u32,
@@ -118,6 +115,10 @@ struct DecodePhaseOutcome {
     accepted_proposal_count: usize,
     proposed_token_count: usize,
     round_count: usize,
+    /// Every token the phase emitted, in order. The speculative phase's
+    /// tail is detokenized after measurement so a low-entropy repetition
+    /// loop cannot masquerade as high acceptance.
+    emitted_token_ids: Vec<u32>,
 }
 
 async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
@@ -126,6 +127,7 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
     let mut journey = load_proof_journey(journey_started_at);
 
     let context_length_tokens = journey.prompt_token_ids.len() as u32;
+    let measured_output_tokens = journey.scenario.measured_output_tokens;
 
     // Warmup contract: fifty untimed speculative tokens so every draft and
     // target graph compiles before either side of the comparison is timed.
@@ -148,22 +150,22 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
     // target's cache — the draft would be left behind and could not be
     // cheaply re-synced without contaminating the baseline timing.
     println!(
-        "[dflash-proof {:>4}s] measuring speculative: {MEASURED_OUTPUT_TOKENS} tokens at k={}",
+        "[dflash-proof {:>4}s] measuring speculative: {measured_output_tokens} tokens at k={}",
         journey_started_at.elapsed().as_secs(),
-        speculation_token_count()
+        journey.scenario.speculation_tokens
     );
     let speculative_started_at = Instant::now();
     let speculative_outcome = decode_speculative(
         &mut journey,
         warmup_bonus_token_id,
         warmup_outcome.context_length_after,
-        MEASURED_OUTPUT_TOKENS,
+        measured_output_tokens,
         journey_started_at,
     );
     let speculative_elapsed = speculative_started_at.elapsed();
 
     println!(
-        "[dflash-proof {:>4}s] measuring baseline: {MEASURED_OUTPUT_TOKENS} one-token-at-a-time tokens",
+        "[dflash-proof {:>4}s] measuring baseline: {measured_output_tokens} one-token-at-a-time tokens",
         journey_started_at.elapsed().as_secs()
     );
     let baseline_started_at = Instant::now();
@@ -171,13 +173,13 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
         &mut journey,
         speculative_outcome.next_bonus_token_id,
         speculative_outcome.context_length_after,
-        MEASURED_OUTPUT_TOKENS,
+        measured_output_tokens,
     );
     let baseline_elapsed = baseline_started_at.elapsed();
 
-    let baseline_tokens_per_second = MEASURED_OUTPUT_TOKENS as f64 / baseline_elapsed.as_secs_f64();
+    let baseline_tokens_per_second = measured_output_tokens as f64 / baseline_elapsed.as_secs_f64();
     let speculative_tokens_per_second =
-        MEASURED_OUTPUT_TOKENS as f64 / speculative_elapsed.as_secs_f64();
+        measured_output_tokens as f64 / speculative_elapsed.as_secs_f64();
     let speedup_ratio = speculative_tokens_per_second / baseline_tokens_per_second;
     let acceptance_rate = speculative_outcome.accepted_proposal_count as f64
         / speculative_outcome.proposed_token_count.max(1) as f64;
@@ -191,8 +193,8 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
         journey.draft_directory.display()
     );
     println!(
-        "prompt tokens: {context_length_tokens} | measured output: {MEASURED_OUTPUT_TOKENS} per mode | k = {}",
-        speculation_token_count()
+        "prompt tokens: {context_length_tokens} | measured output: {measured_output_tokens} per mode | k = {}",
+        journey.scenario.speculation_tokens
     );
     println!("baseline decode:     {baseline_tokens_per_second:.2} tokens/second");
     println!("speculative decode:  {speculative_tokens_per_second:.2} tokens/second");
@@ -214,9 +216,37 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
         baseline_outcome.context_length_after
     );
     println!("===========================================================");
+
+    // Regime classification: detokenize the speculative phase's tail. The
+    // acceptance number alone cannot distinguish healthy low-entropy
+    // generation (structured code continuation) from a degenerate
+    // repetition loop, and the two flatter throughput differently.
+    let tail_token_count = 200.min(speculative_outcome.emitted_token_ids.len());
+    let tail_start_index = speculative_outcome.emitted_token_ids.len() - tail_token_count;
+    let mut tail_decoder = journey.tokenizer.incremental_decoder();
+    let mut tail_text = String::new();
+    for tail_token_id in &speculative_outcome.emitted_token_ids[tail_start_index..] {
+        if let Some(piece) = tail_decoder
+            .push_token(*tail_token_id)
+            .expect("the speculative tail token should decode")
+        {
+            tail_text.push_str(&piece);
+        }
+    }
+    if let Some(final_piece) = tail_decoder
+        .finish()
+        .expect("the speculative tail decoder should finish")
+    {
+        tail_text.push_str(&final_piece);
+    }
+    println!();
+    println!("---- speculative tail: last {tail_token_count} tokens ----");
+    println!("{tail_text}");
+    println!("---------------------------------------------------------");
 }
 
 fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
+    let scenario = load_proof_scenario();
     let target_directory =
         configured_installed_model_directory_by_id(resident_sparse_moe_model_id());
     let draft_directory = resolve_draft_library_directory(&target_directory);
@@ -288,18 +318,66 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
         )
         .expect("the target decoder-state stack should allocate");
 
-    // Ten thousand Romeo-and-Juliet tokens inside the measurement band. The
-    // fixture is the shared acceptance excerpt source (the same text every
-    // throughput journey reads), inlined here because the direct-MLX test
-    // binary does not link the serving support module.
-    let prompt_text = romeo_and_juliet_excerpt(10_000);
-    let mut prompt_token_ids = tokenizer
-        .encode_prompt(&prompt_text)
-        .expect("the Romeo and Juliet fixture should encode");
-    prompt_token_ids.truncate(10_000);
+    // Romeo-and-Juliet tokens inside the measurement band, sized by the
+    // context sweep knob. The fixture is the shared acceptance excerpt
+    // source (the same text every throughput journey reads), inlined here
+    // because the direct-MLX test binary does not link the serving support
+    // module; the fifty-thousand-word file backs context sweeps beyond
+    // ten thousand tokens.
+    let requested_context_token_count = scenario.context_tokens;
+    let fixture_text = match scenario.fixture {
+        ProofFixtureKind::SourceCode => progressive_source_code_excerpt(50_000),
+        ProofFixtureKind::RomeoAndJuliet => romeo_and_juliet_excerpt(50_000),
+    };
+    let fixture_label = match scenario.fixture {
+        ProofFixtureKind::SourceCode => "progressive source code",
+        ProofFixtureKind::RomeoAndJuliet => "Romeo and Juliet",
+    };
+    let mut prompt_token_ids = if scenario.chat_formatted {
+        // The exact worker tokenization: the chat template applied to the
+        // fixture as one user message, isolating the chat-format variable
+        // against the raw-continuation default.
+        let chat_generation_command = astronomical_ipc_protocol::ChatGenerationCommand {
+            request_id: RequestId::new(0),
+            model: resident_sparse_moe_model_id().to_owned(),
+            messages: vec![astronomical_ipc_protocol::ChatMessage::User {
+                content: format!(
+                    "{fixture_text}\n\nContinue this text exactly where it \
+                     stops, in the same voice, without any commentary."
+                ),
+                images: Vec::new(),
+            }],
+            tools: Vec::new(),
+            tool_choice: astronomical_ipc_protocol::ChatToolChoice::None,
+            settings: astronomical_ipc_protocol::ChatGenerationSettings {
+                max_output_tokens: 4_096,
+                temperature_thousandths: Some(0),
+                top_p_thousandths: None,
+                repetition_penalty_thousandths: None,
+                seed: None,
+                thinking_budget: Some(0),
+            },
+            structured_generation: None,
+        };
+        let inference_request = tokenizer
+            .prepare_chat(&chat_generation_command, false)
+            .expect("the chat-formatted fixture should tokenize");
+        inference_request.input_token_ids().to_vec()
+    } else {
+        tokenizer
+            .encode_prompt(&fixture_text)
+            .expect("the measured fixture should encode")
+    };
+    prompt_token_ids.truncate(requested_context_token_count);
     assert!(
-        (9_000..=11_000).contains(&prompt_token_ids.len()),
-        "the measured prompt must stay inside the ten-thousand-token band"
+        !prompt_token_ids.is_empty() && prompt_token_ids.len() <= requested_context_token_count,
+        "the measured prompt must hold between one and {requested_context_token_count} tokens"
+    );
+    println!(
+        "[dflash-proof] scenario {:?} | fixture={} measured_context_tokens={}",
+        scenario,
+        fixture_label,
+        prompt_token_ids.len(),
     );
 
     let mut journey = ProofJourney {
@@ -308,7 +386,9 @@ fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
         draft,
         draft_configuration,
         draft_key_value_states,
+        scenario,
         prompt_token_ids,
+        tokenizer,
         prefill_terminal_bonus_token_id: 0,
         draft_directory,
     };
@@ -345,16 +425,6 @@ fn resolve_draft_library_directory(target_directory: &std::path::Path) -> PathBu
         "the DFlash draft {draft_leaf_id} must be installed under one organization directory of {}",
         library_root.display()
     );
-}
-
-/// The shared Romeo-and-Juliet fixture, truncated by word count exactly as
-/// the serving support helper does.
-fn romeo_and_juliet_excerpt(maximum_word_count: usize) -> String {
-    include_str!("../../../fixtures/model_metrics_10000_romeo_and_juliet_words.txt")
-        .split_whitespace()
-        .take(maximum_word_count)
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 /// Runs the tap-capturing prefill in chunks and grows the draft's context
@@ -480,6 +550,7 @@ fn decode_baseline(
         accepted_proposal_count: 0,
         proposed_token_count: 0,
         round_count: output_token_count,
+        emitted_token_ids: Vec::new(),
     }
 }
 
@@ -495,6 +566,8 @@ fn decode_speculative(
     let mut accepted_proposal_count = 0_usize;
     let mut proposed_token_count = 0_usize;
     let mut round_count = 0_usize;
+    let mut phase_emitted_token_ids: Vec<u32> = Vec::new();
+    let mut listed_new_token_count = 0_usize;
     let mut bonus_token_id = starting_bonus_token_id;
     let mut context_length_tokens = starting_context_tokens;
     let mut attribution = PerformanceAttribution::disabled();
@@ -502,7 +575,7 @@ fn decode_speculative(
     // one tempered target sample per position through the same transform
     // the classic path applies, from a fixed seed so temperature reruns
     // are comparable.
-    let target_token_choice = match verification_temperature_thousandths() {
+    let target_token_choice = match journey.scenario.temperature_thousandths {
         0 => VerificationTokenChoice::HighestLogit,
         temperature_thousandths => VerificationTokenChoice::TopKTopP {
             temperature_thousandths,
@@ -522,11 +595,11 @@ fn decode_speculative(
     };
     println!(
         "[speculative] verification mode: {target_token_choice:?} at block length {}",
-        speculation_token_count()
+        journey.scenario.speculation_tokens
     );
     while emitted_tokens < output_token_count {
         let remaining_tokens = output_token_count - emitted_tokens;
-        let speculation_token_count = speculation_token_count().min(remaining_tokens);
+        let speculation_token_count = journey.scenario.speculation_tokens.min(remaining_tokens);
         let round_request = SpeculationRoundRequest {
             request_id: RequestId::new(0),
             bonus_token_id,
@@ -545,10 +618,26 @@ fn decode_speculative(
             &mut attribution,
         )
         .expect("the speculative round should succeed");
+        // Every round's emitted list repeats the previous round's last
+        // token as its bonus seed. The engine emits that boundary token
+        // exactly once (the queue tail becomes the next round's bonus);
+        // the harness must deduplicate identically, or it double-counts
+        // one token per round and inflates throughput by up to the round
+        // count — which is exactly what every earlier report of this
+        // journey did.
+        if phase_emitted_token_ids.is_empty() {
+            phase_emitted_token_ids.extend_from_slice(&round_outcome.emitted_token_ids);
+        } else {
+            phase_emitted_token_ids.extend_from_slice(&round_outcome.emitted_token_ids[1..]);
+        }
         accepted_proposal_count += round_outcome.accepted_proposal_count;
         proposed_token_count += speculation_token_count;
         round_count += 1;
-        emitted_tokens += round_outcome.emitted_token_ids.len().min(remaining_tokens);
+        // New unique tokens this round: the emitted list minus the bonus
+        // seed, which the previous round already counted.
+        let round_new_token_count = round_outcome.emitted_token_ids.len() - 1;
+        listed_new_token_count += round_new_token_count;
+        emitted_tokens += round_new_token_count.min(remaining_tokens);
         context_length_tokens = round_outcome.context_length_after_round;
         bonus_token_id = round_outcome.next_bonus_token_id;
         if emitted_tokens.is_multiple_of(100) {
@@ -562,12 +651,23 @@ fn decode_speculative(
             );
         }
     }
+    // Accounting invariant: every round lists exactly (its emitted list
+    // length minus the bonus seed) new tokens, and only the final round may
+    // be truncated by the remaining-token clamp. The historical double-count
+    // bug credited the full list length per round — inflating the count by
+    // the round count — and would fail this bound immediately.
+    assert!(
+        listed_new_token_count >= emitted_tokens
+            && listed_new_token_count - emitted_tokens <= journey.scenario.speculation_tokens,
+        "speculative accounting must satisfy listed-new = sum(emitted list length - 1), differing from the emitted count only by the final round's clamp: listed {listed_new_token_count}, emitted {emitted_tokens}, rounds {round_count}"
+    );
     DecodePhaseOutcome {
         context_length_after: context_length_tokens,
         next_bonus_token_id: bonus_token_id,
         accepted_proposal_count,
         proposed_token_count,
         round_count,
+        emitted_token_ids: phase_emitted_token_ids,
     }
 }
 
