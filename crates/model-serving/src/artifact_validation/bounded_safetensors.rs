@@ -78,12 +78,15 @@ fn validate_bounded_safetensors_internal(
 ) -> Result<BoundedSafetensorsMetadata, ArtifactValidationError> {
     let artifact_safetensors_header =
         read_artifact_safetensors_header(weights_file, file_size_bytes, weights_file_name)?;
-    let bounded_metadata = validate_all_tensors(
-        &artifact_safetensors_header.tensors,
+    let tensor_acceptance_contract = TensorAcceptanceContract {
         required_tensor_names,
         accepted_extra_tensor_names,
         required_tensor_profiles,
         recognized_tensor_profiles,
+    };
+    let bounded_metadata = validate_all_tensors(
+        &tensor_acceptance_contract,
+        &artifact_safetensors_header.tensors,
         artifact_safetensors_header.data_section_start_bytes,
         file_size_bytes,
         weights_file_name,
@@ -259,12 +262,20 @@ pub(super) fn artifact_safetensors_header_error(
     }
 }
 
+/// The tensor-acceptance contract a shard must satisfy: which tensors are
+/// required, which extra names are tolerated, and the dtype/shape profiles for
+/// the strict and the merely-recognized sets. The four facets travel together
+/// through every validation entry point, so they travel as one value.
+struct TensorAcceptanceContract<'a> {
+    required_tensor_names: &'a HashSet<&'a str>,
+    accepted_extra_tensor_names: &'a HashSet<&'a str>,
+    required_tensor_profiles: &'a [TensorProfile],
+    recognized_tensor_profiles: &'a [TensorProfile],
+}
+
 fn validate_all_tensors(
+    tensor_acceptance_contract: &TensorAcceptanceContract<'_>,
     safetensors_tensors: &HashMap<String, SafetensorsTensorView>,
-    required_tensor_names: &HashSet<&str>,
-    accepted_extra_tensor_names: &HashSet<&str>,
-    required_tensor_profiles: &[TensorProfile],
-    recognized_tensor_profiles: &[TensorProfile],
     data_section_start: u64,
     file_size_bytes: u64,
     weights_file_name: &str,
@@ -272,8 +283,12 @@ fn validate_all_tensors(
     validate_tensor_data_consistency(safetensors_tensors, weights_file_name)?;
 
     for (tensor_name, tensor_view) in safetensors_tensors {
-        if !required_tensor_names.contains(tensor_name.as_str())
-            && !accepted_extra_tensor_names.contains(tensor_name.as_str())
+        if !tensor_acceptance_contract
+            .required_tensor_names
+            .contains(tensor_name.as_str())
+            && !tensor_acceptance_contract
+                .accepted_extra_tensor_names
+                .contains(tensor_name.as_str())
         {
             return Err(ArtifactValidationError::UnexpectedTensor {
                 tensor_name: tensor_name.clone(),
@@ -288,7 +303,8 @@ fn validate_all_tensors(
         )?;
     }
 
-    if let Some(missing_tensor_name) = required_tensor_names
+    if let Some(missing_tensor_name) = tensor_acceptance_contract
+        .required_tensor_names
         .iter()
         .find(|tensor_name| !safetensors_tensors.contains_key(**tensor_name))
     {
@@ -298,7 +314,7 @@ fn validate_all_tensors(
         });
     }
 
-    for tensor_profile in required_tensor_profiles {
+    for tensor_profile in tensor_acceptance_contract.required_tensor_profiles {
         let tensor_view = safetensors_tensors
             .get(&tensor_profile.name)
             .ok_or_else(|| ArtifactValidationError::TensorMissing {
@@ -308,7 +324,7 @@ fn validate_all_tensors(
         validate_tensor_dtype(tensor_profile, tensor_view, weights_file_name)?;
         validate_tensor_shape(tensor_profile, tensor_view)?;
     }
-    for tensor_profile in recognized_tensor_profiles {
+    for tensor_profile in tensor_acceptance_contract.recognized_tensor_profiles {
         let Some(tensor_view) = safetensors_tensors.get(&tensor_profile.name) else {
             continue;
         };
@@ -404,8 +420,7 @@ fn validate_tensor_shape(
     let shape_matches = tensor_view.shape == tensor_profile.shape
         || tensor_profile
             .equivalent_published_shapes
-            .iter()
-            .any(|equivalent_shape| *equivalent_shape == tensor_view.shape);
+            .contains(&tensor_view.shape);
     if !shape_matches {
         return Err(ArtifactValidationError::TensorShapeMismatch {
             tensor_name: tensor_profile.name.clone(),

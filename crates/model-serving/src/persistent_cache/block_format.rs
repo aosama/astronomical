@@ -348,17 +348,14 @@ fn validate_tensor_offsets(
             Some("F32") => 4_u64,
             Some(_) | None => 0_u64,
         };
-        let expected_payload_byte_count = tensors
-            .get(tensor_name)
-            .map(|tensor_view| {
-                tensor_view.shape.iter().try_fold(
-                    scalar_byte_count,
-                    |payload_byte_count, tensor_dimension| {
-                        payload_byte_count.checked_mul(*tensor_dimension as u64)
-                    },
-                )
-            })
-            .flatten();
+        let expected_payload_byte_count = tensors.get(tensor_name).and_then(|tensor_view| {
+            tensor_view.shape.iter().try_fold(
+                scalar_byte_count,
+                |payload_byte_count, tensor_dimension| {
+                    payload_byte_count.checked_mul(*tensor_dimension as u64)
+                },
+            )
+        });
         if let Some(expected_payload_byte_count) = expected_payload_byte_count
             && end_offset.saturating_sub(start_offset) != expected_payload_byte_count
         {

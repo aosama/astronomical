@@ -9,6 +9,12 @@ use crate::{
 
 /// Family-tagged image engine used by the generic worker so one process can serve any
 /// installed image-generation family.
+///
+/// The variant size difference is a per-model-load construction cost, not a
+/// per-token one: the enum is built once when a family loads and dispatched by
+/// reference for its whole life. Boxing the larger engine would also ripple
+/// through the consumers that pattern-match the engine out by value.
+#[allow(clippy::large_enum_variant)]
 pub enum ModelFamilyImageEngine {
     Flux2Klein(Flux2KleinImageEngine),
     QwenImage21(QwenImage21ImageEngine),

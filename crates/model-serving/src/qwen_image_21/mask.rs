@@ -29,9 +29,9 @@ pub fn build_image_ids(img_shapes: &[(usize, usize)], image_pad_mask: &[bool]) -
         }
     }
 
-    let mut block_id = 0i32;
     let mut pos_cursor = 0usize;
-    for &(height, width) in img_shapes {
+    for (block_index, &(height, width)) in img_shapes.iter().enumerate() {
+        let block_id = block_index as i32;
         let block_len = height * width;
         for _ in 0..block_len {
             // The `debug_assert` guards the invariant that `img_shapes` accounts for exactly the
@@ -43,7 +43,6 @@ pub fn build_image_ids(img_shapes: &[(usize, usize)], image_pad_mask: &[bool]) -
             image_ids[image_positions[pos_cursor]] = block_id;
             pos_cursor += 1;
         }
-        block_id += 1;
     }
 
     image_ids

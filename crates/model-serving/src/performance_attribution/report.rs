@@ -310,6 +310,10 @@ impl PerformanceAttribution {
     }
 
     #[must_use]
+    // The seven facts are exactly the fields of the embeddings report this
+    // method exists to build, and there is exactly one caller. A parameter
+    // struct would repeat the same names at the call site one line earlier.
+    #[allow(clippy::too_many_arguments)]
     pub fn finish_embeddings(
         self,
         outcome: PerformanceAttributionOutcome,

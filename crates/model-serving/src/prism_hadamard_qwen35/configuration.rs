@@ -315,7 +315,9 @@ fn validated_dimensionality(text: &FoldedTextConfigDocument) -> Result<(), Folde
     }
     if text.linear_num_key_heads == 0
         || text.linear_num_value_heads == 0
-        || text.linear_num_value_heads % text.linear_num_key_heads != 0
+        || !text
+            .linear_num_value_heads
+            .is_multiple_of(text.linear_num_key_heads)
     {
         return Err(FoldedPackConfigError::InvalidLinearHeadCounts {
             actual_value_heads: text.linear_num_value_heads,

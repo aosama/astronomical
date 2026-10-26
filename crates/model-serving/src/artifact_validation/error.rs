@@ -439,7 +439,7 @@ impl ArtifactValidationError {
 
 fn bound_public_artifact_failure_reason(unbounded_reason: String) -> String {
     const MAX_PUBLIC_REASON_CHARACTERS: usize = 512;
-    let path_free_reason = unbounded_reason.replace('/', "_").replace('\\', "_");
+    let path_free_reason = unbounded_reason.replace(['/', '\\'], "_");
     let mut reason = path_free_reason
         .chars()
         .take(MAX_PUBLIC_REASON_CHARACTERS)

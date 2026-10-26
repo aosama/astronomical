@@ -369,8 +369,8 @@ impl PersistentPromptCachePrefixLookup {
         if maximum_restorable_block_count == 0 {
             // A prompt shorter than one complete block can still reuse a root
             // tail published by a previous turn with the same short prefix.
-            if probe_partial_tail_blocks {
-                if let Some(restored_partial_tail_block_key) =
+            if probe_partial_tail_blocks
+                && let Some(restored_partial_tail_block_key) =
                     partial_tail_probe::probe_restorable_partial_tail_block(
                         persistent_prompt_cache_model_contract,
                         prompt_tokens,
@@ -381,18 +381,17 @@ impl PersistentPromptCachePrefixLookup {
                         &persistent_prompt_cache_kv_block_exists,
                         &persistent_prompt_cache_recurrent_snapshot_exists,
                     )
-                {
-                    let restored_token_count = restored_partial_tail_block_key.token_count();
-                    lookup_diagnostics
-                        .record_restored_partial_tail_block_token_count(restored_token_count);
-                    return PersistentPromptCachePrefixLookupResult {
-                        restored_token_count,
-                        remaining_tokens: prompt_tokens[restored_token_count..].to_vec(),
-                        last_restored_persistent_prompt_cache_block_key: None,
-                        restored_partial_tail_block_key: Some(restored_partial_tail_block_key),
-                        lookup_diagnostics,
-                    };
-                }
+            {
+                let restored_token_count = restored_partial_tail_block_key.token_count();
+                lookup_diagnostics
+                    .record_restored_partial_tail_block_token_count(restored_token_count);
+                return PersistentPromptCachePrefixLookupResult {
+                    restored_token_count,
+                    remaining_tokens: prompt_tokens[restored_token_count..].to_vec(),
+                    last_restored_persistent_prompt_cache_block_key: None,
+                    restored_partial_tail_block_key: Some(restored_partial_tail_block_key),
+                    lookup_diagnostics,
+                };
             }
             lookup_diagnostics.record_miss_reason(
                 PersistentPromptCacheMissReason::PromptTooShortForPersistentPromptCache,

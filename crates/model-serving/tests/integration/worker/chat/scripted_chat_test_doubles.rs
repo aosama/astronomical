@@ -463,7 +463,7 @@ impl InferenceEngine for ScriptedChatEngine {
                 .min(requested_mlx_memory_ceiling_bytes),
             1,
             ExpertMemoryMode::Resident,
-            self.idle_mlx_memory_telemetry.clone(),
+            self.idle_mlx_memory_telemetry,
         )
         .with_expert_residency_telemetry(ExpertResidencyTelemetry {
             total_layer_count: 2,
@@ -491,6 +491,6 @@ impl InferenceEngine for ScriptedChatEngine {
     async fn collect_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
-        Ok(self.idle_mlx_memory_telemetry.clone())
+        Ok(self.idle_mlx_memory_telemetry)
     }
 }

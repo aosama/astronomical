@@ -82,12 +82,11 @@ fn should_never_reference_a_row_beyond_the_causal_condition_tensor() {
     for batch_size in [1usize, 2usize, 4usize] {
         let rows = super::causal_modulation_row_map(Some(&mask), batch_size, MOD_SEQ_LEN);
         let max_allowed = batch_size; // batch_size rows [0..batch) plus the trailing t=0 row at batch_size
-        for sample in 0..batch_size {
-            for token in 0..MOD_SEQ_LEN {
+        for (sample, sample_row) in rows.iter().enumerate().take(batch_size) {
+            for (token, &mapped_row) in sample_row.iter().enumerate() {
                 assert!(
-                    rows[sample][token] <= max_allowed,
-                    "row index {} exceeds the causal_condition tensor bound {max_allowed} (batch={batch_size}, sample={sample}, token={token})",
-                    rows[sample][token]
+                    mapped_row <= max_allowed,
+                    "row index {mapped_row} exceeds the causal_condition tensor bound {max_allowed} (batch={batch_size}, sample={sample}, token={token})",
                 );
             }
         }

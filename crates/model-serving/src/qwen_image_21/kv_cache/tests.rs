@@ -43,9 +43,9 @@ fn should_match_the_oracle_cache_validity_for_every_layout() {
 
 #[test]
 fn should_reject_every_layout_when_causal_condition_is_disabled() {
-    for layout_index in 0..CACHE_LAYOUT_COUNT {
+    for (layout_index, cache_mask) in CACHE_MASKS.iter().enumerate() {
         assert!(
-            !cache_is_valid(&CACHE_MASKS[layout_index], false),
+            !cache_is_valid(cache_mask, false),
             "layout {layout_index} must be invalid with causal_condition disabled, even if the layout is a valid suffix"
         );
     }
@@ -132,8 +132,7 @@ fn should_align_the_cached_prefix_with_the_start_of_the_decoded_targets() {
 #[test]
 fn should_produce_in_bounds_slices_for_every_layout_and_mode() {
     let modes = [CacheMode::Prefill, CacheMode::Extract, CacheMode::Reuse];
-    for layout_index in 0..CACHE_LAYOUT_COUNT {
-        let prefix_len = CACHE_PREFIX_LENS[layout_index];
+    for (layout_index, &prefix_len) in CACHE_PREFIX_LENS.iter().enumerate() {
         for mode in modes {
             let (start, end) = cache_query_slice(mode, CACHE_SEQ_LEN, prefix_len);
             assert!(
