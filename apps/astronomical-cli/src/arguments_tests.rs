@@ -5,6 +5,7 @@
 mod embed_tests;
 mod launch_tests;
 mod models_tests;
+mod quantize_tests;
 mod respond_tests;
 mod validate_config_tests;
 
