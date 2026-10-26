@@ -25,6 +25,87 @@ pub(crate) fn build_sampled_token(
 ) -> Result<MlxArray, InferenceEngineError> {
     let vocabulary_size =
         validate_sampled_logits(logits, temperature_thousandths, top_p_thousandths)?;
+    sampled_tokens_for_logits(
+        runtime,
+        logits,
+        vocabulary_size,
+        temperature_thousandths,
+        top_p_thousandths,
+        top_k,
+        random_state,
+    )
+}
+
+/// Builds one lazy sampled token per logit row using the same GPU top-k +
+/// top-p pipeline as the single-row sampler.
+///
+/// `logits` must have shape `[1, row_count, vocabulary]`; the result has shape
+/// `[1, row_count]` with one independent categorical draw per row. Speculative
+/// verification samples every block position in one graph through this entry,
+/// so a tempered verification round costs one random-key split instead of one
+/// per position.
+pub(crate) fn build_sampled_token_rows(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    temperature_thousandths: u16,
+    top_p_thousandths: u16,
+    top_k: u16,
+    random_state: &mut MlxArray,
+) -> Result<MlxArray, InferenceEngineError> {
+    let row_count = logits
+        .shape()
+        .get(1)
+        .copied()
+        .ok_or_else(|| sampling_failure("sampled rows require a rank-3 logits tensor"))?;
+    if row_count < 1 {
+        return Err(sampling_failure(
+            "sampled rows must contain at least one logit row",
+        ));
+    }
+    let vocabulary_size =
+        validate_sampled_logits(logits, temperature_thousandths, top_p_thousandths)?;
+    sampled_tokens_for_logits(
+        runtime,
+        logits,
+        vocabulary_size,
+        temperature_thousandths,
+        top_p_thousandths,
+        Some(top_k),
+        random_state,
+    )
+}
+
+/// Test-visible rows sampler entry so GPU contract tests can prove the
+/// per-row tempered marginals without production visibility.
+pub fn build_sampled_token_rows_for_tests(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    temperature_thousandths: u16,
+    top_p_thousandths: u16,
+    top_k: u16,
+    random_state: &mut MlxArray,
+) -> Result<MlxArray, InferenceEngineError> {
+    build_sampled_token_rows(
+        runtime,
+        logits,
+        temperature_thousandths,
+        top_p_thousandths,
+        top_k,
+        random_state,
+    )
+}
+
+/// The shared sampling core: constrain (top-k and top-p, either optional),
+/// temperature-scale, and draw one categorical sample per row.
+fn sampled_tokens_for_logits(
+    runtime: &MlxRuntime,
+    logits: &MlxArray,
+    vocabulary_size: i32,
+    temperature_thousandths: u16,
+    top_p_thousandths: u16,
+    top_k: Option<u16>,
+    random_state: &mut MlxArray,
+) -> Result<MlxArray, InferenceEngineError> {
     let constrained_logits = match top_k {
         Some(top_k) => Some(masked_logits_after_top_k_and_top_p(
             runtime,
@@ -55,9 +136,9 @@ fn validate_sampled_logits(
     top_p_thousandths: u16,
 ) -> Result<i32, InferenceEngineError> {
     let logit_shape = logits.shape();
-    if logit_shape.len() != 3 || logit_shape[0] != 1 || logit_shape[1] != 1 || logit_shape[2] <= 0 {
+    if logit_shape.len() != 3 || logit_shape[0] != 1 || logit_shape[1] < 1 || logit_shape[2] <= 0 {
         return Err(sampling_failure(
-            "sampled logits must have shape [1, 1, vocabulary] with a positive vocabulary",
+            "sampled logits must have shape [1, rows, vocabulary] with at least one row and a positive vocabulary",
         ));
     }
     if temperature_thousandths == 0 {

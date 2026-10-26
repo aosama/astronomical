@@ -23,8 +23,8 @@ use astronomical_model_serving::{
     DFlashDraftConfiguration, DFlashDraftKeyValueStates, DFlashDraftLoadedWeights,
     PerformanceAttribution, Qwen3_5ArtifactValidator, Qwen3_5ModelChunkingConfiguration,
     Qwen3_5ResidentModel, Qwen3_5Tokenizer, RequestDecoderStateStack, SpeculationRoundRequest,
-    ValidatedQwen3_5Artifact, VerificationLogitsMode, append_conditioned_context_key_values,
-    condition_target_hidden_states, run_speculative_round,
+    ValidatedQwen3_5Artifact, VerificationLogitsMode, VerificationTokenChoice,
+    append_conditioned_context_key_values, condition_target_hidden_states, run_speculative_round,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_c_rust::MlxArray;
@@ -56,6 +56,27 @@ fn speculation_token_count() -> usize {
         .and_then(|block_length_text| block_length_text.parse().ok())
         .unwrap_or(8)
 }
+/// Verification temperature in thousandths. Zero (the default) runs the
+/// greedy argmax contract; a positive value runs sampled verification —
+/// one tempered target sample per position, the exact sampled output law —
+/// so one build measures how acceptance and throughput decay as the
+/// distribution flattens. Top-k and top-p stay at the engine's serving
+/// defaults.
+fn verification_temperature_thousandths() -> u16 {
+    std::env::var("DFLASH_PROOF_TEMPERATURE_THOUSANDTHS")
+        .ok()
+        .and_then(|temperature_text| temperature_text.parse().ok())
+        .unwrap_or(0)
+}
+/// The serving default top-k the classic path applies alongside
+/// temperature.
+const VERIFICATION_TOP_K: u16 = 40;
+/// The serving default nucleus the classic path applies alongside
+/// temperature.
+const VERIFICATION_TOP_P_THOUSANDTHS: u16 = 1_000;
+/// The journey's random-state seed for sampled verification; fixed so
+/// reruns of the same temperature are comparable.
+const VERIFICATION_SAMPLING_SEED: u64 = 20_260_925;
 /// Prefill chunk length for the tap-capturing bootstrap, matching the
 /// resident engine's default prompt-processing granularity.
 const PREFILL_CHUNK_TOKENS: usize = 2048;
@@ -477,6 +498,32 @@ fn decode_speculative(
     let mut bonus_token_id = starting_bonus_token_id;
     let mut context_length_tokens = starting_context_tokens;
     let mut attribution = PerformanceAttribution::disabled();
+    // Greedy verification drafts against argmax; sampled verification draws
+    // one tempered target sample per position through the same transform
+    // the classic path applies, from a fixed seed so temperature reruns
+    // are comparable.
+    let target_token_choice = match verification_temperature_thousandths() {
+        0 => VerificationTokenChoice::HighestLogit,
+        temperature_thousandths => VerificationTokenChoice::TopKTopP {
+            temperature_thousandths,
+            top_k: VERIFICATION_TOP_K,
+            top_p_thousandths: VERIFICATION_TOP_P_THOUSANDTHS,
+        },
+    };
+    let mut random_state = match target_token_choice.consumes_random_state() {
+        true => Some(
+            journey
+                .target_model
+                .runtime()
+                .random_key(VERIFICATION_SAMPLING_SEED)
+                .expect("the sampled journey should build its random state"),
+        ),
+        false => None,
+    };
+    println!(
+        "[speculative] verification mode: {target_token_choice:?} at block length {}",
+        speculation_token_count()
+    );
     while emitted_tokens < output_token_count {
         let remaining_tokens = output_token_count - emitted_tokens;
         let speculation_token_count = speculation_token_count().min(remaining_tokens);
@@ -485,6 +532,7 @@ fn decode_speculative(
             bonus_token_id,
             speculation_token_count,
             context_length_tokens,
+            target_token_choice,
         };
         let round_outcome = run_speculative_round(
             &journey.target_model,
@@ -493,6 +541,7 @@ fn decode_speculative(
             &journey.draft_configuration,
             &mut journey.draft_key_value_states,
             &round_request,
+            &mut random_state,
             &mut attribution,
         )
         .expect("the speculative round should succeed");

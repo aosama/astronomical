@@ -195,12 +195,7 @@ impl Qwen3_5EngineState {
             .is_some_and(|_| {
                 super::super::speculative_decode_lifecycle::speculation_session_admission::should_admit_speculation_for_session(
                     &super::super::speculative_decode_lifecycle::speculation_session_admission::SpeculationSessionRequestProperties {
-                        sampling_strategy: match sampling_strategy {
-                            crate::Qwen3_5SamplingStrategy::HighestLogit => Some(
-                                super::super::speculative_decode_lifecycle::speculation_session_admission::SpeculationCompatibleSampling::HighestLogit,
-                            ),
-                            crate::Qwen3_5SamplingStrategy::TopKTopP { .. } => None,
-                        },
+                        sampling_strategy: super::super::speculative_decode_lifecycle::speculation_session_admission::verification_token_choice_for_strategy(&sampling_strategy),
                         structured_generation_is_active: inference_request
                             .structured_generation()
                             .is_some(),
@@ -460,6 +455,7 @@ impl Qwen3_5EngineState {
                 }),
             speculative_emission_queue: std::collections::VecDeque::new(),
             speculative_session_admitted,
+            speculative_acceptance_window: std::collections::VecDeque::new(),
         });
         let restored_prompt_prefix_token_count = u32::try_from(prefill_cursor).map_err(
             super::generation_error_constructors::restored_prompt_prefix_exceeds_u32_range_error,

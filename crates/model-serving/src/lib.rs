@@ -165,7 +165,8 @@ pub use flux2_klein::{
 #[doc(hidden)]
 #[cfg(feature = "direct-mlx")]
 pub use gpu_token_sampling::{
-    sample_acceptance_coins_for_tests, sample_from_relative_probabilities_for_tests,
+    build_sampled_token_rows_for_tests, sample_acceptance_coins_for_tests,
+    sample_from_relative_probabilities_for_tests,
 };
 
 pub use image_generation_engine::{
@@ -538,7 +539,8 @@ pub use qwen3_5_resident::dflash_draft::target_hidden_state_conditioning::condit
 
 #[cfg(feature = "direct-mlx")]
 pub use qwen3_5_resident::{
-    SpeculationRoundOutcome, SpeculationRoundRequest, VerificationLogitsMode, run_speculative_round,
+    SpeculationRoundOutcome, SpeculationRoundRequest, VerificationLogitsMode,
+    VerificationTokenChoice, run_speculative_round,
 };
 
 #[cfg(feature = "direct-mlx")]

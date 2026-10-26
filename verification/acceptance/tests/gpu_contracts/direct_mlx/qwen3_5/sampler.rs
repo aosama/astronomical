@@ -250,3 +250,83 @@ async fn should_scale_seen_token_logits_by_the_repetition_penalty() {
         );
     }
 }
+
+#[tokio::test]
+async fn should_sample_one_tempered_token_per_logit_row() {
+    let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
+    let runtime = MlxRuntime::initialize(
+        MlxMemoryLimits::new(
+            DIRECT_MLX_TEST_ACTIVE_MEMORY_LIMIT_BYTES,
+            DIRECT_MLX_TEST_ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+        )
+        .expect("the sampler test memory limits should be valid"),
+    )
+    .expect("the direct MLX runtime should initialize");
+    // Two identical skewed rows: exp(2.0), exp(1.5), exp(1.0), exp(0.5)
+    // normalize to roughly 0.455, 0.276, 0.167, 0.101, so the tempered mode
+    // at temperature 1.0 must appear near 45 percent of draws — never 100
+    // percent the way a greedy draft would (the failure mode the reference
+    // repository's issue #74 reproduction demonstrates).
+    let row_logits = [2.0_f32, 1.5, 1.0, 0.5];
+    let two_row_logits = row_logits
+        .iter()
+        .cycle()
+        .take(8)
+        .copied()
+        .collect::<Vec<_>>();
+    let logits_array = runtime
+        .array_from_f32(&two_row_logits, &[1, 2, 4])
+        .expect("the two-row logits should be valid");
+    let mut random_state = runtime
+        .random_key(20_260_925)
+        .expect("the sampler test should build its random state");
+
+    let draw_count = 1_000_usize;
+    let mut row_a_mode_count = 0_usize;
+    let mut row_b_mode_count = 0_usize;
+    let mut rows_differ_count = 0_usize;
+    for _ in 0..draw_count {
+        let sampled_rows = astronomical_model_serving::build_sampled_token_rows_for_tests(
+            &runtime,
+            &logits_array,
+            1_000,
+            1_000,
+            4,
+            &mut random_state,
+        )
+        .expect("the rows sampler should build a valid MLX graph");
+        let sampled_token_ids = sampled_rows
+            .to_vec_u32()
+            .expect("the sampled rows should evaluate as uint32");
+        assert_eq!(sampled_token_ids.len(), 2);
+        if sampled_token_ids[0] == 0 {
+            row_a_mode_count += 1;
+        }
+        if sampled_token_ids[1] == 0 {
+            row_b_mode_count += 1;
+        }
+        if sampled_token_ids[0] != sampled_token_ids[1] {
+            rows_differ_count += 1;
+        }
+    }
+
+    // Tempered marginals: both rows near the softmax mode probability of
+    // about 0.455, with loose bounds absorbing run-to-run key variance.
+    let expected_mode_share = 0.455_f32;
+    let tolerance = 0.08_f32;
+    for (row_label, mode_count) in [("row-a", row_a_mode_count), ("row-b", row_b_mode_count)] {
+        let observed_share = mode_count as f32 / draw_count as f32;
+        assert!(
+            (observed_share - expected_mode_share).abs() < tolerance,
+            "{row_label} tempered mode share {observed_share} must stay near {expected_mode_share}"
+        );
+    }
+    // Independent draws: identical rows must still disagree most of the time
+    // (two independent 0.455/0.276/0.167/0.101 draws agree with probability
+    // about 0.32, so differing in well over half the draws proves the rows
+    // do not share one draw).
+    assert!(
+        rows_differ_count > draw_count / 2,
+        "the two rows must draw independently, differed only {rows_differ_count} of {draw_count} times"
+    );
+}
