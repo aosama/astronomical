@@ -39,7 +39,7 @@ impl ModelFactory<ScriptedChatProcessor, ScriptedChatEngine> for LazyScriptedMod
         let mut scripted_engine = ScriptedChatEngine::new();
         scripted_engine.initial_expert_memory_mode = self.expert_memory_mode;
         if let Some(created_engine_idle_mlx_memory_telemetry) =
-            self.created_engine_idle_mlx_memory_telemetry.clone()
+            self.created_engine_idle_mlx_memory_telemetry
         {
             scripted_engine = scripted_engine
                 .with_idle_mlx_memory_telemetry(created_engine_idle_mlx_memory_telemetry);

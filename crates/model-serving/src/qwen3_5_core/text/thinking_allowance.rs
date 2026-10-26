@@ -27,9 +27,7 @@ pub fn resolve_effective_thinking_allowance(
     max_output_tokens: u16,
     transition_token_count: usize,
 ) -> Option<u16> {
-    let Some(thinking_budget) = requested_thinking_budget else {
-        return None;
-    };
+    let thinking_budget = requested_thinking_budget?;
     if !enable_thinking || thinking_budget == 0 {
         return None;
     }

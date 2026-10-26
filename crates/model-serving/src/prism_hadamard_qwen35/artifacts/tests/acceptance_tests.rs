@@ -32,9 +32,8 @@ fn should_validate_the_complete_fixture_pack() {
         super::pack_fixture::FIXTURE_HADAMARD_BLOCK
     );
     assert_eq!(validated_pack.max_output_tokens(), 4096);
-    assert_eq!(
+    assert!(
         validated_pack.total_payload_bytes() > 0,
-        true,
         "the pack should account for its payload bytes"
     );
     assert!(

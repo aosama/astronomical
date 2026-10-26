@@ -29,7 +29,7 @@ enum ConstraintKind {
     Json {
         decoded_text: String,
     },
-    Regex(RegexTokenMask),
+    Regex(Box<RegexTokenMask>),
 }
 
 impl StructuredTokenConstraint {
@@ -51,9 +51,9 @@ impl StructuredTokenConstraint {
             | StructuredGenerationConstraint::JsonSchema { .. } => ConstraintKind::Json {
                 decoded_text: String::new(),
             },
-            StructuredGenerationConstraint::Regex { pattern } => ConstraintKind::Regex(
+            StructuredGenerationConstraint::Regex { pattern } => ConstraintKind::Regex(Box::new(
                 RegexTokenMask::compile(pattern, Arc::clone(&vocabulary_pieces))?,
-            ),
+            )),
         };
         Ok(Self {
             vocabulary_pieces,
@@ -70,10 +70,10 @@ impl StructuredTokenConstraint {
                 remaining_token_suffixes,
             } => {
                 for remaining_token_suffix in remaining_token_suffixes {
-                    if let Some(next_token_id) = remaining_token_suffix.first() {
-                        if let Some(bias) = biases.get_mut(*next_token_id as usize) {
-                            *bias = 0.0;
-                        }
+                    if let Some(next_token_id) = remaining_token_suffix.first()
+                        && let Some(bias) = biases.get_mut(*next_token_id as usize)
+                    {
+                        *bias = 0.0;
                     }
                 }
             }
@@ -94,13 +94,13 @@ impl StructuredTokenConstraint {
             }
         }
         for end_of_sequence_token_id in &self.end_of_sequence_token_ids {
-            if self.is_complete() {
-                if let Some(bias) = biases.get_mut(*end_of_sequence_token_id as usize) {
-                    *bias = 0.0;
-                }
+            if self.is_complete()
+                && let Some(bias) = biases.get_mut(*end_of_sequence_token_id as usize)
+            {
+                *bias = 0.0;
             }
         }
-        if !biases.iter().any(|bias| *bias == 0.0) {
+        if !biases.contains(&0.0) {
             // Fail open to EOS rather than a zero-mass categorical row.
             for end_of_sequence_token_id in &self.end_of_sequence_token_ids {
                 if let Some(bias) = biases.get_mut(*end_of_sequence_token_id as usize) {
@@ -186,7 +186,7 @@ impl StructuredTokenConstraint {
 }
 
 pub(crate) fn normalize_token_piece(token_piece: &str) -> String {
-    token_piece.replace('\u{0120}', " ").replace('▁', " ")
+    token_piece.replace(['\u{0120}', '▁'], " ")
 }
 
 #[cfg(test)]

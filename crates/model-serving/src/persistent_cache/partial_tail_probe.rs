@@ -23,6 +23,12 @@ use super::model_contract::PersistentPromptCacheModelContract;
 /// `tail_block_slot_index` is the prompt block slot the tail occupies; it
 /// selects the model-owned causal input for that slot. A missing causal input
 /// disables the probe (fail-soft, matching complete-block lookup).
+// A probe parameterized by its inputs: the contract under test, the tail state,
+// two restore-policy switches, and two injected existence checks. The closure
+// parameters resist a parameter struct — mixed ownership (references, slices,
+// impl Fn) would trade one long signature for a construction site that is just
+// as long.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn probe_restorable_partial_tail_block(
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
     prompt_tokens: &[u32],

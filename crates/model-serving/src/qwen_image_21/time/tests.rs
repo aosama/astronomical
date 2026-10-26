@@ -89,15 +89,15 @@ fn should_emit_the_cosine_half_before_the_sine_half() {
     let projection = SinusoidalTimesteps::default();
     let embedding = projection.embed(0.0);
     let half = timestep_dim(&time_oracle()) / 2;
-    for channel in 0..half {
+    for (channel, &embedded_value) in embedding.iter().enumerate().take(half) {
         assert!(
-            (embedding[channel] - 1.0).abs() <= EMBED_TOLERANCE,
+            (embedded_value - 1.0).abs() <= EMBED_TOLERANCE,
             "cos half channel {channel} must be 1.0 at t=0"
         );
     }
-    for channel in half..embedding.len() {
+    for (channel, &embedded_value) in embedding.iter().enumerate().skip(half) {
         assert!(
-            embedding[channel].abs() <= EMBED_TOLERANCE,
+            embedded_value.abs() <= EMBED_TOLERANCE,
             "sin half channel {channel} must be 0.0 at t=0"
         );
     }

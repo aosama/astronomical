@@ -8,8 +8,8 @@ fn refusal(
 ) -> crate::prism_hadamard_qwen35::configuration::FoldedPackConfigError {
     let mut document = shipped_shape_config_json();
     mutate(&mut document);
-    let error = parse_config(&document).expect_err("every mutated fixture must be refused");
-    error
+
+    parse_config(&document).expect_err("every mutated fixture must be refused")
 }
 
 #[test]

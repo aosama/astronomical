@@ -109,6 +109,12 @@ impl ValidatedFoldedPack {
 /// Validates a folded ternary pack directory before any weight is read.
 pub struct FoldedPackValidator;
 
+impl Default for FoldedPackValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FoldedPackValidator {
     #[must_use]
     pub const fn new() -> Self {

@@ -75,3 +75,9 @@ impl EngineLoadResult {
         self.startup_residency_facts
     }
 }
+
+impl Default for EngineLoadResult {
+    fn default() -> Self {
+        Self::new()
+    }
+}

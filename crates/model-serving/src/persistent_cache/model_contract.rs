@@ -41,6 +41,11 @@ pub struct PersistentPromptCacheModelContract {
 
 impl PersistentPromptCacheModelContract {
     /// Resolves one deterministic exact-state storage policy for a loaded model and its budgets.
+    // Eight distinct configuration knobs (identity pair, cache layout, resource
+    // ceilings, block geometry) with five-plus call sites; a parameter struct
+    // would relocate the same fields positionally at every caller without
+    // removing a single name from this signature.
+    #[allow(clippy::too_many_arguments)]
     pub fn resolve(
         model_id: String,
         model_revision: String,
@@ -437,7 +442,7 @@ fn checked_ceiling_division(
         return Err(PersistentPromptCacheModelContractError::ZeroStorageGeometryDivisor);
     }
     (dividend / divisor)
-        .checked_add(usize::from(dividend % divisor != 0))
+        .checked_add(usize::from(!dividend.is_multiple_of(divisor)))
         .ok_or(PersistentPromptCacheModelContractError::BlockTokenCountOverflow)
 }
 

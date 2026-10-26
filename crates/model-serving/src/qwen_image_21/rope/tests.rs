@@ -146,7 +146,7 @@ fn should_lay_image_blocks_on_a_zero_centered_grid() {
     assert!(
         block_one_height
             .iter()
-            .all(|&value| (value >= -1) && (value <= 0)),
+            .all(|&value| (-1..=0).contains(&value)),
         "2x2 block height grid must be zero-centered [-1, 0]: {block_one_height:?}"
     );
     assert_eq!(
@@ -160,7 +160,7 @@ fn should_lay_image_blocks_on_a_zero_centered_grid() {
     assert!(
         block_one_width
             .iter()
-            .all(|&value| (value >= -1) && (value <= 0)),
+            .all(|&value| (-1..=0).contains(&value)),
         "2x2 block width grid must be zero-centered [-1, 0]: {block_one_width:?}"
     );
 }

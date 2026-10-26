@@ -105,7 +105,7 @@ pub fn persistent_prompt_cache_partial_tail_capture_end(
     prompt_token_count: usize,
     persistent_prompt_cache_block_token_count: usize,
 ) -> usize {
-    if prompt_token_count % persistent_prompt_cache_block_token_count == 0 {
+    if prompt_token_count.is_multiple_of(persistent_prompt_cache_block_token_count) {
         prompt_token_count
     } else {
         prompt_token_count.saturating_sub(1)

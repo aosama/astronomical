@@ -375,13 +375,10 @@ impl PerformanceAttribution {
         &mut self,
         token_route: ObservedExpertRoute,
     ) -> Option<ObservedExpertRoute> {
-        let Some(enabled_attribution) = self.enabled_attribution.as_mut() else {
-            return None;
-        };
-        std::mem::replace(
-            &mut enabled_attribution.route_observation_previous_route,
-            Some(token_route),
-        )
+        let enabled_attribution = self.enabled_attribution.as_mut()?;
+        enabled_attribution
+            .route_observation_previous_route
+            .replace(token_route)
     }
 
     /// Returns one accumulated counter, or zero when attribution is disabled.
@@ -396,7 +393,7 @@ impl PerformanceAttribution {
 }
 
 fn usize_to_u64_saturating(integer_count: usize) -> u64 {
-    u64::try_from(integer_count).map_or(u64::MAX, |converted_count| converted_count)
+    u64::try_from(integer_count).unwrap_or(u64::MAX)
 }
 
 pub(super) fn unix_epoch_millis() -> u64 {
