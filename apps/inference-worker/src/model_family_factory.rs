@@ -1,3 +1,11 @@
+//! Model-family dispatch: build the concrete image or autoregressive engine for
+//! a verified model directory, routing each supported family (FLUX.2-klein,
+//! Qwen-Image-21, the Qwen3.5 text engine) through its own startup pipeline.
+//!
+//! The Qwen3.5 startup pipeline lives alongside this orchestrator in the
+//! `model_family_factory/` folder: the startup routine (`qwen3_5_model_startup`)
+//! and its failure type (`qwen3_5_model_startup_error`).
+
 use std::path::PathBuf;
 
 use astronomical_config::{
@@ -17,7 +25,13 @@ use astronomical_model_serving::{
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
-use crate::qwen3_5_model_startup::{self, Qwen3_5EngineSelection};
+mod qwen3_5_model_startup;
+mod qwen3_5_model_startup_error;
+
+#[cfg(test)]
+mod qwen3_5_model_startup_error_tests;
+
+use self::qwen3_5_model_startup::Qwen3_5EngineSelection;
 
 /// Creates the concrete family processor and engine for a selected model directory.
 #[doc(hidden)]

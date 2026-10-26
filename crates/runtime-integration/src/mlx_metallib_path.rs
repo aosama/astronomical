@@ -60,7 +60,6 @@ const BUNDLED_METALLIB_RELATIVE_PATH: &str = "../Resources/share/mlx/mlx.metalli
 /// — the message tells app users to reinstall and development users to
 /// rebuild native artifacts, because those are the two populations that hit
 /// this path — or when an override is not absolute.
-#[must_use]
 pub fn resolve_mlx_metallib_path(
     environment_override_path: Option<PathBuf>,
     current_executable_path: &Path,

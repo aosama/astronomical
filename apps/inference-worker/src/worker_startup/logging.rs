@@ -1,3 +1,7 @@
+//! Bounded rolling diagnostics for the worker process: an hourly rotating log
+//! file whose delivery is lossy by design, so inference never blocks on slow
+//! diagnostic storage.
+
 use std::error::Error;
 
 use astronomical_ipc_protocol::{WorkerLogLevel, WorkerStartupConfiguration};

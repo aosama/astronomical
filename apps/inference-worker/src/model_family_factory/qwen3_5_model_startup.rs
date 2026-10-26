@@ -1,3 +1,7 @@
+//! The Qwen3.5 autoregressive startup pipeline: validate the model directory's
+//! artifacts, derive the RAM geometry and the complete-residency decision,
+//! build the tokenizer and processor, and select and initialize the engine.
+
 use std::path::PathBuf;
 
 use astronomical_config::PromptCacheConfig;
@@ -15,7 +19,7 @@ use astronomical_model_serving::{
     mlx_ram_budget_model_geometry_from_validated_artifact,
 };
 
-use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
+use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 use astronomical_model_serving::ModelLoadingPerformanceAttributionMetadata;
 
 #[derive(Clone, Copy)]

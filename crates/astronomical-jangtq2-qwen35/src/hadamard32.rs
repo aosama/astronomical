@@ -24,7 +24,7 @@ pub const HADAMARD_BLOCK_WIDTH: usize = 32;
 /// Returns whether the transform applies to an input width.
 #[must_use]
 pub const fn is_applicable_to_input_width(input_width: usize) -> bool {
-    input_width % HADAMARD_BLOCK_WIDTH == 0
+    input_width.is_multiple_of(HADAMARD_BLOCK_WIDTH)
 }
 
 /// Applies the CPU reference transform to one vector in place over its
@@ -44,9 +44,20 @@ pub fn reference_transform_vector(input_values: &[f32]) -> Option<Vec<f32>> {
     }
     let hadamard_matrix = normalized_block_matrix();
     let mut transformed_values = vec![0_f32; input_values.len()];
+    // as_chunks splits into (complete N-chunks, remainder); the .0 slice is
+    // the chunks. chunks_exact dropped the remainder the same way, so .0 here
+    // preserves the original behaviour exactly (input width is guaranteed
+    // divisible by HADAMARD_BLOCK_WIDTH, so the remainder is empty anyway).
     for (input_block, transformed_block) in input_values
-        .chunks_exact(HADAMARD_BLOCK_WIDTH)
-        .zip(transformed_values.chunks_exact_mut(HADAMARD_BLOCK_WIDTH))
+        .as_chunks::<HADAMARD_BLOCK_WIDTH>()
+        .0
+        .iter()
+        .zip(
+            transformed_values
+                .as_chunks_mut::<HADAMARD_BLOCK_WIDTH>()
+                .0
+                .iter_mut(),
+        )
     {
         for (row_index, transformed_slot) in transformed_block.iter_mut().enumerate() {
             let mut dot_product = 0_f32;

@@ -160,7 +160,7 @@ pub const fn whole_table_reclamation_target_bytes(
         return required_reclamation_bytes;
     }
     let whole_table_count = required_reclamation_bytes / complete_table_payload_bytes;
-    if required_reclamation_bytes % complete_table_payload_bytes == 0 {
+    if required_reclamation_bytes.is_multiple_of(complete_table_payload_bytes) {
         return required_reclamation_bytes;
     }
     match (whole_table_count + 1).checked_mul(complete_table_payload_bytes) {

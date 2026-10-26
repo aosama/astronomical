@@ -1,11 +1,13 @@
-//! Integration rejection and comparison coverage for the independent FLUX reference contract.
+//! Unit coverage for the independent FLUX reference contract: the oracle must
+//! reject every malformed or mismatched bundle before any generation runs, and
+//! must compare generated RGB (or a decoded PNG reference) against the pinned
+//! independent digest within the explicit tolerance.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{DynamicImage, ImageBuffer, ImageFormat, Rgb};
 use serde_json::{Value, json};
 
-use astronomical_test_harness::flux_reference_oracle;
-use astronomical_test_harness::flux_reference_oracle::{ExpectedFluxReference, FluxReferenceOracle};
+use super::{ExpectedFluxReference, FluxReferenceOracle, sha256_hex};
 
 const MODEL_ID: &str = "black-forest-labs/FLUX.2-klein-4B";
 const MODEL_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
@@ -193,7 +195,7 @@ fn valid_bundle() -> Value {
         "diffusers_source_revision": "2f7e0154a9db246e95c9ede43edba7db5b130805",
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
-        "prompt_sha256": flux2_klein_reference_oracle::sha256_hex(PROMPT.as_bytes()),
+        "prompt_sha256": sha256_hex(PROMPT.as_bytes()),
         "width": 2,
         "height": 2,
         "seed": 7,

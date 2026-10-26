@@ -53,7 +53,6 @@ impl MeasuredExpertLayerPayload {
 /// `complete_residency_transient_bytes` is the transient payload the measurement
 /// owner expects to coexist with complete residency (for example the largest
 /// resident gate-up fusion); it feeds the activation-headroom requirement.
-#[must_use]
 pub fn mlx_ram_budget_model_geometry_from_measured_layer_facts(
     measured_layer_payloads: &[MeasuredExpertLayerPayload],
     total_model_payload_bytes: u64,

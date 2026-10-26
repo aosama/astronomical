@@ -180,7 +180,7 @@ fn should_reject_current_residency_one_byte_above_the_planning_ceiling() {
             MemoryPhase::Prefill,
             10,
             &geometries,
-            &[current_residency.clone()],
+            std::slice::from_ref(&current_residency),
         )
         .is_ok()
     );
