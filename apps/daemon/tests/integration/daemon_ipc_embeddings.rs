@@ -7,7 +7,7 @@ use astronomical_daemon::{EmbeddingsOutput, WorkerHealthSnapshot};
 use astronomical_ipc_protocol::{DaemonIpcClient, DaemonRequest, DaemonResponse, RequestId};
 use tokio::time::timeout;
 
-use crate::common::daemon_ipc::{
+use crate::support::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, StubGenerationExecutor, fresh_instance_state_directory,
     ready_stub_executor_with_embeddings, start_stub_daemon_ipc_service,
 };
@@ -58,10 +58,7 @@ async fn should_route_embeddings_requests_to_the_executor_and_return_the_vectors
         "an embeddings request without a model must resolve to the resident model and return the worker vectors"
     );
 
-    let received_embeddings_commands = stub_executor
-        .received_embeddings_commands
-        .lock()
-        .expect("the stub embeddings command log lock should not be poisoned");
+    let received_embeddings_commands = stub_executor.logged_embeddings_commands();
     assert_eq!(received_embeddings_commands.len(), 1);
     assert_eq!(
         received_embeddings_commands[0].model, "test/local-embedder",

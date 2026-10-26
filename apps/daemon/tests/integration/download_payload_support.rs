@@ -255,7 +255,7 @@ pub(super) fn parse_job_with_size(
 pub(super) fn multi_file_paused_job(file_payloads: &[(&str, &[u8])]) -> DownloadJob {
     let mut files_json = String::new();
     let mut bytes_total = 0_u64;
-    for (file_index, (relative_path, payload_bytes)) in file_payloads.into_iter().enumerate() {
+    for (file_index, (relative_path, payload_bytes)) in file_payloads.iter().enumerate() {
         if file_index > 0 {
             files_json.push(',');
         }
@@ -263,7 +263,7 @@ pub(super) fn multi_file_paused_job(file_payloads: &[(&str, &[u8])]) -> Download
         files_json.push_str(&format!(
             "{{\"relative_path\":\"{relative_path}\",\"expected_bytes\":{expected_bytes},\"expected_digest\":{{\"algorithm\":\"sha256\",\"hex\":\"{digest}\"}},\"bytes_on_disk\":0}}",
             expected_bytes = payload_bytes.len(),
-            digest = sha256_hex(&payload_bytes),
+            digest = sha256_hex(payload_bytes),
         ));
     }
     DownloadJob::parse_json(&format!(

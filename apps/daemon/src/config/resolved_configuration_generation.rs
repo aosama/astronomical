@@ -44,7 +44,7 @@ impl ResolvedConfigurationGeneration {
         }
 
         let mut ordered_model_policies = model_policy_catalog.iter().collect::<Vec<_>>();
-        ordered_model_policies.sort_by(|(left_id, _), (right_id, _)| left_id.cmp(right_id));
+        ordered_model_policies.sort_by_key(|(model_id, _)| *model_id);
         for (model_id, model_policy) in ordered_model_policies {
             update_text(&mut generation_digest, model_id);
             update_number(

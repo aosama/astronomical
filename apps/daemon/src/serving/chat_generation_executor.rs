@@ -80,39 +80,30 @@ pub enum GenerationStartError {
     WorkerUnavailable,
 }
 
+/// Boxed future returned by every chat start: the receiving end of the
+/// generation event stream, or the reason the start was refused before any
+/// worker work began.
+pub(crate) type ChatGenerationStartFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<mpsc::Receiver<ChatGenerationStreamEvent>, GenerationStartError>>
+            + Send
+            + 'a,
+    >,
+>;
+
 /// Starts a bounded chat stream through the one local worker.
 pub trait ChatGenerationExecutor: Send + Sync + 'static {
     fn start_chat_generation(
         &self,
         generation_command: ChatGenerationCommand,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    >;
+    ) -> ChatGenerationStartFuture<'_>;
 
     /// Signals after policy-bound work has entered the executor's immutable admission queue.
     fn start_chat_generation_with_admission_signal(
         &self,
         generation_command: ChatGenerationCommand,
         admission_sender: tokio::sync::oneshot::Sender<()>,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<ChatGenerationStreamEvent>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
+    ) -> ChatGenerationStartFuture<'_> {
         Box::pin(async move {
             let _admission_signal_result = admission_sender.send(());
             self.start_chat_generation(generation_command).await

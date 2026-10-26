@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::timeout;
 
-use crate::common::daemon_ipc::{
+use crate::support::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, StubGenerationExecutor, fresh_instance_state_directory,
     ipc_runtime_config, ready_stub_executor, start_stub_daemon_ipc_service,
     start_stub_daemon_ipc_service_with_runtime_config, text_only_chat_generate_request,
@@ -139,10 +139,7 @@ async fn should_stream_chat_generation_frames_to_the_cli_client() {
         "the daemon should close the connection after the terminal frame"
     );
 
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert_eq!(received_commands.len(), 1);
     let received_command = &received_commands[0];
     assert!(
@@ -212,10 +209,7 @@ async fn should_admit_chat_generation_for_a_model_the_worker_has_not_loaded_yet(
         "a known model the worker has not loaded yet must be admitted to the \
          executor (the empty stub stream ends in failure, not rejection): {terminal_frame:?}"
     );
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert_eq!(
         received_commands.len(),
         1,
@@ -275,10 +269,7 @@ async fn should_reject_chat_generation_for_a_model_unknown_to_the_policy_catalog
         ),
         "a model unknown to the policy catalog must be rejected with its id named: {rejection_frame:?}"
     );
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert!(
         received_commands.is_empty(),
         "a rejected request must not reach the worker"
@@ -362,10 +353,7 @@ async fn should_allocate_distinct_request_ids_to_consecutive_chat_requests() {
         }
     }
 
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert_eq!(received_commands.len(), 2);
     let first_request_id = received_commands[0].request_id.value();
     let second_request_id = received_commands[1].request_id.value();
@@ -422,10 +410,7 @@ async fn should_fill_zero_max_output_tokens_from_the_worker_capabilities() {
             .expect("the sentinel stream frame read should not fail at the transport layer");
     }
 
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert_eq!(received_commands.len(), 1);
     assert_eq!(
         received_commands[0].settings.max_output_tokens, 128,

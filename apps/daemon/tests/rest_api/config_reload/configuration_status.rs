@@ -24,7 +24,7 @@ async fn should_expose_configured_and_worker_effective_generation_with_path_free
     let configured_worker_model_configuration = worker_model_configuration();
     let effective_worker_model_configuration = worker_model_configuration();
     resolved_config.model_policy_catalog = Arc::new(HashMap::from([(
-        crate::common::MODEL_ID.to_owned(),
+        crate::support::MODEL_ID.to_owned(),
         RuntimeModelPolicy {
             model_directory: PathBuf::from("/fictional/private/target"),
             generation_defaults: RuntimeModelGenerationDefaults {
@@ -162,7 +162,7 @@ async fn should_expose_unavailable_model_directory_diagnostics_without_paths() {
 
 fn worker_model_configuration() -> WorkerModelConfiguration {
     WorkerModelConfiguration::Autoregressive(WorkerAutoregressiveModelConfiguration {
-        model_id: crate::common::MODEL_ID.to_owned(),
+        model_id: crate::support::MODEL_ID.to_owned(),
         maximum_context_tokens: 16_384,
         maximum_output_tokens: 4_096,
         chunking: WorkerChunkingConfiguration {

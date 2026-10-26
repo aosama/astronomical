@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::timeout;
 
-use crate::common::daemon_ipc::{
+use crate::support::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, fresh_instance_state_directory, ready_stub_executor,
     start_stub_daemon_ipc_service,
 };
@@ -41,10 +41,7 @@ async fn should_forward_a_valid_cli_schema_as_a_structured_generation_command() 
         "a valid schema should pass the daemon gate: {completion_frame:?}"
     );
 
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert_eq!(received_commands.len(), 1);
     assert_eq!(
         received_commands[0].structured_generation,
@@ -89,10 +86,7 @@ async fn should_map_an_empty_object_schema_to_the_json_object_constraint() {
         Some(DaemonResponse::ChatGenerationCompleted { .. })
     ));
 
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert_eq!(
         received_commands[0].structured_generation,
         Some(StructuredGenerationConstraint::JsonObject),
@@ -131,10 +125,7 @@ async fn should_reject_a_chat_generate_request_with_an_unparseable_schema() {
         other => panic!("expected a generation rejection, got {other:?}"),
     }
 
-    let received_commands = stub_executor
-        .received_commands
-        .lock()
-        .expect("the stub command log lock should not be poisoned");
+    let received_commands = stub_executor.logged_commands();
     assert!(
         received_commands.is_empty(),
         "an unparseable schema must never reach the worker executor"

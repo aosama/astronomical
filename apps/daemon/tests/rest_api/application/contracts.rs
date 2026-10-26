@@ -11,7 +11,7 @@ use axum::{
 use tower::ServiceExt;
 
 use super::support;
-use crate::common::{MODEL_ID, ScriptedExecutor};
+use crate::support::{MODEL_ID, ScriptedExecutor};
 
 #[tokio::test]
 async fn should_report_health_readiness_and_the_loaded_model() {

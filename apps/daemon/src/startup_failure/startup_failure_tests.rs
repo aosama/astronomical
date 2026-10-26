@@ -115,6 +115,7 @@ fn should_expose_the_lock_holder_note_written_by_the_running_daemon() {
 
     let mut lock_file = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .mode(0o600)

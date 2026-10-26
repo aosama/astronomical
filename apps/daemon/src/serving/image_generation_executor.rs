@@ -49,24 +49,29 @@ impl ImageGenerationTimeouts {
     }
 }
 
+/// Boxed future returned by every image/embeddings start: the receiving end
+/// of the generation outcome stream, or the reason the start was refused
+/// before any worker work began. The stream items stay `Result`-wrapped so a
+/// mid-generation failure travels on the stream rather than the start path.
+pub(crate) type GenerationOutcomeStartFuture<'a, GenerationOutcome, GenerationError> = Pin<
+    Box<
+        dyn Future<
+                Output = Result<
+                    mpsc::Receiver<Result<GenerationOutcome, GenerationError>>,
+                    GenerationStartError,
+                >,
+            > + Send
+            + 'a,
+    >,
+>;
+
 /// Starts one image request through the same bounded worker admission owner as chat.
 pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     fn start_image_generation(
         &self,
         _image_generation_command: ImageGenerationCommand,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<
-                            Result<ImageGenerationOutput, ImageGenerationExecutionError>,
-                        >,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
+    ) -> GenerationOutcomeStartFuture<'_, ImageGenerationOutput, ImageGenerationExecutionError>
+    {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }
 
@@ -75,19 +80,8 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
         &self,
         image_generation_command: ImageGenerationCommand,
         admission_sender: tokio::sync::oneshot::Sender<()>,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<
-                            Result<ImageGenerationOutput, ImageGenerationExecutionError>,
-                        >,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
+    ) -> GenerationOutcomeStartFuture<'_, ImageGenerationOutput, ImageGenerationExecutionError>
+    {
         Box::pin(async move {
             let _admission_signal_result = admission_sender.send(());
             self.start_image_generation(image_generation_command).await
@@ -102,17 +96,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     fn start_embeddings_generation(
         &self,
         _embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
+    ) -> GenerationOutcomeStartFuture<'_, EmbeddingsOutput, EmbeddingsExecutionError> {
         Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
     }
 
@@ -121,17 +105,7 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
         &self,
         embeddings_command: astronomical_ipc_protocol::EmbeddingsCommand,
         admission_sender: tokio::sync::oneshot::Sender<()>,
-    ) -> Pin<
-        Box<
-            dyn Future<
-                    Output = Result<
-                        mpsc::Receiver<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
-                        GenerationStartError,
-                    >,
-                > + Send
-                + '_,
-        >,
-    > {
+    ) -> GenerationOutcomeStartFuture<'_, EmbeddingsOutput, EmbeddingsExecutionError> {
         let _admission_signal_result = admission_sender.send(());
         self.start_embeddings_generation(embeddings_command)
     }

@@ -23,8 +23,11 @@ impl AstronomicalInstanceLock {
                 source,
             }
         })?;
-        let locked_file = OpenOptions::new()
+        // truncate(false) is explicit because truncation must wait for lock
+        // ownership: a losing opener must not destroy the holder's pid note.
+        let mut locked_file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .mode(0o600)
@@ -39,8 +42,8 @@ impl AstronomicalInstanceLock {
                 // so the winner records its pid for the loser's failure report.
                 // Best-effort: the lock is the flock, not this content.
                 let holder_note = format!("pid={} instance=astronomicald", std::process::id());
-                let _ = (&locked_file).set_len(0);
-                let _ = (&locked_file).write_all(holder_note.as_bytes());
+                let _ = locked_file.set_len(0);
+                let _ = locked_file.write_all(holder_note.as_bytes());
                 Ok(Self {
                     _locked_file: locked_file,
                 })

@@ -98,16 +98,21 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     scripted_worker_chat::send_structured_json_reply(request_id, &mut event_writer)
                         .await?;
                 } else {
+                    let cancellation_fixture_state = CancellationFixtureState {
+                        active_request_id: &mut active_request_id,
+                        should_acknowledge_cancellation: &mut should_acknowledge_cancellation,
+                        cancellation_acknowledgement_delay: &mut cancellation_acknowledgement_delay,
+                        cancellation_mlx_telemetry: &mut cancellation_mlx_telemetry,
+                        should_emit_unexpected_cancellation_event:
+                            &mut should_emit_unexpected_cancellation_event,
+                        should_emit_cache_stats_before_cancellation_acknowledgement:
+                            &mut should_emit_cache_stats_before_cancellation_acknowledgement,
+                    };
                     let should_exit_worker = dispatch_unstructured_chat(
                         generation_command,
                         request_id,
                         &mut event_writer,
-                        &mut active_request_id,
-                        &mut should_acknowledge_cancellation,
-                        &mut cancellation_acknowledgement_delay,
-                        &mut cancellation_mlx_telemetry,
-                        &mut should_emit_unexpected_cancellation_event,
-                        &mut should_emit_cache_stats_before_cancellation_acknowledgement,
+                        cancellation_fixture_state,
                     )
                     .await?;
                     if should_exit_worker {
@@ -249,22 +254,36 @@ fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMlxMemorySnap
     }
 }
 
+/// The shared cancellation-script state the Generate and Cancel arms both
+/// mutate; one bundle keeps the dispatch signature readable.
+struct CancellationFixtureState<'a> {
+    active_request_id: &'a mut Option<RequestId>,
+    should_acknowledge_cancellation: &'a mut bool,
+    cancellation_acknowledgement_delay: &'a mut Duration,
+    cancellation_mlx_telemetry: &'a mut CancellationMlxTelemetry,
+    should_emit_unexpected_cancellation_event: &'a mut bool,
+    should_emit_cache_stats_before_cancellation_acknowledgement: &'a mut bool,
+}
+
 /// Dispatches the schema-free chat fixture arms, which mutate the shared
 /// cancellation state; returns true when the worker should exit.
 async fn dispatch_unstructured_chat(
     generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
     request_id: RequestId,
-    mut event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
-    active_request_id: &mut Option<RequestId>,
-    should_acknowledge_cancellation: &mut bool,
-    cancellation_acknowledgement_delay: &mut Duration,
-    cancellation_mlx_telemetry: &mut CancellationMlxTelemetry,
-    should_emit_unexpected_cancellation_event: &mut bool,
-    should_emit_cache_stats_before_cancellation_acknowledgement: &mut bool,
+    event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
+    cancellation_fixture_state: CancellationFixtureState<'_>,
 ) -> Result<bool, Box<dyn Error + Send + Sync>> {
+    let CancellationFixtureState {
+        active_request_id,
+        should_acknowledge_cancellation,
+        cancellation_acknowledgement_delay,
+        cancellation_mlx_telemetry,
+        should_emit_unexpected_cancellation_event,
+        should_emit_cache_stats_before_cancellation_acknowledgement,
+    } = cancellation_fixture_state;
     match generation_command.model.as_str() {
         "astronomical/accepted-chat-fixture" => {
-            scripted_worker_chat::send_accepted_chat(request_id, &mut event_writer).await?;
+            scripted_worker_chat::send_accepted_chat(request_id, event_writer).await?;
         }
         "astronomical/malformed-output-fixture" => {
             event_writer
@@ -336,7 +355,7 @@ async fn dispatch_unstructured_chat(
             *cancellation_mlx_telemetry = CancellationMlxTelemetry::Clear;
         }
         "astronomical/activity-transition-fixture" => {
-            scripted_worker_chat::send_activity_transition(request_id, &mut event_writer).await?;
+            scripted_worker_chat::send_activity_transition(request_id, event_writer).await?;
         }
         "astronomical/duplicate-generation-preparation-fixture" => {
             let generation_preparation_event = WorkerEvent::GenerationPreparationStarted {
