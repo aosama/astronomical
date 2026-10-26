@@ -3,7 +3,7 @@ use std::time::Duration;
 use astronomical_daemon::{ChatGenerationExecutor, WorkerHandle, WorkerHealthStatus};
 use tokio::time::{Instant, sleep};
 
-use crate::common::daemon;
+use crate::support::daemon;
 
 #[tokio::test]
 async fn should_force_terminate_and_reap_a_worker_that_keeps_loading() {

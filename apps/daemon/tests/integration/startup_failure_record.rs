@@ -5,7 +5,7 @@ use std::process::{Child, ChildStdout, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use astronomical_daemon::AstronomicalInstanceLock;
-use astronomical_daemon::startup_failure::{StartupFailureStage, read_last_startup_failure};
+use astronomical_daemon::{StartupFailureStage, read_last_startup_failure};
 
 /// Spawns the real `astronomicald` against a throwaway state directory and
 /// returns the child plus the port parsed from its "listening on" line.

@@ -16,7 +16,10 @@
 //! this contract listed three stylesheets by name and missed `report.css`, which
 //! left a live report page publishing 9.6px labels one directory away.
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// 12px at the browser default root size: the smallest text a page may publish.
 /// Below this, uppercase mono labels stop being readable for anyone who does not
@@ -31,9 +34,9 @@ fn site_directory() -> PathBuf {
 
 /// Every published stylesheet or page below one directory, so a nested report
 /// directory cannot hide from the floor.
-fn published_sources(directory: &PathBuf, extension: &str) -> Vec<PathBuf> {
+fn published_sources(directory: &Path, extension: &str) -> Vec<PathBuf> {
     let mut sources = Vec::new();
-    let mut pending = vec![directory.clone()];
+    let mut pending = vec![directory.to_path_buf()];
 
     while let Some(current) = pending.pop() {
         let entries = fs::read_dir(&current)

@@ -117,12 +117,10 @@ mod tests {
     /// console styles must therefore carry an explicit CSS size.
     #[test]
     fn console_css_sizes_every_styled_svg() {
-        for css_rule_selector in [".navigation-button svg"] {
-            assert!(
-                CONSOLE_CSS.contains(css_rule_selector),
-                "console.css is missing a sizing rule for `{css_rule_selector}`"
-            );
-        }
+        assert!(
+            CONSOLE_CSS.contains(".navigation-button svg"),
+            "console.css is missing a sizing rule for `.navigation-button svg`"
+        );
         let navigation_icon_rule = CONSOLE_CSS
             .split(".navigation-button svg")
             .nth(1)

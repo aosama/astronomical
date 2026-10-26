@@ -9,7 +9,7 @@ use axum::{
 use tokio::time::timeout;
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 #[tokio::test]
 async fn should_serve_a_labelled_library_destination_at_its_deep_link() {

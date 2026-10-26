@@ -8,7 +8,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::daemon::{
+use crate::support::daemon::{
     launch_test_executor, launch_test_executor_with_cancellation_acknowledgement_timeout,
 };
 

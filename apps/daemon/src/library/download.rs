@@ -1,38 +1,32 @@
 //! Download pipeline: coordination, preflights, publication, and progress.
 
-pub(crate) mod download_coordinator;
-pub(crate) mod download_disk_preflight;
-pub(crate) mod download_endpoint;
-pub(crate) mod download_executable_preflight;
-pub(crate) mod download_manifest_preflight;
-pub(crate) mod download_path_selection;
-pub(crate) mod download_progress_snapshot;
-pub(crate) mod download_publication;
-pub(crate) mod download_publication_provenance;
-pub(crate) mod download_publication_reconciliation;
+pub(crate) mod coordinator;
+pub(crate) mod disk_preflight;
+pub(crate) mod endpoint;
+pub(crate) mod executable_preflight;
+pub(crate) mod manifest_preflight;
+pub(crate) mod path_selection;
+pub(crate) mod progress_snapshot;
+pub(crate) mod publication;
 
 #[cfg(test)]
-mod download_disk_preflight_tests;
+mod disk_preflight_tests;
 #[cfg(test)]
-mod download_executable_preflight_tests;
+mod executable_preflight_tests;
 #[cfg(test)]
-mod download_manifest_preflight_tests;
+mod manifest_preflight_tests;
 
 pub(crate) mod job;
 pub(crate) mod transfer;
 
-pub use download_coordinator::{LibraryDownloadCoordinator, LibraryDownloadCoordinatorError};
-pub use download_disk_preflight::{
+pub use coordinator::{LibraryDownloadCoordinator, LibraryDownloadCoordinatorError};
+pub use disk_preflight::{
     DiskCapacityQuery, DownloadDiskCapacityCheck, DownloadDiskPreflight,
     DownloadDiskPreflightError, Fs4DiskCapacityQuery,
 };
-pub(crate) use download_endpoint::library_download_routes;
-pub use download_executable_preflight::{
-    DownloadExecutablePreflight, DownloadExecutablePreflightError,
-};
-pub use download_manifest_preflight::{DownloadManifestPreflight, DownloadManifestPreflightError};
-pub use download_path_selection::DownloadPathSelection;
-pub use download_progress_snapshot::DownloadProgressSnapshot;
-pub use download_publication::{
-    DownloadPublication, DownloadPublicationError, DownloadPublicationRefresh,
-};
+pub(crate) use endpoint::library_download_routes;
+pub use executable_preflight::{DownloadExecutablePreflight, DownloadExecutablePreflightError};
+pub use manifest_preflight::{DownloadManifestPreflight, DownloadManifestPreflightError};
+pub use path_selection::DownloadPathSelection;
+pub use progress_snapshot::DownloadProgressSnapshot;
+pub use publication::{DownloadPublication, DownloadPublicationError, DownloadPublicationRefresh};

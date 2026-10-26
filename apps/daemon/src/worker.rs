@@ -10,22 +10,20 @@ pub(crate) mod generation;
 pub(crate) mod memory;
 pub(crate) mod process;
 
-pub(crate) mod worker_cache_clear;
-pub(crate) mod worker_control_error;
-pub(crate) mod worker_embeddings_event;
-pub(crate) mod worker_embeddings_request;
-pub(crate) mod worker_event_handler;
-pub(crate) mod worker_handle;
-pub(crate) mod worker_handle_chat;
-pub(crate) mod worker_handle_image;
-pub(crate) mod worker_health;
-pub(crate) mod worker_idle_drain;
-pub(crate) mod worker_image_event;
-pub(crate) mod worker_image_request;
-pub(crate) mod worker_loop_types;
+pub(crate) mod cache_clear;
+pub(crate) mod control_error;
+pub(crate) mod embeddings_event;
+pub(crate) mod embeddings_request;
+pub(crate) mod event_handler;
+pub(crate) mod handle;
+pub(crate) mod health;
+pub(crate) mod idle_drain;
+pub(crate) mod image_event;
+pub(crate) mod image_request;
+pub(crate) mod loop_types;
 
 #[cfg(test)]
-mod worker_event_handler_tests;
+mod event_handler_tests;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -34,7 +32,7 @@ use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::time::{Instant, MissedTickBehavior, interval};
 
-use crate::worker::memory::worker_memory_limit::{
+use crate::worker::memory::limit::{
     MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate, apply_mlx_memory_limit,
     take_generation_start_after_pending_memory_limit,
 };
@@ -43,18 +41,18 @@ use crate::{
     ImageGenerationExecutionError, ImageGenerationTimeouts, RuntimeModelPolicy, WorkerControlError,
     WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
     serving::chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect},
-    worker::memory::worker_memory_demotion::MemoryDemotionRestart,
-    worker::process::worker_containment::{
-        cancel_active_generation, close_worker_if_running, contain_worker_failure, shutdown_worker,
-    },
-    worker::process::worker_replacement::WorkerReplacement,
-    worker::worker_event_handler::handle_worker_event,
-    worker::worker_health::{publish_health, publish_pending_mlx_memory_ceiling},
-    worker::worker_idle_drain::{
+    worker::event_handler::handle_worker_event,
+    worker::health::{publish_health, publish_pending_mlx_memory_ceiling},
+    worker::idle_drain::{
         drain_pending_idle_work, wait_for_embeddings_execution_deadline,
         wait_for_image_execution_deadline,
     },
-    worker::worker_loop_types::{ActiveWorkerRequest, WorkerLoopCommand},
+    worker::loop_types::{ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopState},
+    worker::memory::demotion::MemoryDemotionRestart,
+    worker::process::containment::{
+        cancel_active_generation, close_worker_if_running, contain_worker_failure, shutdown_worker,
+    },
+    worker::process::replacement::WorkerReplacement,
 };
 
 // Keeping process-loop dependencies explicit is clearer than hiding them in a context object.
@@ -85,19 +83,22 @@ pub(crate) async fn run_worker(
     let mut pending_prompt_cache_clear: Option<crate::PendingPromptCacheClear> = None;
 
     loop {
+        let mut worker_loop_state = WorkerLoopState {
+            worker_process: &mut worker_process,
+            health_snapshot: &health_snapshot,
+            is_ready: &mut is_ready,
+            model_load_deadline: &mut model_load_deadline,
+            active_request: &mut active_generation,
+            performance_log: &mut performance_log,
+            completion_log: &mut completion_log,
+            model_load_timeout,
+        };
         drain_pending_idle_work(
+            &mut worker_loop_state,
             &mut pending_mlx_memory_limit_update,
             &mut pending_prompt_cache_clear,
-            &mut worker_process,
-            &health_snapshot,
-            &mut active_generation,
-            &mut is_ready,
-            &mut model_load_deadline,
-            &mut performance_log,
-            &mut completion_log,
             &active_generation_permits,
             &generation_queue_permits,
-            model_load_timeout,
         )
         .await;
         let stream_event_sender = active_generation
@@ -161,20 +162,23 @@ pub(crate) async fn run_worker(
                         else {
                             continue;
                         };
-                        if let Err(control_error) = generation::worker_generate::handle_generate_command(
-                            &mut worker_process,
+                        let mut worker_loop_state = WorkerLoopState {
+                            worker_process: &mut worker_process,
+                            health_snapshot: &health_snapshot,
+                            is_ready: &mut is_ready,
+                            model_load_deadline: &mut model_load_deadline,
+                            active_request: &mut active_generation,
+                            performance_log: &mut performance_log,
+                            completion_log: &mut completion_log,
+                            model_load_timeout,
+                        };
+                        if let Err(control_error) = generation::generate::handle_generate_command(
+                            &mut worker_loop_state,
                             active_generation_permit,
                             generation_command,
                             start_sender,
                             stream_event_sender,
-                            &health_snapshot,
-                            &mut is_ready,
-                            &mut model_load_deadline,
-                            &mut active_generation,
-                            &mut performance_log,
-                            &mut completion_log,
                             &model_policy_catalog,
-                            model_load_timeout,
                             cancellation_acknowledgement_timeout,
                         )
                         .await
@@ -217,7 +221,7 @@ pub(crate) async fn run_worker(
                         else {
                             continue;
                         };
-                        if let Err(control_error) = worker_image_request::handle_generate_image_command(
+                        if let Err(control_error) = image_request::handle_generate_image_command(
                             &mut worker_process,
                             active_generation_permit,
                             generation_command,
@@ -273,7 +277,7 @@ pub(crate) async fn run_worker(
                         else {
                             continue;
                         };
-                        if let Err(control_error) = worker_embeddings_request::handle_generate_embeddings_command(
+                        if let Err(control_error) = embeddings_request::handle_generate_embeddings_command(
                             &mut worker_process,
                             active_generation_permit,
                             embeddings_command,
@@ -432,7 +436,7 @@ pub(crate) async fn run_worker(
                         model_id,
                         clear_sender,
                     } => {
-                        worker_cache_clear::handle_prompt_cache_clear_command(
+                        cache_clear::handle_prompt_cache_clear_command(
                             model_id,
                             clear_sender,
                             &mut pending_prompt_cache_clear,

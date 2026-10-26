@@ -11,7 +11,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use crate::common::{MODEL_ID, ScriptedExecutor};
+use crate::support::{MODEL_ID, ScriptedExecutor};
 
 const DISCOVERED_VISION_MODEL_ID: &str = "fake-mixture-of-experts";
 

@@ -17,7 +17,7 @@ use axum::{
 use tokio::net::TcpListener;
 use tower::ServiceExt;
 
-use crate::common::{MODEL_ID, ScriptedExecutor};
+use crate::support::{MODEL_ID, ScriptedExecutor};
 
 const LOCAL_API_PAGE_RELATIVE_PATH: &str = "../../site/local-api.html";
 const LOOPBACK_ORIGIN_PREFIX: &str = "http://127.0.0.1:";
