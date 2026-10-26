@@ -84,9 +84,14 @@ fn should_pin_profiles_alias_rules_and_the_retired_runner_absence() {
             alias_command_text.contains("--release"),
             "the {throughput_alias} alias must carry the optimized build"
         );
+        // A raw `cargo test` alias carries the serial rule as the literal
+        // flag; an alias routed through the typed test-run runner satisfies it
+        // because the runner injects --test-threads=1 into every invocation.
+        let runs_serially = alias_command_text.contains("--test-threads=1")
+            || alias_command_text.contains("run -p xtask -- test-run");
         assert!(
-            alias_command_text.contains("--test-threads=1"),
-            "the {throughput_alias} alias must carry the GPU serial rule"
+            runs_serially,
+            "the {throughput_alias} alias must run GPU work serially: directly via --test-threads=1, or through the test-run runner that injects it"
         );
     }
 
