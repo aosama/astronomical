@@ -783,6 +783,16 @@ jobs:
           scripts/ci/ci-step-timing.sh begin site-link-check
           node scripts/check-site-links.js
         timeout-minutes: 2
+      # The pinned toolchain file makes rustup provision the exact nightly
+      # rustfmt contributors run locally before the check executes, so a
+      # formatting failure is never a version disagreement between the
+      # runner image and the repository pin.
+      - name: Check Rust formatting
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end rust-format-check' EXIT
+          scripts/ci/ci-step-timing.sh begin rust-format-check
+          cargo fmt --all -- --check
+        timeout-minutes: 3
 
   # Host-agnostic configuration contracts (issue #1553, phase 2a): these
   # steps parse configuration and inventory — they do not exercise the
