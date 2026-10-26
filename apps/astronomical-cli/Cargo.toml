@@ -6,10 +6,12 @@ publish.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
-# One explicit test target: unit tests live inside src/ (lib test binary) and
-# the verb journeys stay in tests/cli_journeys/ behind tests/integration_tests.rs.
-# autotests = false keeps stray .rs files under tests/ from auto-discovering as
-# extra linked test binaries.
+# One explicit test target, matching the workspace convention shared by the
+# other integration-tested packages: the target root is
+# tests/integration_tests.rs and the journey tree lives under
+# tests/integration/ with shared stubs under tests/integration/support/.
+# autotests = false keeps any stray .rs file under tests/ from
+# auto-discovering as an extra test binary.
 autotests = false
 
 [[bin]]

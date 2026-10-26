@@ -140,7 +140,7 @@ fn run_launch(launch_arguments: astronomical_cli::LaunchArguments) -> ExitCode {
             is_interactive,
             stdin: &mut stdin,
             stderr: &mut stderr,
-            http_timeout: astronomical_cli::launch::DEFAULT_LOOPBACK_TIMEOUT,
+            http_timeout: astronomical_cli::verbs::launch::DEFAULT_LOOPBACK_TIMEOUT,
         },
     ) {
         Ok(prepared_launch) => prepared_launch,

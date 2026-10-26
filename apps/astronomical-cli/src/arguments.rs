@@ -3,13 +3,14 @@
 
 use std::{ffi::OsString, path::PathBuf};
 
-use crate::embed_arguments::EmbedArguments;
-use crate::errors::UsageError;
-use crate::models_arguments::ModelsCommand;
-use crate::quantize_arguments::QuantizeCommand;
-use crate::respond_arguments::RespondArguments;
-use crate::schema_arguments::SchemaArguments;
-use crate::validate_config_arguments::ValidateConfigArguments;
+use thiserror::Error;
+
+use crate::verbs::embed::EmbedArguments;
+use crate::verbs::models::ModelsCommand;
+use crate::verbs::quantize::QuantizeCommand;
+use crate::verbs::respond::RespondArguments;
+use crate::verbs::schema::SchemaArguments;
+use crate::verbs::validate_config::ValidateConfigArguments;
 
 const HELP_TEXT: &str = concat!(
     "Astronomical\n\n",
@@ -153,7 +154,7 @@ pub fn parse_command(
         "validate" => {
             parse_validate_command(&remaining_arguments[1..]).map(CliCommand::ValidateConfig)
         }
-        "quantize" => crate::quantize_arguments::parse_quantize_command(&remaining_arguments[1..])
+        "quantize" => crate::verbs::quantize::parse_quantize_command(&remaining_arguments[1..])
             .map(CliCommand::Quantize),
         other => Err(UsageError::UnknownCommand(other.to_owned())),
     }
@@ -161,7 +162,7 @@ pub fn parse_command(
 
 fn parse_schema_command(
     remaining_arguments: &[OsString],
-) -> Result<crate::schema_arguments::SchemaArguments, UsageError> {
+) -> Result<crate::verbs::schema::SchemaArguments, UsageError> {
     let schema_target = remaining_arguments
         .first()
         .and_then(|argument| argument.to_str())
@@ -169,12 +170,12 @@ fn parse_schema_command(
     if schema_target != "object" {
         return Err(UsageError::UnknownSchemaTarget(schema_target.to_owned()));
     }
-    crate::schema_arguments::parse_schema_arguments(&remaining_arguments[1..])
+    crate::verbs::schema::parse_schema_arguments(&remaining_arguments[1..])
 }
 
 fn parse_validate_command(
     remaining_arguments: &[OsString],
-) -> Result<crate::validate_config_arguments::ValidateConfigArguments, UsageError> {
+) -> Result<crate::verbs::validate_config::ValidateConfigArguments, UsageError> {
     let validate_target = remaining_arguments
         .first()
         .and_then(|argument| argument.to_str())
@@ -184,7 +185,7 @@ fn parse_validate_command(
             validate_target.to_owned(),
         ));
     }
-    crate::validate_config_arguments::parse_validate_config_arguments(&remaining_arguments[1..])
+    crate::verbs::validate_config::parse_validate_config_arguments(&remaining_arguments[1..])
 }
 
 fn parse_models_command(remaining_arguments: &[OsString]) -> Result<ModelsCommand, UsageError> {
@@ -506,3 +507,59 @@ fn parse_embed_arguments(remaining_arguments: &[OsString]) -> Result<EmbedArgume
         model_id,
     })
 }
+
+/// Command-line usage failures. These exit 2.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum UsageError {
+    #[error("missing command. Try: astronomical launch opencode")]
+    MissingCommand,
+    #[error("unknown command: {0}")]
+    UnknownCommand(String),
+    #[error("unrecognized argument: {0}")]
+    UnknownArgument(String),
+    #[error("missing value for {0}")]
+    MissingValue(&'static str),
+    #[error("argument may be supplied only once: {0}")]
+    RepeatedArgument(&'static str),
+    #[error("launch accepts at most one tool name")]
+    MultipleTools,
+    #[error("schema object needs --name NAME")]
+    SchemaNameRequired,
+    #[error(
+        "schema object needs at least one property. Try: astronomical schema object --name Thing --string label"
+    )]
+    SchemaPropertyRequired,
+    #[error("{0} must follow a property")]
+    SchemaModifierWithoutProperty(String),
+    #[error("property may be supplied only once: {0}")]
+    SchemaDuplicateProperty(String),
+    #[error("invalid property path: {0}")]
+    SchemaInvalidPropertyPath(String),
+    #[error("unknown schema target: {0}. Supported targets: object")]
+    UnknownSchemaTarget(String),
+    #[error("unknown validate target: {0}. Supported targets: config")]
+    UnknownValidateTarget(String),
+    #[error("unknown quantize target: {0}. Supported targets: plan, inspect, convert")]
+    UnknownQuantizeTarget(String),
+    #[error("invalid value for {flag}: {reason}")]
+    InvalidQuantizeValue { flag: &'static str, reason: String },
+    #[error("unknown instance {0}: expected stable or development")]
+    UnknownInstance(String),
+    #[error("respond needs a prompt. Try: astronomical respond 'Hello'")]
+    RespondPromptRequired,
+    #[error("respond takes one prompt. Use either the positional PROMPT or --text, not both.")]
+    RespondPromptConflict,
+    #[error("--thinking-budget must be a whole number of tokens from 0 to 65535: {0}")]
+    InvalidThinkingBudget(String),
+    #[error("embed takes one input. Pass TEXT, --file PATH, or pipe stdin — not several.")]
+    EmbedInputConflict,
+    #[error("models needs a subcommand: list, supported, default, download")]
+    ModelsSubcommandRequired,
+    #[error("unknown models subcommand: {0}. Try: list, supported, default, download")]
+    UnknownModelsSubcommand(String),
+    #[error("models download needs a MODEL_ID. Try: astronomical models download Qwen3.5-2B-4bit")]
+    ModelsDownloadModelRequired,
+}
+
+#[cfg(test)]
+mod arguments_tests;
