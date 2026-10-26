@@ -9,10 +9,6 @@
 - There are no downstream consumers or other dependent applications — hence no need for deprecation or compatibility shims or any other techniques.
 - There is no requirement for backward compatibility for the REST API surface. There are no downstream consumers of these surfaces, so REST API backward compatibility is not a constraint.
 
-## Memory Measurement Units
-
-- Any end-user-facing file-size or memory value must use the gigabyte convention Apple uses to market the machine: 1 GB = 1,073,741,824 bytes (2³⁰). A machine with 51,539,607,552 bytes of RAM is presented as 48 GB, exactly as the purchase sticker reads; its model ceiling is (48 − 8) = 40 GB.
-
 ## Prohibited Terminology: "qualification" and "hermetic"
 
 - Never use "qualification" or any variant ("qualify", "qualified", etc.) in code, comments, tests, scripts, documentation, commit messages, GitHub content, or replies.
