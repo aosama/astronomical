@@ -156,11 +156,7 @@ fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
             "streamed-role layer {layer_index} must stream operation-local when the leftover budget cannot seat its page"
         );
         assert!(
-            !should_commit_mandatory_complete_layer(
-                39,
-                true,
-                Some(*layer_target),
-            ),
+            !should_commit_mandatory_complete_layer(39, true, Some(*layer_target),),
             "the commit gate must refuse layer {layer_index}: 33 pinned claims leave {} bytes, one page is {}",
             COMPOSED_LEFTOVER_BUDGET_BYTES - 33 * COMPLETE_LAYER_PAYLOAD_BYTES,
             COMPLETE_LAYER_PAYLOAD_BYTES
