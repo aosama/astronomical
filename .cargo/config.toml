@@ -72,7 +72,10 @@ test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization
 test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --ignored"
 
 # Repository tooling as typed Rust; the subcommand catalog lives in the
-# xtask sources. `cargo xtask test-run` builds exact Cargo executables and
+# xtask sources. `cargo xtask audit-test-declarations` walks every crate's
+# tests/ tree and fails when a test file is unreachable from any target
+# through `mod` declarations (the class of silent-orphan bug that once hid
+# seven tests in an undeclared file). `cargo xtask test-run` builds exact Cargo executables and
 # runs each selected test in its own process, with a 120-second budget,
 # five-second progress, and retained manifests/logs under target/test-runs;
 # serving measurements must use this runner.
