@@ -24,6 +24,9 @@
 use astronomical_ipc_protocol::RequestId;
 use mlx_c_rust::MlxArray;
 
+use std::time::Instant;
+
+use crate::PerformanceOperation;
 use crate::gpu_token_sampling;
 use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
@@ -95,6 +98,7 @@ pub fn run_speculative_round(
         ));
     }
 
+    let draft_pass_started_at = Instant::now();
     let proposals = draft_proposals(
         target_model,
         draft_weights,
@@ -103,6 +107,11 @@ pub fn run_speculative_round(
         round_request,
         performance_attribution,
     )?;
+    performance_attribution.record_operation_interval(
+        PerformanceOperation::SpeculativeDraftBlockPass,
+        draft_pass_started_at,
+        Instant::now(),
+    );
 
     // The draft key-value state now holds the discarded block scratch at
     // positions after the context; roll it back before the round ends so
@@ -111,9 +120,16 @@ pub fn run_speculative_round(
 
     let verification_tokens =
         assemble_verification_tokens(round_request.bonus_token_id, &proposals);
+    let checkpoint_started_at = Instant::now();
     let target_checkpoint = target_decoder_state
         .checkpoint()
         .map_err(Qwen3_5ExecutionError::from)?;
+    performance_attribution.record_operation_interval(
+        PerformanceOperation::SpeculativeRoundStateCheckpoint,
+        checkpoint_started_at,
+        Instant::now(),
+    );
+    let verification_started_at = Instant::now();
     let verification_output = target_model.build_speculative_verification_forward(
         &verification_tokens,
         context_length_tokens,
@@ -122,22 +138,34 @@ pub fn run_speculative_round(
         VerificationLogitsMode::AllPositions,
         performance_attribution,
     )?;
+    performance_attribution.record_operation_interval(
+        PerformanceOperation::SpeculativeVerificationForward,
+        verification_started_at,
+        Instant::now(),
+    );
     let verification_logits = verification_output.per_position_logits.as_ref().ok_or(
         crate::InferenceEngineError::from(Qwen3_5ExecutionError::InvalidInput {
             description: "a speculative verification round requires per-position logits",
         }),
     )?;
+    let token_choice_started_at = Instant::now();
     let target_chosen_token_ids = choose_tokens_per_position(
         target_model,
         verification_logits,
         round_request,
         random_state,
     )?;
+    performance_attribution.record_operation_interval(
+        PerformanceOperation::SpeculativeTokenChoiceReadback,
+        token_choice_started_at,
+        Instant::now(),
+    );
 
     let verification_decision =
         decide_token_equality_verification(&proposals, &target_chosen_token_ids);
     if verification_decision.accepted_every_proposal {
-        finish_accepted_round(
+        let conditioning_started_at = Instant::now();
+        let finished_round = finish_accepted_round(
             target_model,
             draft_weights,
             draft_configuration,
@@ -148,7 +176,13 @@ pub fn run_speculative_round(
             &target_chosen_token_ids,
             &verification_decision,
             draft_checkpoint_offset,
-        )
+        );
+        performance_attribution.record_operation_interval(
+            PerformanceOperation::SpeculativeDraftKeyValueConditioning,
+            conditioning_started_at,
+            Instant::now(),
+        );
+        finished_round
     } else {
         // Partial or empty acceptance: restore the transactional checkpoint
         // and replay only the accepted prefix, which rebuilds the recurrent
@@ -156,6 +190,7 @@ pub fn run_speculative_round(
         // Every replayed proposal equals the target's choice at its
         // position, so replay is identical under greedy and sampled
         // verification alike.
+        let replay_started_at = Instant::now();
         target_decoder_state
             .restore_checkpoint(target_checkpoint)
             .map_err(Qwen3_5ExecutionError::from)?;
@@ -174,7 +209,13 @@ pub fn run_speculative_round(
                 performance_attribution,
             )?;
         }
-        finish_accepted_round(
+        performance_attribution.record_operation_interval(
+            PerformanceOperation::SpeculativeRejectedPrefixReplay,
+            replay_started_at,
+            Instant::now(),
+        );
+        let conditioning_started_at = Instant::now();
+        let finished_round = finish_accepted_round(
             target_model,
             draft_weights,
             draft_configuration,
@@ -185,7 +226,13 @@ pub fn run_speculative_round(
             &target_chosen_token_ids,
             &verification_decision,
             draft_checkpoint_offset,
-        )
+        );
+        performance_attribution.record_operation_interval(
+            PerformanceOperation::SpeculativeDraftKeyValueConditioning,
+            conditioning_started_at,
+            Instant::now(),
+        );
+        finished_round
     }
 }
 
@@ -248,19 +295,12 @@ fn sample_rows_to_host(
     // well-formed request; a failed round is fatal for the worker anyway.
     *random_state = Some(request_random_state);
     let sampled_rows = sampled_rows?;
-    let row_count = sampled_rows.shape()[1];
-    target_model
-        .runtime
-        .evaluate_arrays(&[&sampled_rows])
+    // One vector transfer for the whole block: each elementwise read is a
+    // full graphics-processor pipeline drain, so per-row reads would pay
+    // that once per position on every round.
+    let sampled_token_ids = sampled_rows
+        .to_vec_u32()
         .map_err(Qwen3_5ExecutionError::from)?;
-    let mut sampled_token_ids = Vec::with_capacity(row_count as usize);
-    for row_index in 0..row_count {
-        let row_value = target_model
-            .runtime
-            .slice(&sampled_rows, &[0, row_index], &[1, row_index + 1], &[1, 1])
-            .map_err(Qwen3_5ExecutionError::from)?;
-        sampled_token_ids.push(row_value.item_u32().map_err(Qwen3_5ExecutionError::from)?);
-    }
     Ok(sampled_token_ids)
 }
 
@@ -465,25 +505,28 @@ fn embed_block_tokens(
     target_model.embedding_lookup(&token_indices)
 }
 
-/// Reads one argmax token per logit row onto the host.
+/// Reads one argmax token per logit row onto the host. One vector
+/// transfer per round instead of a slice-and-read per row: each
+/// elementwise read is a full graphics-processor pipeline drain, so the
+/// per-row pattern costs two drains per position on every round.
 fn argmax_rows_to_host(
     target_model: &Qwen3_5ResidentModel,
     logits: &MlxArray,
 ) -> Result<Vec<u32>, Qwen3_5ExecutionError> {
     let row_count = logits.shape()[1];
     let row_argmax = target_model.runtime.argmax_axis(logits, -1)?;
-    target_model.runtime.evaluate_arrays(&[&row_argmax])?;
-    let mut argmax_token_ids = Vec::with_capacity(row_count as usize);
-    for row_index in 0..row_count {
-        let row_value = target_model.runtime.slice(
-            &row_argmax,
-            &[0, row_index],
-            &[1, row_index + 1],
-            &[1, 1],
-        )?;
-        argmax_token_ids.push(row_value.item_u32()?);
-    }
-    Ok(argmax_token_ids)
+    let argmax_token_ids = row_argmax
+        .to_vec_i32()
+        .map_err(Qwen3_5ExecutionError::from)?;
+    argmax_token_ids
+        .into_iter()
+        .take(row_count as usize)
+        .map(|token_id| {
+            u32::try_from(token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                description: "an argmax token ID exceeds the u32 range",
+            })
+        })
+        .collect()
 }
 
 /// Slices every tap to its first `prefix_token_count` rows.

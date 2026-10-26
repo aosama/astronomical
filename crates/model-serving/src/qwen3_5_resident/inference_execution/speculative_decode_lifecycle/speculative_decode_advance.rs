@@ -27,107 +27,57 @@ use super::super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error
 use super::speculation_round::{SpeculationRoundRequest, run_speculative_round};
 
 impl Qwen3_5EngineState {
-    /// One speculative advance step. `Ok(None)` means the session just
-    /// measured itself out of speculation: the seed token moved to the
-    /// classic pending slot, the session suspended, and the caller must
-    /// take the classic advance path for this and every later token.
+    /// One speculative advance step: drains one queued committed token, or
+    /// — at an empty queue — seeds and runs one draft-and-verify round.
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_speculative_generation(
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
-    ) -> Result<Option<ActiveRequestAdvance>, crate::InferenceEngineError> {
+    ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         // The queue holds committed tokens in front and exactly one
         // uncommitted token at the tail: the last round's correction, which
         // the target endorsed but no forward has committed yet. Draining a
         // committed token is pure emission — its decoder-state entry
         // already exists. Reaching the tail means the tail itself becomes
         // this call's emission AND the bonus of the next round, whose
-        // verify forward commits it. An admitted session therefore never
-        // falls through to the classic advance: falling through with a
-        // drained queue would re-forward a stale token at the wrong
-        // position and corrupt the request. The one sanctioned exit is the
-        // low-acceptance guard below, which hands the uncommitted seed to
-        // the classic pending slot first, so the classic path commits it
-        // exactly as a verify forward would have.
+        // verify forward commits it.
         if active_request.speculative_emission_queue.len() > 1 {
-            let committed_generated_token = active_request
+            let committed_token_id = active_request
                 .speculative_emission_queue
                 .pop_front()
                 .expect("the queue length was just proven above one");
-            return self
-                .emit_one_speculative_token(active_request, committed_generated_token)
-                .map(Some);
+            return self.emit_one_speculative_token_id(active_request, committed_token_id);
         }
-        // A full window of rounds below the break-even acceptance floor
-        // means further rounds cost more than they commit — high-temperature
-        // sessions flatten the target distribution until the draft rarely
-        // matches. The seed (queue tail or pending) becomes the classic
-        // pending token; committed queue tokens are all emitted already.
-        if super::speculation_session_admission::should_suspend_speculation_for_poor_acceptance(
-            &active_request
-                .speculative_acceptance_window
-                .iter()
-                .copied()
-                .collect::<Vec<_>>(),
-        ) {
-            let seed_generated_token = if let Some(correction_token) =
-                active_request.speculative_emission_queue.pop_front()
-            {
-                correction_token
-            } else {
-                active_request.pending_generated_token.take().ok_or_else(|| {
-                        fatal_engine_error(
-                            "a speculative advance requires a queued correction or pending bonus token",
-                        )
-                    })?
-            };
-            active_request.pending_generated_token = Some(seed_generated_token);
-            active_request.suspend_speculative_session("poor_acceptance");
-            return Ok(None);
-        }
-        let bonus_generated_token =
-            if let Some(correction_token) = active_request.speculative_emission_queue.pop_front() {
-                correction_token
-            } else {
-                active_request
-                .pending_generated_token
-                .take()
-                .ok_or_else(|| {
+        let bonus_token_id = if let Some(correction_token_id) =
+            active_request.speculative_emission_queue.pop_front()
+        {
+            correction_token_id
+        } else {
+            // The prefill-seeded pending bonus is the one speculative
+            // token whose id lives only on the device; reading it once
+            // starts the session's first round.
+            let pending_bonus_token = active_request.pending_generated_token.take().ok_or_else(
+                || {
                     fatal_engine_error(
                         "a speculative advance requires a queued correction or pending bonus token",
                     )
-                })?
-            };
-        self.run_one_speculative_round(request_id, active_request, bonus_generated_token)
-            .map(Some)
+                },
+            )?;
+            generated_token_emission::synchronize_generated_token_id(
+                active_request,
+                &pending_bonus_token,
+            )?
+        };
+        Ok(self.run_one_speculative_round(request_id, active_request, bonus_token_id)?)
     }
 
-    /// Drains one queued token through the classic emission machinery;
-    /// used for every committed token between rounds.
-    fn emit_one_speculative_token(
-        &mut self,
-        active_request: &mut Qwen3_5EngineRequest,
-        current_generated_token: mlx_c_rust::MlxArray,
-    ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
-        let current_generated_token_id = generated_token_emission::synchronize_generated_token_id(
-            active_request,
-            &current_generated_token,
-        )?;
-        self.emit_one_speculative_token_id(
-            active_request,
-            current_generated_token,
-            current_generated_token_id,
-        )
-    }
-
-    /// Emits one already-synchronized token, so a caller that read the id
-    /// for its own decisions (the round's bonus) never synchronizes twice.
-    /// The device array stays a parameter so its storage keeps living until
-    /// the emission has consumed it.
+    /// Emits one queued or bonus token through the classic emission
+    /// machinery. The id is always host-known here — the round produced it
+    /// on the host — so no device synchronization ever runs on the
+    /// speculative emission path.
     fn emit_one_speculative_token_id(
         &mut self,
         active_request: &mut Qwen3_5EngineRequest,
-        _current_generated_token: mlx_c_rust::MlxArray,
         current_generated_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         let model = self
@@ -172,7 +122,7 @@ impl Qwen3_5EngineState {
         &mut self,
         request_id: RequestId,
         active_request: &mut Qwen3_5EngineRequest,
-        bonus_generated_token: mlx_c_rust::MlxArray,
+        bonus_token_id: u32,
     ) -> Result<ActiveRequestAdvance, crate::InferenceEngineError> {
         let model = self
             .model
@@ -189,10 +139,6 @@ impl Qwen3_5EngineState {
         ) {
             active_request.first_decode_forward_elapsed_millis = Some(0);
         }
-        let bonus_token_id = generated_token_emission::synchronize_generated_token_id(
-            active_request,
-            &bonus_generated_token,
-        )?;
         // A block never drafts past the session's output budget minus the
         // bonus: the terminal checks below own the final tokens.
         let remaining_output_tokens = active_request
@@ -256,17 +202,6 @@ impl Qwen3_5EngineState {
             crate::PerformanceCounter::SpeculativeAcceptedTokenCount,
             round_outcome.accepted_proposal_count as u64,
         );
-        // Feed the rolling acceptance window the low-acceptance guard
-        // reads; the cap keeps the window at the admission module's length.
-        active_request.speculative_acceptance_window.push_back((
-            speculation_token_count as u64,
-            round_outcome.accepted_proposal_count as u64,
-        ));
-        while active_request.speculative_acceptance_window.len()
-            > super::speculation_session_admission::ACCEPTANCE_WINDOW_ROUND_COUNT
-        {
-            active_request.speculative_acceptance_window.pop_front();
-        }
         tracing::debug!(
             request_id = request_id.value(),
             accepted_proposal_count = round_outcome.accepted_proposal_count,
@@ -276,16 +211,14 @@ impl Qwen3_5EngineState {
         // Queue every round token except the bonus, which emits now. The
         // tail entry is the round's correction token: the target's own next
         // preference, absent from the decoder state until the next round's
-        // verify commits it.
-        let runtime = model.runtime();
+        // verify commits it. Ids queue on the host — the emission output
+        // consumes ids, and a device round trip would only add a
+        // synchronization per token.
         for queued_token_id in round_outcome.emitted_token_ids.iter().skip(1) {
-            let queued_generated_token = runtime
-                .array_from_u32(&[*queued_token_id], &[1, 1])
-                .map_err(qwen3_5_runtime_error)?;
             active_request
                 .speculative_emission_queue
-                .push_back(queued_generated_token);
+                .push_back(*queued_token_id);
         }
-        self.emit_one_speculative_token_id(active_request, bonus_generated_token, bonus_token_id)
+        self.emit_one_speculative_token_id(active_request, bonus_token_id)
     }
 }

@@ -22,7 +22,6 @@ async fn should_preserve_generation_and_chunking_configuration_in_acknowledgemen
                     maximum_context_tokens: 32_768,
                     maximum_output_tokens: 4_096,
                     chunking: WorkerChunkingConfiguration {
-                        speculative_decoding_block_length: None,
                         fixed_prompt_processing_chunk_size_tokens: 2_048,
                         fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 256,
                         full_attention_key_value_growth_tokens: 256,

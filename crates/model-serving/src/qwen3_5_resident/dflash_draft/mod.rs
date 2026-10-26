@@ -1,5 +1,18 @@
 //! The DFlash speculative-decoding draft model.
 //!
+//! COMPARTMENT STATUS: DISABLED BY DESIGN — NOT REACHABLE FROM ENGINE
+//! WIRING. The configuration key is accepted and ignored, the worker wire
+//! contract carries no block length, and model loading never installs a
+//! draft runtime, so no session can reach this trunk. Corrected journey
+//! accounting measured token-equality verification at the realistic
+//! serving temperature (1.0) as a throughput loss on this workload
+//! (0.50x-1.15x across trajectories; the greedy ceiling is only ~1.6x),
+//! and the open question — an unresolved defect versus a weak draft
+//! artifact — is to be settled by independently reproducing the vendor's
+//! published speedups under vLLM before any re-enable. The modules stay
+//! compiled and unit-tested as the diagnostic compartment for that day;
+//! the proof journey exercises them directly, bypassing engine wiring.
+//!
 //! One resident Qwen3.5 engine may host one DFlash draft beside its target
 //! model. The draft is a small dense trunk that never runs alone: its context
 //! keys and values are projections of the target's hidden states (captured at

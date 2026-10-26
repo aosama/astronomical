@@ -1,5 +1,14 @@
 //! Speculative decoding lifecycle for the resident Qwen3.5 engine.
 //!
+//! COMPARTMENT STATUS: DISABLED BY DESIGN — NOT REACHABLE FROM ENGINE
+//! WIRING. No draft runtime is ever installed (see model loading), the
+//! configuration key is accepted and ignored, and admission therefore
+//! never admits a session here; every session decodes through the classic
+//! path. This module stays compiled and unit-tested as the diagnostic
+//! compartment while the vendor's published speedups are independently
+//! reproduced under vLLM; the acceptance proof journey calls
+//! `run_speculative_round` directly, bypassing engine wiring entirely.
+//!
 //! One DFlash draft model proposes token blocks in a single parallel pass;
 //! the target verifies them in one multi-token forward and the accepted
 //! prefix extends the context. The pure acceptance rules live in

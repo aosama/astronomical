@@ -196,39 +196,26 @@ impl Qwen3_5EngineState {
                     .map_err(qwen3_5_runtime_error)?;
                 model.resident_expert_weights = Some(resident_expert_weights);
             }
-            // The draft loads only when the engine was constructed with a
-            // speculation block length. Absence of a paired draft artifact
-            // is a silent return to the classic decode path; a present but
-            // mismatched or unhostable draft is a load failure, because a
-            // half-conditioned draft must never reach a session.
-            if let Some(speculation_block_length) = self.speculative_decoding_block_length {
-                let draft_runtime =
-                    super::speculative_decode_lifecycle::engine_draft_runtime::Qwen3_5SpeculativeDraftRuntime::load_for_target(
-                        model.runtime(),
-                        self.memory_limits.active_memory_limit_bytes(),
-                        &self.model_directory,
-                        model.config().layer_count() as usize,
-                        model.config().hidden_size() as usize,
-                        model.config().vocabulary_size(),
-                        speculation_block_length,
-                    )
-                    .map_err(|draft_loading_error| {
-                        fatal_engine_error(format!(
-                            "the requested DFlash draft failed to load: {draft_loading_error}"
-                        ))
-                    })?;
-                if let Some(draft_runtime) = draft_runtime {
-                    tracing::info!(
-                        speculation_block_length,
-                        "resident engine loaded its DFlash speculative draft"
-                    );
-                    self.speculative_draft_runtime = Some(draft_runtime);
-                } else {
-                    tracing::info!(
-                        "no DFlash draft artifact is installed beside the target; the engine stays on classic decoding"
-                    );
-                }
-            }
+            // DFlash speculative decoding is DISABLED BY DESIGN. The
+            // configuration key is accepted and ignored everywhere, the
+            // worker wire contract no longer carries a block length, and
+            // no draft runtime is ever installed here — every session
+            // decodes through the classic one-token-per-forward path.
+            //
+            // Why: corrected journey accounting showed token-equality
+            // verification at the realistic serving temperature (1.0)
+            // averages a throughput LOSS on this workload (measured
+            // 0.50x-1.15x across trajectories; the greedy ceiling is only
+            // ~1.6x). The open question — an unresolved defect versus a
+            // weak draft artifact — is to be settled by independently
+            // reproducing the vendor's published speedups under vLLM
+            // before any re-enable. The draft trunk, round lifecycle, and
+            // proof journey remain compiled in their compartments as the
+            // diagnostic instrument for that day; see
+            // speculative_decode_lifecycle and dflash_draft.
+            tracing::debug!(
+                "resident engine decode path: classic (DFlash disabled by design)"
+            );
             Ok((
                 model,
                 persistent_prompt_cache_model_contract,
