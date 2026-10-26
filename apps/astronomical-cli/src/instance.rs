@@ -50,3 +50,6 @@ pub fn candidate_instances(
 ) -> [AstronomicalRuntimeInstance; 1] {
     [preferred_instance]
 }
+
+#[cfg(test)]
+mod instance_tests;

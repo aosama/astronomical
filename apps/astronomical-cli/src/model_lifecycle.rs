@@ -13,8 +13,8 @@ use astronomical_ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonWorkerStatus,
 };
 
-use crate::daemon_probe::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
 use crate::formatting;
+use crate::transport::ipc::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
 
 /// Bound for the whole download-wait stage: local disk writes are slow but
 /// finite; generous enough for multi-GB models, short enough that a wedged
@@ -347,3 +347,6 @@ pub(crate) fn render_download_progress(download_job: &DaemonDownloadJob) -> Stri
         percentage,
     )
 }
+
+#[cfg(test)]
+mod model_lifecycle_tests;

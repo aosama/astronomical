@@ -136,7 +136,7 @@ fn validate_dimension(
 ) -> Result<(), OpenAiImageGenerationValidationError> {
     let is_supported = (MIN_OPENAI_IMAGE_DIMENSION_PIXELS..=MAX_OPENAI_IMAGE_DIMENSION_PIXELS)
         .contains(&actual_pixels)
-        && actual_pixels % IMAGE_DIMENSION_MULTIPLE_PIXELS == 0;
+        && actual_pixels.is_multiple_of(IMAGE_DIMENSION_MULTIPLE_PIXELS);
     if is_supported {
         return Ok(());
     }
