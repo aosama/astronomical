@@ -276,6 +276,22 @@
             "upstream_license": "Apache-2.0"
         },
         {
+            "huggingface_id": "nathansutton/Qwen3.8-27B-Ternary-Bonsai-2-DFlash2-MLX",
+            "revision": "234cc925d77cd94683e47b1493bd964917aaf43b",
+            "display_name": "Qwen 3.8 27B Ternary Bonsai 2 DFlash2 MLX",
+            "family": "prism_hadamard_qwen35",
+            "approximate_size_bytes": 8840805938,
+            "public": true,
+            "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack and paired with a DFlash2 block-diffusion draft model for speculative decoding. The folded ternary weights serve full-precision chat quality, while the draft model accelerates generation by proposing tokens the main model verifies. Text-only, built on Qwen 3.8 27B.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "2-bit ternary affine (group 128) with folded Hadamard transforms",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "araysuter/Ornith-1.5-122B-MLX-mixed-2bit",
             "revision": "848e5a0d53f457d213bb43e554012722f3f3fc60",
             "display_name": "Ornith 1.5 122B MLX Mixed 2-bit",
