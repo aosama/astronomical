@@ -83,6 +83,12 @@ pub(in crate::qwen3_5_resident) struct Qwen3_5EngineRequest {
     /// (forced thinking transition, mid-decode feedback injection) suspends
     /// speculation for the remainder of the session.
     pub(super) speculative_session_admitted: bool,
+    /// The most recent rounds' `(proposed, accepted)` counts, capped at the
+    /// admission module's window length. High-temperature sessions accept
+    /// little; once a full window measures rolling acceptance below the
+    /// break-even floor, further rounds cost more than they commit and the
+    /// session finishes on classic decode.
+    pub(super) speculative_acceptance_window: std::collections::VecDeque<(u64, u64)>,
 }
 
 impl Qwen3_5EngineRequest {

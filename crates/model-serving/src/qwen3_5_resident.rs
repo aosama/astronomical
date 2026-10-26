@@ -16,7 +16,8 @@ pub use experts::{
 };
 pub(crate) use inference_execution::Qwen3_5InferenceExecution;
 pub use inference_execution::speculative_decode_lifecycle::{
-    SpeculationRoundOutcome, SpeculationRoundRequest, run_speculative_round,
+    SpeculationRoundOutcome, SpeculationRoundRequest, VerificationTokenChoice,
+    run_speculative_round,
 };
 pub use inference_execution::{
     Qwen3_5ResidentEngine, Qwen3_5ResidentPromptProcessingChunkSizer,

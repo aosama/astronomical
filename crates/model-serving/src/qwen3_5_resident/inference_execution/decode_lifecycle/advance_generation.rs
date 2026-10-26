@@ -125,14 +125,21 @@ impl Qwen3_5EngineState {
         // one draft-and-verify round. A forced thinking boundary suspends
         // speculation for the session's remainder — the block contract
         // cannot re-seed a mid-block forced token, and the classic path
-        // below already handles that boundary exactly.
+        // below already handles that boundary exactly. A `None` speculative
+        // advance means the session just measured itself out of speculation
+        // (poor acceptance): the seed moved to the classic pending slot and
+        // the classic path below owns it.
         if active_request.speculative_session_admitted {
             if forced_thinking_transition_token_id.is_some() {
                 active_request.suspend_speculative_session("forced_thinking_transition");
             } else if active_request.pending_generated_token.is_some()
                 || !active_request.speculative_emission_queue.is_empty()
             {
-                return self.advance_speculative_generation(request_id, active_request);
+                if let Some(speculative_advance) =
+                    self.advance_speculative_generation(request_id, active_request)?
+                {
+                    return Ok(speculative_advance);
+                }
             }
         }
         let mut first_decode_forward_started_at = None;

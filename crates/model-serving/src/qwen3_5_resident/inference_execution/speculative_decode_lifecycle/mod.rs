@@ -19,10 +19,10 @@ pub use speculation_round::{
     SpeculationRoundOutcome, SpeculationRoundRequest, run_speculative_round,
 };
 pub use speculation_session_admission::{
-    SpeculationCompatibleSampling, SpeculationSessionRequestProperties, draft_pairs_with_target,
+    SpeculationSessionRequestProperties, draft_pairs_with_target,
     should_admit_speculation_for_session,
 };
-pub use verification_decisions::GreedyVerificationDecision;
+pub use verification_decisions::{TokenEqualityVerificationDecision, VerificationTokenChoice};
 
 #[cfg(test)]
 mod speculation_round_tests;

@@ -3,9 +3,14 @@
 //! A round takes the bonus token (the last token the target itself
 //! endorsed), drafts `k` proposals with the DFlash trunk in one parallel
 //! pass, then asks the target to verify the block in a single multi-token
-//! forward that also captures the conditioning taps. Under greedy
-//! verification the accepted prefix is the longest run of proposals the
-//! target's argmax agrees with.
+//! forward that also captures the conditioning taps. Verification is token
+//! equality against the target's chosen token per position: the argmax
+//! under greedy decoding, or one tempered sample per position under
+//! sampled decoding (drawn through the same temperature, top-k, top-p
+//! transform the classic path applies). Under either mode every emitted
+//! token is a token the target itself chose, so the output law is exactly
+//! the classic law at the request's settings, and the greedy draft
+//! maximizes per-position acceptance.
 //!
 //! The target's decoder-state rollback uses the transactional checkpoint
 //! the state stack has always owned: checkpoint before the verification
@@ -19,6 +24,7 @@
 use astronomical_ipc_protocol::RequestId;
 use mlx_c_rust::MlxArray;
 
+use crate::gpu_token_sampling;
 use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
 use crate::qwen3_5_resident::dflash_draft;
@@ -27,7 +33,8 @@ use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::model::VerificationLogitsMode;
 
 use super::verification_decisions::{
-    GreedyVerificationDecision, decide_greedy_verification, emitted_tokens_for_round,
+    TokenEqualityVerificationDecision, VerificationTokenChoice, decide_token_equality_verification,
+    emitted_tokens_for_round,
 };
 
 /// Everything one round needs besides the owners it mutates.
@@ -43,6 +50,9 @@ pub struct SpeculationRoundRequest {
     pub speculation_token_count: usize,
     /// The shared context length: target and draft key-value offsets.
     pub context_length_tokens: u32,
+    /// How the target chooses one token per verification position: argmax
+    /// or a tempered sample. The draft always proposes greedily.
+    pub target_token_choice: VerificationTokenChoice,
 }
 
 /// What one round produced.
@@ -70,13 +80,19 @@ pub fn run_speculative_round(
     draft_configuration: &dflash_draft::draft_configuration::DFlashDraftConfiguration,
     draft_key_value_states: &mut dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
     round_request: &SpeculationRoundRequest,
+    random_state: &mut Option<MlxArray>,
     performance_attribution: &mut PerformanceAttribution,
-) -> Result<SpeculationRoundOutcome, Qwen3_5ExecutionError> {
+) -> Result<SpeculationRoundOutcome, crate::InferenceEngineError> {
+    // The engine-level error type is the round's contract: the tempered
+    // sampler fails in engine vocabulary, and every execution error below
+    // converts into it through the existing From implementation.
     let context_length_tokens = round_request.context_length_tokens;
     if draft_key_value_states.offset_tokens() != context_length_tokens as i32 {
-        return Err(Qwen3_5ExecutionError::InvalidInput {
-            description: "the draft key-value context length must match the target context length before a speculative round",
-        });
+        return Err(crate::InferenceEngineError::from(
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "the draft key-value context length must match the target context length before a speculative round",
+            },
+        ));
     }
 
     let proposals = draft_proposals(
@@ -107,13 +123,19 @@ pub fn run_speculative_round(
         performance_attribution,
     )?;
     let verification_logits = verification_output.per_position_logits.as_ref().ok_or(
-        Qwen3_5ExecutionError::InvalidInput {
+        crate::InferenceEngineError::from(Qwen3_5ExecutionError::InvalidInput {
             description: "a speculative verification round requires per-position logits",
-        },
+        }),
     )?;
-    let target_preferred_token_ids = argmax_rows_to_host(target_model, verification_logits)?;
+    let target_chosen_token_ids = choose_tokens_per_position(
+        target_model,
+        verification_logits,
+        round_request,
+        random_state,
+    )?;
 
-    let verification_decision = decide_greedy_verification(&proposals, &target_preferred_token_ids);
+    let verification_decision =
+        decide_token_equality_verification(&proposals, &target_chosen_token_ids);
     if verification_decision.accepted_every_proposal {
         finish_accepted_round(
             target_model,
@@ -123,7 +145,7 @@ pub fn run_speculative_round(
             round_request,
             &verification_output.hidden_state_taps,
             &proposals,
-            &target_preferred_token_ids,
+            &target_chosen_token_ids,
             &verification_decision,
             draft_checkpoint_offset,
         )
@@ -131,6 +153,9 @@ pub fn run_speculative_round(
         // Partial or empty acceptance: restore the transactional checkpoint
         // and replay only the accepted prefix, which rebuilds the recurrent
         // linear-attention states the rejection would otherwise corrupt.
+        // Every replayed proposal equals the target's choice at its
+        // position, so replay is identical under greedy and sampled
+        // verification alike.
         target_decoder_state
             .restore_checkpoint(target_checkpoint)
             .map_err(Qwen3_5ExecutionError::from)?;
@@ -157,11 +182,86 @@ pub fn run_speculative_round(
             round_request,
             &verification_output.hidden_state_taps,
             &proposals,
-            &target_preferred_token_ids,
+            &target_chosen_token_ids,
             &verification_decision,
             draft_checkpoint_offset,
         )
     }
+}
+
+/// Chooses the target's token for every verification position: argmax per
+/// row under greedy decoding, or one tempered sample per row under sampled
+/// decoding. The sampled draw consumes the request's randomness stream, so
+/// the classic path's stream simply continues after the round.
+fn choose_tokens_per_position(
+    target_model: &Qwen3_5ResidentModel,
+    verification_logits: &MlxArray,
+    round_request: &SpeculationRoundRequest,
+    random_state: &mut Option<MlxArray>,
+) -> Result<Vec<u32>, crate::InferenceEngineError> {
+    match round_request.target_token_choice {
+        VerificationTokenChoice::HighestLogit => {
+            argmax_rows_to_host(target_model, verification_logits)
+                .map_err(crate::InferenceEngineError::from)
+        }
+        VerificationTokenChoice::TopKTopP {
+            temperature_thousandths,
+            top_k,
+            top_p_thousandths,
+        } => sample_rows_to_host(
+            target_model,
+            verification_logits,
+            temperature_thousandths,
+            top_k,
+            top_p_thousandths,
+            random_state,
+        ),
+    }
+}
+
+/// Reads one independent tempered sample per logit row onto the host,
+/// consuming one random-key split for the whole block.
+fn sample_rows_to_host(
+    target_model: &Qwen3_5ResidentModel,
+    logits: &MlxArray,
+    temperature_thousandths: u16,
+    top_k: u16,
+    top_p_thousandths: u16,
+    random_state: &mut Option<MlxArray>,
+) -> Result<Vec<u32>, crate::InferenceEngineError> {
+    let mut request_random_state =
+        random_state
+            .take()
+            .ok_or(crate::InferenceEngineError::Fatal {
+                reason: "a sampled speculative round requires the request's random state"
+                    .to_owned(),
+            })?;
+    let sampled_rows = gpu_token_sampling::build_sampled_token_rows(
+        &target_model.runtime,
+        logits,
+        temperature_thousandths,
+        top_p_thousandths,
+        top_k,
+        &mut request_random_state,
+    );
+    // The stream slot returns even on failure so the caller keeps a
+    // well-formed request; a failed round is fatal for the worker anyway.
+    *random_state = Some(request_random_state);
+    let sampled_rows = sampled_rows?;
+    let row_count = sampled_rows.shape()[1];
+    target_model
+        .runtime
+        .evaluate_arrays(&[&sampled_rows])
+        .map_err(Qwen3_5ExecutionError::from)?;
+    let mut sampled_token_ids = Vec::with_capacity(row_count as usize);
+    for row_index in 0..row_count {
+        let row_value = target_model
+            .runtime
+            .slice(&sampled_rows, &[0, row_index], &[1, row_index + 1], &[1, 1])
+            .map_err(Qwen3_5ExecutionError::from)?;
+        sampled_token_ids.push(row_value.item_u32().map_err(Qwen3_5ExecutionError::from)?);
+    }
+    Ok(sampled_token_ids)
 }
 
 /// Drafts `k` proposals with one parallel trunk pass. The block's own
@@ -225,10 +325,10 @@ fn finish_accepted_round(
     round_request: &SpeculationRoundRequest,
     hidden_state_taps: &[MlxArray],
     proposals: &[u32],
-    target_preferred_token_ids: &[u32],
-    verification_decision: &GreedyVerificationDecision,
+    target_chosen_token_ids: &[u32],
+    verification_decision: &TokenEqualityVerificationDecision,
     draft_checkpoint_offset: i32,
-) -> Result<SpeculationRoundOutcome, Qwen3_5ExecutionError> {
+) -> Result<SpeculationRoundOutcome, crate::InferenceEngineError> {
     let accepted_context_growth =
         super::verification_decisions::accepted_context_growth(verification_decision);
     // Discard the draft's block scratch (context entries are re-derived from
@@ -261,15 +361,17 @@ fn finish_accepted_round(
     let emitted_token_ids = emitted_tokens_for_round(
         round_request.bonus_token_id,
         proposals,
-        target_preferred_token_ids,
+        target_chosen_token_ids,
         verification_decision,
     );
     let next_bonus_token_id =
         *emitted_token_ids
             .last()
-            .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                description: "a speculative round must emit at least the bonus token",
-            })?;
+            .ok_or(crate::InferenceEngineError::from(
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "a speculative round must emit at least the bonus token",
+                },
+            ))?;
     Ok(SpeculationRoundOutcome {
         emitted_token_ids,
         next_bonus_token_id,
@@ -309,7 +411,7 @@ pub(super) fn assemble_verification_tokens_for_tests(
 pub(super) fn assemble_replay_tokens_for_tests(
     bonus_token_id: u32,
     proposals: &[u32],
-    verification_decision: &GreedyVerificationDecision,
+    verification_decision: &TokenEqualityVerificationDecision,
 ) -> Vec<u32> {
     assemble_replay_tokens(bonus_token_id, proposals, verification_decision)
 }
@@ -327,7 +429,7 @@ fn assemble_verification_tokens(bonus_token_id: u32, proposals: &[u32]) -> Vec<u
     assemble_replay_tokens(
         bonus_token_id,
         proposals,
-        &GreedyVerificationDecision {
+        &TokenEqualityVerificationDecision {
             accepted_proposal_count: proposals.len(),
             accepted_every_proposal: true,
         },
@@ -337,7 +439,7 @@ fn assemble_verification_tokens(bonus_token_id: u32, proposals: &[u32]) -> Vec<u
 fn assemble_replay_tokens(
     bonus_token_id: u32,
     proposals: &[u32],
-    verification_decision: &GreedyVerificationDecision,
+    verification_decision: &TokenEqualityVerificationDecision,
 ) -> Vec<u32> {
     let mut replay_tokens = Vec::with_capacity(verification_decision.accepted_proposal_count + 1);
     replay_tokens.push(bonus_token_id);
