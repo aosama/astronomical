@@ -28,7 +28,7 @@ fn should_keep_operation_catalog_positions_aligned_with_report_storage() {
     }
 
     assert_eq!(
-        PerformanceOperation::ResidentToStreamingRetry as usize,
+        PerformanceOperation::SpeculativeDraftKeyValueConditioning as usize,
         PerformanceOperation::COUNT - 1,
         "the final variant must stay the storage bound; take COUNT from any newly appended variant"
     );

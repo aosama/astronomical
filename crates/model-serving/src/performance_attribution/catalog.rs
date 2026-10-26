@@ -152,10 +152,29 @@ pub enum PerformanceOperation {
     ExpertLayerPlanConstruction,
     ArtifactRamBudgetGeometry,
     ResidentToStreamingRetry,
+    /// One speculative round's parallel draft block pass: embedding, the
+    /// six-layer trunk, the language-model head, and the proposal readback.
+    SpeculativeDraftBlockPass,
+    /// One speculative round's transactional decoder-state checkpoint
+    /// capture before the verification forward.
+    SpeculativeRoundStateCheckpoint,
+    /// One speculative round's multi-token verification forward over the
+    /// drafted block, including the conditioning hidden-state taps.
+    SpeculativeVerificationForward,
+    /// One speculative round's per-position target token choice readback:
+    /// the argmax or tempered-sample transfer from the device.
+    SpeculativeTokenChoiceReadback,
+    /// One speculative round's rejection work: the checkpoint restore and
+    /// the accepted-prefix replay forward through the target.
+    SpeculativeRejectedPrefixReplay,
+    /// One speculative round's post-decision draft conditioning: tap
+    /// slicing, hidden-state projection, and the draft's context key-value
+    /// growth for the accepted prefix.
+    SpeculativeDraftKeyValueConditioning,
 }
 
 impl PerformanceOperation {
-    pub(super) const COUNT: usize = Self::ResidentToStreamingRetry as usize + 1;
+    pub(super) const COUNT: usize = Self::SpeculativeDraftKeyValueConditioning as usize + 1;
     pub(super) const ALL: [Self; Self::COUNT] = [
         Self::ArtifactValidation,
         Self::TokenizerInitialization,
@@ -293,6 +312,12 @@ impl PerformanceOperation {
         Self::ExpertLayerPlanConstruction,
         Self::ArtifactRamBudgetGeometry,
         Self::ResidentToStreamingRetry,
+        Self::SpeculativeDraftBlockPass,
+        Self::SpeculativeRoundStateCheckpoint,
+        Self::SpeculativeVerificationForward,
+        Self::SpeculativeTokenChoiceReadback,
+        Self::SpeculativeRejectedPrefixReplay,
+        Self::SpeculativeDraftKeyValueConditioning,
     ];
 
     pub(super) const fn identifier(self) -> &'static str {
@@ -522,6 +547,14 @@ impl PerformanceOperation {
             Self::PreviousTokenPrefetch => "previous_token_prefetch",
             Self::ArtifactRamBudgetGeometry => "artifact_ram_budget_geometry",
             Self::ResidentToStreamingRetry => "resident_to_streaming_retry",
+            Self::SpeculativeDraftBlockPass => "speculative_draft_block_pass",
+            Self::SpeculativeRoundStateCheckpoint => "speculative_round_state_checkpoint",
+            Self::SpeculativeVerificationForward => "speculative_verification_forward",
+            Self::SpeculativeTokenChoiceReadback => "speculative_token_choice_readback",
+            Self::SpeculativeRejectedPrefixReplay => "speculative_rejected_prefix_replay",
+            Self::SpeculativeDraftKeyValueConditioning => {
+                "speculative_draft_key_value_conditioning"
+            }
         }
     }
 

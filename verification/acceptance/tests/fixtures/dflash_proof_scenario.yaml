@@ -1,0 +1,53 @@
+# DFlash speculative-decoding proof-journey scenario.
+#
+# The journey `should_measure_dflash_speculative_acceptance_and_decode_throughput`
+# (verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/dflash_speculative_proof.rs)
+# reads this file at runtime — edit it and rerun, no rebuild and no environment
+# variables required. Every key may be omitted; the defaults in the journey's
+# Default impl mirror this file.
+#
+# The committed values model the realistic serving point, because that is the
+# only thing worth measuring repeatedly: temperature 1.0 (the artifact's own
+# default — users do not change it), block length 4 (the shipped engine
+# configuration), real source code (the coding workload), chat-template
+# tokenization (the exact serving format), and a conversation-scale context.
+# Greedy (temperature-zero) runs remain possible by editing this file, but they
+# are a deliberate diagnostic opt-in: no shipped user runs them.
+#
+# Measured findings to keep in mind when choosing values:
+#   - Quote the temperature with every acceptance or throughput number:
+#     sampled verification at 1.0 caps acceptance far below the greedy
+#     contract, so the two temperatures are not comparable.
+#   - Block length 4 dominates block length 8 on this stack (verify cost
+#     grows near-linearly per token on this sparse mixture-of-experts target).
+#   - Acceptance degrades as context grows past a few thousand tokens.
+#   - Acceptance is sensitive to exactly where the context truncation boundary
+#     lands inside the content (a 48-token shift moved acceptance 20 points);
+#     quote boundary-matched repeats when citing a single number.
+
+# Prompt tokens fed to the prefill before decode is measured.
+context_tokens: 10000
+
+# true tokenizes the fixture through the worker's chat template (the exact
+# serving tokenization) instead of raw continuation.
+chat_formatted: true
+
+# Which content corpus backs the prompt:
+#   romeo_and_juliet - fiction prose (the shared fifty-thousand-word fixture)
+#   source_code      - real MLX Python, MIT-licensed (in this fixtures directory)
+fixture: source_code
+
+# Verification mode in thousandths: 1000 is temperature 1.0, the realistic
+# default (one tempered target sample per position, the exact sampled output
+# law). Zero would run the greedy argmax contract — unrealistic for this
+# product, kept only for deliberate diagnostic reruns.
+temperature_thousandths: 1000
+
+# Draft block length per round; 4 matches the shipped engine configuration.
+speculation_tokens: 4
+
+# Timed output tokens per mode: each of speculative and baseline generates
+# this many tokens after the untimed warmup. 500 follows the repository
+# performance convention; larger values trade run time for a tighter
+# steady-state estimate.
+measured_output_tokens: 500

@@ -455,7 +455,6 @@ impl Qwen3_5EngineState {
                 }),
             speculative_emission_queue: std::collections::VecDeque::new(),
             speculative_session_admitted,
-            speculative_acceptance_window: std::collections::VecDeque::new(),
         });
         let restored_prompt_prefix_token_count = u32::try_from(prefill_cursor).map_err(
             super::generation_error_constructors::restored_prompt_prefix_exceeds_u32_range_error,

@@ -1,370 +1,135 @@
 [build]
-# Warnings are defects (see the engineering fundamentals rule): every Cargo
-# compilation must fail on the first warning instead of letting it scroll
-# past and rot. `build.warnings` scopes the deny to workspace crates, unlike
-# rustflags = ["-D", "warnings"] which would also hard-fail on any warning
-# emitted by third-party dependencies.
+# Warnings are defects: every Cargo compilation must fail on the first
+# warning instead of letting it scroll past and rot. `build.warnings` scopes
+# the deny to workspace crates, unlike rustflags = ["-D", "warnings"] which
+# would also hard-fail on any warning emitted by third-party dependencies.
 warnings = "deny"
 
-# Build parallelism is deliberately left at Cargo's default. `build.jobs`
-# defaults to the logical CPU count, so any literal value here could only cap
-# parallelism (and would hardwire a machine-specific core count); there is no
-# config switch that raises it. The nightly parallel rustc front-end
-# (rustflags = ["-Zthreads=0"]) was measured on a cold `cargo check
-# --workspace --all-targets` and rejected: wall time was within noise
-# (15.04s vs 14.88s) while user CPU rose 21%, because Cargo's cross-crate
-# parallelism already saturates the cores. It roughly halves a single-crate
-# `cargo check -p astronomical-model-serving` (1.8s -> 0.95s), but that ~1s
-# per iteration does not justify the nightly-ICE risk surface, CI/local flag
-# divergence, or splitting the sccache cache key (flags hash into it), which
-# would make locally warmed entries unusable to the CI lane.
+# Build parallelism deliberately stays at Cargo's default: `build.jobs`
+# defaults to the logical CPU count, so any literal value could only cap
+# parallelism (and would hardwire a machine-specific core count). The
+# nightly parallel rustc front-end was measured and rejected: wall time
+# within noise, higher CPU, and an sccache cache-key split.
 
 [alias]
-# Test aliases select the exact packages and test binaries below, either through
-# `cargo test` or the explicit repository-owned test runner.
-#
 # Every alias is written as one string, never as a TOML array. Cargo merges
 # config files from every ancestor directory and JOINS array values across
-# them, while a string from the nearest file replaces the ancestors' value.
-# A git worktree nested under the repository (for example under
-# .claude/worktrees/) sees this file twice, once from the worktree and once
-# from the main checkout; an array alias then doubles into
-# `check --workspace --all-targets check --workspace --all-targets`, which
-# breaks `cargo verify`, turns the duplicated `test` word of a test alias into
-# a silent test-name filter, and fails the pre-push hook. The string form
-# merges by replacement, so a nested worktree runs each alias exactly once.
+# them, while a string from the nearest file replaces the ancestors' value;
+# a nested worktree sees this file twice, and an array alias would double
+# into a broken command.
 #
-# Lane vocabulary (issue #1208): the "integration" lane is the test kind; its
-# tests are scripted and deterministic — no external network, no real model
-# artifacts, everything stubbed or fixture-driven. Loopback and Unix Domain
-# Socket inter-process communication are local transport, not network, so
-# they stay inside the lane by design rather than by runtime enforcement.
-# The integration lane runs each package's integration_tests binary AND its
-# beside-source lib unit tests (--lib); the property-named aliases from
-# before the vocabulary campaign were retired with the campaign's final
-# batch, and the no-network enforcement layer (the Seatbelt harness and the
-# Linux network-namespace job) was retired with issue #1551.
-# test-integration: every package's integration_tests binary plus lib unit tests.
-# test-test-harness-fixtures: the shared fixture registry and leaf-id
-# contracts, with the test-fixtures feature enabled.
-# test-rest-api: the REST contract and daemon rest_api_tests binaries.
-# test-e2e: the root whole-product journeys (verification/e2e) that spawn the real
-# astronomicald binary; run `cargo build --bins -p astronomical-daemon`
-# first. The harness's workspace_binary launches binaries from the test
-# actual Cargo profile directory, including custom profiles, and names the
-# matching `cargo build --bin` command if the build was skipped.
-# `cargo xtask test-run --package astronomical-e2e --test e2e
-# [--configuration PATH]` instead builds and supplies exact executables.
-# test-app-builder: the macOS app-builder packaging journey as an
-# integration test — a sandboxed repository copy runs the real
-# scripts/internal/build-macos-app.sh with fixture-bin tool shims on PATH,
-# and typed assertions read the produced bundle through plutil and the shim
-# argv logs. macOS-only (the whole file is target_os = "macos" gated); it
-# runs in CI inside the required macOS integration verification check, so
-# drift fails the lane instead of rotting until release day.
-# test-integration-and-rest: both lanes together; run this
-# before committing.
-# Memory-policy memory-equation and reserve compile-time contracts: run
-# `cargo test -p astronomical-memory-policy` to include unit tests and doctests.
+# Lane vocabulary: "integration" is the scripted, deterministic test kind
+# (no network, no real model artifacts). Acceptance lanes run real-model
+# journeys — `#[ignore]`d, serial (`--test-threads=1`), Apple-Silicon only —
+# and take an optional `--configuration PATH` for explicit inputs; the
+# per-journey parameters and findings live with those tests, not here.
+
+# Every package's integration_tests binary plus lib unit tests.
 test-integration = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test integration_tests"
-# nextest-integration: the identical integration-lane selection executed by
-# cargo-nextest (issue #1553) — a local-run convenience; CI instead builds
-# once and runs per-tier lanes against nextest archives. One process per
-# test, so process-global state (environment variables, signal handlers,
-# the MLX allocator the model-serving accounting tests sample) cannot leak
-# between tests, which is why those tests pass here in parallel even under
-# --features direct-mlx; .config/nextest.toml adds a per-test hang budget.
-# Requires cargo-nextest on PATH. The workflow lane contract pins the
-# archive alias below to the identical selection as test-integration.
+
+# The identical selection through cargo-nextest (one process per test, so
+# process-global state cannot leak between tests); CI builds the archives
+# below from these exact selections.
 nextest-integration = "nextest run --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test integration_tests"
-# The four nextest-archive aliases pack the compiled test binaries (and the
-# daemon executables the journeys launch, via the ci profile's archive.include
-# in .config/nextest.toml) into portable archives under
-# target/nextest-archives/. The macOS build job uploads them; the per-tier
-# test jobs download one archive each and run filters against it without
-# recompiling (issue #1553 phase 2b). Each selection must stay identical to
-# the selection the compile step builds through the cargo aliases above; the
-# workflow lane contract pins that equality for the integration pair.
+
+# Portable nextest archives for the CI build/test split; each selection must
+# stay identical to the selection the compile step builds through the cargo
+# aliases above (the workflow lane contract pins that equality).
 nextest-archive-integration = "nextest archive --profile ci --archive-file target/nextest-archives/integration.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test integration_tests"
 nextest-archive-test-harness = "nextest archive --profile ci --archive-file target/nextest-archives/test-harness.tar.zst -p astronomical-test-harness --features test-fixtures --lib"
 nextest-archive-rest-api = "nextest archive --profile ci --archive-file target/nextest-archives/rest-api.tar.zst -p astronomical-daemon --test rest_api_tests"
 nextest-archive-e2e = "nextest archive --profile ci --archive-file target/nextest-archives/e2e.tar.zst -p astronomical-e2e --test e2e"
+
+# The shared fixture registry and leaf-id contracts, with the test-fixtures
+# feature enabled.
 test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures --lib"
+
+# The REST contract and daemon rest_api_tests binaries.
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
+
+# The root whole-product journeys (verification/e2e) that spawn the real
+# astronomicald binary; build the daemon first:
+# cargo build --bins -p astronomical-daemon.
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
+
+# The macOS app-builder packaging journey as an integration test
+# (macOS-only; runs in the required macOS CI check).
 test-app-builder = "test -p xtask --test integration_app_builder_journeys"
+
+# Both lanes together; run this before committing.
 test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-rest-contract --lib --test integration_tests --test rest_api_tests"
-# Quantization lanes (the OptiQ port in crates/quantization). The crate's
-# unit tests and integration journeys (allocator parity against the Python
-# reference, taxonomy, calibration, artifact round trips) ride in the
-# integration aliases above. These two aliases cover what needs a Metal device.
-# test-quantization-direct-mlx: the GPU encoder against the pure reference
-# encoder and the shard-wise requantizer on a synthetic two-shard source;
-# seconds, no model artifacts, contracts in parallel.
+
+# Quantization lanes (the OptiQ port in crates/quantization).
+
+# The GPU encoder against the pure reference encoder and the shard-wise
+# requantizer on a synthetic two-shard source; seconds, no model artifacts.
 test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization --features direct-mlx --test direct_mlx"
-# test-quantization-acceptance: real-model journeys (static and exact
-# conversions of an installed bf16 Qwen3.5 artifact, parity against an
-# artifact the Python tool produced from the same source, requantizer
-# throughput against the Python tool). Append --configuration PATH containing
-# model_directory and, for parity, reference_artifact_path pointing to the
-# Python-produced artifact directory; ignored by default.
+
+# Real-model conversion, parity, and throughput journeys; append
+# --configuration PATH containing model_directory and, for parity,
+# reference_artifact_path.
 test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --ignored"
-# xtask: repository tooling (CI reporting and verification glue as typed
-# Rust). `cargo xtask tier-pyramid [--update-baseline]` (local-only: counts
-# tests per tier against the committed baseline; not a CI step), `cargo xtask
-# source-size [--staged] [root]`, `cargo xtask coverage-floor [--package
-# NAME] [--minimum-percent N]` (the local-only pre-commit llvm-cov
-# line-coverage floor for astronomical-memory-policy, at or above 90% by default;
-# deliberately not a continuous-integration step), `cargo xtask notices
-# [--check]`, `cargo
-# xtask native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile
-# core|core+memory-contract [root]`, `cargo xtask classify-scope`, `cargo
-# xtask check-architecture`, `cargo xtask prune-caches [--dry-run]
-# [--repo owner/name]`, `cargo xtask save-sccache <primary-cache-key>`,
-# `cargo xtask install-verification-tools
-# [--prefix DIR]`, `cargo xtask bootstrap-native-dependencies
-# [--cache-dir ABSOLUTE_PATH] [--verify]`, `cargo xtask
-# disposable-target --lane NAME -- COMMAND [ARGUMENT ...]` (the typed port
-# of the retired scripts/run-in-disposable-cargo-target.sh), and
-# `cargo xtask scan-retired-native-output [--target-directory PATH]
-# [--fail-on-found] [EXTRA_SCAN_ROOT ...]` (the read-only issue #1486 probe
-# counting the retired CMake native-output layout).
-# `cargo xtask test-run --package NAME (--test TARGET | --lib | --tests)
-# [--features FEATURES] [--release | --profile NAME] [--configuration PATH]
-# [--filter NAME] [--exact] [--ignored]` builds exact Cargo executables and
-# runs each selected test in its own process, with a 120-second test budget,
-# five-second progress, and retained manifests/logs under target/test-runs.
-# The explicit JSON configuration accepts model_directory, reference_artifact_path,
-# evidence_directory, real_models, diagnostics, retain_isolated_home,
-# allow_large_wired_memory_probe, prefix_adoption_enabled,
-# prompt_processing_chunk_tokens, sweep_cell_order, throughput_history_path,
-# and coverage_inventory_output. Its paging_experiment object accepts
-# maximum_mlx_memory_gigabytes, streaming_prompt_processing_chunk_tokens,
-# prefill_graph_submission_layer_interval, and
-# generation_graph_submission_layer_interval. Defaults preserve the ordinary
-# test case; counts must be positive and whole gigabytes use 2^30 bytes.
-# Paths resolve relative to the configuration file. Evidence is separated by
-# run and case so a later failure cannot erase an earlier run.
-# The reference artifact is a secondary input: a FLUX reference bundle file,
-# a Python quantization reference directory, or a folded-pack trajectory file.
-# Image journeys retain their rendered PNG in the case's evidence directory.
-# Source identity and workspace executable paths and digests are generated, not configuration
-# overrides. Throughput history records that worker build identity and dirty
-# source state; serving measurements must use this runner.
-# `cargo xtask mlx-c-coverage-inventory` refreshes the bridge inventory through
-# the same explicit runner. Focused automatic read-limit and wired-claim tests:
-# `cargo test -p astronomical-runtime-integration -p astronomical-inference-worker
-# --features astronomical-runtime-integration/mlx --lib --
-# bounded_range_read_concurrency worker_startup_wired_claim_tests`.
-# Issue #1530 decode-full-fit regression cells (manual, serial, real sparse
-# artifact, 37 GB = 37 * 2^30 bytes, persistent prompt cache disabled):
-# `cargo xtask test-run --package astronomical-acceptance --test expert_paging
-# --features expert-paging --release --filter decode_full_fit --ignored`;
-# `cargo xtask test-run --package astronomical-acceptance --test performance_throughput
-# --features performance_throughput --release --filter decode_full_fit --ignored`;
-# `cargo xtask test-run --package astronomical-e2e --test e2e --release
-# --filter decode_full_fit --ignored --configuration PATH`, with real_models=true
-# in the configuration. Each cell has the same 120-second runner budget.
-# The longer Romeo and Juliet context forces paged prefill. The performance
-# cell warms up with approximately 500 input / 50 output tokens, then measures
-# approximately 26,552 input / 500 output tokens. Evidence asserts complete
-# expert payload and zero decode source reads. Pager-backed complete tables
-# remain structurally Hybrid; raw entitlement can exceed the whole artifact,
-# so exact resident expert count and payload distinguish surplus from missing
-# experts. The existing 36 GB streaming cell remains unchanged.
-# Resident multi-chunk regression cell (manual, serial, real resident sparse
-# artifact, persistent prompt cache enabled, 120-second budget): a short
-# Romeo and Juliet prompt leaves a one-token terminal prefill observation, then
-# a 5,000-token prompt must stay resident with no resident_to_streaming_retry;
-# `cargo xtask test-run --package astronomical-acceptance --features
-# serving-acceptance --test chat_serving --release --filter
-# should_stay_resident_for_a_multi_chunk_prompt_after_a_short_prompt --ignored`.
-# Live-ceiling re-promotion cell (manual, serial, real resident sparse
-# artifact, 120-second budget, issue #1533): lowering the ceiling below the
-# artifact size must serve on the streaming engine with a "paged"/"hybrid"
-# label backed by observed expert storage reads, and restoring the
-# complete-residency ceiling must return to the resident engine and report
-# "resident"; `cargo xtask test-run --package astronomical-acceptance
-# --features serving-acceptance --test chat_serving --release --filter
-# live_ceiling_lowering_rest --ignored`.
-# DFlash speculative-decoding serving cell (manual, serial, real resident
-# sparse artifact plus its paired DFlash draft, 120-second budget): a greedy
-# chat and a temperature 0.7 sampled chat must each stream to a natural
-# stop on the resident engine with multiple speculative rounds and at least
-# one confirmed proposal in each generation attribution report; `cargo
-# xtask test-run --package astronomical-acceptance --features
-# serving-acceptance --test chat_serving --release --filter
-# should_serve_a_chat_through_speculative_decoding_with_the_paired_draft
-# --ignored` and the same with
-# should_serve_a_sampled_chat_through_speculative_decoding.
-# DFlash speculative-decoding proof journey (manual, serial, real resident
-# sparse artifact plus draft, ~30 seconds per block length, 900-second
-# budget): measures acceptance rate and both decode throughputs (baseline
-# one-token-per-forward versus draft-and-verify at DFLASH_PROOF_
-# SPECULATION_TOKENS, default eight) over a 10,000-token Romeo and Juliet
-# prefill with 500 measured output tokens per mode. DFLASH_PROOF_
-# TEMPERATURE_THOUSANDTHS selects the verification mode: zero (default)
-# runs greedy argmax verification; a positive value runs sampled
-# verification — one tempered target sample per position, the exact
-# sampled output law — so the same journey measures how acceptance and
-# throughput decay as the distribution flattens; `cargo test --release
-# -p astronomical-acceptance --features direct-mlx --test direct_mlx
-# should_measure_dflash_speculative_acceptance_and_decode_throughput --
-# --ignored --nocapture --test-threads=1`.
-# Request-demotion re-promotion worker tests (integration, scripted engines): a
-# worker demoted by one request returns to the resident engine for a strictly
-# smaller request once complete residency plus that request's decoder state
-# fits the effective ceiling, and stays streaming for a smaller request that
-# still cannot run resident;
-# `cargo test -p astronomical-model-serving --features direct-mlx --test
-# integration_tests resident_promotion`.
+
+# Repository tooling as typed Rust; the subcommand catalog lives in the
+# xtask sources. `cargo xtask test-run` builds exact Cargo executables and
+# runs each selected test in its own process, with a 120-second budget,
+# five-second progress, and retained manifests/logs under target/test-runs;
+# serving measurements must use this runner.
 xtask = "run -p xtask --"
-# verify: compile the whole workspace across ALL targets (libs, tests,
-# examples, benches) without running anything. This is the pre-push gate —
-# it catches type errors in any crate or test binary (the class of failure
-# that only surfaces in CI when skipped) for one local compile instead of a
-# paid GitHub Actions round trip. Run `cargo verify` before every push.
+
+# Compile the whole workspace across ALL targets without running anything;
+# the pre-push gate. Run `cargo verify` before every push.
 verify = "check --workspace --all-targets"
-# Visibility audits (issue #1355): find public items that nothing calls.
-# rustc's `dead_code` lint deliberately ignores `pub` items in library crates,
-# because a dependent crate could still use them, so `cargo verify` and
-# `cargo clippy` never report unused public library API. These two aliases are
-# how we obtain that list today.
-#
-# audit-unused-public-bins: the nightly rustc lint `dead_code_pub_in_binary`,
-# allow-by-default and scoped to EXECUTABLE crates. Run it with --bins on
-# purpose. Adding --all-targets also compiles each library's unit tests as
-# executable test harnesses, and every public library item then looks unused;
-# that variant reported 1,091 diagnostics, almost all rest-contract and
-# mlx-c-rust lib-test items that other workspace crates do use. `-A
-# clippy::all` keeps unrelated Clippy style warnings from tripping
-# `build.warnings = "deny"` and hiding the answer. Verified on this workspace:
-# no findings in the binary targets.
+
+# Visibility audits (issue #1355). Output is a candidate list, never a
+# verdict: confirm any candidate by hand (`git grep -wn "<name>" -- '*.rs'`)
+# before changing visibility, and move nested worktrees under
+# .claude/worktrees/ aside before trusting the workspace audit, or it
+# reports zero from self-matches.
 audit-unused-public-bins = "clippy --workspace --bins -- -A clippy::all -D dead_code_pub_in_binary"
-# audit-unused-public-workspace: the third-party `cargo-workspace-unused-pub`
-# subcommand, which performs the cross-crate analysis the lint cannot. It
-# needs `rustup component add rust-analyzer`, and it writes a ~51 MB
-# `index.scip` into the repository root, which must never be committed.
-#
-# CAVEAT: a zero result here is NOT proof of cleanliness. The tool's final
-# pass is a text search for each candidate name across the workspace, and this
-# repository keeps nested Git worktrees under .claude/worktrees/, each a full
-# checkout carrying the candidate names. Those matches mark every candidate as
-# used, so the tool reports 0 while issue #1355 still lists 21 candidates that
-# really have no caller. Move .claude/worktrees aside, or run the tool against
-# a checkout without nested worktrees, before trusting the output, and confirm
-# any candidate by hand before changing visibility.
-#
-# SECOND CAVEAT (audit tranche 2): the index output is a candidate generator,
-# never a verdict. It over-reports (test-harness functions look uncalled) and
-# under-reports (items whose only callers are tests or feature-gated code
-# count as referenced, and zero-caller `pub(crate)` items reachable through
-# the module chain from the crate root are invisible to rustc's dead-code
-# pass). The verdict is always `git grep -wn "<name>" -- '*.rs'` across every
-# tracked source file. The bridge crates are exempt from dead-surface
-# cleanup by policy: the published `mlx-c-rust` bridge is complete rather
-# than selective (see that crate's repository), and `astronomical-mlx-c-fork`
-# carries the fork surface regardless of caller count.
 audit-unused-public-workspace = "workspace-unused-pub"
-# Acceptance lanes (issue #1198 workstream 8): one alias per GPU lane, so the
-# packages, features, targets, and the real-model serial rule (`--test-threads=1`)
-# cannot be forgotten. Acceptance journeys are `#[ignore]`d: they need real
-# model artifacts, an Apple-Silicon host, and run through `--ignored` here.
-# A bare `cargo test -p astronomical-acceptance` without features runs
-# nothing — the aliases are the interface.
-# test-direct-mlx: the model-serving direct-MLX contract suite plus the
-# runtime-integration MLX-C coverage bridge contract (CPU-only, seconds) so
-# bridge drift fails the lane instead of shipping silently.
+
+# Acceptance lanes: one alias per GPU lane, so the packages, features,
+# targets, and the serial rule cannot be forgotten.
+
+# The model-serving direct-MLX contract suite plus the runtime-integration
+# MLX-C coverage bridge contract (CPU-only) so bridge drift fails the lane.
 test-direct-mlx = "test --no-fail-fast -p astronomical-acceptance --features astronomical-acceptance/direct-mlx -p astronomical-runtime-integration --features astronomical-runtime-integration/mlx -p astronomical-model-serving --features astronomical-model-serving/direct-mlx --lib --test direct_mlx --test mlx_c_coverage_contract_tests -- --test-threads=1"
-# test-mlx-memory: every native memory-contract phase (model-swap allocator,
-# native probe, MLX-C transitions) in one bounded invocation; the probe
-# binary must exist in the native build store (build it first with
-# `cargo test -p astronomical-runtime-integration --features
-# mlx-memory-contract-probe --no-run`).
+
+# Every native memory-contract phase in one bounded invocation; the probe
+# binary must exist first (see check-mlx-memory-contract).
 test-mlx-memory = "test --no-fail-fast -p astronomical-acceptance --features direct-mlx,mlx-memory-contract-probe --test memory_contracts -- --ignored --test-threads=1"
-# check-mlx-memory-contract: compile-only drift gate for the feature world
-# above. The lane sits off every routine graph (and off `cargo verify`, which
-# never enables the feature), so API moves under it are caught here in
-# seconds instead of silently drifting. The probe-profile CMake build can be
-# streamed live first with
-# `scripts/ci/prewarm-native-build.sh --profile core+memory-contract`.
+
+# Compile-only drift gate for the mlx-memory-contract-probe feature world,
+# which sits off every routine graph; API moves under it are caught here in
+# seconds instead of silently drifting.
 check-mlx-memory-contract = "check -p astronomical-runtime-integration --features mlx-memory-contract-probe --all-targets"
-# test-acceptance: the whole real-model acceptance package, one selected case
-# per process. Append --configuration PATH for explicit model/evidence inputs;
-# --filter NAME narrows the selected journeys. Memory-probe permission is
-# false by default and must be granted in that run's configuration.
+
+# The whole real-model acceptance package, one selected case per process;
+# append --configuration PATH for explicit model/evidence inputs and
+# --filter NAME to narrow the journeys.
 test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --tests --release --ignored"
-# test-prism-hadamard-direct: real-pack text output and upstream greedy parity.
-# Append --configuration PATH containing model_directory for the installed
-# pack and reference_artifact_path for its upstream trajectory reference.
+
+# Prism-Hadamard lanes: real-pack contracts and upstream greedy parity,
+# performance tiers, serving throughput, and real-worker chat; append
+# --configuration PATH containing model_directory and, for parity,
+# reference_artifact_path.
 test-prism-hadamard-direct = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --ignored"
-# test-prism-hadamard-performance: the folded-ternary performance tiers
-# (GPU operation, decoder layer, forward pass, greedy generation) through an
-# optimized build; append --configuration PATH containing model_directory.
-# The serving tier
-# over worker IPC is test-prism-hadamard-serving-throughput.
 test-prism-hadamard-performance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test prism_hadamard --release --filter throughput --ignored"
 test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
-# test-prism-hadamard-serving: real-worker chat, greedy/sampled output, and
-# one-token budget coverage; append --configuration PATH containing
-# model_directory.
 test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack --ignored"
-# test-jangtq2-plan: the ignored library tests that validate the real JANGH2
-# bundle against production validators: every codebook projection of an
-# installed jangtq2 bundle against real shard headers, and the complete-layer
-# page-peak reservation guard. Append --configuration PATH containing the
-# selected model_directory; the tests are ignored by default so
-# every integration lane runs without any model artifact. The lane builds the
-# direct-mlx library test binary (the tests themselves need no graphics
-# processor) so it shares an artifact variant with the other jangtq2 lanes
-# instead of adding a default-feature test binary to the local edit loop.
-# The plan contract lives in this crate's qwen3_5_core artifact module —
-# it validates the standard-family plan surface against a jangtq2 bundle —
-# while the family's own throughput lane lives in
-# astronomical-jangtq2-qwen35 (issue #1427).
+
+# JANGH2 lanes: plan contracts against real bundles, GPU decode-throughput
+# (memory-traffic bound, so the optimized build is part of the alias; serial
+# by rule), correctness contracts, and serving throughput over the daemon
+# IPC boundary persisted to the durable throughput history; append
+# --configuration PATH containing model_directory.
 test-jangtq2-plan = "run -p xtask -- test-run --package astronomical-model-serving --features direct-mlx --lib --filter quantized_expert_layer_plan --ignored"
-# test-jangtq2-decode-throughput: the bottom tier of the jangtq2 performance
-# pyramid — the codebook decode kernels themselves, measured on the graphics
-# processor with real page shapes (top-8 decode pages and complete-layer
-# prefill pages), plus the tier-0 prefill prototype (dequantize-in-register
-# gathered matmul with the Hadamard-32 rotation folded in) compared against
-# the materializing decode plus gather_mm baseline at the pinned chunk shape.
-# Runs in the family crate (astronomical-jangtq2-qwen35, issue #1427): the
-# decoder is memory-traffic bound and debug numbers understate every ratio,
-# so the optimized build is part of the alias. The `throughput` filter
-# matches both the decode-throughput tests and the prefill prototype tests.
-# Serial by rule: graphics-processor tests never run in parallel.
 test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --test direct_mlx throughput -- --ignored --nocapture --test-threads=1"
-# test-jangtq2-direct-mlx: the jangtq2 graphics-processor correctness
-# contracts (codebook decode, Hadamard-32 activation rotation, fused gathered
-# projection) plus the crate's library unit tests built with the direct-mlx
-# feature; seconds, no model artifacts. The ignored throughput measurements
-# stay out: they initialize a larger memory limit than these contracts and
-# the runtime accepts one limit per process, so they run only through
-# test-jangtq2-decode-throughput.
 test-jangtq2-direct-mlx = "test --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"
-# test-jangtq2-serving-throughput: the top tier of the jangtq2 performance
-# pyramid — serving prompt-processing and decode throughput of the real 122B
-# bundle over the daemon IPC boundary (warmup 500/50, measured 10,000/500,
-# SSD cache disabled, 2,048-token prefill chunk, shared serving ceiling),
-# persisted to the durable throughput history. Append --configuration PATH
-# containing the selected model_directory. The runner builds the exact
-# optimized worker and records the source identity itself.
 test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter jangtq2 --ignored"
-# test-engine-versus-memory-ceiling: separates the streaming engine's own cost
-# from the memory ceiling's cost on the resident 35B sparse-MoE model, all
-# cells serving the same 5,000-token Romeo and Juliet summarization into 300
-# output tokens, serialized, persistent prompt cache disabled. The
-# automatic_engine_ceiling_sweep cells run the production engine choice at 24,
-# 22, 21, 20, and 19 GB (resident_memory_ceiling_probe history kind); the
-# forced_engine_isolation cells force the streaming engine at 24 and 32 GB and
-# the resident engine at 22 GB, with and without the static prefill
-# activation floor; forced cells print their record but never append it to
-# the durable history.
-# Narrow with `--filter engine_versus_memory_ceiling::forced_engine_isolation`
-# or `::automatic_engine_ceiling_sweep`; add `--configuration PATH` with
-# {"diagnostics": true} for performance attribution. The 5,000/300 shape is a
-# directed deviation from the canonical 10,000/500 series, kept in its own
-# kind so the text series stays clean. The runner builds the exact optimized
-# worker itself.
+
+# Engine-versus-memory-ceiling isolation on the resident 35B sparse-MoE
+# model; narrow with --filter, add --configuration PATH with
+# {"diagnostics": true} for performance attribution.
 test-engine-versus-memory-ceiling = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter engine_versus_memory_ceiling --ignored"

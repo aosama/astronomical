@@ -70,10 +70,6 @@ pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) validated_artifact:
         Option<ValidatedQwen3_5Artifact>,
     pub(in crate::qwen3_5_resident::inference_execution) vocabulary_size: u32,
-    /// Requested speculation block length; `None` keeps the engine on the
-    /// classic decode path with no draft resident.
-    pub(in crate::qwen3_5_resident::inference_execution) speculative_decoding_block_length:
-        Option<usize>,
     /// The loaded draft runtime; present only when loading found a paired
     /// draft artifact and the active limit had headroom for it.
     pub(in crate::qwen3_5_resident::inference_execution) speculative_draft_runtime: Option<

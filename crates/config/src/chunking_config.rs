@@ -23,6 +23,11 @@ pub(crate) struct ChunkingConfigFile {
         skip_serializing_if = "Option::is_none"
     )]
     pub(crate) prompt_cache_block_tokens: Option<Option<u32>>,
+    // DFlash speculative decoding is disabled by design, so this key is
+    // accepted and deliberately ignored wherever it appears (global or
+    // per-model). The field stays on the parse surface only because this
+    // struct denies unknown fields: a configuration written while DFlash
+    // was enabled must keep parsing. resolve() reads and discards it.
     #[serde(
         default,
         deserialize_with = "deserialize_present_nullable_usize",
@@ -53,7 +58,6 @@ pub struct ConfiguredChunkingFields {
     pub experimental_ssd_paging_prefill_graph_submission_layer_interval: bool,
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: bool,
     pub prompt_cache_block_tokens: bool,
-    pub speculative_decoding_block_length_tokens: bool,
     pub prompt_cache_common_prefix_stride_blocks: bool,
     pub experimental_decode_stage_attribution_enabled: bool,
     pub experimental_prefill_stage_attribution_enabled: bool,
@@ -102,9 +106,6 @@ impl ChunkingConfigFile {
                 .experimental_ssd_paging_generation_graph_submission_layer_interval
                 .is_some(),
             prompt_cache_block_tokens: self.prompt_cache_block_tokens.is_some(),
-            speculative_decoding_block_length_tokens: self
-                .speculative_decoding_block_length_tokens
-                .is_some(),
             prompt_cache_common_prefix_stride_blocks: self
                 .prompt_cache_common_prefix_stride_blocks
                 .is_some(),
@@ -130,7 +131,11 @@ impl ChunkingConfigFile {
         let Some(model) = model else {
             return global.clone();
         };
+        // The speculative block length is deliberately not inherited: the
+        // key is accepted-and-ignored by design (see the file struct's
+        // field comment), so the merged document carries None.
         Self {
+            speculative_decoding_block_length_tokens: None,
             fixed_prompt_processing_chunk_size_tokens: model
                 .fixed_prompt_processing_chunk_size_tokens
                 .or(global.fixed_prompt_processing_chunk_size_tokens),
@@ -152,9 +157,6 @@ impl ChunkingConfigFile {
             prompt_cache_block_tokens: model
                 .prompt_cache_block_tokens
                 .or(global.prompt_cache_block_tokens),
-            speculative_decoding_block_length_tokens: model
-                .speculative_decoding_block_length_tokens
-                .or(global.speculative_decoding_block_length_tokens),
             prompt_cache_common_prefix_stride_blocks: model
                 .prompt_cache_common_prefix_stride_blocks
                 .or(global.prompt_cache_common_prefix_stride_blocks),
@@ -208,7 +210,6 @@ pub struct ChunkingConfig {
     experimental_ssd_paging_prefill_graph_submission_layer_interval: u32,
     experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
     prompt_cache_block_tokens: Option<u32>,
-    speculative_decoding_block_length_tokens: Option<usize>,
     prompt_cache_common_prefix_stride_blocks: u32,
     experimental_decode_stage_attribution_enabled: bool,
     experimental_prefill_stage_attribution_enabled: bool,
@@ -225,6 +226,14 @@ impl ChunkingConfig {
     pub(crate) fn resolve(
         configured: &ChunkingConfigFile,
     ) -> Result<Self, AstronomicalConfigError> {
+        // DFlash speculative decoding is disabled by design: the
+        // speculative block length is read here and discarded, so a
+        // configuration that still carries the key parses cleanly and the
+        // value is ignored everywhere (see the field's comment on the
+        // file struct above). Re-enabling is a deliberate design change,
+        // not a configuration flip.
+        let _ignored_speculative_decoding_block_length_tokens =
+            configured.speculative_decoding_block_length_tokens;
         let resolved = Self {
             fixed_prompt_processing_chunk_size_tokens: configured
                 .fixed_prompt_processing_chunk_size_tokens
@@ -247,9 +256,6 @@ impl ChunkingConfig {
                     DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
                 ),
             prompt_cache_block_tokens: configured.prompt_cache_block_tokens.unwrap_or(None),
-            speculative_decoding_block_length_tokens: configured
-                .speculative_decoding_block_length_tokens
-                .unwrap_or(None),
             prompt_cache_common_prefix_stride_blocks: configured
                 .prompt_cache_common_prefix_stride_blocks
                 .unwrap_or(DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS),
@@ -274,18 +280,6 @@ impl ChunkingConfig {
     }
 
     fn validate(&self) -> Result<(), AstronomicalConfigError> {
-        if let Some(speculative_decoding_block_length_tokens) =
-            self.speculative_decoding_block_length_tokens
-        {
-            if speculative_decoding_block_length_tokens == 0
-                || speculative_decoding_block_length_tokens > 64
-            {
-                return Err(AstronomicalConfigError::InvalidChunkingValue {
-                    field_name: "chunking.speculative_decoding_block_length_tokens",
-                    description: "must be between 1 and 64",
-                });
-            }
-        }
         for (field_name, field_value) in [
             (
                 "chunking.fixed_prompt_processing_chunk_size_tokens",
@@ -361,11 +355,6 @@ impl ChunkingConfig {
         self.experimental_ssd_paging_generation_graph_submission_layer_interval
     }
 
-    #[must_use]
-    pub const fn speculative_decoding_block_length_tokens(&self) -> Option<usize> {
-        self.speculative_decoding_block_length_tokens
-    }
-
     pub const fn prompt_cache_block_tokens(&self) -> Option<u32> {
         self.prompt_cache_block_tokens
     }
@@ -427,7 +416,6 @@ impl ChunkingConfig {
 impl Default for ChunkingConfig {
     fn default() -> Self {
         Self {
-            speculative_decoding_block_length_tokens: None,
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: true,

@@ -26,17 +26,18 @@
 //! journey verifies the measured input/output token counts and zero cache reuse.
 //!
 //! This is a laptop-only journey: it loads real weights into wired GPU memory,
-//! so it is `#[ignore]`d and not wired into CI. Invoke it directly with
-//! `cargo build --release --bin astronomical-inference-worker` followed by
-//! one exact test command. The diagnostic paired run and clean paired run are
-//! separate because attribution distorts measured throughput; only clean runs
-//! append policy-labeled historical records:
-//! - `cargo test --release -p astronomical-acceptance --features performance_throughput --test performance_throughput performance_throughput::qwen3_5_moe::should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput -- --ignored --exact --test-threads=1 --nocapture`
-//! - `cargo test --release -p astronomical-acceptance --features performance_throughput --test performance_throughput performance_throughput::qwen3_5_moe::should_report_streaming_sparse_moe_decode_route_materialization_evidence -- --ignored --exact --test-threads=1 --nocapture`
-//! - `cargo test --release -p astronomical-acceptance --features performance_throughput --test performance_throughput performance_throughput::qwen3_5_moe::should_compare_streaming_sparse_moe_decode_cache_policies_with_attribution -- --ignored --exact --test-threads=1 --nocapture`
-//! - `cargo test --release -p astronomical-acceptance --features performance_throughput --test performance_throughput performance_throughput::qwen3_5_moe::should_compare_clean_streaming_sparse_moe_decode_cache_policy_throughput -- --ignored --exact --test-threads=1 --nocapture`
-//! Each paired command alternates policy order across three trials. The
-//! release journey launches the release worker produced by the build step.
+//! so it is `#[ignore]`d and not wired into CI. Serving measurements must go
+//! through the repository runner, which builds the exact optimized worker and
+//! records the build identity the durable history requires — a direct
+//! `cargo test` invocation fails fast on the missing identity manifest. The
+//! diagnostic paired run and clean paired run are separate because attribution
+//! distorts measured throughput; only clean runs append policy-labeled
+//! historical records (narrow the `--filter` per journey):
+//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_measure_resident_sparse_moe_prompt_processing_and_decode_throughput --ignored`
+//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_report_streaming_sparse_moe_decode_route_materialization_evidence --ignored`
+//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_streaming_sparse_moe_decode_cache_policies_with_attribution --ignored`
+//! - `cargo xtask test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter should_compare_clean_streaming_sparse_moe_decode_cache_policy_throughput --ignored`
+//! Each paired command alternates policy order across three trials.
 
 use crate::performance_throughput::decode_cache_experiment::{
     MeasuredShapeWindow, PAIRED_TRIAL_COUNT, run_paired_decode_cache_trials,

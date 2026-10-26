@@ -221,10 +221,9 @@ pub(crate) fn initialize_qwen3_5_model(
                         ));
                     }
                 };
-            // The draft loads only for the resident placement: the
-            // streaming engine pages experts from SSD and has no spare
-            // residency for a second resident weight set.
-            let speculative_decoding_block_length = chunking.speculative_decoding_block_length;
+            // DFlash speculative decoding is disabled by design: no draft
+            // is ever constructed for the resident engine (see the
+            // speculative-decode lifecycle module for the full rationale).
             Qwen3_5ResidentEngine::new_with_effective_context_runtime_chunking_and_performance_attribution(
                 validated_artifact,
                 active_memory_limit_bytes,
@@ -239,7 +238,6 @@ pub(crate) fn initialize_qwen3_5_model(
                 model_loading_performance_attribution,
                 performance_attribution_log,
                 diagnostic_resident_prefill_activation_floor_bytes,
-                speculative_decoding_block_length,
             )
             .map(ModelFamilyInferenceEngine::Qwen3_5)
         }

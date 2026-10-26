@@ -25,10 +25,6 @@ pub struct WorkerChunkingConfiguration {
     /// Zero disables intermediate generation submission. Ignored while experts
     /// are fully memory resident.
     pub experimental_ssd_paging_generation_graph_submission_layer_interval: u32,
-    /// Speculative-decoding block length; `None` keeps classic decoding and
-    /// serializes away entirely so existing messages keep their exact shape.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub speculative_decoding_block_length: Option<usize>,
     /// Exact persistent-cache block length, or `None` for model-derived sizing.
     pub prompt_cache_block_tokens: Option<u32>,
     /// Number of cache blocks between retained branch restart checkpoints.
