@@ -220,6 +220,12 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let experimentalSsdPagingPrefillGraphSubmissionLayerInterval: UInt32
   let experimentalSsdPagingGenerationGraphSubmissionLayerInterval: UInt32
   let promptCacheBlockTokens: UInt32?
+  // The speculation block length crosses the wire absent (not null) when a
+  // worker runs classic decoding: the Rust DTO skips serialization for
+  // None, unlike prompt_cache_block_tokens which always serializes. The
+  // decoder must therefore treat a missing key as nil rather than demand
+  // key presence.
+  let speculativeDecodingBlockLength: UInt64?
   let promptCacheCommonPrefixStrideBlocks: UInt32
   let experimentalDecodeStageAttributionEnabled: Bool
   let experimentalPrefillStageAttributionEnabled: Bool
@@ -235,6 +241,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case experimentalSsdPagingPrefillGraphSubmissionLayerInterval = "experimental_ssd_paging_prefill_graph_submission_layer_interval"
     case experimentalSsdPagingGenerationGraphSubmissionLayerInterval = "experimental_ssd_paging_generation_graph_submission_layer_interval"
     case promptCacheBlockTokens = "prompt_cache_block_tokens"
+    case speculativeDecodingBlockLength = "speculative_decoding_block_length"
     case promptCacheCommonPrefixStrideBlocks = "prompt_cache_common_prefix_stride_blocks"
     case experimentalDecodeStageAttributionEnabled = "experimental_decode_stage_attribution_enabled"
     case experimentalPrefillStageAttributionEnabled = "experimental_prefill_stage_attribution_enabled"
@@ -261,6 +268,8 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       forKey: .experimentalSsdPagingGenerationGraphSubmissionLayerInterval)
     promptCacheBlockTokens = try container.decodeRequiredNullable(
       UInt32.self, forKey: .promptCacheBlockTokens)
+    speculativeDecodingBlockLength = try container.decodeIfPresent(
+      UInt64.self, forKey: .speculativeDecodingBlockLength)
     promptCacheCommonPrefixStrideBlocks = try container.decode(
       UInt32.self, forKey: .promptCacheCommonPrefixStrideBlocks)
     experimentalDecodeStageAttributionEnabled = try container.decode(
