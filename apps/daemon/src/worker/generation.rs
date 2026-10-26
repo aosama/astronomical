@@ -1,11 +1,11 @@
 //! Generation lifecycle: admission, preparation, output collection, and events.
 
-pub(crate) mod worker_completion_event;
-pub(crate) mod worker_generate;
-pub(crate) mod worker_generation_admission;
-pub(crate) mod worker_generation_output;
-pub(crate) mod worker_generation_preparation;
-pub(crate) mod worker_prefill_progress;
+pub(crate) mod admission;
+pub(crate) mod completion_event;
+pub(crate) mod generate;
+pub(crate) mod output;
+pub(crate) mod prefill_progress;
+pub(crate) mod preparation;
 
 #[cfg(test)]
-mod worker_generation_output_tests;
+mod output_tests;

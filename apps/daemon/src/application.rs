@@ -1,14 +1,14 @@
 use crate::config::config_reload::{ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver};
-use crate::http::status_endpoint::status_check;
 use crate::library::{
     DownloadCatalog, LibraryDownloadCoordinator, library_catalog_routes, library_download_routes,
 };
+use crate::rest::status::status_check;
 use crate::{
     ImageGenerationExecutor, WorkerHandle,
     console::console_assets::console_routes,
-    http::openai_chat_endpoint,
-    http::openai_models_endpoint::{list_models, retrieve_model},
-    http::openai_responses_endpoint,
+    rest::openai::chat_endpoint,
+    rest::openai::models_endpoint::{list_models, retrieve_model},
+    rest::openai::responses_endpoint,
     system_telemetry::system_telemetry_routes,
 };
 use astronomical_config::DiscoveredModel;
@@ -31,7 +31,7 @@ use std::{
 use tokio::sync::Mutex as AsyncMutex;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use crate::http::openai_request_body_budget::enforce_openai_request_body_budget;
+use crate::rest::openai::request_body_budget::enforce_openai_request_body_budget;
 // Request counters restart with each Router. A process/time/instance namespace
 // prevents an OpenCode conversation from confusing tool-call IDs after either
 // a daemon restart or multiple in-process Router constructions in tests.
@@ -371,7 +371,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         .merge(console_routes())
         .merge(library_catalog_routes())
         .merge(library_download_routes())
-        .merge(crate::http::config_reveal_endpoint::config_reveal_routes())
+        .merge(crate::rest::config_reveal::config_reveal_routes())
         .merge(system_telemetry_routes())
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))
@@ -381,7 +381,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         .route("/v1/models/{*model}", get(retrieve_model))
         .route(
             "/v1/chat/completions",
-            post(openai_chat_endpoint::create_chat_completion)
+            post(chat_endpoint::create_chat_completion)
                 .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
                 .layer(axum::middleware::from_fn(
                     enforce_openai_request_body_budget,
@@ -389,7 +389,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         )
         .route(
             "/v1/responses",
-            post(openai_responses_endpoint::create_response)
+            post(responses_endpoint::create_response)
                 .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
                 .layer(axum::middleware::from_fn(
                     enforce_openai_request_body_budget,
@@ -397,7 +397,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         );
     let router = router.route(
         "/v1/images/generations",
-        post(crate::http::openai_image_generation_endpoint::create_image_generation)
+        post(crate::rest::openai::image_generation_endpoint::create_image_generation)
             .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
             .layer(axum::middleware::from_fn(
                 enforce_openai_request_body_budget,
@@ -405,7 +405,7 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     );
     let router = router.route(
         "/v1/embeddings",
-        post(crate::http::openai_embeddings_endpoint::create_embeddings)
+        post(crate::rest::openai::embeddings_endpoint::create_embeddings)
             .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
             .layer(axum::middleware::from_fn(
                 enforce_openai_request_body_budget,
@@ -414,23 +414,20 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     let router = if supports_config_reload {
         router.route(
             "/v1/config/reload",
-            post(crate::http::config_reload_endpoint::reload_config),
+            post(crate::rest::config_reload::reload_config),
         )
     } else {
         router
     };
     let router = if supports_cache_clear {
-        router.route(
-            "/v1/cache",
-            delete(crate::http::cache_clear_endpoint::clear_cache),
-        )
+        router.route("/v1/cache", delete(crate::rest::cache_clear::clear_cache))
     } else {
         router
     };
     let router = if supports_live_mlx_memory_control {
         router.route(
             "/v1/config/maximum-mlx-memory",
-            put(crate::http::maximum_mlx_memory_endpoint::update_maximum_mlx_memory)
+            put(crate::rest::maximum_mlx_memory::update_maximum_mlx_memory)
                 .layer(DefaultBodyLimit::max(4 * 1024)),
         )
     } else {

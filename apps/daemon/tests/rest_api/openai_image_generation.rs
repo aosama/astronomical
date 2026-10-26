@@ -16,7 +16,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{ColorType, ImageDecoder, codecs::png::PngDecoder};
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 const IMAGE_MODEL_ID: &str = "FLUX.2-klein-4B";
 const QWEN_IMAGE_MODEL_ID: &str = "Qwen-Image-2.1";

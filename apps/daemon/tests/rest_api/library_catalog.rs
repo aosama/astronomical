@@ -10,7 +10,7 @@ use axum::{
 use tokio::time::timeout;
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 const VALID_CATALOG_JSON: &str = r#"{
     "schema_version": 2,

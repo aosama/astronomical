@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::daemon;
+use crate::support::daemon;
 
 #[tokio::test]
 async fn should_publish_the_ready_model_identity_from_the_worker_readiness_event() {

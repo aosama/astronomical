@@ -1,8 +1,8 @@
 //! Worker process lifecycle: launch, containment, replacement, and model swap.
 
-pub(crate) mod worker_containment;
-pub(crate) mod worker_model_swap;
-pub(crate) mod worker_process;
-pub(crate) mod worker_replacement;
-pub(crate) mod worker_startup_runtime;
-pub(crate) mod worker_stderr_tail;
+pub(crate) mod child;
+pub(crate) mod containment;
+pub(crate) mod model_swap;
+pub(crate) mod replacement;
+pub(crate) mod startup_runtime;
+pub(crate) mod stderr_tail;

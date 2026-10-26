@@ -62,8 +62,8 @@ fn resume_offset_factories(
         .collect()
 }
 
-fn recorded_bytes_on_disk<'a>(
-    download_job: &'a astronomical_daemon::DownloadJob,
+fn recorded_bytes_on_disk(
+    download_job: &astronomical_daemon::DownloadJob,
     relative_path: &str,
 ) -> u64 {
     download_job

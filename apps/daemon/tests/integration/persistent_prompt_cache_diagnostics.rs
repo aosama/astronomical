@@ -7,7 +7,7 @@ use astronomical_ipc_protocol::{
 use serde_json::Value;
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::daemon;
+use crate::support::daemon;
 
 #[tokio::test]
 async fn should_persist_worker_cache_diagnostics_for_a_completed_user_request() {

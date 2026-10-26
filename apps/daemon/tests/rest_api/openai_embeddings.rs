@@ -12,7 +12,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 const EMBEDDING_MODEL_ID: &str = "nomicai-modernbert-embed-base-8bit";
 const ROMEO_LINE: &str = "O Romeo, Romeo, wherefore art thou Romeo?";

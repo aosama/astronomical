@@ -1,2 +1,2 @@
-mod common;
 mod rest_api;
+mod support;

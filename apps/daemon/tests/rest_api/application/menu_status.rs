@@ -23,7 +23,7 @@ use axum::{
 use serde_json::Value;
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 const AUTOREGRESSIVE_MODEL_ID: &str = "fictional/autoregressive-model";
 const AUTOREGRESSIVE_CONFIGURATION_GENERATION: &str =

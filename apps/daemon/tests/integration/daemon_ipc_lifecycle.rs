@@ -9,7 +9,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::timeout;
 
-use crate::common::daemon_ipc::{
+use crate::support::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, disabled_daemon_attribution_log, fresh_instance_state_directory,
     unavailable_generation_context,
 };

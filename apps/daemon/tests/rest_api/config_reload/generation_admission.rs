@@ -31,7 +31,7 @@ async fn should_release_configuration_transition_after_request_queue_admission()
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(format!(
                         r#"{{"model":"{}","messages":[{{"role":"user","content":"hello"}}],"stream":true}}"#,
-                        crate::common::MODEL_ID
+                        crate::support::MODEL_ID
                     )))
                     .expect("the chat request should be valid"),
             )

@@ -17,7 +17,7 @@ use sha2::Digest;
 use tokio::time::timeout;
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 mod restart;
 mod support;

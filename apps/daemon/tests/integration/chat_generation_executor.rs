@@ -11,7 +11,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::daemon;
+use crate::support::daemon;
 
 const RETIRED_SMALL_FRAME_BYTES: usize = 64 * 1024;
 

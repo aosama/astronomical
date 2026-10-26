@@ -7,10 +7,16 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+# The daemon binary: a thin composition root (argument grammar, instance
+# lock, startup failure reporting) over the library in src/.
 [[bin]]
 name = "astronomicald"
-path = "src/main.rs"
+path = "src/bin/astronomicald/main.rs"
 
+# Fixture executables the integration journeys spawn as real worker
+# processes. They live in tests/fixtures/ (they are fixtures, not tests) and
+# are declared here because cargo only links named bins; `cargo test` builds
+# them so journeys can locate them through CARGO_BIN_EXE_*.
 [[bin]]
 name = "astronomical-daemon-test-worker"
 path = "tests/fixtures/scripted_worker.rs"

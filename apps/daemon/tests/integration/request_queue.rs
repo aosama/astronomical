@@ -9,7 +9,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::{Instant, sleep, timeout};
 
-use crate::common::daemon;
+use crate::support::daemon;
 
 /// Second request should wait for the first to complete and then start,
 /// rather than being immediately rejected with CapacityUnavailable.

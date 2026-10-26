@@ -18,7 +18,7 @@ use axum::{
 use tokio::time::{Instant, sleep, timeout};
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 mod configuration_status;
 mod generation_admission;

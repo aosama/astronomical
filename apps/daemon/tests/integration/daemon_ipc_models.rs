@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::time::timeout;
 
-use crate::common::daemon_ipc::{
+use crate::support::daemon_ipc::{
     HANDSHAKE_TEST_TIMEOUT, fresh_instance_state_directory, ipc_chat_discovered_model,
     ipc_runtime_config, ready_stub_executor, start_stub_daemon_ipc_service,
     start_stub_daemon_ipc_service_with_runtime_config,

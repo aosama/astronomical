@@ -4,7 +4,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use crate::common::ScriptedExecutor;
+use crate::support::ScriptedExecutor;
 
 const EXPECTED_HTML_TITLE_MARKER: &str = "<title>Astronomical Observatory</title>";
 const EXPECTED_THIN_TALK_HANDOFF_MARKER: &str = "href=\"astronomical://chat\"";
