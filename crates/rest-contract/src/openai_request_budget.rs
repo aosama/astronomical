@@ -150,7 +150,10 @@ mod tests {
 
     #[test]
     fn should_keep_the_decoded_media_budget_above_the_per_image_budget() {
-        assert!(
+        // The relation is between two constants, so it is asserted at
+        // compile time for the whole crate: a budget change that breaks the
+        // ordering fails this test target's build, not just this run.
+        const _: () = assert!(
             MAX_OPENAI_INLINE_MEDIA_BYTES >= MAX_OPENAI_IMAGE_DECODED_BYTES,
             "the inline-media budget must admit at least one budget-sized image"
         );

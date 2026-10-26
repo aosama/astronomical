@@ -191,7 +191,7 @@ fn resolve_level_group(
             } else {
                 top_level_effort
             };
-            return Ok(Some(resolved_effort));
+            Ok(Some(resolved_effort))
         }
         (Some(top_level_effort), None) => Ok(Some(top_level_effort)),
         (None, Some(nested_effort)) => Ok(Some(nested_effort)),

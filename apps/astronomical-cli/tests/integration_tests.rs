@@ -1,1 +1,1 @@
-mod cli_journeys;
+mod integration;
