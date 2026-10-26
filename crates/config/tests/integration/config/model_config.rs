@@ -314,9 +314,10 @@ fn should_ignore_the_speculative_decoding_block_length_at_both_levels() {
     // DFlash speculative decoding is disabled by design: the key is
     // accepted and ignored at the global level and inside a per-model
     // chunking override alike, while the real override fields still merge.
-    let astronomical_config =
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect("the configuration carrying ignored speculative keys at both levels should load");
+    let astronomical_config = AstronomicalConfig::load_from_home_directory(
+        temporary_home_directory.path(),
+    )
+    .expect("the configuration carrying ignored speculative keys at both levels should load");
     let model_config = astronomical_config
         .resolved_model_config("organization/target", 65_536)
         .expect("the model policy should resolve");
