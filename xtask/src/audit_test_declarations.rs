@@ -87,9 +87,7 @@ pub(crate) fn audit_test_declarations(
                 .rsplit('/')
                 .next()
                 .and_then(|name| name.strip_suffix(".rs"));
-            if !is_mod_rs
-                && let Some(file_stem) = file_stem
-            {
+            if !is_mod_rs && let Some(file_stem) = file_stem {
                 let owned_folder = format!("{directory}/{file_stem}");
                 if !lookup_prefixes.contains(&owned_folder) {
                     lookup_prefixes.push(owned_folder);
