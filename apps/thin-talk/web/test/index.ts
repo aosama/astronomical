@@ -11,3 +11,6 @@ import "./sessionPreferences.test";
 import "./chatJourney.test";
 import "./stableIdentifierContract.test";
 import "./previewBridgeShim.test";
+import "./copyAnswer.test";
+import "./transcriptRenderSkip.test";
+import "./attachmentTrust.test";

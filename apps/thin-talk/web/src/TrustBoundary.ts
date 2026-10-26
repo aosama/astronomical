@@ -72,6 +72,15 @@ export class TrustBoundary {
     return DOMPurify.sanitize(html, SANITIZE_OPTIONS);
   }
 
+  /** Whether an image source may load, decided by the same scheme rule the
+   * sanitiser applies to markdown images: the private asset scheme, inline
+   * image data, or a fragment. Attachment chips render through this instead
+   * of trusting their own URL, so the remote-image channel stays closed in
+   * exactly one place. */
+  public isAllowedImageSource(source: string): boolean {
+    return SAFE_IMAGE_URI.test(source);
+  }
+
   public escapeHtml(text: string): string {
     return String(text)
       .replace(/&/g, "&amp;")
