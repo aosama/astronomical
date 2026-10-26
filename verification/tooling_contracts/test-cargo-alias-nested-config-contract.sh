@@ -1,11 +1,11 @@
 #!/usr/bin/env sh
 
 # Proves that every alias in .cargo/config.toml expands identically whether
-# cargo runs from the repository or from a git worktree nested under it (for
-# example under .claude/worktrees/). Cargo merges config files from every
-# ancestor directory: array-valued aliases are joined across files, so a
-# nested worktree that sees this file twice runs `check ... check ...`, while
-# string-valued aliases are replaced by the nearest file. The contract copies
+# cargo runs with one copy of that file in its config ancestry or with the
+# same file planted twice. Cargo merges config files from every ancestor
+# directory: array-valued aliases are joined across files, so a directory
+# that sees this file twice runs `check ... check ...`, while string-valued
+# aliases are replaced by the nearest file. The contract copies
 # the real config into an outer and an inner sandbox directory, lists the
 # aliases from both, and requires the listings to match. A detector self-check
 # with a synthetic array alias proves the listing comparison still catches the
@@ -99,7 +99,7 @@ printf '%s\n' '[cargo-alias-nested-config-test] case=detector-self-check status=
 printf '%s\n' '[cargo-alias-nested-config-test] case=repository-aliases-survive-nesting status=start'
 repository_difference="$(nested_listing_difference "${SANDBOX_DIRECTORY}/repository" "${repository_root}/.cargo/config.toml")"
 [ -z "$repository_difference" ] || {
-    print_error "an alias in .cargo/config.toml changes meaning inside a nested worktree; write every alias as one string, not a TOML array"
+    print_error "an alias in .cargo/config.toml changes meaning when the config file appears twice in cargo's ancestry; write every alias as one string, not a TOML array"
     printf '%s\n' "$repository_difference" >&2
     exit 1
 }

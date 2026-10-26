@@ -15,8 +15,8 @@ warnings = "deny"
 # Every alias is written as one string, never as a TOML array. Cargo merges
 # config files from every ancestor directory and JOINS array values across
 # them, while a string from the nearest file replaces the ancestors' value;
-# a nested worktree sees this file twice, and an array alias would double
-# into a broken command.
+# an array alias would double whenever an ancestor .cargo/config.toml
+# defines the same alias, repeating it into a broken command.
 #
 # Lane vocabulary: "integration" is the scripted, deterministic test kind
 # (no network, no real model artifacts). Acceptance lanes run real-model
@@ -83,9 +83,8 @@ verify = "check --workspace --all-targets"
 
 # Visibility audits (issue #1355). Output is a candidate list, never a
 # verdict: confirm any candidate by hand (`git grep -wn "<name>" -- '*.rs'`)
-# before changing visibility, and move nested worktrees under
-# .claude/worktrees/ aside before trusting the workspace audit, or it
-# reports zero from self-matches.
+# before changing visibility, and run them from a checkout with no nested
+# copy of these sources, or the audit reports zero from self-matches.
 audit-unused-public-bins = "clippy --workspace --bins -- -A clippy::all -D dead_code_pub_in_binary"
 audit-unused-public-workspace = "workspace-unused-pub"
 
