@@ -119,10 +119,10 @@ impl SyntheticQwenImage21Artifact {
     }
 
     pub(super) fn widen_first_transformer_tensor(&mut self) {
-        if let Some(first_tensor) = self.transformer.tensors.first_mut() {
-            if let Some(last_dimension) = first_tensor.shape.last_mut() {
-                *last_dimension += 1;
-            }
+        if let Some(first_tensor) = self.transformer.tensors.first_mut()
+            && let Some(last_dimension) = first_tensor.shape.last_mut()
+        {
+            *last_dimension += 1;
         }
     }
 

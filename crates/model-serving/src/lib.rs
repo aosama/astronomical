@@ -585,13 +585,9 @@ pub use sparse_experts::{
 pub use sparse_experts::{SparseExpertError, invert_assignment_order};
 
 /// Validates a safetensors shard where some tensors have strict dtype/shape profiles
-
 /// and remaining tensors are accepted by name only.
-
 ///
-
 /// Exposed for integration tests that build synthetic multi-tensor shard fixtures.
-
 pub fn validate_bounded_safetensors_with_partial_profiles(
     weights_file: &std::fs::File,
 

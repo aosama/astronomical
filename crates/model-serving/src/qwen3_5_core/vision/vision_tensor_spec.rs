@@ -321,7 +321,7 @@ fn append_affine_module_tensor_profiles(
             "affine bit width and group size must be positive".to_owned(),
         ));
     }
-    if input_width % quantization_group_size != 0 {
+    if !input_width.is_multiple_of(quantization_group_size) {
         return Err(invalid_profile(format!(
             "input width {input_width} is not divisible by group size {quantization_group_size}"
         )));

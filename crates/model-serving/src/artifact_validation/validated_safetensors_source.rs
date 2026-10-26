@@ -56,15 +56,16 @@ impl ValidatedSafetensorsSource {
             required_file.size_bytes(),
             MAXIMUM_SAFETENSORS_HEADER_BYTES,
         );
-        if bounded_header.is_err() {
-            tracing::debug!(
-                file_name = required_file.file_name(),
-                "read_bounded_safetensors_json_header returned error"
-            );
-            let error = bounded_header.unwrap_err();
-            return Err(map_header_error(error, required_file.file_name()));
-        }
-        let bounded_header = bounded_header.unwrap();
+        let bounded_header = match bounded_header {
+            Ok(bounded_header) => bounded_header,
+            Err(error) => {
+                tracing::debug!(
+                    file_name = required_file.file_name(),
+                    "read_bounded_safetensors_json_header returned error"
+                );
+                return Err(map_header_error(error, required_file.file_name()));
+            }
+        };
         tracing::debug!(
             file_name = required_file.file_name(),
             "read_bounded_safetensors_json_header succeeded"
@@ -334,8 +335,7 @@ fn validate_profile(
     let shape_matches = metadata.shape == profile.shape
         || profile
             .equivalent_published_shapes
-            .iter()
-            .any(|equivalent_shape| *equivalent_shape == metadata.shape);
+            .contains(&metadata.shape);
     if !shape_matches {
         return Err(ArtifactValidationError::TensorShapeMismatch {
             tensor_name: profile.name.clone(),

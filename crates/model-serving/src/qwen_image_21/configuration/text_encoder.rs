@@ -150,7 +150,7 @@ impl QwenImage21TextEncoderConfig {
         require(document.model_type == "qwen3_vl", DOCUMENT, "model_type")?;
         require(document.dtype == "bfloat16", DOCUMENT, "dtype")?;
         require(
-            document.tie_word_embeddings == false,
+            !document.tie_word_embeddings,
             DOCUMENT,
             "tie_word_embeddings",
         )?;
@@ -160,11 +160,7 @@ impl QwenImage21TextEncoderConfig {
             "transformers_version",
         )?;
         require(document.mlx_format, DOCUMENT, "mlx_format")?;
-        require(
-            text.attention_bias == false,
-            DOCUMENT,
-            "text_config.attention_bias",
-        )?;
+        require(!text.attention_bias, DOCUMENT, "text_config.attention_bias")?;
         require(
             text.attention_dropout == 0.0,
             DOCUMENT,

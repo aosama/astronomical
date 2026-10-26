@@ -227,8 +227,7 @@ impl Qwen3_5ArtifactValidationError {
 fn bound_public_qwen3_5_failure_reason(unbounded_reason: String) -> String {
     const MAX_PUBLIC_REASON_CHARACTERS: usize = 512;
     let mut bounded_reason = unbounded_reason
-        .replace('/', "_")
-        .replace('\\', "_")
+        .replace(['/', '\\'], "_")
         .chars()
         .take(MAX_PUBLIC_REASON_CHARACTERS)
         .collect::<String>();
