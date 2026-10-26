@@ -38,3 +38,9 @@
 
 - `<repo-root>/xtask` exists so that repository tooling is typed, unit-tested Rust invoked as `cargo xtask <command>` instead of untested shell, with each subcommand keeping the output lines and exit codes of the shell tool it replaced so hooks and CI steps survive unchanged. Whenever you add or change such tooling, put it in xtask as a new or extended subcommand with its tests and document the invocation in the `xtask` alias comment of `.cargo/config.toml`;
 - This repo prefers <repo-root>/xtask convention versus shell scripts, shell scripts are highly discouraged and the repo is moving off of shell scripts and reducing their usage.
+
+## Hints About This Repo
+
+- Pins and patches are under "<repo-root>/third-party".
+- Supported models are under "<repo-root>/registry".
+- Performance measurements tests are under "<repo-root>/verification".
