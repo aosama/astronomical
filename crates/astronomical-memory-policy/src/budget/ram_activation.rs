@@ -10,14 +10,14 @@
 //! production incident:
 //!
 //! 1. Evidence is only ever transferred between scopes by a MAXIMUM over
-//!     observations already taken at or below the planned scope. Every
-//!     observation already embeds the attended-context factor of the forward
-//!     that produced it, so multiplying one by a token ratio counts that factor
-//!     twice.
+//!    observations already taken at or below the planned scope. Every
+//!    observation already embeds the attended-context factor of the forward
+//!    that produced it, so multiplying one by a token ratio counts that factor
+//!    twice.
 //! 2. The reserve is capped by what the loaded model can coexist with, not by
-//!     the ceiling. Model core bytes are irrevocable, so a reserve larger than
-//!     `ceiling - model_core` can never be granted and only converts a
-//!     reclaimable over-reservation into a permanent rejection.
+//!    the ceiling. Model core bytes are irrevocable, so a reserve larger than
+//!    `ceiling - model_core` can never be granted and only converts a
+//!    reclaimable over-reservation into a permanent rejection.
 //!
 //! The asymmetry behind both rules: UNDER-reserving for a genuinely larger
 //! forward is recoverable (typed allocation failure, exact reclamation, retry),

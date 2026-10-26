@@ -143,18 +143,20 @@ fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
     let request_residency =
         request_residency.expect("Prefill publication must freeze a request contract");
     assert_eq!(request_residency.pinned_complete_layer_indexes().len(), 33);
-    for layer_index in 33..SPARSE_LAYER_COUNT {
+    for (layer_index, layer_target) in stabilized_plan
+        .layer_targets
+        .iter()
+        .enumerate()
+        .take(SPARSE_LAYER_COUNT)
+        .skip(33)
+    {
         assert_eq!(
-            stabilized_plan.layer_targets[layer_index],
+            *layer_target,
             ExpertLayerResidencyTarget::StreamOperationLocal,
             "streamed-role layer {layer_index} must stream operation-local when the leftover budget cannot seat its page"
         );
         assert!(
-            !should_commit_mandatory_complete_layer(
-                39,
-                true,
-                Some(stabilized_plan.layer_targets[layer_index]),
-            ),
+            !should_commit_mandatory_complete_layer(39, true, Some(*layer_target),),
             "the commit gate must refuse layer {layer_index}: 33 pinned claims leave {} bytes, one page is {}",
             COMPOSED_LEFTOVER_BUDGET_BYTES - 33 * COMPLETE_LAYER_PAYLOAD_BYTES,
             COMPLETE_LAYER_PAYLOAD_BYTES
@@ -191,9 +193,14 @@ fn should_not_authorize_admission_offers_beyond_the_composed_leftover_budget() {
         ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead,
         "the single leftover page after 34 pinned claims admits the first streamed layer"
     );
-    for layer_index in 35..SPARSE_LAYER_COUNT {
+    for layer_target in richer_plan
+        .layer_targets
+        .iter()
+        .take(SPARSE_LAYER_COUNT)
+        .skip(35)
+    {
         assert_eq!(
-            richer_plan.layer_targets[layer_index],
+            *layer_target,
             ExpertLayerResidencyTarget::StreamOperationLocal,
             "every further streamed layer exceeds the leftover and must stream operation-local"
         );

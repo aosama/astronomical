@@ -1,3 +1,8 @@
+//! Failure vocabulary for the Qwen3.5 startup pipeline. Family-owned detail is
+//! bounded at the worker boundary through
+//! `worker_startup::error::bound_public_model_load_failure_reason` before it
+//! reaches daemon-facing diagnostics.
+
 use std::io;
 use std::path::PathBuf;
 
@@ -8,7 +13,7 @@ use astronomical_model_serving::{
 };
 use thiserror::Error;
 
-use crate::worker_startup_error;
+use crate::worker_startup::error;
 
 /// Failure produced while constructing the Qwen family processor and engine.
 #[derive(Debug, Error)]
@@ -79,8 +84,6 @@ impl Qwen3_5ModelStartupError {
                 "model initialization failed".to_owned()
             }
         };
-        worker_startup_error::bound_public_model_load_failure_reason(
-            unbounded_public_model_load_failure_reason,
-        )
+        error::bound_public_model_load_failure_reason(unbounded_public_model_load_failure_reason)
     }
 }

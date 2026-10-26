@@ -1,3 +1,7 @@
+//! The worker's startup and runtime failure vocabulary, plus the
+//! character-bound truncation that keeps family-owned model-load detail from
+//! bloating daemon-facing diagnostics.
+
 use std::io;
 
 use astronomical_ipc_protocol::ProtocolError;

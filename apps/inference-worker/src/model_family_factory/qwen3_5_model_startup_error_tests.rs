@@ -5,7 +5,7 @@ use astronomical_model_serving::{
     Qwen3_5ArtifactValidationError, Qwen3_5ConfigError,
 };
 
-use crate::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
+use super::qwen3_5_model_startup_error::Qwen3_5ModelStartupError;
 
 #[test]
 fn should_explain_the_root_model_validation_failure_without_exposing_its_local_path() {

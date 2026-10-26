@@ -460,3 +460,6 @@ fn require_f64(
         .and_then(Value::as_f64)
         .ok_or_else(|| format!("{object_name} {field_name} must be a number"))
 }
+
+#[cfg(all(test, feature = "flux-reference-oracle"))]
+mod flux_reference_oracle_tests;

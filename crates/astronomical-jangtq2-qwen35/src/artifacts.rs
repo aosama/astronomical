@@ -97,7 +97,10 @@ pub fn tensor_inventory_for_module(
     geometry: &Jangtq2ModuleGeometry,
 ) -> Result<Jangtq2ModuleTensorInventory, Jangtq2ConfigurationError> {
     let packing_alignment_multiple = codebook::codes_per_group();
-    if geometry.input_width % packing_alignment_multiple != 0 {
+    if !geometry
+        .input_width
+        .is_multiple_of(packing_alignment_multiple)
+    {
         return Err(Jangtq2ConfigurationError::InputWidthNotPackingAligned {
             actual_input_width: geometry.input_width,
             required_alignment_multiple: packing_alignment_multiple,
@@ -140,7 +143,7 @@ pub fn tensor_inventory_for_module(
             // Affine companions run along whole groups of the input width:
             // a width that does not divide evenly would leave the contract
             // describing fewer companion columns than the tensor carries.
-            if geometry.input_width % affine_group_size != 0 {
+            if !geometry.input_width.is_multiple_of(affine_group_size) {
                 return Err(Jangtq2ConfigurationError::InputWidthNotPackingAligned {
                     actual_input_width: geometry.input_width,
                     required_alignment_multiple: affine_group_size,

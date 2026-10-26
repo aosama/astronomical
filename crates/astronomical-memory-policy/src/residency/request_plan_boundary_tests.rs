@@ -265,7 +265,7 @@ fn should_keep_authorizing_new_retention_until_every_streamed_layer_is_seated() 
     };
     let chunk_one = request_residency.stabilize_prefill_plan(
         candidate_plan(Vec::new(), 120),
-        &[seated_pin.clone()],
+        std::slice::from_ref(&seated_pin),
         &geometries,
     );
     assert_eq!(
@@ -449,7 +449,7 @@ fn should_never_grow_the_streamed_layer_count_across_chunks_of_one_request() {
     };
     let chunk_one = request_residency.stabilize_prefill_plan(
         four_layer_candidate(Vec::new(), 80),
-        &[seated_pin.clone()],
+        std::slice::from_ref(&seated_pin),
         &geometries,
     );
 

@@ -98,7 +98,7 @@ pub fn unpack_codes_from_packed_row(packed_code_words: &[u32], bit_width: u32) -
         return None;
     }
     // Whole 32-code groups only: words % bits == 0 keeps the row aligned.
-    if packed_code_words.len() % bit_width as usize != 0 {
+    if !packed_code_words.len().is_multiple_of(bit_width as usize) {
         return None;
     }
     let code_count = packed_code_words.len() * u32::BITS as usize / bit_width as usize;
@@ -155,7 +155,7 @@ pub fn decoded_weight_page_shape(
         return None;
     }
     let input_width = packed_row_bit_count / bit_width_as_usize;
-    if input_width % CODES_PER_GROUP as usize != 0 {
+    if !input_width.is_multiple_of(CODES_PER_GROUP as usize) {
         return None;
     }
     Some(vec![

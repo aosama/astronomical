@@ -36,13 +36,14 @@ nextest-integration = "nextest run --no-fail-fast -p astronomical-config -p astr
 # stay identical to the selection the compile step builds through the cargo
 # aliases above (the workflow lane contract pins that equality).
 nextest-archive-integration = "nextest archive --profile ci --archive-file target/nextest-archives/integration.tar.zst -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization --lib --test integration_tests"
-nextest-archive-test-harness = "nextest archive --profile ci --archive-file target/nextest-archives/test-harness.tar.zst -p astronomical-test-harness --features test-fixtures --lib"
+nextest-archive-test-harness = "nextest archive --profile ci --archive-file target/nextest-archives/test-harness.tar.zst -p astronomical-test-harness --features test-fixtures,flux-reference-oracle --lib"
 nextest-archive-rest-api = "nextest archive --profile ci --archive-file target/nextest-archives/rest-api.tar.zst -p astronomical-daemon --test rest_api_tests"
 nextest-archive-e2e = "nextest archive --profile ci --archive-file target/nextest-archives/e2e.tar.zst -p astronomical-e2e --test e2e"
 
-# The shared fixture registry and leaf-id contracts, with the test-fixtures
-# feature enabled.
-test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures --lib"
+# The shared fixture registry and leaf-id contracts (test-fixtures), plus the
+# independent FLUX reference-oracle unit coverage (flux-reference-oracle), which
+# pulls in base64/image/sha2 only for this lib build.
+test-test-harness-fixtures = "test --no-fail-fast -p astronomical-test-harness --features test-fixtures,flux-reference-oracle --lib"
 
 # The REST contract and daemon rest_api_tests binaries.
 test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomical-daemon --test rest_api_tests"
