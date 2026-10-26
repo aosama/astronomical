@@ -44,6 +44,8 @@ mod instance_tests;
 #[cfg(test)]
 mod model_lifecycle_tests;
 #[cfg(test)]
+mod quantize_command_tests;
+#[cfg(test)]
 mod respond_image_tests;
 #[cfg(test)]
 mod respond_schema_tests;
