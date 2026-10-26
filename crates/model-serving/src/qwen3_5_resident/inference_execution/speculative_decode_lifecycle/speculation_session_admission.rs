@@ -51,34 +51,6 @@ pub fn should_admit_speculation_for_session(
         && !request_properties.repetition_penalty_is_active
 }
 
-/// Rounds of acceptance evidence the low-acceptance guard requires before
-/// it may suspend speculation for a session. A full window keeps early
-/// noisy rounds from suspending a healthy session.
-pub const ACCEPTANCE_WINDOW_ROUND_COUNT: usize = 8;
-/// Rolling acceptance below this fraction (thousandths) means the block
-/// pays more verification cost than it commits: the measured break-even on
-/// this target-and-draft pair sits near forty percent at block length
-/// four (fifty-seven percent acceptance measured 1.09x, sixteen percent
-/// measured 0.70x), so sessions under thirty-five percent finish on
-/// classic decode, which is never slower than speculating at that rate.
-pub const MINIMUM_ROLLING_ACCEPTANCE_THOUSANDTHS: u64 = 350;
-
-/// Whether one session's recent rounds acceptance is poor enough that
-/// starting further speculative rounds costs more than it commits. Pure:
-/// the caller supplies the most recent `ACCEPTANCE_WINDOW_ROUND_COUNT`
-/// rounds as `(proposed, accepted)` pairs.
-#[must_use]
-pub fn should_suspend_speculation_for_poor_acceptance(recent_rounds: &[(u64, u64)]) -> bool {
-    if recent_rounds.len() < ACCEPTANCE_WINDOW_ROUND_COUNT {
-        return false;
-    }
-    let window_proposed_token_count: u64 = recent_rounds.iter().map(|round| round.0).sum();
-    let window_accepted_token_count: u64 = recent_rounds.iter().map(|round| round.1).sum();
-    window_proposed_token_count > 0
-        && window_accepted_token_count * 1_000
-            < MINIMUM_ROLLING_ACCEPTANCE_THOUSANDTHS * window_proposed_token_count
-}
-
 /// Maps one request sampling strategy onto the verification token choice
 /// that reproduces it. Greedy maps to per-position argmax; top-k top-p
 /// sampling maps to one tempered sample per position through the same

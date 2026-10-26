@@ -1,9 +1,8 @@
 //! Unit tests for speculative session admission and draft-target pairing.
 
 use super::speculation_session_admission::{
-    ACCEPTANCE_WINDOW_ROUND_COUNT, SpeculationSessionRequestProperties, VerificationTokenChoice,
-    draft_pairs_with_target, should_admit_speculation_for_session,
-    should_suspend_speculation_for_poor_acceptance, verification_token_choice_for_strategy,
+    SpeculationSessionRequestProperties, VerificationTokenChoice, draft_pairs_with_target,
+    should_admit_speculation_for_session, verification_token_choice_for_strategy,
 };
 
 fn plain_greedy_request() -> SpeculationSessionRequestProperties {
@@ -71,47 +70,6 @@ fn should_reject_sessions_the_token_equality_contract_cannot_preserve() {
     let mut penalized = plain_greedy_request();
     penalized.repetition_penalty_is_active = true;
     assert!(!should_admit_speculation_for_session(&penalized));
-}
-
-#[test]
-fn should_suspend_speculation_only_after_a_full_window_of_poor_acceptance() {
-    // A partial window never suspends, however poor: early rounds are noisy.
-    let partial_window = vec![(4_u64, 0_u64); ACCEPTANCE_WINDOW_ROUND_COUNT - 1];
-    assert!(!should_suspend_speculation_for_poor_acceptance(
-        &partial_window
-    ));
-
-    // A full window below the floor suspends (0 of 32 accepted).
-    let poor_window = vec![(4_u64, 0_u64); ACCEPTANCE_WINDOW_ROUND_COUNT];
-    assert!(should_suspend_speculation_for_poor_acceptance(&poor_window));
-
-    // A full window above the floor keeps speculating (57 percent measured
-    // a net win): 46 of 64 accepted.
-    let healthy_window = vec![(4_u64, 5_u64); 8];
-    assert!(!should_suspend_speculation_for_poor_acceptance(
-        &healthy_window
-    ));
-
-    // The boundary itself suspends or keeps by strict inequality: exactly
-    // the floor (112 of 320 accepted is exactly 350 thousandths) stays
-    // speculative; one token below suspends.
-    let boundary_window = vec![(40_u64, 14_u64); ACCEPTANCE_WINDOW_ROUND_COUNT];
-    assert!(!should_suspend_speculation_for_poor_acceptance(
-        &boundary_window
-    ));
-    let mut just_below_boundary = boundary_window.clone();
-    just_below_boundary[0] = (40, 13);
-    assert!(should_suspend_speculation_for_poor_acceptance(
-        &just_below_boundary
-    ));
-
-    // One poor round inside an otherwise healthy window does not suspend:
-    // the window measures the rolling ratio, not the worst round.
-    let mut mostly_healthy_window = vec![(4_u64, 4_u64); ACCEPTANCE_WINDOW_ROUND_COUNT];
-    mostly_healthy_window[0] = (4, 0);
-    assert!(!should_suspend_speculation_for_poor_acceptance(
-        &mostly_healthy_window
-    ));
 }
 
 #[test]

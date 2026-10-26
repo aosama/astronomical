@@ -180,7 +180,6 @@ fn autoregressive_configuration() -> WorkerModelConfiguration {
         maximum_context_tokens: 4_096,
         maximum_output_tokens: 1_024,
         chunking: WorkerChunkingConfiguration {
-            speculative_decoding_block_length: None,
             fixed_prompt_processing_chunk_size_tokens: 1_024,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens: 2_048,
             full_attention_key_value_growth_tokens: 256,

@@ -75,20 +75,17 @@ pub(in crate::qwen3_5_resident) struct Qwen3_5EngineRequest {
         crate::qwen3_5_resident::dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
     >,
     /// Tokens one accepted speculative round still owes the caller, in
-    /// emission order. The tail entry seeds the next round and is the only
-    /// queued token absent from the target's decoder state.
-    pub(super) speculative_emission_queue: std::collections::VecDeque<mlx_c_rust::MlxArray>,
+    /// emission order, as host token ids. The tail entry seeds the next
+    /// round and is the only queued token absent from the target's decoder
+    /// state. Ids stay on the host: the round produced them there, the
+    /// emission output consumes them there, and a device round trip would
+    /// only add a pipeline-draining synchronization per token.
+    pub(super) speculative_emission_queue: std::collections::VecDeque<u32>,
     /// Whether this session runs draft-and-verify; decided once at install
     /// and only ever cleared when a path the block contract cannot preserve
     /// (forced thinking transition, mid-decode feedback injection) suspends
     /// speculation for the remainder of the session.
     pub(super) speculative_session_admitted: bool,
-    /// The most recent rounds' `(proposed, accepted)` counts, capped at the
-    /// admission module's window length. High-temperature sessions accept
-    /// little; once a full window measures rolling acceptance below the
-    /// break-even floor, further rounds cost more than they commit and the
-    /// session finishes on classic decode.
-    pub(super) speculative_acceptance_window: std::collections::VecDeque<(u64, u64)>,
 }
 
 impl Qwen3_5EngineRequest {

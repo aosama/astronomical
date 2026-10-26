@@ -286,3 +286,46 @@ fn should_resolve_the_repetition_penalty_generation_default_with_boundaries() {
         "an absent penalty must stay absent so the sampler keeps its neutral identity"
     );
 }
+
+#[test]
+fn should_ignore_the_speculative_decoding_block_length_at_both_levels() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "$schema":"./astronomical-config.schema.json",
+          "schema_version":1,
+          "runtime":{"model_directories":[],"maximum_mlx_memory_gb":16},
+          "chunking": {
+            "speculative_decoding_block_length_tokens": 8,
+            "fixed_prompt_processing_chunk_size_tokens": 2048
+          },
+          "models": {
+            "organization/target": {
+              "chunking": {
+                "speculative_decoding_block_length_tokens": 4,
+                "fixed_prompt_processing_chunk_size_tokens": 4096
+              }
+            }
+          }
+        }"#,
+    );
+
+    // DFlash speculative decoding is disabled by design: the key is
+    // accepted and ignored at the global level and inside a per-model
+    // chunking override alike, while the real override fields still merge.
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("the configuration carrying ignored speculative keys at both levels should load");
+    let model_config = astronomical_config
+        .resolved_model_config("organization/target", 65_536)
+        .expect("the model policy should resolve");
+
+    assert_eq!(
+        model_config
+            .chunking()
+            .fixed_prompt_processing_chunk_size_tokens(),
+        4096,
+        "the per-model chunking override must still win for real fields"
+    );
+}
