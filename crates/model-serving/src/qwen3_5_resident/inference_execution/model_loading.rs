@@ -213,9 +213,7 @@ impl Qwen3_5EngineState {
             // proof journey remain compiled in their compartments as the
             // diagnostic instrument for that day; see
             // speculative_decode_lifecycle and dflash_draft.
-            tracing::debug!(
-                "resident engine decode path: classic (DFlash disabled by design)"
-            );
+            tracing::debug!("resident engine decode path: classic (DFlash disabled by design)");
             Ok((
                 model,
                 persistent_prompt_cache_model_contract,
