@@ -6,5 +6,4 @@
 //! --ignored --configuration PATH` to grant that permission for one run.
 //! Permission checks run without touching graphics-processor state.
 
-#[path = "gpu/wired_limit_claim_probe.rs"]
-mod wired_limit_claim_probe;
+mod gpu;

@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::worker_startup_error::{WorkerProcessError, WorkerStartupError};
+use super::error::{WorkerProcessError, WorkerStartupError};
 
 #[test]
 fn should_include_the_exact_io_cause_in_a_worker_startup_failure() {

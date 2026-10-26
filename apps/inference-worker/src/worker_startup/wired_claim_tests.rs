@@ -1,6 +1,6 @@
 //! Boundary tests for the wired-residency budget at worker startup.
 
-use crate::worker_startup::wired_residency_claim_budget_bytes;
+use super::wired_claim::wired_residency_claim_budget_bytes;
 
 #[test]
 fn should_cap_the_wired_residency_claim_at_the_recommended_working_set() {

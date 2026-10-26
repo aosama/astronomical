@@ -45,9 +45,8 @@ impl CompleteResidencyRequirements {
             self.active_memory_ceiling_bytes,
             self.required_headroom_bytes,
         ) {
-            let projected_with_headroom_bytes = projected_active_memory_bytes
-                .checked_add(self.required_headroom_bytes)
-                .unwrap_or(u64::MAX);
+            let projected_with_headroom_bytes =
+                projected_active_memory_bytes.saturating_add(self.required_headroom_bytes);
             return CompleteResidencyDecision::DoesNotFit {
                 boundary: MemoryBoundary::CompleteResidency,
                 shortfall_bytes: projected_with_headroom_bytes

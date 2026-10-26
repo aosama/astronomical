@@ -1,3 +1,6 @@
+//! Worker process runtime plumbing: build the Tokio runtime for the worker
+//! future and bound its shutdown so the process always exits promptly.
+
 use std::future::Future;
 use std::io;
 use std::time::Duration;

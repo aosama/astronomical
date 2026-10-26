@@ -169,9 +169,9 @@ mod tests {
     }
 
     fn panic_message_of(resolution: impl FnOnce() + std::panic::UnwindSafe) -> String {
-        let panic_payload = std::panic::catch_unwind(resolution)
-            .err()
-            .expect("the resolution should panic");
+        let Err(panic_payload) = std::panic::catch_unwind(resolution) else {
+            panic!("the resolution should panic");
+        };
         panic_payload
             .downcast_ref::<String>()
             .cloned()

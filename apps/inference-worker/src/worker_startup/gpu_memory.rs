@@ -17,7 +17,7 @@ use std::time::Duration;
 use astronomical_model_serving::machine_ceiling_from_physical_ram_bytes;
 use tokio::{process::Command, time::timeout};
 
-use crate::worker_startup_error::WorkerStartupError;
+use super::error::WorkerStartupError;
 
 const PHYSICAL_MEMORY_SIZE_SYSCTL_KEY: &str = "hw.memsize";
 const SYSCTL_SAMPLE_TIMEOUT: Duration = Duration::from_secs(2);

@@ -151,6 +151,10 @@ pub(super) fn read_source_interval(
                 })
             })
             .collect::<Vec<_>>();
+        // fold, not all(): every spawned read task must be joined even when
+        // one already failed — all() short-circuits and would leak the
+        // remaining threads unjoined.
+        #[allow(clippy::unnecessary_fold)]
         partition_read_tasks
             .into_iter()
             .fold(true, |all_reads_succeeded, read_task| {
@@ -192,9 +196,7 @@ fn positional_read_concurrency_limiter() -> &'static PositionalReadConcurrencyLi
 }
 
 fn automatic_read_parallelism(available_parallelism: usize) -> usize {
-    available_parallelism
-        .min(MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT)
-        .max(1)
+    available_parallelism.clamp(1, MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT)
 }
 
 fn lock_after_possible_poison(mutex: &Mutex<usize>) -> MutexGuard<'_, usize> {
