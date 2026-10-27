@@ -106,32 +106,30 @@ impl Qwen3_5Weights {
             })?;
         let mut bound_tensors = HashMap::with_capacity(language_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;
+        let mut raw_hugging_face_norm_offsets_apply = false;
         for tensor_profile in &language_tensor_profiles {
-            let shard_file_name = shard_index
-                .shard_file_name_for_tensor(&tensor_profile.name)
-                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                })?;
-            let shard_position = shard_index
-                .model_shard_file_names()
-                .iter()
-                .position(|indexed_shard_file_name| *indexed_shard_file_name == shard_file_name)
-                .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "tensor resolves outside the loaded model shards",
-                })?;
-            let model_shard = model_shards.get(shard_position).ok_or_else(|| {
-                Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "loaded model shard is missing",
-                }
-            })?;
-            let tensor = model_shard.tensor(&tensor_profile.name)?;
+            if tensor_profile.name.ends_with(".linear_attn.conv1d.weight") {
+                raw_hugging_face_norm_offsets_apply = should_apply_raw_hugging_face_norm_offsets(
+                    shard_index,
+                    &model_shards,
+                    qwen3_5_config,
+                    &tensor_profile.name,
+                )?;
+                break;
+            }
+        }
+        for tensor_profile in &language_tensor_profiles {
+            let tensor = bound_language_tensor_from_model_shards(
+                shard_index,
+                &model_shards,
+                &tensor_profile.name,
+            )?;
             weights_validation::validate_bound_tensor(tensor_profile, &tensor)?;
             weights_validation::validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
-            let tensor = apply_declared_jangtq2_rms_norm_convention(
+            let tensor = apply_rms_norm_storage_convention(
                 runtime,
                 qwen3_5_config,
+                raw_hugging_face_norm_offsets_apply,
                 &tensor_profile.name,
                 tensor,
             )?;
@@ -392,25 +390,136 @@ pub(crate) fn take_full_attention_weights(
     })
 }
 
-fn apply_declared_jangtq2_rms_norm_convention(
+/// Applies every checkpoint-specific RMSNorm storage convention at binding.
+///
+/// Two offset conventions exist and are mutually exclusive per tensor. The
+/// declared JANGTQ2 family offset covers its own tensor set (including the
+/// gated linear-attention norm), and raw Hugging Face checkpoints — detected
+/// through the published PyTorch Conv1d layout — store their layer and
+/// attention RMSNorm weights as `gamma - 1`. MLX-converted checkpoints bake
+/// the true gamma in and pass through unchanged. The declared convention wins
+/// when both would match, so a tensor is never scaled twice.
+fn apply_rms_norm_storage_convention(
     runtime: &MlxRuntime,
     qwen3_5_config: &Qwen3_5Config,
+    raw_hugging_face_norm_offsets_apply: bool,
     tensor_name: &str,
     tensor: MlxArray,
 ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-    let should_add_unit_scale = matches!(
+    if jangtq2_unit_scale_applies(qwen3_5_config, tensor_name) {
+        return add_unit_scale(runtime, tensor);
+    }
+    if raw_hugging_face_norm_offsets_apply
+        && is_raw_hugging_face_norm_offset_weight_tensor(tensor_name)
+    {
+        return add_unit_scale(runtime, tensor);
+    }
+    Ok(tensor)
+}
+
+fn jangtq2_unit_scale_applies(qwen3_5_config: &Qwen3_5Config, tensor_name: &str) -> bool {
+    matches!(
         qwen3_5_config.jangtq2_rms_norm_convention(),
         Some(astronomical_jangtq2_qwen35::configuration::Jangtq2RmsNormConvention::LanguageMlxPlusOne)
-    ) && is_language_rms_norm_weight_tensor(tensor_name);
-    if !should_add_unit_scale {
-        return Ok(tensor);
-    }
+    ) && is_language_rms_norm_weight_tensor(tensor_name)
+}
 
-    // JANGH2 stores AWQ-folded RMSNorm deviations, not the direct scale used by
-    // ordinary Qwen checkpoints. Materialize `1 + deviation` once during model
-    // binding so every attention and MoE path shares the declared convention.
+/// Raw Hugging Face checkpoints store these RMSNorm weights as `gamma - 1`.
+/// The set mirrors the reference MLX conversion exactly; the gated
+/// linear-attention output norm keeps its direct gamma in every convention
+/// and must stay out.
+fn is_raw_hugging_face_norm_offset_weight_tensor(tensor_name: &str) -> bool {
+    tensor_name == "language_model.model.norm.weight"
+        || tensor_name.ends_with(".input_layernorm.weight")
+        || tensor_name.ends_with(".post_attention_layernorm.weight")
+        || tensor_name.ends_with(".self_attn.q_norm.weight")
+        || tensor_name.ends_with(".self_attn.k_norm.weight")
+}
+
+/// Materializes `1 + deviation` once at binding so every forward path reads
+/// the true RMSNorm scale; JANGH2's AWQ-folded deviations and raw Hugging
+/// Face offset norms both need it.
+fn add_unit_scale(
+    runtime: &MlxRuntime,
+    tensor: MlxArray,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
     let unit_scale = runtime.full(&[], 1.0, tensor.dtype())?;
     Ok(runtime.add(&unit_scale, &tensor)?)
+}
+
+/// Resolves one canonical language tensor from the loaded model shards,
+/// translating through the shard index's stored spelling.
+fn bound_language_tensor_from_model_shards(
+    shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
+    model_shards: &[MlxSafetensors],
+    canonical_tensor_name: &str,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    let shard_file_name = shard_index
+        .shard_file_name_for_tensor(canonical_tensor_name)
+        .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+            tensor_name: canonical_tensor_name.to_owned(),
+        })?;
+    let shard_position = shard_index
+        .model_shard_file_names()
+        .iter()
+        .position(|indexed_shard_file_name| *indexed_shard_file_name == shard_file_name)
+        .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+            tensor_name: canonical_tensor_name.to_owned(),
+            description: "tensor resolves outside the loaded model shards",
+        })?;
+    let model_shard =
+        model_shards
+            .get(shard_position)
+            .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: canonical_tensor_name.to_owned(),
+                description: "loaded model shard is missing",
+            })?;
+    let tensor = model_shard.tensor(&shard_index.stored_tensor_name_for(canonical_tensor_name))?;
+    Ok(tensor)
+}
+
+/// Decides whether the shards carry a raw Hugging Face checkpoint: those ship
+/// the linear-attention Conv1d weight in the published PyTorch layout
+/// `[channels, 1, kernel]` and store RMSNorm weights as `gamma - 1`, while
+/// MLX-converted checkpoints ship `[channels, kernel, 1]` with the true gamma
+/// already materialized. Mirrors the reference converter, which keys the same
+/// decision off the unsanitized convolution layout.
+fn should_apply_raw_hugging_face_norm_offsets(
+    shard_index: &crate::qwen3_5_core::artifacts::Qwen3_5ShardIndex,
+    model_shards: &[MlxSafetensors],
+    qwen3_5_config: &Qwen3_5Config,
+    convolution_profile_name: &str,
+) -> Result<bool, Qwen3_5ExecutionError> {
+    let convolution_weight = bound_language_tensor_from_model_shards(
+        shard_index,
+        model_shards,
+        convolution_profile_name,
+    )?;
+    let channel_count =
+        i32::try_from(qwen3_5_config.linear_convolution_dimension()).map_err(|_| {
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "linear convolution dimension exceeds the MLX shape range",
+            }
+        })?;
+    let kernel_width = i32::try_from(qwen3_5_config.linear_convolution_kernel_dimension())
+        .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+            description: "linear convolution kernel width exceeds the MLX shape range",
+        })?;
+    Ok(is_published_pytorch_convolution_layout(
+        &convolution_weight.shape(),
+        channel_count,
+        kernel_width,
+    ))
+}
+
+/// Pure layout decision: the published PyTorch depthwise Conv1d storage is
+/// `[channels, 1, kernel]`; the MLX execution layout is `[channels, kernel, 1]`.
+fn is_published_pytorch_convolution_layout(
+    convolution_weight_shape: &[i32],
+    channel_count: i32,
+    kernel_width: i32,
+) -> bool {
+    convolution_weight_shape == [channel_count, 1, kernel_width]
 }
 
 fn is_language_rms_norm_weight_tensor(tensor_name: &str) -> bool {

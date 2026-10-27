@@ -110,14 +110,14 @@ impl Qwen3_5ResidentModel {
                             description: "validated visual tensors have no vision configuration",
                         },
                     )?;
-                    let vision_tensor_name_to_shard_index =
+                    let vision_tensor_name_to_shard_location =
                         build_vision_tensor_shard_map(&shard_index);
                     Some(Qwen3_5VisionModel::load_from_model_shards(
                         &runtime,
                         vision_config,
                         &config,
                         &model_shards,
-                        &vision_tensor_name_to_shard_index,
+                        &vision_tensor_name_to_shard_location,
                     )?)
                 } else {
                     None
@@ -401,18 +401,32 @@ impl Qwen3_5ResidentModel {
     }
 }
 
-/// Maps embedded vision tensor names to their loaded model-shard positions.
-fn build_vision_tensor_shard_map(shard_index: &super::Qwen3_5ShardIndex) -> HashMap<String, usize> {
-    let mut vision_tensor_name_to_shard_index = HashMap::new();
+/// Maps embedded canonical vision tensor names to their loaded model-shard
+/// position and stored tensor spelling for physical reads.
+fn build_vision_tensor_shard_map(
+    shard_index: &super::Qwen3_5ShardIndex,
+) -> HashMap<String, crate::qwen3_5_core::vision::EmbeddedVisionTensorLocation> {
+    let mut vision_tensor_name_to_shard_location = HashMap::new();
     for (vision_tensor_name, shard_file_name) in shard_index.vision_tensor_name_to_shard_file_name()
     {
-        if let Some(shard_position) = shard_index
-            .model_shard_file_names()
-            .iter()
-            .position(|expected_file_name| *expected_file_name == *shard_file_name)
+        let mut shard_position_option = None;
+        for (candidate_shard_position, expected_file_name) in
+            shard_index.model_shard_file_names().iter().enumerate()
         {
-            vision_tensor_name_to_shard_index.insert(vision_tensor_name.clone(), shard_position);
+            if expected_file_name == shard_file_name {
+                shard_position_option = Some(candidate_shard_position);
+                break;
+            }
+        }
+        if let Some(shard_position) = shard_position_option {
+            vision_tensor_name_to_shard_location.insert(
+                vision_tensor_name.clone(),
+                crate::qwen3_5_core::vision::EmbeddedVisionTensorLocation {
+                    shard_position,
+                    stored_tensor_name: shard_index.stored_tensor_name_for(vision_tensor_name),
+                },
+            );
         }
     }
-    vision_tensor_name_to_shard_index
+    vision_tensor_name_to_shard_location
 }
