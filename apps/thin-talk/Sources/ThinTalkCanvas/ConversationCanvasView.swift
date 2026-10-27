@@ -124,13 +124,15 @@ public final class ConversationCanvasView: NSView {
     webView?.pageZoom = CanvasZoomController.defaultPageZoom
   }
 
-  /// Answers the bare Cmd+= alias (the menu's ⌘+ is Shift+= on US layouts)
-  /// before the menu lookup, and only when a zoom controller is installed —
-  /// astronomical-menu passes nil and keeps its own untouched behavior. Every
-  /// other key equivalent falls through so the web view and the menu keep
-  /// exactly the shortcuts they had.
+  /// Answers the Command-only zoom-in spellings (⌘= and ⌘+) before the menu
+  /// lookup, and only when a zoom controller is installed — astronomical-menu
+  /// passes nil and keeps its own untouched behavior. SwiftUI resolves menu key
+  /// equivalents against charactersIgnoringModifiers, so the View menu's "="
+  /// item can never answer ⌘+ itself; this override is the only path that
+  /// keystroke has. Every other key equivalent falls through so the web view
+  /// and the menu keep exactly the shortcuts they had.
   public override func performKeyEquivalent(with event: NSEvent) -> Bool {
-    if CanvasZoomController.isUnshiftedZoomInAlias(
+    if CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: event.characters,
       modifierFlags: event.modifierFlags
     ), let zoomController {
