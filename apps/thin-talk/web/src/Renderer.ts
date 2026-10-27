@@ -104,19 +104,28 @@ export class Renderer {
     if (attachments.length === 0) {
       return "";
     }
-    const items = attachments
-      .map(
-        (attachment) =>
-          `<span class="attachment-strip__item" title="${this.trust.escapeHtml(attachment.label)}">` +
-          `<img alt="${this.trust.escapeHtml(attachment.label || "attachment")}" src="${this.trust.escapeHtml(attachment.assetURL)}">` +
-          `</span>`,
-      )
-      .join("");
+    const items = attachments.map((attachment) => this.attachmentItemHtml(attachment)).join("");
     const badge =
       attachments.length > 1
         ? `<span class="attachment-strip__badge" data-testid="attachment-badge">${attachments.length} images</span>`
         : "";
     return `<div class="attachment-strip" data-testid="attachment-strip">${items}${badge}</div>`;
+  }
+
+  /** One attachment chip. The thumbnail only renders when its source passes
+   * the trust boundary's single image-scheme rule; a disallowed source falls
+   * back to its escaped label so conversation text can never nominate a
+   * remote or otherwise disallowed image for loading. */
+  private attachmentItemHtml(attachment: TranscriptAttachment): string {
+    const label = this.trust.escapeHtml(attachment.label || "attachment");
+    if (!this.trust.isAllowedImageSource(attachment.assetURL)) {
+      return `<span class="attachment-strip__item" title="${label}">${label}</span>`;
+    }
+    return (
+      `<span class="attachment-strip__item" title="${label}">` +
+      `<img alt="${label}" src="${this.trust.escapeHtml(attachment.assetURL)}">` +
+      `</span>`
+    );
   }
 
   private actionsHtml(message: TranscriptMessage): string {

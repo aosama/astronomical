@@ -49,6 +49,9 @@ export class TranscriptView {
   // attribute sync and the reconciliation itself fire `toggle` events that must
   // never be mistaken for the reader's own expand/collapse choice.
   private suppressReasoningRecording = false;
+  // Last-rendered content signature per message: unchanged bubbles skip the
+  // markdown parse and DOM diff entirely.
+  private readonly renderedSignatures = new Map<string, string>();
   private pendingMessages: TranscriptMessage[] = [];
   private flushRequested = false;
   private followScroll = true;
@@ -106,9 +109,14 @@ export class TranscriptView {
       if (!incomingIDs.has(messageID)) {
         this.inner.removeChild(article);
         this.articlesByMessageID.delete(messageID);
+        this.renderedSignatures.delete(messageID);
       }
     }
-    this.pendingMessages.push(...snapshot.messages);
+    for (const message of snapshot.messages) {
+      if (this.messageNeedsRender(message)) {
+        this.pendingMessages.push(message);
+      }
+    }
     this.emptyState.hidden = snapshot.messages.length > 0;
     if (this.emptyStateNotice) {
       if (snapshot.messages.length > 0) {
@@ -121,16 +129,56 @@ export class TranscriptView {
     this.scheduleFlush();
   }
 
+  /**
+   * A message re-renders only when something the renderer reads — role,
+   * content, reasoning, state, or attachments — changed since it was last
+   * drawn. Every value Renderer.messageHtml consumes must appear here: a
+   * missing field would let a changed message keep its stale node.
+   *
+   * Without this gate every published snapshot re-ran the markdown parse and
+   * the DOM diff for every earlier message in the conversation, so one
+   * streamed delta cost work proportional to the whole transcript's length.
+   * The signature comparison is the cheap equality that keeps an unchanged
+   * bubble on its already-rendered node.
+   */
+  private messageNeedsRender(message: TranscriptMessage): boolean {
+    const signature = this.messageSignature(message);
+    if (this.renderedSignatures.get(message.id) === signature) {
+      return false;
+    }
+    this.renderedSignatures.set(message.id, signature);
+    return true;
+  }
+
+  /** JSON encoding keeps the signature unambiguous for any content: a plain
+   * delimiter could collide with message text containing that delimiter and
+   * silently skip a needed re-render. */
+  private messageSignature(message: TranscriptMessage): string {
+    return JSON.stringify([
+      message.role,
+      message.markdown,
+      message.reasoning,
+      message.state,
+      message.attachments.map((attachment) => [attachment.id, attachment.assetURL, attachment.label]),
+    ]);
+  }
+
   public messageCount(): number {
     return this.articlesByMessageID.size;
   }
 
   public renderedText(messageID: string): string {
     const article = this.articlesByMessageID.get(messageID);
-    if (article != null && article.textContent != null) {
-      return article.textContent;
+    if (article == null) {
+      return "";
     }
-    return "";
+    // Copy carries the rendered answer body only. The bubble also holds the
+    // role label, the state label, the collapsible reasoning, and the action
+    // buttons; reading the whole article's text would paste that chrome into
+    // the clipboard alongside the reply.
+    const answerBody = article.querySelector(".markdown-body");
+    const answerText = answerBody != null ? answerBody.textContent : null;
+    return answerText != null ? answerText : "";
   }
 
   public diagnostics(): Record<string, unknown> {
