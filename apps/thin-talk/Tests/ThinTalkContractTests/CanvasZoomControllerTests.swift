@@ -47,4 +47,37 @@ final class CanvasZoomControllerTests: XCTestCase {
     let zoomedNegative = CanvasZoomController.clampedPageZoom(current: 1.0, factor: -2)
     XCTAssertEqual(zoomedNegative, CanvasZoomController.minimumPageZoom, accuracy: 0.0001)
   }
+
+  func test_should_accept_a_bare_command_equals_as_the_zoom_in_alias() {
+    let isAlias = CanvasZoomController.isUnshiftedZoomInAlias(
+      keyCharacters: "=", modifierFlags: .command)
+    XCTAssertTrue(isAlias)
+  }
+
+  func test_should_reject_the_shifted_variant_the_view_menu_already_owns() {
+    let isAlias = CanvasZoomController.isUnshiftedZoomInAlias(
+      keyCharacters: "+", modifierFlags: [.command, .shift])
+    XCTAssertFalse(isAlias, "the View menu answers ⌘+ itself; the alias must leave it alone")
+  }
+
+  func test_should_reject_command_equals_carrying_extra_modifiers() {
+    let withOption = CanvasZoomController.isUnshiftedZoomInAlias(
+      keyCharacters: "=", modifierFlags: [.command, .option])
+    let withControl = CanvasZoomController.isUnshiftedZoomInAlias(
+      keyCharacters: "=", modifierFlags: [.command, .control])
+    XCTAssertFalse(withOption)
+    XCTAssertFalse(withControl)
+  }
+
+  func test_should_reject_other_keys_and_missing_command_modifier() {
+    let zoomOutKey = CanvasZoomController.isUnshiftedZoomInAlias(
+      keyCharacters: "-", modifierFlags: .command)
+    let equalsWithoutCommand = CanvasZoomController.isUnshiftedZoomInAlias(
+      keyCharacters: "=", modifierFlags: [])
+    let missingCharacters = CanvasZoomController.isUnshiftedZoomInAlias(
+      keyCharacters: nil, modifierFlags: .command)
+    XCTAssertFalse(zoomOutKey)
+    XCTAssertFalse(equalsWithoutCommand)
+    XCTAssertFalse(missingCharacters)
+  }
 }
