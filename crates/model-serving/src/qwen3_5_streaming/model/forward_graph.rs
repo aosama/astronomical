@@ -86,6 +86,7 @@ impl Qwen3_5Model {
             .final_logits)
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Builds decoder-state prefill without the vocabulary head.
     ///
     /// Intermediate chunks only need cache tensors; no `lm_head` runs until
@@ -141,6 +142,7 @@ impl Qwen3_5Model {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_target_forward_graph_with_position_offsets(
         &self,
         token_ids: &[u32],
@@ -186,6 +188,7 @@ impl Qwen3_5Model {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn build_target_forward_graph_from_token_indices(
         &self,
         token_indices: &MlxArray,
@@ -211,6 +214,7 @@ impl Qwen3_5Model {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_target_forward_graph_from_token_indices_with_position_offsets(
         &self,
         token_indices: &MlxArray,
@@ -239,6 +243,7 @@ impl Qwen3_5Model {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_forward_graph_from_embeddings(
         &self,
         hidden_states: MlxArray,
@@ -264,6 +269,7 @@ impl Qwen3_5Model {
             .final_logits)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_target_forward_graph_from_embeddings(
         &self,
         hidden_states: MlxArray,
@@ -289,6 +295,7 @@ impl Qwen3_5Model {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_target_forward_graph_from_embeddings_with_position_offsets(
         &self,
         mut hidden_states: MlxArray,

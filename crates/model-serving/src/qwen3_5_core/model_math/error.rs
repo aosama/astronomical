@@ -145,9 +145,9 @@ impl From<Qwen3_5ExecutionError> for InferenceEngineError {
                     "expert payload memory admission rejected the generation request: {memory_admission_error}"
                 ),
             },
-            Qwen3_5ExecutionError::InvalidInput { description }
-                if description == "paged route replay exceeded the sparse-layer safety bound" =>
-            {
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "paged route replay exceeded the sparse-layer safety bound",
+            } => {
                 Self::InvalidRequest {
                     reason: "paged expert routes could not stabilize under the configured MLX memory ceiling; raise the memory ceiling or shorten the prompt".to_owned(),
                 }

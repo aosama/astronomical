@@ -10,6 +10,7 @@ use super::model_contract::PersistentPromptCacheModelContract;
 use super::model_contract_error::PersistentPromptCacheModelContractError;
 use crate::DecoderCacheLayout;
 
+#[allow(clippy::too_many_arguments)]
 /// Resolves the model contract, shrinking the cacheable context on quota
 /// failures only.
 pub(crate) fn resolve_quota_bounded_prompt_cache_contract(

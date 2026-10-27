@@ -269,6 +269,7 @@ impl PersistentPromptCacheDiskStore {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn stage_complete_block(
         &self,
         runtime: &MlxRuntime,

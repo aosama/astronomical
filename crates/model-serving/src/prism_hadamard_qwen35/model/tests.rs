@@ -206,12 +206,12 @@ fn should_rotate_bit_identically_through_the_fused_kernel_and_the_composed_route
         let fused_values = model
             .runtime
             .astype(&fused, mlx_c_rust::MlxDtype::Float32)
-            .and_then(|array| array.to_vec_f32().map_err(Into::into))
+            .and_then(|array| array.to_vec_f32())
             .expect("the fused rotation should evaluate");
         let composed_values = model
             .runtime
             .astype(&composed, mlx_c_rust::MlxDtype::Float32)
-            .and_then(|array| array.to_vec_f32().map_err(Into::into))
+            .and_then(|array| array.to_vec_f32())
             .expect("the composed rotation should evaluate");
         assert_eq!(fused_values.len(), composed_values.len());
         assert!(

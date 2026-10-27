@@ -16,10 +16,7 @@ pub(super) fn chunk_requires_visual_embeddings(
     // The artifact's image-pad vocabulary ID can occur in ordinary ChatML token
     // sequences. Treat it as a visual row only when the request actually supplied
     // an image; otherwise text-only requests would be forced through vision.
-    active_request.has_visual_inputs
-        && chunk_token_ids
-            .iter()
-            .any(|token_id| *token_id == active_request.image_pad_token_id)
+    active_request.has_visual_inputs && chunk_token_ids.contains(&active_request.image_pad_token_id)
 }
 
 pub(super) fn seed_terminal_text_prefill_after_prompt_cache_boundaries(

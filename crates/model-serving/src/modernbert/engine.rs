@@ -277,7 +277,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
         let _cleanup_result = loaded_state
             .runtime
             .synchronize_gpu_stream_and_clear_allocator_cache();
-        if let Some(memory_snapshot) = loaded_state.runtime.memory_snapshot().ok() {
+        if let Ok(memory_snapshot) = loaded_state.runtime.memory_snapshot() {
             self.post_cleanup_memory_telemetry =
                 Some(self.memory_telemetry_from_snapshot(&memory_snapshot));
         }

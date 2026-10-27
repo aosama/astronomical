@@ -180,6 +180,7 @@ impl Qwen3_5Model {
         Ok(Some((subset_page, subset_manifest)))
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Streams every expert in the layer. Seats that page only when the phase
     /// plan named this decoder index for mandatory complete-layer promotion.
     ///
@@ -285,8 +286,8 @@ impl Qwen3_5Model {
         // request. When the plan funds the layer's complete claim, the read
         // extends to every non-resident expert so the table converges to a
         // complete layer in one pass instead of a few experts per chunk.
-        if route_token_count > 1 {
-            if let Some(warm_table_page) = self.serve_multi_token_route_from_warm_table(
+        if route_token_count > 1
+            && let Some(warm_table_page) = self.serve_multi_token_route_from_warm_table(
                 expert_pager,
                 layer_index,
                 route_token_count,
@@ -294,9 +295,9 @@ impl Qwen3_5Model {
                 production_default_paging,
                 routed_expert_ids,
                 performance_attribution,
-            )? {
-                return Ok(warm_table_page);
-            }
+            )?
+        {
+            return Ok(warm_table_page);
         }
         let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage(
             expert_pager,

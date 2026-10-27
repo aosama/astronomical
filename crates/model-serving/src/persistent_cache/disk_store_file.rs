@@ -245,7 +245,7 @@ pub(super) fn validate_current_file_header(
             )?;
             Ok(Some(block_header.block_token_count()))
         }
-        PersistentPromptCacheFileKind::VisualEmbedding => return Ok(None),
+        PersistentPromptCacheFileKind::VisualEmbedding => Ok(None),
     }
 }
 

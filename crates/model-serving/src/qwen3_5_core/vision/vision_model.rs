@@ -72,14 +72,17 @@ impl Qwen3_5VisionModel {
         vision_config: &Qwen3_5VisionConfig,
         qwen3_5_config: &crate::qwen3_5_core::configuration::Qwen3_5Config,
         model_shards: &[astronomical_runtime_integration::MlxSafetensors],
-        vision_tensor_name_to_shard_index: &std::collections::HashMap<String, usize>,
+        vision_tensor_name_to_shard_location: &std::collections::HashMap<
+            String,
+            super::EmbeddedVisionTensorLocation,
+        >,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let weights = Qwen3_5VisionWeights::load_from_model_shards(
             runtime,
             vision_config,
             qwen3_5_config,
             model_shards,
-            vision_tensor_name_to_shard_index,
+            vision_tensor_name_to_shard_location,
         )?;
         Ok(Self {
             config: vision_config.clone(),

@@ -12,6 +12,17 @@ use mlx_c_rust::{MlxArray, MlxDtype};
 #[cfg(test)]
 mod tests;
 
+/// Where one canonical vision tensor physically lives inside the loaded model
+/// shards, including its stored spelling for unified-naming checkpoints
+/// (`model.visual.*` shards read through canonical `vision_tower.*` names).
+#[derive(Clone, Debug)]
+pub struct EmbeddedVisionTensorLocation {
+    /// Position of the owning shard inside the loaded model shard list.
+    pub shard_position: usize,
+    /// Tensor spelling to use for the physical shard read.
+    pub stored_tensor_name: String,
+}
+
 /// Strict tensor binding for the Qwen3.5 vision tower.
 ///
 /// Vision tensors may come from one or more separate files, and
@@ -139,14 +150,14 @@ impl Qwen3_5VisionWeights {
     /// tensors or a dedicated vision-only model shard. The `model_shards`
     /// parameter provides the already-loaded
     /// safetensors objects that keep the memory-mapped data alive.
-    /// The `vision_tensor_name_to_shard_index` maps each vision tensor name
-    /// to its shard index in `model_shards`.
+    /// The `vision_tensor_name_to_shard_location` maps each canonical vision
+    /// tensor name to its shard position and stored tensor spelling.
     pub fn load_from_model_shards(
         runtime: &MlxRuntime,
         vision_config: &super::Qwen3_5VisionConfig,
         qwen3_5_config: &Qwen3_5Config,
         model_shards: &[MlxSafetensors],
-        vision_tensor_name_to_shard_index: &HashMap<String, usize>,
+        vision_tensor_name_to_shard_location: &HashMap<String, EmbeddedVisionTensorLocation>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let vision_tensor_profiles =
             super::qwen3_5_vision_tensor_profiles_for_model(vision_config, qwen3_5_config)
@@ -161,18 +172,18 @@ impl Qwen3_5VisionWeights {
         let mut bound_tensors = HashMap::with_capacity(vision_tensor_profiles.len());
         let mut actual_payload_bytes = 0_u64;
         for tensor_profile in &vision_tensor_profiles {
-            let shard_index = vision_tensor_name_to_shard_index
+            let tensor_shard_location = vision_tensor_name_to_shard_location
                 .get(&tensor_profile.name)
                 .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
                     tensor_name: tensor_profile.name.clone(),
                 })?;
-            let model_shard = model_shards.get(*shard_index).ok_or_else(|| {
-                Qwen3_5ExecutionError::InvalidTensor {
+            let model_shard = model_shards
+                .get(tensor_shard_location.shard_position)
+                .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
                     tensor_name: tensor_profile.name.clone(),
                     description: "vision tensor resolves outside the loaded model shards",
-                }
-            })?;
-            let tensor = model_shard.tensor(&tensor_profile.name)?;
+                })?;
+            let tensor = model_shard.tensor(&tensor_shard_location.stored_tensor_name)?;
             let tensor = normalize_published_patch_embed_layout(runtime, tensor_profile, tensor)?;
             validate_bound_vision_tensor(tensor_profile, &tensor)?;
             let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {

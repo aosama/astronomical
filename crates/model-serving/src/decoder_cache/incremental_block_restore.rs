@@ -133,7 +133,7 @@ fn concatenated_block_tensor(
     if block_tensors.is_empty() {
         return Err(restore_error("restore requires at least one block slice"));
     }
-    let block_references: Vec<&MlxArray> = block_tensors.iter().copied().collect();
+    let block_references: Vec<&MlxArray> = block_tensors.to_vec();
     let concatenated =
         runtime.concatenate_axis(&block_references, STATE_DIMENSION_TOKEN_AXIS as i32)?;
     let concatenated_shape = concatenated.shape();

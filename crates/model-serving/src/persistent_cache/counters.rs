@@ -144,6 +144,7 @@ impl PersistentPromptCacheCounters {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[cfg(feature = "direct-mlx")]
 /// Builds the IPC event carrying persistent prompt-cache observability data.
 ///

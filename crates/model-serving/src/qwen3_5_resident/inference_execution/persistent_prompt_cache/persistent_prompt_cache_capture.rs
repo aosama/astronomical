@@ -255,6 +255,7 @@ impl Qwen3_5EngineState {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Publishes one block, retrying once after expert reclamation when the
     /// typed MLX active-memory limit blocked serialization. Reusing the
     /// caller's extracted tensors is essential: this is resource reclamation,

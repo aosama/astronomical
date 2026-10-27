@@ -110,7 +110,7 @@ fn composed_rotation(
 fn float32_values(runtime: &MlxRuntime, array: &MlxArray) -> Result<Vec<f32>, MlxCError> {
     runtime
         .astype(array, MlxDtype::Float32)
-        .and_then(|float32_array| float32_array.to_vec_f32().map_err(MlxCError::from))
+        .and_then(|float32_array| float32_array.to_vec_f32())
 }
 
 fn execution_error(error: MlxCError) -> KernelCapabilityError {

@@ -246,10 +246,9 @@ impl PersistentPromptCacheDiskStore {
         let _write_operation_guard = self.lock_write_operations();
         let clear_target_directory =
             model_id.map(|model_id| self.global_prompt_cache_root_directory.join(model_id));
-        let active_model_cache_was_cleared =
-            clear_target_directory.as_ref().map_or(true, |target| {
-                self.active_model_prompt_cache_directory.starts_with(target)
-            });
+        let active_model_cache_was_cleared = clear_target_directory
+            .as_ref()
+            .is_none_or(|target| self.active_model_prompt_cache_directory.starts_with(target));
         let clear_outcome = clear_persistent_prompt_cache_directory(
             &self.global_prompt_cache_root_directory,
             model_id,

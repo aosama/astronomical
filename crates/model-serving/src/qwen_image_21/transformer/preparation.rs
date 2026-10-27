@@ -101,11 +101,14 @@ pub(super) fn prepare_forward(
 
     // 2. Joint sequence: slots expand to 2×2 latent-token groups, text copies one-to-one.
     let mut slot_mask = request.vlm_image_mask.to_vec();
-    slot_mask.extend(std::iter::repeat(true).take(target_tokens / IMG_TOKENS_PER_SLOT));
+    slot_mask.extend(std::iter::repeat_n(
+        true,
+        target_tokens / IMG_TOKENS_PER_SLOT,
+    ));
     let joint_mask: Vec<bool> = slot_mask
         .iter()
         .flat_map(|&is_image| {
-            std::iter::repeat(is_image).take(if is_image { IMG_TOKENS_PER_SLOT } else { 1 })
+            std::iter::repeat_n(is_image, if is_image { IMG_TOKENS_PER_SLOT } else { 1 })
         })
         .collect();
     let joint_hidden_states = assemble_joint_sequence(
