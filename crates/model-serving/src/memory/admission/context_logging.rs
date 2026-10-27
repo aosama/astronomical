@@ -7,6 +7,7 @@
 
 use crate::memory::{ContextAdmissionRequirements, MemoryAdmissionDecision};
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn log_generation_context_workspace_reservation(
     total_context_token_count: usize,
     prompt_token_count: usize,

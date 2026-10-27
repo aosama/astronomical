@@ -52,7 +52,7 @@ impl Qwen3_5EngineState {
                 "cannot inspect prompt work reuse for a different request",
             ));
         }
-        Ok(active_request.prompt_work_reuse.clone())
+        Ok(active_request.prompt_work_reuse)
     }
 }
 

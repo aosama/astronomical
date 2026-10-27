@@ -22,6 +22,12 @@ pub struct Qwen3_5ShardIndex {
     vision_tensor_name_to_shard_file_name: BTreeMap<String, String>,
     /// Auxiliary tensors retained in the artifact but not loaded by this runtime.
     auxiliary_tensor_name_to_shard_file_name: BTreeMap<String, String>,
+    /// Stored shard spelling for every canonical tensor name the index
+    /// carries. Unified-naming checkpoints (`model.language_model.*`,
+    /// `model.visual.*`) map to their stored unified spelling;
+    /// canonical-named tensors map to themselves. Both resolve identically
+    /// through [`Self::stored_tensor_name_for`].
+    stored_tensor_name_by_canonical_name: BTreeMap<String, String>,
     total_payload_bytes: u64,
     model_shard_file_names: Vec<String>,
     vision_sidecar_file_names: Vec<String>,
@@ -50,31 +56,53 @@ impl Qwen3_5ShardIndex {
         let mut language_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut vision_tensor_name_to_shard_file_name = BTreeMap::new();
         let mut auxiliary_tensor_name_to_shard_file_name = BTreeMap::new();
+        let mut stored_tensor_name_by_canonical_name = BTreeMap::new();
         let mut language_shard_file_names = BTreeSet::new();
         let mut vision_shard_file_names = BTreeSet::new();
-        for (tensor_name, shard_file_name) in &index_document.weight_map {
-            validate_tensor_name(tensor_name)?;
-            if tensor_name.starts_with("language_model.") {
+        for (index_tensor_name, shard_file_name) in &index_document.weight_map {
+            validate_tensor_name(index_tensor_name)?;
+            // Tensor names outside the executable model prefixes are silently
+            // skipped, exactly as before unified-naming support existed.
+            let Some(canonical_tensor_name) = canonical_model_tensor_name(index_tensor_name) else {
+                continue;
+            };
+            if canonical_tensor_name.starts_with("language_model.") {
                 language_shard_file_names.insert(shard_file_name.clone());
-                language_tensor_names.insert(tensor_name.as_str());
+                language_tensor_names.insert(canonical_tensor_name.clone());
                 language_tensor_name_to_shard_file_name
-                    .insert(tensor_name.clone(), shard_file_name.clone());
-            } else if tensor_name.starts_with("vision_tower.") {
+                    .insert(canonical_tensor_name.clone(), shard_file_name.clone());
+            } else if canonical_tensor_name.starts_with("vision_tower.") {
                 // Embedded vision tensors may share language shards or occupy
                 // dedicated vision files. A file containing only vision tensors
                 // is loaded through the separate vision-tower path, regardless
                 // of its filename.
                 vision_shard_file_names.insert(shard_file_name.clone());
                 vision_tensor_name_to_shard_file_name
-                    .insert(tensor_name.clone(), shard_file_name.clone());
-            } else if tensor_name.starts_with("mtp.") {
+                    .insert(canonical_tensor_name.clone(), shard_file_name.clone());
+            } else {
                 auxiliary_tensor_name_to_shard_file_name
-                    .insert(tensor_name.clone(), shard_file_name.clone());
+                    .insert(canonical_tensor_name.clone(), shard_file_name.clone());
             }
-            // Other tensor prefixes are silently skipped.
+            // Every canonical tensor name claims exactly one stored spelling.
+            // Inserting unconditionally (canonical spellings included) lets a
+            // second spelling conflict in either iteration order, because the
+            // index weight-map iteration order is not controlled by us.
+            let existing_stored_tensor_name = stored_tensor_name_by_canonical_name
+                .insert(canonical_tensor_name.clone(), index_tensor_name.clone());
+            if let Some(existing_stored_tensor_name) = existing_stored_tensor_name {
+                return Err(Qwen3_5ArtifactError::ConflictingCanonicalTensorName {
+                    canonical_tensor_name,
+                    existing_stored_tensor_name,
+                    conflicting_stored_tensor_name: index_tensor_name.clone(),
+                });
+            }
         }
+        let language_tensor_name_references = language_tensor_names
+            .iter()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
         tensor_spec::validate_language_tensor_names(
-            &language_tensor_names,
+            &language_tensor_name_references,
             language_tensor_profiles,
         )?;
 
@@ -89,6 +117,7 @@ impl Qwen3_5ShardIndex {
             tensor_name_to_shard_file_name: language_tensor_name_to_shard_file_name,
             vision_tensor_name_to_shard_file_name,
             auxiliary_tensor_name_to_shard_file_name,
+            stored_tensor_name_by_canonical_name,
             total_payload_bytes,
             model_shard_file_names,
             vision_sidecar_file_names,
@@ -168,12 +197,33 @@ impl Qwen3_5ShardIndex {
             .map(String::as_str)
     }
 
+    /// Returns the stored shard spelling for a canonical tensor name.
+    ///
+    /// Every physical shard read must go through this lookup: unified-naming
+    /// checkpoints store `model.language_model.*` / `model.visual.*` bytes
+    /// under those exact names, while the runtime addresses tensors by their
+    /// canonical `language_model.model.*` / `vision_tower.*` names.
+    /// Canonical-named tensors resolve to themselves.
+    #[must_use]
+    pub fn stored_tensor_name_for(&self, canonical_tensor_name: &str) -> String {
+        match self
+            .stored_tensor_name_by_canonical_name
+            .get(canonical_tensor_name)
+        {
+            Some(stored_tensor_name) => stored_tensor_name.clone(),
+            None => canonical_tensor_name.to_owned(),
+        }
+    }
+
     /// Extracts the set of language tensor names from the safetensors index JSON
     /// without performing any validation against tensor profiles.
     ///
     /// This is used to determine which target modules are quantized vs.
     /// unquantized by checking for affine companion tensors before the full
     /// validation pass that requires complete tensor profiles.
+    ///
+    /// Returned names are canonical: unified-naming checkpoints contribute
+    /// their normalized spellings.
     pub fn extract_language_tensor_names_from_json(
         index_bytes: &[u8],
     ) -> Result<BTreeSet<String>, Qwen3_5ArtifactError> {
@@ -185,16 +235,23 @@ impl Qwen3_5ShardIndex {
         }
         let index_document = serde_json::from_slice::<Qwen3_5ShardIndexDocument>(index_bytes)
             .map_err(Qwen3_5ArtifactError::DeserializeIndex)?;
-        Ok(index_document
-            .weight_map
-            .keys()
-            .filter(|tensor_name| tensor_name.starts_with("language_model."))
-            .cloned()
-            .collect())
+        let mut canonical_language_tensor_names = BTreeSet::new();
+        for index_tensor_name in index_document.weight_map.keys() {
+            let Some(canonical_tensor_name) = canonical_model_tensor_name(index_tensor_name) else {
+                continue;
+            };
+            if canonical_tensor_name.starts_with("language_model.") {
+                canonical_language_tensor_names.insert(canonical_tensor_name);
+            }
+        }
+        Ok(canonical_language_tensor_names)
     }
 
     /// Extracts the language and vision tensor names needed to resolve native
     /// modules before profile validation, without validating their profiles.
+    ///
+    /// Returned names are canonical: unified-naming checkpoints contribute
+    /// their normalized spellings.
     pub fn extract_language_and_vision_tensor_names_from_json(
         index_bytes: &[u8],
     ) -> Result<BTreeSet<String>, Qwen3_5ArtifactError> {
@@ -206,16 +263,49 @@ impl Qwen3_5ShardIndex {
         }
         let index_document = serde_json::from_slice::<Qwen3_5ShardIndexDocument>(index_bytes)
             .map_err(Qwen3_5ArtifactError::DeserializeIndex)?;
-        Ok(index_document
-            .weight_map
-            .keys()
-            .filter(|tensor_name| {
-                tensor_name.starts_with("language_model.")
-                    || tensor_name.starts_with("vision_tower.")
-            })
-            .cloned()
-            .collect())
+        let mut canonical_model_tensor_names = BTreeSet::new();
+        for index_tensor_name in index_document.weight_map.keys() {
+            let Some(canonical_tensor_name) = canonical_model_tensor_name(index_tensor_name) else {
+                continue;
+            };
+            let is_model_tensor = canonical_tensor_name.starts_with("language_model.")
+                || canonical_tensor_name.starts_with("vision_tower.");
+            if is_model_tensor {
+                canonical_model_tensor_names.insert(canonical_tensor_name);
+            }
+        }
+        Ok(canonical_model_tensor_names)
     }
+}
+
+/// Returns the canonical executable tensor name for a shard-index tensor name.
+///
+/// Newer unified Hugging Face checkpoints name the language tower
+/// `model.language_model.*` and the vision tower `model.visual.*`, while the
+/// canonical executable layout is `language_model.model.*` and
+/// `vision_tower.*`. Both spellings describe byte-identical tensors, so the
+/// shard index normalizes to canonical names at parse time and
+/// [`Qwen3_5ShardIndex::stored_tensor_name_for`] recovers the stored spelling
+/// for physical shard reads. `None` marks a tensor name outside the
+/// executable model prefixes (`language_model.*`, `vision_tower.*`, `mtp.*`),
+/// which the index silently skips.
+///
+/// The two prefix swaps are length-neutral, which keeps every downstream
+/// tensor-name length bound intact.
+fn canonical_model_tensor_name(index_tensor_name: &str) -> Option<String> {
+    if let Some(tower_suffix) = index_tensor_name.strip_prefix("model.language_model.") {
+        return Some(format!("language_model.model.{tower_suffix}"));
+    }
+    if let Some(tower_suffix) = index_tensor_name.strip_prefix("model.visual.") {
+        return Some(format!("vision_tower.{tower_suffix}"));
+    }
+    let uses_canonical_prefix = index_tensor_name.starts_with("language_model.")
+        || index_tensor_name.starts_with("vision_tower.")
+        || index_tensor_name.starts_with("mtp.");
+    if uses_canonical_prefix {
+        return Some(index_tensor_name.to_owned());
+    }
+    None
 }
 
 #[derive(Debug, Deserialize)]
@@ -262,6 +352,14 @@ pub enum Qwen3_5ArtifactError {
     },
     #[error("Qwen3.5 index contains unexpected executable language tensor '{tensor_name}'")]
     UnexpectedLanguageTensor { tensor_name: String },
+    #[error(
+        "Qwen3.5 index maps stored tensors '{existing_stored_tensor_name}' and '{conflicting_stored_tensor_name}' to the same canonical tensor '{canonical_tensor_name}'"
+    )]
+    ConflictingCanonicalTensorName {
+        canonical_tensor_name: String,
+        existing_stored_tensor_name: String,
+        conflicting_stored_tensor_name: String,
+    },
     #[error("Qwen3.5 index is missing executable language tensor '{tensor_name}'")]
     MissingLanguageTensor { tensor_name: String },
     #[error("Qwen3.5 index contains unexpected vision tensor '{tensor_name}'")]

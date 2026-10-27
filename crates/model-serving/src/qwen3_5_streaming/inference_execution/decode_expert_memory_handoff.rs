@@ -229,12 +229,9 @@ pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
                 if unseated_sparse_layer_count == 0 || per_expert_payload_bytes == 0 {
                     0
                 } else {
-                    let per_layer_warm_bytes = u128::try_from(per_expert_payload_bytes)
-                        .unwrap_or(u128::MAX)
-                        .saturating_mul(
-                            u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX),
-                        );
-                    let affordable_slots = u128::try_from(warm_budget_bytes).unwrap_or(u128::MAX)
+                    let per_layer_warm_bytes = u128::from(per_expert_payload_bytes)
+                        .saturating_mul(u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX));
+                    let affordable_slots = u128::from(warm_budget_bytes)
                         .checked_div(per_layer_warm_bytes)
                         .unwrap_or(0);
                     usize::try_from(affordable_slots).unwrap_or(usize::MAX)

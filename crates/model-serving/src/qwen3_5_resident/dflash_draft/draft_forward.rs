@@ -40,8 +40,7 @@ pub fn forward_draft_block(
 ) -> Result<MlxArray, MlxRuntimeError> {
     let block_token_count = block_embeddings.shape()[1];
     let mut hidden_states: MlxArray = block_embeddings.retain()?;
-    for layer_index in 0..configuration.layer_count() as usize {
-        let layer_weights = &weights.layers[layer_index];
+    for (layer_index, layer_weights) in weights.layers.iter().enumerate() {
         let attention_kind = configuration.layer_attention_kinds()[layer_index];
         hidden_states = forward_one_draft_layer(
             runtime,

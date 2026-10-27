@@ -199,6 +199,7 @@ impl Qwen3_5ResidentModel {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_target_forward_graph_from_token_indices_with_position_offsets(
         &self,
         token_indices: &MlxArray,
@@ -271,6 +272,7 @@ impl Qwen3_5ResidentModel {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn build_target_forward_graph_from_embeddings_with_position_offsets(
         &self,
         mut hidden_states: MlxArray,

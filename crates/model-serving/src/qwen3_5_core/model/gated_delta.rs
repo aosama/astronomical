@@ -30,7 +30,7 @@ impl Qwen3_5ModelBase {
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
         convolution_state: &mut ConvolutionState,
         recurrent_state: &mut GatedDeltaRecurrentState,
-        mut boundary_checkpoint_collector: Option<
+        boundary_checkpoint_collector: Option<
             &mut Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
         >,
         performance_attribution: &mut PerformanceAttribution,
@@ -229,7 +229,7 @@ impl Qwen3_5ModelBase {
             &[&recurrent_output, &next_recurrent_state],
             token_count,
         )?;
-        if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector.as_deref_mut() {
+        if let Some(boundary_checkpoint_collector) = boundary_checkpoint_collector {
             boundary_checkpoint_collector.record_linear_attention_layer(
                 decoder_layer_index,
                 boundary_convolution_states,

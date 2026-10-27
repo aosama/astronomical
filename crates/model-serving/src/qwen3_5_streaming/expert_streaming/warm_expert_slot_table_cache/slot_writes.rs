@@ -148,7 +148,7 @@ pub(super) fn materialize_and_detach_table_weights(
     weights.append_array_references(&mut array_references);
     runtime.evaluate_arrays(&array_references)?;
     for array in array_references {
-        astronomical_mlx_c_fork::detach_array(&array).map_err(|error| {
+        astronomical_mlx_c_fork::detach_array(array).map_err(|error| {
             MlxRuntimeError::RuntimeOperation {
                 operation: "detach a warm table from its lazy graph",
                 description: error.to_string(),

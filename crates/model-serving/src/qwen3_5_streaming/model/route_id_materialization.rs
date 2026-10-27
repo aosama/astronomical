@@ -45,15 +45,14 @@ impl Qwen3_5Model {
         } else {
             contiguous_ids.evaluate()?;
         }
-        let expert_ids =
-            if let Some(performance_attribution) = performance_attribution.as_deref_mut() {
-                performance_attribution.measure_operation(
-                    PerformanceOperation::DecodeExpertRouteHostCopy,
-                    |_performance_attribution| contiguous_ids.copy_evaluated_u32_values(),
-                )?
-            } else {
-                contiguous_ids.copy_evaluated_u32_values()?
-            };
+        let expert_ids = if let Some(performance_attribution) = performance_attribution {
+            performance_attribution.measure_operation(
+                PerformanceOperation::DecodeExpertRouteHostCopy,
+                |_performance_attribution| contiguous_ids.copy_evaluated_u32_values(),
+            )?
+        } else {
+            contiguous_ids.copy_evaluated_u32_values()?
+        };
         Ok(expert_ids
             .into_iter()
             .map(|expert_id| expert_id as usize)

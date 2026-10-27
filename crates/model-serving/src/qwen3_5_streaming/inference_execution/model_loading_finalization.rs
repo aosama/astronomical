@@ -23,6 +23,7 @@ impl Qwen3_5EngineState {
             .with_startup_residency_facts(self.startup_residency_facts)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn record_model_loading_performance_attribution(
         &mut self,
         model_loading_performance_attribution: PerformanceAttribution,

@@ -28,8 +28,7 @@ pub fn append_conditioned_context_key_values(
     conditioned_states: &MlxArray,
     first_absolute_position: i32,
 ) -> Result<(), MlxRuntimeError> {
-    for layer_index in 0..configuration.layer_count() as usize {
-        let layer_weights = &weights.layers[layer_index];
+    for (layer_index, layer_weights) in weights.layers.iter().enumerate() {
         let layer_state = key_value_states.layer_state_mut(layer_index).ok_or(
             MlxRuntimeError::RuntimeOperation {
                 operation: "append DFlash draft context key values",
