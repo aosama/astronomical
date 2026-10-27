@@ -96,6 +96,7 @@ impl Qwen3_5ResidentModel {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Records why part of the MLX ceiling is unused at one decode step (issue #507).
     ///
     /// Only the step with the largest unused headroom is kept, and all terms are

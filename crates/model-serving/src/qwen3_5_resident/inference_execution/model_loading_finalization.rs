@@ -22,6 +22,7 @@ impl Qwen3_5EngineState {
             .with_minimum_mlx_memory_ceiling_bytes(minimum_mlx_memory_ceiling_bytes)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn record_model_loading_performance_attribution(
         &mut self,
         model_loading_performance_attribution: PerformanceAttribution,

@@ -257,7 +257,7 @@ impl super::PrismHadamardTextModel {
         let text = self.pack.config().text();
         // The core route carries the leading batch axis: token indices are
         // [1, token_count] and every activation stays [1, token_count, ...].
-        let token_count = token_indices.shape()[1] as i32;
+        let token_count = token_indices.shape()[1];
         let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
 
         let mut hidden_states = self
@@ -301,7 +301,7 @@ impl super::PrismHadamardTextModel {
         state: &mut StraightGenerationState,
     ) -> Result<MlxArray, PrismHadamardModelError> {
         let text = self.pack.config().text();
-        let token_count = hidden_states.shape()[1] as i32;
+        let token_count = hidden_states.shape()[1];
         let rms_norm_epsilon = f32::from_bits(text.rms_norm_epsilon_bits);
         let decoder_layer = &self.weights.decoder_layers[layer_index];
         let state_slot = self.decoder_layer_state_slots[layer_index];

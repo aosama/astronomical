@@ -138,9 +138,7 @@ fn ensure_memory_headroom_for_draft(
         .map_err(Qwen3_5SpeculativeDraftLoadingError::Runtime)?;
     let active_limit_bytes = u64::try_from(active_memory_limit_bytes).unwrap_or(u64::MAX);
     let active_memory_bytes = u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(0);
-    let free_bytes = active_limit_bytes
-        .checked_sub(active_memory_bytes)
-        .unwrap_or(0);
+    let free_bytes = active_limit_bytes.saturating_sub(active_memory_bytes);
     if free_bytes < draft_weights_bytes + DRAFT_LOAD_HEADROOM_BYTES {
         return Err(Qwen3_5SpeculativeDraftLoadingError::InsufficientHeadroom {
             free_bytes,

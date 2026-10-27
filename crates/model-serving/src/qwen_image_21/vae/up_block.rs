@@ -40,7 +40,7 @@ impl QwenImage21VaeDupUpShortcut {
     ) -> Result<Self, QwenImage21VaeError> {
         let temporal_factor = if temporal_upsample { 2 } else { 1 };
         let factor = temporal_factor * SPATIAL_UPSAMPLE_FACTOR * SPATIAL_UPSAMPLE_FACTOR;
-        if output_channels * factor % input_channels != 0 {
+        if !(output_channels * factor).is_multiple_of(input_channels) {
             return Err(QwenImage21VaeError::invalid_geometry(format!(
                 "dup-up shortcut needs {output_channels} * {factor} to divide by {input_channels}"
             )));

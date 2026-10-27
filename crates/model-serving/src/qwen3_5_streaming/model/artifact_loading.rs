@@ -479,7 +479,7 @@ impl Qwen3_5Model {
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),
             paged_forward_missing_route_collector:
-                crate::qwen3_5_streaming::PagedForwardMissingRouteCollector::default(),
+                crate::qwen3_5_streaming::PagedForwardMissingRouteCollector,
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
             request_expert_storage_read_tally:
                 super::request_expert_storage_read_tally::RequestExpertStorageReadTally::default(),

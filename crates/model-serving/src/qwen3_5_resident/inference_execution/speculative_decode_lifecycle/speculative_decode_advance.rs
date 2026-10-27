@@ -68,7 +68,7 @@ impl Qwen3_5EngineState {
                 &pending_bonus_token,
             )?
         };
-        Ok(self.run_one_speculative_round(request_id, active_request, bonus_token_id)?)
+        self.run_one_speculative_round(request_id, active_request, bonus_token_id)
     }
 
     /// Emits one queued or bonus token through the classic emission
@@ -183,13 +183,11 @@ impl Qwen3_5EngineState {
             &round_request,
             &mut active_request.random_state,
             &mut active_request.performance_attribution,
-        )
-        .map_err(crate::InferenceEngineError::from)?;
+        )?;
         active_request.speculative_draft_key_value_states = Some(draft_key_value_states);
         let accepted_context_growth = round_outcome
             .context_length_after_round
-            .checked_sub(context_length_tokens)
-            .unwrap_or(0) as usize;
+            .saturating_sub(context_length_tokens) as usize;
         active_request.advance_position(accepted_context_growth)?;
         active_request
             .performance_attribution

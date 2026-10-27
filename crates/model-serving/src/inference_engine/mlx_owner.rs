@@ -235,6 +235,7 @@ where
 type OwnerResultSender<Output> = oneshot::Sender<Result<Output, InferenceEngineError>>;
 
 /// An owned one-shot operation executed against the owner's live engine.
+#[cfg(feature = "direct-mlx")]
 type OwnerTestOperation<Execution> =
     Box<dyn FnOnce(&mut Execution) -> Result<(), InferenceEngineError> + Send>;
 

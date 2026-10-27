@@ -205,6 +205,7 @@ fn encode_one_layer(
         .map_err(|error| runtime_failure(MlxRuntimeError::from(error)))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn encode_attention(
     runtime: &MlxRuntime,
     tensors: &MlxSafetensors,
@@ -541,7 +542,7 @@ fn build_local_attention_mask(
 }
 
 fn is_global_layer(configuration: &ModernBertConfiguration, layer_index: u32) -> bool {
-    layer_index % configuration.global_attn_every_n_layers == 0
+    layer_index.is_multiple_of(configuration.global_attn_every_n_layers)
 }
 
 fn tensor(

@@ -200,8 +200,7 @@ pub fn is_gdn_decode_prework_eligible(
     head_dimension: i32,
 ) -> bool {
     prework_kernel.is_some()
-        && token_count >= 1
-        && token_count <= MAX_FUSED_TOKEN_COUNT
+        && (1..=MAX_FUSED_TOKEN_COUNT).contains(&token_count)
         && SUPPORTED_ACTIVATION_DTYPES.contains(&activation_dtype)
         && head_dimension == SUPPORTED_HEAD_DIMENSION
 }
@@ -254,7 +253,7 @@ fn validate_prework_shapes(
             "the fused prework kernel serves single-batch decode steps",
         ));
     }
-    if token_count < 1 || token_count > MAX_FUSED_TOKEN_COUNT {
+    if !(1..=MAX_FUSED_TOKEN_COUNT).contains(&token_count) {
         return Err(prework_error(
             "the fused prework kernel serves single decode steps and verification rows",
         ));

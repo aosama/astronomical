@@ -132,7 +132,7 @@ impl Qwen3_5EngineState {
             } else if active_request.pending_generated_token.is_some()
                 || !active_request.speculative_emission_queue.is_empty()
             {
-                return Ok(self.advance_speculative_generation(request_id, active_request)?);
+                return self.advance_speculative_generation(request_id, active_request);
             }
         }
         let mut first_decode_forward_started_at = None;
@@ -326,8 +326,8 @@ impl Qwen3_5EngineState {
                 )
                 .map_err(InferenceEngineError::from)?;
             active_request.advance_position(1)?;
-            let next_generated_token = active_request.build_generated_token(model, &next_logits)?;
-            next_generated_token
+
+            active_request.build_generated_token(model, &next_logits)?
         };
         active_request
             .performance_attribution

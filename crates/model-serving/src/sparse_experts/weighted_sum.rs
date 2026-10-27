@@ -100,7 +100,7 @@ fn unsorted_expert_weighted_sum_inner(
 ) -> Result<MlxArray, MlxRuntimeError> {
     let output_shape = selected_expert_outputs.shape();
     let score_shape = selected_scores.shape();
-    if output_shape.len() < 2 || score_shape.len() < 1 {
+    if output_shape.len() < 2 || score_shape.is_empty() {
         return Err(geometry_error(
             "unsorted expert outputs and scores must include an assignment axis",
         ));
