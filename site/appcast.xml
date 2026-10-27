@@ -4,39 +4,28 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.83</title>
-            <pubDate>Tue, 27 Oct 2026 13:55:39 -0400</pubDate>
-            <sparkle:version>1723</sparkle:version>
-            <sparkle:shortVersionString>0.2.83</sparkle:shortVersionString>
+            <title>0.2.84</title>
+            <pubDate>Tue, 27 Oct 2026 17:14:01 -0400</pubDate>
+            <sparkle:version>1726</sparkle:version>
+            <sparkle:shortVersionString>0.2.84</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.83
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.84
 
-## Raw Hugging Face Qwen3.5 checkpoints now serve correctly
+## Thin Talk canvas zoom-in now answers ⌘+
 
-Checkpoints in the newer unified Hugging Face layout (such as `empero-ai/Qwen3.8-2B-Distill`) previously loaded but produced degenerate single-token output. Astronomical now normalizes unified tensor names to the canonical executable names at load and materializes RMSNorm weights stored as `gamma - 1` exactly once at binding, restoring token-for-token parity with the reference implementation in both answer and thinking modes. MLX-converted checkpoints keep byte-identical behavior.
-
-## Thin Talk usability
-
-The web client gained a sticky reasoning disclosure, a model picker, canvas zoom, scoped answer copying, gated transcript re-renders, and attachment thumbnail trust checks. Thin Talk web tests now run in continuous integration.
-
-## Download catalog
-
-Added the Ternary Bonsai 2 27B DFlash2 MLX model documentation entry.
-
-## Quality and maintainability
-
-Repository organization by concern across the CLI, daemon, and inference worker crates; strict clippy cleanliness across all model-serving targets including the `direct-mlx` acceptance lane; a new `audit-test-declarations` xtask subcommand that catches orphaned test files; and a rustfmt continuous-integration lane.
+The View menu's Zoom In shortcut advertised ⌘+, but the keystroke never reached it: SwiftUI matches menu shortcuts against the unshifted key character, which for ⌘+ (Shift+⌘+=) is `=` and can never be `+`. Zoom-in now answers every spelling users actually press — ⌘+, the numpad plus, and bare ⌘= — while ⌘− and ⌘0 behave exactly as before, and each keystroke still zooms exactly one step. The View menu displays ⌘= for Zoom In.
 
 ## Compatibility
 
 No configuration changes: existing configuration files and installed models keep working as before, and upgrading preserves all user state.
 
-This release is distributed as a signed and notarized DMG. The Sparkle update feed and its signatures cover the exact published bytes.]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.83/Astronomical-0.2.83-macOS-arm64.dmg" length="18474491" type="application/octet-stream" sparkle:edSignature="2/UUUpxIEYKi7w61/bfToFmUN4fkPQdEa65hfpvAVebSyYXzC3nI1EZ3PsSahfVOY2ufCmuSvntUVe0OkoVDBg=="></enclosure>
+This release is distributed as a signed and notarized DMG. The Sparkle update feed and its signatures cover the exact published bytes.
+]]></description>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.84/Astronomical-0.2.84-macOS-arm64.dmg" length="18474138" type="application/octet-stream" sparkle:edSignature="Nz+fRO56MJpPInL6vVWFnnYrXo+yzGQTCVOKIwk4RpqwmnDFRf8+4wBi8d5y0uXfl3noppjbUkg2Ia+XVzf1Bw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: GNF/i5H7CQYh/Yc03hqBXe61f4NykjQUGSzAxflIXpBOaxo9UE+I+VwhbFt5mMCEWfZ/cZEvSLkob7y0OWRdCw==
-length: 2787
+edSignature: VUCDvGrTvDHc7I45wTb1xRaAwloPJstccVSUesOqy5oUQPczvwuo5GzkZK9tmKOReiL+jDaSm+v8nbCgu891DA==
+length: 2043
 -->
