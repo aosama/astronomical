@@ -37,7 +37,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "ThinTalk",
-            dependencies: ["ThinTalkUI"],
+            dependencies: ["ThinTalkUI", "ThinTalkCanvas"],
             path: "Sources/ThinTalk"
         ),
         .testTarget(

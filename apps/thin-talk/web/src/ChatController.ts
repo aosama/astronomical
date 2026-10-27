@@ -38,7 +38,7 @@ export class ChatController {
   private readonly listeners = new Set<(state: ChatSurfaceState) => void>();
   private readonly watchdog: StallWatchdog;
   private preferences: SessionPreferences = SessionPreferences.default();
-  private activeStream: AbortController | null = null;
+  private activeStreamAbort: AbortController | null = null;
   private activeStreamPromise: Promise<void> | null = null;
   private stopRequested = false;
   private stallFailure: ChatFailure | null = null;
@@ -76,8 +76,7 @@ export class ChatController {
     try {
       await this.client.handshake();
       this.models = await this.client.fetchModels();
-      const firstModel = this.models[0];
-      this.selectedModelID = firstModel ? firstModel.id : null;
+      this.selectedModelID = this.initialModelID();
       this.loadPhase = this.models.length === 0 ? "empty" : "ready";
     } catch (error) {
       this.loadPhase = "failed";
@@ -133,15 +132,41 @@ export class ChatController {
   }
 
   public async stop(): Promise<void> {
-    if (!this.isStreaming || !this.activeStream) {
+    if (!this.isStreaming || !this.activeStreamAbort) {
       return;
     }
     this.stopRequested = true;
-    this.activeStream.abort();
+    this.activeStreamAbort.abort();
     await this.activeStreamPromise?.catch(() => undefined);
   }
 
   // MARK: - Preferences
+
+  /** The model to start with: the user's saved choice when the catalog still
+   * carries it, otherwise the catalog's first model. */
+  private initialModelID(): string | null {
+    const preferredModelID: string | null = this.preferences.modelID;
+    if (preferredModelID != null && this.models.some((model) => model.id === preferredModelID)) {
+      return preferredModelID;
+    }
+    const firstModel: ChatModel | undefined = this.models[0];
+    return firstModel != null ? firstModel.id : null;
+  }
+
+  /** Switches the model future turns go to. An unknown or unchanged id is
+   * ignored so a stale menu can never desync the surface from the catalog. */
+  public selectModel(modelID: string): void {
+    if (modelID === this.selectedModelID) {
+      return;
+    }
+    if (!this.models.some((model) => model.id === modelID)) {
+      return;
+    }
+    this.selectedModelID = modelID;
+    this.preferences.modelID = modelID;
+    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
+    this.publish();
+  }
 
   public setEffort(effort: ThinkingEffort): void {
     if (effort === this.preferences.thinkingEffort) {
@@ -220,14 +245,18 @@ export class ChatController {
     this.autosave();
     this.publish();
     this.watchdog.start();
-    const stream = new AbortController();
-    this.activeStream = stream;
+    const streamAbort = new AbortController();
+    this.activeStreamAbort = streamAbort;
     const modelID = this.selectedModelID;
     const effort = this.preferences.thinkingEffort;
-    this.activeStreamPromise = this.runStream(stream, modelID, effort);
+    this.activeStreamPromise = this.runStream(streamAbort, modelID, effort);
   }
 
-  private async runStream(stream: AbortController, modelID: string, effort: ThinkingEffort): Promise<void> {
+  private async runStream(
+    streamAbort: AbortController,
+    modelID: string,
+    effort: ThinkingEffort,
+  ): Promise<void> {
     try {
       await this.client.streamChat({
         modelID,
@@ -235,7 +264,7 @@ export class ChatController {
         thinkingEffort: effort,
         onText: (delta) => this.ingestDelta(delta, (text) => this.log.applyTextDelta(text)),
         onReasoning: (delta) => this.ingestDelta(delta, (text) => this.log.applyReasoningDelta(text)),
-        signal: stream.signal,
+        signal: streamAbort.signal,
       });
       this.watchdog.stop();
       if (this.stallFailure) {
@@ -258,7 +287,7 @@ export class ChatController {
       this.log.removeEmptyAssistantTurn();
       this.isStreaming = false;
       this.log.assistantMessageID = null;
-      this.activeStream = null;
+      this.activeStreamAbort = null;
       this.activeStreamPromise = null;
       this.autosave();
       void this.store
@@ -279,21 +308,21 @@ export class ChatController {
   /** A stall has no backend marker, so the watchdog aborts the stream and the
    * run records the stall as the turn's failure. */
   private handleStall(): void {
-    if (!this.isStreaming || !this.activeStream) {
+    if (!this.isStreaming || !this.activeStreamAbort) {
       return;
     }
     this.stallFailure = new ChatFailure(ChatFailureKind.STALL);
-    this.activeStream.abort();
+    this.activeStreamAbort.abort();
   }
 
   /** Aborts an in-flight stream and waits for its bookkeeping to finish, so a
    * session switch never races the stream's final save. */
   private async settleActiveStream(): Promise<void> {
-    if (!this.activeStream) {
+    if (!this.activeStreamAbort) {
       return;
     }
     this.stopRequested = true;
-    this.activeStream.abort();
+    this.activeStreamAbort.abort();
     await this.activeStreamPromise?.catch(() => undefined);
   }
 
@@ -343,6 +372,8 @@ export class ChatController {
       acceptsInput: this.loadPhase !== "loading",
       isReady: this.loadPhase === "ready",
       effort: this.preferences.thinkingEffort,
+      models: this.models,
+      selectedModelID: this.selectedModelID,
       failure: this.failure
         ? { message: this.failure.message, nextAction: this.failure.nextAction }
         : null,
