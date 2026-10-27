@@ -29,6 +29,8 @@ final class StableAccessibilityIdentifierContractTests: XCTestCase {
     "composer-retry",
     "composer-effort",
     "composer-effort-menu",
+    "composer-model",
+    "composer-model-menu",
     "sidebar-new-chat",
   ]
 

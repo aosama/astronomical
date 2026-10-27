@@ -115,6 +115,14 @@ const contentTypes = {
   ".md": "text/markdown; charset=utf-8",
 };
 
+/** One small chat-bubble icon so the browser's automatic favicon request has
+ * something real to load. */
+const previewFaviconSVG =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">` +
+  `<rect x="1" y="2" width="14" height="10" rx="3" fill="#7aa2f7"/>` +
+  `<path d="M5 12l-2 3 0-3z" fill="#7aa2f7"/>` +
+  `</svg>`;
+
 const server = http.createServer((request, response) => {
   const requestTarget = request.url != null ? request.url : "/";
   const url = new URL(requestTarget, daemonBaseURL);
@@ -177,6 +185,15 @@ const server = http.createServer((request, response) => {
   if (url.pathname === "/" || url.pathname === "/index.html") {
     response.writeHead(200, { "content-type": contentTypes[".html"], "cache-control": "no-store" });
     response.end(readIndexHTML());
+    return;
+  }
+  if (url.pathname === "/favicon.ico") {
+    // Browsers request /favicon.ico unprompted; without a route every preview
+    // session logged a 404 that read as a broken page. An inline SVG keeps the
+    // server single-file, and modern WebKit and Chromium render SVG favicons
+    // regardless of the .ico name.
+    response.writeHead(200, { "content-type": contentTypes[".svg"], "cache-control": "no-store" });
+    response.end(previewFaviconSVG);
     return;
   }
   const relativeAsset = path.normalize(url.pathname).replace(/^[/\\]+/, "");
