@@ -53,8 +53,14 @@ struct CanvasZoomCommands: Commands {
     // The .toolbar placement is the View menu, where zoom commands live in
     // every native Mac app.
     CommandGroup(after: .toolbar) {
+      // Bound on "=", never "+": SwiftUI matches menu key equivalents against
+      // charactersIgnoringModifiers, which is "=" for Shift+⌘+= and can never
+      // be "+" — a "+" shortcut would advertise a keystroke it can't answer
+      // (the same convention Safari uses internally). ⌘+ reaches zoomIn
+      // through the canvas alias instead; the menu item stays as the fallback
+      // for windows without an installed canvas.
       Button("Zoom In") { controller.zoomIn() }
-        .keyboardShortcut("+", modifiers: .command)
+        .keyboardShortcut("=", modifiers: .command)
       Button("Zoom Out") { controller.zoomOut() }
         .keyboardShortcut("-", modifiers: .command)
       Button("Actual Size") { controller.resetZoom() }
