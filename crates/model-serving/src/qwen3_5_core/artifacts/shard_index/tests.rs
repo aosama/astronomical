@@ -11,6 +11,7 @@ use crate::qwen3_5_core::frozen_config_test_support::expected_qwen3_5_language_t
 use super::*;
 
 mod artifact_tests;
+mod tensor_name_normalization_tests;
 
 pub(crate) const FROZEN_LANGUAGE_PAYLOAD_BYTES: u64 = 22_164_699_392;
 const FROZEN_TOTAL_PARAMETERS: u64 = 34_660_608_768;

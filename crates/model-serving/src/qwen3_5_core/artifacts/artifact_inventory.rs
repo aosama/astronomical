@@ -40,7 +40,7 @@ pub(super) fn build_index_tensor_inventory(
         inventory
             .insert(TensorLocation::new(
                 canonical_name.clone(),
-                canonical_name.clone(),
+                shard_index.stored_tensor_name_for(canonical_name),
                 source_id,
                 semantic_role,
                 TensorDeclarationOrigin::MainIndex,
