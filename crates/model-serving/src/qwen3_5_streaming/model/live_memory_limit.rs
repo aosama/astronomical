@@ -126,18 +126,17 @@ impl Qwen3_5Model {
                 runtime_update_error,
             ));
         }
-        if !is_lowering_mlx_memory_ceiling {
-            if let Err(policy_update_error) = self
+        if !is_lowering_mlx_memory_ceiling
+            && let Err(policy_update_error) = self
                 .update_expert_residency_for_live_mlx_memory_limit(
                     requested_mlx_memory_ceiling_bytes,
                 )
-            {
-                return Err(self.restore_failed_raised_memory_limit(
-                    current_mlx_memory_limits,
-                    previous_expert_paging_memory_ceiling_bytes,
-                    policy_update_error,
-                ));
-            }
+        {
+            return Err(self.restore_failed_raised_memory_limit(
+                current_mlx_memory_limits,
+                previous_expert_paging_memory_ceiling_bytes,
+                policy_update_error,
+            ));
         }
         Ok((
             minimum_mlx_memory_ceiling_bytes,

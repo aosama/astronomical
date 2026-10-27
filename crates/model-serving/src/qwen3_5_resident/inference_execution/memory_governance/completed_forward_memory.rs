@@ -52,6 +52,7 @@ pub(in crate::qwen3_5_resident) fn capture_completed_forward_memory_observation(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Collects post-forward MLX telemetry and records adaptive learning when enabled.
 ///
 /// The returned snapshot is also used for user-visible memory telemetry. Returning
@@ -125,6 +126,7 @@ pub(in crate::qwen3_5_resident) fn collect_completed_forward_memory_snapshot(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 /// Records adaptive learning for a completed operation that needs no snapshot result.
 pub(in crate::qwen3_5_resident) fn record_completed_adaptive_ram_growth(
     adaptive_ram_growth_guard: &mut AdaptiveRamGrowthGuard,
@@ -154,6 +156,7 @@ pub(in crate::qwen3_5_resident) fn record_completed_adaptive_ram_growth(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn record_composed_ram_budget_measurement(
     _adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
     adaptive_ram_growth_context: AdaptiveRamGrowthContext,

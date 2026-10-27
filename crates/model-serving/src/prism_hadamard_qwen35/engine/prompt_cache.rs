@@ -33,6 +33,7 @@ use crate::{
     PersistentPromptCachePublicationOutcome, build_persistent_prompt_cache_stats_event,
 };
 
+#[allow(clippy::too_many_arguments)]
 /// Opens the SSD store for one loaded folded-ternary revision.
 pub(super) fn open_prompt_cache_store(
     effective_mlx_memory_ceiling_bytes: usize,
@@ -367,7 +368,7 @@ pub(super) fn capture_completed_cache_block(
         .model_contract_ref()
         .block_token_count();
     let block_end = active_generation.processed_prompt_token_count as usize;
-    if block_end == 0 || block_end % block_token_count != 0 {
+    if block_end == 0 || !block_end.is_multiple_of(block_token_count) {
         return Ok(());
     }
     let block_start = block_end - block_token_count;

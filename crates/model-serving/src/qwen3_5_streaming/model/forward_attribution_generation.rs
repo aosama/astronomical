@@ -61,7 +61,7 @@ impl Qwen3_5Model {
         // generated token becomes request-visible. Use a synchronous completion
         // root with exact replay instead of decode-ahead async evaluation alone.
         let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
             let next_logits = self.build_forward_graph(
                 &token_indices,
                 1,

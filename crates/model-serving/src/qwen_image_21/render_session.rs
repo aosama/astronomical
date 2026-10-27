@@ -194,7 +194,7 @@ impl QwenImage21RenderSession {
         let drop_idx = self.system_block_token_count();
         let attention_mask = vec![1_u32; token_ids.len()];
         let conditioning = build_prompt_conditioning(
-            &[token_ids.clone()],
+            std::slice::from_ref(&token_ids),
             &[attention_mask],
             drop_idx,
             self.image_pad_token_id()?,

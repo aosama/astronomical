@@ -46,6 +46,10 @@ const UP_BLOCK_TEMPORAL_UPSAMPLE: [bool; 5] = [true, true, true, false, false];
 
 /// Per-channel latent normalization constants from the reviewed artifact's `vae/config.json`;
 /// the pipeline denormalizes samples with `latents * latents_std + latents_mean` before decode.
+// Authored model statistics, not mathematics: clippy flags entries near
+// multiples of pi, but these magnitudes come from the checkpoint and must
+// stay exactly as published.
+#[allow(clippy::approx_constant)]
 const LATENTS_MEAN: [f32; LATENT_CHANNEL_COUNT] = [
     0.5126, 0.7721, -0.0631, 1.3506, -0.7855, -2.1025, -0.3458, 1.3722, 1.8873, -1.7177, -0.651,
     0.2732, 0.7562, -0.6163, -1.0277, 3.8363, 2.021, 0.0472, 0.932, 2.0087, 2.4954, -0.1391,

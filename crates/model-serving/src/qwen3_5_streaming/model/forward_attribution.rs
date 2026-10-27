@@ -43,7 +43,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<usize, Qwen3_5ExecutionError> {
         let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
             let consumed_visual_embedding_count = self.build_visual_prefill_graph(
                 chunk_token_ids,
                 starting_position_tokens,
@@ -139,7 +139,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
             let mut boundary_checkpoint_collector =
                 Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
                     completed_prefill_chunk_tokens.clone(),
@@ -193,7 +193,7 @@ impl Qwen3_5Model {
             .runtime
             .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?;
         let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
             let graph_started_at = std::time::Instant::now();
             self.build_prefill_decoder_state_graph(
                 &token_indices,
@@ -240,7 +240,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5BoundaryCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
             let mut boundary_checkpoint_collector =
                 Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
                     completed_prefill_chunk_tokens.clone(),
@@ -302,7 +302,7 @@ impl Qwen3_5Model {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TerminalCheckpointPrefillOutcome, Qwen3_5ExecutionError> {
         let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
             let mut boundary_checkpoint_collector =
                 Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector::new(
                     completed_prefill_chunk_tokens.clone(),
@@ -355,7 +355,7 @@ impl Qwen3_5Model {
             .runtime
             .array_from_i32(&signed_token_ids, &[1, token_ids.len() as i32])?;
         let maximum_paged_route_replay_attempts = 1;
-        for _paged_route_replay_attempt in 0..maximum_paged_route_replay_attempts {
+        if let Some(_paged_route_replay_attempt) = (0..maximum_paged_route_replay_attempts).next() {
             let final_logits = self.build_forward_graph(
                 &token_indices,
                 token_ids.len() as i32,

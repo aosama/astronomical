@@ -46,7 +46,6 @@ pub struct DFlashDraftConfiguration {
 
 impl DFlashDraftConfiguration {
     /// Parses and validates one draft `config.json` document.
-    #[must_use]
     pub fn from_config_value(
         config_document: &serde_json::Value,
     ) -> Result<Self, DFlashDraftConfigurationError> {

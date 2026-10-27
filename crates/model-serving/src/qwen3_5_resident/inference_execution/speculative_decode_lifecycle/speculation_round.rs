@@ -530,9 +530,9 @@ fn argmax_rows_to_host(
 }
 
 /// Slices every tap to its first `prefix_token_count` rows.
-fn slice_taps_to_prefix<'a>(
+fn slice_taps_to_prefix(
     target_model: &Qwen3_5ResidentModel,
-    hidden_state_taps: &'a [MlxArray],
+    hidden_state_taps: &[MlxArray],
     prefix_token_count: usize,
 ) -> Result<Vec<MlxArray>, Qwen3_5ExecutionError> {
     let prefix_tokens_i32 =

@@ -62,6 +62,7 @@ impl WarmExpertSlotTableCache {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn insert_candidate_decode_experts(
         &mut self,
         runtime: &MlxRuntime,
@@ -83,6 +84,7 @@ impl WarmExpertSlotTableCache {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn insert_streamed_experts_internal(
         &mut self,
         runtime: &MlxRuntime,

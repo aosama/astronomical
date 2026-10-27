@@ -58,7 +58,6 @@ pub fn qwen3_5_language_tensor_profiles(
 /// Returns the language tensors that remain resident after sparse expert paging.
 /// Resident paging executes only in the direct-MLX engine world, so the fn and
 /// its helper exist only there.
-#[must_use]
 #[cfg(feature = "direct-mlx")]
 pub(crate) fn qwen3_5_resident_language_tensor_profiles(
     qwen3_5_config: &Qwen3_5Config,

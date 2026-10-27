@@ -267,39 +267,39 @@ impl Qwen3_5Model {
                 row_scales,
                 codebook_bit_width,
             } => {
-                if let Some(fused_kernel) = self.fused_jangtq2_gathered_projection_kernel.as_ref() {
-                    if let Some(activation_rows) = decode_token_activation_rows(
+                if let Some(fused_kernel) = self.fused_jangtq2_gathered_projection_kernel.as_ref()
+                    && let Some(activation_rows) = decode_token_activation_rows(
                         &self.runtime,
                         projection_activations,
                         selected_expert_indices,
                         usize::try_from(self.config.experts_per_token()).unwrap_or(0),
-                    )? {
-                        // One decode token: multiply straight from the packed
-                        // codes. The kernel returns `[assignments, rows]`;
-                        // restore gather_mm's `[..., assignments, 1, rows]`
-                        // layout so the SwiGLU and reduction stay unchanged.
-                        let projected = performance_attribution.measure_operation(
-                            PerformanceOperation::DecodeFusedJangtq2GatheredProjection,
-                            |_| {
-                                let flat_expert_indices = self.runtime.reshape(
-                                    selected_expert_indices,
-                                    &[selected_expert_indices.element_count() as i32],
-                                )?;
-                                fused_kernel.apply(
-                                    &self.runtime,
-                                    &activation_rows,
-                                    &flat_expert_indices,
-                                    packed_code_words,
-                                    row_scales,
-                                    *codebook_bit_width,
-                                )
-                            },
-                        )?;
-                        let mut gathered_shape = selected_expert_indices.shape();
-                        gathered_shape.push(1);
-                        gathered_shape.push(packed_code_words.shape()[1]);
-                        return Ok(self.runtime.reshape(&projected, &gathered_shape)?);
-                    }
+                    )?
+                {
+                    // One decode token: multiply straight from the packed
+                    // codes. The kernel returns `[assignments, rows]`;
+                    // restore gather_mm's `[..., assignments, 1, rows]`
+                    // layout so the SwiGLU and reduction stay unchanged.
+                    let projected = performance_attribution.measure_operation(
+                        PerformanceOperation::DecodeFusedJangtq2GatheredProjection,
+                        |_| {
+                            let flat_expert_indices = self.runtime.reshape(
+                                selected_expert_indices,
+                                &[selected_expert_indices.element_count() as i32],
+                            )?;
+                            fused_kernel.apply(
+                                &self.runtime,
+                                &activation_rows,
+                                &flat_expert_indices,
+                                packed_code_words,
+                                row_scales,
+                                *codebook_bit_width,
+                            )
+                        },
+                    )?;
+                    let mut gathered_shape = selected_expert_indices.shape();
+                    gathered_shape.push(1);
+                    gathered_shape.push(packed_code_words.shape()[1]);
+                    return Ok(self.runtime.reshape(&projected, &gathered_shape)?);
                 }
                 // Multi-token prefill (or a worker without the fused kernel):
                 // decode a transient bfloat16 copy and gather through
@@ -415,7 +415,7 @@ impl Qwen3_5Model {
                 .runtime
                 .apply_compiled_sparse_shared_expert_combination(
                     &self.compiled_elementwise_graphs,
-                    &sparse_expert_output,
+                    sparse_expert_output,
                     &shared_output,
                     &shared_gate_logits,
                 )?);
