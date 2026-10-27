@@ -3,6 +3,7 @@ import { TranscriptMessage } from "./TranscriptMessage";
 import { TranscriptAction } from "./TranscriptAction";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
+import { reasoningDisclosureIdentifier } from "./ReasoningDisclosure";
 import morphdom from "morphdom";
 
 /** The transcript half of one surface refresh. */
@@ -33,6 +34,21 @@ export class TranscriptView {
   private readonly onError: (detail: string) => void;
   private readonly inner: HTMLElement;
   private readonly articlesByMessageID = new Map<string, HTMLElement>();
+  // Reader intent per message: an explicit expand/collapse wins over the
+  // renderer's default for that message while it streams.
+  private readonly reasoningOpenByMessageID = new Map<string, boolean>();
+  // Messages whose one-time terminal collapse has been applied. Completion must
+  // fold the reasoning away exactly once; after that the reader may reopen it
+  // and the choice must stick through later re-renders.
+  private readonly terminalCollapseAppliedByMessageID = new Set<string>();
+  // Disclosure elements already carrying the toggle listener; morphdom keeps a
+  // patched element's identity, so one install per element is enough, and the
+  // set simply misses nodes a patch has replaced.
+  private readonly disclosuresWithToggleListener = new WeakSet<HTMLDetailsElement>();
+  // True while applyMessage is mutating disclosures programmatically: morphdom
+  // attribute sync and the reconciliation itself fire `toggle` events that must
+  // never be mistaken for the reader's own expand/collapse choice.
+  private suppressReasoningRecording = false;
   private pendingMessages: TranscriptMessage[] = [];
   private flushRequested = false;
   private followScroll = true;
@@ -58,6 +74,29 @@ export class TranscriptView {
     });
     this.inner.addEventListener("click", (event) => this.handleClick(event));
   }
+
+  /**
+   * The one handler per disclosure element (attached when reconciled): `toggle`
+   * does not bubble, and delegating from an ancestor container is unreliable
+   * across engines, so the listener lives on the element itself. Recording the
+   * reader's choice here — rather than a click handler on the summary — also
+   * covers keyboard activation.
+   */
+  private handleDisclosureToggle = (event: Event): void => {
+    if (this.suppressReasoningRecording) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof HTMLDetailsElement)) {
+      return;
+    }
+    const article = target.closest("[data-message-id]");
+    if (!(article instanceof HTMLElement) || !article.dataset.messageId) {
+      return;
+    }
+    const messageID: string = article.dataset.messageId;
+    this.reasoningOpenByMessageID.set(messageID, target.open);
+  };
 
   /** Renders one snapshot: removes articles the snapshot no longer carries,
    * patches the rest, and updates the empty state. */
@@ -200,17 +239,66 @@ export class TranscriptView {
     probe.innerHTML = this.renderer.messageHtml(message);
     this.renderer.labelCodeBlocks(probe);
     this.renderer.stampExpensiveKeys(probe);
-    morphdom(article, probe, {
-      childrenOnly: true,
-      getNodeKey: (node) => this.renderer.nodeKey(node),
-      onBeforeElUpdated: (fromElement: Element, toElement: Element) =>
-        this.renderer.beforeElUpdated(fromElement, toElement),
-    });
+    // Every DOM mutation below — morphdom attribute sync included — can fire
+    // `toggle`, and none of those mutations carry reader intent.
+    this.suppressReasoningRecording = true;
+    try {
+      morphdom(article, probe, {
+        childrenOnly: true,
+        getNodeKey: (node) => this.renderer.nodeKey(node),
+        onBeforeElUpdated: (fromElement: Element, toElement: Element) =>
+          this.renderer.beforeElUpdated(fromElement, toElement),
+      });
+      this.reconcileReasoningDisclosure(article, message);
+    } finally {
+      this.suppressReasoningRecording = false;
+    }
     this.renderer.highlightCodeBlocks(article);
     // Diagrams render once for finished messages; streamed ones show code until
     // the fence closes, exactly like code highlighting does.
     if (message.state === ChatMessageState.COMPLETE || message.state === ChatMessageState.STOPPED) {
       this.renderer.renderDiagrams(article);
+    }
+  }
+
+  /**
+   * Re-applies the disclosure state morphdom would otherwise undo: the fresh
+   * template always arrives with its own default (`open` while streaming,
+   * collapsed afterwards), so without this step every streamed patch resets the
+   * element and a manual expansion survives exactly one frame. Rules, in order:
+   *
+   * 1. While streaming, the reader's recorded choice wins; absent one, the
+   *    disclosure starts open so the reasoning is visible as it arrives.
+   * 2. The first render after streaming folds the reasoning away exactly once —
+   *    the answer is ready, the scratch work is not needed — and clears any
+   *    recorded streaming-time choice.
+   * 3. After that one-time collapse the reader may reopen the reasoning and the
+   *    choice sticks through every later re-render of the finished message.
+   */
+  private reconcileReasoningDisclosure(article: HTMLElement, message: TranscriptMessage): void {
+    const disclosure = article.querySelector(
+      `details.reasoning#${CSS.escape(reasoningDisclosureIdentifier(message.id))}`,
+    );
+    if (!(disclosure instanceof HTMLDetailsElement)) {
+      return;
+    }
+    if (!this.disclosuresWithToggleListener.has(disclosure)) {
+      disclosure.addEventListener("toggle", this.handleDisclosureToggle);
+      this.disclosuresWithToggleListener.add(disclosure);
+    }
+    const isStreaming = message.state === ChatMessageState.STREAMING;
+    if (!isStreaming && !this.terminalCollapseAppliedByMessageID.has(message.id)) {
+      this.terminalCollapseAppliedByMessageID.add(message.id);
+      this.reasoningOpenByMessageID.delete(message.id);
+      if (disclosure.open) {
+        disclosure.open = false;
+      }
+      return;
+    }
+    const recordedPreference: boolean | undefined = this.reasoningOpenByMessageID.get(message.id);
+    const desiredOpen: boolean = recordedPreference != null ? recordedPreference : isStreaming;
+    if (disclosure.open !== desiredOpen) {
+      disclosure.open = desiredOpen;
     }
   }
 

@@ -8,15 +8,21 @@ import ThinTalkCore
 /// conversation is indistinguishable from a broken one.
 public struct RootView: View {
   private let applicationIdentity: ThinTalkApplicationIdentity
+  private let zoomController: CanvasZoomController?
 
-  public init(applicationIdentity: ThinTalkApplicationIdentity) {
+  public init(applicationIdentity: ThinTalkApplicationIdentity, zoomController: CanvasZoomController? = nil) {
     self.applicationIdentity = applicationIdentity
+    self.zoomController = zoomController
   }
 
   public var body: some View {
     if let webDirectory = CanvasWebResources.bundledDirectory() {
-      CanvasWebView(webDirectory: webDirectory, applicationIdentity: applicationIdentity)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      CanvasWebView(
+        webDirectory: webDirectory,
+        applicationIdentity: applicationIdentity,
+        zoomController: zoomController
+      )
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     } else {
       CanvasUnavailableView()
     }
@@ -28,14 +34,17 @@ public struct RootView: View {
 private struct CanvasWebView: NSViewRepresentable {
   let webDirectory: URL
   let applicationIdentity: ThinTalkApplicationIdentity
+  let zoomController: CanvasZoomController?
 
   func makeNSView(context: Context) -> ConversationCanvasView {
-    ConversationCanvasView(
+    let canvas = ConversationCanvasView(
       webDirectory: webDirectory,
       assetRegistry: TranscriptAssetRegistry(),
       sessionFileStore: SessionFileStore(directory: Self.stateDirectory(for: applicationIdentity)),
       runtimeConfig: CanvasRuntimeConfig(applicationIdentity: applicationIdentity)
     )
+    canvas.zoomController = zoomController
+    return canvas
   }
 
   func updateNSView(_ nsView: ConversationCanvasView, context: Context) {}

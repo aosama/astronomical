@@ -9,6 +9,7 @@ import { TranscriptMessage } from "./TranscriptMessage";
 import type { TranscriptAttachment } from "./TranscriptAttachment";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
+import { reasoningDisclosureIdentifier } from "./ReasoningDisclosure";
 
 const VISIBLE_STATE_LABELS: Record<string, string> = {
   streaming: "generating",
@@ -43,7 +44,7 @@ export class Renderer {
 
   public messageHtml(message: TranscriptMessage): string {
     const reasoning = message.reasoning
-      ? `<details class="reasoning"><summary>Reasoning</summary><div class="reasoning__body">${this.trust.escapeHtml(message.reasoning)}</div></details>`
+      ? this.reasoningHtml(message)
       : "";
     const answerBody = this.renderMarkdown(message.markdown);
     const attachments = this.attachmentStripHtml(message.attachments);
@@ -79,6 +80,24 @@ export class Renderer {
     }
     const configuredLabel: string | undefined = VISIBLE_STATE_LABELS[state];
     return configuredLabel != null ? configuredLabel : "";
+  }
+
+  /**
+   * The reasoning disclosure carries a stable id plus a default-open state while
+   * the message is streaming. The id is what lets TranscriptView re-apply the
+   * reader's expand/collapse preference after each streamed patch; without it
+   * morphdom would re-apply this template's collapsed form and clobber every
+   * manual expansion the moment the next delta arrives.
+   */
+  private reasoningHtml(message: TranscriptMessage): string {
+    const disclosureIdentifier = reasoningDisclosureIdentifier(message.id);
+    const openAttribute = message.state === ChatMessageState.STREAMING ? " open" : "";
+    return (
+      `<details class="reasoning" id="${disclosureIdentifier}" data-testid="${disclosureIdentifier}"${openAttribute}>` +
+      `<summary>Reasoning</summary>` +
+      `<div class="reasoning__body">${this.trust.escapeHtml(message.reasoning ?? "")}</div>` +
+      `</details>`
+    );
   }
 
   private attachmentStripHtml(attachments: readonly TranscriptAttachment[]): string {

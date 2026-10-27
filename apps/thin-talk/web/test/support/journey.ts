@@ -12,8 +12,13 @@ export interface Journey {
 
 /** Boots the real client wiring against the fake host and fake daemon.
  * Pass a previous journey to keep its host files across a fresh page —
- * the same persistence a relaunch of the real app would see. */
-export function bootJourney(previous?: Journey): Journey {
+ * the same persistence a relaunch of the real app would see. Pass models
+ * to control the daemon's model catalog, or seedPreferences to write durable
+ * preferences before the client reads them. */
+export function bootJourney(
+  previous?: Journey,
+  options?: { models?: unknown[]; seedPreferences?: unknown },
+): Journey {
   installDom();
   installConfig(DAEMON_BASE_URL);
   const previousHost: FakeSessionHost | undefined = previous?.host;
@@ -24,6 +29,10 @@ export function bootJourney(previous?: Journey): Journey {
       (callId, message) => window.__thintalkBridge?.reject(callId, message),
     );
   host.install();
+  const seededPreferences: unknown = options?.seedPreferences;
+  if (seededPreferences !== undefined) {
+    host.seedPreferences(seededPreferences);
+  }
   const previousDaemon: FakeDaemon | undefined = previous?.daemon;
   const daemon = previousDaemon != null
     ? previousDaemon
@@ -31,6 +40,7 @@ export function bootJourney(previous?: Journey): Journey {
       daemonBaseURL: DAEMON_BASE_URL,
       channel: "development",
       stateDirectory: "~/.astronomical-dev",
+      models: options?.models,
     });
   daemon.install();
   bootChatClient();

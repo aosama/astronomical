@@ -30,6 +30,12 @@ public final class ConversationCanvasView: NSView {
   // WebKit does not retain scheme handlers, so the view owns this one for as
   // long as the web view lives.
   private var assetSchemeHandler: CanvasAssetSchemeHandler?
+  /// Receives the View menu's zoom intents. Set by the hosting view layer; the
+  /// canvas registers itself on assignment so the commands reach the live web
+  /// view once it exists.
+  public var zoomController: CanvasZoomController? {
+    didSet { zoomController?.attach(self) }
+  }
 
   public init(
     webDirectory: URL,
@@ -92,6 +98,9 @@ public final class ConversationCanvasView: NSView {
     let webview = WKWebView(frame: bounds, configuration: configuration)
     webview.navigationDelegate = coordinator
     webview.autoresizingMask = [.width, .height]
+    // Trackpad pinch zooms the canvas; the View menu's Cmd +/-/0 commands carry
+    // the keyboard half of the same behaviour.
+    webview.allowsMagnification = true
     webview.setAccessibilityIdentifier(Self.canvasAccessibilityIdentifier)
     addSubview(webview)
     webView = webview
@@ -103,6 +112,16 @@ public final class ConversationCanvasView: NSView {
     }
     self.assetSchemeHandler = assetSchemeHandler
     _ = webview.load(URLRequest(url: shellURL))
+  }
+  // MARK: - Zoom
+
+  public func adjustPageZoom(by factor: CGFloat) {
+    guard let webView else { return }
+    webView.pageZoom = CanvasZoomController.clampedPageZoom(current: webView.pageZoom, factor: factor)
+  }
+
+  public func resetPageZoom() {
+    webView?.pageZoom = CanvasZoomController.defaultPageZoom
   }
 }
 

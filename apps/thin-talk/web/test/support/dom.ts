@@ -30,8 +30,8 @@ export function installDom(): Window {
   defineGlobal("document", domWindow.document);
   for (const key of [
     "HTMLElement", "HTMLTextAreaElement", "HTMLButtonElement", "HTMLInputElement",
-    "Element", "Node", "Event", "CustomEvent", "KeyboardEvent", "MouseEvent",
-    "MutationObserver", "getComputedStyle", "navigator", "location",
+    "HTMLDetailsElement", "Element", "Node", "Event", "CustomEvent", "KeyboardEvent",
+    "MouseEvent", "MutationObserver", "getComputedStyle", "navigator", "location", "CSS",
   ]) {
     const value = (domWindow as unknown as Record<string, unknown>)[key];
     if (value !== undefined) {
