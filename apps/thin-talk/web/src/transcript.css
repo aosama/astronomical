@@ -88,11 +88,12 @@
 }
 
 .reasoning > summary {
-  cursor: default;
+  cursor: pointer;
   padding: 8px 14px;
   color: var(--text-secondary);
   font-size: 12.5px;
   list-style: none;
+  user-select: none;
 }
 
 .reasoning > summary::-webkit-details-marker {

@@ -97,6 +97,14 @@
   color: var(--text-secondary);
 }
 
+/* Model names can be long; the pill must stay inside the composer row. */
+[data-testid="composer-model-label"] {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .composer__menu-anchor {
   position: relative;
 }

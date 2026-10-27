@@ -62,6 +62,9 @@ export function bootChatClient(): AppShell {
     effortPill: requireElement<HTMLButtonElement>('[data-testid="composer-effort"]'),
     effortLabel: requireElement<HTMLElement>('[data-testid="composer-effort-label"]'),
     effortMenu: requireElement<HTMLElement>('[data-testid="composer-effort-menu"]'),
+    modelPill: requireElement<HTMLButtonElement>('[data-testid="composer-model"]'),
+    modelLabel: requireElement<HTMLElement>('[data-testid="composer-model-label"]'),
+    modelMenu: requireElement<HTMLElement>('[data-testid="composer-model-menu"]'),
     banner: requireElement<HTMLElement>('[data-testid="composer-banner"]'),
     bannerMessage: requireElement<HTMLElement>('[data-testid="banner-message"]'),
     bannerNextAction: requireElement<HTMLElement>('[data-testid="banner-next-action"]'),
@@ -78,6 +81,9 @@ export function bootChatClient(): AppShell {
           return;
         case "setEffort":
           controller.setEffort(ThinkingEffort.parse(action.detail));
+          return;
+        case "selectModel":
+          controller.selectModel(action.detail);
           return;
       }
     },

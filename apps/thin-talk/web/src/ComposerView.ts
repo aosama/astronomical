@@ -20,6 +20,9 @@ export class ComposerView {
   private readonly effortPill: HTMLButtonElement;
   private readonly effortLabel: HTMLElement;
   private readonly effortMenu: HTMLElement;
+  private readonly modelPill: HTMLButtonElement;
+  private readonly modelLabel: HTMLElement;
+  private readonly modelMenu: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly bannerMessage: HTMLElement;
   private readonly bannerNextAction: HTMLElement;
@@ -29,6 +32,8 @@ export class ComposerView {
     acceptsInput: true,
     isReady: false,
     effort: ThinkingEffort.QUICK,
+    models: [],
+    selectedModelID: null,
     failure: null,
   });
 
@@ -40,6 +45,9 @@ export class ComposerView {
     effortPill: HTMLButtonElement;
     effortLabel: HTMLElement;
     effortMenu: HTMLElement;
+    modelPill: HTMLButtonElement;
+    modelLabel: HTMLElement;
+    modelMenu: HTMLElement;
     banner: HTMLElement;
     bannerMessage: HTMLElement;
     bannerNextAction: HTMLElement;
@@ -52,6 +60,9 @@ export class ComposerView {
     this.effortPill = init.effortPill;
     this.effortLabel = init.effortLabel;
     this.effortMenu = init.effortMenu;
+    this.modelPill = init.modelPill;
+    this.modelLabel = init.modelLabel;
+    this.modelMenu = init.modelMenu;
     this.banner = init.banner;
     this.bannerMessage = init.bannerMessage;
     this.bannerNextAction = init.bannerNextAction;
@@ -85,15 +96,36 @@ export class ComposerView {
         new ComposerAction({ kind: "setEffort", detail: effortDetail }),
       );
     });
+    this.modelPill.addEventListener("click", () => this.toggleModelMenu());
+    this.modelMenu.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const choice = target.closest("[data-model-value]");
+      if (!choice) {
+        return;
+      }
+      this.closeModelMenu();
+      const storedModelValue: string | undefined = (choice as HTMLElement).dataset.modelValue;
+      const modelDetail: string = storedModelValue != null ? storedModelValue : "";
+      this.onAction(
+        new ComposerAction({ kind: "selectModel", detail: modelDetail }),
+      );
+    });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         this.closeEffortMenu();
+        this.closeModelMenu();
       }
     });
     document.addEventListener("click", (event) => {
       const target = event.target;
       if (!this.effortMenu.hidden && target instanceof Element && !target.closest(".composer__menu-anchor")) {
         this.closeEffortMenu();
+      }
+      if (!this.modelMenu.hidden && target instanceof Element && !target.closest(".composer__menu-anchor")) {
+        this.closeModelMenu();
       }
     });
   }
@@ -110,8 +142,10 @@ export class ComposerView {
     this.effortLabel.textContent = ThinkingEffort.displayName(state.effort);
     this.effortPill.title = ThinkingEffort.budgetSummary(state.effort);
     this.buildEffortMenu();
+    this.renderModelControls(state);
     if (!state.isReady) {
       this.closeEffortMenu();
+      this.closeModelMenu();
     }
     this.refreshControls();
   }
@@ -165,6 +199,7 @@ export class ComposerView {
   }
 
   private toggleEffortMenu(): void {
+    this.closeModelMenu();
     const opening = this.effortMenu.hidden;
     this.effortMenu.hidden = !opening;
     this.effortPill.setAttribute("aria-expanded", opening ? "true" : "false");
@@ -185,6 +220,56 @@ export class ComposerView {
       choice.textContent = ThinkingEffort.budgetSummary(option);
       item.appendChild(choice);
       this.effortMenu.appendChild(item);
+    });
+  }
+
+  // MARK: - Model menu
+
+  private closeModelMenu(): void {
+    this.modelMenu.hidden = true;
+    this.modelPill.setAttribute("aria-expanded", "false");
+  }
+
+  private toggleModelMenu(): void {
+    this.closeEffortMenu();
+    const opening = this.modelMenu.hidden;
+    this.modelMenu.hidden = !opening;
+    this.modelPill.setAttribute("aria-expanded", opening ? "true" : "false");
+  }
+
+  private renderModelControls(state: ComposerState): void {
+    const hasModels = state.models.length > 0;
+    this.modelPill.hidden = !hasModels;
+    if (!hasModels) {
+      this.modelMenu.hidden = true;
+      this.modelPill.setAttribute("aria-expanded", "false");
+    }
+    const selectedModel = state.models.find((model) => model.id === state.selectedModelID);
+    if (selectedModel) {
+      this.modelLabel.textContent = selectedModel.name;
+      this.modelPill.title = selectedModel.id;
+    } else {
+      this.modelLabel.textContent = "Model";
+      this.modelPill.title = "";
+    }
+    this.buildModelMenu(state);
+  }
+
+  private buildModelMenu(state: ComposerState): void {
+    this.modelMenu.textContent = "";
+    state.models.forEach((model) => {
+      const item = document.createElement("li");
+      item.setAttribute("role", "none");
+      const choice = document.createElement("button");
+      choice.type = "button";
+      choice.setAttribute("role", "menuitemradio");
+      choice.setAttribute("aria-checked", model.id === state.selectedModelID ? "true" : "false");
+      choice.dataset.testid = `composer-model-${model.id}`;
+      choice.id = `composer-model-${model.id}`;
+      choice.dataset.modelValue = model.id;
+      choice.textContent = model.name;
+      item.appendChild(choice);
+      this.modelMenu.appendChild(item);
     });
   }
 }

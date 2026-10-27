@@ -7,6 +7,7 @@ test("session preferences default to quick effort and the base font size", () =>
   const preferences = SessionPreferences.default();
   assert.equal(preferences.thinkingEffort, ThinkingEffort.QUICK);
   assert.equal(preferences.composerFontSize, 14);
+  assert.equal(preferences.modelID, null);
 });
 
 test("session preferences clamp out-of-range font sizes", () => {
@@ -20,14 +21,23 @@ test("session preferences fall back to defaults on malformed input", () => {
   const preferences = SessionPreferences.fromPlain(null);
   assert.equal(preferences.thinkingEffort, ThinkingEffort.QUICK);
   assert.equal(preferences.composerFontSize, 14);
+  assert.equal(preferences.modelID, null);
   const unknownEffort = SessionPreferences.fromPlain({ thinkingEffort: "nonsense", composerFontSize: 16 });
   assert.equal(unknownEffort.thinkingEffort, ThinkingEffort.QUICK);
   assert.equal(unknownEffort.composerFontSize, 16);
+  assert.equal(unknownEffort.modelID, null);
+  const unknownModel = SessionPreferences.fromPlain({ modelID: 42 });
+  assert.equal(unknownModel.modelID, null);
 });
 
 test("session preferences round-trip through toPlain", () => {
-  const preferences = new SessionPreferences({ thinkingEffort: ThinkingEffort.HIGH, composerFontSize: 18 });
+  const preferences = new SessionPreferences({
+    thinkingEffort: ThinkingEffort.HIGH,
+    composerFontSize: 18,
+    modelID: "model-beta",
+  });
   const decoded = SessionPreferences.fromPlain(preferences.toPlain());
   assert.equal(decoded.thinkingEffort, ThinkingEffort.HIGH);
   assert.equal(decoded.composerFontSize, 18);
+  assert.equal(decoded.modelID, "model-beta");
 });
