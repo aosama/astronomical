@@ -226,14 +226,17 @@ where
     },
     #[cfg(feature = "direct-mlx")]
     RunOwnerTestOperation {
-        owner_test_operation:
-            Box<dyn FnOnce(&mut Execution) -> Result<(), InferenceEngineError> + Send>,
+        owner_test_operation: OwnerTestOperation<Execution>,
         completion_sender: OwnerResultSender<()>,
     },
     Shutdown,
 }
 
 type OwnerResultSender<Output> = oneshot::Sender<Result<Output, InferenceEngineError>>;
+
+/// An owned one-shot operation executed against the owner's live engine.
+type OwnerTestOperation<Execution> =
+    Box<dyn FnOnce(&mut Execution) -> Result<(), InferenceEngineError> + Send>;
 
 fn run_mlx_owner<Execution>(
     mut execution: Execution,
