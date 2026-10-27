@@ -49,34 +49,46 @@ final class CanvasZoomControllerTests: XCTestCase {
   }
 
   func test_should_accept_a_bare_command_equals_as_the_zoom_in_alias() {
-    let isAlias = CanvasZoomController.isUnshiftedZoomInAlias(
+    let isAlias = CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: "=", modifierFlags: .command)
     XCTAssertTrue(isAlias)
   }
 
-  func test_should_reject_the_shifted_variant_the_view_menu_already_owns() {
-    let isAlias = CanvasZoomController.isUnshiftedZoomInAlias(
+  func test_should_accept_the_shifted_command_plus_keystroke_users_press() {
+    let isAlias = CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: "+", modifierFlags: [.command, .shift])
-    XCTAssertFalse(isAlias, "the View menu answers ⌘+ itself; the alias must leave it alone")
+    XCTAssertTrue(isAlias, "⌘+ is how zoom-in is actually typed; the alias must answer it")
   }
 
-  func test_should_reject_command_equals_carrying_extra_modifiers() {
-    let withOption = CanvasZoomController.isUnshiftedZoomInAlias(
+  func test_should_accept_the_numpad_command_plus_keystroke() {
+    let isAlias = CanvasZoomController.isZoomInKeyAlias(
+      keyCharacters: "+", modifierFlags: [.command, .numericPad])
+    XCTAssertTrue(isAlias, "the full-keyboard numpad plus must zoom in like the shifted plus")
+  }
+
+  func test_should_reject_zoom_in_keys_carrying_option_or_control() {
+    let withOption = CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: "=", modifierFlags: [.command, .option])
-    let withControl = CanvasZoomController.isUnshiftedZoomInAlias(
-      keyCharacters: "=", modifierFlags: [.command, .control])
+    let withControl = CanvasZoomController.isZoomInKeyAlias(
+      keyCharacters: "+", modifierFlags: [.command, .control])
     XCTAssertFalse(withOption)
     XCTAssertFalse(withControl)
   }
 
   func test_should_reject_other_keys_and_missing_command_modifier() {
-    let zoomOutKey = CanvasZoomController.isUnshiftedZoomInAlias(
+    let zoomOutKey = CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: "-", modifierFlags: .command)
-    let equalsWithoutCommand = CanvasZoomController.isUnshiftedZoomInAlias(
+    let actualSizeKey = CanvasZoomController.isZoomInKeyAlias(
+      keyCharacters: "0", modifierFlags: .command)
+    let plusWithoutCommand = CanvasZoomController.isZoomInKeyAlias(
+      keyCharacters: "+", modifierFlags: [.shift])
+    let equalsWithoutCommand = CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: "=", modifierFlags: [])
-    let missingCharacters = CanvasZoomController.isUnshiftedZoomInAlias(
+    let missingCharacters = CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: nil, modifierFlags: .command)
     XCTAssertFalse(zoomOutKey)
+    XCTAssertFalse(actualSizeKey)
+    XCTAssertFalse(plusWithoutCommand)
     XCTAssertFalse(equalsWithoutCommand)
     XCTAssertFalse(missingCharacters)
   }
