@@ -254,40 +254,56 @@ unsafe extern "C" fn memory_writer_write(
 ) -> usize {
     unsafe {
         with_memory_writer_state(descriptor, |writer_state| {
-            if byte_count == 0 {
-                return Some(byte_count);
-            }
-            if source.is_null() {
-                writer_state.is_good = false;
-                return None;
-            }
-            let Some(write_end_bytes) = writer_state.position_bytes.checked_add(byte_count) else {
-                writer_state.is_good = false;
-                return None;
-            };
-            if write_end_bytes > writer_state.maximum_serialized_byte_count {
-                // The limit is reported through `into_bytes` as the typed
-                // serialization-limit error, so the callback acknowledges the
-                // count to keep native serialization deterministic while the
-                // latched state fails the final result.
-                writer_state.attempted_serialized_byte_count = Some(write_end_bytes);
-                writer_state.is_good = false;
-                return Some(byte_count);
-            }
-            // Seeks may position past the current end; grow with zeros so
-            // every index up to the write end is addressable, then copy.
-            if write_end_bytes > writer_state.output_bytes.len() {
-                writer_state.output_bytes.resize(write_end_bytes, 0);
-            }
-            let source_bytes = std::slice::from_raw_parts(source.cast::<u8>(), byte_count);
-            writer_state.output_bytes[writer_state.position_bytes..write_end_bytes]
-                .copy_from_slice(source_bytes);
-            writer_state.position_bytes = write_end_bytes;
-            Some(byte_count)
+            memory_writer_write_bytes(writer_state, source, byte_count)
         })
     }
     .flatten()
     .unwrap_or(0)
+}
+
+/// Writes one caller-owned buffer into the in-memory output at the current
+/// position and advances the position by exactly what was stored.
+///
+/// The byte count reports success to MLX and `None` reports failure. The
+/// serialization limit is the deliberate exception: the callback
+/// acknowledges the count — with the latched `attempted_serialized_byte_count`
+/// becoming the typed limit error through `into_bytes` — so native
+/// serialization stays deterministic while the latched state fails the final
+/// result.
+fn memory_writer_write_bytes(
+    writer_state: &mut MemoryWriterState,
+    source: *const c_char,
+    byte_count: usize,
+) -> Option<usize> {
+    if byte_count == 0 {
+        return Some(byte_count);
+    }
+    if source.is_null() {
+        writer_state.is_good = false;
+        return None;
+    }
+    let Some(write_end_bytes) = writer_state.position_bytes.checked_add(byte_count) else {
+        writer_state.is_good = false;
+        return None;
+    };
+    if write_end_bytes > writer_state.maximum_serialized_byte_count {
+        writer_state.attempted_serialized_byte_count = Some(write_end_bytes);
+        writer_state.is_good = false;
+        return Some(byte_count);
+    }
+    // Seeks may position past the current end; grow with zeros so
+    // every index up to the write end is addressable, then copy.
+    if write_end_bytes > writer_state.output_bytes.len() {
+        writer_state.output_bytes.resize(write_end_bytes, 0);
+    }
+    // SAFETY: `source` is non-null and points at `byte_count` readable bytes
+    // the caller owns for the duration of this callback; the slice is copied
+    // immediately and never retained.
+    let source_bytes = unsafe { std::slice::from_raw_parts(source.cast::<u8>(), byte_count) };
+    writer_state.output_bytes[writer_state.position_bytes..write_end_bytes]
+        .copy_from_slice(source_bytes);
+    writer_state.position_bytes = write_end_bytes;
+    Some(byte_count)
 }
 
 unsafe extern "C" fn memory_writer_label(_descriptor: *mut c_void) -> *const c_char {

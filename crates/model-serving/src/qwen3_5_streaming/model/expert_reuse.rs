@@ -55,33 +55,18 @@ impl Qwen3_5Model {
         routed_expert_ids: &[usize],
         performance_attribution: &mut PerformanceAttribution,
     ) -> RoutedExpertCoverage {
-        let route_coverage = self.retained_experts.as_ref().map_or_else(
-            || RoutedExpertCoverage {
+        let route_coverage = match self.retained_experts.as_ref() {
+            Some(retained_experts) => route_coverage_with_prefetch_accounting(
+                retained_experts,
+                layer_index,
+                routed_expert_ids,
+                performance_attribution,
+            ),
+            None => RoutedExpertCoverage {
                 retained_expert_ids: Vec::new(),
                 missing_expert_ids: routed_expert_ids.to_vec(),
             },
-            |retained_experts| {
-                let route_coverage = retained_experts
-                    .borrow()
-                    .routed_expert_coverage(layer_index, routed_expert_ids);
-                let (prefetch_hit_count, prefetch_miss_count) = retained_experts
-                    .borrow_mut()
-                    .consume_prefetch_coverage(layer_index, &route_coverage);
-                if prefetch_hit_count > 0 {
-                    performance_attribution.record_counter(
-                        PerformanceCounter::PreviousTokenPrefetchHitCount,
-                        prefetch_hit_count,
-                    );
-                }
-                if prefetch_miss_count > 0 {
-                    performance_attribution.record_counter(
-                        PerformanceCounter::PreviousTokenPrefetchMissCount,
-                        prefetch_miss_count,
-                    );
-                }
-                route_coverage
-            },
-        );
+        };
         if route_coverage.missing_expert_ids.is_empty() {
             performance_attribution
                 .record_counter(PerformanceCounter::HotExpertRouteFullyCoveredCount, 1);
@@ -570,4 +555,39 @@ impl Qwen3_5Model {
             Some(full_coverage_page)
         }
     }
+}
+
+/// Classifies one layer's route coverage against the retained warm tables
+/// and records the previous token's prefetch hit/miss accounting.
+///
+/// Split from the dispatch decision so the coverage classification reads as
+/// one named step; both counters are recorded only when non-zero so clean
+/// attribution logs stay quiet.
+fn route_coverage_with_prefetch_accounting(
+    retained_experts: &std::cell::RefCell<
+        crate::qwen3_5_streaming::expert_streaming::WarmExpertSlotTableCache,
+    >,
+    layer_index: usize,
+    routed_expert_ids: &[usize],
+    performance_attribution: &mut PerformanceAttribution,
+) -> RoutedExpertCoverage {
+    let route_coverage = retained_experts
+        .borrow()
+        .routed_expert_coverage(layer_index, routed_expert_ids);
+    let (prefetch_hit_count, prefetch_miss_count) = retained_experts
+        .borrow_mut()
+        .consume_prefetch_coverage(layer_index, &route_coverage);
+    if prefetch_hit_count > 0 {
+        performance_attribution.record_counter(
+            PerformanceCounter::PreviousTokenPrefetchHitCount,
+            prefetch_hit_count,
+        );
+    }
+    if prefetch_miss_count > 0 {
+        performance_attribution.record_counter(
+            PerformanceCounter::PreviousTokenPrefetchMissCount,
+            prefetch_miss_count,
+        );
+    }
+    route_coverage
 }

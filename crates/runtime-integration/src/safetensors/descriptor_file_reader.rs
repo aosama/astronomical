@@ -159,38 +159,66 @@ unsafe extern "C" fn reader_seek(descriptor: *mut c_void, offset: i64, whence: c
     // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
     let seek_succeeded = unsafe {
         with_reader_cursor(descriptor, |reader_state, reader_cursor| {
-            // Arithmetic in i128 so a malicious or corrupt (offset, whence)
-            // combination is validated before it can wrap the u64 cursor.
-            let base_position_bytes = match whence {
-                libc::SEEK_SET => 0_i128,
-                libc::SEEK_CUR => i128::from(reader_cursor.position_bytes),
-                libc::SEEK_END => match reader_state.file.metadata() {
-                    Ok(metadata) => i128::from(metadata.len()),
-                    Err(_) => {
-                        reader_state.is_good.store(false, Ordering::Release);
-                        return false;
-                    }
-                },
-                _ => {
-                    reader_state.is_good.store(false, Ordering::Release);
-                    return false;
-                }
-            };
-            let requested_position_bytes = base_position_bytes + i128::from(offset);
-            match u64::try_from(requested_position_bytes) {
-                Ok(position_bytes) => {
-                    reader_cursor.position_bytes = position_bytes;
-                    true
-                }
-                Err(_) => {
-                    reader_state.is_good.store(false, Ordering::Release);
-                    false
-                }
-            }
+            reader_seek_position(reader_state, reader_cursor, offset, whence)
         })
     }
     .unwrap_or(false);
     if seek_succeeded { 0 } else { -1 }
+}
+
+/// The absolute base position one seek origin refers to.
+///
+/// `None` means the origin is unsupported or the end-of-file length could
+/// not be read; both flip the shared good flag so the owning read fails.
+fn reader_seek_base_position_bytes(
+    reader_state: &FileReaderState,
+    reader_cursor_position_bytes: u64,
+    whence: c_int,
+) -> Option<i128> {
+    match whence {
+        libc::SEEK_SET => Some(0_i128),
+        libc::SEEK_CUR => Some(i128::from(reader_cursor_position_bytes)),
+        libc::SEEK_END => match reader_state.file.metadata() {
+            Ok(metadata) => Some(i128::from(metadata.len())),
+            Err(_) => {
+                reader_state.is_good.store(false, Ordering::Release);
+                None
+            }
+        },
+        _ => {
+            reader_state.is_good.store(false, Ordering::Release);
+            None
+        }
+    }
+}
+
+/// Applies one C-style seek to the reader cursor.
+///
+/// Arithmetic in i128 so a malicious or corrupt (offset, whence) combination
+/// is validated before it can wrap the u64 cursor; any failure flips the
+/// shared good flag.
+fn reader_seek_position(
+    reader_state: &FileReaderState,
+    reader_cursor: &mut FileReaderCursor,
+    offset: i64,
+    whence: c_int,
+) -> bool {
+    let Some(base_position_bytes) =
+        reader_seek_base_position_bytes(reader_state, reader_cursor.position_bytes, whence)
+    else {
+        return false;
+    };
+    let requested_position_bytes = base_position_bytes + i128::from(offset);
+    match u64::try_from(requested_position_bytes) {
+        Ok(position_bytes) => {
+            reader_cursor.position_bytes = position_bytes;
+            true
+        }
+        Err(_) => {
+            reader_state.is_good.store(false, Ordering::Release);
+            false
+        }
+    }
 }
 
 unsafe extern "C" fn reader_read(
@@ -198,42 +226,56 @@ unsafe extern "C" fn reader_read(
     destination: *mut c_char,
     byte_count: usize,
 ) -> usize {
-    // SAFETY: Sequential reads share cursor state and remain serialized.
     unsafe {
         with_reader_cursor(descriptor, |reader_state, reader_cursor| {
-            if read_exact_at(
-                &reader_state.file,
-                destination,
-                byte_count,
-                reader_cursor.position_bytes,
-            )
-            .is_err()
-            {
-                reader_state.is_good.store(false, Ordering::Release);
-                return 0;
-            }
-            let Ok(consumed_byte_count) = u64::try_from(byte_count) else {
-                reader_state.is_good.store(false, Ordering::Release);
-                return 0;
-            };
-            match reader_cursor
-                .position_bytes
-                .checked_add(consumed_byte_count)
-            {
-                Some(position_bytes) => {
-                    reader_cursor.position_bytes = position_bytes;
-                    // The v0.7.0 wrapper compares the returned count against
-                    // the request; an exact read reports the full count.
-                    byte_count
-                }
-                None => {
-                    reader_state.is_good.store(false, Ordering::Release);
-                    0
-                }
-            }
+            reader_read_bytes(reader_state, reader_cursor, destination, byte_count)
         })
     }
     .unwrap_or(0)
+}
+
+/// Reads one caller-owned buffer at the cursor and advances the cursor by
+/// exactly what was consumed.
+///
+/// Zero reports the read as failed to MLX — the v0.7.0 wrapper compares the
+/// returned count against the request, so an exact read reports the full
+/// count. Every failure flips the shared good flag.
+fn reader_read_bytes(
+    reader_state: &FileReaderState,
+    reader_cursor: &mut FileReaderCursor,
+    destination: *mut c_char,
+    byte_count: usize,
+) -> usize {
+    // `read_exact_at` is safe to call here: sequential reads share cursor
+    // state and remain serialized by the cursor mutex.
+    if read_exact_at(
+        &reader_state.file,
+        destination,
+        byte_count,
+        reader_cursor.position_bytes,
+    )
+    .is_err()
+    {
+        reader_state.is_good.store(false, Ordering::Release);
+        return 0;
+    }
+    let Ok(consumed_byte_count) = u64::try_from(byte_count) else {
+        reader_state.is_good.store(false, Ordering::Release);
+        return 0;
+    };
+    match reader_cursor
+        .position_bytes
+        .checked_add(consumed_byte_count)
+    {
+        Some(position_bytes) => {
+            reader_cursor.position_bytes = position_bytes;
+            byte_count
+        }
+        None => {
+            reader_state.is_good.store(false, Ordering::Release);
+            0
+        }
+    }
 }
 
 unsafe extern "C" fn reader_read_at_offset(
