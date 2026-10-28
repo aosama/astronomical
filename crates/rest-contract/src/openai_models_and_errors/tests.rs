@@ -1,4 +1,4 @@
-use astronomical_rest_contract::{
+use crate::{
     OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
 };
 
@@ -117,10 +117,12 @@ fn should_reject_an_independent_maximum_that_leaves_no_position_for_the_other_si
     assert!(
         matches!(
             model_list_result,
-            Err(astronomical_rest_contract::OpenAiModelValidationError::InputTokenBudgetMustLeaveGenerationPosition {
-                max_input_tokens: 10,
-                context_window: 10,
-            })
+            Err(
+                crate::OpenAiModelValidationError::InputTokenBudgetMustLeaveGenerationPosition {
+                    max_input_tokens: 10,
+                    context_window: 10,
+                }
+            )
         ),
         "each independent maximum must leave one context position for the other side"
     );
@@ -150,10 +152,12 @@ fn should_reject_an_output_maximum_that_leaves_no_prompt_position() {
     assert!(
         matches!(
             model_list_result,
-            Err(astronomical_rest_contract::OpenAiModelValidationError::OutputTokenBudgetMustLeavePromptPosition {
-                max_output_tokens: 10,
-                context_window: 10,
-            })
+            Err(
+                crate::OpenAiModelValidationError::OutputTokenBudgetMustLeavePromptPosition {
+                    max_output_tokens: 10,
+                    context_window: 10,
+                }
+            )
         ),
         "the output maximum must leave one context position for prompt input"
     );
@@ -221,3 +225,5 @@ fn should_serialize_a_standard_openai_invalid_request_error() {
         r#"{"error":{"message":"model is not loaded by the local worker","type":"invalid_request_error","param":"model","code":"model_not_found"}}"#
     );
 }
+
+mod embedding_model_advertisement;

@@ -1,4 +1,4 @@
-use astronomical_rest_contract::{
+use crate::{
     OpenAiResponsesRequest, OpenAiResponsesRequestParts, OpenAiResponsesValidationError,
     ThinkingControlsError,
 };

@@ -49,3 +49,6 @@ struct OpenAiGeneratedImage {
     width: u32,
     height: u32,
 }
+
+#[cfg(test)]
+mod tests;
