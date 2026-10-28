@@ -2,13 +2,13 @@ use super::scripted_chat_test_doubles::CorrectionRequestingProcessor;
 use super::support::{
     ScriptedInferenceRequest, chat_command, close_worker_transport, next_event, ready_event,
 };
+use crate::{
+    EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
+    GenerationFinalization, InferenceEngine, InferenceEngineError,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId,
     WorkerCommand, WorkerEvent,
-};
-use astronomical_model_serving::{
-    EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
-    GenerationFinalization, InferenceEngine, InferenceEngineError,
 };
 use std::sync::{Arc, Mutex};
 use tokio::io::{duplex, split};
