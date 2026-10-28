@@ -11,18 +11,15 @@ use crate::{
     PersistentPromptCacheDiskStoreError, PersistentPromptCachePublicationOutcome,
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
 };
+use astronomical_runtime_integration::MlxMemorySnapshot;
 use mlx_c_rust::MlxArray;
 use std::collections::HashMap;
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
+use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+use crate::persistent_cache::capture_planning;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
-
-/// Comfort margin below the active-memory ceiling at which block publication
-/// stops wiping the MLX allocator cache. Publication materializes tens of MB;
-/// only a ceiling within this margin of the live active memory needs the
-/// reclaimed room.
-const PUBLICATION_COMFORT_HEADROOM_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// Converts a required persistence failure into the user-visible engine error.
 pub(in crate::qwen3_5_resident::inference_execution) fn required_prompt_state_persistence_failure(
@@ -53,165 +50,74 @@ impl Qwen3_5EngineState {
         successful_prefill_end: usize,
         boundary_checkpoints: Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
     ) -> Result<(), InferenceEngineError> {
-        // Boundary checkpoints are emitted by the successful forward. Recompute
-        // absolute positions here and validate them before slicing user tokens;
-        // never trust a model-specific checkpoint to be aligned implicitly.
         let persistent_prompt_cache_block_token_count =
             persistent_prompt_cache.model_contract.block_token_count();
         for boundary_checkpoint in boundary_checkpoints {
-            let Some(absolute_boundary) = successful_prefill_start
-                .checked_add(boundary_checkpoint.completed_prefill_chunk_tokens)
-            else {
-                return Err(required_prompt_state_persistence_failure(
-                    active_request,
-                    "required persistent prompt-state capture",
-                    "prompt-cache boundary position overflowed",
-                ));
-            };
-            if !absolute_boundary.is_multiple_of(persistent_prompt_cache_block_token_count)
-                || absolute_boundary > successful_prefill_end
-            {
-                return Err(required_prompt_state_persistence_failure(
-                    active_request,
-                    "required persistent prompt-state capture",
-                    "prompt-cache boundary position is invalid",
-                ));
-            }
-            let Some(block_start) =
-                absolute_boundary.checked_sub(persistent_prompt_cache_block_token_count)
-            else {
-                return Err(required_prompt_state_persistence_failure(
-                    active_request,
-                    "required persistent prompt-state capture",
-                    "prompt-cache block start underflowed",
-                ));
-            };
-            let block_end = absolute_boundary;
-            let block_tokens = &active_request.input_token_ids[block_start..block_end];
-            let block_index = block_start / persistent_prompt_cache_block_token_count;
-            let empty_block_causal_input = crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput::empty();
-            let block_causal_input = if active_request
-                .persistent_prompt_cache_block_causal_inputs
-                .is_empty()
-            {
-                &empty_block_causal_input
-            } else {
-                let Some(block_causal_input) = active_request
-                    .persistent_prompt_cache_block_causal_inputs
-                    .get(block_index)
-                else {
+            let capture_planning::CaptureBlockWindow {
+                block_start,
+                block_end,
+                block_index,
+            } = match capture_planning::capture_block_window(
+                successful_prefill_start,
+                boundary_checkpoint.completed_prefill_chunk_tokens,
+                persistent_prompt_cache_block_token_count,
+                successful_prefill_end,
+            ) {
+                Ok(capture_block_window) => capture_block_window,
+                Err(rejection) => {
                     return Err(required_prompt_state_persistence_failure(
                         active_request,
                         "required persistent prompt-state capture",
-                        "prompt-cache causal input plan does not cover captured block",
+                        rejection.description(),
                     ));
-                };
-                block_causal_input
-            };
-            // Each block binds only new causal inputs; descendants inherit them through ancestry.
-            let persistent_prompt_cache_block_key = match active_request
-                .last_restored_persistent_prompt_cache_block_key
-                .as_ref()
-            {
-                None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
-                    &persistent_prompt_cache.model_contract,
-                    block_tokens,
-                    block_causal_input,
-                ),
-                Some(parent_persistent_prompt_cache_block_key) => {
-                    parent_persistent_prompt_cache_block_key
-                        .for_child_block_with_causal_input(block_tokens, block_causal_input)
                 }
-            }
-            .map_err(|_| {
-                required_prompt_state_persistence_failure(
-                    active_request,
-                    "required persistent prompt-state capture",
-                    "prompt-cache block identity construction failed",
-                )
-            })?;
-            let kv_block_start = block_start;
-            let kv_block_end = block_end;
+            };
+            let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
+            let block_causal_input = match capture_planning::select_block_causal_input(
+                &active_request.persistent_prompt_cache_block_causal_inputs,
+                block_index,
+            ) {
+                Ok(capture_planning::BlockCausalInputSelection::Empty) => &empty_block_causal_input,
+                Ok(capture_planning::BlockCausalInputSelection::FromPlan(block_causal_input)) => {
+                    block_causal_input
+                }
+                Err(rejection) => {
+                    return Err(required_prompt_state_persistence_failure(
+                        active_request,
+                        "required persistent prompt-state capture",
+                        rejection.description(),
+                    ));
+                }
+            };
+            let persistent_prompt_cache_block_key =
+                match capture_planning::block_key_for_captured_block(
+                    active_request
+                        .last_restored_persistent_prompt_cache_block_key
+                        .as_ref(),
+                    &persistent_prompt_cache.model_contract,
+                    &active_request.input_token_ids[block_start..block_end],
+                    block_causal_input,
+                ) {
+                    Ok(persistent_prompt_cache_block_key) => persistent_prompt_cache_block_key,
+                    Err(_) => {
+                        return Err(required_prompt_state_persistence_failure(
+                            active_request,
+                            "required persistent prompt-state capture",
+                            "prompt-cache block identity construction failed",
+                        ));
+                    }
+                };
             // Extraction returns MLX arrays referencing exact decoder state. Keep
             // these same arrays alive through a possible retry; recapturing after
             // reclamation could observe mutated request state or duplicate work.
-            let kv_block_tensors = match active_request.measure_operation_with_request(
-                PerformanceOperation::PersistentPromptCacheStateExtraction,
-                |active_request| {
-                    active_request
-                        .request_decoder_state
-                        .extract_persistent_prompt_cache_kv_block_tensors(
-                            model.runtime(),
-                            kv_block_start,
-                            kv_block_end,
-                            persistent_prompt_cache_block_token_count,
-                        )
-                },
-            ) {
-                Ok(kv_block_tensors) => kv_block_tensors,
-                Err(error) => {
-                    tracing::warn!(block_start, block_end, kv_block_start, kv_block_end, %error, "prompt-cache KV extraction failed");
-                    return Err(required_prompt_state_persistence_failure(
-                        active_request,
-                        "required persistent prompt-state capture",
-                        error,
-                    ));
-                }
-            };
-            // Publication materializes the block's state tensors (tens of MB).
-            // Wiping the whole allocator cache for that forced the chunk after
-            // each published block to re-allocate every intermediate buffer
-            // fresh, which measured as a large hidden prefill cost on roomy
-            // ceilings. Only pay the wipe when the active-memory ceiling
-            // actually needs the room; an unreadable state keeps the old
-            // unconditional behavior.
-            let memory_snapshot_before_cleanup = model.runtime().memory_snapshot().ok();
-            let is_publication_workspace_needed = match (
-                memory_snapshot_before_cleanup.as_ref(),
-                model.runtime().configured_memory_limit_bytes(),
-            ) {
-                (Some(memory_snapshot), Ok(active_memory_ceiling_bytes)) => {
-                    u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX)
-                        + PUBLICATION_COMFORT_HEADROOM_BYTES
-                        > u64::try_from(active_memory_ceiling_bytes).unwrap_or(u64::MAX)
-                }
-                _ => true,
-            };
-            if is_publication_workspace_needed {
-                active_request
-                    .performance_attribution
-                    .measure_operation(
-                        PerformanceOperation::MlxAllocatorCacheCleanup,
-                        |_performance_attribution| {
-                            model
-                                .runtime()
-                                .synchronize_gpu_stream_and_clear_allocator_cache()
-                        },
-                    )
-                    .map_err(qwen3_5_runtime_error)?;
-                let memory_snapshot_after_cleanup = model.runtime().memory_snapshot().ok();
-                if let Some(persistent_prompt_cache_diagnostics) =
-                    active_request.persistent_prompt_cache_diagnostics.as_mut()
-                {
-                    let allocator_bytes_cleared = memory_snapshot_before_cleanup
-                        .as_ref()
-                        .map_or(0, |memory_snapshot| {
-                            u64::try_from(memory_snapshot.allocator_cache_memory_bytes())
-                                .unwrap_or(u64::MAX)
-                        })
-                        .saturating_sub(memory_snapshot_after_cleanup.as_ref().map_or(
-                            0,
-                            |memory_snapshot| {
-                                u64::try_from(memory_snapshot.allocator_cache_memory_bytes())
-                                    .unwrap_or(u64::MAX)
-                            },
-                        ));
-                    persistent_prompt_cache_diagnostics.allocator_bytes_cleared_for_publication =
-                        persistent_prompt_cache_diagnostics
-                            .allocator_bytes_cleared_for_publication
-                            .saturating_add(allocator_bytes_cleared);
-                }
-            }
+            let kv_block_tensors = extract_kv_block_tensors_with_measurement(
+                model,
+                active_request,
+                block_start,
+                block_end,
+                persistent_prompt_cache_block_token_count,
+            )?;
+            release_publication_workspace_if_needed(model, active_request)?;
             // The disk-store API needs mutable attribution while the request also
             // remains mutably borrowed. Move the owner out temporarily and put it
             // back on every return path before interpreting publication outcome.
@@ -227,39 +133,26 @@ impl Qwen3_5EngineState {
                 &kv_block_tensors,
                 &boundary_checkpoint.recurrent_snapshot_tensors,
             );
-            match save_outcome {
-                Ok(publication_outcome) => {
-                    if publication_outcome == PersistentPromptCachePublicationOutcome::Published
-                        && let Some(persistent_prompt_cache_diagnostics) =
-                            active_request.persistent_prompt_cache_diagnostics.as_mut()
-                    {
-                        persistent_prompt_cache_diagnostics.record_published_block();
-                    }
-                    // Both successful outcomes prove durable availability, so the
-                    // next block may safely use this key as its parent. Diagnostics
-                    // count physical publications only, not idempotent reuse.
-                    active_request.last_restored_persistent_prompt_cache_block_key =
-                        Some(persistent_prompt_cache_block_key);
-                }
-                Err(PromptBlockPublicationFailure::Reclamation(error)) => return Err(error),
-                Err(PromptBlockPublicationFailure::Publication(error)) => {
-                    tracing::warn!(block_start, block_end, %error, "prompt-cache block save failed");
-                    return Err(required_prompt_state_persistence_failure(
-                        active_request,
-                        "required persistent prompt-state capture",
-                        error,
-                    ));
-                }
-            }
+            apply_publication_outcome(
+                active_request,
+                save_outcome,
+                persistent_prompt_cache_block_key,
+                block_start,
+                block_end,
+            )?;
         }
         Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
-    /// Publishes one block, retrying once after expert reclamation when the
-    /// typed MLX active-memory limit blocked serialization. Reusing the
-    /// caller's extracted tensors is essential: this is resource reclamation,
-    /// not a second logical capture.
+    /// Publishes one block, retrying once when the typed MLX active-memory
+    /// limit blocked serialization. Reusing the caller's extracted tensors is
+    /// essential: this is resource reclamation, not a second logical capture.
+    ///
+    /// Unlike the streaming engine's variant, the resident engine performs no
+    /// pageable-expert reclamation between the attempts — its expert weights
+    /// are resident by design, so there is no eviction to attempt. The
+    /// divergence from the streaming twin is recorded on issue #1637.
     pub(super) fn publish_block_with_reclamation_retry(
         &self,
         model: &Qwen3_5ResidentModel,
@@ -311,6 +204,147 @@ impl Qwen3_5EngineState {
         };
         save_outcome.map_err(PromptBlockPublicationFailure::Publication)
     }
+}
+
+/// Extracts one block's KV tensors under the request's extraction measurement,
+/// converting a failure into the request-stopping persistence error.
+fn extract_kv_block_tensors_with_measurement(
+    model: &Qwen3_5ResidentModel,
+    active_request: &mut Qwen3_5EngineRequest,
+    kv_block_start: usize,
+    kv_block_end: usize,
+    persistent_prompt_cache_block_token_count: usize,
+) -> Result<HashMap<String, MlxArray>, InferenceEngineError> {
+    match active_request.measure_operation_with_request(
+        PerformanceOperation::PersistentPromptCacheStateExtraction,
+        |active_request| {
+            active_request
+                .request_decoder_state
+                .extract_persistent_prompt_cache_kv_block_tensors(
+                    model.runtime(),
+                    kv_block_start,
+                    kv_block_end,
+                    persistent_prompt_cache_block_token_count,
+                )
+        },
+    ) {
+        Ok(kv_block_tensors) => Ok(kv_block_tensors),
+        Err(error) => {
+            tracing::warn!(
+                kv_block_start,
+                kv_block_end,
+                block_start = kv_block_start,
+                block_end = kv_block_end,
+                %error,
+                "prompt-cache KV extraction failed"
+            );
+            Err(required_prompt_state_persistence_failure(
+                active_request,
+                "required persistent prompt-state capture",
+                error,
+            ))
+        }
+    }
+}
+
+/// Releases allocator workspace before publication when the active-memory
+/// ceiling needs the room, and records the bytes the release cleared.
+fn release_publication_workspace_if_needed(
+    model: &Qwen3_5ResidentModel,
+    active_request: &mut Qwen3_5EngineRequest,
+) -> Result<(), InferenceEngineError> {
+    let memory_snapshot_before_cleanup = model.runtime().memory_snapshot().ok();
+    let is_publication_workspace_needed = capture_planning::publication_workspace_decision(
+        memory_snapshot_before_cleanup
+            .as_ref()
+            .map(memory_snapshot_active_memory_bytes),
+        model
+            .runtime()
+            .configured_memory_limit_bytes()
+            .ok()
+            .map(configured_memory_limit_bytes_u64),
+    );
+    if !is_publication_workspace_needed {
+        return Ok(());
+    }
+    active_request
+        .performance_attribution
+        .measure_operation(
+            PerformanceOperation::MlxAllocatorCacheCleanup,
+            |_performance_attribution| {
+                model
+                    .runtime()
+                    .synchronize_gpu_stream_and_clear_allocator_cache()
+            },
+        )
+        .map_err(qwen3_5_runtime_error)?;
+    let memory_snapshot_after_cleanup = model.runtime().memory_snapshot().ok();
+    if let Some(persistent_prompt_cache_diagnostics) =
+        active_request.persistent_prompt_cache_diagnostics.as_mut()
+    {
+        let allocator_bytes_cleared = capture_planning::allocator_bytes_cleared(
+            memory_snapshot_before_cleanup
+                .as_ref()
+                .map(memory_snapshot_allocator_cache_bytes),
+            memory_snapshot_after_cleanup
+                .as_ref()
+                .map(memory_snapshot_allocator_cache_bytes),
+        );
+        persistent_prompt_cache_diagnostics.allocator_bytes_cleared_for_publication =
+            persistent_prompt_cache_diagnostics
+                .allocator_bytes_cleared_for_publication
+                .saturating_add(allocator_bytes_cleared);
+    }
+    Ok(())
+}
+
+/// Applies one publication outcome: records diagnostics, advances the parent
+/// chain on durable availability, and translates both failure owners into
+/// their request-stopping errors.
+fn apply_publication_outcome(
+    active_request: &mut Qwen3_5EngineRequest,
+    save_outcome: Result<PersistentPromptCachePublicationOutcome, PromptBlockPublicationFailure>,
+    persistent_prompt_cache_block_key: PersistentPromptCacheBlockKey,
+    block_start: usize,
+    block_end: usize,
+) -> Result<(), InferenceEngineError> {
+    match save_outcome {
+        Ok(publication_outcome) => {
+            if publication_outcome == PersistentPromptCachePublicationOutcome::Published
+                && let Some(persistent_prompt_cache_diagnostics) =
+                    active_request.persistent_prompt_cache_diagnostics.as_mut()
+            {
+                persistent_prompt_cache_diagnostics.record_published_block();
+            }
+            // Both successful outcomes prove durable availability, so the
+            // next block may safely use this key as its parent. Diagnostics
+            // count physical publications only, not idempotent reuse.
+            active_request.last_restored_persistent_prompt_cache_block_key =
+                Some(persistent_prompt_cache_block_key);
+            Ok(())
+        }
+        Err(PromptBlockPublicationFailure::Reclamation(error)) => Err(error),
+        Err(PromptBlockPublicationFailure::Publication(error)) => {
+            tracing::warn!(block_start, block_end, %error, "prompt-cache block save failed");
+            Err(required_prompt_state_persistence_failure(
+                active_request,
+                "required persistent prompt-state capture",
+                error,
+            ))
+        }
+    }
+}
+
+fn memory_snapshot_active_memory_bytes(memory_snapshot: &MlxMemorySnapshot) -> u64 {
+    u64::try_from(memory_snapshot.active_memory_bytes()).unwrap_or(u64::MAX)
+}
+
+fn memory_snapshot_allocator_cache_bytes(memory_snapshot: &MlxMemorySnapshot) -> u64 {
+    u64::try_from(memory_snapshot.allocator_cache_memory_bytes()).unwrap_or(u64::MAX)
+}
+
+fn configured_memory_limit_bytes_u64(configured_memory_limit_bytes: usize) -> u64 {
+    u64::try_from(configured_memory_limit_bytes).unwrap_or(u64::MAX)
 }
 
 /// Distinguishes the two failure owners of a publication with reclamation
