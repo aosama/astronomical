@@ -3,20 +3,19 @@
 //! Lookup is allocation-free. After a complete chain is identified, all sequence
 //! blocks and the newest required boundary are loaded, reconstructed, synchronized,
 //! and released before memory admission is repeated for only the remaining context.
-
-use std::collections::HashMap;
+//!
+//! The lookup diagnostics, block-key derivation, prefix enumeration, and the
+//! load-and-reconstruct pipeline are shared with the streaming engine in
+//! `crate::persistent_cache::restore_support`; this module keeps the resident
+//! engine's in-memory prefix adoption and its no-reclamation admission policy.
 
 use astronomical_ipc_protocol::{
-    RequestId, WorkerInMemoryPrefixAdoptionOutcome,
-    WorkerPersistentPromptCacheExpectedBlockHashPrefix, WorkerPersistentPromptCacheLookupOutcome,
-    WorkerPersistentPromptCacheMissReason, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPersistentPromptCacheStartupCleanupCategory,
-    WorkerPersistentPromptCacheStartupCleanupEvidence,
+    RequestId, WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheRequestDiagnostics,
 };
-use mlx_c_rust::MlxArray;
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;
+use crate::persistent_cache::restore_support;
 use crate::{
     InferenceEngineError, PerformanceAttribution, PerformanceOperation,
     PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
@@ -24,6 +23,7 @@ use crate::{
 
 use super::Qwen3_5EngineState;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+
 /// The cache-specific portion of a newly admitted request's starting state.
 ///
 /// `restored_token_count` drives the prefill cursor, while the u32 field is
@@ -37,6 +37,31 @@ pub(in crate::qwen3_5_resident::inference_execution) struct PersistentPromptCach
         Option<PersistentPromptCacheBlockKey>,
     pub(in crate::qwen3_5_resident::inference_execution) persistent_prompt_cache_diagnostics:
         WorkerPersistentPromptCacheRequestDiagnostics,
+}
+
+/// How the in-memory adoption check resolved: either the retained live prefix
+/// took over the restore, or the disk path continues with an adoption outcome
+/// to report. The adopted outcome is boxed to keep the enum's cold variant
+/// from inflating every resolution.
+enum InMemoryPrefixAdoptionResolution {
+    Adopted(Box<PersistentPromptCacheRestoreOutcome>),
+    NotAdopted(Option<WorkerInMemoryPrefixAdoptionOutcome>),
+}
+
+/// The inputs of a restore-hit finalization: everything the counter stamping,
+/// hit logging, and outcome construction need. The resident engine re-admits
+/// nothing — its experts stay resident — so no admission fields appear here.
+struct RestoreHitFinalization<'a> {
+    request_id: &'a RequestId,
+    prompt_token_count: usize,
+    total_context_tokens: usize,
+    restored_token_count: usize,
+    complete_block_count: usize,
+    restored_partial_tail_block_key: Option<&'a PersistentPromptCacheBlockKey>,
+    lookup_diagnostics: &'a crate::PersistentPromptCacheLookupDiagnostics,
+    target_expert_payload_bytes_reclaimed_before_restore: u64,
+    persistent_prompt_cache_diagnostics: WorkerPersistentPromptCacheRequestDiagnostics,
+    last_restored_persistent_prompt_cache_block_key: Option<PersistentPromptCacheBlockKey>,
 }
 
 impl Qwen3_5EngineState {
@@ -69,520 +94,303 @@ impl Qwen3_5EngineState {
         let restored_token_count = lookup_result.restored_token_count();
         let restored_partial_tail_block_key =
             lookup_result.restored_partial_tail_block_key().cloned();
-        let prompt_token_count = prompt_token_ids.len();
         let lookup_diagnostics = lookup_result.diagnostics();
-        let mut persistent_prompt_cache_diagnostics = persistent_prompt_cache_request_diagnostics(
-            persistent_prompt_cache.model_contract.block_token_count(),
-            lookup_diagnostics,
-            restored_token_count,
-            lookup_diagnostics.restored_partial_tail_block_token_count(),
-        );
+        let mut persistent_prompt_cache_diagnostics =
+            restore_support::persistent_prompt_cache_request_diagnostics(
+                persistent_prompt_cache.model_contract.block_token_count(),
+                lookup_diagnostics,
+                restored_token_count,
+                lookup_diagnostics.restored_partial_tail_block_token_count(),
+            );
         // In-memory prefix adoption (issue #1167): match the prompt's chain
         // against the retained live state before touching the disk store. An
         // adopted prefix can even rescue a disk miss, because the live state
         // may outlive blocks the store evicted.
-        let mut in_memory_prefix_adoption_outcome = if !self
-            .chunking
-            .experimental_in_memory_prefix_adoption_enabled
-        {
-            None
-        } else if self.retained_live_prefix.is_none() {
-            Some(WorkerInMemoryPrefixAdoptionOutcome::NoRetainedState)
-        } else {
-            let retained_live_prefix = match self.retained_live_prefix.take() {
-                Some(retained_live_prefix) => retained_live_prefix,
-                None => unreachable!("the holder was just proven present"),
-            };
-            let retained_lookup =
-                PersistentPromptCachePrefixLookup::for_retained_complete_block_keys(
-                    &persistent_prompt_cache.model_contract,
-                    prompt_token_ids,
-                    block_causal_inputs,
-                    &retained_live_prefix.complete_block_keys,
-                    |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
-                );
-            match super::in_memory_adoption_decision::decide_in_memory_prefix_adoption(
-                    retained_lookup.restored_token_count(),
-                    restored_token_count,
-                ) {
-                    super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::AdoptRetainedState =>
-                    {
-                        return self.install_adopted_live_prefix(
-                            persistent_prompt_cache,
-                            retained_live_prefix,
-                            retained_lookup,
-                            request_decoder_state,
-                            performance_attribution,
-                        );
-                    }
-                    // The retained state lost to the disk store or diverged from
-                    // this prompt's chain: drop it. Its arrays return to the
-                    // allocator cache here rather than serving a conversation
-                    // they no longer match.
-                    super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::ChainMismatch => {
-                        Some(WorkerInMemoryPrefixAdoptionOutcome::ChainMismatch)
-                    }
-                    super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::RetainedStateShorter => {
-                        Some(WorkerInMemoryPrefixAdoptionOutcome::RetainedStateShorter)
-                    }
-                }
+        let in_memory_prefix_adoption_outcome = match self.try_adopt_retained_live_prefix(
+            persistent_prompt_cache,
+            prompt_token_ids,
+            block_causal_inputs,
+            restored_token_count,
+            request_decoder_state,
+            performance_attribution,
+        )? {
+            InMemoryPrefixAdoptionResolution::Adopted(adopted_restore_outcome) => {
+                return Ok(*adopted_restore_outcome);
+            }
+            InMemoryPrefixAdoptionResolution::NotAdopted(adoption_outcome) => adoption_outcome,
         };
         persistent_prompt_cache_diagnostics.in_memory_prefix_adoption =
-            in_memory_prefix_adoption_outcome.take();
+            in_memory_prefix_adoption_outcome;
         if restored_token_count == 0 {
-            if matches!(
-                lookup_diagnostics.miss_reason(),
-                Some(
-                    crate::PersistentPromptCacheMissReason::RootSequenceStateBlockMissing
-                        | crate::PersistentPromptCacheMissReason::BoundaryStateSnapshotMissing
-                )
-            ) {
-                persistent_prompt_cache_diagnostics.startup_cleanup_evidence =
-                    persistent_prompt_cache
-                        .take_startup_cleanup_evidence()
-                        .map(worker_startup_cleanup_evidence);
-            }
-            tracing::info!(
-                request_id = request_id.value(),
-                prompt_token_count,
-                restored_token_count,
-                restored_block_count = 0usize,
-                complete_prompt_block_count = lookup_diagnostics.complete_prompt_block_count(),
-                maximum_restorable_block_count = lookup_diagnostics.maximum_restorable_block_count(),
-                matched_sequence_state_block_count = lookup_diagnostics
-                    .matched_sequence_state_block_count(),
-                first_missing_sequence_state_block_index = ?lookup_diagnostics
-                    .first_missing_sequence_state_block_index(),
-                newest_boundary_state_snapshot_block_index = ?lookup_diagnostics
-                    .newest_boundary_state_snapshot_block_index(),
-                miss_reason = ?lookup_diagnostics.miss_reason(),
-                startup_cleanup_evidence = ?persistent_prompt_cache_diagnostics
-                    .startup_cleanup_evidence,
-                "persistent prompt-cache miss: no restorable prefix found"
-            );
-            self.persistent_prompt_cache_counters.record_cache_miss();
-            // A miss is normal, not an error. Returning an explicit cold state
-            // keeps the caller's fallback path identical for short prompts,
-            // first requests, and a directory with no matching prefix.
-            return Ok(PersistentPromptCacheRestoreOutcome {
-                persistent_prompt_cache_token_count: 0,
-                restored_token_count: 0,
-                last_restored_persistent_prompt_cache_block_key: None,
+            // A miss is normal, not an error. The cold outcome keeps the
+            // caller's fallback path identical for short prompts, first
+            // requests, and a directory with no matching prefix.
+            return Ok(self.cold_restore_miss_outcome(
+                &request_id,
+                prompt_token_ids.len(),
+                persistent_prompt_cache,
+                lookup_diagnostics,
                 persistent_prompt_cache_diagnostics,
-            });
+            ));
         }
 
-        let persistent_prompt_cache_block_token_count =
-            persistent_prompt_cache.model_contract.block_token_count();
-        let complete_block_count = restored_token_count / persistent_prompt_cache_block_token_count;
-        let mut restored_persistent_prompt_cache_block_keys = Vec::with_capacity(
-            complete_block_count + usize::from(restored_partial_tail_block_key.is_some()),
-        );
-        let mut last_restored_persistent_prompt_cache_block_key = None;
-        // The concat restore holds the complete source block set beside the
-        // final-length destination, so the transient workspace is the sum of
-        // every block, not one in-flight block.
-        let mut total_sequence_block_file_size_bytes = 0_u64;
-        for block_index in 0..complete_block_count {
-            let block_start = block_index * persistent_prompt_cache_block_token_count;
-            let block_end = block_start + persistent_prompt_cache_block_token_count;
-            let persistent_prompt_cache_block_key = restored_persistent_prompt_cache_block_key(
-                prompt_token_ids,
-                block_start,
-                block_end,
-                block_index,
-                block_causal_inputs,
-                last_restored_persistent_prompt_cache_block_key.as_ref(),
-                &persistent_prompt_cache.model_contract,
-            )?;
-            let sequence_state_block_file_size_bytes = persistent_prompt_cache
-                .sequence_state_block_file_size_bytes(
-                    &persistent_prompt_cache_block_key.block_hash(),
-                )
-                .unwrap_or(0);
-            total_sequence_block_file_size_bytes = total_sequence_block_file_size_bytes
-                .saturating_add(sequence_state_block_file_size_bytes);
-            last_restored_persistent_prompt_cache_block_key =
-                Some(persistent_prompt_cache_block_key.clone());
-            restored_persistent_prompt_cache_block_keys.push(persistent_prompt_cache_block_key);
-        }
-        // The tail loads like any other sequence block but never becomes a
-        // chain parent: capture keeps chaining from the last complete block.
-        if let Some(restored_partial_tail_block_key) = &restored_partial_tail_block_key {
-            let sequence_state_block_file_size_bytes = persistent_prompt_cache
-                .sequence_state_block_file_size_bytes(&restored_partial_tail_block_key.block_hash())
-                .unwrap_or(0);
-            total_sequence_block_file_size_bytes = total_sequence_block_file_size_bytes
-                .saturating_add(sequence_state_block_file_size_bytes);
-            restored_persistent_prompt_cache_block_keys
-                .push(restored_partial_tail_block_key.clone());
-        }
-        // Recurrent state needs the newest boundary at the restored end, which
-        // is the tail's snapshot when a tail was restored and otherwise the
-        // last complete block's snapshot.
-        let recurrent_snapshot_source_block_key = restored_partial_tail_block_key
-            .as_ref()
-            .or(last_restored_persistent_prompt_cache_block_key.as_ref());
-        // The snapshot loads only after the concatenated KV materializes and
-        // releases the source blocks, so the two phases never hold both at
-        // once; the workspace is the larger of the two.
-        let recurrent_snapshot_file_size_bytes = match recurrent_snapshot_source_block_key {
-            Some(recurrent_snapshot_block_key) => persistent_prompt_cache
-                .recurrent_snapshot_file_size_bytes(&recurrent_snapshot_block_key.block_hash())
-                .unwrap_or(0),
-            None => 0,
-        };
+        let complete_block_count =
+            restored_token_count / persistent_prompt_cache.model_contract.block_token_count();
+        let prefix_enumeration = restore_support::enumerate_restored_prefix_blocks(
+            persistent_prompt_cache,
+            prompt_token_ids,
+            block_causal_inputs,
+            restored_token_count,
+            restored_partial_tail_block_key.as_ref(),
+        )?;
+        // The resident engine keeps its experts resident, so restore does not
+        // gate on a transient workspace or reclaim expert payloads; the byte
+        // totals are computed for parity reporting only.
         let _persistent_prompt_cache_restore_temporary_workspace_bytes =
             super::restore_transient_workspace::restore_transient_workspace_bytes(
-                total_sequence_block_file_size_bytes,
-                recurrent_snapshot_file_size_bytes,
+                prefix_enumeration.total_sequence_block_file_size_bytes,
+                prefix_enumeration.recurrent_snapshot_file_size_bytes,
             );
         let target_expert_payload_bytes_reclaimed_before_restore = 0_u64;
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(
-                super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
+        let last_restored_persistent_prompt_cache_block_key = self
+            .load_and_reconstruct_restored_prefix(
+                persistent_prompt_cache,
+                prefix_enumeration.restored_persistent_prompt_cache_block_keys,
+                restored_token_count,
+                complete_block_count,
+                restored_partial_tail_block_key.as_ref(),
+                request_decoder_state,
+                performance_attribution,
             )?;
-
-        // Lookup already proved every block exists. Load the complete block
-        // set, then reconstruct each full-attention layer with one
-        // concatenation, O(restored tokens); a per-block slice_update into the
-        // growing final-length destination recopied the whole prefix per block
-        // and forced a GPU synchronization per block.
-        let mut restored_persistent_prompt_cache_kv_block_tensors: Vec<HashMap<String, MlxArray>> =
-            Vec::with_capacity(restored_persistent_prompt_cache_block_keys.len());
-        for (block_index, persistent_prompt_cache_block_key) in
-            restored_persistent_prompt_cache_block_keys
-                .into_iter()
-                .enumerate()
-        {
-            let loaded_kv_block_tensors = performance_attribution
-                .measure_operation(
-                    PerformanceOperation::PersistentPromptCacheKvBlockRead,
-                    |performance_attribution| {
-                        persistent_prompt_cache.load_kv_block(
-                            model.runtime(),
-                            &persistent_prompt_cache_block_key,
-                            performance_attribution.positional_file_read_metrics(),
-                        )
-                    },
-                )
-                .map_err(|persistent_prompt_cache_error| {
-                    super::fatal_engine_error(format!(
-                        "failed to load persistent prompt-cache KV block {block_index}: \
-                         {persistent_prompt_cache_error}"
-                    ))
-                })?
-                .ok_or_else(|| {
-                    super::fatal_engine_error(
-                        "persistent prompt-cache KV block was reported as present \
-                         but load returned None",
-                    )
-                })?;
-            restored_persistent_prompt_cache_kv_block_tensors.push(loaded_kv_block_tensors);
-            // The tail occupies the slot after the complete blocks; only
-            // complete blocks extend the capture-parent chain.
-            if block_index < complete_block_count {
-                last_restored_persistent_prompt_cache_block_key =
-                    Some(persistent_prompt_cache_block_key);
-            }
-        }
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheStateReconstruction,
-                |_performance_attribution| {
-                    request_decoder_state.restore_full_attention_kv_concat(
-                        model.runtime(),
-                        &restored_persistent_prompt_cache_kv_block_tensors,
-                        restored_token_count,
-                    )
-                },
-            )
-            .map_err(|persistent_prompt_cache_error| {
-                super::fatal_engine_error(format!(
-                    "failed to restore request decoder state from {complete_block_count} \
-                     persistent prompt-cache blocks: {persistent_prompt_cache_error}"
-                ))
-            })?;
-        drop(restored_persistent_prompt_cache_kv_block_tensors);
-        // Sequence state is append-only across every matched block, but recurrent
-        // state needs only the newest boundary corresponding to the restored end.
-        let recurrent_snapshot_block_key = restored_partial_tail_block_key
-            .as_ref()
-            .or(last_restored_persistent_prompt_cache_block_key.as_ref())
-            .ok_or_else(|| {
-                super::fatal_engine_error("persistent prompt-cache restore lost snapshot key")
-            })?;
-        let mut persistent_prompt_cache_recurrent_snapshot_tensors = performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheRecurrentSnapshotRead,
-                |performance_attribution| {
-                    persistent_prompt_cache.load_recurrent_snapshot(
-                        model.runtime(),
-                        recurrent_snapshot_block_key,
-                        performance_attribution.positional_file_read_metrics(),
-                    )
-                },
-            )
-            .map_err(|persistent_prompt_cache_error| {
-                super::fatal_engine_error(format!(
-                    "failed to load persistent prompt-cache recurrent snapshot: \
-                     {persistent_prompt_cache_error}"
-                ))
-            })?
-            .ok_or_else(|| {
-                super::fatal_engine_error(
-                    "persistent prompt-cache recurrent snapshot was reported as present \
-                     but load returned None",
-                )
-            })?;
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheStateReconstruction,
-                |_performance_attribution| {
-                    request_decoder_state.absorb_persistent_prompt_cache_recurrent_snapshot(
-                        model.runtime(),
-                        &mut persistent_prompt_cache_recurrent_snapshot_tensors,
-                    )
-                },
-            )
-            .map_err(|persistent_prompt_cache_error| {
-                super::fatal_engine_error(format!(
-                    "failed to restore request decoder state from {complete_block_count} \
-                     persistent prompt-cache blocks: {persistent_prompt_cache_error}"
-                ))
-            })?;
-        drop(persistent_prompt_cache_recurrent_snapshot_tensors);
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheStateMaterializationSynchronizationWait,
-                |_performance_attribution| {
-                    request_decoder_state
-                        .materialize_restored_persistent_prompt_cache_state(model.runtime())
-                },
-            )
-            .map_err(|persistent_prompt_cache_error| {
-                super::fatal_engine_error(format!(
-                    "failed to materialize restored request decoder state from {complete_block_count} \
-                     persistent prompt-cache blocks: {persistent_prompt_cache_error}"
-                ))
-            })?;
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::MlxAllocatorCacheCleanup,
-                |_performance_attribution| model.runtime().clear_allocator_cache(),
-            )
-            .map_err(|runtime_error| {
-                super::fatal_engine_error(format!(
-                    "failed to clear allocator memory after persistent prompt-cache restore: \
-                     {runtime_error}"
-                ))
-            })?;
         // The initial admission was conservative because no prefix was restored
         // yet. Re-admit against only uncached context after temporary load memory
         // is gone, allowing the ordinary request path to use reclaimed capacity.
-        let _remaining_context_token_count = total_context_tokens
-            .checked_sub(restored_token_count)
+        self.finalize_restored_prefix_hit(RestoreHitFinalization {
+            request_id: &request_id,
+            prompt_token_count: prompt_token_ids.len(),
+            total_context_tokens,
+            restored_token_count,
+            complete_block_count,
+            restored_partial_tail_block_key: restored_partial_tail_block_key.as_ref(),
+            lookup_diagnostics,
+            target_expert_payload_bytes_reclaimed_before_restore,
+            persistent_prompt_cache_diagnostics,
+            last_restored_persistent_prompt_cache_block_key,
+        })
+    }
+
+    /// Cold-path miss outcome: attaches startup-cleanup evidence when the miss
+    /// reason is one a startup sweep cures, logs the miss, records the miss
+    /// counter, and returns the explicit cold state.
+    fn cold_restore_miss_outcome(
+        &mut self,
+        request_id: &RequestId,
+        prompt_token_count: usize,
+        persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+        lookup_diagnostics: &crate::PersistentPromptCacheLookupDiagnostics,
+        mut persistent_prompt_cache_diagnostics: WorkerPersistentPromptCacheRequestDiagnostics,
+    ) -> PersistentPromptCacheRestoreOutcome {
+        if restore_support::miss_reason_warrants_startup_cleanup_evidence(lookup_diagnostics) {
+            persistent_prompt_cache_diagnostics.startup_cleanup_evidence = persistent_prompt_cache
+                .take_startup_cleanup_evidence()
+                .map(restore_support::worker_startup_cleanup_evidence);
+        }
+        restore_support::log_persistent_prompt_cache_restore_miss(
+            request_id,
+            prompt_token_count,
+            lookup_diagnostics,
+            persistent_prompt_cache_diagnostics
+                .startup_cleanup_evidence
+                .as_ref(),
+        );
+        self.persistent_prompt_cache_counters.record_cache_miss();
+        PersistentPromptCacheRestoreOutcome {
+            persistent_prompt_cache_token_count: 0,
+            restored_token_count: 0,
+            last_restored_persistent_prompt_cache_block_key: None,
+            persistent_prompt_cache_diagnostics,
+        }
+    }
+
+    /// Hit finalization: validates the restored span against the generation
+    /// context, records the zero-reclaim total, logs the hit, stamps the
+    /// counters, and builds the outcome. The resident engine performs no
+    /// expert reclamation here — its experts stay resident by design.
+    fn finalize_restored_prefix_hit(
+        &mut self,
+        hit_finalization: RestoreHitFinalization<'_>,
+    ) -> Result<PersistentPromptCacheRestoreOutcome, InferenceEngineError> {
+        let mut hit_finalization = hit_finalization;
+        let _remaining_context_token_count = hit_finalization
+            .total_context_tokens
+            .checked_sub(hit_finalization.restored_token_count)
             .ok_or_else(|| {
                 super::fatal_engine_error(
                     "persistent prompt-cache restore exceeded the generation context",
                 )
             })?;
         let target_expert_payload_bytes_reclaimed_after_restore = 0_u64;
-        let target_expert_payload_bytes_reclaimed_during_restore =
-            target_expert_payload_bytes_reclaimed_before_restore
-                .saturating_add(target_expert_payload_bytes_reclaimed_after_restore);
-        persistent_prompt_cache_diagnostics.expert_bytes_reclaimed_for_restore =
+        let target_expert_payload_bytes_reclaimed_during_restore = hit_finalization
+            .target_expert_payload_bytes_reclaimed_before_restore
+            .saturating_add(target_expert_payload_bytes_reclaimed_after_restore);
+        hit_finalization
+            .persistent_prompt_cache_diagnostics
+            .expert_bytes_reclaimed_for_restore =
             target_expert_payload_bytes_reclaimed_during_restore;
-        tracing::info!(
-            request_id = request_id.value(),
-            prompt_token_count = prompt_token_ids.len(),
-            restored_token_count,
-            restored_block_count = complete_block_count
-                + usize::from(restored_partial_tail_block_key.is_some()),
-            restored_partial_tail_block_token_count = ?lookup_diagnostics
-                .restored_partial_tail_block_token_count(),
-            restored_partial_tail_block_hash = ?restored_partial_tail_block_key
-                .as_ref()
-                .map(PersistentPromptCacheBlockKey::block_hash),
-            complete_prompt_block_count = lookup_diagnostics.complete_prompt_block_count(),
-            maximum_restorable_block_count = lookup_diagnostics.maximum_restorable_block_count(),
-            matched_sequence_state_block_count = lookup_diagnostics
-                .matched_sequence_state_block_count(),
-            first_missing_sequence_state_block_index = ?lookup_diagnostics
-                .first_missing_sequence_state_block_index(),
-            newest_boundary_state_snapshot_block_index = ?lookup_diagnostics
-                .newest_boundary_state_snapshot_block_index(),
-            unrestored_matched_sequence_state_block_count = lookup_diagnostics
-                .matched_sequence_state_block_count()
-                .saturating_sub(complete_block_count),
+        restore_support::log_persistent_prompt_cache_restore_hit(
+            hit_finalization.request_id,
+            hit_finalization.prompt_token_count,
+            hit_finalization.restored_token_count,
+            hit_finalization.complete_block_count,
+            hit_finalization.restored_partial_tail_block_key,
+            hit_finalization.lookup_diagnostics,
             target_expert_payload_bytes_reclaimed_during_restore,
-            "persistent prompt-cache hit: restored prefix from disk"
         );
         let persistent_prompt_cache_token_count =
-            u32::try_from(restored_token_count).map_err(|_| {
+            u32::try_from(hit_finalization.restored_token_count).map_err(|_| {
                 super::fatal_engine_error(
                     "persistent prompt-cache token count exceeds the u32 range",
                 )
             })?;
         self.persistent_prompt_cache_counters
-            .record_cache_hit(restored_token_count);
-        if restored_partial_tail_block_key.is_some() {
+            .record_cache_hit(hit_finalization.restored_token_count);
+        if hit_finalization.restored_partial_tail_block_key.is_some() {
             self.persistent_prompt_cache_counters
                 .record_partial_tail_hit();
         }
         Ok(PersistentPromptCacheRestoreOutcome {
             persistent_prompt_cache_token_count,
+            restored_token_count: hit_finalization.restored_token_count,
+            last_restored_persistent_prompt_cache_block_key: hit_finalization
+                .last_restored_persistent_prompt_cache_block_key,
+            persistent_prompt_cache_diagnostics: hit_finalization
+                .persistent_prompt_cache_diagnostics,
+        })
+    }
+
+    /// Loads the enumerated prefix, reconstructs the concatenated full-attention
+    /// state, absorbs the newest recurrent snapshot, materializes everything on
+    /// the GPU, and releases the transient buffers.
+    #[allow(clippy::too_many_arguments)]
+    fn load_and_reconstruct_restored_prefix(
+        &self,
+        persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+        restored_persistent_prompt_cache_block_keys: Vec<PersistentPromptCacheBlockKey>,
+        restored_token_count: usize,
+        complete_block_count: usize,
+        restored_partial_tail_block_key: Option<&PersistentPromptCacheBlockKey>,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<PersistentPromptCacheBlockKey>, InferenceEngineError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(
+                super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error,
+            )?;
+        let restored_kv_block_load = restore_support::load_restored_kv_blocks(
+            model.runtime(),
+            persistent_prompt_cache,
+            restored_persistent_prompt_cache_block_keys,
+            complete_block_count,
+            performance_attribution,
+        )?;
+        let last_restored_persistent_prompt_cache_block_key =
+            restored_kv_block_load.last_restored_persistent_prompt_cache_block_key;
+        restore_support::restore_concatenated_full_attention_state(
+            model.runtime(),
+            request_decoder_state,
+            restored_kv_block_load.restored_persistent_prompt_cache_kv_block_tensors,
             restored_token_count,
-            last_restored_persistent_prompt_cache_block_key,
-            persistent_prompt_cache_diagnostics,
-        })
+            complete_block_count,
+            performance_attribution,
+        )?;
+        // Recurrent state needs the newest boundary at the restored end, which
+        // is the tail's snapshot when a tail was restored and otherwise the
+        // last complete block's snapshot.
+        let recurrent_snapshot_block_key = restored_partial_tail_block_key
+            .or(last_restored_persistent_prompt_cache_block_key.as_ref())
+            .ok_or_else(|| {
+                super::fatal_engine_error("persistent prompt-cache restore lost snapshot key")
+            })?;
+        restore_support::absorb_newest_recurrent_snapshot(
+            model.runtime(),
+            persistent_prompt_cache,
+            request_decoder_state,
+            recurrent_snapshot_block_key,
+            complete_block_count,
+            performance_attribution,
+        )?;
+        restore_support::materialize_and_release_restored_state(
+            model.runtime(),
+            request_decoder_state,
+            complete_block_count,
+            performance_attribution,
+        )?;
+        Ok(last_restored_persistent_prompt_cache_block_key)
     }
-}
 
-pub(super) fn persistent_prompt_cache_request_diagnostics(
-    persistent_prompt_cache_block_token_count: usize,
-    lookup_diagnostics: &crate::PersistentPromptCacheLookupDiagnostics,
-    restored_token_count: usize,
-    restored_partial_tail_block_token_count: Option<usize>,
-) -> WorkerPersistentPromptCacheRequestDiagnostics {
-    // Diagnostics are bounded scalar evidence copied over IPC. Never include full
-    // hashes, prompts, local paths, or model tensor details in the public log.
-    let restored_block_count = restored_token_count / persistent_prompt_cache_block_token_count
-        + usize::from(restored_partial_tail_block_token_count.is_some());
-    WorkerPersistentPromptCacheRequestDiagnostics {
-        lookup_outcome: if restored_token_count == 0 {
-            WorkerPersistentPromptCacheLookupOutcome::Miss
-        } else {
-            WorkerPersistentPromptCacheLookupOutcome::Hit
-        },
-        block_token_count: u64::try_from(persistent_prompt_cache_block_token_count)
-            .unwrap_or(u64::MAX),
-        complete_prompt_block_count: u64::try_from(
-            lookup_diagnostics.complete_prompt_block_count(),
-        )
-        .unwrap_or(u64::MAX),
-        maximum_restorable_block_count: u64::try_from(
-            lookup_diagnostics.maximum_restorable_block_count(),
-        )
-        .unwrap_or(u64::MAX),
-        matched_sequence_state_block_count: u64::try_from(
-            lookup_diagnostics.matched_sequence_state_block_count(),
-        )
-        .unwrap_or(u64::MAX),
-        restored_block_count: u64::try_from(restored_block_count).unwrap_or(u64::MAX),
-        partial_tail_block_token_count: restored_partial_tail_block_token_count.map(
-            |partial_tail_block_token_count| {
-                u64::try_from(partial_tail_block_token_count).unwrap_or(u64::MAX)
+    /// Matches the prompt's chain against the retained live state and, when the
+    /// retained state wins, installs it as the restore outcome directly.
+    #[allow(clippy::too_many_arguments)]
+    fn try_adopt_retained_live_prefix(
+        &mut self,
+        persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+        prompt_token_ids: &[u32],
+        block_causal_inputs: &[PersistentPromptCacheBlockCausalInput],
+        disk_restored_token_count: usize,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<InMemoryPrefixAdoptionResolution, InferenceEngineError> {
+        if !self.chunking.experimental_in_memory_prefix_adoption_enabled {
+            return Ok(InMemoryPrefixAdoptionResolution::NotAdopted(None));
+        }
+        if self.retained_live_prefix.is_none() {
+            return Ok(InMemoryPrefixAdoptionResolution::NotAdopted(Some(
+                WorkerInMemoryPrefixAdoptionOutcome::NoRetainedState,
+            )));
+        }
+        let retained_live_prefix = match self.retained_live_prefix.take() {
+            Some(retained_live_prefix) => retained_live_prefix,
+            None => unreachable!("the holder was just proven present"),
+        };
+        let retained_lookup = PersistentPromptCachePrefixLookup::for_retained_complete_block_keys(
+            &persistent_prompt_cache.model_contract,
+            prompt_token_ids,
+            block_causal_inputs,
+            &retained_live_prefix.complete_block_keys,
+            |block_hash| persistent_prompt_cache.has_recurrent_snapshot(block_hash),
+        );
+        Ok(
+            match super::in_memory_adoption_decision::decide_in_memory_prefix_adoption(
+                retained_lookup.restored_token_count(),
+                disk_restored_token_count,
+            ) {
+                super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::AdoptRetainedState => {
+                    let adopted_restore_outcome = self.install_adopted_live_prefix(
+                        persistent_prompt_cache,
+                        retained_live_prefix,
+                        retained_lookup,
+                        request_decoder_state,
+                        performance_attribution,
+                    )?;
+                    InMemoryPrefixAdoptionResolution::Adopted(Box::new(adopted_restore_outcome))
+                }
+                // The retained state lost to the disk store or diverged from
+                // this prompt's chain: drop it. Its arrays return to the
+                // allocator cache here rather than serving a conversation
+                // they no longer match.
+                super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::ChainMismatch => {
+                    InMemoryPrefixAdoptionResolution::NotAdopted(Some(
+                        WorkerInMemoryPrefixAdoptionOutcome::ChainMismatch,
+                    ))
+                }
+                super::in_memory_adoption_decision::InMemoryPrefixAdoptionDecision::RetainedStateShorter => {
+                    InMemoryPrefixAdoptionResolution::NotAdopted(Some(
+                        WorkerInMemoryPrefixAdoptionOutcome::RetainedStateShorter,
+                    ))
+                }
             },
-        ),
-        first_missing_sequence_state_block_index: lookup_diagnostics
-            .first_missing_sequence_state_block_index()
-            .map(|block_index| u64::try_from(block_index).unwrap_or(u64::MAX)),
-        miss_reason: lookup_diagnostics.miss_reason().map(worker_miss_reason),
-        expected_block_hash_prefix: lookup_diagnostics
-            .first_missing_sequence_state_block_hash()
-            .map(WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash),
-        startup_cleanup_evidence: None,
-        published_block_count: 0,
-        allocator_bytes_cleared_for_publication: 0,
-        expert_bytes_reclaimed_for_publication: 0,
-        expert_bytes_reclaimed_for_restore: 0,
-        in_memory_prefix_adoption: None,
-    }
-}
-
-fn worker_startup_cleanup_evidence(
-    startup_cleanup_evidence: crate::PersistentPromptCacheStartupCleanupEvidence,
-) -> WorkerPersistentPromptCacheStartupCleanupEvidence {
-    WorkerPersistentPromptCacheStartupCleanupEvidence {
-        interrupted_transaction_recovery: worker_startup_cleanup_category(
-            startup_cleanup_evidence.interrupted_transaction_recovery,
-        ),
-        obsolete_format: worker_startup_cleanup_category(startup_cleanup_evidence.obsolete_format),
-        corrupt_current_format: worker_startup_cleanup_category(
-            startup_cleanup_evidence.corrupt_current_format,
-        ),
-        quota_eviction: worker_startup_cleanup_category(startup_cleanup_evidence.quota_eviction),
-    }
-}
-
-fn worker_startup_cleanup_category(
-    startup_cleanup_category: crate::PersistentPromptCacheStartupCleanupCategory,
-) -> WorkerPersistentPromptCacheStartupCleanupCategory {
-    WorkerPersistentPromptCacheStartupCleanupCategory {
-        artifact_count: startup_cleanup_category.artifact_count,
-        block_count: startup_cleanup_category.block_count,
-        byte_count: startup_cleanup_category.byte_count,
-    }
-}
-
-fn worker_miss_reason(
-    miss_reason: crate::PersistentPromptCacheMissReason,
-) -> WorkerPersistentPromptCacheMissReason {
-    match miss_reason {
-        crate::PersistentPromptCacheMissReason::PromptTooShortForPersistentPromptCache => {
-            WorkerPersistentPromptCacheMissReason::PromptTooShortForPersistentPromptCache
-        }
-        crate::PersistentPromptCacheMissReason::RootSequenceStateBlockMissing => {
-            WorkerPersistentPromptCacheMissReason::RootSequenceStateBlockMissing
-        }
-        crate::PersistentPromptCacheMissReason::BoundaryStateSnapshotMissing => {
-            WorkerPersistentPromptCacheMissReason::BoundaryStateSnapshotMissing
-        }
-    }
-}
-
-fn restored_persistent_prompt_cache_block_key(
-    prompt_token_ids: &[u32],
-    block_start: usize,
-    block_end: usize,
-    block_index: usize,
-    block_causal_inputs: &[PersistentPromptCacheBlockCausalInput],
-    last_restored_persistent_prompt_cache_block_key: Option<&PersistentPromptCacheBlockKey>,
-    persistent_prompt_cache_model_contract: &crate::PersistentPromptCacheModelContract,
-) -> Result<PersistentPromptCacheBlockKey, InferenceEngineError> {
-    let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
-    let block_causal_input = if block_causal_inputs.is_empty() {
-        &empty_block_causal_input
-    } else {
-        block_causal_inputs.get(block_index).ok_or_else(|| {
-            super::fatal_engine_error(
-                "persistent prompt-cache causal input plan does not cover restored block",
-            )
-        })?
-    };
-    if block_index == 0 {
-        // Root blocks are explicitly bound to the pinned model identity. Child
-        // keys inherit that binding through their parent hash chain.
-        return PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
-            persistent_prompt_cache_model_contract,
-            &prompt_token_ids[block_start..block_end],
-            block_causal_input,
         )
-        .map_err(|_| {
-            super::fatal_engine_error(
-                "persistent prompt-cache block identity construction failed during restore",
-            )
-        });
     }
-    last_restored_persistent_prompt_cache_block_key
-        // A non-root restore requires every earlier prefix block. Allowing a
-        // child to continue without its parent would make its file identity
-        // ambiguous and could join unrelated prompt histories.
-        .ok_or_else(|| {
-            super::fatal_engine_error(
-                "persistent prompt-cache block identity chain was lost during restore",
-            )
-        })?
-        .for_child_block_with_causal_input(
-            &prompt_token_ids[block_start..block_end],
-            block_causal_input,
-        )
-        .map_err(|_| {
-            super::fatal_engine_error(
-                "persistent prompt-cache block identity construction failed during restore",
-            )
-        })
 }
