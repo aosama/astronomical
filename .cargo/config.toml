@@ -75,7 +75,11 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # xtask sources. `cargo xtask audit-test-declarations` walks every crate's
 # tests/ tree and fails when a test file is unreachable from any target
 # through `mod` declarations (the class of silent-orphan bug that once hid
-# seven tests in an undeclared file). `cargo xtask test-run` builds exact Cargo executables and
+# seven tests in an undeclared file). `cargo xtask function-length` reports
+# every function over the 100-code-line budget from clippy.toml across the
+# default, MLX, and acceptance feature worlds — a report lane while the
+# budget proves out, not a gate yet (see clippy.toml for its counting
+# semantics and the warnings-policy trap it works around). `cargo xtask test-run` builds exact Cargo executables and
 # runs each selected test in its own process, with a 120-second budget,
 # five-second progress, and retained manifests/logs under target/test-runs;
 # serving measurements must use this runner.
