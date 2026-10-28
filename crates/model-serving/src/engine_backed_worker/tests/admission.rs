@@ -1,15 +1,15 @@
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
-    ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice,
-    MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
-};
-use astronomical_model_serving::{
+use crate::{
     EngineBackedWorker, EngineGenerationStart, EngineLoadResult, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError, ModelGeneratedTokenTranslation,
     ModelGenerationOutputError, ModelGenerationProcessor, PreparedInferenceRequest,
     PreparedModelGeneration,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput,
+    ChatGenerationSettings, ChatMessage, ChatModelCapabilities, ChatToolChoice,
+    MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
 };
 use tokio::io::{duplex, split};
 use tokio::time::timeout;

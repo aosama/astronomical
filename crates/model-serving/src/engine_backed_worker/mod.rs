@@ -59,3 +59,6 @@ mod retry;
 mod support;
 
 pub use support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
+
+#[cfg(test)]
+mod tests;

@@ -2,12 +2,12 @@ use super::scripted_model_factory_test_doubles::{
     FirstCreationFailsScriptedModelFactory, LazyScriptedModelFactory,
 };
 use super::support::{close_worker_transport, next_event, worker_model_configuration};
+use crate::{
+    EngineBackedWorker, MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
+};
 use astronomical_ipc_protocol::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, ProtocolReader, ProtocolWriter,
     WorkerCommand, WorkerEvent, WorkerExpertResidencySnapshot, WorkerRuntimeFeatureConfiguration,
-};
-use astronomical_model_serving::{
-    EngineBackedWorker, MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

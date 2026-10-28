@@ -4,6 +4,12 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::{
+    EngineBackedWorker, FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION,
+    ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
+    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory,
+    ModelFactoryRuntime, WorkerRuntimeError,
+};
 use astronomical_ipc_protocol::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationFailureReason, ImageGenerationPhase, ImageGenerationResultMetadata,
@@ -11,18 +17,12 @@ use astronomical_ipc_protocol::{
     ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerModelConfiguration,
 };
-use astronomical_model_serving::{
-    EngineBackedWorker, FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION,
-    ImageGenerationEngine, ImageGenerationEngineLoadResult, ImageGenerationEngineStep,
-    MlxActiveMemoryBreakdown, MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelFactory,
-    ModelFactoryRuntime, WorkerRuntimeError,
-};
 use image::ImageEncoder;
 use tokio::io::{AsyncWrite, duplex, split};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-use crate::integration::worker::chat::scripted_chat_test_doubles::{
+use crate::engine_backed_worker::tests::chat::scripted_chat_test_doubles::{
     ScriptedChatEngine, ScriptedChatProcessor,
 };
 
