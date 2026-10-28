@@ -1,0 +1,25 @@
+# Clippy configuration, searched from the workspace root and applied to every
+# member crate.
+#
+# Function-length budget: 100 clippy code-lines. Clippy counts only lines that
+# carry code — comment lines and blank lines are excluded (with stateful
+# /* */ handling) — so documentation-heavy functions read shorter here than
+# their raw brace-to-brace span suggests. Keep any other measurement in line
+# with that definition or the numbers will disagree.
+#
+# The lint (clippy::too_many_lines, pedantic group, allow-by-default) is
+# deliberately NOT armed here yet. Prove-out phase first: run
+# `cargo xtask function-length`, which reports every over-budget function in
+# the default, MLX, and acceptance feature worlds without failing the build.
+# Measured October 2026: 201 sites exceed the budget (119 production-side, 82
+# test-side). Institution path once that report has stayed stable across real
+# work: an #[expect] sweep over the existing sites, then arm
+# too_many_lines = "deny" under [workspace.lints.clippy], then the pre-commit
+# hook, then the CI lane.
+#
+# Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
+# repository denies warnings via [build] warnings, which turns this lint into
+# an error and aborts dependent crates, truncating the report. Never set
+# CARGO_BUILD_WARNINGS=allow for clippy accounting: it suppresses diagnostics
+# entirely instead of merely downgrading them.
+too-many-lines-threshold = 100
