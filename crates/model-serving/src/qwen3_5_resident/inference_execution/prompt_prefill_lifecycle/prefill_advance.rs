@@ -25,8 +25,11 @@ use crate::{
     ResidentForwardAdmissionRejection, StreamingEngineRequirement,
 };
 use astronomical_ipc_protocol::RequestId;
-use astronomical_runtime_integration::ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES;
+use astronomical_runtime_integration::{
+    ALLOCATOR_CACHE_RECLAIM_THRESHOLD_BYTES, MlxMemorySnapshot,
+};
 
+use super::super::engine_request::Qwen3_5EngineRequest;
 use super::super::generation_session_lifecycle::generation_error_constructors::completed_prefill_chunk_tokens_exceed_u32_range_error;
 use super::super::generation_session_lifecycle::generation_error_constructors::engine_lost_loaded_model_error;
 use super::super::generation_session_lifecycle::generation_error_constructors::mlx_active_memory_bytes_exceed_u64_range_error;
@@ -35,6 +38,7 @@ use super::super::generation_session_lifecycle::generation_error_constructors::m
 use super::completed_forward_memory;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
+use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::model::memory_admission;
 impl Qwen3_5EngineState {
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_prompt_prefill_if_pending(
@@ -389,48 +393,15 @@ impl Qwen3_5EngineState {
             prefill_chunk_elapsed_millis,
             "completed synchronous Qwen3.5 prompt-processing chunk"
         );
-        let mlx_memory_telemetry = mlx_memory_snapshot
-            .map(|mlx_memory_snapshot| {
-                let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
-                    .map_err(mlx_active_memory_bytes_exceed_u64_range_error)?;
-                let active_memory_breakdown = model.active_memory_breakdown(
-                    &active_request.request_decoder_state,
-                    0,
-                    active_memory_bytes,
-                    0,
-                );
-                Ok::<crate::memory::telemetry::MlxMemoryTelemetry, InferenceEngineError>(
-                    crate::memory::telemetry::MlxMemoryTelemetry::new(
-                        active_memory_bytes,
-                        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes())
-                            .map_err(mlx_allocator_cache_memory_bytes_exceed_u64_range_error)?,
-                        u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
-                            .map_err(mlx_peak_memory_bytes_exceed_u64_range_error)?,
-                        active_memory_breakdown,
-                    )
-                    // The claim derives from the breakdown of this exact snapshot
-                    // so the progress pair cannot straddle a promotion or demote
-                    // (issue #337).
-                    .with_expert_residency_telemetry(
-                        model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
-                    )
-                    // Issue #510: the prefill progress sample carries the same
-                    // utilization split, planned against the full prompt so the
-                    // context reserve reflects the request the user submitted.
-                    // The activation reserve is operation-scoped (issue #644):
-                    // it plans this chunk's own workspace, not the prompt.
-                    .with_memory_ceiling_utilization(
-                        model.memory_ceiling_utilization_for_breakdown(
-                            crate::MemoryPhase::Prefill,
-                            u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX),
-                            u64::try_from(prefill_token_count).unwrap_or(u64::MAX),
-                            active_memory_bytes,
-                            active_memory_breakdown,
-                        ),
-                    ),
-                )
-            })
-            .transpose()?;
+        let mlx_memory_telemetry = match mlx_memory_snapshot {
+            Some(mlx_memory_snapshot) => Some(prefill_mlx_memory_telemetry_from_snapshot(
+                model,
+                active_request,
+                prefill_token_count,
+                mlx_memory_snapshot,
+            )?),
+            None => None,
+        };
         let expert_residency = mlx_memory_telemetry
             .as_ref()
             .and_then(|telemetry| telemetry.expert_residency_telemetry());
@@ -449,4 +420,60 @@ impl Qwen3_5EngineState {
                 .clone(),
         }))
     }
+}
+
+/// Builds the prefill-phase MLX memory telemetry from one post-chunk memory
+/// snapshot.
+///
+/// Extracted from the prefill advance step so each snapshot conversion reads
+/// as a named value instead of a nested `try_from`/`map_err` chain inside an
+/// `Option::map` closure; the decode-phase sibling lives in
+/// `decode_lifecycle/generated_token_emission`. The resident generation path
+/// reports its range failures through the shared named error constructors.
+fn prefill_mlx_memory_telemetry_from_snapshot(
+    model: &Qwen3_5ResidentModel,
+    active_request: &Qwen3_5EngineRequest,
+    prefill_token_count: usize,
+    mlx_memory_snapshot: MlxMemorySnapshot,
+) -> Result<crate::memory::telemetry::MlxMemoryTelemetry, InferenceEngineError> {
+    let active_memory_bytes = u64::try_from(mlx_memory_snapshot.active_memory_bytes())
+        .map_err(mlx_active_memory_bytes_exceed_u64_range_error)?;
+    let active_memory_breakdown = model.active_memory_breakdown(
+        &active_request.request_decoder_state,
+        0,
+        active_memory_bytes,
+        0,
+    );
+    let allocator_cache_memory_bytes =
+        u64::try_from(mlx_memory_snapshot.allocator_cache_memory_bytes())
+            .map_err(mlx_allocator_cache_memory_bytes_exceed_u64_range_error)?;
+    let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
+        .map_err(mlx_peak_memory_bytes_exceed_u64_range_error)?;
+    let prompt_token_count =
+        u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX);
+    let chunk_token_count = u64::try_from(prefill_token_count).unwrap_or(u64::MAX);
+    Ok(crate::memory::telemetry::MlxMemoryTelemetry::new(
+        active_memory_bytes,
+        allocator_cache_memory_bytes,
+        peak_memory_bytes,
+        active_memory_breakdown,
+    )
+    // The claim derives from the breakdown of this exact snapshot
+    // so the progress pair cannot straddle a promotion or demote
+    // (issue #337).
+    .with_expert_residency_telemetry(
+        model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
+    )
+    // Issue #510: the prefill progress sample carries the same
+    // utilization split, planned against the full prompt so the
+    // context reserve reflects the request the user submitted.
+    // The activation reserve is operation-scoped (issue #644):
+    // it plans this chunk's own workspace, not the prompt.
+    .with_memory_ceiling_utilization(model.memory_ceiling_utilization_for_breakdown(
+        crate::MemoryPhase::Prefill,
+        prompt_token_count,
+        chunk_token_count,
+        active_memory_bytes,
+        active_memory_breakdown,
+    )))
 }

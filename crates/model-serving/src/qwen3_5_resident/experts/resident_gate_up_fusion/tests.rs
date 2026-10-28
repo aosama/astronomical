@@ -206,52 +206,25 @@ fn synthetic_gate_up_fusion_layer_plan(
     weight_bytes_per_expert: usize,
 ) -> QuantizedExpertLayerPlan {
     let expert_capacity = gate_weight_shape[0];
-    // Fusion planning uses only validated tensor metadata, so fictional source
-    // intervals keep this fixture independent of files and MLX.
     let mut tensor_sources = Vec::new();
-    let mut append_projection =
-        |projection_name: &str, weight_shape: Vec<usize>, quantization_bits: i32| {
-            tensor_sources.push(QuantizedTensorSource {
-                tensor_name: format!("language_model.model.layers.0.mlp.{projection_name}.weight"),
-                projection_name: projection_name.to_owned(),
-                parameter_name: "weight".to_owned(),
-                quantization_bits,
-                quantization_group_size: 64,
-                source_file: PathBuf::from("fictional-model-shard.safetensors"),
-                source_file_size_bytes: u64::MAX,
-                dtype: match quantization_mode {
-                    QuantizationMode::NativeBfloat16 => SafetensorsDtype::BFloat16,
-                    QuantizationMode::Affine => SafetensorsDtype::Uint32,
-                    QuantizationMode::Jangtq2Codebook => SafetensorsDtype::Uint32,
-                },
-                full_shape: weight_shape,
-                tensor_payload_offset: 0,
-                bytes_per_expert: weight_bytes_per_expert,
-                expert_capacity,
-            });
-            if quantization_mode == QuantizationMode::Affine {
-                for parameter_name in ["scales", "biases"] {
-                    tensor_sources.push(QuantizedTensorSource {
-                        tensor_name: format!(
-                            "language_model.model.layers.0.mlp.{projection_name}.{parameter_name}"
-                        ),
-                        projection_name: projection_name.to_owned(),
-                        parameter_name: parameter_name.to_owned(),
-                        quantization_bits,
-                        quantization_group_size: 64,
-                        source_file: PathBuf::from("fictional-model-shard.safetensors"),
-                        source_file_size_bytes: u64::MAX,
-                        dtype: SafetensorsDtype::Float16,
-                        full_shape: vec![expert_capacity, 16, 1],
-                        tensor_payload_offset: 0,
-                        bytes_per_expert: weight_bytes_per_expert / 2,
-                        expert_capacity,
-                    });
-                }
-            }
-        };
-    append_projection("gate_proj", gate_weight_shape, gate_quantization_bits);
-    append_projection("up_proj", up_weight_shape, up_quantization_bits);
+    append_projection_tensor_sources(
+        &mut tensor_sources,
+        quantization_mode,
+        weight_bytes_per_expert,
+        expert_capacity,
+        "gate_proj",
+        gate_weight_shape,
+        gate_quantization_bits,
+    );
+    append_projection_tensor_sources(
+        &mut tensor_sources,
+        quantization_mode,
+        weight_bytes_per_expert,
+        expert_capacity,
+        "up_proj",
+        up_weight_shape,
+        up_quantization_bits,
+    );
 
     QuantizedExpertLayerPlan {
         layer_prefix: "language_model.model.layers.0.mlp".to_owned(),
@@ -261,5 +234,61 @@ fn synthetic_gate_up_fusion_layer_plan(
         quantization_bits: gate_quantization_bits,
         quantization_group_size: 64,
         quantization_mode,
+    }
+}
+
+/// Appends one projection's weight tensor source — plus the affine mode's
+/// scale and bias companions — to a synthetic layer plan's tensor sources.
+///
+/// A named fixture builder instead of a local closure so the construction
+/// reads as a plain call. Fusion planning uses only validated tensor
+/// metadata, so fictional source intervals keep this fixture independent of
+/// files and MLX.
+fn append_projection_tensor_sources(
+    tensor_sources: &mut Vec<QuantizedTensorSource>,
+    quantization_mode: QuantizationMode,
+    weight_bytes_per_expert: usize,
+    expert_capacity: usize,
+    projection_name: &str,
+    weight_shape: Vec<usize>,
+    quantization_bits: i32,
+) {
+    tensor_sources.push(QuantizedTensorSource {
+        tensor_name: format!("language_model.model.layers.0.mlp.{projection_name}.weight"),
+        projection_name: projection_name.to_owned(),
+        parameter_name: "weight".to_owned(),
+        quantization_bits,
+        quantization_group_size: 64,
+        source_file: PathBuf::from("fictional-model-shard.safetensors"),
+        source_file_size_bytes: u64::MAX,
+        dtype: match quantization_mode {
+            QuantizationMode::NativeBfloat16 => SafetensorsDtype::BFloat16,
+            QuantizationMode::Affine => SafetensorsDtype::Uint32,
+            QuantizationMode::Jangtq2Codebook => SafetensorsDtype::Uint32,
+        },
+        full_shape: weight_shape,
+        tensor_payload_offset: 0,
+        bytes_per_expert: weight_bytes_per_expert,
+        expert_capacity,
+    });
+    if quantization_mode == QuantizationMode::Affine {
+        for parameter_name in ["scales", "biases"] {
+            tensor_sources.push(QuantizedTensorSource {
+                tensor_name: format!(
+                    "language_model.model.layers.0.mlp.{projection_name}.{parameter_name}"
+                ),
+                projection_name: projection_name.to_owned(),
+                parameter_name: parameter_name.to_owned(),
+                quantization_bits,
+                quantization_group_size: 64,
+                source_file: PathBuf::from("fictional-model-shard.safetensors"),
+                source_file_size_bytes: u64::MAX,
+                dtype: SafetensorsDtype::Float16,
+                full_shape: vec![expert_capacity, 16, 1],
+                tensor_payload_offset: 0,
+                bytes_per_expert: weight_bytes_per_expert / 2,
+                expert_capacity,
+            });
+        }
     }
 }
