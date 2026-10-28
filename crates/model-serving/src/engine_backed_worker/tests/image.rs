@@ -3,12 +3,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::{
+    EngineBackedWorker, EnginePlacement, FLUX2_KLEIN_OFFICIAL_MODEL_ID, WorkerRuntimeError,
+};
 use astronomical_ipc_protocol::{
     ImageGenerationFailureReason, MlxMemorySnapshotSource, RequestId, WorkerCommand, WorkerEvent,
     WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
-};
-use astronomical_model_serving::{
-    EngineBackedWorker, EnginePlacement, FLUX2_KLEIN_OFFICIAL_MODEL_ID, WorkerRuntimeError,
 };
 use tokio::time::timeout;
 

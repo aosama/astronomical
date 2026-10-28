@@ -2,10 +2,10 @@
 
 use super::scripted_model_factory_test_doubles::LazyScriptedModelFactory;
 use super::support::{close_worker_transport, next_event};
+use crate::EngineBackedWorker;
 use astronomical_ipc_protocol::{
     MAX_IPC_FRAME_BYTES, ProtocolReader, ProtocolWriter, WorkerCommand, WorkerEvent,
 };
-use astronomical_model_serving::EngineBackedWorker;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 use tokio::io::{duplex, split};

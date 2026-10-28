@@ -1,10 +1,10 @@
-use astronomical_model_serving::{
+use crate::{
     PersistentPromptCacheBlockCausalInput, PersistentPromptCacheBlockKey,
     PersistentPromptCacheMissReason, PersistentPromptCacheModelContract,
     PersistentPromptCachePrefixLookup,
 };
 
-use super::frozen_ornith_1_0_fixtures::persistent_prompt_cache_model_contract;
+use super::lookup_fixtures::persistent_prompt_cache_model_contract;
 
 #[test]
 fn should_report_no_cache_hit_when_no_complete_blocks_exist() {
