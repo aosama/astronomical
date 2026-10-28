@@ -1,4 +1,4 @@
-use astronomical_rest_contract::{
+use crate::{
     MAX_OPENAI_IMAGE_DECODED_BYTES, MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
     MAX_OPENAI_INLINE_MEDIA_BYTES, MAX_OPENAI_REQUEST_BODY_BYTES, OpenAiChatCompletionRequest,
     OpenAiChatCompletionValidationError, OpenAiChatMessageParts, OpenAiResponsesRequest,
@@ -345,8 +345,7 @@ fn should_accept_a_screenshot_heavy_chat_request_that_fits_every_mainstream_ceil
     .to_string();
     let wire_body_bytes = content_parts.len();
     let decoded_bytes_per_image = screenshot_decoded_bytes;
-    let wire_bytes_per_image =
-        astronomical_rest_contract::base64_wire_byte_count(decoded_bytes_per_image);
+    let wire_bytes_per_image = crate::base64_wire_byte_count(decoded_bytes_per_image);
     let image_part_count = 3;
 
     assert!(wire_body_bytes <= ANTHROPIC_REQUEST_BODY_BYTES);

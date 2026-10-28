@@ -1,5 +1,5 @@
 use super::*;
-use astronomical_rest_contract::ThinkingControlsError;
+use crate::ThinkingControlsError;
 
 #[test]
 fn should_accept_opencode_large_output_budget_without_a_public_coding_cap() {

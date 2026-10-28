@@ -1,4 +1,4 @@
-use astronomical_rest_contract::{OpenAiResponseInputParts, OpenAiResponsesRequest};
+use crate::{OpenAiResponseInputParts, OpenAiResponsesRequest};
 
 #[test]
 fn should_parse_a_non_streaming_response_request_with_string_input() {
@@ -107,7 +107,7 @@ fn should_decode_a_responses_data_uri_image_in_user_content_order() {
     let OpenAiResponseInputParts::Items(response_input_items) = request_parts.input else {
         panic!("expected response input items");
     };
-    let astronomical_rest_contract::OpenAiResponseInputItemParts::UserMessage { content, images } =
+    let crate::OpenAiResponseInputItemParts::UserMessage { content, images } =
         &response_input_items[0]
     else {
         panic!("expected a user message");
