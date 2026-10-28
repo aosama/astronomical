@@ -436,3 +436,6 @@ fn validate_sampling_parameter(
         },
     )
 }
+
+#[cfg(test)]
+mod tests;

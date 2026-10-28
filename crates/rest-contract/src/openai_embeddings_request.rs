@@ -160,3 +160,6 @@ impl OpenAiEmbeddingsRequest {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;

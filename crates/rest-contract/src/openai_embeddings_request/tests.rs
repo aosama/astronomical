@@ -1,7 +1,9 @@
-use astronomical_rest_contract::{
-    OpenAiEmbedding, OpenAiEmbeddingEncodingFormat, OpenAiEmbeddingModelParts,
-    OpenAiEmbeddingVector, OpenAiEmbeddingsRequest, OpenAiEmbeddingsResponse, OpenAiModel,
-};
+//! Wire-contract tests for the embeddings request DTO.
+//!
+//! Moved from the integration lane (issue #1610): every test exercises
+//! exactly this module's parse-and-validate surface with literal JSON.
+
+use crate::{OpenAiEmbeddingEncodingFormat, OpenAiEmbeddingsRequest};
 
 #[test]
 fn should_validate_a_single_string_input_into_one_part() {
@@ -140,61 +142,4 @@ fn should_reject_unknown_fields_like_max_length_for_now() {
         .expect_err("unknown fields must fail closed on the embeddings boundary");
 
     assert!(validation_error.to_string().contains("max_length"));
-}
-
-#[test]
-fn should_serialize_an_openai_embeddings_list_with_float_rows() {
-    let response = OpenAiEmbeddingsResponse::new(
-        vec![
-            OpenAiEmbedding::new(0, OpenAiEmbeddingVector::Float(vec![1.0, 0.0])),
-            OpenAiEmbedding::new(1, OpenAiEmbeddingVector::Float(vec![0.0, 1.0])),
-        ],
-        "mlx-community/nomicai-modernbert-embed-base-8bit".to_owned(),
-        astronomical_rest_contract::OpenAiTokenUsage::new(14, 0)
-            .expect("token accounting should be valid"),
-    );
-
-    let serialized =
-        serde_json::to_string(&response).expect("the embeddings response should serialize");
-    assert!(
-        serialized.contains(r#""object":"list""#),
-        "embedding list must declare object list: {serialized}"
-    );
-    assert!(
-        serialized.contains(r#""object":"embedding""#),
-        "each row must declare object embedding: {serialized}"
-    );
-    assert!(serialized.contains(r#""index":1"#));
-    assert!(serialized.contains(r#""total_tokens":14"#));
-}
-
-#[test]
-fn should_advertise_an_embedding_model_with_only_the_embeddings_endpoint() {
-    let model = OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
-        model_id: "nomicai-modernbert-embed-base-8bit".to_owned(),
-        created: 1_784_231_803,
-        owned_by: "astronomical".to_owned(),
-        vector_width: 768,
-        max_input_tokens: 8_192,
-    })
-    .expect("a valid embedding model should serialize");
-
-    let serialized = serde_json::to_string(&model).expect("the embedding model should serialize");
-    assert!(serialized.contains(r#""supported_endpoints":["/v1/embeddings"]"#));
-    assert!(serialized.contains(r#""output_modalities":["embedding"]"#));
-    assert!(serialized.contains(r#""supports_streaming":false"#));
-}
-
-#[test]
-fn should_reject_a_zero_vector_width_embedding_model() {
-    let validation_error = OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
-        model_id: "nomicai-modernbert-embed-base-8bit".to_owned(),
-        created: 1_784_231_803,
-        owned_by: "astronomical".to_owned(),
-        vector_width: 0,
-        max_input_tokens: 8_192,
-    })
-    .expect_err("a zero vector width must fail advertisement");
-
-    assert!(validation_error.to_string().contains("vector width"));
 }

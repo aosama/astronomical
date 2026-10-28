@@ -159,3 +159,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod wire_budget_tests;

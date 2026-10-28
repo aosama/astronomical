@@ -147,3 +147,6 @@ fn validate_dimension(
         maximum_pixels: MAX_OPENAI_IMAGE_DIMENSION_PIXELS,
     })
 }
+
+#[cfg(test)]
+mod tests;

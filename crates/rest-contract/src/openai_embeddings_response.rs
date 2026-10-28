@@ -61,3 +61,6 @@ impl OpenAiEmbeddingsResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,4 +1,4 @@
-use astronomical_rest_contract::{OpenAiResponse, OpenAiResponseOutputItem, OpenAiResponseUsage};
+use crate::{OpenAiResponse, OpenAiResponseOutputItem, OpenAiResponseUsage};
 
 #[test]
 fn should_serialize_raw_model_reasoning_as_a_plaintext_summary_without_encrypted_content() {
