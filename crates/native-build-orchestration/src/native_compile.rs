@@ -1,14 +1,15 @@
 //! Pinned native runtime compilation shared by the Cargo build script and the
 //! standalone native-build tool.
 //!
-//! # The sharing mechanism
+//! # One module, two entry points
 //!
-//! Both entry points include this module through `#[path]`, so it must stay
-//! free of `cargo:` directives and reach its sibling build modules only
-//! through `crate::` paths that every includer declares. Like the other build
-//! orchestration sources, this file is excluded from the native identity
-//! fingerprint: semantic CMake changes require bumping
-//! `native-build-store-schema-version` instead — progress-logging or
+//! The build script consumes this crate through `[build-dependencies]` and
+//! the standalone tool through a normal dependency, so this module must stay
+//! free of `cargo:` directives (it must remain callable outside a build
+//! script) and reaches its sibling build modules through ordinary `crate::`
+//! paths. Like the other build orchestration sources, this file is excluded
+//! from the native identity fingerprint: semantic CMake changes require
+//! bumping `native-build-store-schema-version` instead — progress-logging or
 //! parallelism edits here must not invalidate anyone's native store entry.
 //!
 //! # The toolchain is fully controlled, never ambient

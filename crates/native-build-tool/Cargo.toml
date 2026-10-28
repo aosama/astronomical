@@ -12,18 +12,7 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-# The included build modules own these dependencies: the native build store
-# locks entries with fs4 and hashes manifests with sha2; the identity policy
-# comes from the shared native-identity library (issue #1250).
-fs4.workspace = true
-sha2.workspace = true
-astronomical-native-identity = { path = "../native-identity" }
-
-# cargo-machete reports all three dependencies above as unused because its
-# text search only scans this package's directory, while the code that uses
-# them is compiled in through `#[path]` module includes whose files live
-# under crates/runtime-integration/build-orchestration/ (see src/lib.rs and
-# the nested include in native_store.rs). Keep this ignore list in sync with
-# that include chain.
-[package.metadata.cargo-machete]
-ignored = ["astronomical-native-identity", "fs4", "sha2"]
+# The orchestration this tool runs: CMake invocation, store, progress (the
+# modules' single compilation home; issue #1628). Its tree is exactly fs4,
+# sha2, and native-identity, so the tool stays cheap to build.
+astronomical-native-build-orchestration = { path = "../native-build-orchestration" }

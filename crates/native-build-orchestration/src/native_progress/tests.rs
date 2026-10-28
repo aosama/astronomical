@@ -6,10 +6,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
-#[path = "../../build-orchestration/native_progress.rs"]
-mod native_progress;
-
-use native_progress::NativeBuildProgress;
+use super::NativeBuildProgress;
 
 fn write_progress_file_path(progress_directory: &tempfile::TempDir) -> PathBuf {
     progress_directory.path().join("native-build-progress")

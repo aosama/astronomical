@@ -26,18 +26,21 @@ use probes::ToolchainOverrides;
 const MANIFEST_SCHEMA_VERSION: u32 = 2;
 
 /// Source-identity pathspecs: every input that determines the native
-/// artifact's bytes. The Rust build-orchestration sources (`build.rs` and
-/// the modules under `crates/runtime-integration/build-orchestration/`) and
-/// the `xtask` CLI executor are deliberately
-/// excluded because they are executors, not policy: edits to progress
-/// logging, parallelism resolution, or store plumbing must not force a full
-/// CMake rebuild. Every artifact-affecting cmake argument is already
-/// fingerprinted through the toolchain probes, the profile, and the
+/// artifact's bytes. The Rust build-orchestration sources (the
+/// `astronomical-native-build-orchestration` crate's executor modules and
+/// runtime-integration's `build.rs`) and the `xtask` CLI executor are
+/// deliberately excluded because they are executors, not policy: edits to
+/// progress logging, parallelism resolution, or store plumbing must not
+/// force a full CMake rebuild. Every artifact-affecting cmake argument is
+/// already fingerprinted through the toolchain probes, the profile, and the
 /// third-party files; a change to cmake invocation semantics must bump
-/// `crates/runtime-integration/build-orchestration/native-build-store-schema-version` instead.
+/// `crates/native-build-orchestration/src/native-build-store-schema-version`
+/// instead. Relocating that policy file rotates every build identity once
+/// (issue #1628): reuse is validated, never trusted, so the only effect is
+/// a one-time native rebuild per machine per profile.
 pub const SOURCE_IDENTITY_PATHSPECS: &[&str] = &[
     "crates/native-identity/src",
-    "crates/runtime-integration/build-orchestration/native-build-store-schema-version",
+    "crates/native-build-orchestration/src/native-build-store-schema-version",
     "crates/runtime-integration/native",
     "third-party/native-dependency-manifest.cmake",
     "third-party/pins",
