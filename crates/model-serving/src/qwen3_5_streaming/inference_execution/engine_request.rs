@@ -159,25 +159,8 @@ impl Qwen3_5EngineRequest {
         let logits = masked_logits.as_ref().unwrap_or(logits);
         let generated_token_outcome = self.performance_attribution.measure_operation(
             PerformanceOperation::TokenSamplingGraphConstruction,
-            |_performance_attribution| match sampling_strategy {
-                Qwen3_5SamplingStrategy::HighestLogit => model
-                    .select_highest_logit_token(logits)
-                    .map_err(qwen3_5_runtime_error),
-                Qwen3_5SamplingStrategy::TopKTopP {
-                    temperature_thousandths,
-                    top_k,
-                    top_p_thousandths,
-                    ..
-                } => sampler::build_qwen3_5_sampled_token(
-                    model,
-                    logits,
-                    temperature_thousandths,
-                    top_p_thousandths,
-                    top_k,
-                    sampling_random_state.as_mut().ok_or_else(|| {
-                        super::fatal_engine_error("sampled request lost its random state")
-                    })?,
-                ),
+            |_performance_attribution| {
+                sample_generated_token(model, logits, sampling_strategy, &mut sampling_random_state)
             },
         );
         self.random_state = sampling_random_state;
@@ -253,3 +236,36 @@ impl Qwen3_5EngineRequest {
 }
 
 use crate::Qwen3_5ThinkingBudgetState;
+
+/// Samples the next token under the request's sampling strategy.
+///
+/// Split from the measurement call so the two strategy arms read as named
+/// dispatch; the caller owns the random state and restores it after
+/// measurement so a lost state surfaces once, not per arm.
+fn sample_generated_token(
+    model: &Qwen3_5Model,
+    logits: &MlxArray,
+    sampling_strategy: Qwen3_5SamplingStrategy,
+    sampling_random_state: &mut Option<MlxArray>,
+) -> Result<MlxArray, InferenceEngineError> {
+    match sampling_strategy {
+        Qwen3_5SamplingStrategy::HighestLogit => model
+            .select_highest_logit_token(logits)
+            .map_err(qwen3_5_runtime_error),
+        Qwen3_5SamplingStrategy::TopKTopP {
+            temperature_thousandths,
+            top_k,
+            top_p_thousandths,
+            ..
+        } => sampler::build_qwen3_5_sampled_token(
+            model,
+            logits,
+            temperature_thousandths,
+            top_p_thousandths,
+            top_k,
+            sampling_random_state.as_mut().ok_or_else(|| {
+                super::fatal_engine_error("sampled request lost its random state")
+            })?,
+        ),
+    }
+}

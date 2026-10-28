@@ -54,23 +54,7 @@ pub(crate) fn write_expert_usage(
         .iter()
         .enumerate()
         .map(|(layer_index, layer_demand_counts)| {
-            let mut demand_counts_by_expert_id = layer_demand_counts
-                .iter()
-                .enumerate()
-                .filter(|(_, demand_count)| **demand_count > 0)
-                .take(MAXIMUM_PERSISTED_EXPERTS_PER_LAYER)
-                .map(|(expert_id, demand_count)| (expert_id, *demand_count))
-                .collect::<BTreeMap<_, _>>();
-            if demand_counts_by_expert_id.len() > MAXIMUM_PERSISTED_EXPERTS_PER_LAYER {
-                demand_counts_by_expert_id = demand_counts_by_expert_id
-                    .into_iter()
-                    .take(MAXIMUM_PERSISTED_EXPERTS_PER_LAYER)
-                    .collect();
-            }
-            ExpertUsageLayer {
-                layer_index,
-                demand_counts_by_expert_id,
-            }
+            persisted_expert_usage_layer(layer_index, layer_demand_counts)
         })
         .collect::<Vec<_>>();
     let usage_file = ExpertUsageFile {
@@ -151,3 +135,29 @@ pub(crate) fn read_expert_usage(
 #[cfg(test)]
 #[path = "expert_usage_history_tests.rs"]
 mod expert_usage_history_tests;
+
+/// One layer's persisted expert-demand counts: the non-zero experts in
+/// expert-id order, capped at the per-layer persistence limit so one hot
+/// layer cannot crowd the rest out of the history file.
+fn persisted_expert_usage_layer(
+    layer_index: usize,
+    layer_demand_counts: &[u64],
+) -> ExpertUsageLayer {
+    let mut demand_counts_by_expert_id = layer_demand_counts
+        .iter()
+        .enumerate()
+        .filter(|(_, demand_count)| **demand_count > 0)
+        .take(MAXIMUM_PERSISTED_EXPERTS_PER_LAYER)
+        .map(|(expert_id, demand_count)| (expert_id, *demand_count))
+        .collect::<BTreeMap<_, _>>();
+    if demand_counts_by_expert_id.len() > MAXIMUM_PERSISTED_EXPERTS_PER_LAYER {
+        demand_counts_by_expert_id = demand_counts_by_expert_id
+            .into_iter()
+            .take(MAXIMUM_PERSISTED_EXPERTS_PER_LAYER)
+            .collect();
+    }
+    ExpertUsageLayer {
+        layer_index,
+        demand_counts_by_expert_id,
+    }
+}
