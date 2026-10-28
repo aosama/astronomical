@@ -80,7 +80,7 @@ impl SignalPipe {
             ),
         ] {
             let mut handler_action: libc::sigaction = unsafe { std::mem::zeroed() };
-            handler_action.sa_sigaction = handler as usize;
+            handler_action.sa_sigaction = handler;
             handler_action.sa_flags = libc::SA_RESTART;
             unsafe {
                 libc::sigemptyset(&mut handler_action.sa_mask);

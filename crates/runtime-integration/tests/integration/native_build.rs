@@ -5,7 +5,8 @@ use std::{fs, path::Path, process::Command};
 use sha2::{Digest, Sha256};
 
 const NATIVE_BUILD_CONFIGURATION: &str = include_str!("../../native/CMakeLists.txt");
-const NATIVE_BUILD_COMPILATION: &str = include_str!("../../build-orchestration/native_compile.rs");
+const NATIVE_BUILD_COMPILATION: &str =
+    include_str!("../../../native-build-orchestration/src/native_compile.rs");
 const NATIVE_BUILD_SCRIPT: &str = include_str!("../../build.rs");
 const NATIVE_TILE_SELECTION_PATCH: &str =
     include_str!("../../../../third-party/patches/mlx-0.32.4-nax-qmm-tile-variants.patch");

@@ -10,10 +10,12 @@
 //! (Inheriting cargo's count directly would starve either the native build
 //! or the concurrent Rust compile on small machines.)
 
-// Referenced by build.rs, which is not part of the integration test target that
-// includes this module through #[path]; the warning would otherwise fire there.
-#[allow(dead_code)]
+// Part of the crate's public surface: the runtime-integration build-script
+// wiring contract pins this variable name by reading the module's source.
 pub const NATIVE_BUILD_JOBS_VARIABLE: &str = "ASTRONOMICAL_NATIVE_BUILD_JOBS";
+
+#[cfg(test)]
+mod tests;
 
 /// Resolves the parallel job count passed to `cmake --parallel`, preferring
 /// the native-specific override, then the explicit `CARGO_BUILD_JOBS`

@@ -8,35 +8,27 @@
 //!
 //! 1. resolves the **native build identity** through
 //!    `astronomical-native-identity` (sources + toolchain fingerprint);
-//! 2. asks the **native build store** (`build-orchestration/native_store.rs`)
-//!    to reuse a published entry for that identity or build one under an
-//!    exclusive lock;
+//! 2. asks the **native build store** (the
+//!    `astronomical-native-build-orchestration` crate's `native_store`
+//!    module) to reuse a published entry for that identity or build one
+//!    under an exclusive lock;
 //! 3. configures **Rust linking** against the published static archives and
-//!    publishes the Metallib beside the cargo target (`build-orchestration/
-//!    native_linking.rs`);
+//!    publishes the Metallib beside the cargo target (the same crate's
+//!    `native_linking` module);
 //! 4. emits **rerun contracts** so Cargo re-runs exactly when an input the
 //!    artifact depends on changes — and never for a phantom path (see the
 //!    memorialized lesson below).
 //!
-//! # The module map (and the multi-includer rule)
+//! # The orchestration dependency
 //!
-//! The modules under `build-orchestration/` are shared verbatim with the
-//! standalone `astronomical-native-build-tool` and the integration test target
-//! through `#[path]` includes, so a pre-warmed out-of-Cargo build and the
-//! in-Cargo build execute byte-identical code. Because a `#[path]`-included
-//! file must not declare sibling modules itself, **every includer declares
-//! the modules it needs with identical names**, and the shared modules reach
-//! each other only through `crate::` paths:
-//!
-//! - `native_compile` — the CMake configure/build invocation (also included
-//!   by the standalone tool);
-//! - `native_linking` — linker directives and Metallib publication
-//!   (Cargo-only; it emits `cargo:` directives);
-//! - `native_store` — the identity-keyed, lock-guarded, atomically published
-//!   machine-wide store (with `native_store_manifest` as its integrity
-//!   manifest submodule);
-//! - `native_parallelism` — the native job-count resolution;
-//! - `native_progress` — the hosted-CI progress heartbeat file.
+//! The CMake invocation, store, linking, parallelism, and progress modules
+//! live in the `astronomical-native-build-orchestration` crate — their
+//! single compilation home (issue #1628) — consumed here through
+//! `[build-dependencies]`. The standalone `astronomical-native-build-tool`
+//! pre-warms the same store through the same crate as a normal dependency,
+//! so a pre-warmed out-of-Cargo build and the in-Cargo build execute
+//! byte-identical code because they compile one crate, not because files
+//! are shared across crate roots.
 //!
 //! # Where generated bindings live
 //!
@@ -45,9 +37,9 @@
 //! `OUT_DIR` of the published `mlx-c-rust` crate's build script (resolved
 //! from the cargo registry), which preserves Cargo's ownership of generated
 //! source; this script never writes there. The native compilation itself
-//! lives in `build-orchestration/native_compile.rs`, shared with the
-//! standalone native-build tool so pre-warmed builds and in-Cargo builds
-//! stay identical.
+//! lives in `astronomical-native-build-orchestration`'s `native_compile`
+//! module, shared with the standalone native-build tool so pre-warmed
+//! builds and in-Cargo builds stay identical.
 //!
 //! # A memorialized lesson: never watch a path that may not exist
 //!
@@ -61,25 +53,13 @@
 
 use std::{env, error::Error, path::Path, time::Instant};
 
-#[path = "build-orchestration/native_compile.rs"]
-mod native_compile;
-#[path = "build-orchestration/native_linking.rs"]
-mod native_linking;
-#[path = "build-orchestration/native_parallelism.rs"]
-mod native_parallelism;
-#[path = "build-orchestration/native_progress.rs"]
-mod native_progress;
-#[path = "build-orchestration/native_store.rs"]
-mod native_store;
-
-use native_compile::{
-    NATIVE_BUILD_STATUS_FILE_VARIABLE, NATIVE_BUILD_STORE_VARIABLE,
-    NATIVE_DEPENDENCY_CACHE_VARIABLE, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
+use astronomical_native_build_orchestration::{
+    NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NATIVE_BUILD_STATUS_FILE_VARIABLE,
+    NATIVE_BUILD_STORE_VARIABLE, NATIVE_DEPENDENCY_CACHE_VARIABLE, NativeBuildProfile,
+    NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, RUSTC_WRAPPER_VARIABLE,
     build_pinned_native_runtime, native_build_store_directory, native_parallel_job_count,
     required_path_variable, resolve_native_build_identity, write_native_build_status,
 };
-use native_progress::{NATIVE_BUILD_PROGRESS_FILE_VARIABLE, NativeBuildProgress};
-use native_store::{NativeBuildProfile, NativeBuildStore};
 
 const MLX_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX";
 const MLX_MEMORY_CONTRACT_PROBE_FEATURE_VARIABLE: &str = "CARGO_FEATURE_MLX_MEMORY_CONTRACT_PROBE";
@@ -127,7 +107,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         native_build_started_at.elapsed(),
     );
 
-    native_linking::configure_rust_linking(&native_build_artifacts)?;
+    astronomical_native_build_orchestration::native_linking::configure_rust_linking(
+        &native_build_artifacts,
+    )?;
     emit_native_source_rerun_contracts(
         &manifest_directory,
         &native_source_directory,
@@ -183,13 +165,12 @@ fn emit_native_source_rerun_contracts(
 ) {
     for source_path in [
         manifest_directory.join("build.rs"),
-        manifest_directory.join("build-orchestration/native_compile.rs"),
-        manifest_directory.join("build-orchestration/native_linking.rs"),
-        manifest_directory.join("build-orchestration/native_store.rs"),
-        manifest_directory.join("build-orchestration/native_store_manifest.rs"),
-        manifest_directory.join("build-orchestration/native_parallelism.rs"),
-        manifest_directory.join("build-orchestration/native_progress.rs"),
-        manifest_directory.join("build-orchestration/native-build-store-schema-version"),
+        // One directory watch covers every orchestration module and the
+        // schema-version policy file beside them; the modules are
+        // identity-exempt executors, so watching their whole source tree is
+        // correct-and-conservative (a store hit after re-running this script
+        // is cheap).
+        manifest_directory.join("../native-build-orchestration/src"),
         native_source_directory.join("CMakeLists.txt"),
         native_source_directory.join("apply_patch_if_needed.cmake"),
         native_source_directory.join("tests/mlx_memory_contract_probe.cpp"),

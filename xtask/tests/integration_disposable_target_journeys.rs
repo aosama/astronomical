@@ -514,7 +514,7 @@ fn should_retain_one_owned_target_when_measurement_is_interrupted() {
         let du_shim_path = shim_directory.join("du");
         std::fs::write(
             &du_shim_path,
-            &format!(
+            format!(
                 "#!/bin/sh\n\
                  set -eu\n\
                  printf '4\\t%s\\n' \"$2\"\n\

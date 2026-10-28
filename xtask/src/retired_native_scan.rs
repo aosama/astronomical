@@ -95,7 +95,7 @@ pub(crate) fn is_retired_candidate_directory(parent_directory: &Path, entry_name
     if !name_matches {
         return false;
     }
-    if parent_directory.file_name().as_deref() != Some(OsStr::new("out")) {
+    if parent_directory.file_name() != Some(OsStr::new("out")) {
         return false;
     }
     let Some(generation_directory) = parent_directory.parent() else {
