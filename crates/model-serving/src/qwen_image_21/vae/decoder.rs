@@ -256,24 +256,7 @@ impl QwenImage21VaeDecoder {
         } = state;
         let advanced = performance_attribution.measure_operation(
             PerformanceOperation::ImageVaeCompleteDecodeGraphConstruction,
-            |_| match next_stage {
-                DecodeStage::ConvolutionInput => {
-                    self.convolution_input.forward(runtime, &hidden_states)
-                }
-                DecodeStage::MiddleResnetBeforeAttention => self
-                    .mid_block
-                    .forward_resnet_before_attention(runtime, &hidden_states),
-                DecodeStage::MiddleAttention => {
-                    self.mid_block.forward_attention(runtime, &hidden_states)
-                }
-                DecodeStage::MiddleResnetAfterAttention => self
-                    .mid_block
-                    .forward_resnet_after_attention(runtime, &hidden_states),
-                DecodeStage::UpBlock(block_index) => {
-                    self.up_blocks[block_index].forward(runtime, &hidden_states)
-                }
-                DecodeStage::OutputHead => self.forward_output_head(runtime, &hidden_states),
-            },
+            |_| self.run_decode_stage(runtime, &hidden_states, next_stage),
         )?;
         performance_attribution.measure_operation(
             PerformanceOperation::ImageVaeDecodeSynchronizationWait,
@@ -320,4 +303,33 @@ fn validate_latent_shape(latents: &MlxArray) -> Result<(), QwenImage21VaeError> 
     Err(QwenImage21VaeError::invalid_geometry(format!(
         "decoding expects NHWC latents with {LATENT_CHANNEL_COUNT} channels, received {shape:?}"
     )))
+}
+
+impl QwenImage21VaeDecoder {
+    /// Runs one decode stage's module forward for the current hidden
+    /// states, without touching the stage cursor: measurement wraps this
+    /// call, so the function stays pure stage dispatch.
+    fn run_decode_stage(
+        &self,
+        runtime: &MlxRuntime,
+        hidden_states: &MlxArray,
+        next_stage: DecodeStage,
+    ) -> Result<MlxArray, QwenImage21VaeError> {
+        match next_stage {
+            DecodeStage::ConvolutionInput => self.convolution_input.forward(runtime, hidden_states),
+            DecodeStage::MiddleResnetBeforeAttention => self
+                .mid_block
+                .forward_resnet_before_attention(runtime, hidden_states),
+            DecodeStage::MiddleAttention => {
+                self.mid_block.forward_attention(runtime, hidden_states)
+            }
+            DecodeStage::MiddleResnetAfterAttention => self
+                .mid_block
+                .forward_resnet_after_attention(runtime, hidden_states),
+            DecodeStage::UpBlock(block_index) => {
+                self.up_blocks[block_index].forward(runtime, hidden_states)
+            }
+            DecodeStage::OutputHead => self.forward_output_head(runtime, hidden_states),
+        }
+    }
 }
