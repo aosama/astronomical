@@ -120,9 +120,7 @@ impl BootstrapSandbox {
     /// The curl shim serves canned bytes for every URL; only shell builtins
     /// are used because the shim directory is the whole PATH.
     fn write_curl_shim(&self) {
-        let shim_script = format!(
-            "#!/bin/sh\ndestination=\"\"\nprevious=\"\"\nfor argument in \"$@\"; do\n    case \"$previous\" in\n        --output) destination=\"$argument\" ;;\n    esac\n    previous=\"$argument\"\ndone\nprintf '%s' 'downloaded-archive-payload' > \"$destination\"\n"
-        );
+        let shim_script = "#!/bin/sh\ndestination=\"\"\nprevious=\"\"\nfor argument in \"$@\"; do\n    case \"$previous\" in\n        --output) destination=\"$argument\" ;;\n    esac\n    previous=\"$argument\"\ndone\nprintf '%s' 'downloaded-archive-payload' > \"$destination\"\n".to_string();
         self.write_executable_shim("curl", &shim_script);
     }
 
@@ -192,10 +190,8 @@ fn verify_only_provisions_from_a_warm_cache() {
     let stdout_text = String::from_utf8_lossy(&output.stdout);
     assert_eq!(stdout_text.matches("status=verified-cached").count(), 5);
     assert!(stdout_text.contains("status=ready"));
-    for archive_index in 0..FIXTURE_ARCHIVE_NAMES.len() {
-        let archive_path = sandbox
-            .cache_directory
-            .join(FIXTURE_ARCHIVE_NAMES[archive_index]);
+    for (archive_index, archive_name) in FIXTURE_ARCHIVE_NAMES.into_iter().enumerate() {
+        let archive_path = sandbox.cache_directory.join(archive_name);
         assert_eq!(
             std::fs::read(&archive_path).unwrap(),
             BootstrapSandbox::archive_bytes(archive_index).into_bytes(),

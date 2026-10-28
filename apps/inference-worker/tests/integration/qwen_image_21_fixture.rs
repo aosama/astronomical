@@ -177,7 +177,7 @@ fn text_encoder_config() -> Value {
 }
 
 fn vae_config() -> Value {
-    let channel_values: Vec<f64> = (1_u32..=64).map(|index| f64::from(index)).collect();
+    let channel_values: Vec<f64> = (1_u32..=64).map(f64::from).collect();
     json!({
         "_class_name": "AutoencoderKLQwenImage21",
         "attn_scales": [],

@@ -288,24 +288,23 @@ fn should_reject_full_attention_growth_that_cannot_cross_the_mlx_dimension_bound
 
 #[test]
 fn should_reject_retired_graph_submission_layer_interval_fields() {
-    for retired_field_name in ["generation_graph_submission_layer_interval"] {
-        let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
-        write_config(
-            temporary_home_directory.path(),
-            &format!(
-                r#"{{
-                  "chunking": {{
-                    "{retired_field_name}": 1
-                  }}
-                }}"#
-            ),
-        );
+    let retired_field_name = "generation_graph_submission_layer_interval";
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        &format!(
+            r#"{{
+              "chunking": {{
+                "{retired_field_name}": 1
+              }}
+            }}"#
+        ),
+    );
 
-        assert!(matches!(
-            AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
-            Err(AstronomicalConfigError::ParseConfigFile { .. })
-        ));
-    }
+    assert!(matches!(
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+        Err(AstronomicalConfigError::ParseConfigFile { .. })
+    ));
 }
 
 #[test]

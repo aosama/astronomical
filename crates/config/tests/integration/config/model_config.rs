@@ -203,23 +203,21 @@ fn should_reject_invalid_model_ranges_and_unknown_nested_fields() {
 
 #[test]
 fn should_reject_control_characters_in_model_relationship_identities() {
-    for configured_models in [serde_json::json!({"target\nmodel": {}})] {
-        let temporary_home_directory =
-            tempfile::tempdir().expect("temporary home should be created");
-        write_config(
-            temporary_home_directory.path(),
-            &serde_json::json!({
-                "$schema": "./astronomical-config.schema.json",
-                "schema_version": 1,
-                "runtime": {"model_directories": []},
-                "models": configured_models,
-            })
-            .to_string(),
-        );
+    let configured_models = serde_json::json!({"target\nmodel": {}});
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        &serde_json::json!({
+            "$schema": "./astronomical-config.schema.json",
+            "schema_version": 1,
+            "runtime": {"model_directories": []},
+            "models": configured_models,
+        })
+        .to_string(),
+    );
 
-        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
-            .expect_err("model relationship identities must reject control characters");
-    }
+    AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+        .expect_err("model relationship identities must reject control characters");
 }
 
 #[test]

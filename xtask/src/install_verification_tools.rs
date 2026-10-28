@@ -73,10 +73,8 @@ pub fn expected_version_line(tool_name: &str, version: &str) -> String {
 /// hex token wins because publishers disagree about trailing fields.
 pub fn published_digest_from_sidecar(sidecar_text: &str) -> Result<String, String> {
     for token in sidecar_text.split_whitespace() {
-        let is_sixty_four_hex = token.len() == 64
-            && token
-                .bytes()
-                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F'));
+        let is_sixty_four_hex =
+            token.len() == 64 && token.bytes().all(|byte: u8| byte.is_ascii_hexdigit());
         if is_sixty_four_hex {
             return Ok(token.to_lowercase());
         }
@@ -384,7 +382,7 @@ pub fn run(mut arguments: impl Iterator<Item = String>) -> Result<(), String> {
 fn tempfile_directory() -> Result<PathBuf, String> {
     let base_directory = std::env::var_os("TMPDIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::temp_dir());
+        .unwrap_or_else(std::env::temp_dir);
     for attempt in 0..1000 {
         let candidate = base_directory.join(format!(
             "astronomical-verification-tools-{}-{attempt}",

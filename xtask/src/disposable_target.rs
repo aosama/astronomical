@@ -242,7 +242,7 @@ fn local_timestamp() -> String {
     let epoch_seconds = unix_epoch_seconds() as libc::time_t;
     let mut broken_down_time: libc::tm = unsafe { std::mem::zeroed() };
     let time_conversion_succeeded =
-        unsafe { libc::localtime_r(&epoch_seconds, &mut broken_down_time) != std::ptr::null_mut() };
+        unsafe { !libc::localtime_r(&epoch_seconds, &mut broken_down_time).is_null() };
     if !time_conversion_succeeded {
         return epoch_seconds.to_string();
     }

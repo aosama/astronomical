@@ -207,9 +207,7 @@ fn read_sysctl_integer(sysctl_key: &str) -> Option<u64> {
 
 fn next_probe_bytes(previous_probe_bytes: usize, remaining_bytes: usize) -> usize {
     let doubled_probe_bytes = previous_probe_bytes.saturating_mul(2);
-    let capped_probe_bytes = doubled_probe_bytes
-        .min(PROBE_MAXIMUM_BYTES)
-        .max(PROBE_STEP_BYTES);
+    let capped_probe_bytes = doubled_probe_bytes.clamp(PROBE_STEP_BYTES, PROBE_MAXIMUM_BYTES);
     capped_probe_bytes.min(remaining_bytes)
 }
 

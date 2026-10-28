@@ -64,18 +64,16 @@ fn main() -> ExitCode {
     if let Some(root_position) = arguments
         .iter()
         .position(|argument| argument == "--repository-root")
+        && let Some(root_path) = arguments.get(root_position + 1)
     {
-        if let Some(root_path) = arguments.get(root_position + 1) {
-            repository_root_override = Some(std::path::PathBuf::from(root_path));
-            arguments.drain(root_position..=root_position + 1);
-        }
+        repository_root_override = Some(std::path::PathBuf::from(root_path));
+        arguments.drain(root_position..=root_position + 1);
     }
-    if repository_root_override.is_none() {
-        if let Ok(journey_root) = std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV) {
-            if !journey_root.is_empty() {
-                repository_root_override = Some(std::path::PathBuf::from(journey_root));
-            }
-        }
+    if repository_root_override.is_none()
+        && let Ok(journey_root) = std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV)
+        && !journey_root.is_empty()
+    {
+        repository_root_override = Some(std::path::PathBuf::from(journey_root));
     }
     let resolve_root = move || repository_root_override.unwrap_or_else(resolve_repository_root);
     match arguments.first().map(String::as_str) {
