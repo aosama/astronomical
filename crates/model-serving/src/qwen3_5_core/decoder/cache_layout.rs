@@ -71,37 +71,19 @@ pub fn qwen3_5_decoder_cache_layout(
                 decoder_layer_cache_dtypes,
             ) {
                 (true, Qwen3_5DecoderLayerCacheDtypes::FullAttention { keys, values }) => {
-                    Ok(DecoderCacheLayerLayout::append_only_attention(
-                        DecoderCacheTensorLayout::sequence(
-                            QWEN_ATTENTION_KEYS_TENSOR_ROLE,
-                            *keys,
-                            full_attention_key_value_dimensions.clone(),
-                            2,
-                        ),
-                        DecoderCacheTensorLayout::sequence(
-                            QWEN_ATTENTION_VALUES_TENSOR_ROLE,
-                            *values,
-                            full_attention_key_value_dimensions.clone(),
-                            2,
-                        ),
+                    full_attention_layer_layout(
+                        *keys,
+                        *values,
+                        &full_attention_key_value_dimensions,
                         full_attention_key_value_growth_tokens,
-                    ))
+                    )
                 }
                 (false, Qwen3_5DecoderLayerCacheDtypes::LinearAttention { convolution }) => {
-                    Ok(DecoderCacheLayerLayout::composite(vec![
-                        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                            QWEN_CONVOLUTION_TENSOR_ROLE,
-                            *convolution,
-                            linear_convolution_dimensions.clone(),
-                        )),
-                        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
-                            // The gated-delta recurrent accumulator is Float32 in live execution;
-                            // preserve it independently from the BF16 activation state above.
-                            QWEN_RECURRENCE_TENSOR_ROLE,
-                            DecoderCacheTensorDtype::Float32,
-                            linear_recurrent_dimensions.clone(),
-                        )),
-                    ]))
+                    linear_attention_layer_layout(
+                        *convolution,
+                        &linear_convolution_dimensions,
+                        &linear_recurrent_dimensions,
+                    )
                 }
                 _ => Err(DecoderCacheLayoutError::ExecutionDtypeLayerFamilyMismatch {
                     layer_index: decoder_layer_index,
@@ -110,4 +92,51 @@ pub fn qwen3_5_decoder_cache_layout(
         })
         .collect::<Result<Vec<_>, _>>()?;
     DecoderCacheLayout::new(decoder_layer_layouts)
+}
+
+/// The append-only KV cache layout for one full-attention layer: keys and
+/// values as sequence-growing tensors that share the layer's head geometry.
+fn full_attention_layer_layout(
+    keys: DecoderCacheTensorDtype,
+    values: DecoderCacheTensorDtype,
+    full_attention_key_value_dimensions: &[usize],
+    full_attention_key_value_growth_tokens: usize,
+) -> Result<DecoderCacheLayerLayout, DecoderCacheLayoutError> {
+    Ok(DecoderCacheLayerLayout::append_only_attention(
+        DecoderCacheTensorLayout::sequence(
+            QWEN_ATTENTION_KEYS_TENSOR_ROLE,
+            keys,
+            full_attention_key_value_dimensions.to_vec(),
+            2,
+        ),
+        DecoderCacheTensorLayout::sequence(
+            QWEN_ATTENTION_VALUES_TENSOR_ROLE,
+            values,
+            full_attention_key_value_dimensions.to_vec(),
+            2,
+        ),
+        full_attention_key_value_growth_tokens,
+    ))
+}
+
+/// The recurrent state layout for one linear-attention layer: the BF16
+/// convolution activation beside the gated-delta accumulator, which stays
+/// Float32 in live execution independently of the activation state's dtype.
+fn linear_attention_layer_layout(
+    convolution: DecoderCacheTensorDtype,
+    linear_convolution_dimensions: &[usize],
+    linear_recurrent_dimensions: &[usize],
+) -> Result<DecoderCacheLayerLayout, DecoderCacheLayoutError> {
+    Ok(DecoderCacheLayerLayout::composite(vec![
+        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
+            QWEN_CONVOLUTION_TENSOR_ROLE,
+            convolution,
+            linear_convolution_dimensions.to_vec(),
+        )),
+        DecoderCacheLayerLayout::recurrent_tensor(DecoderCacheTensorLayout::fixed(
+            QWEN_RECURRENCE_TENSOR_ROLE,
+            DecoderCacheTensorDtype::Float32,
+            linear_recurrent_dimensions.to_vec(),
+        )),
+    ]))
 }
