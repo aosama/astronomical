@@ -226,65 +226,92 @@ unsafe extern "C" fn writer_is_good(descriptor: *mut c_void) -> bool {
 unsafe extern "C" fn writer_tell(descriptor: *mut c_void) -> usize {
     unsafe {
         with_writer_state(descriptor, |writer_state| {
-            match usize::try_from(writer_state.position_bytes) {
-                Ok(position_bytes) => Some(position_bytes),
-                Err(_) => {
-                    record_writer_io_error(
-                        writer_state,
-                        std::io::Error::other("safetensors writer position exceeds usize"),
-                    );
-                    None
-                }
-            }
+            writer_tell_position(writer_state)
         })
     }
     .flatten()
     .unwrap_or(0)
 }
 
+/// The current writer position as a C `tell` result.
+///
+/// `None` reports the position as unusable to MLX; the u64-to-usize range
+/// failure latches the first error on the writer state so `finish` surfaces
+/// it.
+fn writer_tell_position(writer_state: &mut FileWriterState) -> Option<usize> {
+    match usize::try_from(writer_state.position_bytes) {
+        Ok(position_bytes) => Some(position_bytes),
+        Err(_) => {
+            record_writer_io_error(
+                writer_state,
+                std::io::Error::other("safetensors writer position exceeds usize"),
+            );
+            None
+        }
+    }
+}
+
+/// The absolute base position one seek origin refers to.
+///
+/// `None` means the origin is unsupported or its end-of-file length could
+/// not be read; both failures latch an error on the writer state so `finish`
+/// surfaces them.
+fn seek_base_position_bytes(writer_state: &mut FileWriterState, whence: c_int) -> Option<i128> {
+    match whence {
+        libc::SEEK_SET => Some(0_i128),
+        libc::SEEK_CUR => Some(i128::from(writer_state.position_bytes)),
+        libc::SEEK_END => match writer_state.output_file.metadata() {
+            Ok(file_metadata) => Some(i128::from(file_metadata.len())),
+            Err(source) => {
+                record_writer_io_error(writer_state, source);
+                None
+            }
+        },
+        _ => {
+            record_writer_io_error(
+                writer_state,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "unsupported safetensors writer seek origin",
+                ),
+            );
+            None
+        }
+    }
+}
+
+/// Applies one C-style seek to the writer position.
+///
+/// The target is computed in i128 so negative offsets and additions are
+/// validated before conversion to the writer's u64 position; any failure
+/// latches the first error on the writer state.
+fn writer_seek_position(writer_state: &mut FileWriterState, offset: i64, whence: c_int) -> bool {
+    let Some(base_position_bytes) = seek_base_position_bytes(writer_state, whence) else {
+        return false;
+    };
+    match u64::try_from(base_position_bytes + i128::from(offset)) {
+        Ok(position_bytes) => {
+            writer_state.position_bytes = position_bytes;
+            true
+        }
+        Err(_) => {
+            record_writer_io_error(
+                writer_state,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "safetensors writer seek position is invalid",
+                ),
+            );
+            false
+        }
+    }
+}
+
 unsafe extern "C" fn writer_seek(descriptor: *mut c_void, offset: i64, whence: c_int) -> c_int {
     // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
     let seek_succeeded = unsafe {
         with_writer_state(descriptor, |writer_state| {
-            // Perform seek arithmetic in i128 so negative offsets and additions
-            // are validated before conversion to the writer's u64 position.
-            let base_position_bytes = match whence {
-                libc::SEEK_SET => 0_i128,
-                libc::SEEK_CUR => i128::from(writer_state.position_bytes),
-                libc::SEEK_END => match writer_state.output_file.metadata() {
-                    Ok(file_metadata) => i128::from(file_metadata.len()),
-                    Err(source) => {
-                        record_writer_io_error(writer_state, source);
-                        return false;
-                    }
-                },
-                _ => {
-                    record_writer_io_error(
-                        writer_state,
-                        std::io::Error::new(
-                            std::io::ErrorKind::InvalidInput,
-                            "unsupported safetensors writer seek origin",
-                        ),
-                    );
-                    return false;
-                }
-            };
-            match u64::try_from(base_position_bytes + i128::from(offset)) {
-                Ok(position_bytes) => {
-                    writer_state.position_bytes = position_bytes;
-                    true
-                }
-                Err(_) => {
-                    record_writer_io_error(
-                        writer_state,
-                        std::io::Error::new(
-                            std::io::ErrorKind::InvalidInput,
-                            "safetensors writer seek position is invalid",
-                        ),
-                    );
-                    false
-                }
-            }
+            writer_seek_position(writer_state, offset, whence)
         })
     }
     .unwrap_or(false);
@@ -345,56 +372,75 @@ unsafe extern "C" fn writer_write(
     // return exactly what reached the descriptor.
     unsafe {
         with_writer_state(descriptor, |writer_state| {
-            if byte_count == 0 {
-                return Some(byte_count);
-            }
-            if source.is_null() {
-                record_writer_io_error(
-                    writer_state,
-                    std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        "safetensors writer received a null source",
-                    ),
-                );
-                return None;
-            }
-            // MLX guarantees the source remains live for this callback only. Do
-            // not retain the slice; copy it completely before returning to C++.
-            let source_bytes = std::slice::from_raw_parts(source.cast::<u8>(), byte_count);
-            if let Err(source) = write_all_at(
-                &writer_state.output_file,
-                source_bytes,
-                writer_state.position_bytes,
-            ) {
-                record_writer_io_error(writer_state, source);
-                return None;
-            }
-            let Ok(written_byte_count) = u64::try_from(byte_count) else {
-                // The bytes are on disk; the latched state error surfaces
-                // through `finish` while the honest count keeps MLX moving.
-                record_writer_io_error(
-                    writer_state,
-                    std::io::Error::other("safetensors write byte count exceeds u64"),
-                );
-                return Some(byte_count);
-            };
-            match writer_state.position_bytes.checked_add(written_byte_count) {
-                Some(position_bytes) => {
-                    writer_state.position_bytes = position_bytes;
-                    Some(byte_count)
-                }
-                None => {
-                    record_writer_io_error(
-                        writer_state,
-                        std::io::Error::other("safetensors writer position overflowed"),
-                    );
-                    Some(byte_count)
-                }
-            }
+            writer_write_bytes(writer_state, source, byte_count)
         })
     }
     .flatten()
     .unwrap_or(0)
+}
+
+/// Writes one caller-owned buffer at the current writer position and
+/// advances the position by exactly what reached the descriptor.
+///
+/// The byte count reports success to MLX (the v0.7.0 wrapper fails the
+/// write on any shortfall, so the count must be exact); `None` reports
+/// failure. Every failure latches the first error on the writer state, and
+/// when the bytes are already on disk but a count cannot be represented,
+/// the honest count keeps MLX moving while the latched error surfaces
+/// through `finish`.
+fn writer_write_bytes(
+    writer_state: &mut FileWriterState,
+    source: *const c_char,
+    byte_count: usize,
+) -> Option<usize> {
+    if byte_count == 0 {
+        return Some(byte_count);
+    }
+    if source.is_null() {
+        record_writer_io_error(
+            writer_state,
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "safetensors writer received a null source",
+            ),
+        );
+        return None;
+    }
+    // MLX guarantees the source remains live for this callback only. Do
+    // not retain the slice; copy it completely before returning to C++.
+    // SAFETY: `source` is non-null and points at `byte_count` readable
+    // bytes the caller owns for the duration of this callback.
+    let source_bytes = unsafe { std::slice::from_raw_parts(source.cast::<u8>(), byte_count) };
+    if let Err(source) = write_all_at(
+        &writer_state.output_file,
+        source_bytes,
+        writer_state.position_bytes,
+    ) {
+        record_writer_io_error(writer_state, source);
+        return None;
+    }
+    let Ok(written_byte_count) = u64::try_from(byte_count) else {
+        // The bytes are on disk; the latched state error surfaces
+        // through `finish` while the honest count keeps MLX moving.
+        record_writer_io_error(
+            writer_state,
+            std::io::Error::other("safetensors write byte count exceeds u64"),
+        );
+        return Some(byte_count);
+    };
+    match writer_state.position_bytes.checked_add(written_byte_count) {
+        Some(position_bytes) => {
+            writer_state.position_bytes = position_bytes;
+            Some(byte_count)
+        }
+        None => {
+            record_writer_io_error(
+                writer_state,
+                std::io::Error::other("safetensors writer position overflowed"),
+            );
+            Some(byte_count)
+        }
+    }
 }
 
 fn record_writer_io_error(writer_state: &mut FileWriterState, source: std::io::Error) {
