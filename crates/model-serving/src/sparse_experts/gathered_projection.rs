@@ -14,7 +14,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use mlx_c_rust::MlxArray;
+use mlx_c_rust::{MlxArray, MlxCError};
 
 /// Tells MLX whether the supplied expert-ID array is sorted in ascending order.
 ///
@@ -94,42 +94,96 @@ pub fn gather_expert_projection(
     // reports gathered projection construction under the same catalog entry,
     // while its surrounding router and shared-expert work remain family-owned.
     performance_attribution
-        .measure_operation(PerformanceOperation::GatheredExpertExecution, |_| {
-            match projection {
-                StackedExpertProjection::Dense { transposed_weights } => runtime
-                    .gather_dense_matmul(
-                        activations,
-                        transposed_weights,
-                        // No explicit left index is needed: each activation batch row
-                        // already corresponds to its assignment position.
-                        None,
-                        // The right index chooses one matrix from the expert axis.
-                        Some(selected_expert_indices),
-                        assignment_order.uses_sorted_indices(),
-                    ),
+        .measure_operation(
+            PerformanceOperation::GatheredExpertExecution,
+            |_| match projection {
+                StackedExpertProjection::Dense { transposed_weights } => gather_dense_projection(
+                    runtime,
+                    activations,
+                    transposed_weights,
+                    selected_expert_indices,
+                    assignment_order,
+                ),
                 StackedExpertProjection::Affine {
                     packed_weights,
                     scales,
                     biases,
                     group_size,
                     bits,
-                } => runtime.gather_quantized_matmul_affine(
+                } => gather_affine_projection(
+                    runtime,
                     activations,
-                    packed_weights,
-                    scales,
-                    biases,
-                    // As in the dense path, activation rows are already arranged
-                    // for their assignment positions; only experts are gathered.
-                    None,
-                    Some(selected_expert_indices),
-                    // Checkpoint affine weights are `[expert, output, packed_input]`,
-                    // so MLX logically transposes each selected matrix for x @ Wᵀ.
-                    true,
-                    group_size,
-                    bits,
-                    assignment_order.uses_sorted_indices(),
+                    &AffineExpertProjectionInputs {
+                        packed_weights,
+                        scales,
+                        biases,
+                        group_size,
+                        bits,
+                    },
+                    selected_expert_indices,
+                    assignment_order,
                 ),
-            }
-        })
+            },
+        )
         .map_err(MlxRuntimeError::from)
+}
+
+/// The affine-quantized expert arrays one gathered projection reads,
+/// grouped so `gather_affine_projection` receives one named payload
+/// instead of a row of positional arrays (the pattern
+/// `PrefillGatheredDequantInputs` established for the prefill kernel).
+struct AffineExpertProjectionInputs<'a> {
+    packed_weights: &'a MlxArray,
+    scales: &'a MlxArray,
+    biases: &'a MlxArray,
+    group_size: i32,
+    bits: i32,
+}
+
+/// Gathers the dense expert matrices for the routed assignments.
+///
+/// No explicit left index is needed: each activation batch row already
+/// corresponds to its assignment position, and the right index chooses one
+/// matrix from the expert axis.
+fn gather_dense_projection(
+    runtime: &MlxRuntime,
+    activations: &MlxArray,
+    transposed_weights: &MlxArray,
+    selected_expert_indices: &MlxArray,
+    assignment_order: ExpertAssignmentOrder,
+) -> Result<MlxArray, MlxCError> {
+    runtime.gather_dense_matmul(
+        activations,
+        transposed_weights,
+        None,
+        Some(selected_expert_indices),
+        assignment_order.uses_sorted_indices(),
+    )
+}
+
+/// Gathers the affine-quantized expert matrices for the routed assignments.
+///
+/// As in the dense path, activation rows are already arranged for their
+/// assignment positions, so only experts are gathered. Checkpoint affine
+/// weights are `[expert, output, packed_input]`, so MLX logically transposes
+/// each selected matrix for x @ Wᵀ.
+fn gather_affine_projection(
+    runtime: &MlxRuntime,
+    activations: &MlxArray,
+    affine_projection_inputs: &AffineExpertProjectionInputs<'_>,
+    selected_expert_indices: &MlxArray,
+    assignment_order: ExpertAssignmentOrder,
+) -> Result<MlxArray, MlxCError> {
+    runtime.gather_quantized_matmul_affine(
+        activations,
+        affine_projection_inputs.packed_weights,
+        affine_projection_inputs.scales,
+        affine_projection_inputs.biases,
+        None,
+        Some(selected_expert_indices),
+        true,
+        affine_projection_inputs.group_size,
+        affine_projection_inputs.bits,
+        assignment_order.uses_sorted_indices(),
+    )
 }

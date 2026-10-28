@@ -78,72 +78,114 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let sparse_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
-            |performance_attribution| {
-                let (retained_slot_indices, _retained_scores) = route_side_arrays(
-                    &self.runtime,
-                    &cached_plus_streamed_route.retained_page_slot_indices,
-                    &cached_plus_streamed_route.retained_scores,
-                )?;
-                let (missing_slot_indices, _missing_scores) = route_side_arrays(
-                    &self.runtime,
-                    &cached_plus_streamed_route.missing_page_slot_indices,
-                    &cached_plus_streamed_route.missing_scores,
-                )?;
-                let retained_rows = match self.streamed_expert_assignment_outputs(
-                    hidden_states,
-                    retained_expert_weights,
-                    &retained_slot_indices,
-                    performance_attribution,
-                )? {
-                    RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs } => {
-                        assignment_outputs
-                    }
-                    RoutedExpertAssignmentOutputs::Sorted { .. } => {
-                        return Err(Qwen3_5ExecutionError::InvalidInput {
-                            description: "mixed decode routing must stay unsorted",
-                        });
-                    }
-                };
-                let missing_rows = match self.streamed_expert_assignment_outputs(
-                    hidden_states,
-                    missing_expert_weights,
-                    &missing_slot_indices,
-                    performance_attribution,
-                )? {
-                    RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs } => {
-                        assignment_outputs
-                    }
-                    RoutedExpertAssignmentOutputs::Sorted { .. } => {
-                        return Err(Qwen3_5ExecutionError::InvalidInput {
-                            description: "mixed decode routing must stay unsorted",
-                        });
-                    }
-                };
-                let combined_output = qwen3_5_moe_combine_partial_route_outputs_for_tests(
-                    &self.runtime,
-                    &retained_rows,
-                    &missing_rows,
-                    concatenated_assignment_order,
-                )?;
-                // One weighted reduction over the restored original assignment
-                // order consumes the same values in the same order as the
-                // single-page path, so mixed serving cannot change generated
-                // tokens through floating-point reassociation.
-                let sparse_expert_output = routing::qwen3_5_moe_unsorted_expert_weighted_sum(
-                    &self.runtime,
-                    &combined_output,
-                    selected_scores,
-                )?;
-                self.combine_paged_sparse_and_shared_outputs(
+            |measured_attribution| {
+                self.build_cached_plus_streamed_sparse_output(
                     hidden_states,
                     mixture_of_experts_weights,
-                    &sparse_expert_output,
+                    retained_expert_weights,
+                    cached_plus_streamed_route,
+                    missing_expert_weights,
+                    selected_scores,
+                    concatenated_assignment_order,
                     should_use_compiled_elementwise_graphs,
+                    measured_attribution,
                 )
             },
         )?;
         performance_attribution.record_counter(PerformanceCounter::HotExpertMixedRouteCount, 1);
         Ok(sparse_output)
+    }
+
+    /// Builds the mixed sparse expert output for one cached-plus-streamed
+    /// route (issue #373): gathers the retained side from the warm table and
+    /// the missing side from the streamed page, restores the original
+    /// assignment order, and runs one weighted reduction.
+    ///
+    /// Extracted from the `PagedMoeGraphConstruction` measurement so the
+    /// measured region reads as one named step instead of an inline closure.
+    #[allow(clippy::too_many_arguments)]
+    fn build_cached_plus_streamed_sparse_output(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        retained_expert_weights: &Qwen3_5PagedExpertWeights,
+        cached_plus_streamed_route: &Qwen3_5MoECachedPlusStreamedPageRoute,
+        missing_expert_weights: &Qwen3_5PagedExpertWeights,
+        selected_scores: &MlxArray,
+        concatenated_assignment_order: &[usize],
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let (retained_slot_indices, _retained_scores) = route_side_arrays(
+            &self.runtime,
+            &cached_plus_streamed_route.retained_page_slot_indices,
+            &cached_plus_streamed_route.retained_scores,
+        )?;
+        let (missing_slot_indices, _missing_scores) = route_side_arrays(
+            &self.runtime,
+            &cached_plus_streamed_route.missing_page_slot_indices,
+            &cached_plus_streamed_route.missing_scores,
+        )?;
+        let retained_rows = self.unsorted_assignment_rows(
+            hidden_states,
+            retained_expert_weights,
+            &retained_slot_indices,
+            performance_attribution,
+        )?;
+        let missing_rows = self.unsorted_assignment_rows(
+            hidden_states,
+            missing_expert_weights,
+            &missing_slot_indices,
+            performance_attribution,
+        )?;
+        let combined_output = qwen3_5_moe_combine_partial_route_outputs_for_tests(
+            &self.runtime,
+            &retained_rows,
+            &missing_rows,
+            concatenated_assignment_order,
+        )?;
+        // One weighted reduction over the restored original assignment
+        // order consumes the same values in the same order as the
+        // single-page path, so mixed serving cannot change generated
+        // tokens through floating-point reassociation.
+        let sparse_expert_output = routing::qwen3_5_moe_unsorted_expert_weighted_sum(
+            &self.runtime,
+            &combined_output,
+            selected_scores,
+        )?;
+        self.combine_paged_sparse_and_shared_outputs(
+            hidden_states,
+            mixture_of_experts_weights,
+            &sparse_expert_output,
+            should_use_compiled_elementwise_graphs,
+        )
+    }
+
+    /// Runs one partial route side's expert assignments, refusing the sorted
+    /// variant: mixed decode must keep unsorted outputs because the combine
+    /// step restores the original assignment order afterwards.
+    fn unsorted_assignment_rows(
+        &self,
+        hidden_states: &MlxArray,
+        expert_weights: &Qwen3_5PagedExpertWeights,
+        page_slot_indices: &MlxArray,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        match self.streamed_expert_assignment_outputs(
+            hidden_states,
+            expert_weights,
+            page_slot_indices,
+            performance_attribution,
+        )? {
+            RoutedExpertAssignmentOutputs::Unsorted { assignment_outputs } => {
+                Ok(assignment_outputs)
+            }
+            RoutedExpertAssignmentOutputs::Sorted { .. } => {
+                Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "mixed decode routing must stay unsorted",
+                })
+            }
+        }
     }
 
     /// Serves one decode token whose routed experts are partly warm and partly
