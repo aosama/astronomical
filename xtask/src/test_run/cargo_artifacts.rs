@@ -89,12 +89,11 @@ pub(super) fn parse_artifacts(
             if let Some(previous_executable) = artifacts
                 .binaries
                 .insert(binary_name.to_owned(), executable_path.clone())
+                && previous_executable != executable_path
             {
-                if previous_executable != executable_path {
-                    return Err(format!(
-                        "Cargo reported conflicting executables for {binary_name}"
-                    ));
-                }
+                return Err(format!(
+                    "Cargo reported conflicting executables for {binary_name}"
+                ));
             }
         }
     }

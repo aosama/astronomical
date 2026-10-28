@@ -68,11 +68,11 @@ pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourne
     let configured_rustc_wrapper = std::env::var("RUSTC_WRAPPER")
         .ok()
         .filter(|value| !value.is_empty());
-    if let Some(wrapper_name) = configured_rustc_wrapper.as_deref() {
-        if !command_is_available(wrapper_name) {
-            print_error(&format!("required command is unavailable: {wrapper_name}"));
-            return ExitCode::from(1);
-        }
+    if let Some(wrapper_name) = configured_rustc_wrapper.as_deref()
+        && !command_is_available(wrapper_name)
+    {
+        print_error(&format!("required command is unavailable: {wrapper_name}"));
+        return ExitCode::from(1);
     }
     let selected_rustc_wrapper = select_rustc_wrapper(
         configured_rustc_wrapper.as_deref(),

@@ -239,11 +239,10 @@ mod should_convert_exit_status_to_shell_status {
     }
 
     fn run_status(code: i32) -> std::process::ExitStatus {
-        let status_output = std::process::Command::new("sh")
+        std::process::Command::new("sh")
             .arg("-c")
             .arg(format!("exit {code}"))
             .status()
-            .expect("the exit-status fixture should run");
-        status_output
+            .expect("the exit-status fixture should run")
     }
 }

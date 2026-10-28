@@ -54,7 +54,10 @@ use fixtures::{
     deterministic_packed_words, deterministic_row_scales, deterministic_token_activations,
     expert_sorted_assignments, median_duration_millis, prototype_runtime,
 };
-use kernel::{PREFILL_GATHERED_DEQUANT_KERNEL_SOURCE, launch_prefill_gathered_dequant};
+use kernel::{
+    PREFILL_GATHERED_DEQUANT_KERNEL_SOURCE, PrefillGatheredDequantInputs,
+    launch_prefill_gathered_dequant,
+};
 
 mod fixtures;
 mod kernel;
@@ -327,20 +330,19 @@ fn measure_prefill_gathered_dequant(
     let mut prototype_ms = Vec::with_capacity(MEASURED_ITERATIONS);
     let mut retained_prototype_outputs =
         Vec::with_capacity(WARMUP_ITERATIONS + MEASURED_ITERATIONS);
+    let prototype_inputs = PrefillGatheredDequantInputs {
+        assignments: &prototype_assignments,
+        expert_assignment_starts: &expert_assignment_starts,
+        packed_code_words: &packed_code_words,
+        row_scales: &row_scales,
+        codebook_level_table: &codebook_levels,
+        bit_width,
+        expert_count,
+        output_rows,
+    };
     for _ in 0..WARMUP_ITERATIONS {
-        let projected = launch_prefill_gathered_dequant(
-            &runtime,
-            &kernel,
-            &prototype_assignments,
-            &expert_assignment_starts,
-            &packed_code_words,
-            &row_scales,
-            &codebook_levels,
-            bit_width,
-            expert_count,
-            output_rows,
-        )
-        .expect("the warmup prototype launch should succeed");
+        let projected = launch_prefill_gathered_dequant(&runtime, &kernel, prototype_inputs)
+            .expect("the warmup prototype launch should succeed");
         runtime
             .evaluate_arrays(&[&projected])
             .expect("the warmup prototype should evaluate");
@@ -348,19 +350,8 @@ fn measure_prefill_gathered_dequant(
     }
     for _ in 0..MEASURED_ITERATIONS {
         let started_at = std::time::Instant::now();
-        let projected = launch_prefill_gathered_dequant(
-            &runtime,
-            &kernel,
-            &prototype_assignments,
-            &expert_assignment_starts,
-            &packed_code_words,
-            &row_scales,
-            &codebook_levels,
-            bit_width,
-            expert_count,
-            output_rows,
-        )
-        .expect("the measured prototype launch should succeed");
+        let projected = launch_prefill_gathered_dequant(&runtime, &kernel, prototype_inputs)
+            .expect("the measured prototype launch should succeed");
         runtime
             .evaluate_arrays(&[&projected])
             .expect("the measured prototype should evaluate");
@@ -377,19 +368,12 @@ fn measure_prefill_gathered_dequant(
             &[assignment_count as i32, input_width as i32],
         )
         .expect("the parity assignment rows should upload freshly");
-    let prototype_output = launch_prefill_gathered_dequant(
-        &runtime,
-        &kernel,
-        &parity_assignments,
-        &expert_assignment_starts,
-        &packed_code_words,
-        &row_scales,
-        &codebook_levels,
-        bit_width,
-        expert_count,
-        output_rows,
-    )
-    .expect("the parity prototype launch should succeed");
+    let parity_inputs = PrefillGatheredDequantInputs {
+        assignments: &parity_assignments,
+        ..prototype_inputs
+    };
+    let prototype_output = launch_prefill_gathered_dequant(&runtime, &kernel, parity_inputs)
+        .expect("the parity prototype launch should succeed");
     runtime
         .evaluate_arrays(&[&prototype_output])
         .expect("the parity prototype should evaluate");

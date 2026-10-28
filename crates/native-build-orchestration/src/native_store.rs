@@ -45,11 +45,10 @@ use std::{
 };
 
 use fs4::TryLockError;
-// Included by explicit path (not a plain `mod`) because this file itself is
-// loaded through `#[path]` from three roots; a bare `mod` would resolve
-// relative to whichever includer compiled it.
-#[path = "native_store_manifest.rs"]
+
 mod manifest;
+#[cfg(test)]
+mod tests;
 
 use manifest::{
     copy_directory_without_symlinks, copy_required_file, sync_directory, sync_directory_tree,

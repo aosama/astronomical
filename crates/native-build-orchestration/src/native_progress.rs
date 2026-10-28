@@ -54,9 +54,8 @@ pub struct NativeBuildProgress {
 }
 
 impl NativeBuildProgress {
-    // Called by build.rs, which is not part of the integration test target that
-    // includes this module through #[path]; the warning would otherwise fire there.
-    #[allow(dead_code)]
+    // Part of the crate's public surface for the build script and the
+    // standalone tool; no internal call site exists in this crate.
     pub fn from_environment() -> Result<Self, String> {
         match std::env::var_os(NATIVE_BUILD_PROGRESS_FILE_VARIABLE) {
             None => Ok(Self::disabled()),
@@ -274,3 +273,6 @@ fn append_progress_line(progress_file_path: &Path, line_body: &str) {
         let _ = writeln!(progress_file, "{PROGRESS_LINE_PREFIX} {line_body}");
     }
 }
+
+#[cfg(test)]
+mod tests;

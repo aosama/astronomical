@@ -255,12 +255,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "astronomical-native-build-tool"
+name = "astronomical-native-build-orchestration"
 version = "0.2.84"
 dependencies = [
  "astronomical-native-identity",
  "fs4",
  "sha2",
+ "tempfile",
+]
+
+[[package]]
+name = "astronomical-native-build-tool"
+version = "0.2.84"
+dependencies = [
+ "astronomical-native-build-orchestration",
 ]
 
 [[package]]
@@ -303,6 +311,7 @@ name = "astronomical-runtime-integration"
 version = "0.2.84"
 dependencies = [
  "astronomical-mlx-c-fork",
+ "astronomical-native-build-orchestration",
  "astronomical-native-identity",
  "astronomical-test-harness",
  "fs4",
