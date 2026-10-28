@@ -120,6 +120,41 @@ impl Flux2KleinVaeDecoder {
         Ok(runtime.reshape(&spatial_order, &to_i32_shape(layout.unpatchified_shape())?)?)
     }
 
+    /// Runs one complete-decode stage's module forward for the current
+    /// hidden states, without touching the stage cursor: measurement wraps
+    /// this call, so the function stays pure stage dispatch.
+    fn run_complete_decode_stage(
+        &self,
+        runtime: &MlxRuntime,
+        hidden_states: &MlxArray,
+        next_stage: CompleteDecodeStage,
+    ) -> Result<MlxArray, Flux2KleinVaeError> {
+        match next_stage {
+            CompleteDecodeStage::Input => {
+                let post_quant = self.post_quant_conv.forward(runtime, hidden_states)?;
+                self.conv_in.forward(runtime, &post_quant)
+            }
+            CompleteDecodeStage::MiddleBeforeAttention => self
+                .middle_resnet_before_attention
+                .forward(runtime, hidden_states),
+            CompleteDecodeStage::MiddleAttention => {
+                self.middle_attention.forward(runtime, hidden_states)
+            }
+            CompleteDecodeStage::MiddleAfterAttention => self
+                .middle_resnet_after_attention
+                .forward(runtime, hidden_states),
+            CompleteDecodeStage::UpBlock(block_index) => {
+                self.up_blocks[block_index].forward(runtime, hidden_states)
+            }
+            CompleteDecodeStage::Output => {
+                let normalized = self.output_norm.forward(runtime, hidden_states)?;
+                let activated = runtime.silu(&normalized)?;
+                let decoded = self.conv_out.forward(runtime, &activated)?;
+                Ok(runtime.clip(&decoded, -1.0, 1.0)?)
+            }
+        }
+    }
+
     fn advance_complete_stage(
         &self,
         runtime: &MlxRuntime,
@@ -129,33 +164,9 @@ impl Flux2KleinVaeDecoder {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<CompleteDecodeAdvance, Flux2KleinVaeError> {
         let next_stage = state.next_stage;
-        let hidden_states =
-            performance_attribution.measure_operation(graph_operation, |_| match next_stage {
-                CompleteDecodeStage::Input => {
-                    let post_quant = self
-                        .post_quant_conv
-                        .forward(runtime, &state.hidden_states)?;
-                    self.conv_in.forward(runtime, &post_quant)
-                }
-                CompleteDecodeStage::MiddleBeforeAttention => self
-                    .middle_resnet_before_attention
-                    .forward(runtime, &state.hidden_states),
-                CompleteDecodeStage::MiddleAttention => {
-                    self.middle_attention.forward(runtime, &state.hidden_states)
-                }
-                CompleteDecodeStage::MiddleAfterAttention => self
-                    .middle_resnet_after_attention
-                    .forward(runtime, &state.hidden_states),
-                CompleteDecodeStage::UpBlock(block_index) => {
-                    self.up_blocks[block_index].forward(runtime, &state.hidden_states)
-                }
-                CompleteDecodeStage::Output => {
-                    let normalized = self.output_norm.forward(runtime, &state.hidden_states)?;
-                    let activated = runtime.silu(&normalized)?;
-                    let decoded = self.conv_out.forward(runtime, &activated)?;
-                    Ok(runtime.clip(&decoded, -1.0, 1.0)?)
-                }
-            })?;
+        let hidden_states = performance_attribution.measure_operation(graph_operation, |_| {
+            self.run_complete_decode_stage(runtime, &state.hidden_states, next_stage)
+        })?;
         performance_attribution
             .measure_operation(synchronization_operation, |_| hidden_states.evaluate())?;
         let following_stage = match next_stage {

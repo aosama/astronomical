@@ -22,33 +22,7 @@ pub(super) fn exact_state_file_bytes(
     let mut tensor_geometry = persisted_tensor_layouts
         .into_iter()
         .map(|persisted_tensor_layout| {
-            let tensor_layout = persisted_tensor_layout.tensor_layout();
-            let dimensions = tensor_layout
-                .dimensions()
-                .iter()
-                .enumerate()
-                .map(|(dimension_index, dimension)| {
-                    if tensor_layout.sequence_axis() == Some(dimension_index) {
-                        block_token_count
-                    } else {
-                        *dimension
-                    }
-                })
-                .collect::<Vec<_>>();
-            let payload_bytes = if tensor_layout.sequence_axis().is_some() {
-                tensor_layout
-                    .sequence_payload_byte_count_per_token()?
-                    .checked_mul(block_token_count)
-                    .ok_or(crate::DecoderCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?
-            } else {
-                tensor_layout.fixed_payload_byte_count()?
-            };
-            Ok::<_, crate::DecoderCacheLayoutError>((
-                persisted_tensor_layout.persistent_tensor_name(),
-                tensor_layout.dtype().safetensors_dtype_name(),
-                dimensions,
-                payload_bytes,
-            ))
+            tensor_storage_geometry(persisted_tensor_layout, block_token_count)
         })
         .collect::<Result<Vec<_>, _>>()?;
     tensor_geometry.sort_by(|left_tensor, right_tensor| {
@@ -108,4 +82,44 @@ pub(super) fn maximum_block_manifest_file_bytes(
     serde_json::to_vec(&manifest)
         .map(|manifest_bytes| u64::try_from(manifest_bytes.len()).unwrap_or(u64::MAX))
         .map_err(PersistentPromptCacheModelContractError::SerializeStorageGeometry)
+}
+
+/// One persisted tensor's storage geometry: its persistent name, dtype name,
+/// block-shaped dimensions (the sequence axis sized to the block's token
+/// count), and exact payload bytes.
+///
+/// The caller sorts by payload bytes so JSON insertion and payload offsets
+/// stay deterministic, mirroring the native writer's largest-tensor-first
+/// policy that bounds peak workspace.
+fn tensor_storage_geometry(
+    persisted_tensor_layout: crate::DecoderCachePersistedTensorLayout,
+    block_token_count: usize,
+) -> Result<(String, &'static str, Vec<usize>, usize), crate::DecoderCacheLayoutError> {
+    let tensor_layout = persisted_tensor_layout.tensor_layout();
+    let dimensions = tensor_layout
+        .dimensions()
+        .iter()
+        .enumerate()
+        .map(|(dimension_index, dimension)| {
+            if tensor_layout.sequence_axis() == Some(dimension_index) {
+                block_token_count
+            } else {
+                *dimension
+            }
+        })
+        .collect::<Vec<_>>();
+    let payload_bytes = if tensor_layout.sequence_axis().is_some() {
+        tensor_layout
+            .sequence_payload_byte_count_per_token()?
+            .checked_mul(block_token_count)
+            .ok_or(crate::DecoderCacheLayoutError::SequenceTensorPayloadByteCountOverflow)?
+    } else {
+        tensor_layout.fixed_payload_byte_count()?
+    };
+    Ok((
+        persisted_tensor_layout.persistent_tensor_name(),
+        tensor_layout.dtype().safetensors_dtype_name(),
+        dimensions,
+        payload_bytes,
+    ))
 }

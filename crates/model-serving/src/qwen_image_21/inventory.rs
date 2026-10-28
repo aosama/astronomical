@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ::safetensors::Dtype;
 
-use crate::artifact_validation::RawSafetensorsInventory;
+use crate::artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
 
 use super::artifact::QwenImage21ArtifactError;
 use super::configuration::{
@@ -128,37 +128,7 @@ fn validate_component(
         .tensor_descriptors
         .into_iter()
         .map(|descriptor| {
-            // Unreachable after the exact-name checks above; reporting the missing tensor
-            // again beats panicking if that invariant ever regresses.
-            let expected_profile = expected_by_name
-                .get(descriptor.tensor_name.as_str())
-                .ok_or_else(|| QwenImage21ArtifactError::MissingTensor {
-                    component,
-                    tensor_name: descriptor.tensor_name.clone(),
-                })?;
-            if descriptor.dtype
-                != expected_dtype(component, &descriptor.tensor_name, expected_profile.dtype)?
-            {
-                return Err(QwenImage21ArtifactError::TensorDtype {
-                    component,
-                    tensor_name: descriptor.tensor_name,
-                });
-            }
-            if descriptor.shape != expected_profile.shape {
-                return Err(QwenImage21ArtifactError::TensorShape {
-                    component,
-                    tensor_name: descriptor.tensor_name,
-                });
-            }
-            Ok(QwenImage21TensorDescriptor {
-                source_file_name: file_name.to_owned(),
-                tensor_name: descriptor.tensor_name,
-                dtype: descriptor.dtype,
-                shape: descriptor.shape,
-                data_start_offset_bytes: descriptor.data_start_offset_bytes,
-                data_end_offset_bytes: descriptor.data_end_offset_bytes,
-                payload_bytes: descriptor.tensor_payload_bytes,
-            })
+            validated_tensor_descriptor(component, file_name, &expected_by_name, descriptor)
         })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(QwenImage21TensorInventory {
@@ -192,4 +162,47 @@ pub(super) fn validate_vae_inventory(
 ) -> Result<QwenImage21TensorInventory, QwenImage21ArtifactError> {
     let expected = vae_tensor_profiles(config);
     validate_component("vae", file_name, inventory, expected)
+}
+
+/// Validates one parsed descriptor against the component's expected profile
+/// and converts it to the inventory's typed descriptor.
+///
+/// The lookup's missing-tensor arm is unreachable after the exact-name checks
+/// the caller ran first; reporting the missing tensor again still beats
+/// panicking if that invariant ever regresses.
+fn validated_tensor_descriptor(
+    component: &'static str,
+    file_name: &str,
+    expected_by_name: &BTreeMap<&str, &QwenImage21TensorProfile>,
+    descriptor: RawSafetensorsTensorDescriptor,
+) -> Result<QwenImage21TensorDescriptor, QwenImage21ArtifactError> {
+    let expected_profile = expected_by_name
+        .get(descriptor.tensor_name.as_str())
+        .ok_or_else(|| QwenImage21ArtifactError::MissingTensor {
+            component,
+            tensor_name: descriptor.tensor_name.clone(),
+        })?;
+    if descriptor.dtype
+        != expected_dtype(component, &descriptor.tensor_name, expected_profile.dtype)?
+    {
+        return Err(QwenImage21ArtifactError::TensorDtype {
+            component,
+            tensor_name: descriptor.tensor_name,
+        });
+    }
+    if descriptor.shape != expected_profile.shape {
+        return Err(QwenImage21ArtifactError::TensorShape {
+            component,
+            tensor_name: descriptor.tensor_name,
+        });
+    }
+    Ok(QwenImage21TensorDescriptor {
+        source_file_name: file_name.to_owned(),
+        tensor_name: descriptor.tensor_name,
+        dtype: descriptor.dtype,
+        shape: descriptor.shape,
+        data_start_offset_bytes: descriptor.data_start_offset_bytes,
+        data_end_offset_bytes: descriptor.data_end_offset_bytes,
+        payload_bytes: descriptor.tensor_payload_bytes,
+    })
 }
