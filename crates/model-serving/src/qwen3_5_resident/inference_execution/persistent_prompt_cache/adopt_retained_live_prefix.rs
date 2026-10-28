@@ -20,9 +20,9 @@ use crate::{
     PersistentPromptCachePrefixLookupResult,
 };
 
-use super::decoder_state_reuse::{
-    PersistentPromptCacheRestoreOutcome, persistent_prompt_cache_request_diagnostics,
-};
+use crate::persistent_cache::restore_support::persistent_prompt_cache_request_diagnostics;
+
+use super::decoder_state_reuse::PersistentPromptCacheRestoreOutcome;
 use super::retained_live_prefix::RetainedLiveDecoderPrefix;
 use super::{Qwen3_5EngineState, fatal_engine_error};
 

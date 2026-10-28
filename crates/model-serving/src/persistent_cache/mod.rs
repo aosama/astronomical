@@ -52,6 +52,12 @@ pub(crate) mod prefix_lookup;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod quota_bounded_contract;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod restore_support;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod restore_support_tests;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod restore_support_tests_support;
+#[cfg(feature = "direct-mlx")]
 mod retention_policy;
 #[cfg(feature = "direct-mlx")]
 mod startup_cleanup_evidence;

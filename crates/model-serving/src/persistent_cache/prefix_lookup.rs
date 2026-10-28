@@ -101,6 +101,28 @@ impl PersistentPromptCacheLookupDiagnostics {
         self.miss_reason
     }
 
+    /// Test fixture: a diagnostics record with the fields the restore-support
+    /// mapping consumes set explicitly, so the IPC contract can be tested
+    /// without driving a full prefix lookup against a disk store.
+    #[cfg(test)]
+    pub(crate) fn for_tests(
+        complete_prompt_block_count: usize,
+        maximum_restorable_block_count: usize,
+        matched_sequence_state_block_count: usize,
+        miss_reason: Option<PersistentPromptCacheMissReason>,
+    ) -> Self {
+        Self {
+            complete_prompt_block_count,
+            maximum_restorable_block_count,
+            matched_sequence_state_block_count,
+            first_missing_sequence_state_block_index: None,
+            first_missing_sequence_state_block_hash: None,
+            newest_boundary_state_snapshot_block_index: None,
+            restored_partial_tail_block_token_count: None,
+            miss_reason,
+        }
+    }
+
     fn record_matched_sequence_state_block_count(
         &mut self,
         matched_sequence_state_block_count: usize,
