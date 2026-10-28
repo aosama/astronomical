@@ -193,6 +193,7 @@ async fn should_cap_concurrent_payload_requests_at_the_bounded_window() {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_pause_across_every_in_flight_file_and_resume_without_progress_mismatch() {
     tokio::time::timeout(Duration::from_secs(5), async {
         let file_payloads: [(&str, &[u8]); 2] = [

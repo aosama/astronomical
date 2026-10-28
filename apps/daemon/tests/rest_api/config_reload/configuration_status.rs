@@ -9,6 +9,7 @@ use astronomical_ipc_protocol::{
 use super::*;
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_expose_configured_and_worker_effective_generation_with_path_free_model_summary() {
     let configured_generation = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     let effective_generation = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";

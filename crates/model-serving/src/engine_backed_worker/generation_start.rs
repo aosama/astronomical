@@ -18,6 +18,7 @@ where
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
 {
+    #[expect(clippy::too_many_lines)]
     pub(super) async fn start_generation<WriteTransport>(
         &mut self,
         generation_command: astronomical_ipc_protocol::ChatGenerationCommand,

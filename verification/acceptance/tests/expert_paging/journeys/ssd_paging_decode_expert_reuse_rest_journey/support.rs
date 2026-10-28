@@ -275,6 +275,7 @@ pub(super) struct DecodeExpertReuseCounters {
 /// (#373), true routes are observed (#536), the predictor surface stays
 /// retired (#537, #594), and the ceiling-utilization identity closes with no
 /// unexplained residual (#507).
+#[expect(clippy::too_many_lines)]
 pub(super) fn assert_decode_expert_reuse_attribution(
     attribution_home: &Path,
     final_status: &Value,

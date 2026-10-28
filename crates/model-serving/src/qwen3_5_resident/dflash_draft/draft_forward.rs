@@ -62,6 +62,7 @@ pub fn forward_draft_block(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 fn forward_one_draft_layer(
     runtime: &MlxRuntime,
     layer_weights: &DFlashDraftLayerWeights,

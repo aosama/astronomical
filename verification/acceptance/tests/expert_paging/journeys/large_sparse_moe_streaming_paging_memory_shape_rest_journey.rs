@@ -69,6 +69,7 @@ async fn should_measure_paging_memory_shape_and_serving_rates_under_the_configur
         .expect("the paging memory-shape experiment must finish within 60 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_paging_memory_shape_experiment() {
     let paging_experiment = TestRunContext::current().configuration.paging_experiment;
     let maximum_mlx_memory_bytes = paging_experiment

@@ -106,6 +106,7 @@ impl QuantizationConfigSource for Qwen3_5TextConfig {
 }
 
 impl Qwen3_5TextConfig {
+    #[expect(clippy::too_many_lines)]
     pub(super) fn validate(
         &self,
         feed_forward_architecture: Qwen3_5FeedForwardArchitecture,

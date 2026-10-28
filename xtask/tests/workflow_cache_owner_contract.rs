@@ -15,6 +15,7 @@ use serde_yaml::Value;
 
 /// Asserts one cache owner's restore/save pair through the shared composite
 /// action and accumulates the restored paths for the disjointness check.
+#[expect(clippy::too_many_lines)]
 fn assert_composite_cache_owner(
     job_steps: &[&Value],
     owner_id: &str,

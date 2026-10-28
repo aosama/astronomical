@@ -113,6 +113,7 @@ where
     Ok(())
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) fn scan_current_format_block_directories(
     blocks_directory: &Path,
     tracked_files: &mut PersistentPromptCacheDiskStoreIndex,

@@ -5,6 +5,7 @@ use super::*;
 const MAXIMUM_LOAD_FAILURE_DESCRIPTION_CHARACTERS: usize = 512;
 
 impl Flux2KleinMlxComponents {
+    #[expect(clippy::too_many_lines)]
     pub(super) fn load_inner(&mut self) -> Result<Flux2KleinComponentLoad, String> {
         let mut attribution = self.new_attribution();
         let mut attribution_log = PerformanceAttributionLog::open(

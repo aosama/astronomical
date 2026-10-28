@@ -89,6 +89,7 @@ fn finish_run(run_outcome: Result<(), RunFailure>) -> ExitCode {
     }
 }
 
+#[expect(clippy::too_many_lines)]
 fn execute(
     repository_root: &Path,
     request: &TestRunRequest,

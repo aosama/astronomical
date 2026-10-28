@@ -252,6 +252,7 @@ impl Qwen3_5Model {
     /// growth path. Prefill pages stay off the decode warm-insert queue, which
     /// previously pinned every chunk's union, including failed attempts, until
     /// generation started.
+    #[expect(clippy::too_many_lines)]
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,

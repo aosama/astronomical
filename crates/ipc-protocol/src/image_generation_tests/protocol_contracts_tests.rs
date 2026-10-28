@@ -26,6 +26,7 @@ fn should_serialize_generated_image_bytes_as_base64_json() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_reject_invalid_image_generation_commands_and_settings() {
     let valid_command = super::valid_image_generation_command();
     let invalid_commands = [

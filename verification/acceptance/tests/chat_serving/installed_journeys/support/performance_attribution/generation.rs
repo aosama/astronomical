@@ -7,6 +7,7 @@ use astronomical_model_serving::{
 use std::time::Instant;
 use tokio::time::{MissedTickBehavior, interval};
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn run_attributed_generation(
     qwen3_5_engine: &mut Qwen3_5StreamingEngine,
     request_id: RequestId,

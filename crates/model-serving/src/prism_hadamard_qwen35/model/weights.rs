@@ -263,6 +263,7 @@ impl PrismHadamardWeights {
 }
 
 /// Loads every family tensor from the pack's retained weights file map.
+#[expect(clippy::too_many_lines)]
 pub(crate) fn load_family_weights(
     runtime: &MlxRuntime,
     pack: &ValidatedFoldedPack,

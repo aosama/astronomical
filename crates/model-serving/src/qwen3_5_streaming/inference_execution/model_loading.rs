@@ -15,6 +15,7 @@ use crate::qwen3_5_core::vision::Qwen3_5ImageProcessor;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 
 impl Qwen3_5EngineState {
+    #[expect(clippy::too_many_lines)]
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         if let Some(model) = self.model.as_ref() {
             return Ok(self.engine_load_result(model.minimum_mlx_memory_ceiling_bytes()?));

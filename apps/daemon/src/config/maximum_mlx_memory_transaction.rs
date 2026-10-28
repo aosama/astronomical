@@ -40,6 +40,7 @@ pub(crate) fn commit_applied_config_snapshots(
     }
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn reconcile_queued_memory_config(
     application_state: ApplicationState,
     candidate_resolved_config: ResolvedRuntimeConfig,

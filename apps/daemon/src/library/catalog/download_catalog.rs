@@ -167,6 +167,7 @@ struct DownloadCatalogCapabilitiesDocument {
 
 impl DownloadCatalog {
     /// Parses and validates one complete catalog document.
+    #[expect(clippy::too_many_lines)]
     pub fn parse_json(catalog_json: &str) -> Result<Self, DownloadCatalogError> {
         // Startup validates this source-authored document before serving; explicit metadata
         // bounds prevent release packaging mistakes from consuming arbitrary laptop resources.

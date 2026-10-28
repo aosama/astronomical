@@ -18,6 +18,7 @@ use crate::{
     worker::loop_types::ActiveGeneration,
 };
 
+#[expect(clippy::too_many_lines)]
 pub(in crate::worker) fn handle_worker_output(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,

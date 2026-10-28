@@ -115,6 +115,7 @@ async fn should_not_reclaim_more_expert_payload_for_a_cache_miss_than_without_ca
     .await;
 }
 
+#[expect(clippy::too_many_lines)]
 async fn measure_initial_request_expert_reclamation(
     model_directory: &Path,
     persistent_prompt_cache_directory: Option<&Path>,

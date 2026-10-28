@@ -336,6 +336,7 @@ impl Qwen3_5Tokenizer {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn prepare_chat_with_performance_attribution(
         &self,
         chat_generation_command: &ChatGenerationCommand,

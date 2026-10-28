@@ -54,6 +54,7 @@ async fn should_attribute_resident_sparse_moe_long_context_prefill_graphics_proc
     .expect("the Ornith-35B long-context attribution journey must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_prefill_attribution_journey(prompt: String, context_label: &str) {
     let model_id = resident_model_id();
     let (isolated_home, rest_server) = launch_resident_rest_server_with_prefill_attribution().await;

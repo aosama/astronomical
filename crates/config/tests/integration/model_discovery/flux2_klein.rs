@@ -321,6 +321,7 @@ fn invalidate_artifact(model_directory: &Path, invalid_artifact: InvalidArtifact
     }
 }
 
+#[expect(clippy::too_many_lines)]
 fn write_executable_flux2_klein_artifact(model_directory: &Path) {
     for relative_directory in [
         ".cache/huggingface/download",

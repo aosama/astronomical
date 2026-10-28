@@ -88,6 +88,7 @@ const MEASURED_ITERATIONS: usize = 10;
 /// (rotation graph, complete-layer page decode, `gather_mm`) against the
 /// prototype kernel with the rotation folded in, each phase timed to a fully
 /// evaluated output, then a parity check of the two results.
+#[expect(clippy::too_many_lines)]
 fn measure_prefill_gathered_dequant(
     case_name: &str,
     output_rows: usize,

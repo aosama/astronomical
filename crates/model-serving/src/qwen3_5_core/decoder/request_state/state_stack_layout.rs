@@ -12,6 +12,7 @@ pub(super) fn decoder_cache_layout_projection_error(
     ))
 }
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn request_decoder_layer_state_from_layout(
     decoder_cache_layer_layout: &DecoderCacheLayerLayout,
     full_attention_kv_state_growth_tokens_override: Option<i32>,

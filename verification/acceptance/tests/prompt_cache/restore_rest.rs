@@ -35,6 +35,7 @@ async fn should_publish_and_restore_the_romeo_and_juliet_cache_through_rest() {
     .expect("the persistent prompt-cache REST journey must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_persistent_prompt_cache_memory_rest_journey(
     maximum_mlx_memory_bytes: Option<u64>,
     expected_expert_memory_mode: Option<&str>,

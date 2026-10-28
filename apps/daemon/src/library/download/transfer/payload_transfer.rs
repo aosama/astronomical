@@ -122,6 +122,7 @@ impl DownloadPayloadTransfer {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub async fn resume(
         &self,
         updated_at_unix_millis: u64,

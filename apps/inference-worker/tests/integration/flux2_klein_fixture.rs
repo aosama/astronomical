@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 pub(super) const CANONICAL_MODEL_ID: &str = "FLUX.2-klein-4B";
 pub(super) const REVIEWED_REVISION: &str = "e7b7dc27f91deacad38e78976d1f2b499d76a294";
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn write_executable_artifact(model_directory: &Path) {
     for relative_directory in [
         ".cache/huggingface/download",

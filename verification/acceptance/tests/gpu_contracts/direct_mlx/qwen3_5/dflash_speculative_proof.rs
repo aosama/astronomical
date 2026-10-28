@@ -121,6 +121,7 @@ struct DecodePhaseOutcome {
     emitted_token_ids: Vec<u32>,
 }
 
+#[expect(clippy::too_many_lines)]
 async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
     let _direct_mlx_guard = direct_mlx_test_guard().await;
     let journey_started_at = Instant::now();
@@ -245,6 +246,7 @@ async fn measure_dflash_speculative_acceptance_and_decode_throughput() {
     println!("---------------------------------------------------------");
 }
 
+#[expect(clippy::too_many_lines)]
 fn load_proof_journey(journey_started_at: Instant) -> ProofJourney {
     let scenario = load_proof_scenario();
     let target_directory =

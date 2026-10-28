@@ -50,6 +50,7 @@ impl Qwen3_5Model {
     /// Routes once, then selects contiguous resident arrays or native paging.
     // Paged execution inputs stay explicit rather than introducing a parameter facade.
     #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn forward_qwen3_5_moe(
         &self,
         hidden_states: &MlxArray,

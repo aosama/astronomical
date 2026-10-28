@@ -49,6 +49,7 @@ pub struct Qwen3_5Config {
 
 impl Qwen3_5Config {
     /// Parses the config bytes retained by validated artifact ownership.
+    #[expect(clippy::too_many_lines)]
     pub fn from_json_bytes(config_bytes: &[u8]) -> Result<Self, Qwen3_5ConfigError> {
         let config_document = serde_json::from_slice::<Qwen3_5ConfigDocument>(config_bytes)
             .map_err(Qwen3_5ConfigError::DeserializeConfig)?;

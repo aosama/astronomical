@@ -98,6 +98,7 @@ async fn should_reject_an_expert_absent_from_its_declared_cached_plus_streamed_p
     .expect("the absent-expert contract must finish within 30 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn verify_compact_cached_plus_streamed_page_route_parity() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = direct_mlx_runtime();
@@ -293,6 +294,7 @@ fn assert_f32_close(actual_values: &[f32], expected_values: &[f32]) {
 /// from each page, one gather restoring the original assignment order, then one
 /// weighted reduction with the original scores.
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_restore_single_page_assignment_order_across_partial_routes() {
     timeout(CACHED_PLUS_STREAMED_PAGE_ROUTE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;

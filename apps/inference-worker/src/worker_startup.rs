@@ -66,6 +66,7 @@ where
     run_initialized_worker(worker_startup_configuration, command_reader, event_writer).await
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_initialized_worker<ReadTransport, WriteTransport>(
     worker_startup_configuration: WorkerStartupConfiguration,
     command_reader: ProtocolReader<ReadTransport>,

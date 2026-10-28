@@ -24,6 +24,7 @@ use crate::{
 };
 
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 pub(super) async fn handle_generate_image_command(
     worker_process: &mut WorkerProcess,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,

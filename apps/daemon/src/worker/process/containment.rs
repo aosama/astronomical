@@ -209,6 +209,7 @@ fn publish_recovery_acknowledgement(
     Ok(())
 }
 
+#[expect(clippy::too_many_lines)]
 async fn cancel_worker_request(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,

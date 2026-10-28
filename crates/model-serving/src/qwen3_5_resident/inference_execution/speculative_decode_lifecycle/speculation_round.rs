@@ -76,6 +76,7 @@ pub struct SpeculationRoundOutcome {
 /// the draft's key-value states in lockstep; both end at the accepted
 /// context length.
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 pub fn run_speculative_round(
     target_model: &Qwen3_5ResidentModel,
     target_decoder_state: &mut RequestDecoderStateStack,

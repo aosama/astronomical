@@ -19,6 +19,7 @@ const FLUX_MODEL_ID: &str = "FLUX.2-klein-4B";
 const FLUX_REVISION: &str = "reviewed-revision";
 
 #[tokio::main]
+#[expect(clippy::too_many_lines)]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut command_reader = ProtocolReader::new(tokio::io::stdin());
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());

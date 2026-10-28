@@ -9,6 +9,7 @@ use crate::qwen_image_21::configuration::QwenImage21TextEncoderConfig;
 /// vision tower. The T2I path executes only the language model; the vision tower is validated so
 /// the artifact contract covers the full file.
 #[must_use]
+#[expect(clippy::too_many_lines)] // declarative table: data serialized as code (issue #1637 Family D)
 pub fn text_encoder_tensor_profiles(
     config: &QwenImage21TextEncoderConfig,
 ) -> Vec<QwenImage21TensorProfile> {

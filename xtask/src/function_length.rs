@@ -75,8 +75,10 @@ pub(crate) fn function_length_lanes() -> Vec<FunctionLengthLane> {
 ///
 /// The short format puts everything on one line:
 /// `path:line:column: warning: this function has too many lines (142/100)`.
-/// Only that message is aggregated; every other diagnostic passes through
-/// untouched for the caller to treat as a genuine compile failure.
+/// When the budget lint is denied, the same message arrives with an `error:`
+/// prefix, so both prefixes resolve to the same location. Only that message
+/// is aggregated; every other diagnostic passes through untouched for the
+/// caller to treat as a genuine compile failure.
 pub(crate) fn parse_over_budget_diagnostics(diagnostic_text: &str) -> Vec<OverBudgetFunction> {
     let mut findings_by_location: BTreeMap<(String, usize), OverBudgetFunction> = BTreeMap::new();
     for line in diagnostic_text.lines() {
@@ -85,6 +87,7 @@ pub(crate) fn parse_over_budget_diagnostics(diagnostic_text: &str) -> Vec<OverBu
         };
         let location_text = line[..message_start]
             .strip_suffix(": warning: ")
+            .or_else(|| line[..message_start].strip_suffix(": error: "))
             .unwrap_or(&line[..message_start]);
         let mut location_segments = location_text.rsplitn(3, ':');
         let Some(column_text) = location_segments.next() else {

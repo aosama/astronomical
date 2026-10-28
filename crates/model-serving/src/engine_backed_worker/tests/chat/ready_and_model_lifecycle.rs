@@ -319,6 +319,7 @@ async fn should_remain_idle_after_the_first_model_creation_fails() {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_publish_the_unused_ceiling_split_on_model_loaded_and_limit_adjusted_samples() {
     let model_factory_call_count = Arc::new(AtomicUsize::new(0));
     let utilization_split = MemoryCeilingUtilization {

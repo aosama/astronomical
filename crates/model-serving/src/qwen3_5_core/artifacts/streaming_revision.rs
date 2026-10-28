@@ -62,6 +62,7 @@ impl Qwen3_5ArtifactValidator {
     /// and the expert pager derives their plans from pack headers. A
     /// synthesized index document keeps the shard-index, inventory, and
     /// binding contracts identical to the shard path.
+    #[expect(clippy::too_many_lines)]
     pub(super) fn validate_streaming_revision(
         model_directory: &Path,
         max_output_tokens: u32,

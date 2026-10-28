@@ -37,6 +37,7 @@ async fn main() -> ExitCode {
     }
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut command_reader = ProtocolReader::new(tokio::io::stdin());
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());

@@ -26,6 +26,7 @@ async fn should_embed_romeo_and_juliet_lines_through_public_rest() {
         .expect("the embeddings GPU journey must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_embeddings_gpu_journey() {
     let selected_model = configured_embeddings_model();
     eprintln!(

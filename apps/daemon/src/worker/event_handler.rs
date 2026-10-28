@@ -35,6 +35,7 @@ use crate::{
 /// payload is valid. Generation-scoped events additionally require a matching
 /// active request. Model-swap waiting delegates here so both loops enforce the
 /// same protocol rules instead of maintaining competing event allowlists.
+#[expect(clippy::too_many_lines)]
 pub(super) fn handle_worker_event(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,

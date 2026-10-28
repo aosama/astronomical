@@ -312,6 +312,7 @@ async fn wait_until_idle(worker_handle: &WorkerHandle) {
     );
 }
 
+#[expect(clippy::too_many_lines)]
 async fn measure_worker_summarization(
     pass_label: &str,
     benchmark_started_at: Instant,

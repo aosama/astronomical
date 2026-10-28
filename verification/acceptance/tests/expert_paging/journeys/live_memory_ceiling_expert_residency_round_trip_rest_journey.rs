@@ -73,6 +73,7 @@ async fn should_settle_fully_resident_after_raising_the_memory_ceiling_mid_strea
         .expect("the mid-streaming SSD ceiling raise settlement must finish within 120 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_mid_streaming_raise_settlement() {
     let journey_started_at = Instant::now();
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
@@ -264,6 +265,7 @@ async fn run_mid_streaming_raise_settlement() {
     );
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_residency_round_trip() {
     let journey_started_at = Instant::now();
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
