@@ -290,3 +290,6 @@ pub enum ThinkingControlsError {
     )]
     ThinkingDisabledWhileBudgetRequested { thinking_budget: u32 },
 }
+
+#[cfg(test)]
+mod tests;

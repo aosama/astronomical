@@ -352,3 +352,6 @@ impl OpenAiTokenUsage {
         self
     }
 }
+
+#[cfg(test)]
+mod tests;

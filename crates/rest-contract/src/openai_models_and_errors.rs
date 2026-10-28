@@ -436,3 +436,6 @@ pub struct OpenAiError {
     #[serde(skip_serializing_if = "Option::is_none")]
     code: Option<String>,
 }
+
+#[cfg(test)]
+mod tests;

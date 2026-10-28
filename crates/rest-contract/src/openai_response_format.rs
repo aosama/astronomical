@@ -342,3 +342,6 @@ fn json_nesting_depth(json_value: &Value) -> usize {
         _ => 0,
     }
 }
+
+#[cfg(test)]
+mod tests;

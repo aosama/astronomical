@@ -1,4 +1,4 @@
-use astronomical_rest_contract::{
+use crate::{
     OpenAiChatCompletionRequest, OpenAiResponsesRequest, OpenAiStructuredOutput,
     OpenAiStructuredOutputValidationError, UNENFORCED_RESPONSE_FORMAT_WARNING,
     compact_extracted_json_text, extract_json_value_from_text,
@@ -151,7 +151,7 @@ fn should_accept_structured_outputs_choice() {
         .expect("choice extra body should validate");
     assert!(matches!(
         request_parts.enforced_structured_generation,
-        Some(astronomical_rest_contract::EnforcedStructuredGeneration::Choice { .. })
+        Some(crate::EnforcedStructuredGeneration::Choice { .. })
     ));
 }
 
@@ -170,11 +170,9 @@ fn should_enforce_structured_outputs_regex() {
         .expect("a compilable regex must be enforced, not rejected");
     assert_eq!(
         request_parts.enforced_structured_generation,
-        Some(
-            astronomical_rest_contract::EnforcedStructuredGeneration::Regex {
-                pattern: "[A-Z]+".to_owned(),
-            }
-        )
+        Some(crate::EnforcedStructuredGeneration::Regex {
+            pattern: "[A-Z]+".to_owned(),
+        })
     );
 }
 
@@ -196,8 +194,7 @@ fn should_reject_an_uncompilable_regex_pattern() {
 
 #[test]
 fn should_reject_an_oversized_regex_pattern() {
-    let oversized_pattern =
-        "a".repeat(astronomical_rest_contract::MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES + 1);
+    let oversized_pattern = "a".repeat(crate::MAXIMUM_STRUCTURED_REGEX_PATTERN_BYTES + 1);
     let request = serde_json::from_str::<OpenAiChatCompletionRequest>(&format!(
         r#"{{
             "model": "mlx-community/Qwen3.5-2B-4bit",
@@ -261,6 +258,6 @@ fn should_accept_structured_outputs_json_object() {
         .expect("empty json extra body should compile to json_object");
     assert_eq!(
         request_parts.enforced_structured_generation,
-        Some(astronomical_rest_contract::EnforcedStructuredGeneration::JsonObject)
+        Some(crate::EnforcedStructuredGeneration::JsonObject)
     );
 }

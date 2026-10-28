@@ -476,3 +476,6 @@ struct OpenAiResponseInputTokenDetails {
 struct OpenAiResponseOutputTokenDetails {
     reasoning_tokens: u32,
 }
+
+#[cfg(test)]
+mod tests;

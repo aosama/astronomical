@@ -1,4 +1,10 @@
-use astronomical_rest_contract::{
+//! Wire-contract tests for the chat completion request DTO.
+//!
+//! Moved from the integration lane (issue #1610): every scenario exercises
+//! exactly this module's parse-and-validate surface with literal JSON and
+//! crosses no process, socket, filesystem, or model boundary.
+
+use crate::{
     MAX_OPENAI_OUTPUT_TOKENS, OpenAiChatCompletionRequest, OpenAiChatCompletionValidationError,
     OpenAiChatMessageParts, OpenAiToolChoiceMode,
 };

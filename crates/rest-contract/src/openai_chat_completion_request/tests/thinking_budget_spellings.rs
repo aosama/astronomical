@@ -1,5 +1,5 @@
 use super::*;
-use astronomical_rest_contract::{OpenAiChatCompletionRequestParts, ThinkingControlsError};
+use crate::{OpenAiChatCompletionRequestParts, ThinkingControlsError};
 
 #[test]
 fn should_resolve_the_coding_agent_thinking_budget_spelling_alone() {

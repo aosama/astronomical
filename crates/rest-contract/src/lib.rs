@@ -1,3 +1,15 @@
+//! Typed OpenAI-compatible request/response contracts for Astronomical's
+//! loopback REST surface.
+//!
+//! # Test tiers
+//!
+//! All 141 tests in this crate are unit tests and live beside the types
+//! they exercise, in `#[cfg(test)]` submodules of `src/` (issue #1610):
+//! 137 moved in from the retired `tests/rest_api` integration lane, plus
+//! the request-budget module's four. The crate has no integration lane;
+//! the `rest_api_tests` target CI selects resolves from the daemon crate,
+//! which drives the full application stack.
+
 #![forbid(unsafe_code)]
 
 mod image_input;
