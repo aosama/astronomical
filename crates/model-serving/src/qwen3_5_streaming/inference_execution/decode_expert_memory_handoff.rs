@@ -167,78 +167,96 @@ pub(in crate::qwen3_5_streaming) fn decode_warm_slot_count(
     model: &Qwen3_5Model,
     expert_statistics: crate::ExpertWeightMemoryCacheStatistics,
 ) -> usize {
-    model
-        .runtime()
-        .memory_snapshot()
-        .map(|memory_snapshot| {
-            let warm_budget_bytes = decode_warm_budget_bytes(
-                adaptive_ram_growth_guard,
-                model,
-                memory_snapshot.active_memory_bytes(),
-                expert_statistics.resident_payload_byte_count,
-            );
-            let (expert_capacity, per_expert_payload_bytes, sparse_layer_count) = model
-                .expert_pager
-                .as_ref()
-                .and_then(|expert_pager| expert_pager.layer_plans().first())
-                .and_then(|layer_plan| {
-                    let expert_capacity = layer_plan.expert_capacity;
-                    let per_expert_payload_bytes =
-                        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-                            layer_plan,
-                            1,
-                        )
-                        .ok()?;
-                    Some((expert_capacity, per_expert_payload_bytes))
-                })
-                .map_or((0, 0, 0), |(expert_capacity, per_expert_payload_bytes)| {
-                    (
-                        expert_capacity,
-                        per_expert_payload_bytes,
-                        model
-                            .expert_pager
-                            .as_ref()
-                            .map_or(0, |expert_pager| expert_pager.layer_count()),
-                    )
-                });
-            if expert_capacity == 0 || per_expert_payload_bytes == 0 {
-                return 0;
-            }
-            let warm_capacity = crate::hot_expert_warm_slot_count(expert_capacity);
-            // The real expert capacity decides the elastic/complete
-            let complete_layer_count =
-                model
-                    .retained_experts
-                    .as_ref()
-                    .map_or(0, |retained_experts| {
-                        retained_experts
-                            .borrow()
-                            .topology_snapshot(expert_capacity)
-                            .into_iter()
-                            .filter(|residency| {
-                                residency.class
-                                    == crate::RetainedExpertPageClass::StableCompleteLayer
-                            })
-                            .count()
-                    });
-            let unseated_sparse_layer_count =
-                sparse_layer_count.saturating_sub(complete_layer_count);
-            // The warm capacity scales down to what the guard's headroom
-            // affords across the unseated layers; zero disables warming.
-            let budget_affordable_capacity =
-                if unseated_sparse_layer_count == 0 || per_expert_payload_bytes == 0 {
-                    0
-                } else {
-                    let per_layer_warm_bytes = u128::from(per_expert_payload_bytes)
-                        .saturating_mul(u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX));
-                    let affordable_slots = u128::from(warm_budget_bytes)
-                        .checked_div(per_layer_warm_bytes)
-                        .unwrap_or(0);
-                    usize::try_from(affordable_slots).unwrap_or(usize::MAX)
-                };
-            warm_capacity.min(budget_affordable_capacity)
-        })
-        .unwrap_or(0)
+    let warm_budget_bytes =
+        decode_warm_budget_bytes_from_snapshot(adaptive_ram_growth_guard, model, expert_statistics);
+    let Some(layer_geometry) = decode_warm_layer_geometry(model) else {
+        return 0;
+    };
+    if layer_geometry.expert_capacity == 0 || layer_geometry.per_expert_payload_bytes == 0 {
+        return 0;
+    }
+    let warm_capacity = crate::hot_expert_warm_slot_count(layer_geometry.expert_capacity);
+    let complete_layer_count = stable_complete_layer_count(model, layer_geometry.expert_capacity);
+    let unseated_sparse_layer_count = layer_geometry
+        .sparse_layer_count
+        .saturating_sub(complete_layer_count);
+    // The warm capacity scales down to what the guard's headroom affords
+    // across the unseated layers; zero disables warming.
+    let budget_affordable_capacity = budget_affordable_slot_count(
+        warm_budget_bytes,
+        layer_geometry.per_expert_payload_bytes,
+        unseated_sparse_layer_count,
+    );
+    warm_capacity.min(budget_affordable_capacity)
+}
+
+/// The first sparse layer plan's paging geometry, shared by the decode
+/// warm-sizing decisions so they all price bytes from the same layer.
+struct DecodeWarmLayerGeometry {
+    expert_capacity: usize,
+    per_expert_payload_bytes: u64,
+    sparse_layer_count: usize,
+}
+
+/// Reads the first sparse layer plan's expert capacity, per-expert payload
+/// bytes, and the pager's sparse layer count.
+///
+/// `None` means no warm decision applies — no pager, no layer plans, or a
+/// first plan that cannot price one routed expert page — and every caller
+/// treats that as "size to zero" rather than inventing a fallback geometry.
+fn decode_warm_layer_geometry(model: &Qwen3_5Model) -> Option<DecodeWarmLayerGeometry> {
+    let expert_pager = model.expert_pager.as_ref()?;
+    let first_layer_plan = expert_pager.layer_plans().first()?;
+    let per_expert_payload_bytes =
+        crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
+            first_layer_plan,
+            1,
+        )
+        .ok()?;
+    Some(DecodeWarmLayerGeometry {
+        expert_capacity: first_layer_plan.expert_capacity,
+        per_expert_payload_bytes,
+        sparse_layer_count: expert_pager.layer_count(),
+    })
+}
+
+/// Counts the sparse layers seated as stable complete layers: the layers
+/// whose experts are already fully resident, so warm tables would duplicate
+/// them. Layers without retained-expert seating report zero.
+fn stable_complete_layer_count(model: &Qwen3_5Model, expert_capacity: usize) -> usize {
+    let Some(retained_experts) = model.retained_experts.as_ref() else {
+        return 0;
+    };
+    let topology_snapshot = retained_experts.borrow().topology_snapshot(expert_capacity);
+    let mut complete_layer_count = 0;
+    for residency in topology_snapshot {
+        if residency.class == crate::RetainedExpertPageClass::StableCompleteLayer {
+            complete_layer_count += 1;
+        }
+    }
+    complete_layer_count
+}
+
+/// The warm-table slot count the warm budget affords across every unseated
+/// sparse layer: the budget divided by one layer's warm payload.
+///
+/// Zero unseated layers (or a zero per-expert payload) disables warming,
+/// because there is nothing left to warm; the division never rounds up into
+/// bytes the guard has not released.
+fn budget_affordable_slot_count(
+    warm_budget_bytes: u64,
+    per_expert_payload_bytes: u64,
+    unseated_sparse_layer_count: usize,
+) -> usize {
+    if unseated_sparse_layer_count == 0 || per_expert_payload_bytes == 0 {
+        return 0;
+    }
+    let per_layer_warm_bytes = u128::from(per_expert_payload_bytes)
+        .saturating_mul(u128::try_from(unseated_sparse_layer_count).unwrap_or(u128::MAX));
+    let affordable_slots = u128::from(warm_budget_bytes)
+        .checked_div(per_layer_warm_bytes)
+        .unwrap_or(0);
+    usize::try_from(affordable_slots).unwrap_or(usize::MAX)
 }
 
 /// The warm budget under the tighter of the guard's and the plan's ceilings.
@@ -274,6 +292,28 @@ fn decode_warm_budget_bytes(
         .saturating_sub(resident_payload_byte_count)
 }
 
+/// The warm budget read from the live memory snapshot, or zero when no
+/// snapshot is available.
+///
+/// Every warm-sizing decision in this file reads the budget through this
+/// one door so they see byte-identical headroom for one snapshot and none
+/// of them silently invents a different missing-snapshot fallback.
+fn decode_warm_budget_bytes_from_snapshot(
+    adaptive_ram_growth_guard: &AdaptiveRamGrowthGuard,
+    model: &Qwen3_5Model,
+    expert_statistics: crate::ExpertWeightMemoryCacheStatistics,
+) -> u64 {
+    let Ok(memory_snapshot) = model.runtime().memory_snapshot() else {
+        return 0;
+    };
+    decode_warm_budget_bytes(
+        adaptive_ram_growth_guard,
+        model,
+        memory_snapshot.active_memory_bytes(),
+        expert_statistics.resident_payload_byte_count,
+    )
+}
+
 /// Evicts the coldest complete layers until the warm budget can seat the
 /// minimum decode warm floor across every unseated sparse layer.
 ///
@@ -293,50 +333,30 @@ fn enforce_decode_warm_slot_floor(
     model: &Qwen3_5Model,
     experts_per_token: usize,
 ) {
-    let Some((expert_capacity, per_expert_payload_bytes, sparse_layer_count)) =
-        model.expert_pager.as_ref().and_then(|expert_pager| {
-            let first_layer_plan = expert_pager.layer_plans().first()?;
-            let per_expert_payload_bytes =
-                crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes(
-                    first_layer_plan,
-                    1,
-                )
-                .ok()?;
-            Some((
-                first_layer_plan.expert_capacity,
-                per_expert_payload_bytes,
-                expert_pager.layer_count(),
-            ))
-        })
-    else {
+    let Some(layer_geometry) = decode_warm_layer_geometry(model) else {
         return;
     };
-    if expert_capacity == 0 || per_expert_payload_bytes == 0 || sparse_layer_count == 0 {
+    if layer_geometry.expert_capacity == 0
+        || layer_geometry.per_expert_payload_bytes == 0
+        || layer_geometry.sparse_layer_count == 0
+    {
         return;
     }
     let expert_statistics = model.expert_weight_memory_cache_statistics();
-    let warm_budget_bytes = model
-        .runtime()
-        .memory_snapshot()
-        .map_or(0_u64, |memory_snapshot| {
-            decode_warm_budget_bytes(
-                adaptive_ram_growth_guard,
-                model,
-                memory_snapshot.active_memory_bytes(),
-                expert_statistics.resident_payload_byte_count,
-            )
-        });
+    let warm_budget_bytes =
+        decode_warm_budget_bytes_from_snapshot(adaptive_ram_growth_guard, model, expert_statistics);
+    let retained_topology_snapshot = match model.retained_experts.as_ref() {
+        Some(retained_experts) => retained_experts
+            .borrow()
+            .topology_snapshot(layer_geometry.expert_capacity),
+        None => Vec::new(),
+    };
     let eviction_indexes = crate::decode_warm_floor_eviction_indexes(
-        &model
-            .retained_experts
-            .as_ref()
-            .map_or(Vec::new(), |retained_experts| {
-                retained_experts.borrow().topology_snapshot(expert_capacity)
-            }),
+        &retained_topology_snapshot,
         warm_budget_bytes,
-        per_expert_payload_bytes,
+        layer_geometry.per_expert_payload_bytes,
         crate::minimum_decode_warm_slot_count(experts_per_token),
-        sparse_layer_count,
+        layer_geometry.sparse_layer_count,
     );
     let evicted_complete_layer_count = eviction_indexes.len();
     for coldest_complete_layer_index in eviction_indexes {
@@ -390,21 +410,55 @@ fn cap_complete_layer_seating_to_decode_warm_floor(
                 )
             });
     let expert_statistics = model.expert_weight_memory_cache_statistics();
-    let warm_budget_bytes = model
-        .runtime()
-        .memory_snapshot()
-        .map_or(0_u64, |memory_snapshot| {
-            decode_warm_budget_bytes(
-                adaptive_ram_growth_guard,
-                model,
-                memory_snapshot.active_memory_bytes(),
-                expert_statistics.resident_payload_byte_count,
-            )
-        });
+    let warm_budget_bytes =
+        decode_warm_budget_bytes_from_snapshot(adaptive_ram_growth_guard, model, expert_statistics);
     crate::memory::decode_seating::complete_layers_within_decode_warm_budget(
         &geometries,
         &current_residencies,
         planned_complete_layer_indexes_to_seat,
         warm_budget_bytes,
     )
+}
+
+#[cfg(test)]
+mod budget_affordable_slot_count_tests {
+    use super::budget_affordable_slot_count;
+
+    #[test]
+    fn should_size_slots_to_the_budget_across_every_unseated_layer() {
+        // 1000 warm bytes across 10 unseated layers, one expert priced at
+        // 10 bytes: 100 bytes per layer affords 10 warm slots.
+        assert_eq!(budget_affordable_slot_count(1_000, 10, 10), 10);
+    }
+
+    #[test]
+    fn should_seat_exactly_one_layer_when_the_budget_divides_evenly() {
+        assert_eq!(budget_affordable_slot_count(100, 10, 10), 1);
+    }
+
+    #[test]
+    fn should_floor_to_zero_when_the_budget_cannot_seat_one_layer() {
+        assert_eq!(budget_affordable_slot_count(99, 10, 10), 0);
+    }
+
+    #[test]
+    fn should_disable_warming_when_no_layers_remain_unseated() {
+        assert_eq!(budget_affordable_slot_count(1_000, 10, 0), 0);
+    }
+
+    #[test]
+    fn should_disable_warming_when_the_payload_price_is_zero() {
+        assert_eq!(budget_affordable_slot_count(1_000, 0, 10), 0);
+    }
+
+    #[test]
+    fn should_report_zero_for_a_budget_dwarfed_by_extreme_geometry() {
+        // u64::MAX warm bytes cannot seat even one expert per layer once
+        // every layer prices at u64::MAX bytes: the per-layer product
+        // approaches the u128 ceiling and the division floors to zero.
+        assert_eq!(
+            budget_affordable_slot_count(u64::MAX, u64::MAX, usize::MAX),
+            0
+        );
+    }
 }
