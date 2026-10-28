@@ -91,36 +91,6 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
     // Wide rows make each projection array tens of kilobytes, so a real pin
     // (a retired table or a fill source) towers over the CPU allocator's
     // per-array size-class rounding this suite-mode assertion must tolerate.
-    let wide_streamed_weights = |expert_count: usize| {
-        let projection = |fill: f32| {
-            runtime
-                .array_from_f32(
-                    &vec![fill; expert_count * 2048],
-                    &[
-                        i32::try_from(expert_count).expect("the expert count fits i32"),
-                        2048,
-                    ],
-                )
-                .expect("the test projection should be valid")
-        };
-        Qwen3_5PagedExpertWeights {
-            gate_projection: Qwen3_5AffineWeights::NativeBfloat16 {
-                weight: projection(1.0),
-            },
-            up_projection: Qwen3_5AffineWeights::NativeBfloat16 {
-                weight: projection(2.0),
-            },
-            down_projection: Qwen3_5AffineWeights::NativeBfloat16 {
-                weight: projection(3.0),
-            },
-            gate_activation_rotation:
-                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
-            up_activation_rotation:
-                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
-            down_activation_rotation:
-                astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
-        }
-    };
     let mut cache = WarmExpertSlotTableCache::new(1);
     cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
     // Other suite tests share the process-global runtime; sample this test's
@@ -139,7 +109,7 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
     )
     .unwrap_or(0);
     {
-        let weights = wide_streamed_weights(2);
+        let weights = wide_streamed_native_weights(&runtime, 2);
         cache
             .queue_pending_routed_expert_insert(0, &[1, 2], &weights, WARM_SLOT_COUNT)
             .expect("the first warm insert should queue");
@@ -151,7 +121,7 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
             .queue_pending_routed_expert_insert(
                 0,
                 &[3, 4],
-                &wide_streamed_weights(2),
+                &wide_streamed_native_weights(&runtime, 2),
                 WARM_SLOT_COUNT,
             )
             .expect("the growth warm insert should queue");
@@ -186,4 +156,48 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
         active_bytes_after_growth,
         claimed_table_payload_bytes
     );
+}
+
+/// One wide native-BF16 projection: `expert_count × 2048` rows of a constant
+/// fill, large enough that a real graph pin towers over the CPU allocator's
+/// per-array size-class rounding.
+fn wide_native_projection(
+    runtime: &MlxRuntime,
+    expert_count: usize,
+    fill: f32,
+) -> mlx_c_rust::MlxArray {
+    runtime
+        .array_from_f32(
+            &vec![fill; expert_count * 2048],
+            &[
+                i32::try_from(expert_count).expect("the expert count fits i32"),
+                2048,
+            ],
+        )
+        .expect("the test projection should be valid")
+}
+
+/// Wide native-BF16 streamed weights whose three projections carry distinct
+/// constant fills, so each expert page pin is attributable to its projection.
+fn wide_streamed_native_weights(
+    runtime: &MlxRuntime,
+    expert_count: usize,
+) -> Qwen3_5PagedExpertWeights {
+    Qwen3_5PagedExpertWeights {
+        gate_projection: Qwen3_5AffineWeights::NativeBfloat16 {
+            weight: wide_native_projection(runtime, expert_count, 1.0),
+        },
+        up_projection: Qwen3_5AffineWeights::NativeBfloat16 {
+            weight: wide_native_projection(runtime, expert_count, 2.0),
+        },
+        down_projection: Qwen3_5AffineWeights::NativeBfloat16 {
+            weight: wide_native_projection(runtime, expert_count, 3.0),
+        },
+        gate_activation_rotation:
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        up_activation_rotation:
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        down_activation_rotation:
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+    }
 }

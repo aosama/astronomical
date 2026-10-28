@@ -7,7 +7,7 @@
 
 use crate::memory::{CurrentExpertLayerResidency, RetainedExpertPageClass};
 
-use super::WarmExpertSlotTableCache;
+use super::{ExpertSlotTable, WarmExpertSlotTableCache};
 
 impl WarmExpertSlotTableCache {
     pub fn record_expert_demand(
@@ -61,33 +61,42 @@ impl WarmExpertSlotTableCache {
             .iter()
             .enumerate()
             .filter_map(|(layer_index, table)| {
-                let table = table.as_ref()?;
-                let mut expert_ids: Vec<usize> = table.slot_by_expert_id.keys().copied().collect();
-                expert_ids.sort_unstable();
-                // A slot table that has grown to hold every expert is effectively
-                // a complete layer and must be classified as StableCompleteLayer
-                // so the residency validation passes (ElasticRoutedExperts requires
-                // retained_count < expert_capacity, which is false when all are held).
-                let class = if expert_ids.len() >= expert_capacity {
-                    RetainedExpertPageClass::StableCompleteLayer
-                } else {
-                    RetainedExpertPageClass::ElasticRoutedExperts
-                };
-                let covered_weighted_demand = expert_ids
-                    .iter()
-                    .filter_map(|expert_id| {
-                        self.expert_demand_counts_by_layer[layer_index].get(*expert_id)
-                    })
-                    .copied()
-                    .fold(0_u64, u64::saturating_add);
-                Some(CurrentExpertLayerResidency {
-                    layer_index,
-                    class,
-                    retained_expert_ids: expert_ids,
-                    payload_bytes: table.payload_bytes,
-                    covered_weighted_demand,
-                })
+                self.current_layer_residency(layer_index, table.as_ref(), expert_capacity)
             })
             .collect()
+    }
+
+    /// One layer's current residency classification, or `None` when the
+    /// layer holds no warm table.
+    fn current_layer_residency(
+        &self,
+        layer_index: usize,
+        warm_table: Option<&ExpertSlotTable>,
+        expert_capacity: usize,
+    ) -> Option<CurrentExpertLayerResidency> {
+        let warm_table = warm_table?;
+        let mut expert_ids: Vec<usize> = warm_table.slot_by_expert_id.keys().copied().collect();
+        expert_ids.sort_unstable();
+        // A slot table that has grown to hold every expert is effectively
+        // a complete layer and must be classified as StableCompleteLayer
+        // so the residency validation passes (ElasticRoutedExperts requires
+        // retained_count < expert_capacity, which is false when all are held).
+        let class = if expert_ids.len() >= expert_capacity {
+            RetainedExpertPageClass::StableCompleteLayer
+        } else {
+            RetainedExpertPageClass::ElasticRoutedExperts
+        };
+        let covered_weighted_demand = expert_ids
+            .iter()
+            .filter_map(|expert_id| self.expert_demand_counts_by_layer[layer_index].get(*expert_id))
+            .copied()
+            .fold(0_u64, u64::saturating_add);
+        Some(CurrentExpertLayerResidency {
+            layer_index,
+            class,
+            retained_expert_ids: expert_ids,
+            payload_bytes: warm_table.payload_bytes,
+            covered_weighted_demand,
+        })
     }
 }

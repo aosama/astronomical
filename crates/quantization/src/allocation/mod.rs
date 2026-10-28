@@ -259,30 +259,7 @@ pub fn optimize_mixed_precision(
     //    the greedy heap upgrades them first, without exempting them.
     let effective_results: BTreeMap<String, SensitivityResult> = results
         .iter()
-        .map(|result| {
-            if protected.contains(&result.module_name) {
-                let kl_divergence_by_bit_width = result
-                    .kl_divergence_by_bit_width
-                    .iter()
-                    .map(|(&width, &value)| {
-                        (
-                            width,
-                            value * protected_modules::PROTECTED_MODULE_KL_MULTIPLIER,
-                        )
-                    })
-                    .collect();
-                (
-                    result.module_name.clone(),
-                    SensitivityResult {
-                        module_name: result.module_name.clone(),
-                        kl_divergence_by_bit_width,
-                        logical_parameter_count: result.logical_parameter_count,
-                    },
-                )
-            } else {
-                (result.module_name.clone(), result.clone())
-            }
-        })
+        .map(|result| effective_sensitivity_result(result, &protected))
         .collect();
 
     // 8. Seed the heap with each module's next upgrade.
@@ -431,4 +408,34 @@ fn clean_non_finite(
         });
     }
     (cleaned, non_finite_module_names)
+}
+
+/// One module's heap entry for the greedy pass: protected modules get their
+/// KL measurements multiplied so the greedy heap upgrades them first,
+/// without exempting them from the allocation.
+fn effective_sensitivity_result(
+    result: &SensitivityResult,
+    protected_module_names: &std::collections::BTreeSet<String>,
+) -> (String, SensitivityResult) {
+    if !protected_module_names.contains(&result.module_name) {
+        return (result.module_name.clone(), result.clone());
+    }
+    let kl_divergence_by_bit_width = result
+        .kl_divergence_by_bit_width
+        .iter()
+        .map(|(&width, &value)| {
+            (
+                width,
+                value * protected_modules::PROTECTED_MODULE_KL_MULTIPLIER,
+            )
+        })
+        .collect();
+    (
+        result.module_name.clone(),
+        SensitivityResult {
+            module_name: result.module_name.clone(),
+            kl_divergence_by_bit_width,
+            logical_parameter_count: result.logical_parameter_count,
+        },
+    )
 }

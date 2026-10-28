@@ -292,30 +292,48 @@ impl Qwen3_5ExpertPager {
         self.layer_plans
             .iter()
             .try_fold(0_u64, |largest_page_peak_bytes, layer_plan| {
-                let routed_expert_count = experts_per_token.min(layer_plan.expert_capacity);
-                let per_expert_source_bytes = layer_plan.expert_payload_byte_count()?;
-                let routed_source_page_bytes = crate::memory::source_expert_page_payload_bytes(
-                    per_expert_source_bytes,
-                    routed_expert_count,
+                layer_routed_page_peak_bytes(
+                    largest_page_peak_bytes,
+                    layer_plan,
+                    experts_per_token,
+                    materializes_decoded_weights,
                 )
-                .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
-                    description: "routed expert source-page byte count overflowed".to_owned(),
-                })?;
-                if !materializes_decoded_weights {
-                    return Ok(largest_page_peak_bytes.max(routed_source_page_bytes));
-                }
-                let decoded_codebook_weight_shapes =
-                    layer_plan.jangtq2_decoded_weight_page_shapes(routed_expert_count)?;
-                let routed_page_peak_bytes = crate::memory::expert_page_peak_allocation_bytes(
-                    routed_source_page_bytes,
-                    &decoded_codebook_weight_shapes,
-                    size_of::<u16>(),
-                )
-                .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
-                    description: "routed expert page peak allocation byte count overflowed"
-                        .to_owned(),
-                })?;
-                Ok(largest_page_peak_bytes.max(routed_page_peak_bytes))
             })
     }
+}
+
+/// The larger of the running peak and one layer plan's routed-page peak.
+///
+/// A page the fused decode-token kernel multiplies in packed form costs only
+/// its source bytes (`materializes_decoded_weights` false); the codebook
+/// decode output is added only when the weights are materialized.
+fn layer_routed_page_peak_bytes(
+    largest_page_peak_bytes: u64,
+    layer_plan: &QuantizedExpertLayerPlan,
+    experts_per_token: usize,
+    materializes_decoded_weights: bool,
+) -> Result<u64, ExpertPagingError> {
+    let routed_expert_count = experts_per_token.min(layer_plan.expert_capacity);
+    let per_expert_source_bytes = layer_plan.expert_payload_byte_count()?;
+    let routed_source_page_bytes = crate::memory::source_expert_page_payload_bytes(
+        per_expert_source_bytes,
+        routed_expert_count,
+    )
+    .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+        description: "routed expert source-page byte count overflowed".to_owned(),
+    })?;
+    if !materializes_decoded_weights {
+        return Ok(largest_page_peak_bytes.max(routed_source_page_bytes));
+    }
+    let decoded_codebook_weight_shapes =
+        layer_plan.jangtq2_decoded_weight_page_shapes(routed_expert_count)?;
+    let routed_page_peak_bytes = crate::memory::expert_page_peak_allocation_bytes(
+        routed_source_page_bytes,
+        &decoded_codebook_weight_shapes,
+        size_of::<u16>(),
+    )
+    .ok_or_else(|| ExpertPagingError::InvalidPagingPlan {
+        description: "routed expert page peak allocation byte count overflowed".to_owned(),
+    })?;
+    Ok(largest_page_peak_bytes.max(routed_page_peak_bytes))
 }

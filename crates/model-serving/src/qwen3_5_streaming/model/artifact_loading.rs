@@ -249,26 +249,12 @@ impl Qwen3_5Model {
         let decoder_cache_layout = performance_attribution.measure_operation(
             PerformanceOperation::ModelTensorBinding,
             |_performance_attribution| {
-                let decoder_layer_cache_dtypes =
-                    super::decoder_cache_dtype_flow::derive_decoder_layer_cache_dtypes(
-                        &weights,
-                        expert_pager.as_ref(),
-                    )?;
-                crate::qwen3_5_core::decoder::qwen3_5_decoder_cache_layout(
+                decoder_cache_layout_at_tensor_binding(
                     &config,
-                    usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(
-                        |_| Qwen3_5ExecutionError::InvalidInput {
-                            description:
-                                "full-attention key/value growth tokens exceed the usize range",
-                        },
-                    )?,
-                    &decoder_layer_cache_dtypes,
+                    &chunking,
+                    &weights,
+                    expert_pager.as_ref(),
                 )
-                .map_err(|decoder_cache_layout_error| {
-                    Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
-                        description: decoder_cache_layout_error.to_string(),
-                    }
-                })
             },
         )?;
         // The two gated-delta kernels are independent capability families. A
@@ -558,4 +544,33 @@ fn build_vision_tensor_shard_map(
         }
     }
     vision_tensor_name_to_shard_location
+}
+
+/// Derives the decoder cache layout at the tensor-binding boundary.
+///
+/// Cache geometry cannot be finalized before weights and sparse plans are
+/// bound: their source dtypes determine MLX result-type promotion, so the
+/// persistence contract is derived here without evaluating tensors.
+fn decoder_cache_layout_at_tensor_binding(
+    config: &crate::Qwen3_5Config,
+    chunking: &super::Qwen3_5ModelChunkingConfiguration,
+    weights: &Qwen3_5Weights,
+    expert_pager: Option<&Qwen3_5ExpertPager>,
+) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
+    let decoder_layer_cache_dtypes =
+        super::decoder_cache_dtype_flow::derive_decoder_layer_cache_dtypes(weights, expert_pager)?;
+    crate::qwen3_5_core::decoder::qwen3_5_decoder_cache_layout(
+        config,
+        usize::try_from(chunking.full_attention_key_value_growth_tokens).map_err(|_| {
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "full-attention key/value growth tokens exceed the usize range",
+            }
+        })?,
+        &decoder_layer_cache_dtypes,
+    )
+    .map_err(
+        |decoder_cache_layout_error| Qwen3_5ExecutionError::InvalidDecoderCacheLayout {
+            description: decoder_cache_layout_error.to_string(),
+        },
+    )
 }

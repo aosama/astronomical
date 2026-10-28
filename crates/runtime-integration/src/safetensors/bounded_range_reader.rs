@@ -236,33 +236,44 @@ unsafe extern "C" fn bounded_reader_seek(
                 .cursor
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            // i128 arithmetic validates (offset, whence) before any u64 write;
-            // note SEEK_END is anchored at the *virtual* size, not the source
-            // file size — MLX must never learn the real shard is larger.
-            let base_position_bytes = match whence {
-                libc::SEEK_SET => 0_i128,
-                libc::SEEK_CUR => i128::from(reader_cursor.position_bytes),
-                libc::SEEK_END => i128::from(reader_state.total_virtual_size()),
-                _ => {
-                    reader_state.is_good.store(false, Ordering::Release);
-                    return false;
-                }
-            };
-            let requested_position_bytes = base_position_bytes + i128::from(offset);
-            match u64::try_from(requested_position_bytes) {
-                Ok(position_bytes) => {
-                    reader_cursor.position_bytes = position_bytes;
-                    true
-                }
-                Err(_) => {
-                    reader_state.is_good.store(false, Ordering::Release);
-                    false
-                }
-            }
+            bounded_reader_seek_position(reader_state, &mut reader_cursor, offset, whence)
         })
     }
     .unwrap_or(false);
     if seek_succeeded { 0 } else { -1 }
+}
+
+/// Applies one C-style seek to the bounded reader's cursor.
+///
+/// i128 arithmetic validates (offset, whence) before any u64 write. SEEK_END
+/// anchors at the *virtual* size, not the source file size — MLX must never
+/// learn the real shard is larger. Any failure flips the shared good flag.
+fn bounded_reader_seek_position(
+    reader_state: &BoundedMultiRangeReaderState,
+    reader_cursor: &mut BoundedReaderCursor,
+    offset: i64,
+    whence: c_int,
+) -> bool {
+    let base_position_bytes = match whence {
+        libc::SEEK_SET => 0_i128,
+        libc::SEEK_CUR => i128::from(reader_cursor.position_bytes),
+        libc::SEEK_END => i128::from(reader_state.total_virtual_size()),
+        _ => {
+            reader_state.is_good.store(false, Ordering::Release);
+            return false;
+        }
+    };
+    let requested_position_bytes = base_position_bytes + i128::from(offset);
+    match u64::try_from(requested_position_bytes) {
+        Ok(position_bytes) => {
+            reader_cursor.position_bytes = position_bytes;
+            true
+        }
+        Err(_) => {
+            reader_state.is_good.store(false, Ordering::Release);
+            false
+        }
+    }
 }
 
 unsafe extern "C" fn bounded_reader_read(
