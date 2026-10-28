@@ -411,32 +411,41 @@ impl Qwen3_5Model {
         }
         let final_logits = performance_attribution.measure_operation(
             PerformanceOperation::FinalLogitsGraphConstruction,
-            |_performance_attribution| {
-                let normalized_states = self.runtime.rms_norm(
-                    &hidden_states,
-                    &self.weights.final_normalization_weight,
-                    f32::from_bits(self.config.rms_norm_epsilon_bits()),
-                )?;
-                let hidden_size = self.config.hidden_size() as i32;
-                let final_hidden_state = self.runtime.slice(
-                    &normalized_states,
-                    &[0, token_count - 1, 0],
-                    &[1, token_count, hidden_size],
-                    &[1, 1, 1],
-                )?;
-                let final_logits = self.quantized_linear(
-                    &final_hidden_state,
-                    &self.weights.language_model_head_weights,
-                )?;
-                Ok::<MlxArray, Qwen3_5ExecutionError>(
-                    self.runtime.astype(&final_logits, MlxDtype::Float32)?,
-                )
-            },
+            |_performance_attribution| self.final_vocabulary_logits(&hidden_states, token_count),
         )?;
         Ok(Qwen3_5TargetForwardOutput {
             final_logits,
             pre_final_normalization_hidden_states: hidden_states,
         })
+    }
+
+    /// Builds the final vocabulary logits for the last token position:
+    /// normalize, slice the final token, project through the language-model
+    /// head, and widen to Float32 for host sampling.
+    fn final_vocabulary_logits(
+        &self,
+        hidden_states: &MlxArray,
+        token_count: i32,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let normalized_states = self.runtime.rms_norm(
+            hidden_states,
+            &self.weights.final_normalization_weight,
+            f32::from_bits(self.config.rms_norm_epsilon_bits()),
+        )?;
+        let hidden_size = self.config.hidden_size() as i32;
+        let final_hidden_state = self.runtime.slice(
+            &normalized_states,
+            &[0, token_count - 1, 0],
+            &[1, token_count, hidden_size],
+            &[1, 1, 1],
+        )?;
+        let final_logits = self.quantized_linear(
+            &final_hidden_state,
+            &self.weights.language_model_head_weights,
+        )?;
+        self.runtime
+            .astype(&final_logits, MlxDtype::Float32)
+            .map_err(Qwen3_5ExecutionError::from)
     }
 }
 
