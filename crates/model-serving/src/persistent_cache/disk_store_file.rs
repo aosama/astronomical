@@ -26,6 +26,7 @@ pub(crate) enum PersistentPromptCacheFileKind {
     VisualEmbedding,
 }
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn save_direct_safetensors_file_with_name(
     runtime: &MlxRuntime,
     directory: &Path,

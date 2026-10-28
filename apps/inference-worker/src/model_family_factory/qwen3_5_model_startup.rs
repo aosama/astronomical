@@ -39,6 +39,7 @@ enum Qwen3_5SelectedEngine {
 }
 
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     active_memory_limit_bytes: usize,

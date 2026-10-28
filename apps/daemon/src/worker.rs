@@ -57,6 +57,7 @@ use crate::{
 
 // Keeping process-loop dependencies explicit is clearer than hiding them in a context object.
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn run_worker(
     mut worker_process: WorkerProcess,
     mut command_receiver: mpsc::Receiver<WorkerLoopCommand>,

@@ -37,6 +37,7 @@ async fn should_probe_prompt_cache_restore_reconstruction_costs() {
         .expect("the restore reconstruction probe must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn probe_restore_reconstruction() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(

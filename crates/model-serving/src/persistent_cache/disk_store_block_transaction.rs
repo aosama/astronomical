@@ -38,6 +38,7 @@ use super::retention_policy;
 use mlx_c_rust::MlxArray;
 
 impl PersistentPromptCacheDiskStore {
+    #[expect(clippy::too_many_lines)]
     pub(super) fn publish_new_block_transaction(
         &self,
         runtime: &MlxRuntime,

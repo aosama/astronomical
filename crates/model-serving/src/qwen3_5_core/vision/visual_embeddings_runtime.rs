@@ -37,6 +37,7 @@ pub(crate) struct VisualEmbeddingEngineContext<'context> {
 /// run the vision forward once and publish their embeddings back to the
 /// persistent store. Returns the suffix rows concatenated in plan order, or
 /// `None` when the plan needs no visual rows.
+#[expect(clippy::too_many_lines)]
 pub(crate) fn resolve_visual_embeddings_for_processed_images(
     visual_embedding_context: VisualEmbeddingEngineContext<'_>,
     persistent_prompt_cache_counters: &mut PersistentPromptCacheCounters,

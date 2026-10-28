@@ -22,6 +22,7 @@ where
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
 {
+    #[expect(clippy::too_many_lines)]
     pub(crate) async fn advance_generation<WriteTransport>(
         &mut self,
         mut active_generation: ActiveEngineGeneration<

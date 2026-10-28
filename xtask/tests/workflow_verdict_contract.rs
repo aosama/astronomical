@@ -121,6 +121,7 @@ const MACOS_GATED_LANES: [&str; 6] = [
 ];
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn verdict_script_decides_every_scenario_correctly() {
     let workflow = workflow_contract();
     let verdict_job = required_job(&workflow, "verdict");

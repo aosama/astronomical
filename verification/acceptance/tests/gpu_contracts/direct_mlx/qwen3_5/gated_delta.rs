@@ -64,6 +64,7 @@ async fn should_apply_one_ops_based_gated_delta_recurrent_step() {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_match_ops_loop_when_dispatching_one_complete_prefill_sequence() {
     const TOKEN_COUNT: i32 = 3;
     const KEY_HEAD_COUNT: i32 = 16;

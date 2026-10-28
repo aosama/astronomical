@@ -309,6 +309,7 @@ pub(crate) async fn run_throughput_journey(
     measurement
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn measure_throughput(
     model_id: &str,
     journey: &ThroughputJourney,

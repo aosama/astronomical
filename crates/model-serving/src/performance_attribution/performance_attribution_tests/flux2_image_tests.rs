@@ -41,6 +41,7 @@ fn should_serialize_image_identity_controls_memory_and_success_outcome() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_serialize_every_image_operation_with_graph_and_synchronization_separate() {
     let image_operations = [
         (

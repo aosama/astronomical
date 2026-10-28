@@ -185,6 +185,7 @@ fn stable_bundle_signs_for_distribution_and_keeps_the_development_artifact() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn app_store_bundle_is_sparkle_free_and_assigns_sandbox_entitlements() {
     let sandbox = AppBuilderSandbox::install();
     let outcome = sandbox.run_builder(&BuilderJourney {

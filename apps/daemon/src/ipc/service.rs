@@ -138,6 +138,7 @@ pub async fn start_daemon_ipc_service(
     })
 }
 
+#[expect(clippy::too_many_lines)]
 async fn handle_streaming_daemon_request(
     generation_context: DaemonIpcGenerationContext,
     daemon_attribution_log: DaemonPerformanceAttributionLog,

@@ -96,6 +96,7 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names(
 ///
 /// Qwen sparse layers commonly share a small set of SafeTensors files. Keeping this cache outside
 /// the per-layer loop guarantees each unique header is parsed once instead of once per layer.
+#[expect(clippy::too_many_lines)]
 pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
     model_dir: &Path,
     weight_map: &HashMap<String, String>,

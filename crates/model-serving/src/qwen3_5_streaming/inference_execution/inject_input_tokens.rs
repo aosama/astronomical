@@ -56,6 +56,7 @@ impl Qwen3_5EngineState {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn inject_into_active_request(
         &mut self,
         active_request: &mut super::engine_request::Qwen3_5EngineRequest,

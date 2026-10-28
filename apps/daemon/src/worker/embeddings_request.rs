@@ -23,6 +23,7 @@ use crate::{
 const EMBEDDINGS_EXECUTION_TIMEOUT_SECS: u64 = 60;
 
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 pub(super) async fn handle_generate_embeddings_command(
     worker_process: &mut WorkerProcess,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,

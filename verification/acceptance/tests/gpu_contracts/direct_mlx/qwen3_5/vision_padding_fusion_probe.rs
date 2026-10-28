@@ -33,6 +33,7 @@ async fn should_probe_vision_padding_cache_costs_at_scaled_vision_shapes() {
         .expect("the vision padding probe must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn probe_vision_padding_cache() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = MlxRuntime::initialize(

@@ -108,6 +108,7 @@ impl RequestExpertResidency {
     /// operation-local streaming so the plan never authorizes an adoption
     /// offer it budgets zero bytes for (issue #1278).
     #[must_use]
+    #[expect(clippy::too_many_lines)]
     pub fn stabilize_prefill_plan(
         &self,
         mut candidate_plan: ExpertResidencyPlan,

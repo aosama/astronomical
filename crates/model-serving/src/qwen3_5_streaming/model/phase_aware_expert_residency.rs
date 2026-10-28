@@ -61,6 +61,7 @@ impl Qwen3_5StreamingModel {
     }
 
     /// Refreshes the no-I/O target after memory policy has established a phase budget.
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn refresh_phase_aware_expert_residency_plan(
         &self,
         phase: MemoryPhase,

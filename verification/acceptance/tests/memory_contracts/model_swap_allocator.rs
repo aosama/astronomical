@@ -39,6 +39,7 @@ async fn should_clear_stale_mlx_allocator_memory_before_loading_the_replacement_
         .expect("the 35B Ornith 1.5 MLX allocator contract must finish within 105 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_model_swap_allocator_contract() {
     let _direct_mlx_test_guard = crate::common::direct_mlx_test_guard().await;
     let first_model_id = first_model_id();

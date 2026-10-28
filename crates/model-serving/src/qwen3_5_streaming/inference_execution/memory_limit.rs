@@ -22,6 +22,7 @@ pub const fn safe_minimum_mlx_memory_ceiling_bytes(
 }
 
 impl Qwen3_5EngineState {
+    #[expect(clippy::too_many_lines)]
     pub(super) fn update_mlx_memory_limit(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,

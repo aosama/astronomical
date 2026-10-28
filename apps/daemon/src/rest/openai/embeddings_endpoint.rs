@@ -20,6 +20,7 @@ use crate::{
     application::{ApplicationState, allocate_chat_request_id},
 };
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn create_embeddings(
     State(application_state): State<ApplicationState>,
     request_body_bytes: axum::body::Bytes,

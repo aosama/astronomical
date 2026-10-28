@@ -16,6 +16,7 @@ use axum::{
 };
 
 /// Reloads config without cancelling active or queued generation work.
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn reload_config(State(application_state): State<ApplicationState>) -> Response {
     let Some(reloadable_config) = application_state.reloadable_config.as_ref() else {
         return (StatusCode::NOT_FOUND, "reload not supported").into_response();

@@ -16,6 +16,7 @@ use crate::{
     worker::loop_types::{ActiveImageGeneration, ActiveWorkerRequest},
 };
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn handle_worker_image_event(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,

@@ -3,6 +3,7 @@
 use super::*;
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run() {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
 

@@ -403,6 +403,31 @@ jobs:
           cargo nextest-archive-rest-api
           cargo nextest-archive-e2e
         timeout-minutes: 5
+
+      - name: Function-length and clippy budget (default world)
+        # clippy::too_many_lines is denied through the workspace lints
+        # tables (issue #1637); every pre-existing over-budget function
+        # carries #[expect], so this step fails on any new over-budget
+        # function and on any expect left behind after a function shrank.
+        run: |
+          scripts/ci/ci-step-timing.sh begin clippy-budget-default
+          cargo clippy --locked --workspace --all-targets
+          scripts/ci/ci-step-timing.sh end clippy-budget-default
+        timeout-minutes: 12
+
+      - name: Function-length and clippy budget (MLX world)
+        run: |
+          scripts/ci/ci-step-timing.sh begin clippy-budget-mlx
+          cargo clippy --locked --workspace --all-targets --features astronomical-model-serving/direct-mlx,astronomical-runtime-integration/mlx,astronomical-jangtq2-qwen35/direct-mlx,astronomical-quantization/direct-mlx,astronomical-acceptance/direct-mlx
+          scripts/ci/ci-step-timing.sh end clippy-budget-mlx
+        timeout-minutes: 12
+
+      - name: Function-length and clippy budget (acceptance superset)
+        run: |
+          scripts/ci/ci-step-timing.sh begin clippy-budget-acceptance
+          cargo clippy --locked -p astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --all-targets
+          scripts/ci/ci-step-timing.sh end clippy-budget-acceptance
+        timeout-minutes: 12
       - name: Upload integration test archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

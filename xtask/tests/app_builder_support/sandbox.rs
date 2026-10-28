@@ -22,6 +22,7 @@ pub(crate) struct AppBuilderSandbox {
 }
 
 impl AppBuilderSandbox {
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn install() -> Self {
         // Tests run in parallel threads inside one process, so the process id
         // alone cannot name the sandbox root: a sibling test's cleanup would
@@ -135,6 +136,7 @@ impl AppBuilderSandbox {
         sandbox
     }
 
+    #[expect(clippy::too_many_lines)]
     fn write_tool_shims(&self) {
         // The fake cargo answers metadata, the xtask port, and the release
         // build: it records the disposable CARGO_TARGET_DIR the runner owns

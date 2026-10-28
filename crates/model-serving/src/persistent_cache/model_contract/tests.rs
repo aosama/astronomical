@@ -19,6 +19,7 @@ const TEST_MLX_MEMORY_CEILING_BYTES: u64 = 20_000_000_000;
 const TEST_SSD_QUOTA_BYTES: u64 = 50_000_000_000;
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadata() {
     let ornith_config = frozen_ornith_1_0_config();
     let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);

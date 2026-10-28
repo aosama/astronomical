@@ -183,6 +183,7 @@ async fn should_reject_catalog_mutation_and_leave_unknown_library_paths_unmatche
 // bundled parse, endpoint projection, and the browser renderability contract —
 // so a hand-edited catalog entry cannot silently vanish from the Library.
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpoint() {
     timeout(Duration::from_secs(5), async {
         let shipped_catalog_text = std::fs::read_to_string(

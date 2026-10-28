@@ -191,6 +191,7 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         ))
     }
 
+    #[expect(clippy::too_many_lines)]
     fn decode_next_token(
         &mut self,
         request_id: RequestId,
@@ -447,6 +448,7 @@ impl PrismHadamardQwen35InferenceExecution {
 
     /// Advances one bounded prompt-processing chunk through the straight
     /// forward pass and reports prefill progress to the worker.
+    #[expect(clippy::too_many_lines)]
     fn prefill_next_chunk(
         &mut self,
         request_id: RequestId,

@@ -43,6 +43,7 @@ impl Qwen3_5ArtifactValidator {
     /// - Vision sidecar presence from the index
     /// - Model ID from the leaf directory name
     /// - Revision from a SHA-256 hash of `config.json` bytes
+    #[expect(clippy::too_many_lines)]
     pub fn validate(
         self,
         model_directory: impl AsRef<Path>,

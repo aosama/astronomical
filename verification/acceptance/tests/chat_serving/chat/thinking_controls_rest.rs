@@ -28,6 +28,7 @@ async fn should_enforce_thinking_control_spellings_over_public_rest() {
         .expect("the thinking-controls GPU journey must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_thinking_controls_gpu_journey() {
     let selected_model = configured_thinking_controls_chat_model();
     eprintln!(

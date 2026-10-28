@@ -7,6 +7,7 @@ use super::Qwen3_5Model;
 use crate::qwen3_5_streaming;
 
 /// Admits context against the paged expert cache, reclaiming its exact deficit.
+#[expect(clippy::too_many_lines)]
 pub(crate) fn validate_context_memory_admission(
     model: &Qwen3_5Model,
     memory_limits: MlxMemoryLimits,

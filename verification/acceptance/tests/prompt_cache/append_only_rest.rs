@@ -22,6 +22,7 @@ async fn should_restore_every_completed_cold_block_for_an_appended_chat_through_
         .expect("the append-only persistent prompt-cache journey must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_append_only_rest_journey() {
     let acceptance_log_prefix = "[persistent-prompt-cache-append-only-rest]";
     let model_directory =

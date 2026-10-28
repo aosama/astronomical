@@ -160,6 +160,7 @@ impl
         ModernBertEmbeddingEngine,
     > for ModelFamilyFactory
 {
+    #[expect(clippy::too_many_lines)]
     async fn create(
         &self,
         model_directory: &str,

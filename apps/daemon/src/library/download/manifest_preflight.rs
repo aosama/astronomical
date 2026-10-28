@@ -62,6 +62,7 @@ where
     }
 
     /// Persists each restart boundary and never performs Hub I/O before initial disk admission.
+    #[expect(clippy::too_many_lines)]
     pub async fn prepare(
         &self,
         catalog_entry: &DownloadCatalogEntry,

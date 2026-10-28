@@ -47,6 +47,7 @@ async fn should_reproduce_upstream_similarity_gap_on_modernbert() {
         .expect("the reference-similarity journey must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_reference_similarity_journey() {
     // ── discovery ──────────────────────────────────────────────
     let selected_model = configured_modernbert_model();

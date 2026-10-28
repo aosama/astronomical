@@ -13,6 +13,7 @@ use super::{
 };
 use crate::phase::MemoryPhase;
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn foundation_and_overlay_plan(
     phase: MemoryPhase,
     ceiling_bytes: u64,

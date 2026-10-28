@@ -15,6 +15,7 @@ pub(super) struct ValidatedPng {
     pub(super) decoded_rgb_byte_count: usize,
 }
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn validate_png_structure(
     png_bytes: &[u8],
     maximum_decoded_rgb_bytes: usize,

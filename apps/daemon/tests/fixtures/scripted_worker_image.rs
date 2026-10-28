@@ -34,6 +34,7 @@ pub(super) enum ScriptedImageCommandOutcome {
     CancellationPending { should_acknowledge: bool },
 }
 
+#[expect(clippy::too_many_lines)]
 pub(super) async fn handle_image_command<WriteTransport>(
     generation_command: ImageGenerationCommand,
     event_writer: &mut ProtocolWriter<WriteTransport>,

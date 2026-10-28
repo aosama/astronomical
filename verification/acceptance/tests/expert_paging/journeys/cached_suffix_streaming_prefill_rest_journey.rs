@@ -117,6 +117,7 @@ enum StreamingPrefillJourneyKind {
     TightCeiling,
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_interaction_journey(journey_kind: StreamingPrefillJourneyKind) {
     let model_id = crate::support::large_sparse_moe_streaming_model_id();
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id);

@@ -57,6 +57,7 @@ pub(super) struct DisposableJourney {
     pub(super) is_cleanup_pending: bool,
 }
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourney) -> ExitCode {
     let selected_lane_root = match select_lane_root() {
         Ok(selected_lane_root) => selected_lane_root,
