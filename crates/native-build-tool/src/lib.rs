@@ -6,24 +6,14 @@
 //! so a later Cargo build finds the native build store warm and skips CMake
 //! entirely.
 //!
-//! # The sharing mechanism
+//! # Why this crate stays tiny
 //!
-//! The build modules are included by `#[path]` from the runtime-integration
-//! crate rather than through a dependency, so `cargo run` builds only this
-//! tiny crate and never the runtime-integration dependency tree. The included
-//! modules reference each other through `crate::` paths, so every module
-//! that `native_compile` needs must be declared here with the same module
-//! names the other includers use (see `runtime-integration/build.rs` for the
-//! canonical module map).
-
-#[path = "../../runtime-integration/build-orchestration/native_compile.rs"]
-pub mod native_compile;
-#[path = "../../runtime-integration/build-orchestration/native_parallelism.rs"]
-pub mod native_parallelism;
-#[path = "../../runtime-integration/build-orchestration/native_progress.rs"]
-pub mod native_progress;
-#[path = "../../runtime-integration/build-orchestration/native_store.rs"]
-pub mod native_store;
+//! The orchestration it runs lives in `astronomical-native-build-orchestration`
+//! — a dependency whose tree is exactly fs4, sha2, and native-identity — so
+//! `cargo run` builds only this tiny crate plus that small orchestration
+//! tree, never the runtime-integration dependency tree. The pre-warm tool
+//! and the in-Cargo build script execute byte-identical orchestration
+//! because both compile that one crate (issue #1628).
 
 use std::{
     error::Error,
@@ -31,25 +21,28 @@ use std::{
     time::{Duration, Instant},
 };
 
-use native_compile::{
-    NativeRuntimeBuildInputs, build_pinned_native_runtime, detect_host_target_triple,
-    native_build_store_directory, native_parallel_job_count, resolve_native_build_identity,
-    write_native_build_status,
+use astronomical_native_build_orchestration::{
+    NativeBuildProgress, NativeBuildStore, NativeRuntimeBuildInputs, build_pinned_native_runtime,
+    detect_host_target_triple, native_build_store_directory, native_parallel_job_count,
+    resolve_native_build_identity, write_native_build_status,
 };
-use native_progress::NativeBuildProgress;
-use native_store::NativeBuildStore;
+
+/// Re-exported because [`NativeBuildToolArguments::native_build_profile`]
+/// exposes the profile type on this crate's public surface; the orchestration
+/// crate is the type's home.
+pub use astronomical_native_build_orchestration::NativeBuildProfile;
 
 pub const NATIVE_BUILD_TOOL_PREFIX: &str = "[native-build-tool]";
 
 /// Parsed command-line arguments for one standalone native build.
 #[derive(Debug)]
 pub struct NativeBuildToolArguments {
-    native_build_profile: native_store::NativeBuildProfile,
+    native_build_profile: NativeBuildProfile,
     repository_root: PathBuf,
 }
 
 impl NativeBuildToolArguments {
-    pub fn native_build_profile(&self) -> native_store::NativeBuildProfile {
+    pub fn native_build_profile(&self) -> NativeBuildProfile {
         self.native_build_profile
     }
 
@@ -109,8 +102,8 @@ pub fn parse_arguments(arguments: &[String]) -> Result<NativeBuildToolArguments,
             repository_root_path.display()
         ));
     }
-    let native_build_profile = native_store::NativeBuildProfile::from_identity_name(&profile_name)
-        .ok_or_else(|| {
+    let native_build_profile =
+        NativeBuildProfile::from_identity_name(&profile_name).ok_or_else(|| {
             format!(
                 "unsupported native build profile: {profile_name} (supported profiles: core, \
                      core+memory-contract)"

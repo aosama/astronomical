@@ -187,7 +187,7 @@ jobs:
             exit 1
           }
           native_build_store_directory="$HOME/Library/Caches/Astronomical/native-builds"
-          native_store_schema_version="$(tr -d '[:space:]' < crates/runtime-integration/build-orchestration/native-build-store-schema-version)"
+          native_store_schema_version="$(tr -d '[:space:]' < crates/native-build-orchestration/src/native-build-store-schema-version)"
           case "$native_store_schema_version" in
             ''|*[!0-9]*) printf '%s\n' 'Error: native store schema version is invalid' >&2; exit 1 ;;
           esac
