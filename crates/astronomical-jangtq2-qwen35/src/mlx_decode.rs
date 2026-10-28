@@ -125,50 +125,114 @@ pub fn decode_expert_weight_rows(
     let bits_i32 = i32::try_from(bit_width)
         .map_err(|_| decode_error("bit width exceeds the template range".to_owned()))?;
 
-    let decoded_weight_bfloat16 = PAGE_DECODE_KERNEL.with(|page_decode_kernel| {
-        let mut page_decode_kernel = page_decode_kernel.borrow_mut();
-        let page_decode_kernel = match page_decode_kernel.as_mut() {
+    let page_decode_launch_plan = PageDecodeLaunchPlan {
+        bit_width,
+        bits_i32,
+        packed_shape,
+        input_width_i32,
+        thread_count,
+    };
+    // `.with` is the thread-local API's required shape; everything the
+    // closure used to inline now lives in the named launch helpers below,
+    // and each binding names its own role instead of shadowing one name.
+    let decoded_weight_bfloat16 = PAGE_DECODE_KERNEL.with(|thread_local_kernel| {
+        let mut cached_kernel = thread_local_kernel.borrow_mut();
+        let page_decode_kernel = match cached_kernel.as_mut() {
             Some(page_decode_kernel) => page_decode_kernel,
-            None => page_decode_kernel.insert(PageDecodeKernel::new()?),
+            None => cached_kernel.insert(PageDecodeKernel::new()?),
         };
-        let codebook_level_table = page_decode_kernel.codebook_level_table(bit_width)?;
-        let template_arguments = [
-            MlxMetalKernelTemplateArgument::Dtype {
-                name: "OutputT",
-                dtype: MlxDtype::BFloat16,
-            },
-            MlxMetalKernelTemplateArgument::Integer {
-                name: "bits",
-                integer_template_argument: bits_i32,
-            },
-            MlxMetalKernelTemplateArgument::Integer {
-                name: "input_width",
-                integer_template_argument: input_width_i32,
-            },
-            MlxMetalKernelTemplateArgument::Integer {
-                name: "words_per_row",
-                integer_template_argument: packed_shape[2],
-            },
-        ];
-        let mut outputs = runtime
-            .apply_metal_kernel(
-                &page_decode_kernel.kernel,
-                &[packed_code_words, row_scales, &codebook_level_table],
-                &[MlxMetalKernelOutput::new(
-                    vec![packed_shape[0], packed_shape[1], input_width_i32],
-                    MlxDtype::BFloat16,
-                )],
-                [thread_count, 1, 1],
-                [THREADGROUP_SIZE, 1, 1],
-                &template_arguments,
-            )
-            .map_err(MlxRuntimeError::from)?;
-        outputs
-            .pop()
-            .ok_or_else(|| decode_error("the page decode kernel returned no output".to_owned()))
+        launch_page_decode_kernel(
+            runtime,
+            page_decode_kernel,
+            packed_code_words,
+            row_scales,
+            &page_decode_launch_plan,
+        )
     })?;
     materialize_and_detach_jangtq2_array(runtime, &decoded_weight_bfloat16)?;
     Ok(decoded_weight_bfloat16)
+}
+
+/// The resolved launch parameters for one page decode, grouped so the
+/// launch helpers receive named values instead of a row of positional
+/// locals (the same pattern `PrefillGatheredDequantInputs` established for
+/// the prefill kernel).
+struct PageDecodeLaunchPlan {
+    bit_width: u32,
+    bits_i32: i32,
+    /// `[rows, columns, words_per_row]` of the packed code-word tensor; the
+    /// rank-three shape was validated before this plan was built.
+    packed_shape: Vec<i32>,
+    input_width_i32: i32,
+    thread_count: i32,
+}
+
+/// The Metal template arguments the page decode kernel specializes on: the
+/// BF16 output dtype, the codebook bit width, the decoded input width, and
+/// the packed words each decoded row reads.
+fn page_decode_template_arguments(
+    page_decode_launch_plan: &PageDecodeLaunchPlan,
+) -> [MlxMetalKernelTemplateArgument; 4] {
+    [
+        MlxMetalKernelTemplateArgument::Dtype {
+            name: "OutputT",
+            dtype: MlxDtype::BFloat16,
+        },
+        MlxMetalKernelTemplateArgument::Integer {
+            name: "bits",
+            integer_template_argument: page_decode_launch_plan.bits_i32,
+        },
+        MlxMetalKernelTemplateArgument::Integer {
+            name: "input_width",
+            integer_template_argument: page_decode_launch_plan.input_width_i32,
+        },
+        MlxMetalKernelTemplateArgument::Integer {
+            name: "words_per_row",
+            integer_template_argument: page_decode_launch_plan.packed_shape[2],
+        },
+    ]
+}
+
+/// Launches the compiled page decode kernel for one packed page and returns
+/// its single decoded BF16 output.
+///
+/// The kernel owner is passed in already compiled, because the thread-local
+/// cache — not this function — owns compilation; splitting that
+/// responsibility keeps the `.with` closure at the call site down to
+/// get-or-insert plus one named call.
+fn launch_page_decode_kernel(
+    runtime: &MlxRuntime,
+    page_decode_kernel: &mut PageDecodeKernel,
+    packed_code_words: &MlxArray,
+    row_scales: &MlxArray,
+    page_decode_launch_plan: &PageDecodeLaunchPlan,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let codebook_level_table =
+        page_decode_kernel.codebook_level_table(page_decode_launch_plan.bit_width)?;
+    let template_arguments = page_decode_template_arguments(page_decode_launch_plan);
+    let mut outputs = runtime
+        .apply_metal_kernel(
+            &page_decode_kernel.kernel,
+            &[packed_code_words, row_scales, &codebook_level_table],
+            &[MlxMetalKernelOutput::new(
+                vec![
+                    page_decode_launch_plan.packed_shape[0],
+                    page_decode_launch_plan.packed_shape[1],
+                    page_decode_launch_plan.input_width_i32,
+                ],
+                MlxDtype::BFloat16,
+            )],
+            [page_decode_launch_plan.thread_count, 1, 1],
+            [THREADGROUP_SIZE, 1, 1],
+            &template_arguments,
+        )
+        .map_err(MlxRuntimeError::from)?;
+    match outputs.pop() {
+        Some(decoded_weight_bfloat16) => Ok(decoded_weight_bfloat16),
+        None => Err(decode_error(
+            "the page decode kernel returned no output".to_owned(),
+        )),
+    }
 }
 
 /// The compiled page decode kernel plus the per-width codebook level tables
