@@ -564,3 +564,6 @@ fn cache_miss_lookup_result(
         lookup_diagnostics,
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,13 +1,13 @@
 use super::support::{ScriptedInferenceRequest, ready_event};
-use astronomical_ipc_protocol::{
-    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ExpertMemoryMode,
-    RequestId, WorkerEvent,
-};
-use astronomical_model_serving::{
+use crate::{
     EngineGenerationStart, EngineLoadResult, ExpertResidencyTelemetry, GeneratedToken,
     GenerationFinalization, InferenceEngine, InferenceEngineError, MlxActiveMemoryBreakdown,
     MlxMemoryLimitAdjustment, MlxMemoryTelemetry, ModelGeneratedTokenTranslation,
     ModelGenerationOutputError, ModelGenerationProcessor, PreparedModelGeneration,
+};
+use astronomical_ipc_protocol::{
+    ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ExpertMemoryMode,
+    RequestId, WorkerEvent,
 };
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -77,7 +77,7 @@ impl ModelGenerationProcessor for MalformedFinishProcessor {
         _request_output: &mut Self::RequestOutput,
     ) -> Result<Vec<ChatGenerationOutput>, ModelGenerationOutputError> {
         Err(ModelGenerationOutputError::MalformedOutput {
-            diagnostic: Box::new(astronomical_model_serving::MalformedModelOutputDiagnostic {
+            diagnostic: Box::new(crate::MalformedModelOutputDiagnostic {
                 diagnostic_code: "scripted_malformed_finish",
                 parser_error: "scripted malformed finish".to_owned(),
                 generated_token_ids: Vec::new(),

@@ -1,12 +1,12 @@
 use super::scripted_chat_test_doubles::{ScriptedChatEngine, ScriptedChatProcessor};
 use super::support::{chat_command, close_worker_transport, next_event, ready_event};
+use crate::{
+    EngineBackedWorker, GeneratedToken, GenerationFinalization, MlxActiveMemoryBreakdown,
+    MlxMemoryTelemetry,
+};
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource,
     ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerMlxMemorySnapshot,
-};
-use astronomical_model_serving::{
-    EngineBackedWorker, GeneratedToken, GenerationFinalization, MlxActiveMemoryBreakdown,
-    MlxMemoryTelemetry,
 };
 use tokio::io::{duplex, split};
 #[tokio::test]

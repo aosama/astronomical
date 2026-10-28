@@ -1,10 +1,10 @@
+use crate::{PreparedInferenceRequest, WorkerRuntimeError};
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatModelCapabilities,
     ChatToolChoice, ChatToolDefinition, ProtocolReader, ProtocolWriter, RequestId,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerEvent,
     WorkerModelConfiguration,
 };
-use astronomical_model_serving::{PreparedInferenceRequest, WorkerRuntimeError};
 use std::time::Duration;
 use tokio::io::AsyncWrite;
 use tokio::task::JoinHandle;
