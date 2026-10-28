@@ -85,6 +85,7 @@ impl WarmExpertSlotTableCache {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     fn insert_streamed_experts_internal(
         &mut self,
         runtime: &MlxRuntime,

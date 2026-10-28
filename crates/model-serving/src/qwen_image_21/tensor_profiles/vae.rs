@@ -84,6 +84,7 @@ fn attention(profiles: &mut Vec<QwenImage21TensorProfile>, prefix: &str, channel
 
 /// Expected physical tensors of the 3D causal VAE (238 tensors, all F32).
 #[must_use]
+#[expect(clippy::too_many_lines)] // declarative table: data serialized as code (issue #1637 Family D)
 pub fn vae_tensor_profiles(config: &QwenImage21VaeConfig) -> Vec<QwenImage21TensorProfile> {
     // Channel ladders. Decoder block `i` operates at `decoder_base_dim * dim_mult[4 - i]`
     // (1152, 1152, 576, 288, 144); encoder block `i` at `base_dim * dim_mult[i]`

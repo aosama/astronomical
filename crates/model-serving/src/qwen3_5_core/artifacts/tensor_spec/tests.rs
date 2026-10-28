@@ -11,6 +11,7 @@ use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config;
 use super::*;
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_generate_the_complete_mixed_precision_optiq_language_tensor_profile() {
     let ornith_config = frozen_ornith_1_0_config();
 

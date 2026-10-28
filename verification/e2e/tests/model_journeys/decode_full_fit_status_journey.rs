@@ -24,6 +24,7 @@ async fn should_report_complete_decode_residency_through_the_real_daemon_at_37_g
         .expect("the whole-product full-fit journey must stay within the 120-second runner budget");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_full_fit_status_journey() {
     let context = TestRunContext::current();
     assert!(

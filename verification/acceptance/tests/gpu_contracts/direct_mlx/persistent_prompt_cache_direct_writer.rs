@@ -137,6 +137,7 @@ async fn should_publish_four_production_sized_boundaries_sequentially() {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_retry_the_same_captured_arrays_after_releasing_artificial_active_pressure() {
     tokio::time::timeout(DIRECT_MLX_PROMPT_CACHE_TEST_TIMEOUT, async {
         let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;

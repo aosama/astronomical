@@ -105,6 +105,7 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_parallel_tool_calls(),

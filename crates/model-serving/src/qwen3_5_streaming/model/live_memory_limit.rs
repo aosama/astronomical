@@ -19,6 +19,7 @@ impl Qwen3_5Model {
         ))
     }
 
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn update_mlx_memory_limit(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,

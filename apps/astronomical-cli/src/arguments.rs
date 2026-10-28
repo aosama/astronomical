@@ -322,6 +322,7 @@ fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArgu
     })
 }
 
+#[expect(clippy::too_many_lines)]
 fn parse_respond_arguments(
     remaining_arguments: &[OsString],
 ) -> Result<RespondArguments, UsageError> {

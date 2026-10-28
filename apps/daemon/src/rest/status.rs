@@ -5,6 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn status_check(State(application_state): State<ApplicationState>) -> Response {
     let build_identity = ApplicationBuildIdentity::current();
     let runtime_instance = application_state

@@ -184,6 +184,7 @@ async fn run_load_to_prefill_measurement(journey_timeout: Duration) {
     eprintln!("[load-to-prefill] {measurement_report}");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_single_measured_request(
     worker_handle: &WorkerHandle,
     model_id: &str,

@@ -46,6 +46,7 @@ impl PersistentPromptCacheModelContract {
     // would relocate the same fields positionally at every caller without
     // removing a single name from this signature.
     #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub fn resolve(
         model_id: String,
         model_revision: String,

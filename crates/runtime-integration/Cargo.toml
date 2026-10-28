@@ -36,6 +36,8 @@ unused_dependencies = "allow"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+# Function-length budget gate (issue #1637).
+too_many_lines = "deny"
 
 [dependencies]
 # The published stock MLX-C bindings (operations, types, raw FFI surface).

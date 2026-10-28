@@ -260,6 +260,7 @@ impl Qwen3_5Model {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn streamed_expert_linear(
         &self,
         activations: &MlxArray,

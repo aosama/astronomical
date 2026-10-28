@@ -21,6 +21,25 @@ else
     exit 1
 fi
 
+# Function-length budget gate (issue #1637): clippy::too_many_lines is
+# denied through the workspace lints tables, and every pre-existing
+# over-budget function carries #[expect] so the debt is tracked and
+# self-cleaning. A commit staging Rust sources re-proves the budget in the
+# default and MLX worlds; the acceptance superset worlds are CI-owned.
+if git diff --cached --name-only | grep -q '\.rs$'; then
+    printf '%s\n' "[pre-commit] status=start check=function-length-budget root=${REPOSITORY_ROOT}"
+    budget_started_epoch_seconds="$(date +%s)"
+    if cargo clippy --workspace --all-targets && cargo clippy --workspace --all-targets --features astronomical-model-serving/direct-mlx,astronomical-runtime-integration/mlx,astronomical-jangtq2-qwen35/direct-mlx,astronomical-quantization/direct-mlx,astronomical-acceptance/direct-mlx; then
+        budget_elapsed_seconds=$(( $(date +%s) - budget_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=function-length-budget elapsed_seconds=${budget_elapsed_seconds}"
+    else
+        budget_elapsed_seconds=$(( $(date +%s) - budget_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=function-length-budget elapsed_seconds=${budget_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=a function crossed the 100-line budget, or an #[expect] became unfulfilled after a function shrank — fix the function or drop the expect' >&2
+        exit 1
+    fi
+fi
+
 # Coverage floor for the memory-policy crate (local hook only; deliberately
 # no continuous-integration step). The crate is the admission and eviction
 # brain, so any commit staging changes to its sources — deletions included,

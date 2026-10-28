@@ -258,6 +258,7 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
     let final_mlx_memory_telemetry = MlxMemoryTelemetry::new(
         24_000,

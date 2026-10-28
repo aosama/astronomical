@@ -60,6 +60,7 @@ async fn should_demote_the_live_ceiling_queued_behind_an_active_generation() {
         .expect("the queued lower-ceiling demotion SSD journey must finish within 120 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_queued_demotion_journey() {
     let model_id = resident_sparse_moe_model_id();
     let model_directory = configured_installed_model_directory_by_id(model_id);

@@ -157,6 +157,7 @@ impl Qwen3_5EngineState {
     }
 
     /// Admits one forward pass and starts an operation-local MLX peak sample.
+    #[expect(clippy::too_many_lines)]
     fn begin_adaptive_ram_growth(
         &mut self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,

@@ -252,6 +252,7 @@ impl Qwen3_5ModelBase {
     /// into Q, K, and V; gives Q and K position information; adds K and V to
     /// the running context; applies attention; and projects the result back to
     /// the normal hidden-size vector expected by the rest of the decoder layer.
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn forward_full_attention(
         &self,
         hidden_states: &MlxArray,

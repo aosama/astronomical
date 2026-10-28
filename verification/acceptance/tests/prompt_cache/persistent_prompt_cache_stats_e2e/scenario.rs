@@ -75,6 +75,7 @@ pub(super) async fn run_cache_stats_e2e_with_timeout(cache_stats_e2e_case: Cache
     }
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_cache_stats_e2e(cache_stats_e2e_case: &CacheStatsE2eCase, log_prefix: &str) {
     let (
         isolated_worker_home,

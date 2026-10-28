@@ -225,6 +225,7 @@ async fn should_keep_serving_after_client_disconnects_without_a_request() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+#[expect(clippy::too_many_lines)]
 async fn should_stream_multiple_responses_for_one_request() {
     let test_directory = fresh_transport_test_directory("stream-many");
     let socket_path = test_directory.join(SOCKET_FILE_NAME);

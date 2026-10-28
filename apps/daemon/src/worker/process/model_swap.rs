@@ -20,6 +20,7 @@ pub(in crate::worker) enum ModelSwapWaitOutcome {
 /// Process-scoped telemetry and configuration events may have been queued
 /// before `SwapModel`. They remain valid while the swap acknowledgement is
 /// pending and must update daemon health rather than terminate the worker.
+#[expect(clippy::too_many_lines)]
 pub(in crate::worker) async fn wait_for_model_swap(
     worker_loop_state: &mut WorkerLoopState<'_>,
     expected_configuration_generation: Option<&str>,

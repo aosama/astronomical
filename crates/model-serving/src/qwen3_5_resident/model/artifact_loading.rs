@@ -48,6 +48,7 @@ impl Qwen3_5ResidentModel {
     ///
     /// Sparse artifacts build shared expert-layer plans from their indexed
     /// SafeTensors metadata; complete expert tensors are materialized later.
+    #[expect(clippy::too_many_lines)]
     pub fn load_with_performance_attribution(
         runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,

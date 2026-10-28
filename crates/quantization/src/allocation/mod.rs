@@ -174,6 +174,7 @@ impl AllocationResult {
 /// 9. Apply the block-run guard; count its upgrades.
 /// 10. Build the decisions, achieved bits-per-weight, counts, and the
 ///     estimated size `sum(bits * parameters) / 8`.
+#[expect(clippy::too_many_lines)]
 pub fn optimize_mixed_precision(
     table: &SensitivityTable,
     constraints: &AllocationConstraints,

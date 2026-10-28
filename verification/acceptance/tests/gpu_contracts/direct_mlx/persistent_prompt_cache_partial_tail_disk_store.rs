@@ -70,6 +70,7 @@ async fn should_publish_a_partial_tail_block_and_survive_a_rescan() {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_supersede_only_strictly_shorter_tail_siblings() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();

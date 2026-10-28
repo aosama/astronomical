@@ -67,6 +67,7 @@ fn should_apply_the_peak_allowance_at_its_exact_boundary() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_match_request_and_resident_guard_verdicts_when_the_analytic_floor_is_the_same_workspace()
 {
     // Fixed ownership so only the workspace byte count moves the projections.

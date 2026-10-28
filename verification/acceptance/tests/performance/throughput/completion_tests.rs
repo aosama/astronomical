@@ -1,6 +1,7 @@
 use super::*;
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_parse_the_measured_generation_cache_evidence() {
     let logging_directory =
         tempfile::tempdir().expect("the worker logging directory should be created");

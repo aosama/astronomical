@@ -387,6 +387,7 @@ fn image_memory_snapshot(
 }
 
 impl EnabledPerformanceAttribution {
+    #[expect(clippy::too_many_lines)]
     fn finish_common_report(
         &self,
         outcome: PerformanceAttributionOutcome,

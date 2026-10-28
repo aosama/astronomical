@@ -40,6 +40,7 @@ pub fn qwen3_5_vision_tensor_profiles_for_model(
     qwen3_5_vision_tensor_profiles_with_quantization(vision_config, Some(qwen3_5_config))
 }
 
+#[expect(clippy::too_many_lines)]
 fn qwen3_5_vision_tensor_profiles_with_quantization(
     vision_config: &Qwen3_5VisionConfig,
     qwen3_5_config: Option<&Qwen3_5Config>,

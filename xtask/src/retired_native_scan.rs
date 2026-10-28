@@ -153,6 +153,7 @@ fn print_scan_usage() {
     );
 }
 
+#[expect(clippy::too_many_lines)]
 fn run_scan(
     repository_root: &Path,
     target_directory_override: Option<String>,

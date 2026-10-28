@@ -207,6 +207,7 @@ impl Flux2KleinTransformer {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn advance_one_block_group_with_performance_attribution(
         &self,
         mut forward_state: Flux2KleinForwardState,

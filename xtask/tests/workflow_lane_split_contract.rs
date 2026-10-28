@@ -110,6 +110,7 @@ fn archive_aliases_carry_the_selections_the_compile_step_builds() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn tier_lanes_run_their_own_archives_without_compiling() {
     let workflow = workflow_contract();
     for (lane_id, lane_name) in TIER_LANES {

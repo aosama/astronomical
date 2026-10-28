@@ -49,6 +49,7 @@ struct RawSafetensorsTensorDeclaration {
 }
 
 /// Reads and validates raw tensor declarations from one retained artifact descriptor.
+#[expect(clippy::too_many_lines)]
 pub(crate) fn read_raw_safetensors_inventory(
     validated_required_file: &ValidatedRequiredFile,
 ) -> Result<RawSafetensorsInventory, ArtifactValidationError> {

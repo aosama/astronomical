@@ -62,6 +62,7 @@ impl MemoryDemotionRestart {
     /// transition, so no request can start between shutdown and restored-model
     /// readiness.
     #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub(in crate::worker) async fn execute(
         self,
         trusted_worker_process: &mut WorkerProcess,

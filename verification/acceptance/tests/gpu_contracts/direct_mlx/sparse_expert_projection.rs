@@ -53,6 +53,7 @@ fn values_as_float32(runtime: &MlxRuntime, array: &MlxArray) -> Vec<f32> {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_match_dense_operations_reference_across_generic_assignment_rows_and_dtypes() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = test_runtime();

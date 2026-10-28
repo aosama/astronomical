@@ -17,6 +17,7 @@ fn should_preserve_native_memory_transitions_through_the_mlx_c_boundary() {
     );
 }
 
+#[expect(clippy::too_many_lines)]
 fn run_native_memory_transitions_contract() {
     eprintln!("[mlx-c-memory-contract] status=start phase=runtime_initialization");
     let runtime = crate::runtime_common::runtime_test_support::runtime();

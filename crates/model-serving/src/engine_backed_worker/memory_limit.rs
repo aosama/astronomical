@@ -24,6 +24,7 @@ where
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
 {
+    #[expect(clippy::too_many_lines)]
     pub(crate) async fn update_mlx_memory_limit<WriteTransport>(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,

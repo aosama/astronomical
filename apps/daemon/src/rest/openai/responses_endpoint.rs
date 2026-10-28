@@ -23,6 +23,7 @@ use crate::{
     OpenAiResponsesStreamEncoder,
 };
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn create_response(
     State(application_state): State<ApplicationState>,
     request_body_bytes: Bytes,

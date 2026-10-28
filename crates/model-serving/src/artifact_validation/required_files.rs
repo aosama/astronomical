@@ -81,6 +81,7 @@ pub(crate) fn read_bounded_required_file_bytes(
     Ok(required_file_bytes)
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) fn validate_required_file(
     model_directory: &Path,
     required_file_profile: &RequiredFileProfile,

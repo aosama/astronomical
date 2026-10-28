@@ -58,6 +58,7 @@ pub(crate) struct PairedConfidenceInterval95 {
     pub(crate) upper_bound_percent: f64,
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) fn run_paired_decode_cache_trials(
     model_id: &'static str,
     journey_template: &ThroughputJourney,
@@ -294,6 +295,7 @@ fn assert_peak_memory_within_limit(
 #[path = "decode_cache_experiment_tests.rs"]
 mod decode_cache_experiment_tests;
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn report_attributed_policy_comparison(paired_trials: &[PairedDecodeCacheTrial]) {
     let baseline_decode_p95_nanoseconds = paired_trials
         .iter()

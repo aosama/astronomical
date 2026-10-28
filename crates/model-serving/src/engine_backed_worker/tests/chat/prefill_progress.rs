@@ -11,6 +11,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::{duplex, split};
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_cached_usage()
  {
     let engine_worker = EngineBackedWorker::new(

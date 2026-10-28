@@ -79,6 +79,7 @@ pub fn qwen3_5_gated_delta_checkpoint_kernel()
 /// kernel — `None` — uses the ops-based fallback, which snapshots boundaries
 /// at exactly the same completed-token positions.
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     runtime: &MlxRuntime,
     gated_delta_checkpoint_kernel: Option<&MlxMetalKernel>,

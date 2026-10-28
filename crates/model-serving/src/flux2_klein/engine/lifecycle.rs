@@ -210,6 +210,7 @@ impl ImageGenerationEngine for Flux2KleinImageEngine {
         Ok(())
     }
 
+    #[expect(clippy::too_many_lines)]
     fn advance_generation(
         &mut self,
         request_id: RequestId,

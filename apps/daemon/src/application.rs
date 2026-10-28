@@ -360,6 +360,7 @@ pub fn build_application_with_full_control_and_download_catalog(
     application_router(application_state)
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) fn application_router(application_state: ApplicationState) -> Router {
     let supports_config_reload = application_state.reloadable_config.is_some()
         && application_state.runtime_config_resolver.is_some();

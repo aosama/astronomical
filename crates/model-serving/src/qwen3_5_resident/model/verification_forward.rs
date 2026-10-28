@@ -47,6 +47,7 @@ impl Qwen3_5ResidentModel {
     /// `target_hidden_state_tap_layer_ids` names target decoder layers whose
     /// output hidden states the caller conditions the draft on; the draft's
     /// configuration pins them and the caller keeps the order stable.
+    #[expect(clippy::too_many_lines)]
     pub fn build_speculative_verification_forward(
         &self,
         token_ids: &[u32],

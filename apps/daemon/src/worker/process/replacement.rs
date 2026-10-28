@@ -43,6 +43,7 @@ impl WorkerReplacement {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub(crate) async fn execute(
         self,
         trusted_worker_process: &mut WorkerProcess,

@@ -309,6 +309,7 @@ fn checkpoint_write_source_for_token(
     checkpoint_write_source_template.replace(CHECKPOINT_TOKEN_EXPRESSION_MARKER, token_expression)
 }
 
+#[expect(clippy::too_many_lines)]
 fn pipelined_step_source(
     step_pipelining: StepPipelining,
     previous_step_reduction: PreviousStepReduction,

@@ -80,6 +80,7 @@ fn should_return_none_for_generation_tps_when_token_count_is_zero() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_open_and_append_to_performance_log() {
     let temp_dir = tempfile::tempdir().expect("test directory should be created");
     let mut performance_log =

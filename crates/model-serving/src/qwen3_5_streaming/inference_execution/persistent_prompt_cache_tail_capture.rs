@@ -21,6 +21,7 @@ impl Qwen3_5EngineState {
     /// Captures the prompt's final partial block after the terminal prefill
     /// chunk, extending the last durable full block of this request's chain.
     /// A tail is a leaf: it is never recorded as a capture parent.
+    #[expect(clippy::too_many_lines)]
     pub(super) fn capture_persistent_prompt_cache_partial_tail_block(
         &self,
         persistent_prompt_cache: &PersistentPromptCacheDiskStore,

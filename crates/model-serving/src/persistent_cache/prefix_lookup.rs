@@ -354,6 +354,7 @@ impl PersistentPromptCachePrefixLookup {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     fn for_prompt_with_block_causal_inputs_and_boundary_policy(
         persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
         prompt_tokens: &[u32],

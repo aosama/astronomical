@@ -72,6 +72,7 @@ fn should_round_trip_daemon_requests_through_the_wire_codec() {
 }
 
 #[test]
+#[expect(clippy::too_many_lines)]
 fn should_round_trip_daemon_responses_through_the_wire_codec() {
     let daemon_responses = [
         DaemonResponse::HandshakeAccepted {

@@ -90,6 +90,7 @@ fn run_fixture() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     runtime.block_on(run_fixture_async())
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_fixture_async() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut command_reader = ProtocolReader::new(tokio::io::stdin());
     let mut event_writer = ProtocolWriter::new(tokio::io::stdout());
