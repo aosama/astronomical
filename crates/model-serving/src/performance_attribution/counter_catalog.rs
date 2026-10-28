@@ -224,6 +224,7 @@ impl PerformanceCounter {
     ];
 
     /// Stable report identifier for this counter.
+    #[expect(clippy::too_many_lines)] // declarative table: data serialized as code (issue #1637 Family D)
     pub const fn identifier(self) -> &'static str {
         match self {
             Self::PromptTokenCount => "prompt_token_count",

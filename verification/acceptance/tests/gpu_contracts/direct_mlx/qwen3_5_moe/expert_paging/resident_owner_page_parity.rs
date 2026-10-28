@@ -311,6 +311,7 @@ fn assert_arrays_identical(
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_build_identical_resident_layers_from_shard_and_bounded_reads() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = tempfile::tempdir().expect("the parity model directory should create");

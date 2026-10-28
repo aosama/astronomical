@@ -377,6 +377,7 @@ struct TwoTurnEvidence {
 /// Drives one worker through the same long prompt twice. The first turn
 /// streams and (per the residency plan) seats complete layers; the second
 /// turn must reuse that seating instead of re-paying the SSD streams.
+#[expect(clippy::too_many_lines)]
 async fn run_two_turn_streaming_journey(
     attribution_enabled: bool,
     persistent_prompt_cache_enabled: bool,

@@ -70,6 +70,7 @@ where
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
 {
+    #[expect(clippy::too_many_lines)]
     pub(super) async fn swap_model<WriteTransport>(
         &mut self,
         model_directory: &str,

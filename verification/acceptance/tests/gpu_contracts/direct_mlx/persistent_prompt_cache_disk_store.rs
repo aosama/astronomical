@@ -59,6 +59,7 @@ async fn should_publish_a_block_directly_and_report_idempotent_republication() {
 }
 
 #[tokio::test]
+#[expect(clippy::too_many_lines)]
 async fn should_save_and_load_kv_block_and_recurrent_snapshot_as_separate_files() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let runtime = runtime_with_shared_limits();

@@ -75,6 +75,7 @@ async fn should_drive_raw_resident_model_prefill_and_decode_forwards_measurably(
     .expect("the raw resident forward probe must finish inside its documented real-model bound");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn drive_raw_resident_model_forwards() {
     let _gpu_exclusive = crate::common::direct_mlx_test_guard().await;
     let development_config = AstronomicalConfig::load_from_development_location()

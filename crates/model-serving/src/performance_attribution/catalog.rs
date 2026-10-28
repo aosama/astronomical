@@ -320,6 +320,7 @@ impl PerformanceOperation {
         Self::SpeculativeDraftKeyValueConditioning,
     ];
 
+    #[expect(clippy::too_many_lines)] // declarative table: data serialized as code (issue #1637 Family D)
     pub(super) const fn identifier(self) -> &'static str {
         match self {
             Self::ArtifactValidation => "artifact_validation",

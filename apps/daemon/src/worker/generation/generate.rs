@@ -20,6 +20,7 @@ use crate::{
     worker::process::startup_runtime::wait_for_startup_runtime_configuration,
 };
 
+#[expect(clippy::too_many_lines)]
 pub(in crate::worker) async fn handle_generate_command(
     worker_loop_state: &mut WorkerLoopState<'_>,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,

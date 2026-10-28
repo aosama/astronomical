@@ -148,6 +148,7 @@ fn initialize_tracing(
     Ok(guard)
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_daemon(
     instance_paths: AstronomicalInstancePaths,
     user_config: AstronomicalConfig,

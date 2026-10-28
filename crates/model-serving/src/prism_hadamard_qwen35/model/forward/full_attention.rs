@@ -15,6 +15,7 @@ use super::super::weights::FullLayerWeights;
 use super::StraightGenerationState;
 
 impl super::super::PrismHadamardTextModel {
+    #[expect(clippy::too_many_lines)]
     pub(super) fn forward_full_attention_layer(
         &self,
         normalized_input: &MlxArray,

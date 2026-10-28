@@ -8,14 +8,16 @@
 # with that definition or the numbers will disagree.
 #
 # The lint (clippy::too_many_lines, pedantic group, allow-by-default) is
-# deliberately NOT armed here yet. Prove-out phase first: run
-# `cargo xtask function-length`, which reports every over-budget function in
-# the default, MLX, and acceptance feature worlds without failing the build.
-# Measured October 2026: 201 sites exceed the budget (119 production-side, 82
-# test-side). Institution path once that report has stayed stable across real
-# work: an #[expect] sweep over the existing sites, then arm
-# too_many_lines = "deny" under [workspace.lints.clippy], then the pre-commit
-# hook, then the CI lane.
+# ARMED: "deny" under [workspace.lints.clippy] in the root Cargo.toml (and in
+# the runtime-integration and acceptance crates' own lints tables), with
+# #[expect] on every pre-existing over-budget function. The budget therefore
+# fails any build that crosses it, an #[expect] self-cleans when its function
+# shrinks below the budget, and `cargo xtask function-length` now reports
+# UNTRACKED over-budget functions (zero while every site carries its expect;
+# the tracked-debt count is `git grep -c 'expect(clippy::too_many_lines)'`).
+# The pre-commit hook re-proves the default and MLX worlds on Rust-touching
+# commits; CI's clippy budget steps cover all three worlds including the
+# acceptance feature superset.
 #
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
 # repository denies warnings via [build] warnings, which turns this lint into

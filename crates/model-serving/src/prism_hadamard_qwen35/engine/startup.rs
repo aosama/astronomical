@@ -52,6 +52,7 @@ pub enum PrismHadamardQwen35StartupError {
 /// The pack validation and tokenizer load run on the caller thread (CPU-only
 /// document work); MLX runtime initialization and weight loading stay inside
 /// `load` on the owner thread because MLX handles are not `Send`.
+#[expect(clippy::too_many_lines)]
 pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
     model_directory: &Path,
     effective_mlx_memory_ceiling_bytes: usize,

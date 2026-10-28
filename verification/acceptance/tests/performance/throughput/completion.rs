@@ -278,6 +278,7 @@ fn sample_to_measurement(
     }
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) fn read_decode_cache_diagnostic_evidence(
     logging_directory: &Path,
     request_id: u64,

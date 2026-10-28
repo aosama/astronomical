@@ -90,6 +90,7 @@ impl Qwen3_5VisionPaddingZeroCache {
 
 /// Runs one unmasked, image-segmented vision attention layer.
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_lines)]
 pub(super) fn qwen3_5_vision_self_attention(
     runtime: &MlxRuntime,
     compiled_elementwise_graphs: &MlxCompiledElementwiseGraphs,

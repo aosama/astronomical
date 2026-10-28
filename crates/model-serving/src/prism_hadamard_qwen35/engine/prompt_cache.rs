@@ -90,6 +90,7 @@ pub(super) struct PrismPromptCacheRestoreOutcome {
 /// The terminal block is dropped when it would consume the whole prompt: the
 /// final forward must process at least one prompt token to produce the first
 /// logits, exactly like every family that restores complete blocks only.
+#[expect(clippy::too_many_lines)]
 pub(super) fn lookup_and_restore_prompt_prefix(
     model: &PrismHadamardTextModel,
     persistent_prompt_cache: &PersistentPromptCacheDiskStore,

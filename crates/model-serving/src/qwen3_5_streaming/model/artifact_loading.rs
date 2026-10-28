@@ -70,6 +70,7 @@ impl Qwen3_5Model {
         )
     }
 
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn load_with_performance_attribution_and_decode_expert_cache_policy(
         runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,

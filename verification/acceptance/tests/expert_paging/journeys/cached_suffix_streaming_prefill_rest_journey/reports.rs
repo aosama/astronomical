@@ -43,6 +43,7 @@ fn read_json_lines(log_path: &Path) -> Vec<Value> {
 }
 
 /// Verifies memory bounds, cache reuse, truthful topology, and attribution.
+#[expect(clippy::too_many_lines)]
 pub(super) fn assert_reported_interaction(
     reports: &InteractionReports,
     cold_outcome: &ObservedRequestOutcome,

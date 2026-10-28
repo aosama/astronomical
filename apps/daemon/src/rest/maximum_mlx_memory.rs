@@ -26,6 +26,7 @@ struct MaximumMlxMemoryResponse {
     message: String,
 }
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn update_maximum_mlx_memory(
     State(application_state): State<ApplicationState>,
     Json(maximum_mlx_memory_request): Json<MaximumMlxMemoryRequest>,

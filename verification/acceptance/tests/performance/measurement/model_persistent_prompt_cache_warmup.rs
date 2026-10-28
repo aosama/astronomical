@@ -47,6 +47,7 @@ async fn should_measure_model_persistent_prompt_cache_warmup_scaling_at_hundred_
     .expect("the 100K persistent prompt-cache warmup E2E must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_persistent_prompt_cache_warmup_e2e(
     persistent_prompt_cache_warmup_case: PersistentPromptCacheWarmupCase,
 ) {

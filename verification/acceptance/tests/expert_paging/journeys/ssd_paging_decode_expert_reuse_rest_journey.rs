@@ -68,6 +68,7 @@ async fn should_reuse_retained_decode_experts_while_staying_within_the_mlx_memor
     .expect("the progressive expert-memory SSD journey must finish within 120 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_ssd_paging_decode_expert_reuse_journey() {
     let model_directory = crate::support::configured_installed_model_directory_by_id(model_id());
     let isolated_worker_home =

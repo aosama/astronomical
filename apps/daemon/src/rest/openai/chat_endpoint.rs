@@ -24,6 +24,7 @@ use crate::{
 use crate::application;
 use crate::application::ApplicationState;
 
+#[expect(clippy::too_many_lines)]
 pub(crate) async fn create_chat_completion(
     State(application_state): State<ApplicationState>,
     request_body_bytes: Bytes,

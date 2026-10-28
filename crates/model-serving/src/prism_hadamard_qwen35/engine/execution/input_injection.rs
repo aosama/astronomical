@@ -7,6 +7,7 @@ use super::sampling::sample_token;
 use super::{PrismHadamardQwen35InferenceExecution, successor_stays_pending};
 use crate::{InferenceEngineError, PerformanceOperation};
 
+#[expect(clippy::too_many_lines)]
 pub(super) fn inject_input_tokens(
     execution: &mut PrismHadamardQwen35InferenceExecution,
     request_id: RequestId,

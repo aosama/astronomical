@@ -137,6 +137,7 @@ fn pending_segment_queue(
 }
 
 impl DownloadPayloadTransfer {
+    #[expect(clippy::too_many_lines)]
     pub(super) async fn download_pending_files_within_bounded_window(
         &self,
         download_job: &mut DownloadJob,

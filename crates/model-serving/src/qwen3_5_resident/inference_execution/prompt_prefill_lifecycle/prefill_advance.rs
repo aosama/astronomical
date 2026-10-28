@@ -41,6 +41,7 @@ use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::model::memory_admission;
 impl Qwen3_5EngineState {
+    #[expect(clippy::too_many_lines)]
     pub(in crate::qwen3_5_resident::inference_execution) fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,

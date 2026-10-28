@@ -75,6 +75,7 @@ fn assert_valid_prefill_chunk_sweep_result(prefill_chunk_metrics: PrefillChunkMe
 }
 
 /// Loads the Ornith model over duplex pipes with one neutral fixed chunk policy.
+#[expect(clippy::too_many_lines)]
 async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> PrefillChunkMetrics {
     let (test_to_worker, worker_from_test) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);
     let (worker_to_test, test_from_worker) = tokio::io::duplex(MAX_IPC_FRAME_BYTES * 4);

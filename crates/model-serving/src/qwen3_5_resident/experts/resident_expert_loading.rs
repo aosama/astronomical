@@ -20,6 +20,7 @@ type ResidentSourceTensorMap = HashMap<ResidentSourceTensorKey, MlxArray>;
 
 impl Qwen3_5ResidentExpertWeights {
     /// Materializes all complete expert layers directly from their shared plans.
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn load(
         runtime: &MlxRuntime,
         layer_plans: &[QuantizedExpertLayerPlan],

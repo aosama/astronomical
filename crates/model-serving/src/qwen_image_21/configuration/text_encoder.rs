@@ -110,6 +110,7 @@ pub struct QwenImage21TextEncoderConfig {
 }
 
 impl QwenImage21TextEncoderConfig {
+    #[expect(clippy::too_many_lines)]
     pub fn parse(json_bytes: &[u8]) -> Result<Self, QwenImage21ConfigError> {
         const DOCUMENT: &str = "text_encoder/config.json";
         let document: TextEncoderDocument = parse_document(json_bytes, DOCUMENT)?;

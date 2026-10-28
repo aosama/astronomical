@@ -22,6 +22,7 @@ mod tests;
 
 impl Qwen3_5ModelBase {
     #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_lines)]
     pub(crate) fn forward_linear_attention(
         &self,
         hidden_states: &MlxArray,

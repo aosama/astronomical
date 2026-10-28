@@ -74,6 +74,7 @@ impl Qwen3_5EngineState {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn advance_active_request(
         &mut self,
         request_id: RequestId,

@@ -221,6 +221,7 @@ fn ready_model_summary(
     })
 }
 
+#[expect(clippy::too_many_lines)]
 fn chunking_summary(
     configured_policy: Option<&crate::RuntimeModelPolicy>,
     effective_model: Option<&WorkerLoadedModelRuntimeConfiguration>,

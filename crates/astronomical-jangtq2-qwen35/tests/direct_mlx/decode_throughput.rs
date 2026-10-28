@@ -103,6 +103,7 @@ fn median_duration_millis(durations_ms: &[f64]) -> f64 {
 ///
 /// The decoder evaluates and detaches its output, so each call is already
 /// fully synchronous and per-call wall time is honest without extra evaluation.
+#[expect(clippy::too_many_lines)]
 fn measure_decode_throughput(case_name: &str, packed_shape: &[i32], bit_width: u32) {
     let runtime = test_runtime();
     let expert_count = packed_shape[0] as usize;
@@ -360,6 +361,7 @@ fn should_measure_hadamard32_activation_rotation_throughput() {
 /// two medians are directly comparable. Reports the ratio so the decode-token
 /// cost model (three projections per layer, 48 layers) can be read straight
 /// off the tier-0 line.
+#[expect(clippy::too_many_lines)]
 fn measure_fused_gathered_projection_throughput(
     case_name: &str,
     packed_shape: &[i32],

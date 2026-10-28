@@ -42,6 +42,7 @@ async fn should_restore_a_long_ornith_prefix_with_one_block_of_workspace() {
     .await;
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_cache_restore_peak_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let journey_started_at = tokio::time::Instant::now();

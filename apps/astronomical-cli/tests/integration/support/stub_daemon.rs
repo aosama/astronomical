@@ -156,6 +156,7 @@ impl StubDaemonConfig {
 }
 
 /// Binds the socket and serves scripted exchanges until aborted.
+#[expect(clippy::too_many_lines)]
 pub fn spawn_stub_daemon(
     socket_path: PathBuf,
     config: StubDaemonConfig,

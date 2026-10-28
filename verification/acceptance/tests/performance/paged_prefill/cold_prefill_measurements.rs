@@ -117,6 +117,7 @@ async fn should_measure_paged_prefill_cold_cache_at_fifty_thousand_words() {
     .expect("the model-artifact cold-cache 50K measurement must finish within 60 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn run_cold_prefill_measurement(measurement_case: ColdPrefillMeasurementCase) {
     let configured_model_directory = configured_model_directory_from_user_config();
     let production_worker_executable_path =
@@ -299,6 +300,7 @@ async fn wait_until_idle(worker_handle: &WorkerHandle) {
     panic!("the real worker did not become idle before the metrics deadline");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn measure_worker_summarization(
     worker_handle: &WorkerHandle,
     source_document: &str,

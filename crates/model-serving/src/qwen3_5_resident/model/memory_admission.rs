@@ -13,6 +13,7 @@ use super::Qwen3_5ResidentModel;
 /// Whole-owner demotion is orchestrated by the mutable engine before this model
 /// helper runs. Once paged, this helper can reclaim the exact native deficit and
 /// retry the unchanged projection before rejecting the user's request.
+#[expect(clippy::too_many_lines)]
 pub(crate) fn validate_context_memory_admission(
     model: &Qwen3_5ResidentModel,
     memory_limits: MlxMemoryLimits,

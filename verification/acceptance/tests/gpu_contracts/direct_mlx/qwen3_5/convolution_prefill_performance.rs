@@ -27,6 +27,7 @@ async fn should_measure_isolated_convolution_chain_costs_at_prefill_shapes() {
         .expect("the isolated convolution bench must finish within 115 seconds");
 }
 
+#[expect(clippy::too_many_lines)]
 async fn measure_convolution_chain_costs() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     // Production-shaped memory limits: the tiny direct-MLX test defaults (8 MB

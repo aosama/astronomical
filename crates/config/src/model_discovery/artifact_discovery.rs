@@ -26,6 +26,7 @@ pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
 /// This variant accepts a custom `model_id`, useful for HuggingFace cache entries
 /// where the model_id is derived from the decoded `models--org--repo` directory name
 /// rather than the snapshot hash.
+#[expect(clippy::too_many_lines)]
 pub fn try_discover_model_with_id(
     model_directory: &Path,
     model_id: &str,

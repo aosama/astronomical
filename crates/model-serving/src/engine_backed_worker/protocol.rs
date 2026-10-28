@@ -39,6 +39,7 @@ where
     }
 
     /// Serves commands using already-created protocol transports.
+    #[expect(clippy::too_many_lines)]
     pub async fn run_with_protocol<ReadTransport, WriteTransport>(
         mut self,
         command_reader: ProtocolReader<ReadTransport>,
@@ -161,6 +162,7 @@ where
         self.worker_runtime_feature_configuration.clone()
     }
 
+    #[expect(clippy::too_many_lines)]
     async fn serve_protocol<ReadTransport, WriteTransport>(
         mut self,
         mut command_reader: ProtocolReader<ReadTransport>,
