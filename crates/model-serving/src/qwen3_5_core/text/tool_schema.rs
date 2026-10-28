@@ -312,28 +312,10 @@ fn parse_nullable_any_of_type(
                 has_null_type = true;
             }
             Some(Value::String(parameter_type)) if non_null_type.is_none() => {
-                if schema_fields.keys().any(|schema_keyword| {
-                    !matches!(
-                        schema_keyword.as_str(),
-                        "type"
-                            | "description"
-                            | "title"
-                            | "default"
-                            | "minimum"
-                            | "maximum"
-                            | "exclusiveMinimum"
-                            | "exclusiveMaximum"
-                            | "minLength"
-                            | "maxLength"
-                            | "pattern"
-                            | "format"
-                            | "minItems"
-                            | "maxItems"
-                            | "minProperties"
-                            | "maxProperties"
-                            | "uniqueItems"
-                    )
-                }) {
+                if schema_fields
+                    .keys()
+                    .any(|schema_keyword| !is_recognized_json_schema_keyword(schema_keyword))
+                {
                     return None;
                 }
                 non_null_type = Some(parameter_type.clone());
@@ -400,4 +382,32 @@ fn trim_one_boundary_newline(parameter_value: &str) -> &str {
     parameter_value
         .strip_suffix('\n')
         .unwrap_or(parameter_value)
+}
+
+/// Whether this keyword is one the tool-parameter schema mapping understands.
+///
+/// A non-null typed parameter carrying any other JSON-Schema keyword cannot
+/// be mapped faithfully to a tool parameter, so the mapping rejects it
+/// rather than silently dropping the constraint the keyword expresses.
+fn is_recognized_json_schema_keyword(schema_keyword: &str) -> bool {
+    matches!(
+        schema_keyword,
+        "type"
+            | "description"
+            | "title"
+            | "default"
+            | "minimum"
+            | "maximum"
+            | "exclusiveMinimum"
+            | "exclusiveMaximum"
+            | "minLength"
+            | "maxLength"
+            | "pattern"
+            | "format"
+            | "minItems"
+            | "maxItems"
+            | "minProperties"
+            | "maxProperties"
+            | "uniqueItems"
+    )
 }

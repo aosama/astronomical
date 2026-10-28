@@ -49,26 +49,17 @@ impl Qwen3_5Model {
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
         let paged_output = performance_attribution.measure_operation(
             PerformanceOperation::PagedMoeGraphConstruction,
-            |performance_attribution| {
-                let page_slot_indices =
-                    cached_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
-                        &self.runtime,
-                        selected_indices,
-                        sorted_unique_expert_ids,
-                        page_manifest,
-                    )?;
-                let sparse_output = self.forward_moe_with_streamed_weights(
-                    hidden_states,
-                    paged_expert_weights,
-                    &page_slot_indices,
-                    selected_scores,
-                    performance_attribution,
-                )?;
-                self.combine_paged_sparse_and_shared_outputs(
+            |measured_attribution| {
+                self.build_paged_sparse_output(
                     hidden_states,
                     mixture_of_experts_weights,
-                    &sparse_output,
+                    paged_expert_weights,
+                    page_manifest,
+                    selected_indices,
+                    sorted_unique_expert_ids,
+                    selected_scores,
                     should_use_compiled_elementwise_graphs,
+                    measured_attribution,
                 )
             },
         )?;
@@ -77,6 +68,47 @@ impl Qwen3_5Model {
             3,
         );
         Ok(paged_output)
+    }
+
+    /// Builds the paged sparse expert output for one decode forward: remaps
+    /// the routed experts to their page slots, streams the weights through
+    /// the gathered projection, and folds the shared (non-expert) outputs in.
+    ///
+    /// Extracted from the `PagedMoeGraphConstruction` measurement so the
+    /// measured region reads as one named step instead of an inline closure.
+    #[allow(clippy::too_many_arguments)]
+    fn build_paged_sparse_output(
+        &self,
+        hidden_states: &MlxArray,
+        mixture_of_experts_weights: &Qwen3_5MoEFeedForwardWeights,
+        paged_expert_weights: &Qwen3_5PagedExpertWeights,
+        page_manifest: &QuantizedExpertPageManifest,
+        selected_indices: &MlxArray,
+        sorted_unique_expert_ids: &[usize],
+        selected_scores: &MlxArray,
+        should_use_compiled_elementwise_graphs: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let page_slot_indices =
+            cached_plus_streamed_page_route::qwen3_5_moe_remap_expert_page_slots(
+                &self.runtime,
+                selected_indices,
+                sorted_unique_expert_ids,
+                page_manifest,
+            )?;
+        let sparse_output = self.forward_moe_with_streamed_weights(
+            hidden_states,
+            paged_expert_weights,
+            &page_slot_indices,
+            selected_scores,
+            performance_attribution,
+        )?;
+        self.combine_paged_sparse_and_shared_outputs(
+            hidden_states,
+            mixture_of_experts_weights,
+            &sparse_output,
+            should_use_compiled_elementwise_graphs,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
