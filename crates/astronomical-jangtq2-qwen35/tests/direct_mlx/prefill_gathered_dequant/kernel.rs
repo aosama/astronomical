@@ -102,18 +102,36 @@ pub(super) const PREFILL_GATHERED_DEQUANT_KERNEL_SOURCE: &str = r#"
   }
 "#;
 
+/// The data-plane arguments of one gathered-dequant launch, mirroring the
+/// Metal kernel's input buffers and scalars one-to-one. `runtime` and
+/// `kernel` stay explicit launcher arguments as the execution plane.
+#[derive(Clone, Copy)]
+pub(super) struct PrefillGatheredDequantInputs<'a> {
+    pub(super) assignments: &'a MlxArray,
+    pub(super) expert_assignment_starts: &'a MlxArray,
+    pub(super) packed_code_words: &'a MlxArray,
+    pub(super) row_scales: &'a MlxArray,
+    pub(super) codebook_level_table: &'a MlxArray,
+    pub(super) bit_width: u32,
+    pub(super) expert_count: usize,
+    pub(super) output_rows: usize,
+}
+
 pub(super) fn launch_prefill_gathered_dequant(
     runtime: &MlxRuntime,
     kernel: &MlxMetalKernel,
-    assignments: &MlxArray,
-    expert_assignment_starts: &MlxArray,
-    packed_code_words: &MlxArray,
-    row_scales: &MlxArray,
-    codebook_level_table: &MlxArray,
-    bit_width: u32,
-    expert_count: usize,
-    output_rows: usize,
+    inputs: PrefillGatheredDequantInputs<'_>,
 ) -> Result<MlxArray, MlxRuntimeError> {
+    let PrefillGatheredDequantInputs {
+        assignments,
+        expert_assignment_starts,
+        packed_code_words,
+        row_scales,
+        codebook_level_table,
+        bit_width,
+        expert_count,
+        output_rows,
+    } = inputs;
     let words_per_row = packed_code_words.shape()[2];
     let input_width = words_per_row * 32 / bit_width as i32;
     let assignment_count = assignments.shape()[0];

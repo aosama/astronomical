@@ -315,29 +315,29 @@ impl DisposableJourney {
         // The measuring branch needs no work here: its caller kills the
         // external `du` child before entering, and measuring never mutates
         // the owned target, so retention is the correct terminal state.
-        if self.cleanup_operation == CleanupOperationName::Removing {
-            if let Some(removal_result_receiver) = self.removal_result_receiver.take() {
-                let removal_result = removal_result_receiver
-                    .recv()
-                    .unwrap_or_else(|_| Err(std::io::Error::other("the removal worker died")));
-                if let Some(progress_reporter) = self.cleanup_progress_reporter.take() {
-                    progress_reporter.stop();
-                }
-                if removal_result.is_ok() && !self.target_directory.exists() {
-                    lifecycle_line(&self.lane_name, "removed-during-interruption", false);
-                } else {
-                    lifecycle_line(
-                        &self.lane_name,
-                        &format!(
-                            "cleanup-incomplete-retained target_directory={}",
-                            self.target_directory.display()
-                        ),
-                        true,
-                    );
-                }
-                self.is_cleanup_pending = false;
-                std::process::exit(signal_exit_status);
+        if self.cleanup_operation == CleanupOperationName::Removing
+            && let Some(removal_result_receiver) = self.removal_result_receiver.take()
+        {
+            let removal_result = removal_result_receiver
+                .recv()
+                .unwrap_or_else(|_| Err(std::io::Error::other("the removal worker died")));
+            if let Some(progress_reporter) = self.cleanup_progress_reporter.take() {
+                progress_reporter.stop();
             }
+            if removal_result.is_ok() && !self.target_directory.exists() {
+                lifecycle_line(&self.lane_name, "removed-during-interruption", false);
+            } else {
+                lifecycle_line(
+                    &self.lane_name,
+                    &format!(
+                        "cleanup-incomplete-retained target_directory={}",
+                        self.target_directory.display()
+                    ),
+                    true,
+                );
+            }
+            self.is_cleanup_pending = false;
+            std::process::exit(signal_exit_status);
         }
         if let Some(progress_reporter) = self.cleanup_progress_reporter.take() {
             progress_reporter.stop();

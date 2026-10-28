@@ -34,8 +34,7 @@ impl Progress {
             (checked_files * 100 / self.total_files, 0)
         } else {
             let estimated_total_seconds =
-                (elapsed_seconds * self.total_files as u64 + checked_files as u64 - 1)
-                    / checked_files as u64;
+                (elapsed_seconds * self.total_files as u64).div_ceil(checked_files as u64);
             (
                 checked_files * 100 / self.total_files,
                 estimated_total_seconds - elapsed_seconds,
@@ -48,7 +47,7 @@ impl Progress {
     }
 
     fn should_report(&self, checked_files: usize) -> bool {
-        checked_files % PROGRESS_INTERVAL_FILES == 0 || checked_files == self.total_files
+        checked_files.is_multiple_of(PROGRESS_INTERVAL_FILES) || checked_files == self.total_files
     }
 
     fn assert_within_timeout(&self) -> Result<(), String> {
