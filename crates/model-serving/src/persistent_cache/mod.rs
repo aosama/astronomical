@@ -11,6 +11,9 @@ pub(crate) mod block_format_error;
 mod block_key;
 #[cfg(feature = "direct-mlx")]
 mod block_manifest;
+pub(crate) mod capture_planning;
+#[cfg(test)]
+mod capture_planning_tests;
 #[cfg(any(test, feature = "direct-mlx"))]
 pub(crate) mod counters;
 #[cfg(feature = "direct-mlx")]
