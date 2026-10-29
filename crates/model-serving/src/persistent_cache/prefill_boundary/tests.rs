@@ -1,6 +1,7 @@
 use super::{
     persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
+    resolve_prompt_prefill_chunk_span,
 };
 
 #[test]
@@ -145,4 +146,62 @@ fn should_not_produce_a_zero_token_terminal_chunk_for_a_one_token_remainder() {
         3_329,
         super::persistent_prompt_cache_clamped_prefill_chunk_end(3_328, 3_329, 3_329, 3_328,),
     );
+}
+
+#[test]
+fn should_report_no_pending_prompt_work_when_the_cursor_reached_the_end() {
+    assert!(
+        resolve_prompt_prefill_chunk_span(8, 8, 8, true, true, 4).is_none(),
+        "a cursor at the prompt end means prefill is complete"
+    );
+}
+
+#[test]
+fn should_report_no_pending_prompt_work_when_the_cursor_passed_the_end() {
+    assert!(
+        resolve_prompt_prefill_chunk_span(9, 8, 8, true, true, 4).is_none(),
+        "a cursor beyond the end is equally complete"
+    );
+}
+
+#[test]
+fn should_keep_the_configured_chunk_when_no_cache_is_available() {
+    let span = resolve_prompt_prefill_chunk_span(0, 2_048, 1_792, false, true, 512)
+        .expect("prompt work is pending");
+    assert_eq!(span.prefill_start, 0);
+    assert_eq!(span.attempted_prefill_chunk_token_count, 1_792);
+}
+
+#[test]
+fn should_keep_the_configured_chunk_when_the_request_cannot_use_the_cache() {
+    // Availability alone must not clamp: the request's own permission bit
+    // decides, so a cache-configured engine serving a cache-ineligible request
+    // keeps the configured chunk.
+    let span = resolve_prompt_prefill_chunk_span(0, 2_048, 1_792, true, false, 512)
+        .expect("prompt work is pending");
+    assert_eq!(span.attempted_prefill_chunk_token_count, 1_792);
+}
+
+#[test]
+fn should_clamp_the_chunk_to_one_durable_boundary_when_the_cache_applies() {
+    // A 1,792-token configured chunk starting at 0 with 512-token blocks
+    // would publish three complete blocks; the clamp keeps it to one.
+    let span = resolve_prompt_prefill_chunk_span(0, 2_048, 1_792, true, true, 512)
+        .expect("prompt work is pending");
+    assert_eq!(span.attempted_prefill_chunk_token_count, 512);
+}
+
+#[test]
+fn should_stop_one_token_short_of_a_terminal_misaligned_prompt() {
+    // The terminal chunk stops one token short so the captured partial tail
+    // stays probeable: with 4-token blocks, a prompt ending at a non-aligned
+    // position clamps one token short of that end.
+    let span = resolve_prompt_prefill_chunk_span(8, 17, 17, true, true, 4)
+        .expect("prompt work is pending");
+    assert_eq!(
+        span.attempted_prefill_chunk_token_count,
+        super::persistent_prompt_cache_clamped_prefill_chunk_end(8, 17, 17, 4) - 8,
+        "the span resolver must delegate terminal-tail clamping to the one clamp function"
+    );
+    assert!(span.attempted_prefill_chunk_token_count < 9);
 }

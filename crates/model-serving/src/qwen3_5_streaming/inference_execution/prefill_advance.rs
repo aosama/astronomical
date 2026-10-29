@@ -37,7 +37,6 @@ use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::qwen3_5_streaming::model::memory_admission;
 impl Qwen3_5EngineState {
-    #[expect(clippy::too_many_lines)]
     pub(super) fn advance_prompt_prefill_if_pending(
         &mut self,
         request_id: RequestId,
@@ -46,19 +45,139 @@ impl Qwen3_5EngineState {
         // Target-only prefill consumes every prompt token and samples first
         // output from the last chunk.
         let prefill_end_exclusive = active_request.input_token_ids.len();
-        if active_request.prefill_cursor >= prefill_end_exclusive {
+        let Some(prefill_chunk_span) =
+            self.resolve_next_prefill_chunk_span(active_request, prefill_end_exclusive)
+        else {
             return Ok(None);
+        };
+        let crate::persistent_cache::ResolvedPrefillChunkSpan {
+            prefill_start,
+            attempted_prefill_chunk_token_count,
+            ..
+        } = prefill_chunk_span;
+        self.refresh_prefill_residency_plan(active_request)?;
+        let forward_chunk_started_at = Instant::now();
+        tracing::info!(
+            request_id = request_id.value(),
+            prefill_start,
+            attempted_prefill_chunk_token_count,
+            "executing prompt-prefill chunk"
+        );
+        self.open_expert_demand_window_for_prefill(
+            active_request,
+            prefill_start,
+            attempted_prefill_chunk_token_count,
+            prefill_end_exclusive,
+        );
+        let prefill_end = self
+            .prefill_end_for_attempted_chunk(prefill_start, attempted_prefill_chunk_token_count)?;
+        let prompt_prefill_chunk_outcome =
+            match self.execute_prompt_prefill_chunk(active_request, prefill_start, prefill_end) {
+                Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
+                Err(prompt_prefill_chunk_attempt_error) => {
+                    return self.handle_prompt_prefill_chunk_attempt_failure(
+                        request_id,
+                        active_request,
+                        prefill_start,
+                        attempted_prefill_chunk_token_count,
+                        prompt_prefill_chunk_attempt_error,
+                    );
+                }
+            };
+        // Decode records its own route demand at plain assignment weight; the
+        // boost belongs to the final prefill chunk's evidence only.
+        if let Some(model) = self.model.as_ref() {
+            model.set_expert_demand_assignment_weight_for_residency(1);
         }
-        let prefill_start = active_request.prefill_cursor;
+        let forward_chunk_elapsed_millis =
+            prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
+        let boundary_checkpoints = prompt_prefill_chunk_outcome.boundary_checkpoints;
+        let active_memory_bytes_before_growth =
+            prompt_prefill_chunk_outcome.active_memory_bytes_before_growth;
+        let retained_expert_payload_bytes_before_growth =
+            prompt_prefill_chunk_outcome.retained_expert_payload_bytes_before_growth;
+        let streamed_expert_page_bytes_before_growth =
+            prompt_prefill_chunk_outcome.streamed_expert_page_bytes_before_growth;
+        let adaptive_ram_growth_context = prompt_prefill_chunk_outcome.adaptive_ram_growth_context;
+        let exact_temporary_workspace_bytes =
+            prompt_prefill_chunk_outcome.exact_temporary_workspace_bytes;
+        self.publish_and_advance_durable_prefill_state(
+            active_request,
+            prefill_start,
+            prefill_end,
+            boundary_checkpoints,
+        )?;
+        self.reclaim_allocator_cache_after_prefill_chunk(
+            request_id,
+            active_request,
+            prefill_start,
+            prefill_end,
+        )?;
+        self.record_completed_forward_memory(
+            active_request,
+            adaptive_ram_growth_context,
+            active_memory_bytes_before_growth,
+            retained_expert_payload_bytes_before_growth,
+            exact_temporary_workspace_bytes,
+            streamed_expert_page_bytes_before_growth,
+        )?;
+        Ok(Some(self.prefill_progress_token(
+            active_request,
+            request_id,
+            prefill_start,
+            prefill_end,
+            forward_chunk_started_at,
+            forward_chunk_elapsed_millis,
+        )?))
+    }
+}
+
+impl Qwen3_5EngineState {
+    /// Resolves the next prompt-prefill chunk span through the shared pure
+    /// resolver: the configured chunk end from the sizer, clamped at the
+    /// durable prompt-cache boundary when one applies.
+    fn resolve_next_prefill_chunk_span(
+        &self,
+        active_request: &super::engine_request::Qwen3_5EngineRequest,
+        prefill_end_exclusive: usize,
+    ) -> Option<crate::persistent_cache::ResolvedPrefillChunkSpan> {
+        let persistent_prompt_cache_block_token_count = self
+            .persistent_prompt_cache
+            .as_ref()
+            .map(|persistent_prompt_cache| {
+                persistent_prompt_cache
+                    .model_contract_ref()
+                    .block_token_count()
+            })
+            .unwrap_or(0);
+        crate::persistent_cache::resolve_prompt_prefill_chunk_span(
+            active_request.prefill_cursor,
+            prefill_end_exclusive,
+            self.prompt_processing_chunk_sizer
+                .next_prompt_processing_chunk_end(
+                    active_request.prefill_cursor,
+                    prefill_end_exclusive,
+                ),
+            self.persistent_prompt_cache.is_some(),
+            active_request.can_use_persistent_prompt_cache,
+            persistent_prompt_cache_block_token_count,
+        )
+    }
+
+    /// Refreshes the phase-aware expert residency plan for the prefill phase.
+    /// The activation reserve is operation-scoped (issue #644): the residency
+    /// plan must survive the largest chunk this request can still attempt,
+    /// not the whole prompt's imagined workspace. Mirrors the inlined block.
+    fn refresh_prefill_residency_plan(
+        &mut self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+    ) -> Result<(), InferenceEngineError> {
         self.model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
             .refresh_phase_aware_expert_residency_plan(
                 MemoryPhase::Prefill,
                 u64::try_from(active_request.input_token_ids.len()).unwrap_or(u64::MAX),
-                // The activation reserve is operation-scoped (issue #644): the
-                // residency plan must survive the largest chunk this request can
-                // still attempt, not the whole prompt's imagined workspace.
                 u64::try_from(
                     self.prompt_processing_chunk_sizer
                         .maximum_prompt_processing_chunk_size_tokens(),
@@ -66,53 +185,18 @@ impl Qwen3_5EngineState {
                 .unwrap_or(u64::MAX),
                 &mut active_request.performance_attribution,
             )
-            .map_err(qwen3_5_runtime_error)?;
-        let configured_prompt_processing_chunk_end = self
-            .prompt_processing_chunk_sizer
-            .next_prompt_processing_chunk_end(active_request.prefill_cursor, prefill_end_exclusive);
-        let requested_prefill_chunk_end = configured_prompt_processing_chunk_end;
-        // Required publication is synchronous, so do not let one forward cross
-        // multiple durable boundaries. A successful forward produces one exact
-        // checkpoint, publishes it, and only then advances the request cursor.
-        // One-boundary-per-forward keeps publication workspace exact when a
-        // small cache block would otherwise sit inside a 2,048-token chunk many
-        // times. When the configured chunk crosses at most one durable boundary,
-        // clamping only splits a later complete-layer SSD stream (1,792 then a
-        // 561-token stub) without reducing publication count.
-        let requested_prefill_chunk_end = if self.persistent_prompt_cache.is_some()
-            && active_request.can_use_persistent_prompt_cache
-        {
-            let persistent_prompt_cache_block_token_count = self
-                .persistent_prompt_cache
-                .as_ref()
-                .map(|persistent_prompt_cache| {
-                    persistent_prompt_cache
-                        .model_contract_ref()
-                        .block_token_count()
-                })
-                .unwrap_or(0);
-            // One shared function applies both clamps (at most one durable
-            // block publication per forward; terminal chunks stop one token
-            // short so the captured partial tail stays probeable). Keeping the
-            // composition in the tested pure layer is deliberate: the boundary
-            // clamp was silently discarded once by an innocent refactor.
-            crate::persistent_prompt_cache_clamped_prefill_chunk_end(
-                prefill_start,
-                requested_prefill_chunk_end,
-                prefill_end_exclusive,
-                persistent_prompt_cache_block_token_count,
-            )
-        } else {
-            requested_prefill_chunk_end
-        };
-        let forward_chunk_started_at = Instant::now();
-        let attempted_prefill_chunk_token_count = requested_prefill_chunk_end - prefill_start;
-        tracing::info!(
-            request_id = request_id.value(),
-            prefill_start,
-            attempted_prefill_chunk_token_count,
-            "executing prompt-prefill chunk"
-        );
+            .map_err(qwen3_5_runtime_error)
+    }
+
+    /// Opens the request's one demand-evidence window for prefill and sets the
+    /// final chunk's boosted assignment weight. Mirrors the inlined block.
+    fn open_expert_demand_window_for_prefill(
+        &mut self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        prefill_start: usize,
+        attempted_prefill_chunk_token_count: usize,
+        prefill_end_exclusive: usize,
+    ) {
         // One demand-evidence window per request's prefill: earlier chunks
         // record at weight one and the final chunk records boosted, so the
         // prefill-to-decode handoff ranks prompt-tail routes by token density
@@ -135,117 +219,115 @@ impl Qwen3_5EngineState {
         if let Some(model) = self.model.as_ref() {
             model.set_expert_demand_assignment_weight_for_residency(demand_assignment_weight);
         }
-        let prefill_end = prefill_start
+    }
+
+    /// The exclusive chunk end for one attempted span; overflow is a fatal
+    /// generation error, exactly as the inlined checked_add was.
+    fn prefill_end_for_attempted_chunk(
+        &self,
+        prefill_start: usize,
+        attempted_prefill_chunk_token_count: usize,
+    ) -> Result<usize, InferenceEngineError> {
+        prefill_start
             .checked_add(attempted_prefill_chunk_token_count)
-            .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))?;
-        let prompt_prefill_chunk_outcome = match self.execute_prompt_prefill_chunk(
-            active_request,
-            prefill_start,
-            prefill_end,
-        ) {
-            Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
-            Err(prompt_prefill_chunk_attempt_error) => {
-                let prefill_memory_failure_error = match prompt_prefill_chunk_attempt_error {
-                    PromptPrefillChunkAttemptError::Engine(generation_error) => {
-                        return Err(generation_error);
-                    }
-                    PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
-                        decision: crate::PagedForwardAdmissionDecision::Reject { .. },
-                        reason,
-                    } => {
-                        tracing::warn!(
-                            request_id = request_id.value(),
-                            prefill_start,
-                            attempted_prefill_chunk_token_count,
-                            reason = %reason,
-                            "prefill admission rejected the configured chunk"
-                        );
-                        memory_admission::invalid_request_error(format!(
-                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
-                        ))
-                    }
-                    PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
-                        decision,
-                        reason,
-                    } => {
-                        return Err(memory_admission::invalid_request_error(format!(
-                            "unexpected paged forward admission decision {decision:?}: {reason}"
-                        )));
-                    }
-                    PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
-                        active_memory_bytes,
-                        attempted_allocation_bytes,
-                        allowed_active_memory_bytes,
-                    } => {
-                        tracing::warn!(
-                            request_id = request_id.value(),
-                            prefill_start,
-                            attempted_prefill_chunk_token_count,
-                            active_memory_bytes,
-                            attempted_allocation_bytes,
-                            allowed_active_memory_bytes,
-                            "prefill chunk forward exceeded the MLX active-memory limit"
-                        );
-                        memory_admission::invalid_request_error(format!(
-                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
-                        ))
-                    }
-                    PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { reason } => {
-                        tracing::warn!(
-                            request_id = request_id.value(),
-                            prefill_start,
-                            attempted_prefill_chunk_token_count,
-                            reason = %reason,
-                            "prefill chunk forward exhausted graphics-processor memory"
-                        );
-                        memory_admission::invalid_request_error(format!(
-                            "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
-                        ))
-                    }
-                };
-                if !prefill_memory_recovery::should_attempt_prefill_memory_recovery(
-                    active_request.completed_prefill_memory_recovery_attempt_count,
-                    active_request.has_visual_inputs,
-                ) {
-                    return Err(prefill_memory_failure_error);
-                }
-                self.recover_prefill_after_memory_exhaustion(
-                    request_id,
-                    active_request,
+            .ok_or_else(|| fatal_engine_error("prefill chunk end overflowed"))
+    }
+
+    /// Dispatches one failed chunk attempt: engine errors propagate; every
+    /// memory failure either triggers the one-shot prefill memory recovery
+    /// (recurring into the advance) or is terminal. Mirrors the inlined
+    /// dispatch.
+    fn handle_prompt_prefill_chunk_attempt_failure(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        prefill_start: usize,
+        attempted_prefill_chunk_token_count: usize,
+        prompt_prefill_chunk_attempt_error: PromptPrefillChunkAttemptError,
+    ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
+        let prefill_memory_failure_error = match prompt_prefill_chunk_attempt_error {
+            PromptPrefillChunkAttemptError::Engine(generation_error) => {
+                return Err(generation_error);
+            }
+            PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded {
+                decision: crate::PagedForwardAdmissionDecision::Reject { .. },
+                reason,
+            } => {
+                tracing::warn!(
+                    request_id = request_id.value(),
                     prefill_start,
-                )?;
-                // Recursion depth is bounded by the one-recovery-per-request
-                // counter incremented inside the recovery.
-                return self.advance_prompt_prefill_if_pending(request_id, active_request);
+                    attempted_prefill_chunk_token_count,
+                    reason = %reason,
+                    "prefill admission rejected the configured chunk"
+                );
+                memory_admission::invalid_request_error(format!(
+                    "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens cannot fit under the MLX ceiling: {reason}"
+                ))
+            }
+            PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { decision, reason } => {
+                return Err(memory_admission::invalid_request_error(format!(
+                    "unexpected paged forward admission decision {decision:?}: {reason}"
+                )));
+            }
+            PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded {
+                active_memory_bytes,
+                attempted_allocation_bytes,
+                allowed_active_memory_bytes,
+            } => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    prefill_start,
+                    attempted_prefill_chunk_token_count,
+                    active_memory_bytes,
+                    attempted_allocation_bytes,
+                    allowed_active_memory_bytes,
+                    "prefill chunk forward exceeded the MLX active-memory limit"
+                );
+                memory_admission::invalid_request_error(format!(
+                    "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exceeded the MLX active-memory limit: {active_memory_bytes} active bytes, {attempted_allocation_bytes} requested bytes, {allowed_active_memory_bytes} allowed bytes"
+                ))
+            }
+            PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { reason } => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    prefill_start,
+                    attempted_prefill_chunk_token_count,
+                    reason = %reason,
+                    "prefill chunk forward exhausted graphics-processor memory"
+                );
+                memory_admission::invalid_request_error(format!(
+                    "configured prefill chunk of {attempted_prefill_chunk_token_count} tokens exhausted GPU memory: {reason}"
+                ))
             }
         };
-        // Decode records its own route demand at plain assignment weight; the
-        // boost belongs to the final prefill chunk's evidence only.
-        if let Some(model) = self.model.as_ref() {
-            model.set_expert_demand_assignment_weight_for_residency(1);
+        if !prefill_memory_recovery::should_attempt_prefill_memory_recovery(
+            active_request.completed_prefill_memory_recovery_attempt_count,
+            active_request.has_visual_inputs,
+        ) {
+            return Err(prefill_memory_failure_error);
         }
-        let active_memory_bytes_before_growth =
-            prompt_prefill_chunk_outcome.active_memory_bytes_before_growth;
-        let retained_expert_payload_bytes_before_growth =
-            prompt_prefill_chunk_outcome.retained_expert_payload_bytes_before_growth;
-        let streamed_expert_page_bytes_before_growth =
-            prompt_prefill_chunk_outcome.streamed_expert_page_bytes_before_growth;
-        let forward_chunk_elapsed_millis =
-            prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
-        let adaptive_ram_growth_context = prompt_prefill_chunk_outcome.adaptive_ram_growth_context;
-        let exact_temporary_workspace_bytes =
-            prompt_prefill_chunk_outcome.exact_temporary_workspace_bytes;
-        let boundary_checkpoints = prompt_prefill_chunk_outcome.boundary_checkpoints;
+        self.recover_prefill_after_memory_exhaustion(request_id, active_request, prefill_start)?;
+        // Recursion depth is bounded by the one-recovery-per-request
+        // counter incremented inside the recovery.
+        self.advance_prompt_prefill_if_pending(request_id, active_request)
+    }
+
+    /// Publishes durable prompt-cache blocks and the partial tail, then
+    /// advances the request position and cursor. Publication precedes both
+    /// moves so a storage failure leaves restartable state. Mirrors the
+    /// inlined block.
+    fn publish_and_advance_durable_prefill_state(
+        &mut self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        prefill_start: usize,
+        prefill_end: usize,
+        boundary_checkpoints: Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>,
+    ) -> Result<(), InferenceEngineError> {
+        let prefill_token_count = prefill_end - prefill_start;
         let model = self
             .model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let prefill_token_count = prefill_end - prefill_start;
-        // Every completed forward is valid model-local transient evidence. Cache
-        // boundaries and terminal tails deliberately produce smaller chunks; if
-        // they are discarded, a long OpenCode request can complete real prefill
-        // work without ever teaching subsequent admission about its workspace.
-        let should_retain_adaptive_ram_growth_observation = true;
         // Publication deliberately precedes `advance_position` and cursor update.
         // If storage fails, the request stops at its last durable parent rather
         // than continuing with an in-memory chain that restart cannot reproduce.
@@ -276,6 +358,23 @@ impl Qwen3_5EngineState {
             active_request.next_position_tokens,
             &active_request.request_decoder_state,
         );
+        Ok(())
+    }
+
+    /// Retires the chunk tape and reclaims the allocator cache above the
+    /// IOGPU-visible threshold, logging both memory snapshots. Mirrors the
+    /// inlined block.
+    fn reclaim_allocator_cache_after_prefill_chunk(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        prefill_start: usize,
+        prefill_end: usize,
+    ) -> Result<(), InferenceEngineError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         // Retire the chunk tape. Reclaim the allocator cache only when it is
         // large enough to justify an IOGPU-visible clear.
         let memory_snapshot_before_end_of_prefill_chunk_cleanup =
@@ -323,10 +422,33 @@ impl Qwen3_5EngineState {
                 .as_millis(),
             "cleared MLX allocator-cache storage after prompt-processing chunk"
         );
+        Ok(())
+    }
+
+    /// Records one completed forward's memory evidence for adaptive RAM
+    /// growth. Every completed forward is valid model-local transient
+    /// evidence: cache boundaries and terminal tails deliberately produce
+    /// smaller chunks; discarding them would let a long request complete real
+    /// prefill work without ever teaching admission about its workspace.
+    /// Mirrors the inlined collection call.
+    #[allow(clippy::too_many_arguments)]
+    fn record_completed_forward_memory(
+        &mut self,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        adaptive_ram_growth_context: crate::AdaptiveRamGrowthContext,
+        active_memory_bytes_before_growth: usize,
+        retained_expert_payload_bytes_before_growth: u64,
+        exact_temporary_workspace_bytes: usize,
+        streamed_expert_page_bytes_before_growth: u64,
+    ) -> Result<(), InferenceEngineError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         completed_forward_memory::collect_completed_forward_memory_snapshot(
             &mut self.adaptive_ram_growth_guard,
             adaptive_ram_growth_context,
-            should_retain_adaptive_ram_growth_observation,
+            true,
             model,
             active_request.request_context_extent(),
             active_memory_bytes_before_growth,
@@ -335,6 +457,26 @@ impl Qwen3_5EngineState {
             streamed_expert_page_bytes_before_growth,
             &mut active_request.performance_attribution,
         )?;
+        Ok(())
+    }
+
+    /// Builds the prefill-phase MLX telemetry and the public prefill progress
+    /// token for one completed chunk. Mirrors the inlined tail.
+    #[allow(clippy::too_many_arguments)]
+    fn prefill_progress_token(
+        &self,
+        active_request: &super::engine_request::Qwen3_5EngineRequest,
+        request_id: RequestId,
+        prefill_start: usize,
+        prefill_end: usize,
+        forward_chunk_started_at: Instant,
+        forward_chunk_elapsed_millis: u64,
+    ) -> Result<GeneratedToken, InferenceEngineError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let prefill_token_count = prefill_end - prefill_start;
         // Demand-selected pages are materialized once after all prompt chunks.
         // Rebuilding them at every barrier would repeatedly read the same model
         // payload while the demand histogram is still changing.
@@ -361,7 +503,7 @@ impl Qwen3_5EngineState {
         let expert_residency = mlx_memory_telemetry
             .as_ref()
             .and_then(|telemetry| telemetry.expert_residency_telemetry());
-        Ok(Some(GeneratedToken::PrefillProgress {
+        Ok(GeneratedToken::PrefillProgress {
             processed_token_count: prefill_token_count as u32,
             elapsed_millis: prefill_chunk_elapsed_millis,
             forward_prefill_chunk_elapsed_millis: forward_chunk_elapsed_millis,
@@ -375,7 +517,7 @@ impl Qwen3_5EngineState {
             persistent_prompt_cache_diagnostics: active_request
                 .persistent_prompt_cache_diagnostics
                 .clone(),
-        }))
+        })
     }
 }
 
