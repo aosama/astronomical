@@ -46,10 +46,8 @@ mod seat_planned_complete_layers;
 pub(crate) mod streaming_model;
 
 pub(crate) use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-pub(crate) use crate::qwen3_5_core::model_math::gated_delta_sequence;
 pub(crate) use crate::qwen3_5_core::model_math::{
-    decoder_layer_weights, error, forward_contract, gated_delta_boundary_checkpoints,
-    gdn_decode_prework_kernel, weights,
+    decoder_layer_weights, error, forward_contract, weights,
 };
 pub use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel as Qwen3_5Model;
 
