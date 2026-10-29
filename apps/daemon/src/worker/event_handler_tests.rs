@@ -5,10 +5,13 @@ use std::sync::{Arc, RwLock};
 
 use astronomical_ipc_protocol::{
     MlxMemorySnapshotSource, RequestId, WorkerEvent, WorkerMlxMemorySnapshot,
+    WorkerModelCapabilities,
 };
 use tokio::sync::{Semaphore, mpsc};
 
-use crate::worker::event_handler::handle_worker_event;
+use crate::worker::event_handler::{
+    handle_worker_event, outside_cache_clear_wait_violation, outside_model_swap_wait_violation,
+};
 use crate::worker::loop_types::{ActiveGeneration, ActiveWorkerRequest};
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, WorkerHealthSnapshot, WorkerHealthStatus,
@@ -90,4 +93,80 @@ fn should_fold_a_standalone_memory_sample_peak_into_the_active_chat_request() {
         _ => panic!("the chat request should remain active"),
     };
     assert_eq!(folded_peak, Some(37_398_417_028));
+}
+
+#[test]
+fn should_report_the_acknowledgement_violation_for_a_model_swap_outside_wait() {
+    let model_swap_acknowledgement = WorkerEvent::ModelSwapped {
+        model_id: String::from("qwen3.5"),
+        capabilities: WorkerModelCapabilities {
+            chat: None,
+            image_generation: None,
+            embeddings: None,
+        },
+        expert_memory_mode: None,
+        minimum_mlx_memory_ceiling_bytes: 0,
+    };
+    let violation = outside_model_swap_wait_violation(&model_swap_acknowledgement);
+    assert!(
+        matches!(
+            violation,
+            crate::WorkerControlError::WorkerProtocolViolation { description }
+                if description == "model swap acknowledgement outside model swap wait"
+        ),
+        "a swap acknowledgement outside swap wait carries its own message"
+    );
+}
+
+#[test]
+fn should_report_the_failure_violation_for_a_model_swap_failure_outside_wait() {
+    let model_swap_failure = WorkerEvent::ModelSwapFailed {
+        loaded_model_remains_ready: false,
+        model_load_failure_reason: String::from("load failed"),
+    };
+    let violation = outside_model_swap_wait_violation(&model_swap_failure);
+    assert!(
+        matches!(
+            violation,
+            crate::WorkerControlError::WorkerProtocolViolation { description }
+                if description == "model swap failure outside model swap wait"
+        ),
+        "a swap failure outside swap wait carries its own message"
+    );
+}
+
+#[test]
+fn should_report_a_fallback_violation_for_an_unrouted_event() {
+    let violation = outside_model_swap_wait_violation(&WorkerEvent::Idle {
+        machine_mlx_memory_ceiling_bytes: 0,
+        effective_mlx_memory_ceiling_bytes: 0,
+        minimum_mlx_memory_ceiling_bytes: 0,
+        wired_residency_budget_bytes: None,
+    });
+    assert!(
+        matches!(
+            violation,
+            crate::WorkerControlError::WorkerProtocolViolation { description }
+                if description == "unexpected event in the model-swap wait violation"
+        ),
+        "an event that never routes here still reports a violation, never a panic"
+    );
+}
+
+#[test]
+fn should_report_the_violation_for_a_cache_clear_acknowledgement_outside_wait() {
+    let cache_clear_acknowledgement = WorkerEvent::PromptCacheCleared {
+        model_id: None,
+        blocks_removed: 0,
+        bytes_freed: 0,
+    };
+    let violation = outside_cache_clear_wait_violation(&cache_clear_acknowledgement);
+    assert!(
+        matches!(
+            violation,
+            crate::WorkerControlError::WorkerProtocolViolation { description }
+                if description == "prompt-cache clear acknowledgement outside cache-clear wait"
+        ),
+        "a cache-clear acknowledgement outside cache-clear wait carries its own message"
+    );
 }
