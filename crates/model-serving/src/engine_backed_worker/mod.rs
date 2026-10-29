@@ -47,6 +47,7 @@ mod construction;
 mod embeddings;
 mod fatal;
 mod generation_advance;
+mod generation_advance_prefill;
 mod generation_start;
 mod idle_command;
 mod image_generation;
