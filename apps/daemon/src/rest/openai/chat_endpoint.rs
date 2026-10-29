@@ -405,7 +405,9 @@ fn finalize_chat_generation_command(
 }
 
 /// Maps a failed generation start to its OpenAI-shaped HTTP rejection.
-fn generation_start_rejection_response(generation_start_error: GenerationStartError) -> Response {
+pub(crate) fn generation_start_rejection_response(
+    generation_start_error: GenerationStartError,
+) -> Response {
     match generation_start_error {
         GenerationStartError::CapacityUnavailable => (
             StatusCode::TOO_MANY_REQUESTS,
