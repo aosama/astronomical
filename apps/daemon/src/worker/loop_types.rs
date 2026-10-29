@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::PathBuf,
     sync::{Arc, RwLock},
     time::Duration,
@@ -9,9 +10,10 @@ use astronomical_ipc_protocol::{
     ImageGenerationFailureReason, ImageGenerationPhase, RequestId,
     WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
 };
-use tokio::sync::{OwnedSemaphorePermit, mpsc, oneshot};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::time::Instant;
 
+use crate::worker::memory::limit::PendingMlxMemoryLimitUpdate;
 use crate::{
     ChatGenerationStreamEvent, CompletedToolCall, CompletionAttributionLog,
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationPerformanceLog, GenerationStartError,
@@ -19,6 +21,30 @@ use crate::{
     PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
     WorkerProcess, WorkerTerminationOutcome,
 };
+
+/// The owned, loop-carried state of the worker event loop.
+///
+/// `run_worker` constructs this once; every select! branch and command arm
+/// then takes `&mut WorkerLoopRuntime` instead of a dozen individual `&mut`
+/// references, which is what let the loop's decomposition stay readable.
+/// Field-for-field these are exactly the locals the loop used to declare.
+pub(in crate::worker) struct WorkerLoopRuntime {
+    pub worker_process: WorkerProcess,
+    pub health_snapshot: Arc<RwLock<WorkerHealthSnapshot>>,
+    pub is_ready: bool,
+    pub model_load_deadline: Option<Instant>,
+    pub active_generation: Option<ActiveWorkerRequest>,
+    pub performance_log: GenerationPerformanceLog,
+    pub completion_log: CompletionAttributionLog,
+    pub model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+    pub pending_mlx_memory_limit_update: Option<PendingMlxMemoryLimitUpdate>,
+    pub pending_prompt_cache_clear: Option<crate::PendingPromptCacheClear>,
+    pub active_generation_permits: Arc<Semaphore>,
+    pub generation_queue_permits: Arc<Semaphore>,
+    pub model_load_timeout: Duration,
+    pub cancellation_acknowledgement_timeout: Duration,
+    pub image_generation_timeouts: crate::ImageGenerationTimeouts,
+}
 
 pub(crate) enum WorkerLoopCommand {
     Generate {
@@ -118,6 +144,40 @@ impl ActiveWorkerRequest {
     pub(crate) fn embeddings_mut(&mut self) -> Option<&mut ActiveEmbeddingsGeneration> {
         match self {
             Self::Embeddings(request) => Some(request),
+            Self::Chat(_) | Self::Image(_) => None,
+        }
+    }
+
+    /// The active chat request's stream-event channel, or `None` for any other
+    /// modality. Cloned for the worker loop's `tokio::select!` so the branch
+    /// owns its own handle to the same channel.
+    pub(crate) fn chat_stream_event_sender(
+        &self,
+    ) -> Option<mpsc::Sender<ChatGenerationStreamEvent>> {
+        match self {
+            Self::Chat(request) => Some(request.stream_event_sender.clone()),
+            Self::Image(_) | Self::Embeddings(_) => None,
+        }
+    }
+
+    /// The active image request's result channel, or `None` for any other
+    /// modality.
+    pub(crate) fn image_result_sender(
+        &self,
+    ) -> Option<mpsc::Sender<Result<ImageGenerationOutput, ImageGenerationExecutionError>>> {
+        match self {
+            Self::Image(request) => Some(request.image_result_sender.clone()),
+            Self::Chat(_) | Self::Embeddings(_) => None,
+        }
+    }
+
+    /// The active embeddings request's result channel, or `None` for any other
+    /// modality.
+    pub(crate) fn embeddings_result_sender(
+        &self,
+    ) -> Option<mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>> {
+        match self {
+            Self::Embeddings(request) => Some(request.embeddings_result_sender.clone()),
             Self::Chat(_) | Self::Image(_) => None,
         }
     }
