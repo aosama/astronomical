@@ -21,6 +21,7 @@ mod decode_cache_policy;
 mod demand;
 mod flush;
 mod insert;
+mod insert_planning;
 mod previous_token_prefetch;
 mod reclamation;
 mod slot_writes;
