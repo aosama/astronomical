@@ -174,6 +174,7 @@ pub fn resolve_prompt_prefill_chunk_span(
         };
     Some(ResolvedPrefillChunkSpan {
         prefill_start,
+        requested_prefill_chunk_end,
         attempted_prefill_chunk_token_count: requested_prefill_chunk_end - prefill_start,
     })
 }
@@ -183,5 +184,6 @@ pub fn resolve_prompt_prefill_chunk_span(
 /// admit against.
 pub struct ResolvedPrefillChunkSpan {
     pub prefill_start: usize,
+    pub requested_prefill_chunk_end: usize,
     pub attempted_prefill_chunk_token_count: usize,
 }
