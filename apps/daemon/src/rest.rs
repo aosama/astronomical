@@ -12,9 +12,12 @@ pub(crate) mod openai;
 pub(crate) mod cache_clear;
 pub(crate) mod chat_diagnostics;
 pub(crate) mod config_reload;
+pub(crate) mod config_reload_memory;
 pub(crate) mod config_reveal;
 pub(crate) mod maximum_mlx_memory;
 pub(crate) mod status;
 
 #[cfg(test)]
 mod chat_diagnostics_tests;
+#[cfg(test)]
+mod config_reload_tests;
