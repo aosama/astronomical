@@ -198,6 +198,10 @@ impl Qwen3_5EngineState {
             )?;
         }
         self.limit_retention_and_reset_peak(&mut admission)?;
+        // Return the exact pre-forward baselines used by post-forward learning:
+        // active memory, retained payload, and the cumulative expert-streaming
+        // counter whose later delta is this forward's promoted page bytes
+        // (issue #691). `usize::MAX` is reserved by the disabled guard.
         Ok(AdaptiveRamGrowthAdmissionBaseline {
             active_memory_bytes: admission
                 .memory_snapshot_before_growth
@@ -424,7 +428,9 @@ impl Qwen3_5EngineState {
                     return Err(AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
                         decision: forward_admission_decision,
                         reason: paged_rejection_reason(
-                            &admission.forward_projection,
+                            PagedForwardProjectionNumbers::from_projection(
+                                &admission.forward_projection,
+                            ),
                             &expert_reclamation_plan,
                             previous_pass_released_pages,
                         ),
@@ -593,11 +599,12 @@ struct PagedForwardAdmissionState {
 /// released nothing (stable/peak/recovery cannot fit at all), or a released
 /// pass still projects above a boundary. Pure so the three message shapes
 /// stay testable against the projection's own numbers.
-fn paged_rejection_reason(
-    forward_projection: &crate::memory::AdaptiveRamGrowthProjection,
+pub(super) fn paged_rejection_reason(
+    forward_projection_numbers: PagedForwardProjectionNumbers,
     expert_reclamation_plan: &crate::memory::ExpertReclamationPlan,
     previous_pass_released_pages: Option<bool>,
 ) -> String {
+    let numbers = forward_projection_numbers;
     if !expert_reclamation_plan.can_satisfy_every_memory_boundary() {
         format!(
             "adaptive RAM growth exceeds reclaimable expert capacity by {} bytes",
@@ -606,21 +613,46 @@ fn paged_rejection_reason(
     } else if matches!(previous_pass_released_pages, Some(false)) {
         format!(
             "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, and recovery projection of {} bytes do not fit C={} bytes and P={} bytes while retained expert paging is unavailable",
-            forward_projection.stable_projected_bytes(),
-            forward_projection.peak_projected_bytes(),
-            forward_projection.recovery_projected_bytes(),
-            forward_projection.active_memory_ceiling_bytes(),
-            forward_projection.allowed_active_memory_bytes(),
+            numbers.stable_projected_bytes,
+            numbers.peak_projected_bytes,
+            numbers.recovery_projected_bytes,
+            numbers.active_memory_ceiling_bytes,
+            numbers.allowed_active_memory_bytes,
         )
     } else {
         format!(
             "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, or recovery projection of {} bytes remains above C={} bytes or P={} bytes after retained-expert reclamation",
-            forward_projection.stable_projected_bytes(),
-            forward_projection.peak_projected_bytes(),
-            forward_projection.recovery_projected_bytes(),
-            forward_projection.active_memory_ceiling_bytes(),
-            forward_projection.allowed_active_memory_bytes(),
+            numbers.stable_projected_bytes,
+            numbers.peak_projected_bytes,
+            numbers.recovery_projected_bytes,
+            numbers.active_memory_ceiling_bytes,
+            numbers.allowed_active_memory_bytes,
         )
+    }
+}
+
+/// The five projection numbers the paged rejection messages quote, lifted from
+/// the projection so the message shapes are unit-testable without constructing
+/// one.
+#[derive(Clone, Copy)]
+pub(super) struct PagedForwardProjectionNumbers {
+    stable_projected_bytes: usize,
+    peak_projected_bytes: usize,
+    recovery_projected_bytes: usize,
+    active_memory_ceiling_bytes: usize,
+    allowed_active_memory_bytes: usize,
+}
+
+impl PagedForwardProjectionNumbers {
+    /// Lifts the quoted numbers from one live projection.
+    fn from_projection(projection: &crate::memory::AdaptiveRamGrowthProjection) -> Self {
+        Self {
+            stable_projected_bytes: projection.stable_projected_bytes(),
+            peak_projected_bytes: projection.peak_projected_bytes(),
+            recovery_projected_bytes: projection.recovery_projected_bytes(),
+            active_memory_ceiling_bytes: projection.active_memory_ceiling_bytes(),
+            allowed_active_memory_bytes: projection.allowed_active_memory_bytes(),
+        }
     }
 }
 
@@ -658,3 +690,7 @@ fn exhausted_reclamation_error(
         decision: rejection_decision,
     }
 }
+
+#[cfg(test)]
+#[path = "memory_admission_tests.rs"]
+mod memory_admission_tests;
