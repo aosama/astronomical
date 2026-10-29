@@ -110,7 +110,9 @@ pub struct QwenImage21TextEncoderConfig {
 }
 
 impl QwenImage21TextEncoderConfig {
-    #[expect(clippy::too_many_lines)]
+    /// Parses and reviews the text-encoder document section by section: the
+    /// document header, the text geometry, the text protocol facts, the
+    /// vision tower's declared shape, and the streaming token identifiers.
     pub fn parse(json_bytes: &[u8]) -> Result<Self, QwenImage21ConfigError> {
         const DOCUMENT: &str = "text_encoder/config.json";
         let document: TextEncoderDocument = parse_document(json_bytes, DOCUMENT)?;
@@ -143,202 +145,254 @@ impl QwenImage21TextEncoderConfig {
             quantization_bits: document.quantization.bits,
             quantization_group_size: document.quantization.group_size,
         };
-        require(
-            document.architectures == ["Qwen3VLForConditionalGeneration"],
-            DOCUMENT,
-            "architectures",
-        )?;
-        require(document.model_type == "qwen3_vl", DOCUMENT, "model_type")?;
-        require(document.dtype == "bfloat16", DOCUMENT, "dtype")?;
-        require(
-            !document.tie_word_embeddings,
-            DOCUMENT,
-            "tie_word_embeddings",
-        )?;
-        require(
-            document.transformers_version == "4.57.1",
-            DOCUMENT,
-            "transformers_version",
-        )?;
-        require(document.mlx_format, DOCUMENT, "mlx_format")?;
-        require(!text.attention_bias, DOCUMENT, "text_config.attention_bias")?;
-        require(
-            text.attention_dropout == 0.0,
-            DOCUMENT,
-            "text_config.attention_dropout",
-        )?;
-        require(
-            text.bos_token_id == 151_643,
-            DOCUMENT,
-            "text_config.bos_token_id",
-        )?;
-        require(
-            text.eos_token_id == 151_645,
-            DOCUMENT,
-            "text_config.eos_token_id",
-        )?;
-        require(text.dtype == "bfloat16", DOCUMENT, "text_config.dtype")?;
-        require(text.head_dim == 128, DOCUMENT, "text_config.head_dim")?;
-        require(
-            text.hidden_act == "silu",
-            DOCUMENT,
-            "text_config.hidden_act",
-        )?;
-        require(
-            text.hidden_size == 4096,
-            DOCUMENT,
-            "text_config.hidden_size",
-        )?;
-        require(
-            text.intermediate_size == 12288,
-            DOCUMENT,
-            "text_config.intermediate_size",
-        )?;
-        require(
-            text.initializer_range == 0.02,
-            DOCUMENT,
-            "text_config.initializer_range",
-        )?;
-        require(
-            text.max_position_embeddings == 262144,
-            DOCUMENT,
-            "text_config.max_position_embeddings",
-        )?;
-        require(
-            text.model_type == "qwen3_vl_text",
-            DOCUMENT,
-            "text_config.model_type",
-        )?;
-        require(
-            text.num_attention_heads == 32,
-            DOCUMENT,
-            "text_config.num_attention_heads",
-        )?;
-        require(
-            text.num_hidden_layers == 36,
-            DOCUMENT,
-            "text_config.num_hidden_layers",
-        )?;
-        require(
-            text.num_key_value_heads == 8,
-            DOCUMENT,
-            "text_config.num_key_value_heads",
-        )?;
-        require(
-            text.rms_norm_eps == 1e-6,
-            DOCUMENT,
-            "text_config.rms_norm_eps",
-        )?;
-        require(
-            text.rope_scaling.mrope_interleaved,
-            DOCUMENT,
-            "text_config.rope_scaling.mrope_interleaved",
-        )?;
-        require(
-            text.rope_scaling.mrope_section == [24, 20, 20],
-            DOCUMENT,
-            "text_config.rope_scaling.mrope_section",
-        )?;
-        require(
-            text.rope_scaling.rope_type == "default",
-            DOCUMENT,
-            "text_config.rope_scaling.rope_type",
-        )?;
-        require(
-            text.rope_theta == 5_000_000,
-            DOCUMENT,
-            "text_config.rope_theta",
-        )?;
-        require(text.use_cache, DOCUMENT, "text_config.use_cache")?;
-        require(
-            text.vocab_size == 151_936,
-            DOCUMENT,
-            "text_config.vocab_size",
-        )?;
-        require(vision.depth == 27, DOCUMENT, "vision_config.depth")?;
-        require(vision.dtype == "bfloat16", DOCUMENT, "vision_config.dtype")?;
-        require(
-            vision.hidden_act == "gelu_pytorch_tanh",
-            DOCUMENT,
-            "vision_config.hidden_act",
-        )?;
-        require(
-            vision.hidden_size == 1152,
-            DOCUMENT,
-            "vision_config.hidden_size",
-        )?;
-        require(
-            vision.in_channels == 3,
-            DOCUMENT,
-            "vision_config.in_channels",
-        )?;
-        require(
-            vision.initializer_range == 0.02,
-            DOCUMENT,
-            "vision_config.initializer_range",
-        )?;
-        require(
-            vision.intermediate_size == 4304,
-            DOCUMENT,
-            "vision_config.intermediate_size",
-        )?;
-        require(
-            vision.model_type == "qwen3_vl",
-            DOCUMENT,
-            "vision_config.model_type",
-        )?;
-        require(vision.num_heads == 16, DOCUMENT, "vision_config.num_heads")?;
-        require(
-            vision.num_position_embeddings == 2304,
-            DOCUMENT,
-            "vision_config.num_position_embeddings",
-        )?;
-        require(
-            vision.out_hidden_size == 4096,
-            DOCUMENT,
-            "vision_config.out_hidden_size",
-        )?;
-        require(
-            vision.patch_size == 16,
-            DOCUMENT,
-            "vision_config.patch_size",
-        )?;
-        require(
-            vision.spatial_merge_size == 2,
-            DOCUMENT,
-            "vision_config.spatial_merge_size",
-        )?;
-        require(
-            vision.temporal_patch_size == 2,
-            DOCUMENT,
-            "vision_config.temporal_patch_size",
-        )?;
-        require(
-            vision.deepstack_visual_indexes == [8, 16, 24],
-            DOCUMENT,
-            "vision_config.deepstack_visual_indexes",
-        )?;
-        require(
-            document.image_token_id == 151_655,
-            DOCUMENT,
-            "image_token_id",
-        )?;
-        require(
-            document.video_token_id == 151_656,
-            DOCUMENT,
-            "video_token_id",
-        )?;
-        require(
-            document.vision_start_token_id == 151_652,
-            DOCUMENT,
-            "vision_start_token_id",
-        )?;
-        require(
-            document.vision_end_token_id == 151_653,
-            DOCUMENT,
-            "vision_end_token_id",
-        )?;
+        require_document_header_facts(&document)?;
+        require_text_config_geometry_facts(text)?;
+        require_text_config_protocol_facts(text)?;
+        require_vision_config_facts(vision)?;
+        require_streaming_token_id_facts(&document)?;
         reviewed_quantization(&document.quantization, DOCUMENT)?;
         Ok(config)
     }
 }
+
+/// Reviews the document-level identity facts: the one reviewed architecture,
+/// model family, dtype, untied embeddings, pinned upstream version, and the
+/// MLX packaging flag.
+fn require_document_header_facts(
+    document: &TextEncoderDocument,
+) -> Result<(), QwenImage21ConfigError> {
+    const DOCUMENT: &str = "text_encoder/config.json";
+    require(
+        document.architectures == ["Qwen3VLForConditionalGeneration"],
+        DOCUMENT,
+        "architectures",
+    )?;
+    require(document.model_type == "qwen3_vl", DOCUMENT, "model_type")?;
+    require(document.dtype == "bfloat16", DOCUMENT, "dtype")?;
+    require(
+        !document.tie_word_embeddings,
+        DOCUMENT,
+        "tie_word_embeddings",
+    )?;
+    require(
+        document.transformers_version == "4.57.1",
+        DOCUMENT,
+        "transformers_version",
+    )?;
+    require(document.mlx_format, DOCUMENT, "mlx_format")?;
+    Ok(())
+}
+
+/// Reviews the text tower's reviewed geometry: attention width, feed-forward
+/// width, depth, attention-head layout, context budget, vocabulary, and the
+/// mrope plan.
+fn require_text_config_geometry_facts(
+    text: &TextConfigDocument,
+) -> Result<(), QwenImage21ConfigError> {
+    const DOCUMENT: &str = "text_encoder/config.json";
+    require(text.head_dim == 128, DOCUMENT, "text_config.head_dim")?;
+    require(
+        text.hidden_size == 4096,
+        DOCUMENT,
+        "text_config.hidden_size",
+    )?;
+    require(
+        text.intermediate_size == 12288,
+        DOCUMENT,
+        "text_config.intermediate_size",
+    )?;
+    require(
+        text.max_position_embeddings == 262144,
+        DOCUMENT,
+        "text_config.max_position_embeddings",
+    )?;
+    require(
+        text.num_attention_heads == 32,
+        DOCUMENT,
+        "text_config.num_attention_heads",
+    )?;
+    require(
+        text.num_hidden_layers == 36,
+        DOCUMENT,
+        "text_config.num_hidden_layers",
+    )?;
+    require(
+        text.num_key_value_heads == 8,
+        DOCUMENT,
+        "text_config.num_key_value_heads",
+    )?;
+    require(
+        text.vocab_size == 151_936,
+        DOCUMENT,
+        "text_config.vocab_size",
+    )?;
+    require(
+        text.rope_scaling.mrope_interleaved,
+        DOCUMENT,
+        "text_config.rope_scaling.mrope_interleaved",
+    )?;
+    require(
+        text.rope_scaling.mrope_section == [24, 20, 20],
+        DOCUMENT,
+        "text_config.rope_scaling.mrope_section",
+    )?;
+    require(
+        text.rope_scaling.rope_type == "default",
+        DOCUMENT,
+        "text_config.rope_scaling.rope_type",
+    )?;
+    require(
+        text.rope_theta == 5_000_000,
+        DOCUMENT,
+        "text_config.rope_theta",
+    )?;
+    Ok(())
+}
+
+/// Reviews the text tower's protocol facts: bias, dropout, streaming token
+/// identifiers, dtype, activation, initialization scale, model family, and
+/// the cache flag.
+fn require_text_config_protocol_facts(
+    text: &TextConfigDocument,
+) -> Result<(), QwenImage21ConfigError> {
+    const DOCUMENT: &str = "text_encoder/config.json";
+    require(!text.attention_bias, DOCUMENT, "text_config.attention_bias")?;
+    require(
+        text.attention_dropout == 0.0,
+        DOCUMENT,
+        "text_config.attention_dropout",
+    )?;
+    require(
+        text.bos_token_id == 151_643,
+        DOCUMENT,
+        "text_config.bos_token_id",
+    )?;
+    require(
+        text.eos_token_id == 151_645,
+        DOCUMENT,
+        "text_config.eos_token_id",
+    )?;
+    require(text.dtype == "bfloat16", DOCUMENT, "text_config.dtype")?;
+    require(
+        text.hidden_act == "silu",
+        DOCUMENT,
+        "text_config.hidden_act",
+    )?;
+    require(
+        text.initializer_range == 0.02,
+        DOCUMENT,
+        "text_config.initializer_range",
+    )?;
+    require(
+        text.model_type == "qwen3_vl_text",
+        DOCUMENT,
+        "text_config.model_type",
+    )?;
+    require(text.use_cache, DOCUMENT, "text_config.use_cache")?;
+    Ok(())
+}
+
+/// Reviews the vision tower's declared shape: depth, width, activation,
+/// patch geometry, head layout, output projection, and the deepstack taps.
+fn require_vision_config_facts(
+    vision: &VisionConfigDocument,
+) -> Result<(), QwenImage21ConfigError> {
+    const DOCUMENT: &str = "text_encoder/config.json";
+    require(vision.depth == 27, DOCUMENT, "vision_config.depth")?;
+    require(vision.dtype == "bfloat16", DOCUMENT, "vision_config.dtype")?;
+    require(
+        vision.hidden_act == "gelu_pytorch_tanh",
+        DOCUMENT,
+        "vision_config.hidden_act",
+    )?;
+    require(
+        vision.hidden_size == 1152,
+        DOCUMENT,
+        "vision_config.hidden_size",
+    )?;
+    require(
+        vision.in_channels == 3,
+        DOCUMENT,
+        "vision_config.in_channels",
+    )?;
+    require(
+        vision.initializer_range == 0.02,
+        DOCUMENT,
+        "vision_config.initializer_range",
+    )?;
+    require(
+        vision.intermediate_size == 4304,
+        DOCUMENT,
+        "vision_config.intermediate_size",
+    )?;
+    require(
+        vision.model_type == "qwen3_vl",
+        DOCUMENT,
+        "vision_config.model_type",
+    )?;
+    require(vision.num_heads == 16, DOCUMENT, "vision_config.num_heads")?;
+    require(
+        vision.num_position_embeddings == 2304,
+        DOCUMENT,
+        "vision_config.num_position_embeddings",
+    )?;
+    require(
+        vision.out_hidden_size == 4096,
+        DOCUMENT,
+        "vision_config.out_hidden_size",
+    )?;
+    require(
+        vision.patch_size == 16,
+        DOCUMENT,
+        "vision_config.patch_size",
+    )?;
+    require(
+        vision.spatial_merge_size == 2,
+        DOCUMENT,
+        "vision_config.spatial_merge_size",
+    )?;
+    require(
+        vision.temporal_patch_size == 2,
+        DOCUMENT,
+        "vision_config.temporal_patch_size",
+    )?;
+    require(
+        vision.deepstack_visual_indexes == [8, 16, 24],
+        DOCUMENT,
+        "vision_config.deepstack_visual_indexes",
+    )?;
+    Ok(())
+}
+
+/// Reviews the four streaming sentinel token identifiers the text-only path
+/// splices into rendered prompts.
+fn require_streaming_token_id_facts(
+    document: &TextEncoderDocument,
+) -> Result<(), QwenImage21ConfigError> {
+    const DOCUMENT: &str = "text_encoder/config.json";
+    require(
+        document.image_token_id == 151_655,
+        DOCUMENT,
+        "image_token_id",
+    )?;
+    require(
+        document.video_token_id == 151_656,
+        DOCUMENT,
+        "video_token_id",
+    )?;
+    require(
+        document.vision_start_token_id == 151_652,
+        DOCUMENT,
+        "vision_start_token_id",
+    )?;
+    require(
+        document.vision_end_token_id == 151_653,
+        DOCUMENT,
+        "vision_end_token_id",
+    )?;
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "text_encoder_tests.rs"]
+mod text_encoder_tests;
