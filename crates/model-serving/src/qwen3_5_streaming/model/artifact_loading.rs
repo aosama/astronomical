@@ -1,14 +1,15 @@
 //! Artifact binding and startup-only MLX resource construction for Qwen3.5.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::Path;
 
 use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::kernel_capability;
-use crate::kernel_capability::CustomMetalKernelFamily;
+use crate::qwen3_5_core::model::loading_pipeline::{
+    BoundLanguageArtifact, InvariantLinearScales, ModelKernelVerdicts, bind_language_artifact,
+    load_invariant_linear_scales, load_model_kernel_verdicts,
+};
 use crate::qwen3_5_streaming;
 use crate::qwen3_5_streaming::Qwen3_5ExpertPager;
 use crate::{
@@ -21,7 +22,7 @@ use super::{
     Qwen3_5ExecutionError, Qwen3_5FeedForwardArchitecture, Qwen3_5VisionModel, Qwen3_5Weights,
     ValidatedQwen3_5Artifact,
 };
-use mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxDtype};
+use mlx_c_rust::{MlxCompiledElementwiseGraphs, MlxCompiledSwiGlu, MlxMetalKernel};
 
 impl Qwen3_5Model {
     /// Loads a model without diagnostic performance attribution.
@@ -50,7 +51,7 @@ impl Qwen3_5Model {
     /// Every sparse model constructs a Qwen3_5ExpertPager at startup for prefill and
     /// decode. The `model_directory` must point to the directory containing the
     /// safetensors shard files so the pager can build bounded byte-range plans
-    /// without loading expert payloads.
+    /// from the same validated inventory the weights bound.
     pub fn load_with_performance_attribution(
         runtime: MlxRuntime,
         validated_artifact: ValidatedQwen3_5Artifact,
@@ -70,7 +71,11 @@ impl Qwen3_5Model {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
+    /// The decode-cache-policy-aware loader: binds the shared language
+    /// artifact, builds the streaming expert runtime (pager, warm slot table,
+    /// sorted-reduction kernel), derives the decoder cache layout, collects
+    /// the capability-verdict kernels and invariant scales, and assembles the
+    /// RAM budget with the fused-kernel verdict.
     pub(crate) fn load_with_performance_attribution_and_decode_expert_cache_policy(
         runtime: MlxRuntime,
         mut validated_artifact: ValidatedQwen3_5Artifact,
@@ -80,170 +85,32 @@ impl Qwen3_5Model {
         decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let config = validated_artifact.config().clone();
-        let vision_config = validated_artifact.vision_config().cloned();
-        let has_separate_vision_sidecar =
-            should_bind_vision_weights && validated_artifact.has_separate_vision_sidecar();
-        let has_embedded_vision_tower = should_bind_vision_weights
-            && validated_artifact.supports_image_input()
-            && !has_separate_vision_sidecar;
-        let tensor_inventory = validated_artifact.tensor_inventory().clone();
-        let shard_index = validated_artifact.shard_index().clone();
-        let model_shard_source_ids =
-            validated_artifact.source_ids_for_file_names(shard_index.model_shard_file_names())?;
-        let sidecar_vision_model = if has_separate_vision_sidecar {
-            performance_attribution.measure_operation(
-                PerformanceOperation::ModelSafetensorsMapping,
-                |_performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
-                    Qwen3_5VisionModel::load_from_sidecar(&runtime, &mut validated_artifact)
-                },
-            )?
-        } else {
-            None
-        };
-        let model_shards = performance_attribution.measure_operation(
-            PerformanceOperation::ModelSafetensorsMapping,
-            |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
-                let model_shard_files =
-                    validated_artifact.take_safetensors_sources(&model_shard_source_ids)?;
-                let mut model_shards = Vec::with_capacity(model_shard_files.len());
-                let positional_file_read_metrics =
-                    performance_attribution.positional_file_read_metrics();
-                for model_shard_file in model_shard_files {
-                    let shard_source_file = model_shard_file.into_file();
-                    model_shards.push(
-                        runtime.load_safetensors(
-                            shard_source_file,
-                            positional_file_read_metrics
-                                .as_ref()
-                                .map(std::sync::Arc::clone),
-                        )?,
-                    );
-                }
-                Ok(model_shards)
-            },
+        let BoundLanguageArtifact {
+            config,
+            shard_index,
+            tensor_inventory,
+            weights,
+            vision_model,
+            ..
+        } = bind_language_artifact(
+            &runtime,
+            &mut validated_artifact,
+            should_bind_vision_weights,
+            performance_attribution,
         )?;
-        let (weights, vision_model) = performance_attribution.measure_operation(
-            PerformanceOperation::ModelTensorBinding,
-            |_performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
-                let vision_model = if has_separate_vision_sidecar {
-                    sidecar_vision_model
-                } else if has_embedded_vision_tower {
-                    let vision_config = vision_config.as_ref().ok_or(
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "validated visual tensors have no vision configuration",
-                        },
-                    )?;
-                    let vision_tensor_name_to_shard_location =
-                        build_vision_tensor_shard_map(&shard_index);
-                    Some(Qwen3_5VisionModel::load_from_model_shards(
-                        &runtime,
-                        vision_config,
-                        &config,
-                        &model_shards,
-                        &vision_tensor_name_to_shard_location,
-                    )?)
-                } else {
-                    None
-                };
-                let weights = Qwen3_5Weights::bind_from_model_shards(
+        let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) =
+            match config.feed_forward_architecture() {
+                Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
+                Qwen3_5FeedForwardArchitecture::MixtureOfExperts => load_streaming_expert_runtime(
                     &runtime,
+                    model_directory,
                     &config,
                     &shard_index,
-                    model_shards,
-                )?;
-                Ok((weights, vision_model))
-            },
-        )?;
-        let (expert_pager, retained_experts, sorted_expert_weighted_sum_kernel) = match config
-            .feed_forward_architecture()
-        {
-            Qwen3_5FeedForwardArchitecture::Dense => (None, None, None),
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts => {
-                let tensor_name_to_shard_file_name: HashMap<String, String> = shard_index
-                    .language_tensor_name_to_shard_file_name()
-                    .iter()
-                    .map(|(tensor_name, shard_file_name)| {
-                        (tensor_name.clone(), shard_file_name.clone())
-                    })
-                    .collect();
-                let stored_tensor_name_by_canonical_name = tensor_inventory
-                    .locations()
-                    .map(|location| {
-                        (
-                            location.canonical_name().to_owned(),
-                            location.stored_name().to_owned(),
-                        )
-                    })
-                    .collect::<HashMap<_, _>>();
-                let expert_pager = performance_attribution.measure_operation(
-                    PerformanceOperation::ExpertPagerPlanConstruction,
-                    |_performance_attribution| {
-                        Qwen3_5ExpertPager::new(
-                            &runtime,
-                            model_directory.to_path_buf(),
-                            &tensor_name_to_shard_file_name,
-                            &stored_tensor_name_by_canonical_name,
-                            &config,
-                            // The live configurable MLX active-memory ceiling is the only
-                            // paging budget. Reading the runtime policy here lets reloads
-                            // apply on every machine without copying a stale wired limit.
-                            runtime.memory_limits().active_memory_limit_bytes(),
-                        )
-                    },
-                )?;
-                // The GPU capability verdict decides whether this worker
-                // process retains the measured sorted-reduction kernel. A
-                // demoted kernel leaves None and every MoE forward takes the
-                // unsorted MLX route for the worker's lifetime.
-                let sorted_expert_weighted_sum_kernel =
-                    if kernel_capability::worker_process_kernel_capabilities(
-                        &runtime,
-                        performance_attribution,
-                    )
-                    .is_custom_kernel_supported(CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM)
-                    {
-                        Some(qwen3_5_streaming::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
-                    } else {
-                        tracing::info!(
-                            "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
-                        );
-                        None
-                    };
-                let retained_experts = RefCell::new(
-                    crate::qwen3_5_streaming::WarmExpertSlotTableCache::new_with_decode_cache_policy(
-                        expert_pager.layer_count(),
-                        decode_expert_cache_policy,
-                    ),
-                );
-                // Seed demand ranking from the persisted usage history beside
-                // the artifact (colibri's `.coli_usage` analog). A missing or
-                // stale file simply leaves the session cold.
-                let usage_file_path =
-                    crate::qwen3_5_streaming::expert_streaming::expert_usage_file_path(
-                        model_directory,
-                    );
-                match crate::qwen3_5_streaming::expert_streaming::read_expert_usage(
-                    &usage_file_path,
-                    expert_pager.layer_count(),
-                ) {
-                    Some(historical_demand_counts_by_layer) => {
-                        retained_experts
-                            .borrow_mut()
-                            .seed_expert_demand_history(historical_demand_counts_by_layer);
-                    }
-                    None => tracing::info!(
-                        usage_file_path = usage_file_path.display().to_string(),
-                        "no reusable expert usage history; warm tables start cold"
-                    ),
-                }
-                (
-                    Some(expert_pager),
-                    Some(retained_experts),
-                    sorted_expert_weighted_sum_kernel,
-                )
-            }
-        };
+                    &tensor_inventory,
+                    decode_expert_cache_policy,
+                    performance_attribution,
+                )?,
+            };
         // Cache geometry cannot be finalized before weights and sparse plans are
         // bound: their source dtypes determine MLX result-type promotion. Derive
         // the persistence contract at that boundary without evaluating tensors.
@@ -258,183 +125,31 @@ impl Qwen3_5Model {
                 )
             },
         )?;
-        // The two gated-delta kernels are independent capability families. A
-        // demoted kernel is None and the gated-delta dispatch falls back to
-        // the ops-based public MLX route for the worker's lifetime — the
-        // checkpoint fallback preserves the prompt-cache boundary contract.
-        let gated_delta_kernel = if kernel_capability::worker_process_kernel_capabilities(
-            &runtime,
-            performance_attribution,
-        )
-        .is_custom_kernel_supported(CustomMetalKernelFamily::GATED_DELTA_SEQUENCE)
-        {
-            Some(super::gated_delta_sequence::qwen3_5_gated_delta_kernel()?)
-        } else {
-            tracing::info!(
-                "fused gated-delta kernel demoted to the MLX ops fallback for this worker process"
-            );
-            None
-        };
-        let gated_delta_checkpoint_kernel =
-            if kernel_capability::worker_process_kernel_capabilities(
-                &runtime,
-                performance_attribution,
-            )
-            .is_custom_kernel_supported(CustomMetalKernelFamily::GATED_DELTA_BOUNDARY_CHECKPOINT)
-            {
-                Some(
-                    super::gated_delta_boundary_checkpoints::qwen3_5_gated_delta_checkpoint_kernel(
-                    )?,
-                )
-            } else {
-                tracing::info!(
-                    "gated-delta checkpoint kernel demoted to the MLX ops fallback for this worker process"
-                );
-                None
-            };
-        // The fused decode prework kernel removes roughly thirteen
-        // launch-bound dispatches per gated-delta layer at decode shapes.
-        let gdn_decode_prework_kernel = if kernel_capability::worker_process_kernel_capabilities(
-            &runtime,
-            performance_attribution,
-        )
-        .is_custom_kernel_supported(CustomMetalKernelFamily::GDN_DECODE_PREWORK)
-        {
-            Some(
-                super::gdn_decode_prework_kernel::qwen3_5_gdn_decode_prework_kernel(
-                    f32::from_bits(config.rms_norm_epsilon_bits()),
-                )?,
-            )
-        } else {
-            tracing::info!(
-                "fused decode prework kernel demoted to the MLX ops fallback for this worker process"
-            );
-            None
-        };
+        let ModelKernelVerdicts {
+            gated_delta_kernel,
+            gated_delta_checkpoint_kernel,
+            gdn_decode_prework_kernel,
+        } = load_model_kernel_verdicts(&runtime, &config, performance_attribution)?;
         let compiled_swiglu = MlxCompiledSwiGlu::new()?;
         let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
-        // Qwen3.5 config validation accepts BF16 activations only. Construct
-        // the two invariant scales once instead of rebuilding their scalar and
-        // cast graphs for every linear-attention forward pass.
-        let linear_head_dimension = config.linear_key_head_dimension() as f32;
-        let inverse_linear_head_dimension_scale = runtime
-            .array_from_f32(&[linear_head_dimension.recip()], &[])
-            .and_then(|float32_scale| runtime.astype(&float32_scale, MlxDtype::BFloat16))?;
-        let inverse_square_root_linear_head_dimension_scale = runtime
-            .array_from_f32(&[linear_head_dimension.sqrt().recip()], &[])
-            .and_then(|float32_scale| runtime.astype(&float32_scale, MlxDtype::BFloat16))?;
-        // The prefill composed path folds each scale into `fast_rms_norm`'s
-        // per-channel weight so one fused launch replaces the norm kernel plus
-        // the broadcast-multiply kernel (issue #915 item 5). Every channel
-        // carries the same f32 value through the same BF16 rounding as the
-        // scalar scales, which the fused decode-prework kernel still requires.
-        let head_dimension_i32 = config.linear_key_head_dimension() as i32;
-        let query_normalization_scale_weight = runtime
-            .array_from_f32(
-                &vec![linear_head_dimension.recip(); head_dimension_i32 as usize],
-                &[head_dimension_i32],
-            )
-            .and_then(|float32_weight| runtime.astype(&float32_weight, MlxDtype::BFloat16))?;
-        let key_normalization_scale_weight = runtime
-            .array_from_f32(
-                &vec![linear_head_dimension.sqrt().recip(); head_dimension_i32 as usize],
-                &[head_dimension_i32],
-            )
-            .and_then(|float32_weight| runtime.astype(&float32_weight, MlxDtype::BFloat16))?;
-        let model_core_payload_bytes = weights.total_payload_bytes().saturating_add(
-            vision_model
-                .as_ref()
-                .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
-        );
-        let complete_expert_payload_bytes = match expert_pager.as_ref() {
-            Some(expert_pager) => expert_pager.complete_expert_payload_byte_count().map_err(
-                |_| Qwen3_5ExecutionError::InvalidInput {
-                    description: "complete expert payload byte count overflowed during model load",
-                },
-            )?,
-            None => 0,
-        };
-        // The RAM owner's three-layer prefill floor is based on packed source
-        // payload geometry. The separately composed expert-page reservation
-        // carries the decoded bfloat16 output a forward materializes.
-        let largest_complete_expert_layer_bytes = match expert_pager.as_ref() {
-            Some(expert_pager) => expert_pager
-                .maximum_complete_expert_source_payload_bytes()
-                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                    description: "complete expert source layer byte count overflowed during model load",
-                })?,
-            None => 0,
-        };
-        let fused_jangtq2_gathered_projection_kernel =
-            expert_pager.as_ref().and_then(|expert_pager| {
-                fused_jangtq2_gathered_projection_kernel_for_pager(
-                    &runtime,
-                    expert_pager,
-                    performance_attribution,
-                )
-            });
-        if let Some(expert_pager) = expert_pager.as_ref() {
-            expert_pager.set_decode_tokens_multiply_packed_pages(
-                fused_jangtq2_gathered_projection_kernel.is_some(),
-            );
-        }
-        let largest_routed_expert_page_bytes =
-            expert_pager.as_ref().map_or(Ok(0), |expert_pager| {
-                // The load-time budget is taken before the fused kernel
-                // verdict, so it keeps the conservative decode peak.
-                expert_pager.maximum_routed_expert_page_bytes(
-                    usize::try_from(config.experts_per_token()).unwrap_or(usize::MAX),
-                    true,
-                )
-            })?;
-        let mut mlx_ram_budget = MlxRamBudget::new(
-            u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "MLX active memory ceiling exceeds the u64 range",
-                }
-            })?,
-            MlxRamBudgetModelGeometry {
-                model_core_payload_bytes,
-                complete_expert_payload_bytes,
-                largest_complete_expert_layer_bytes,
-                largest_routed_expert_page_bytes,
-                sequence_state_bytes_per_token: u64::try_from(
-                    decoder_cache_layout
-                        .sequence_state_payload_byte_count_per_token()
-                        .unwrap_or(0),
-                )
-                .unwrap_or(0),
-            },
-        )
-        .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-            description: "MLX RAM budget requires a positive active-memory ceiling",
-        })?;
-        if let Some(expert_pager) = expert_pager.as_ref() {
-            // A multi-token forward decodes the complete-layer page it
-            // multiplies, so the prefill plan must keep that page's peak
-            // (packed source plus decoded output) out of the expert budget;
-            // the packed-source slot alone seated experts into the decode's
-            // space and every chunk had to reclaim a layer before it could run.
-            // The second slot funds the one complete layer a chunk reads ahead
-            // of its route while earlier layers compute
-            // (`prefill_complete_layer_prefetch`). That prefetch is only issued
-            // for pages multiplied without a transient decode, so it holds the
-            // packed source alone, and only of layers it can pick: codebook
-            // layers are never eligible in prefill, so an all-codebook bundle
-            // reserves no read-ahead bytes at all. Charging it the full
-            // decoded peak instead doubled a 5.74 GB JANGTQ2 slot to 11.48 GB
-            // and cut 122B prefill throughput nearly in two (measured
-            // 2026-10-24: 134 versus 232–273 tokens per second).
-            mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(
-                super::prefill_complete_layer_prefetch::prefill_complete_layer_stream_slot_bytes(
-                    expert_pager.maximum_expert_page_bytes(),
-                    super::prefill_complete_layer_prefetch::largest_prefill_prefetchable_complete_source_payload_bytes(
-                        expert_pager.layer_plans(),
-                    )
-                    .map_err(qwen3_5_streaming::expert_streaming::ExpertPagingError::from)?,
-                ),
-            );
-        }
+        let InvariantLinearScales {
+            inverse_linear_head_dimension_scale,
+            inverse_square_root_linear_head_dimension_scale,
+            query_normalization_scale_weight,
+            key_normalization_scale_weight,
+        } = load_invariant_linear_scales(&runtime, &config)?;
+        let StreamingExpertBudgetOutcome {
+            mlx_ram_budget,
+            fused_jangtq2_gathered_projection_kernel,
+        } = build_streaming_expert_budget(
+            &runtime,
+            &config,
+            &weights,
+            &vision_model,
+            expert_pager.as_ref(),
+            &decoder_cache_layout,
+            performance_attribution,
+        )?;
         Ok(Self {
             base: Qwen3_5ModelBase {
                 runtime,
@@ -475,6 +190,228 @@ impl Qwen3_5Model {
     }
 }
 
+/// The streaming engine's MoE-only runtime trio: pager, warm slot table, and
+/// the sorted-reduction kernel verdict.
+type StreamingExpertRuntimeTrio = (
+    Option<Qwen3_5ExpertPager>,
+    Option<RefCell<qwen3_5_streaming::WarmExpertSlotTableCache>>,
+    Option<MlxMetalKernel>,
+);
+
+/// Builds the streaming expert runtime for a sparse model. Mirrors the MoE
+/// branch of the inlined loader, including the warm-table seeding from the
+/// persisted `.coli_usage`-analog history.
+#[allow(clippy::too_many_arguments)]
+fn load_streaming_expert_runtime(
+    runtime: &MlxRuntime,
+    model_directory: &Path,
+    config: &crate::Qwen3_5Config,
+    shard_index: &super::Qwen3_5ShardIndex,
+    tensor_inventory: &crate::TensorInventory,
+    decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
+    let tensor_name_to_shard_file_name: std::collections::HashMap<String, String> = shard_index
+        .language_tensor_name_to_shard_file_name()
+        .iter()
+        .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
+        .collect();
+    let stored_tensor_name_by_canonical_name = tensor_inventory
+        .locations()
+        .map(|location| {
+            (
+                location.canonical_name().to_owned(),
+                location.stored_name().to_owned(),
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let expert_pager = performance_attribution.measure_operation(
+        crate::PerformanceOperation::ExpertPagerPlanConstruction,
+        |_performance_attribution| {
+            Qwen3_5ExpertPager::new(
+                runtime,
+                model_directory.to_path_buf(),
+                &tensor_name_to_shard_file_name,
+                &stored_tensor_name_by_canonical_name,
+                config,
+                // The live configurable MLX active-memory ceiling is the only
+                // paging budget. Reading the runtime policy here lets reloads
+                // apply on every machine without copying a stale wired limit.
+                runtime.memory_limits().active_memory_limit_bytes(),
+            )
+        },
+    )?;
+    // The GPU capability verdict decides whether this worker
+    // process retains the measured sorted-reduction kernel. A
+    // demoted kernel leaves None and every MoE forward takes the
+    // unsorted MLX route for the worker's lifetime.
+    let sorted_expert_weighted_sum_kernel =
+        if crate::kernel_capability::worker_process_kernel_capabilities(
+            runtime,
+            performance_attribution,
+        )
+        .is_custom_kernel_supported(
+            crate::kernel_capability::CustomMetalKernelFamily::SORTED_EXPERT_WEIGHTED_SUM,
+        ) {
+            Some(qwen3_5_streaming::qwen3_5_moe_sorted_expert_weighted_sum_kernel()?)
+        } else {
+            tracing::info!(
+                "sorted expert weighted-sum kernel demoted to the MLX fallback for this worker process"
+            );
+            None
+        };
+    let retained_experts = RefCell::new(
+        qwen3_5_streaming::WarmExpertSlotTableCache::new_with_decode_cache_policy(
+            expert_pager.layer_count(),
+            decode_expert_cache_policy,
+        ),
+    );
+    // Seed demand ranking from the persisted usage history beside
+    // the artifact (colibri's `.coli_usage` analog). A missing or
+    // stale file simply leaves the session cold.
+    let usage_file_path =
+        qwen3_5_streaming::expert_streaming::expert_usage_file_path(model_directory);
+    match qwen3_5_streaming::expert_streaming::read_expert_usage(
+        &usage_file_path,
+        expert_pager.layer_count(),
+    ) {
+        Some(historical_demand_counts_by_layer) => {
+            retained_experts
+                .borrow_mut()
+                .seed_expert_demand_history(historical_demand_counts_by_layer);
+        }
+        None => tracing::info!(
+            usage_file_path = usage_file_path.display().to_string(),
+            "no reusable expert usage history; warm tables start cold"
+        ),
+    }
+    Ok((
+        Some(expert_pager),
+        Some(retained_experts),
+        sorted_expert_weighted_sum_kernel,
+    ))
+}
+
+/// The streaming RAM budget plus the fused jangtq2 verdict that the model
+/// struct also carries.
+struct StreamingExpertBudgetOutcome {
+    mlx_ram_budget: MlxRamBudget,
+    fused_jangtq2_gathered_projection_kernel: Option<
+        astronomical_jangtq2_qwen35::fused_gathered_projection::FusedJangtq2GatheredProjectionKernel,
+    >,
+}
+
+/// Assembles the streaming engine's RAM budget. Mirrors the payload math,
+/// fused-kernel verdict, routed-page sizing, and the prefill read-ahead slot
+/// of the inlined loader, in the same order.
+#[allow(clippy::too_many_arguments)]
+fn build_streaming_expert_budget(
+    runtime: &MlxRuntime,
+    config: &crate::Qwen3_5Config,
+    weights: &Qwen3_5Weights,
+    vision_model: &Option<Qwen3_5VisionModel>,
+    expert_pager: Option<&Qwen3_5ExpertPager>,
+    decoder_cache_layout: &crate::DecoderCacheLayout,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<StreamingExpertBudgetOutcome, Qwen3_5ExecutionError> {
+    let model_core_payload_bytes =
+        crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
+            weights,
+            vision_model,
+        );
+    let complete_expert_payload_bytes = match expert_pager {
+        Some(expert_pager) => expert_pager
+            .complete_expert_payload_byte_count()
+            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                description: "complete expert payload byte count overflowed during model load",
+            })?,
+        None => 0,
+    };
+    // The RAM owner's three-layer prefill floor is based on packed source
+    // payload geometry. The separately composed expert-page reservation
+    // carries the decoded bfloat16 output a forward materializes.
+    let largest_complete_expert_layer_bytes = match expert_pager {
+        Some(expert_pager) => expert_pager
+            .maximum_complete_expert_source_payload_bytes()
+            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                description: "complete expert source layer byte count overflowed during model load",
+            })?,
+        None => 0,
+    };
+    let fused_jangtq2_gathered_projection_kernel = expert_pager.and_then(|expert_pager| {
+        fused_jangtq2_gathered_projection_kernel_for_pager(
+            runtime,
+            expert_pager,
+            performance_attribution,
+        )
+    });
+    if let Some(expert_pager) = expert_pager {
+        expert_pager.set_decode_tokens_multiply_packed_pages(
+            fused_jangtq2_gathered_projection_kernel.is_some(),
+        );
+    }
+    let largest_routed_expert_page_bytes = expert_pager.map_or(Ok(0), |expert_pager| {
+        // The load-time budget is taken before the fused kernel
+        // verdict, so it keeps the conservative decode peak.
+        expert_pager.maximum_routed_expert_page_bytes(
+            usize::try_from(config.experts_per_token()).unwrap_or(usize::MAX),
+            true,
+        )
+    })?;
+    let mut mlx_ram_budget = MlxRamBudget::new(
+        u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "MLX active memory ceiling exceeds the u64 range",
+            }
+        })?,
+        MlxRamBudgetModelGeometry {
+            model_core_payload_bytes,
+            complete_expert_payload_bytes,
+            largest_complete_expert_layer_bytes,
+            largest_routed_expert_page_bytes,
+            sequence_state_bytes_per_token: u64::try_from(
+                decoder_cache_layout
+                    .sequence_state_payload_byte_count_per_token()
+                    .unwrap_or(0),
+            )
+            .unwrap_or(0),
+        },
+    )
+    .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+        description: "MLX RAM budget requires a positive active-memory ceiling",
+    })?;
+    if let Some(expert_pager) = expert_pager {
+        // A multi-token forward decodes the complete-layer page it
+        // multiplies, so the prefill plan must keep that page's peak
+        // (packed source plus decoded output) out of the expert budget;
+        // the packed-source slot alone seated experts into the decode's
+        // space and every chunk had to reclaim a layer before it could run.
+        // The second slot funds the one complete layer a chunk reads ahead
+        // of its route while earlier layers compute
+        // (`prefill_complete_layer_prefetch`). That prefetch is only issued
+        // for pages multiplied without a transient decode, so it holds the
+        // packed source alone, and only of layers it can pick: codebook
+        // layers are never eligible in prefill, so an all-codebook bundle
+        // reserves no read-ahead bytes at all. Charging it the full
+        // decoded peak instead doubled a 5.74 GB JANGTQ2 slot to 11.48 GB
+        // and cut 122B prefill throughput nearly in two (measured
+        // 2026-10-24: 134 versus 232–273 tokens per second).
+        mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(
+            super::prefill_complete_layer_prefetch::prefill_complete_layer_stream_slot_bytes(
+                expert_pager.maximum_expert_page_bytes(),
+                super::prefill_complete_layer_prefetch::largest_prefill_prefetchable_complete_source_payload_bytes(
+                    expert_pager.layer_plans(),
+                )
+                .map_err(qwen3_5_streaming::expert_streaming::ExpertPagingError::from)?,
+            ),
+        );
+    }
+    Ok(StreamingExpertBudgetOutcome {
+        mlx_ram_budget,
+        fused_jangtq2_gathered_projection_kernel,
+    })
+}
+
 /// Builds the fused jangtq2 decode-token projection kernel when the pager has
 /// codebook experts and the worker's capability verdict allows it.
 /// A demoted kernel leaves `None`, and
@@ -497,9 +434,13 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
     if !has_codebook_experts {
         return None;
     }
-    if !kernel_capability::worker_process_kernel_capabilities(runtime, performance_attribution)
-        .is_custom_kernel_supported(CustomMetalKernelFamily::FUSED_JANGTQ2_GATHERED_PROJECTION)
-    {
+    if !crate::kernel_capability::worker_process_kernel_capabilities(
+        runtime,
+        performance_attribution,
+    )
+    .is_custom_kernel_supported(
+        crate::kernel_capability::CustomMetalKernelFamily::FUSED_JANGTQ2_GATHERED_PROJECTION,
+    ) {
         tracing::info!(
             "fused jangtq2 gathered projection kernel demoted to the materializing decoder for this worker process"
         );
@@ -515,36 +456,6 @@ fn fused_jangtq2_gathered_projection_kernel_for_pager(
             None
         }
     }
-}
-
-/// Maps embedded canonical vision tensor names to their loaded model-shard
-/// position and stored tensor spelling for physical reads.
-fn build_vision_tensor_shard_map(
-    shard_index: &super::Qwen3_5ShardIndex,
-) -> HashMap<String, crate::qwen3_5_core::vision::EmbeddedVisionTensorLocation> {
-    let mut vision_tensor_name_to_shard_location = HashMap::new();
-    for (vision_tensor_name, shard_file_name) in shard_index.vision_tensor_name_to_shard_file_name()
-    {
-        let mut shard_position_option = None;
-        for (candidate_shard_position, expected_file_name) in
-            shard_index.model_shard_file_names().iter().enumerate()
-        {
-            if expected_file_name == shard_file_name {
-                shard_position_option = Some(candidate_shard_position);
-                break;
-            }
-        }
-        if let Some(shard_position) = shard_position_option {
-            vision_tensor_name_to_shard_location.insert(
-                vision_tensor_name.clone(),
-                crate::qwen3_5_core::vision::EmbeddedVisionTensorLocation {
-                    shard_position,
-                    stored_tensor_name: shard_index.stored_tensor_name_for(vision_tensor_name),
-                },
-            );
-        }
-    }
-    vision_tensor_name_to_shard_location
 }
 
 /// Derives the decoder cache layout at the tensor-binding boundary.

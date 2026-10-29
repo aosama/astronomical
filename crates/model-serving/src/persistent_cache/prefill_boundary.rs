@@ -138,3 +138,50 @@ pub fn persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
     };
     requested_prefill_chunk_end.min(next_persistent_prompt_cache_boundary)
 }
+
+/// The next prompt-prefill chunk span, resolved identically by both Qwen3.5
+/// engines: `None` when no prompt work is pending, otherwise the configured
+/// chunk end clamped at the durable prompt-cache boundary when one applies.
+///
+/// Extracted from the two engines' `advance_prompt_prefill_if_pending` twins,
+/// which had drifted toward repeating this composition; the boundary clamp was
+/// silently discarded once by an innocent refactor, so the whole span
+/// resolution — availability, permission, and clamp — lives in this one
+/// tested pure function.
+#[must_use]
+pub fn resolve_prompt_prefill_chunk_span(
+    prefill_cursor: usize,
+    prompt_token_count: usize,
+    configured_prompt_processing_chunk_end: usize,
+    persistent_prompt_cache_available: bool,
+    can_use_persistent_prompt_cache: bool,
+    persistent_prompt_cache_block_token_count: usize,
+) -> Option<ResolvedPrefillChunkSpan> {
+    if prefill_cursor >= prompt_token_count {
+        return None;
+    }
+    let prefill_start = prefill_cursor;
+    let requested_prefill_chunk_end =
+        if persistent_prompt_cache_available && can_use_persistent_prompt_cache {
+            persistent_prompt_cache_clamped_prefill_chunk_end(
+                prefill_start,
+                configured_prompt_processing_chunk_end,
+                prompt_token_count,
+                persistent_prompt_cache_block_token_count,
+            )
+        } else {
+            configured_prompt_processing_chunk_end
+        };
+    Some(ResolvedPrefillChunkSpan {
+        prefill_start,
+        attempted_prefill_chunk_token_count: requested_prefill_chunk_end - prefill_start,
+    })
+}
+
+/// One resolved prompt-prefill chunk: its inclusive start, its (possibly
+/// cache-clamped) exclusive end, and the token count the engines log and
+/// admit against.
+pub struct ResolvedPrefillChunkSpan {
+    pub prefill_start: usize,
+    pub attempted_prefill_chunk_token_count: usize,
+}
