@@ -30,6 +30,8 @@ use crate::{
     combined_persistent_growth_bytes,
 };
 
+use astronomical_runtime_integration::MlxMemorySnapshot;
+
 use super::{Qwen3_5EngineState, qwen3_5_runtime_error};
 
 /// Bound on reclaim passes for one forward. Each pass snapshots MLX after a
@@ -155,9 +157,7 @@ impl Qwen3_5EngineState {
         }
         Ok(admitted_baseline)
     }
-
     /// Admits one forward pass and starts an operation-local MLX peak sample.
-    #[expect(clippy::too_many_lines)]
     fn begin_adaptive_ram_growth(
         &mut self,
         adaptive_ram_growth_context: AdaptiveRamGrowthContext,
@@ -167,65 +167,12 @@ impl Qwen3_5EngineState {
         should_log_memory_decision: bool,
         performance_attribution: &PerformanceAttribution,
     ) -> Result<AdaptiveRamGrowthAdmissionBaseline, AdaptiveRamGrowthMemoryAdmissionError> {
-        // Capture one internally consistent ownership snapshot. The model borrow
-        // ends with this block so later demotion/reclamation may borrow it mutably.
-        let (
-            target_persistent_state_growth_bytes,
-            routed_expert_page_reservation_bytes,
-            unobserved_scope_transient_floor_bytes,
-            mut memory_snapshot_before_growth,
-            mut retained_expert_payload_bytes_before_growth,
-        ) = {
-            let model = self
-                .model
-                .as_ref()
-                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-            let target_persistent_state_growth_bytes = request_decoder_state
-                .projected_persistent_state_growth_bytes(
-                    model.decoder_cache_layout(),
-                    adaptive_ram_growth_context.forward_token_count(),
-                )
-                .map_err(qwen3_5_runtime_error)?;
-            let routed_expert_page_reservation_bytes = if model.expert_pager.is_some() {
-                // Reserve the largest model-derived routed page, not merely the
-                // route expected from this token. Router output is lazy and is not
-                // known on the host at initial admission.
-                model
-                    .expert_page_reservation_bytes_for_forward(
-                        adaptive_ram_growth_context.forward_token_count(),
-                    )
-                    .map_err(InferenceEngineError::from)?
-                    .try_into()
-                    .map_err(|_| {
-                        memory_admission::invalid_request_error(
-                            "routed expert page reservation exceeds the platform range",
-                        )
-                    })?
-            } else {
-                0
-            };
-            let memory_snapshot_before_growth = model
-                .runtime()
-                .memory_snapshot()
-                .map_err(qwen3_5_runtime_error)?;
-            let retained_expert_payload_bytes_before_growth = model
-                .expert_weight_memory_cache_statistics()
-                .resident_payload_byte_count;
-            let unobserved_scope_transient_floor_bytes = model
-                .mlx_ram_budget()
-                .adaptive_growth_unobserved_scope_transient_floor_bytes(
-                    adaptive_ram_growth_context,
-                );
-            (
-                target_persistent_state_growth_bytes,
-                routed_expert_page_reservation_bytes,
-                unobserved_scope_transient_floor_bytes,
-                memory_snapshot_before_growth,
-                retained_expert_payload_bytes_before_growth,
-            )
-        };
+        let admission_inputs = self.capture_admission_ownership_snapshot(
+            adaptive_ram_growth_context,
+            request_decoder_state,
+        )?;
         let exact_context_growth_bytes = combined_persistent_growth_bytes(
-            target_persistent_state_growth_bytes,
+            admission_inputs.target_persistent_state_growth_bytes,
             additional_persistent_state_growth_bytes,
         )
         .ok_or_else(|| {
@@ -233,23 +180,130 @@ impl Qwen3_5EngineState {
                 "target and additional persistent growth overflowed",
             )
         })?;
+        let mut admission = self.project_initial_forward_growth(
+            adaptive_ram_growth_context,
+            &admission_inputs,
+            exact_context_growth_bytes,
+            exact_temporary_workspace_bytes,
+            should_log_memory_decision,
+        )?;
+        if !admission.admission_decision.is_admitted() {
+            self.run_paged_expert_reclamation_loop(
+                adaptive_ram_growth_context,
+                &admission_inputs,
+                exact_context_growth_bytes,
+                exact_temporary_workspace_bytes,
+                should_log_memory_decision,
+                &mut admission,
+            )?;
+        }
+        self.limit_retention_and_reset_peak(&mut admission)?;
+        Ok(AdaptiveRamGrowthAdmissionBaseline {
+            active_memory_bytes: admission
+                .memory_snapshot_before_growth
+                .active_memory_bytes(),
+            retained_expert_payload_bytes: admission.retained_expert_payload_bytes_before_growth,
+            streamed_expert_page_bytes: performance_attribution
+                .expert_streaming_payload_byte_count(),
+            transient_reserve_source: Some(admission.forward_projection.transient_reserve_source()),
+            unreserved_headroom_bytes: u64::try_from(
+                admission
+                    .forward_projection
+                    .allowed_active_memory_bytes()
+                    .saturating_sub(admission.forward_projection.peak_projected_bytes()),
+            )
+            .unwrap_or(u64::MAX),
+        })
+    }
+
+    /// Captures one internally consistent ownership snapshot: the projected
+    /// persistent growth, the routed-page reservation, the unobserved-scope
+    /// floor, and the pre-growth memory and retained-payload readings. The
+    /// model borrow ends with this block so later demotion/reclamation may
+    /// borrow it mutably.
+    fn capture_admission_ownership_snapshot(
+        &self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        request_decoder_state: &RequestDecoderStateStack,
+    ) -> Result<AdmissionOwnershipSnapshot, AdaptiveRamGrowthMemoryAdmissionError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let target_persistent_state_growth_bytes = request_decoder_state
+            .projected_persistent_state_growth_bytes(
+                model.decoder_cache_layout(),
+                adaptive_ram_growth_context.forward_token_count(),
+            )
+            .map_err(qwen3_5_runtime_error)?;
+        let routed_expert_page_reservation_bytes = if model.expert_pager.is_some() {
+            // Reserve the largest model-derived routed page, not merely the
+            // route expected from this token. Router output is lazy and is not
+            // known on the host at initial admission.
+            model
+                .expert_page_reservation_bytes_for_forward(
+                    adaptive_ram_growth_context.forward_token_count(),
+                )
+                .map_err(InferenceEngineError::from)?
+                .try_into()
+                .map_err(|_| {
+                    memory_admission::invalid_request_error(
+                        "routed expert page reservation exceeds the platform range",
+                    )
+                })?
+        } else {
+            0
+        };
+        let memory_snapshot_before_growth = model
+            .runtime()
+            .memory_snapshot()
+            .map_err(qwen3_5_runtime_error)?;
+        let retained_expert_payload_bytes_before_growth = model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        let unobserved_scope_transient_floor_bytes = model
+            .mlx_ram_budget()
+            .adaptive_growth_unobserved_scope_transient_floor_bytes(adaptive_ram_growth_context);
+        Ok(AdmissionOwnershipSnapshot {
+            target_persistent_state_growth_bytes,
+            routed_expert_page_reservation_bytes,
+            memory_snapshot_before_growth,
+            retained_expert_payload_bytes_before_growth,
+            unobserved_scope_transient_floor_bytes,
+        })
+    }
+
+    /// Projects the first forward growth from the ownership snapshot and logs
+    /// the intentional admission-with-recovery-constraint decision when the
+    /// expected work fits but only the optional recovery window does not.
+    /// Mirrors the inlined projection and constraint-log block.
+    fn project_initial_forward_growth(
+        &mut self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        admission_inputs: &AdmissionOwnershipSnapshot,
+        exact_context_growth_bytes: usize,
+        exact_temporary_workspace_bytes: usize,
+        should_log_memory_decision: bool,
+    ) -> Result<PagedForwardAdmissionState, AdaptiveRamGrowthMemoryAdmissionError> {
         // The first projection describes ownership exactly as sampled. It may be
         // replaced below after retained-page eviction.
-        let mut first_forward_projection = self
+        let first_forward_projection = self
             .adaptive_ram_growth_guard
             .project_growth_for_context(
                 adaptive_ram_growth_context,
-                memory_snapshot_before_growth.active_memory_bytes(),
+                admission_inputs
+                    .memory_snapshot_before_growth
+                    .active_memory_bytes(),
                 exact_context_growth_bytes,
-                routed_expert_page_reservation_bytes,
+                admission_inputs.routed_expert_page_reservation_bytes,
                 exact_temporary_workspace_bytes,
-                unobserved_scope_transient_floor_bytes,
+                admission_inputs.unobserved_scope_transient_floor_bytes,
             )
             .map_err(|adaptive_ram_growth_projection_error| {
                 tracing::warn!(
                     action = "reject",
                     current_active_memory_bytes =
-                        memory_snapshot_before_growth.active_memory_bytes(),
+                        admission_inputs.memory_snapshot_before_growth.active_memory_bytes(),
                     exact_context_growth_bytes,
                     error = %adaptive_ram_growth_projection_error,
                     "stopped Qwen3.5 forward after adaptive RAM growth projection failed"
@@ -261,7 +315,8 @@ impl Qwen3_5EngineState {
 
         let initial_forward_admission_decision = PagedForwardAdmissionDecision::for_paged_forward(
             &first_forward_projection,
-            usize::try_from(retained_expert_payload_bytes_before_growth).unwrap_or(usize::MAX),
+            usize::try_from(admission_inputs.retained_expert_payload_bytes_before_growth)
+                .unwrap_or(usize::MAX),
             None,
         );
         if should_log_memory_decision
@@ -281,188 +336,147 @@ impl Qwen3_5EngineState {
                 "admit_with_recovery_constraint",
             );
         }
-        if !initial_forward_admission_decision.is_admitted() {
-            if should_log_memory_decision {
-                log_adaptive_ram_growth_admission_decision(
-                    adaptive_ram_growth_context,
-                    &first_forward_projection,
-                    initial_forward_admission_decision.paged_log_label(),
-                );
-            }
+        Ok(PagedForwardAdmissionState {
+            forward_projection: first_forward_projection,
+            admission_decision: initial_forward_admission_decision,
+            memory_snapshot_before_growth: admission_inputs.memory_snapshot_before_growth,
+            retained_expert_payload_bytes_before_growth: admission_inputs
+                .retained_expert_payload_bytes_before_growth,
+        })
+    }
 
-            // Every retained page is an elastic byte, so each typed target
-            // releases exactly the contribution the equation proves necessary.
-            let expert_weight_memory_cache_statistics_before_reclamation = {
-                let model = self.model.as_ref().ok_or_else(|| {
-                    super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                })?;
-                model.expert_weight_memory_cache_statistics()
-            };
-            let mut previous_pass_released_pages = None;
-            let mut paged_expert_reclamation_admitted = false;
-            for _ in 0..MAXIMUM_PAGED_EXPERT_RECLAMATION_PASSES {
-                let model = self.model.as_ref().ok_or_else(|| {
-                    super::fatal_engine_error("Qwen3.5 engine lost its loaded model")
-                })?;
-                let expert_weight_memory_cache_statistics =
-                    model.expert_weight_memory_cache_statistics();
-                let retained_expert_payload_bytes = usize::try_from(
-                    expert_weight_memory_cache_statistics.resident_payload_byte_count,
-                )
-                .unwrap_or(usize::MAX);
-                let expert_reclamation_plan = first_forward_projection
-                    .expert_retention_reclamation_plan(retained_expert_payload_bytes);
-                let forward_admission_decision = PagedForwardAdmissionDecision::for_paged_forward(
-                    &first_forward_projection,
-                    retained_expert_payload_bytes,
-                    previous_pass_released_pages,
-                );
-                match forward_admission_decision {
-                    PagedForwardAdmissionDecision::Admit => {
-                        if previous_pass_released_pages.is_some() {
-                            log_adaptive_ram_growth_pressure(
-                                &first_forward_projection,
-                                expert_weight_memory_cache_statistics_before_reclamation,
-                                expert_weight_memory_cache_statistics,
-                                memory_snapshot_before_growth.allocator_cache_memory_bytes(),
-                                expert_reclamation_plan.reclamation_target_bytes(),
-                                "admit",
-                            );
-                        }
-                        paged_expert_reclamation_admitted = true;
-                        break;
-                    }
-                    PagedForwardAdmissionDecision::Reject { .. } => {
+    /// Runs the bounded retained-expert reclamation passes until admission,
+    /// terminal rejection, or pass exhaustion. Every retained page is an
+    /// elastic byte, so each typed target releases exactly the contribution
+    /// the equation proves necessary. Mirrors the inlined loop.
+    #[allow(clippy::too_many_lines)]
+    fn run_paged_expert_reclamation_loop(
+        &mut self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        admission_inputs: &AdmissionOwnershipSnapshot,
+        exact_context_growth_bytes: usize,
+        exact_temporary_workspace_bytes: usize,
+        should_log_memory_decision: bool,
+        admission: &mut PagedForwardAdmissionState,
+    ) -> Result<(), AdaptiveRamGrowthMemoryAdmissionError> {
+        if should_log_memory_decision {
+            log_adaptive_ram_growth_admission_decision(
+                adaptive_ram_growth_context,
+                &admission.forward_projection,
+                admission.admission_decision.paged_log_label(),
+            );
+        }
+        let expert_weight_memory_cache_statistics_before_reclamation = {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            model.expert_weight_memory_cache_statistics()
+        };
+        let mut previous_pass_released_pages = None;
+        let mut paged_expert_reclamation_admitted = false;
+        for _ in 0..MAXIMUM_PAGED_EXPERT_RECLAMATION_PASSES {
+            let model = self
+                .model
+                .as_ref()
+                .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+            let expert_weight_memory_cache_statistics =
+                model.expert_weight_memory_cache_statistics();
+            let retained_expert_payload_bytes =
+                usize::try_from(expert_weight_memory_cache_statistics.resident_payload_byte_count)
+                    .unwrap_or(usize::MAX);
+            let expert_reclamation_plan = admission
+                .forward_projection
+                .expert_retention_reclamation_plan(retained_expert_payload_bytes);
+            let forward_admission_decision = PagedForwardAdmissionDecision::for_paged_forward(
+                &admission.forward_projection,
+                retained_expert_payload_bytes,
+                previous_pass_released_pages,
+            );
+            match forward_admission_decision {
+                PagedForwardAdmissionDecision::Admit => {
+                    if previous_pass_released_pages.is_some() {
                         log_adaptive_ram_growth_pressure(
-                            &first_forward_projection,
+                            &admission.forward_projection,
                             expert_weight_memory_cache_statistics_before_reclamation,
                             expert_weight_memory_cache_statistics,
-                            memory_snapshot_before_growth.allocator_cache_memory_bytes(),
+                            admission
+                                .memory_snapshot_before_growth
+                                .allocator_cache_memory_bytes(),
                             expert_reclamation_plan.reclamation_target_bytes(),
-                            "reject",
+                            "admit",
                         );
-                        let rejection_reason = if !expert_reclamation_plan
-                            .can_satisfy_every_memory_boundary()
-                        {
-                            format!(
-                                "adaptive RAM growth exceeds reclaimable expert capacity by {} bytes",
-                                expert_reclamation_plan.unresolved_shortfall_bytes(),
-                            )
-                        } else if matches!(previous_pass_released_pages, Some(false)) {
-                            format!(
-                                "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, and recovery projection of {} bytes do not fit C={} bytes and P={} bytes while retained expert paging is unavailable",
-                                first_forward_projection.stable_projected_bytes(),
-                                first_forward_projection.peak_projected_bytes(),
-                                first_forward_projection.recovery_projected_bytes(),
-                                first_forward_projection.active_memory_ceiling_bytes(),
-                                first_forward_projection.allowed_active_memory_bytes(),
-                            )
-                        } else {
-                            format!(
-                                "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, or recovery projection of {} bytes remains above C={} bytes or P={} bytes after retained-expert reclamation",
-                                first_forward_projection.stable_projected_bytes(),
-                                first_forward_projection.peak_projected_bytes(),
-                                first_forward_projection.recovery_projected_bytes(),
-                                first_forward_projection.active_memory_ceiling_bytes(),
-                                first_forward_projection.allowed_active_memory_bytes(),
-                            )
-                        };
-                        return Err(AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
-                            decision: forward_admission_decision,
-                            reason: rejection_reason,
-                        });
                     }
-                    PagedForwardAdmissionDecision::ReclaimRetainedExperts { target_bytes } => {
-                        let Some(memory_snapshot_after_reclamation) =
-                            qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
-                                model,
-                                target_bytes,
-                            )?
-                        else {
-                            previous_pass_released_pages = Some(false);
-                            continue;
-                        };
-                        let expert_weight_memory_cache_statistics_after_reclamation =
-                            model.expert_weight_memory_cache_statistics();
-                        log_adaptive_ram_growth_pressure(
-                            &first_forward_projection,
-                            expert_weight_memory_cache_statistics_before_reclamation,
-                            expert_weight_memory_cache_statistics_after_reclamation,
-                            memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
-                            target_bytes,
-                            "reclaim_experts",
-                        );
-                        first_forward_projection = self
-                            .adaptive_ram_growth_guard
-                            .project_growth_for_context(
-                                adaptive_ram_growth_context,
-                                memory_snapshot_after_reclamation.active_memory_bytes(),
-                                exact_context_growth_bytes,
-                                routed_expert_page_reservation_bytes,
-                                exact_temporary_workspace_bytes,
-                                unobserved_scope_transient_floor_bytes,
-                            )
-                            .map_err(|adaptive_ram_growth_projection_error| {
-                                tracing::warn!(
-                                    action = "reject",
-                                    error = %adaptive_ram_growth_projection_error,
-                                    "stopped Qwen3.5 forward after post-reclamation adaptive RAM growth projection failed"
-                                );
-                                memory_admission::invalid_request_error(format!(
-                                    "adaptive RAM growth rejected: {adaptive_ram_growth_projection_error}"
-                                ))
-                            })?;
-                        previous_pass_released_pages = Some(true);
-                        memory_snapshot_before_growth = memory_snapshot_after_reclamation;
-                        retained_expert_payload_bytes_before_growth =
-                            expert_weight_memory_cache_statistics_after_reclamation
-                                .resident_payload_byte_count;
-                    }
+                    paged_expert_reclamation_admitted = true;
+                    break;
+                }
+                PagedForwardAdmissionDecision::Reject { .. } => {
+                    log_adaptive_ram_growth_pressure(
+                        &admission.forward_projection,
+                        expert_weight_memory_cache_statistics_before_reclamation,
+                        expert_weight_memory_cache_statistics,
+                        admission
+                            .memory_snapshot_before_growth
+                            .allocator_cache_memory_bytes(),
+                        expert_reclamation_plan.reclamation_target_bytes(),
+                        "reject",
+                    );
+                    return Err(AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
+                        decision: forward_admission_decision,
+                        reason: paged_rejection_reason(
+                            &admission.forward_projection,
+                            &expert_reclamation_plan,
+                            previous_pass_released_pages,
+                        ),
+                    });
+                }
+                PagedForwardAdmissionDecision::ReclaimRetainedExperts { target_bytes } => {
+                    self.reclaim_experts_and_reproject(
+                        adaptive_ram_growth_context,
+                        admission_inputs,
+                        exact_context_growth_bytes,
+                        exact_temporary_workspace_bytes,
+                        admission,
+                        expert_weight_memory_cache_statistics_before_reclamation,
+                        target_bytes,
+                        &mut previous_pass_released_pages,
+                    )?;
                 }
             }
-            if !paged_expert_reclamation_admitted {
-                let retained_expert_payload_bytes =
-                    usize::try_from(retained_expert_payload_bytes_before_growth)
-                        .unwrap_or(usize::MAX);
-                let exhausted_decision = PagedForwardAdmissionDecision::for_paged_forward(
-                    &first_forward_projection,
-                    retained_expert_payload_bytes,
-                    Some(false),
-                );
-                let rejection_decision = match exhausted_decision {
-                    PagedForwardAdmissionDecision::Reject { .. } => exhausted_decision,
-                    PagedForwardAdmissionDecision::Admit
-                    | PagedForwardAdmissionDecision::ReclaimRetainedExperts { .. } => {
-                        PagedForwardAdmissionDecision::Reject {
-                            unresolved_shortfall_bytes: first_forward_projection
-                                .operation_reclamation_required_bytes(),
-                        }
-                    }
-                };
-                return Err(AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
-                    reason: format!(
-                        "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, or recovery projection of {} bytes remains above C={} bytes or P={} bytes after retained-expert reclamation",
-                        first_forward_projection.stable_projected_bytes(),
-                        first_forward_projection.peak_projected_bytes(),
-                        first_forward_projection.recovery_projected_bytes(),
-                        first_forward_projection.active_memory_ceiling_bytes(),
-                        first_forward_projection.allowed_active_memory_bytes(),
-                    ),
-                    decision: rejection_decision,
-                });
-            }
         }
-        // MLX's peak counter is process-global. Reset it only after admission so
-        // the next sample measures this one forward pass rather than model loading
-        // or an earlier prefill chunk.
+        if !paged_expert_reclamation_admitted {
+            let retained_expert_payload_bytes =
+                usize::try_from(admission.retained_expert_payload_bytes_before_growth)
+                    .unwrap_or(usize::MAX);
+            return Err(exhausted_reclamation_error(
+                admission,
+                retained_expert_payload_bytes,
+            ));
+        }
+        Ok(())
+    }
+
+    /// Limits retained ownership to the admitted forward's reserve and resets
+    /// the process-global peak counter. MLX's peak counter is process-global:
+    /// resetting it only after admission means the next sample measures this
+    /// one forward pass rather than model loading or an earlier prefill chunk.
+    /// Mirrors the inlined post-admission block.
+    fn limit_retention_and_reset_peak(
+        &mut self,
+        admission: &mut PagedForwardAdmissionState,
+    ) -> Result<(), AdaptiveRamGrowthMemoryAdmissionError> {
         let model = self
             .model
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let admitted_forward_reserve_bytes =
-            u64::try_from(first_forward_projection.forward_reserve_bytes()).unwrap_or(u64::MAX);
-        let current_active_memory_bytes =
-            u64::try_from(memory_snapshot_before_growth.active_memory_bytes()).unwrap_or(u64::MAX);
+            u64::try_from(admission.forward_projection.forward_reserve_bytes()).unwrap_or(u64::MAX);
+        let current_active_memory_bytes = u64::try_from(
+            admission
+                .memory_snapshot_before_growth
+                .active_memory_bytes(),
+        )
+        .unwrap_or(u64::MAX);
         let current_retained_expert_payload_bytes = model
             .expert_weight_memory_cache_statistics()
             .resident_payload_byte_count;
@@ -475,11 +489,11 @@ impl Qwen3_5EngineState {
                 .runtime()
                 .synchronize_gpu_stream_and_clear_allocator_cache()
                 .map_err(qwen3_5_runtime_error)?;
-            memory_snapshot_before_growth = model
+            admission.memory_snapshot_before_growth = model
                 .runtime()
                 .memory_snapshot()
                 .map_err(qwen3_5_runtime_error)?;
-            retained_expert_payload_bytes_before_growth = model
+            admission.retained_expert_payload_bytes_before_growth = model
                 .expert_weight_memory_cache_statistics()
                 .resident_payload_byte_count;
         }
@@ -487,22 +501,160 @@ impl Qwen3_5EngineState {
             .runtime()
             .reset_peak_memory()
             .map_err(qwen3_5_runtime_error)?;
-        // Return the exact pre-forward baselines used by post-forward learning:
-        // active memory, retained payload, and the cumulative expert-streaming
-        // counter whose later delta is this forward's promoted page bytes
-        // (issue #691). `usize::MAX` is reserved by the disabled guard.
-        Ok(AdaptiveRamGrowthAdmissionBaseline {
-            active_memory_bytes: memory_snapshot_before_growth.active_memory_bytes(),
-            retained_expert_payload_bytes: retained_expert_payload_bytes_before_growth,
-            streamed_expert_page_bytes: performance_attribution
-                .expert_streaming_payload_byte_count(),
-            transient_reserve_source: Some(first_forward_projection.transient_reserve_source()),
-            unreserved_headroom_bytes: u64::try_from(
-                first_forward_projection
-                    .allowed_active_memory_bytes()
-                    .saturating_sub(first_forward_projection.peak_projected_bytes()),
-            )
-            .unwrap_or(u64::MAX),
-        })
+        Ok(())
+    }
+
+    /// One reclamation pass: release retained experts toward the typed target,
+    /// log the pressure evidence, reproject from the post-reclamation snapshot,
+    /// and advance the pass state. A pass that releases no pages marks the
+    /// paging unavailable. Mirrors the inlined `ReclaimRetainedExperts` arm.
+    #[allow(clippy::too_many_arguments)]
+    fn reclaim_experts_and_reproject(
+        &mut self,
+        adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+        admission_inputs: &AdmissionOwnershipSnapshot,
+        exact_context_growth_bytes: usize,
+        exact_temporary_workspace_bytes: usize,
+        admission: &mut PagedForwardAdmissionState,
+        expert_weight_memory_cache_statistics_before_reclamation: crate::ExpertWeightMemoryCacheStatistics,
+        target_bytes: usize,
+        previous_pass_released_pages: &mut Option<bool>,
+    ) -> Result<(), AdaptiveRamGrowthMemoryAdmissionError> {
+        let model = self
+            .model
+            .as_ref()
+            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
+        let Some(memory_snapshot_after_reclamation) =
+            qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
+                model,
+                target_bytes,
+            )?
+        else {
+            *previous_pass_released_pages = Some(false);
+            return Ok(());
+        };
+        let expert_weight_memory_cache_statistics_after_reclamation =
+            model.expert_weight_memory_cache_statistics();
+        log_adaptive_ram_growth_pressure(
+            &admission.forward_projection,
+            expert_weight_memory_cache_statistics_before_reclamation,
+            expert_weight_memory_cache_statistics_after_reclamation,
+            memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
+            target_bytes,
+            "reclaim_experts",
+        );
+        admission.forward_projection = self
+                .adaptive_ram_growth_guard
+                .project_growth_for_context(
+                    adaptive_ram_growth_context,
+                    memory_snapshot_after_reclamation.active_memory_bytes(),
+                    exact_context_growth_bytes,
+                    admission_inputs.routed_expert_page_reservation_bytes,
+                    exact_temporary_workspace_bytes,
+                    admission_inputs.unobserved_scope_transient_floor_bytes,
+                )
+                .map_err(|adaptive_ram_growth_projection_error| {
+                    tracing::warn!(
+                        action = "reject",
+                        error = %adaptive_ram_growth_projection_error,
+                        "stopped Qwen3.5 forward after post-reclamation adaptive RAM growth projection failed"
+                    );
+                    memory_admission::invalid_request_error(format!(
+                        "adaptive RAM growth rejected: {adaptive_ram_growth_projection_error}"
+                    ))
+                })?;
+        *previous_pass_released_pages = Some(true);
+        admission.memory_snapshot_before_growth = memory_snapshot_after_reclamation;
+        admission.retained_expert_payload_bytes_before_growth =
+            expert_weight_memory_cache_statistics_after_reclamation.resident_payload_byte_count;
+        Ok(())
+    }
+}
+
+/// The ownership evidence one admission decision is made from.
+struct AdmissionOwnershipSnapshot {
+    target_persistent_state_growth_bytes: usize,
+    routed_expert_page_reservation_bytes: usize,
+    memory_snapshot_before_growth: MlxMemorySnapshot,
+    retained_expert_payload_bytes_before_growth: u64,
+    unobserved_scope_transient_floor_bytes: usize,
+}
+
+/// The mutable admission state threaded through the reclamation passes.
+struct PagedForwardAdmissionState {
+    forward_projection: crate::memory::AdaptiveRamGrowthProjection,
+    admission_decision: PagedForwardAdmissionDecision,
+    memory_snapshot_before_growth: MlxMemorySnapshot,
+    retained_expert_payload_bytes_before_growth: u64,
+}
+
+/// The rejection reason for one rejected reclamation pass: either the plan
+/// cannot satisfy every boundary (unresolved shortfall), the previous pass
+/// released nothing (stable/peak/recovery cannot fit at all), or a released
+/// pass still projects above a boundary. Pure so the three message shapes
+/// stay testable against the projection's own numbers.
+fn paged_rejection_reason(
+    forward_projection: &crate::memory::AdaptiveRamGrowthProjection,
+    expert_reclamation_plan: &crate::memory::ExpertReclamationPlan,
+    previous_pass_released_pages: Option<bool>,
+) -> String {
+    if !expert_reclamation_plan.can_satisfy_every_memory_boundary() {
+        format!(
+            "adaptive RAM growth exceeds reclaimable expert capacity by {} bytes",
+            expert_reclamation_plan.unresolved_shortfall_bytes(),
+        )
+    } else if matches!(previous_pass_released_pages, Some(false)) {
+        format!(
+            "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, and recovery projection of {} bytes do not fit C={} bytes and P={} bytes while retained expert paging is unavailable",
+            forward_projection.stable_projected_bytes(),
+            forward_projection.peak_projected_bytes(),
+            forward_projection.recovery_projected_bytes(),
+            forward_projection.active_memory_ceiling_bytes(),
+            forward_projection.allowed_active_memory_bytes(),
+        )
+    } else {
+        format!(
+            "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, or recovery projection of {} bytes remains above C={} bytes or P={} bytes after retained-expert reclamation",
+            forward_projection.stable_projected_bytes(),
+            forward_projection.peak_projected_bytes(),
+            forward_projection.recovery_projected_bytes(),
+            forward_projection.active_memory_ceiling_bytes(),
+            forward_projection.allowed_active_memory_bytes(),
+        )
+    }
+}
+
+/// The terminal error after every reclamation pass is spent without
+/// admission: the projections still cannot fit the ceilings.
+fn exhausted_reclamation_error(
+    admission: &PagedForwardAdmissionState,
+    retained_expert_payload_bytes: usize,
+) -> AdaptiveRamGrowthMemoryAdmissionError {
+    let exhausted_decision = PagedForwardAdmissionDecision::for_paged_forward(
+        &admission.forward_projection,
+        retained_expert_payload_bytes,
+        Some(false),
+    );
+    let rejection_decision = match exhausted_decision {
+        PagedForwardAdmissionDecision::Reject { .. } => exhausted_decision,
+        PagedForwardAdmissionDecision::Admit
+        | PagedForwardAdmissionDecision::ReclaimRetainedExperts { .. } => {
+            PagedForwardAdmissionDecision::Reject {
+                unresolved_shortfall_bytes: admission
+                    .forward_projection
+                    .operation_reclamation_required_bytes(),
+            }
+        }
+    };
+    AdaptiveRamGrowthMemoryAdmissionError::ForwardAdmission {
+        reason: format!(
+            "adaptive RAM growth rejected: stable projection of {} bytes, peak projection of {} bytes, or recovery projection of {} bytes remains above C={} bytes or P={} bytes after retained-expert reclamation",
+            admission.forward_projection.stable_projected_bytes(),
+            admission.forward_projection.peak_projected_bytes(),
+            admission.forward_projection.recovery_projected_bytes(),
+            admission.forward_projection.active_memory_ceiling_bytes(),
+            admission.forward_projection.allowed_active_memory_bytes(),
+        ),
+        decision: rejection_decision,
     }
 }
