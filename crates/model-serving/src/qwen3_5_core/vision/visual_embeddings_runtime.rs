@@ -7,6 +7,7 @@
 
 use super::Qwen3_5ProcessedImage;
 use super::vision_model::Qwen3_5VisionModel;
+use super::visual_embeddings::Qwen3_5VisualEmbeddingRequiredImage;
 use super::visual_embeddings::Qwen3_5VisualEmbeddingSuffixPlan;
 use crate::persistent_cache::{
     PersistentPromptCacheCounters, PersistentPromptCacheDiskStore,
@@ -37,7 +38,7 @@ pub(crate) struct VisualEmbeddingEngineContext<'context> {
 /// run the vision forward once and publish their embeddings back to the
 /// persistent store. Returns the suffix rows concatenated in plan order, or
 /// `None` when the plan needs no visual rows.
-#[expect(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn resolve_visual_embeddings_for_processed_images(
     visual_embedding_context: VisualEmbeddingEngineContext<'_>,
     persistent_prompt_cache_counters: &mut PersistentPromptCacheCounters,
@@ -61,88 +62,108 @@ pub(crate) fn resolve_visual_embeddings_for_processed_images(
     let mut persistent_prompt_cache_visual_embedding_hit_row_counts = Vec::new();
     let mut persistent_prompt_cache_visual_embedding_miss_count = 0_u64;
 
+    collect_cached_visual_embeddings(
+        &visual_embedding_context,
+        required_images,
+        processed_visual_images,
+        request_id,
+        visual_embedding_hidden_size,
+        &mut visual_embeddings_by_required_image,
+        &mut missing_required_image_indexes,
+        &mut missing_processed_visual_images,
+        &mut persistent_prompt_cache_visual_embedding_hit_row_counts,
+        &mut persistent_prompt_cache_visual_embedding_miss_count,
+    )?;
+
+    if !missing_processed_visual_images.is_empty() {
+        let computed_missing_visual_embeddings = compute_missing_visual_embeddings(
+            &visual_embedding_context,
+            &missing_processed_visual_images,
+            performance_attribution,
+        )?;
+        let total_missing_visual_embedding_row_count = fold_missing_visual_embedding_row_count(
+            required_images,
+            &missing_required_image_indexes,
+        )?;
+        if !visual_embedding_array_has_expected_layout(
+            &computed_missing_visual_embeddings,
+            total_missing_visual_embedding_row_count,
+            visual_embedding_hidden_size,
+        ) {
+            return Err(visual_embedding_fatal_error(
+                "computed visual embeddings do not match expected Qwen3.5 text width",
+            ));
+        }
+        publish_and_slice_missing_visual_embeddings(
+            &visual_embedding_context,
+            processed_visual_images,
+            required_images,
+            &missing_required_image_indexes,
+            &computed_missing_visual_embeddings,
+            visual_embedding_hidden_size,
+            request_id,
+            &mut visual_embeddings_by_required_image,
+        )?;
+    }
+
+    let suffix_visual_embedding_arrays = assemble_suffix_visual_embeddings(
+        runtime,
+        required_images,
+        &mut visual_embeddings_by_required_image,
+        visual_embedding_hidden_size,
+    )?;
+    finalize_visual_embedding_resolution(
+        runtime,
+        suffix_visual_embedding_arrays,
+        persistent_prompt_cache_counters,
+        persistent_prompt_cache_visual_embedding_hit_row_counts,
+        persistent_prompt_cache_visual_embedding_miss_count,
+    )
+}
+
+/// Loads every required image's full-image embedding from the persistent
+/// cache, recording hit rows and miss counts and collecting the images the
+/// cache could not serve.
+#[allow(clippy::too_many_arguments)]
+fn collect_cached_visual_embeddings(
+    visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
+    required_images: &[Qwen3_5VisualEmbeddingRequiredImage],
+    processed_visual_images: &[Qwen3_5ProcessedImage],
+    request_id: RequestId,
+    visual_embedding_hidden_size: usize,
+    visual_embeddings_by_required_image: &mut [Option<MlxArray>],
+    missing_required_image_indexes: &mut Vec<usize>,
+    missing_processed_visual_images: &mut Vec<Qwen3_5ProcessedImage>,
+    persistent_prompt_cache_visual_embedding_hit_row_counts: &mut Vec<usize>,
+    persistent_prompt_cache_visual_embedding_miss_count: &mut u64,
+) -> Result<(), InferenceEngineError> {
+    // A projected embedding is ordinary inference work when caching is
+    // disabled, not a cache miss. Emit cache-specific diagnostics only for a
+    // real lookup attempt.
+    let persistent_prompt_cache_visual_embedding_lookup_was_attempted =
+        visual_embedding_context.persistent_prompt_cache.is_some();
     for (required_image_index, required_image) in required_images.iter().enumerate() {
         let processed_visual_image = processed_visual_images
             .get(required_image.image_index())
             .ok_or_else(|| {
                 visual_embedding_fatal_error("visual suffix plan refers to a missing image")
             })?;
-        let persistent_prompt_cache_visual_embedding_lookup_was_attempted =
-            visual_embedding_context.persistent_prompt_cache.is_some();
-        let loaded_visual_embeddings =
-            match visual_embedding_context.persistent_prompt_cache.as_ref() {
-                Some(persistent_prompt_cache) => {
-                    // Construct disk identity only after proving a cache owner
-                    // exists. The cache-disabled path proceeds directly to
-                    // projection without model/revision key construction.
-                    let visual_embedding_key = PersistentVisualEmbeddingKey::for_image(
-                        processed_visual_image.encoded_image_sha256,
-                        visual_embedding_context
-                            .visual_embedding_model_contract
-                            .model_id(),
-                        visual_embedding_context
-                            .visual_embedding_model_contract
-                            .model_revision(),
-                    );
-                    match persistent_prompt_cache.load_visual_embedding(
-                        runtime,
-                        &visual_embedding_key,
-                        visual_embedding_context.visual_embedding_model_contract,
-                    ) {
-                        Ok(Some(loaded_visual_embeddings))
-                            if visual_embedding_array_has_expected_layout(
-                                &loaded_visual_embeddings,
-                                required_image.image_visual_embedding_row_count(),
-                                visual_embedding_hidden_size,
-                            ) =>
-                        {
-                            tracing::debug!(
-                                request_id = request_id.value(),
-                                image_ordinal = required_image.image_index(),
-                                visual_embedding_row_count =
-                                    required_image.image_visual_embedding_row_count(),
-                                "persistent visual embedding cache hit"
-                            );
-                            persistent_prompt_cache_visual_embedding_hit_row_counts
-                                .push(required_image.image_visual_embedding_row_count());
-                            Some(loaded_visual_embeddings)
-                        }
-                        Ok(Some(_stale_visual_embeddings)) => {
-                            tracing::warn!(
-                                request_id = request_id.value(),
-                                image_ordinal = required_image.image_index(),
-                                expected_visual_embedding_row_count =
-                                    required_image.image_visual_embedding_row_count(),
-                                "persistent visual embedding shape mismatch; recomputing"
-                            );
-                            None
-                        }
-                        Ok(None) => None,
-                        Err(visual_embedding_load_error) => {
-                            tracing::warn!(
-                                request_id = request_id.value(),
-                                image_ordinal = required_image.image_index(),
-                                "persistent visual embedding load failed; recomputing: \
-                                 {visual_embedding_load_error}"
-                            );
-                            None
-                        }
-                    }
-                }
-                None => None,
-            };
+        let loaded_visual_embeddings = load_cached_visual_embedding_for_image(
+            visual_embedding_context,
+            processed_visual_image,
+            required_image,
+            request_id,
+            visual_embedding_hidden_size,
+        );
         if let Some(loaded_visual_embeddings) = loaded_visual_embeddings {
+            persistent_prompt_cache_visual_embedding_hit_row_counts
+                .push(required_image.image_visual_embedding_row_count());
             visual_embeddings_by_required_image[required_image_index] =
                 Some(loaded_visual_embeddings);
         } else {
             if persistent_prompt_cache_visual_embedding_lookup_was_attempted {
-                persistent_prompt_cache_visual_embedding_miss_count =
+                *persistent_prompt_cache_visual_embedding_miss_count =
                     persistent_prompt_cache_visual_embedding_miss_count.saturating_add(1);
-            }
-            if persistent_prompt_cache_visual_embedding_lookup_was_attempted {
-                // A projected embedding is ordinary inference work when
-                // caching is disabled, not a cache miss. Emit cache-specific
-                // diagnostics only for a real lookup attempt.
                 tracing::debug!(
                     request_id = request_id.value(),
                     image_ordinal = required_image.image_index(),
@@ -154,101 +175,201 @@ pub(crate) fn resolve_visual_embeddings_for_processed_images(
             missing_processed_visual_images.push(processed_visual_image.clone());
         }
     }
+    Ok(())
+}
 
-    if !missing_processed_visual_images.is_empty() {
-        let vision_model = visual_embedding_context.vision_model.ok_or_else(|| {
-            visual_embedding_fatal_error("Qwen3.5 image request lost the loaded vision model")
-        })?;
-        let computed_missing_visual_embeddings = performance_attribution
-            .measure_operation(
-                PerformanceOperation::VisionEmbeddingGraphConstruction,
-                |_performance_attribution| {
-                    vision_model.forward(
-                        runtime,
-                        visual_embedding_context.compiled_elementwise_graphs,
-                        &missing_processed_visual_images,
-                    )
-                },
-            )
-            .map_err(visual_embedding_runtime_error)?;
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::VisionEmbeddingEvaluationSynchronizationWait,
-                |_performance_attribution| {
-                    runtime.evaluate_arrays(&[&computed_missing_visual_embeddings])
-                },
-            )
-            .map_err(visual_embedding_runtime_error)?;
-        let total_missing_visual_embedding_row_count = missing_required_image_indexes
-            .iter()
-            .try_fold(
-                0_usize,
-                |total_missing_visual_embedding_row_count, required_image_index| {
-                    total_missing_visual_embedding_row_count.checked_add(
-                        required_images[*required_image_index].image_visual_embedding_row_count(),
-                    )
-                },
-            )
-            .ok_or_else(|| {
-                visual_embedding_fatal_error("missing visual embedding row count overflowed")
-            })?;
-        if !visual_embedding_array_has_expected_layout(
-            &computed_missing_visual_embeddings,
-            total_missing_visual_embedding_row_count,
-            visual_embedding_hidden_size,
-        ) {
-            return Err(visual_embedding_fatal_error(
-                "computed visual embeddings do not match expected Qwen3.5 text width",
-            ));
-        }
-        let mut missing_visual_embedding_start_row = 0_usize;
-        for required_image_index in missing_required_image_indexes {
-            let required_image = &required_images[required_image_index];
-            let missing_visual_embedding_end_row = missing_visual_embedding_start_row
-                .checked_add(required_image.image_visual_embedding_row_count())
-                .ok_or_else(|| {
-                    visual_embedding_fatal_error("missing visual row offset overflowed")
-                })?;
-            let image_visual_embeddings = slice_visual_embedding_rows(
-                runtime,
-                &computed_missing_visual_embeddings,
-                missing_visual_embedding_start_row,
-                missing_visual_embedding_end_row,
+/// Loads one required image's embedding from the persistent cache. Cache
+/// misses, stale shapes, and load failures all resolve to `None` so the
+/// caller recomputes through the vision forward.
+fn load_cached_visual_embedding_for_image(
+    visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
+    processed_visual_image: &Qwen3_5ProcessedImage,
+    required_image: &Qwen3_5VisualEmbeddingRequiredImage,
+    request_id: RequestId,
+    visual_embedding_hidden_size: usize,
+) -> Option<MlxArray> {
+    let persistent_prompt_cache = visual_embedding_context.persistent_prompt_cache.as_ref()?;
+    // Construct disk identity only after proving a cache owner exists. The
+    // cache-disabled path proceeds directly to projection without
+    // model/revision key construction.
+    let visual_embedding_key = PersistentVisualEmbeddingKey::for_image(
+        processed_visual_image.encoded_image_sha256,
+        visual_embedding_context
+            .visual_embedding_model_contract
+            .model_id(),
+        visual_embedding_context
+            .visual_embedding_model_contract
+            .model_revision(),
+    );
+    match persistent_prompt_cache.load_visual_embedding(
+        visual_embedding_context.runtime,
+        &visual_embedding_key,
+        visual_embedding_context.visual_embedding_model_contract,
+    ) {
+        Ok(Some(loaded_visual_embeddings))
+            if visual_embedding_array_has_expected_layout(
+                &loaded_visual_embeddings,
+                required_image.image_visual_embedding_row_count(),
                 visual_embedding_hidden_size,
-            )?;
-            if let Some(persistent_prompt_cache) =
-                visual_embedding_context.persistent_prompt_cache.as_ref()
-            {
-                let processed_visual_image = processed_visual_images
-                    .get(required_image.image_index())
-                    .ok_or_else(|| {
-                        visual_embedding_fatal_error("visual suffix plan refers to a missing image")
-                    })?;
-                let visual_embedding_key = PersistentVisualEmbeddingKey::for_image(
-                    processed_visual_image.encoded_image_sha256,
-                    visual_embedding_context
-                        .visual_embedding_model_contract
-                        .model_id(),
-                    visual_embedding_context
-                        .visual_embedding_model_contract
-                        .model_revision(),
-                );
-                if let Err(visual_embedding_save_error) = persistent_prompt_cache
-                    .save_visual_embedding(runtime, &visual_embedding_key, &image_visual_embeddings)
-                {
-                    tracing::warn!(
-                        request_id = request_id.value(),
-                        image_ordinal = required_image.image_index(),
-                        "persistent visual embedding save failed: {visual_embedding_save_error}"
-                    );
-                }
-            }
-            visual_embeddings_by_required_image[required_image_index] =
-                Some(image_visual_embeddings);
-            missing_visual_embedding_start_row = missing_visual_embedding_end_row;
+            ) =>
+        {
+            tracing::debug!(
+                request_id = request_id.value(),
+                image_ordinal = required_image.image_index(),
+                visual_embedding_row_count = required_image.image_visual_embedding_row_count(),
+                "persistent visual embedding cache hit"
+            );
+            Some(loaded_visual_embeddings)
+        }
+        Ok(Some(_stale_visual_embeddings)) => {
+            tracing::warn!(
+                request_id = request_id.value(),
+                image_ordinal = required_image.image_index(),
+                expected_visual_embedding_row_count =
+                    required_image.image_visual_embedding_row_count(),
+                "persistent visual embedding shape mismatch; recomputing"
+            );
+            None
+        }
+        Ok(None) => None,
+        Err(visual_embedding_load_error) => {
+            tracing::warn!(
+                request_id = request_id.value(),
+                image_ordinal = required_image.image_index(),
+                "persistent visual embedding load failed; recomputing: \
+                 {visual_embedding_load_error}"
+            );
+            None
         }
     }
+}
 
+/// Runs the vision forward for the images the cache could not serve and
+/// synchronizes the evaluation under attribution.
+fn compute_missing_visual_embeddings(
+    visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
+    missing_processed_visual_images: &[Qwen3_5ProcessedImage],
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<MlxArray, InferenceEngineError> {
+    let vision_model = visual_embedding_context.vision_model.ok_or_else(|| {
+        visual_embedding_fatal_error("Qwen3.5 image request lost the loaded vision model")
+    })?;
+    let runtime = visual_embedding_context.runtime;
+    let computed_missing_visual_embeddings = performance_attribution
+        .measure_operation(
+            PerformanceOperation::VisionEmbeddingGraphConstruction,
+            |_performance_attribution| {
+                vision_model.forward(
+                    runtime,
+                    visual_embedding_context.compiled_elementwise_graphs,
+                    missing_processed_visual_images,
+                )
+            },
+        )
+        .map_err(visual_embedding_runtime_error)?;
+    performance_attribution
+        .measure_operation(
+            PerformanceOperation::VisionEmbeddingEvaluationSynchronizationWait,
+            |_performance_attribution| {
+                runtime.evaluate_arrays(&[&computed_missing_visual_embeddings])
+            },
+        )
+        .map_err(visual_embedding_runtime_error)?;
+    Ok(computed_missing_visual_embeddings)
+}
+
+/// Pure: folds the missing images' visual row counts, rejecting overflow
+/// instead of wrapping silently.
+fn fold_missing_visual_embedding_row_count(
+    required_images: &[Qwen3_5VisualEmbeddingRequiredImage],
+    missing_required_image_indexes: &[usize],
+) -> Result<usize, InferenceEngineError> {
+    missing_required_image_indexes
+        .iter()
+        .try_fold(
+            0_usize,
+            |total_missing_visual_embedding_row_count, required_image_index| {
+                total_missing_visual_embedding_row_count.checked_add(
+                    required_images[*required_image_index].image_visual_embedding_row_count(),
+                )
+            },
+        )
+        .ok_or_else(|| {
+            visual_embedding_fatal_error("missing visual embedding row count overflowed")
+        })
+}
+
+/// Slices each missing image's rows out of the computed embedding tensor and
+/// publishes them back to the persistent cache; save failures warn without
+/// failing the request.
+#[allow(clippy::too_many_arguments)]
+fn publish_and_slice_missing_visual_embeddings(
+    visual_embedding_context: &VisualEmbeddingEngineContext<'_>,
+    processed_visual_images: &[Qwen3_5ProcessedImage],
+    required_images: &[Qwen3_5VisualEmbeddingRequiredImage],
+    missing_required_image_indexes: &[usize],
+    computed_missing_visual_embeddings: &MlxArray,
+    visual_embedding_hidden_size: usize,
+    request_id: RequestId,
+    visual_embeddings_by_required_image: &mut [Option<MlxArray>],
+) -> Result<(), InferenceEngineError> {
+    let runtime = visual_embedding_context.runtime;
+    let mut missing_visual_embedding_start_row = 0_usize;
+    for required_image_index in missing_required_image_indexes {
+        let required_image = &required_images[*required_image_index];
+        let missing_visual_embedding_end_row = missing_visual_embedding_start_row
+            .checked_add(required_image.image_visual_embedding_row_count())
+            .ok_or_else(|| visual_embedding_fatal_error("missing visual row offset overflowed"))?;
+        let image_visual_embeddings = slice_visual_embedding_rows(
+            runtime,
+            computed_missing_visual_embeddings,
+            missing_visual_embedding_start_row,
+            missing_visual_embedding_end_row,
+            visual_embedding_hidden_size,
+        )?;
+        if let Some(persistent_prompt_cache) =
+            visual_embedding_context.persistent_prompt_cache.as_ref()
+        {
+            let processed_visual_image = processed_visual_images
+                .get(required_image.image_index())
+                .ok_or_else(|| {
+                    visual_embedding_fatal_error("visual suffix plan refers to a missing image")
+                })?;
+            let visual_embedding_key = PersistentVisualEmbeddingKey::for_image(
+                processed_visual_image.encoded_image_sha256,
+                visual_embedding_context
+                    .visual_embedding_model_contract
+                    .model_id(),
+                visual_embedding_context
+                    .visual_embedding_model_contract
+                    .model_revision(),
+            );
+            if let Err(visual_embedding_save_error) = persistent_prompt_cache.save_visual_embedding(
+                runtime,
+                &visual_embedding_key,
+                &image_visual_embeddings,
+            ) {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    image_ordinal = required_image.image_index(),
+                    "persistent visual embedding save failed: {visual_embedding_save_error}"
+                );
+            }
+        }
+        visual_embeddings_by_required_image[*required_image_index] = Some(image_visual_embeddings);
+        missing_visual_embedding_start_row = missing_visual_embedding_end_row;
+    }
+    Ok(())
+}
+
+/// Slices each required image's suffix rows out of its full-image embedding;
+/// a suffix spanning the whole image keeps the loaded array untouched.
+fn assemble_suffix_visual_embeddings(
+    runtime: &MlxRuntime,
+    required_images: &[Qwen3_5VisualEmbeddingRequiredImage],
+    visual_embeddings_by_required_image: &mut [Option<MlxArray>],
+    visual_embedding_hidden_size: usize,
+) -> Result<Vec<MlxArray>, InferenceEngineError> {
     let mut suffix_visual_embedding_arrays = Vec::with_capacity(required_images.len());
     for (required_image_index, required_image) in required_images.iter().enumerate() {
         let full_image_visual_embeddings = visual_embeddings_by_required_image
@@ -278,6 +399,19 @@ pub(crate) fn resolve_visual_embeddings_for_processed_images(
         };
         suffix_visual_embedding_arrays.push(suffix_visual_embeddings);
     }
+    Ok(suffix_visual_embedding_arrays)
+}
+
+/// Concatenates the suffix arrays in plan order (a single image needs no
+/// concatenation), clears the allocator cache, and records the cache hit and
+/// miss counters.
+fn finalize_visual_embedding_resolution(
+    runtime: &MlxRuntime,
+    mut suffix_visual_embedding_arrays: Vec<MlxArray>,
+    persistent_prompt_cache_counters: &mut PersistentPromptCacheCounters,
+    persistent_prompt_cache_visual_embedding_hit_row_counts: Vec<usize>,
+    persistent_prompt_cache_visual_embedding_miss_count: u64,
+) -> Result<Option<MlxArray>, InferenceEngineError> {
     let resolved_visual_embeddings = if suffix_visual_embedding_arrays.len() == 1 {
         suffix_visual_embedding_arrays.pop()
     } else {
@@ -362,3 +496,7 @@ fn slice_visual_embedding_rows(
         )
         .map_err(visual_embedding_runtime_error)
 }
+
+#[cfg(test)]
+#[path = "visual_embeddings_runtime_tests.rs"]
+mod visual_embeddings_runtime_tests;
