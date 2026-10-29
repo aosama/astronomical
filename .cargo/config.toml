@@ -81,7 +81,13 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # itself is denied through the lints tables, so tracked debt is #[expect]
 # and a clean lane means nothing crossed the budget untracked (see
 # clippy.toml for the counting semantics and the warnings-policy trap the
-# lane works around). `cargo xtask test-run` builds exact Cargo executables and
+# lane works around). `cargo xtask function-length-top` ranks every
+# over-budget function worst-first WITH names — it force-warns the budget
+# lint, which overrides the #[expect] ratchet, across the same three worlds;
+# `--top N` caps the table (0 = everything, default 10) and `--scope
+# production|tests|all` filters which tree is ranked, while the summary
+# always describes the full set. `cargo xtask test-run` builds exact Cargo
+# executables and
 # runs each selected test in its own process, with a 120-second budget,
 # five-second progress, and retained manifests/logs under target/test-runs;
 # serving measurements must use this runner.
