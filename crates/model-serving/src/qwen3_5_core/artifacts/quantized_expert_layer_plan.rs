@@ -9,7 +9,10 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::{HashMap, hash_map::Entry};
+#[path = "quantized_expert_layer_plan_steps.rs"]
+mod quantized_expert_layer_plan_steps;
+
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::expert_paging::quantized_expert_manifest::{
@@ -21,6 +24,10 @@ use crate::expert_paging::safetensors_header::{
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantizationProfile};
+
+use self::quantized_expert_layer_plan_steps::{
+    ProjectionPlanInputs, assemble_expert_layer_plan, build_projection_source_collection,
+};
 
 /// The three MoE projection names in an expert's SwitchMLP block.
 pub(crate) const PROJECTION_NAMES: &[&str] = &["gate_proj", "up_proj", "down_proj"];
@@ -96,7 +103,6 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names(
 ///
 /// Qwen sparse layers commonly share a small set of SafeTensors files. Keeping this cache outside
 /// the per-layer loop guarantees each unique header is parsed once instead of once per layer.
-#[expect(clippy::too_many_lines)]
 pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
     model_dir: &Path,
     weight_map: &HashMap<String, String>,
@@ -105,162 +111,31 @@ pub(crate) fn build_quantized_expert_layer_plan_with_stored_names_and_header_cac
     qwen3_5_config: &Qwen3_5Config,
     header_cache: &mut HashMap<PathBuf, SafetensorsHeader>,
 ) -> Result<QuantizedExpertLayerPlan, ExpertManifestError> {
+    let plan_inputs = ProjectionPlanInputs {
+        model_dir,
+        weight_map,
+        stored_tensor_name_by_canonical_name,
+        layer_prefix,
+        qwen3_5_config,
+    };
     let mut tensor_sources = Vec::new();
     let mut projection_quantization_modes = Vec::new();
     let mut jangtq2_projection_rotations = Vec::new();
-
     for projection_name in PROJECTION_NAMES {
-        let projection_module_name = format!("{layer_prefix}.switch_mlp.{projection_name}");
-        let projection_quantization_profile =
-            qwen3_5_config.quantization_profile_for_module(&projection_module_name);
-        // Storage is a module fact. A model-wide affine document does not make a
-        // native expert projection into zero-bit affine.
-        let projection_storage =
-            projection_storage_contract(&projection_module_name, projection_quantization_profile)?;
-        if let ModuleWeightCodec::Jangtq2CodebookQuantized { rotation } =
-            projection_quantization_profile.weight_codec
-        {
+        let projection_collection =
+            build_projection_source_collection(&plan_inputs, projection_name, header_cache)?;
+        tensor_sources.extend(projection_collection.tensor_sources);
+        projection_quantization_modes.push(projection_collection.quantization_mode);
+        if let Some(rotation) = projection_collection.jangtq2_rotation {
             jangtq2_projection_rotations.push(((*projection_name).to_owned(), rotation));
         }
-        projection_quantization_modes.push(projection_storage.quantization_mode);
-        let mut projection_sources: HashMap<&str, Option<QuantizedTensorSource>> = HashMap::new();
-        for parameter_name in projection_storage.parameter_names {
-            let tensor_name =
-                format!("{layer_prefix}.switch_mlp.{projection_name}.{parameter_name}");
-            let source_file_name = weight_map.get(&tensor_name).ok_or_else(|| {
-                ExpertManifestError::MissingTensorEntry {
-                    tensor_name: tensor_name.clone(),
-                }
-            })?;
-            let source_file = model_dir.join(source_file_name);
-            let stored_tensor_name = stored_tensor_name_by_canonical_name
-                .get(&tensor_name)
-                .map_or(tensor_name.as_str(), String::as_str);
-            let header = match header_cache.entry(source_file.clone()) {
-                Entry::Occupied(cached_header_entry) => cached_header_entry.into_mut(),
-                Entry::Vacant(vacant_header_entry) => vacant_header_entry.insert(
-                    crate::expert_paging::safetensors_header::parse_safetensors_header(
-                        &source_file,
-                    )?,
-                ),
-            };
-            let tensor_entry = header
-                .tensor_entry_for_name(stored_tensor_name)
-                .ok_or_else(|| ExpertManifestError::MissingShardTensor {
-                    tensor_name: tensor_name.clone(),
-                })?;
-            let source = validate_quantized_tensor_source(
-                &tensor_name,
-                projection_name,
-                parameter_name,
-                projection_storage.quantization_bits,
-                projection_storage.quantization_group_size,
-                tensor_entry,
-                &source_file,
-                header.total_file_size_bytes,
-            )?;
-            projection_sources.insert(parameter_name, Some(source));
-        }
-        // Validate the source geometry specific to the storage format.
-        let packed_parameter_name = match projection_storage.quantization_mode {
-            QuantizationMode::Jangtq2Codebook => "tq2_packed",
-            QuantizationMode::Affine | QuantizationMode::NativeBfloat16 => "weight",
-        };
-        let packed_source = projection_sources
-            .get(packed_parameter_name)
-            .and_then(Option::as_ref)
-            .ok_or_else(|| ExpertManifestError::MissingShardTensor {
-                tensor_name: format!(
-                    "{layer_prefix}.switch_mlp.{projection_name}.{packed_parameter_name}"
-                ),
-            })?;
-        match projection_storage.quantization_mode {
-            QuantizationMode::Affine => {
-                let scales_source = projection_sources
-                    .get("scales")
-                    .and_then(Option::as_ref)
-                    .ok_or_else(|| ExpertManifestError::MissingShardTensor {
-                        tensor_name: format!("{layer_prefix}.switch_mlp.{projection_name}.scales"),
-                    })?;
-                let biases_source = projection_sources
-                    .get("biases")
-                    .and_then(Option::as_ref)
-                    .ok_or_else(|| ExpertManifestError::MissingShardTensor {
-                        tensor_name: format!("{layer_prefix}.switch_mlp.{projection_name}.biases"),
-                    })?;
-                validate_projection_quantization_geometry(
-                    projection_name,
-                    packed_source,
-                    scales_source,
-                    biases_source,
-                    projection_storage.quantization_bits,
-                    projection_storage.quantization_group_size,
-                )?;
-            }
-            QuantizationMode::Jangtq2Codebook => {
-                let scales_source = projection_sources
-                    .get("tq2_scales")
-                    .and_then(Option::as_ref)
-                    .ok_or_else(|| ExpertManifestError::MissingShardTensor {
-                        tensor_name: format!(
-                            "{layer_prefix}.switch_mlp.{projection_name}.tq2_scales"
-                        ),
-                    })?;
-                validate_projection_codebook_geometry(
-                    &projection_module_name,
-                    projection_name,
-                    packed_source,
-                    scales_source,
-                    projection_storage.quantization_bits,
-                    projection_quantization_profile,
-                    qwen3_5_config,
-                )?;
-            }
-            QuantizationMode::NativeBfloat16 => {}
-        }
-        for parameter_name in projection_storage.parameter_names {
-            let tensor_name =
-                format!("{layer_prefix}.switch_mlp.{projection_name}.{parameter_name}");
-            let tensor_source = projection_sources
-                .remove(*parameter_name)
-                .flatten()
-                .ok_or(ExpertManifestError::MissingShardTensor { tensor_name })?;
-            tensor_sources.push(tensor_source);
-        }
     }
-
-    let expert_capacities: std::collections::HashSet<usize> =
-        tensor_sources.iter().map(|s| s.expert_capacity).collect();
-    if expert_capacities.len() != 1 {
-        return Err(ExpertManifestError::InconsistentExpertCapacity {
-            found_capacities: expert_capacities.iter().copied().collect(),
-        });
-    }
-    let expert_capacity = expert_capacities.iter().next().copied().ok_or(
-        ExpertManifestError::InconsistentExpertCapacity {
-            found_capacities: Vec::new(),
-        },
-    )?;
-    let quantization_mode = layer_quantization_mode(&projection_quantization_modes);
-    Ok(QuantizedExpertLayerPlan {
-        layer_prefix: layer_prefix.to_owned(),
+    assemble_expert_layer_plan(
+        &plan_inputs,
         tensor_sources,
+        projection_quantization_modes,
         jangtq2_projection_rotations,
-        expert_capacity,
-        quantization_bits: match quantization_mode {
-            QuantizationMode::Affine => i32::try_from(qwen3_5_config.default_quantization_bits())
-                .map_err(|_| ExpertManifestError::InvalidBits)?,
-            QuantizationMode::NativeBfloat16 | QuantizationMode::Jangtq2Codebook => 0,
-        },
-        quantization_group_size: match quantization_mode {
-            QuantizationMode::Affine => {
-                i32::try_from(qwen3_5_config.default_quantization_group_size())
-                    .map_err(|_| ExpertManifestError::InvalidGroupSize)?
-            }
-            QuantizationMode::NativeBfloat16 | QuantizationMode::Jangtq2Codebook => 0,
-        },
-        quantization_mode,
-    })
+    )
 }
 
 pub(crate) struct ProjectionStorageContract {
@@ -535,3 +410,7 @@ fn validate_projection_codebook_geometry(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "quantized_expert_layer_plan_tests.rs"]
+mod quantized_expert_layer_plan_tests;
