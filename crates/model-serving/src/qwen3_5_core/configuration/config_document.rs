@@ -106,7 +106,6 @@ impl QuantizationConfigSource for Qwen3_5TextConfig {
 }
 
 impl Qwen3_5TextConfig {
-    #[expect(clippy::too_many_lines)]
     pub(super) fn validate(
         &self,
         feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
@@ -115,125 +114,18 @@ impl Qwen3_5TextConfig {
             Qwen3_5FeedForwardArchitecture::Dense => EXPECTED_DENSE_TEXT_MODEL_TYPE,
             Qwen3_5FeedForwardArchitecture::MixtureOfExperts => EXPECTED_MOE_TEXT_MODEL_TYPE,
         };
-        validate_exact_value(
-            "text_config.model_type",
-            &self.model_type,
-            expected_text_model_type,
-        )?;
-        validate_exact_value(
-            "text_config.hidden_act",
-            &self.hidden_act,
-            EXPECTED_HIDDEN_ACTIVATION,
-        )?;
+        validate_exact_text_values(self, expected_text_model_type)?;
+        // The rope-parameter contract is checked between the pinned wire tokens
+        // and the boolean flags so a config reporting both failures still
+        // surfaces the rope failure first, matching the original pass order.
         if let Some(rope_parameters) = &self.rope_parameters {
             rope_parameters.validate()?;
         }
-        validate_exact_boolean("text_config.attention_bias", self.attention_bias, false)?;
-        validate_exact_boolean("text_config.mlp_bias", self.mlp_bias, false)?;
-        validate_exact_boolean("text_config.norm_topk_prob", self.norm_topk_prob, true)?;
-        if let Some(mamba_ssm_dtype) = self.mamba_ssm_dtype.as_deref()
-            && !matches!(mamba_ssm_dtype, "bfloat16" | "float32")
-        {
-            return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
-                description: format!(
-                    "text_config.mamba_ssm_dtype contains unsupported dtype '{mamba_ssm_dtype}'"
-                ),
-            });
-        }
-        if self.hidden_size == 0
-            || self.num_hidden_layers == 0
-            || self.num_attention_heads == 0
-            || self.num_key_value_heads == 0
-            || self.head_dim == 0
-            || self.vocab_size == 0
-            || self.max_position_embeddings == 0
-            || self.linear_conv_kernel_dim == 0
-            || self.linear_num_key_heads == 0
-            || self.linear_num_value_heads == 0
-            || self.linear_key_head_dim == 0
-            || self.linear_value_head_dim == 0
-        {
-            return Err(Qwen3_5ConfigError::InvalidConfigValue {
-                description: "text_config numeric fields must be positive",
-            });
-        }
-        match feed_forward_architecture {
-            Qwen3_5FeedForwardArchitecture::Dense if self.intermediate_size == 0 => {
-                return Err(Qwen3_5ConfigError::InvalidConfigValue {
-                    description: "text_config numeric fields must be positive",
-                });
-            }
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts
-                if self.num_experts == 0
-                    || self.num_experts_per_tok == 0
-                    || self.moe_intermediate_size == 0
-                    || self.shared_expert_intermediate_size == 0 =>
-            {
-                return Err(Qwen3_5ConfigError::InvalidConfigValue {
-                    description: "text_config numeric fields must be positive",
-                });
-            }
-            _ => {}
-        }
-        if !self
-            .num_attention_heads
-            .is_multiple_of(self.num_key_value_heads)
-        {
-            return Err(Qwen3_5ConfigError::InvalidConfigValue {
-                description: "text_config.num_attention_heads must divide evenly by num_key_value_heads",
-            });
-        }
-        if matches!(
-            feed_forward_architecture,
-            Qwen3_5FeedForwardArchitecture::MixtureOfExperts
-        ) && self.num_experts_per_tok > self.num_experts
-        {
-            return Err(Qwen3_5ConfigError::InvalidConfigValue {
-                description: "text_config.num_experts_per_tok must not exceed num_experts",
-            });
-        }
-        if matches!(
-            feed_forward_architecture,
-            Qwen3_5FeedForwardArchitecture::Dense
-        ) && (self.num_experts != 0
-            || self.num_experts_per_tok != 0
-            || self.moe_intermediate_size != 0
-            || self.shared_expert_intermediate_size != 0)
-        {
-            return Err(Qwen3_5ConfigError::InvalidConfigValue {
-                description: "dense Qwen3.5 text config must not declare sparse-expert dimensions",
-            });
-        }
-        let maximum_mlx_shape_dimension = i32::MAX as u64;
-        if [
-            self.linear_conv_kernel_dim,
-            self.linear_num_value_heads,
-            self.linear_value_head_dim,
-            self.linear_key_head_dim,
-        ]
-        .into_iter()
-        .any(|shape_dimension| u64::from(shape_dimension) > maximum_mlx_shape_dimension)
-            || self.linear_convolution_state_dimension() > maximum_mlx_shape_dimension
-        {
-            return Err(Qwen3_5ConfigError::InvalidConfigValue {
-                description: "linear-attention dimensions must fit the MLX signed 32-bit shape range",
-            });
-        }
-        if self.layer_types.len() != self.num_hidden_layers as usize {
-            return Err(Qwen3_5ConfigError::LayerTypeCountMismatch {
-                actual_layer_type_count: self.layer_types.len(),
-                expected_layer_type_count: self.num_hidden_layers as usize,
-            });
-        }
-        for layer_type in &self.layer_types {
-            if !matches!(layer_type.as_str(), "full_attention" | "linear_attention") {
-                return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
-                    description: format!(
-                        "text_config.layer_types contains unsupported attention type '{layer_type}'"
-                    ),
-                });
-            }
-        }
+        validate_boolean_flags_and_mamba_dtype(self)?;
+        validate_numeric_fields_are_positive(self, feed_forward_architecture)?;
+        validate_attention_and_expert_head_counts(self, feed_forward_architecture)?;
+        validate_linear_attention_shape_bounds(self)?;
+        validate_layer_types(self)?;
         Ok(())
     }
 
@@ -246,6 +138,184 @@ impl Qwen3_5TextConfig {
                     .saturating_mul(u64::from(self.linear_value_head_dim)),
             )
     }
+}
+
+/// Rejects text fields that must exactly equal the wire tokens this executor
+/// implements; the expected model type depends on the declared architecture.
+fn validate_exact_text_values(
+    text_config: &Qwen3_5TextConfig,
+    expected_text_model_type: &'static str,
+) -> Result<(), Qwen3_5ConfigError> {
+    validate_exact_value(
+        "text_config.model_type",
+        &text_config.model_type,
+        expected_text_model_type,
+    )?;
+    validate_exact_value(
+        "text_config.hidden_act",
+        &text_config.hidden_act,
+        EXPECTED_HIDDEN_ACTIVATION,
+    )
+}
+
+/// Checks the boolean implementation contracts and the mamba SSM dtype
+/// allowlist; both are pinned because the execution kernels support no
+/// alternatives.
+fn validate_boolean_flags_and_mamba_dtype(
+    text_config: &Qwen3_5TextConfig,
+) -> Result<(), Qwen3_5ConfigError> {
+    validate_exact_boolean(
+        "text_config.attention_bias",
+        text_config.attention_bias,
+        false,
+    )?;
+    validate_exact_boolean("text_config.mlp_bias", text_config.mlp_bias, false)?;
+    validate_exact_boolean(
+        "text_config.norm_topk_prob",
+        text_config.norm_topk_prob,
+        true,
+    )?;
+    if let Some(mamba_ssm_dtype) = text_config.mamba_ssm_dtype.as_deref()
+        && !matches!(mamba_ssm_dtype, "bfloat16" | "float32")
+    {
+        return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
+            description: format!(
+                "text_config.mamba_ssm_dtype contains unsupported dtype '{mamba_ssm_dtype}'"
+            ),
+        });
+    }
+    Ok(())
+}
+
+/// Rejects zero-valued execution dimensions. The shared text-config fields are
+/// checked first, then each feed-forward family adds its own required-positive
+/// fields, so the shared failure is reported even when a family field is also
+/// zero.
+fn validate_numeric_fields_are_positive(
+    text_config: &Qwen3_5TextConfig,
+    feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+) -> Result<(), Qwen3_5ConfigError> {
+    if text_config.hidden_size == 0
+        || text_config.num_hidden_layers == 0
+        || text_config.num_attention_heads == 0
+        || text_config.num_key_value_heads == 0
+        || text_config.head_dim == 0
+        || text_config.vocab_size == 0
+        || text_config.max_position_embeddings == 0
+        || text_config.linear_conv_kernel_dim == 0
+        || text_config.linear_num_key_heads == 0
+        || text_config.linear_num_value_heads == 0
+        || text_config.linear_key_head_dim == 0
+        || text_config.linear_value_head_dim == 0
+    {
+        return Err(Qwen3_5ConfigError::InvalidConfigValue {
+            description: "text_config numeric fields must be positive",
+        });
+    }
+    match feed_forward_architecture {
+        Qwen3_5FeedForwardArchitecture::Dense if text_config.intermediate_size == 0 => {
+            return Err(Qwen3_5ConfigError::InvalidConfigValue {
+                description: "text_config numeric fields must be positive",
+            });
+        }
+        Qwen3_5FeedForwardArchitecture::MixtureOfExperts
+            if text_config.num_experts == 0
+                || text_config.num_experts_per_tok == 0
+                || text_config.moe_intermediate_size == 0
+                || text_config.shared_expert_intermediate_size == 0 =>
+        {
+            return Err(Qwen3_5ConfigError::InvalidConfigValue {
+                description: "text_config numeric fields must be positive",
+            });
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// Checks head-count divisibility and the per-family expert-dimension
+/// invariants: sparse routing must stay within the expert count, and a dense
+/// checkpoint must not carry leftover sparse-expert dimensions.
+fn validate_attention_and_expert_head_counts(
+    text_config: &Qwen3_5TextConfig,
+    feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
+) -> Result<(), Qwen3_5ConfigError> {
+    if !text_config
+        .num_attention_heads
+        .is_multiple_of(text_config.num_key_value_heads)
+    {
+        return Err(Qwen3_5ConfigError::InvalidConfigValue {
+            description: "text_config.num_attention_heads must divide evenly by num_key_value_heads",
+        });
+    }
+    if matches!(
+        feed_forward_architecture,
+        Qwen3_5FeedForwardArchitecture::MixtureOfExperts
+    ) && text_config.num_experts_per_tok > text_config.num_experts
+    {
+        return Err(Qwen3_5ConfigError::InvalidConfigValue {
+            description: "text_config.num_experts_per_tok must not exceed num_experts",
+        });
+    }
+    if matches!(
+        feed_forward_architecture,
+        Qwen3_5FeedForwardArchitecture::Dense
+    ) && (text_config.num_experts != 0
+        || text_config.num_experts_per_tok != 0
+        || text_config.moe_intermediate_size != 0
+        || text_config.shared_expert_intermediate_size != 0)
+    {
+        return Err(Qwen3_5ConfigError::InvalidConfigValue {
+            description: "dense Qwen3.5 text config must not declare sparse-expert dimensions",
+        });
+    }
+    Ok(())
+}
+
+/// MLX shape dimensions are signed 32-bit, so each individual linear-attention
+/// dimension and their derived convolution state width must fit that range;
+/// the state width can overflow even when every individual dimension fits.
+fn validate_linear_attention_shape_bounds(
+    text_config: &Qwen3_5TextConfig,
+) -> Result<(), Qwen3_5ConfigError> {
+    let maximum_mlx_shape_dimension = i32::MAX as u64;
+    if [
+        text_config.linear_conv_kernel_dim,
+        text_config.linear_num_value_heads,
+        text_config.linear_value_head_dim,
+        text_config.linear_key_head_dim,
+    ]
+    .into_iter()
+    .any(|shape_dimension| u64::from(shape_dimension) > maximum_mlx_shape_dimension)
+        || text_config.linear_convolution_state_dimension() > maximum_mlx_shape_dimension
+    {
+        return Err(Qwen3_5ConfigError::InvalidConfigValue {
+            description: "linear-attention dimensions must fit the MLX signed 32-bit shape range",
+        });
+    }
+    Ok(())
+}
+
+/// Every decoder layer must declare exactly one supported attention kind, and
+/// the declaration count must match the decoder depth; the count mismatch is
+/// reported before any unsupported entry.
+fn validate_layer_types(text_config: &Qwen3_5TextConfig) -> Result<(), Qwen3_5ConfigError> {
+    if text_config.layer_types.len() != text_config.num_hidden_layers as usize {
+        return Err(Qwen3_5ConfigError::LayerTypeCountMismatch {
+            actual_layer_type_count: text_config.layer_types.len(),
+            expected_layer_type_count: text_config.num_hidden_layers as usize,
+        });
+    }
+    for layer_type in &text_config.layer_types {
+        if !matches!(layer_type.as_str(), "full_attention" | "linear_attention") {
+            return Err(Qwen3_5ConfigError::InvalidConfigValueDynamic {
+                description: format!(
+                    "text_config.layer_types contains unsupported attention type '{layer_type}'"
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -283,3 +353,7 @@ impl Qwen3_5RopeParameters {
 const fn default_true() -> bool {
     true
 }
+
+#[cfg(test)]
+#[path = "config_document_tests.rs"]
+mod config_document_tests;
