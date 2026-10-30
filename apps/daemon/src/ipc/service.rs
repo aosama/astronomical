@@ -138,45 +138,23 @@ pub async fn start_daemon_ipc_service(
     })
 }
 
-#[expect(clippy::too_many_lines)]
 async fn handle_streaming_daemon_request(
     generation_context: DaemonIpcGenerationContext,
     daemon_attribution_log: DaemonPerformanceAttributionLog,
     daemon_request: DaemonRequest,
-    mut streaming_response_writer: StreamingResponseWriter,
+    streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
     match daemon_request {
         DaemonRequest::Handshake => {
-            let handshake_response = DaemonResponse::HandshakeAccepted {
-                protocol_version: DAEMON_PROTOCOL_VERSION,
-                application_name: DAEMON_APPLICATION_NAME.to_owned(),
-            };
-            send_attributed_streaming_response(
-                &daemon_attribution_log,
-                DaemonPerformanceOperation::DaemonIpcHandshake,
-                &mut streaming_response_writer,
-                &handshake_response,
-            )
-            .await?;
-            streaming_response_writer.close().await
+            answer_handshake(&daemon_attribution_log, streaming_response_writer).await
         }
         DaemonRequest::Status => {
-            let health_snapshot = generation_context.executor.worker_health_snapshot();
-            let status_response = DaemonResponse::Status {
-                worker_status: health_snapshot.status.into(),
-                ready_model_id: health_snapshot.ready_model_id,
-                default_model_id: Some(effective_default_model_id(
-                    &generation_context.instance_paths,
-                )),
-            };
-            send_attributed_streaming_response(
+            answer_status(
+                &generation_context,
                 &daemon_attribution_log,
-                DaemonPerformanceOperation::DaemonIpcStatus,
-                &mut streaming_response_writer,
-                &status_response,
+                streaming_response_writer,
             )
-            .await?;
-            streaming_response_writer.close().await
+            .await
         }
         DaemonRequest::ChatGenerate {
             model,
@@ -184,30 +162,18 @@ async fn handle_streaming_daemon_request(
             settings,
             schema_json,
         } => {
-            daemon_attribution_log
-                .measure_async_operation_best_effort(
-                    DaemonPerformanceOperation::DaemonIpcChatGenerate,
-                    || {
-                        super::chat::stream_chat_generation(
-                            &generation_context,
-                            super::chat::DaemonIpcChatRequest {
-                                model,
-                                messages,
-                                settings,
-                                schema_json,
-                            },
-                            streaming_response_writer,
-                        )
-                    },
-                    |stream_outcome| {
-                        if stream_outcome.is_ok() {
-                            DaemonPerformanceMeasurement::success()
-                        } else {
-                            DaemonPerformanceMeasurement::failure()
-                        }
-                    },
-                )
-                .await
+            stream_chat_generate(
+                &generation_context,
+                &daemon_attribution_log,
+                super::chat::DaemonIpcChatRequest {
+                    model,
+                    messages,
+                    settings,
+                    schema_json,
+                },
+                streaming_response_writer,
+            )
+            .await
         }
         DaemonRequest::EmbedGenerate {
             model,
@@ -267,6 +233,77 @@ async fn handle_streaming_daemon_request(
             .await
         }
     }
+}
+
+/// Answers the IPC handshake with the daemon's protocol version.
+async fn answer_handshake(
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
+    mut streaming_response_writer: StreamingResponseWriter,
+) -> Result<(), DaemonTransportError> {
+    let handshake_response = DaemonResponse::HandshakeAccepted {
+        protocol_version: DAEMON_PROTOCOL_VERSION,
+        application_name: DAEMON_APPLICATION_NAME.to_owned(),
+    };
+    send_attributed_streaming_response(
+        daemon_attribution_log,
+        DaemonPerformanceOperation::DaemonIpcHandshake,
+        &mut streaming_response_writer,
+        &handshake_response,
+    )
+    .await?;
+    streaming_response_writer.close().await
+}
+
+/// Answers the status request from the live worker health snapshot.
+async fn answer_status(
+    generation_context: &DaemonIpcGenerationContext,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
+    mut streaming_response_writer: StreamingResponseWriter,
+) -> Result<(), DaemonTransportError> {
+    let health_snapshot = generation_context.executor.worker_health_snapshot();
+    let status_response = DaemonResponse::Status {
+        worker_status: health_snapshot.status.into(),
+        ready_model_id: health_snapshot.ready_model_id,
+        default_model_id: Some(effective_default_model_id(
+            &generation_context.instance_paths,
+        )),
+    };
+    send_attributed_streaming_response(
+        daemon_attribution_log,
+        DaemonPerformanceOperation::DaemonIpcStatus,
+        &mut streaming_response_writer,
+        &status_response,
+    )
+    .await?;
+    streaming_response_writer.close().await
+}
+
+/// Streams one chat generation under its attributed measurement region.
+async fn stream_chat_generate(
+    generation_context: &DaemonIpcGenerationContext,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
+    chat_request: super::chat::DaemonIpcChatRequest,
+    streaming_response_writer: StreamingResponseWriter,
+) -> Result<(), DaemonTransportError> {
+    daemon_attribution_log
+        .measure_async_operation_best_effort(
+            DaemonPerformanceOperation::DaemonIpcChatGenerate,
+            || {
+                super::chat::stream_chat_generation(
+                    generation_context,
+                    chat_request,
+                    streaming_response_writer,
+                )
+            },
+            |stream_outcome| {
+                if stream_outcome.is_ok() {
+                    DaemonPerformanceMeasurement::success()
+                } else {
+                    DaemonPerformanceMeasurement::failure()
+                }
+            },
+        )
+        .await
 }
 
 /// The model ID CLI verbs fall back to: the user-configured default model,

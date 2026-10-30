@@ -1,7 +1,10 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use astronomical_ipc_protocol::{RequestId, WorkerEvent, WorkerRuntimeFeatureConfiguration};
+use astronomical_ipc_protocol::{
+    ExpertMemoryMode, RequestId, WorkerEvent, WorkerExpertResidencySnapshot,
+    WorkerMlxMemorySnapshot, WorkerRuntimeFeatureConfiguration,
+};
 use tokio::time::timeout;
 
 use crate::serving::chat_generation_executor;
@@ -209,7 +212,6 @@ fn publish_recovery_acknowledgement(
     Ok(())
 }
 
-#[expect(clippy::too_many_lines)]
 async fn cancel_worker_request(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
@@ -224,114 +226,14 @@ async fn cancel_worker_request(
                 .next_event()
                 .await?
                 .ok_or(WorkerControlError::WorkerEventStreamClosed)?;
-            match worker_event {
-                WorkerEvent::Output {
-                    request_id: output_request_id,
-                    ..
-                } if output_request_id == request_id => {}
-                WorkerEvent::PrefillProgress {
-                    request_id: prefill_request_id,
-                    ..
-                } if prefill_request_id == request_id => {}
-                WorkerEvent::GenerationPreparationStarted {
-                    request_id: preparation_request_id,
-                    ..
-                } if preparation_request_id == request_id => {}
-                WorkerEvent::GenerationProgress {
-                    request_id: progress_request_id,
-                    ..
-                } if progress_request_id == request_id => {}
-                WorkerEvent::FirstDecodeCompleted {
-                    request_id: decode_request_id,
-                    ..
-                } if decode_request_id == request_id => {}
-                WorkerEvent::PromptWorkReuse {
-                    request_id: reuse_request_id,
-                    ..
-                } if reuse_request_id == request_id => {}
-                WorkerEvent::ImageGenerationProgress {
-                    request_id: image_request_id,
-                    ..
-                } if expects_image_finalization && image_request_id == request_id => {}
-                WorkerEvent::ImageGenerationCompleted {
-                    request_id: image_request_id,
-                    ..
-                } if expects_image_finalization && image_request_id == request_id => {}
-                WorkerEvent::ImageGenerationFailed {
-                    request_id: image_request_id,
-                    ..
-                } if expects_image_finalization && image_request_id == request_id => {}
-                WorkerEvent::ImageGenerationFinalized {
-                    request_id: image_request_id,
-                    mlx_memory_snapshot,
-                    ..
-                } if expects_image_finalization && image_request_id == request_id => {
-                    crate::worker::image_event::publish_image_finalized_memory_snapshot(
-                        health_snapshot,
-                        mlx_memory_snapshot,
-                    )?;
-                    return Ok(());
-                }
-                WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
-                    publish_expert_memory_mode(health_snapshot, expert_memory_mode);
-                }
-                WorkerEvent::GenerationFinalized {
-                    expert_memory_mode,
-                    mlx_memory_snapshot,
-                    expert_residency,
-                    ..
-                } => {
-                    if let Some(expert_memory_mode) = expert_memory_mode {
-                        publish_expert_memory_mode(health_snapshot, expert_memory_mode);
-                    }
-                    if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
-                        publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
-                    } else {
-                        clear_latest_mlx_memory_snapshot(health_snapshot);
-                    }
-                    if let Some(expert_residency) = expert_residency {
-                        crate::worker::health::publish_worker_expert_residency(
-                            health_snapshot,
-                            expert_residency,
-                        );
-                    }
-                }
-                WorkerEvent::PersistentPromptCacheStats { .. } => {
-                    // Cache publication can finish after the client drops the
-                    // stream. Keep the worker reusable and record the telemetry.
-                    publish_persistent_prompt_cache_stats(health_snapshot, worker_event);
-                }
-                WorkerEvent::MlxMemorySample {
-                    mlx_memory_snapshot,
-                    expert_residency,
-                } => {
-                    if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
-                        publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
-                    } else {
-                        clear_latest_mlx_memory_snapshot(health_snapshot);
-                    }
-                    if let Some(expert_residency) = expert_residency {
-                        crate::worker::health::publish_worker_expert_residency(
-                            health_snapshot,
-                            expert_residency,
-                        );
-                    }
-                }
-                WorkerEvent::Completed {
-                    request_id: completed_request_id,
-                    ..
-                } if completed_request_id == request_id => return Ok(()),
-                WorkerEvent::Failed {
-                    request_id: failed_request_id,
-                    ..
-                } if failed_request_id == request_id => return Ok(()),
-                unexpected_worker_event => {
-                    return Err(WorkerControlError::UnexpectedCancellationEvent {
-                        request_id: request_id.value(),
-                        unexpected_worker_event_summary: unexpected_worker_event
-                            .diagnostic_summary(),
-                    });
-                }
+            match react_to_cancellation_event(
+                health_snapshot,
+                worker_event,
+                request_id,
+                expects_image_finalization,
+            )? {
+                CancellationEventReaction::KeepDraining => {}
+                CancellationEventReaction::Acknowledged => return Ok(()),
             }
         }
     })
@@ -339,6 +241,146 @@ async fn cancel_worker_request(
     .map_err(|_| WorkerControlError::CancellationAckTimeout {
         cancellation_timeout_millis: cancellation_acknowledgement_timeout.as_millis(),
     })?
+}
+
+/// What the cancellation drain does with one worker event: keep waiting for
+/// the acknowledgement, or stop because it arrived.
+enum CancellationEventReaction {
+    KeepDraining,
+    Acknowledged,
+}
+
+/// Publishes the memory/residency facts one worker event carries: the
+/// expert-mode transition, the latest snapshot (or its clearing), and the
+/// expert-residency table.
+fn publish_observed_memory_facts(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    expert_memory_mode: Option<ExpertMemoryMode>,
+    mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    expert_residency: Option<WorkerExpertResidencySnapshot>,
+) {
+    if let Some(expert_memory_mode) = expert_memory_mode {
+        publish_expert_memory_mode(health_snapshot, expert_memory_mode);
+    }
+    if let Some(mlx_memory_snapshot) = mlx_memory_snapshot {
+        publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
+    } else {
+        clear_latest_mlx_memory_snapshot(health_snapshot);
+    }
+    if let Some(expert_residency) = expert_residency {
+        crate::worker::health::publish_worker_expert_residency(health_snapshot, expert_residency);
+    }
+}
+
+/// Classifies one worker event during the cancellation drain: request-scoped
+/// progress events are drained silently, health-bearing events publish their
+/// facts, the request's terminal/finalization event acknowledges the
+/// cancellation, and anything else is a protocol violation.
+fn react_to_cancellation_event(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    worker_event: WorkerEvent,
+    request_id: RequestId,
+    expects_image_finalization: bool,
+) -> Result<CancellationEventReaction, WorkerControlError> {
+    match worker_event {
+        WorkerEvent::Output {
+            request_id: output_request_id,
+            ..
+        } if output_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
+        WorkerEvent::PrefillProgress {
+            request_id: prefill_request_id,
+            ..
+        } if prefill_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
+        WorkerEvent::GenerationPreparationStarted {
+            request_id: preparation_request_id,
+            ..
+        } if preparation_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
+        WorkerEvent::GenerationProgress {
+            request_id: progress_request_id,
+            ..
+        } if progress_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
+        WorkerEvent::FirstDecodeCompleted {
+            request_id: decode_request_id,
+            ..
+        } if decode_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
+        WorkerEvent::PromptWorkReuse {
+            request_id: reuse_request_id,
+            ..
+        } if reuse_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
+        WorkerEvent::ImageGenerationProgress {
+            request_id: image_request_id,
+            ..
+        }
+        | WorkerEvent::ImageGenerationCompleted {
+            request_id: image_request_id,
+            ..
+        }
+        | WorkerEvent::ImageGenerationFailed {
+            request_id: image_request_id,
+            ..
+        } if expects_image_finalization && image_request_id == request_id => {
+            Ok(CancellationEventReaction::KeepDraining)
+        }
+        WorkerEvent::ImageGenerationFinalized {
+            request_id: image_request_id,
+            mlx_memory_snapshot,
+            ..
+        } if expects_image_finalization && image_request_id == request_id => {
+            crate::worker::image_event::publish_image_finalized_memory_snapshot(
+                health_snapshot,
+                mlx_memory_snapshot,
+            )?;
+            Ok(CancellationEventReaction::Acknowledged)
+        }
+        WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
+            publish_expert_memory_mode(health_snapshot, expert_memory_mode);
+            Ok(CancellationEventReaction::KeepDraining)
+        }
+        WorkerEvent::GenerationFinalized {
+            expert_memory_mode,
+            mlx_memory_snapshot,
+            expert_residency,
+            ..
+        } => {
+            publish_observed_memory_facts(
+                health_snapshot,
+                expert_memory_mode,
+                mlx_memory_snapshot,
+                expert_residency,
+            );
+            Ok(CancellationEventReaction::KeepDraining)
+        }
+        WorkerEvent::PersistentPromptCacheStats { .. } => {
+            // Cache publication can finish after the client drops the
+            // stream. Keep the worker reusable and record the telemetry.
+            publish_persistent_prompt_cache_stats(health_snapshot, worker_event);
+            Ok(CancellationEventReaction::KeepDraining)
+        }
+        WorkerEvent::MlxMemorySample {
+            mlx_memory_snapshot,
+            expert_residency,
+        } => {
+            publish_observed_memory_facts(
+                health_snapshot,
+                None,
+                mlx_memory_snapshot,
+                expert_residency,
+            );
+            Ok(CancellationEventReaction::KeepDraining)
+        }
+        WorkerEvent::Completed {
+            request_id: completed_request_id,
+            ..
+        } if completed_request_id == request_id => Ok(CancellationEventReaction::Acknowledged),
+        WorkerEvent::Failed {
+            request_id: failed_request_id,
+            ..
+        } if failed_request_id == request_id => Ok(CancellationEventReaction::Acknowledged),
+        unexpected_worker_event => Err(WorkerControlError::UnexpectedCancellationEvent {
+            request_id: request_id.value(),
+            unexpected_worker_event_summary: unexpected_worker_event.diagnostic_summary(),
+        }),
+    }
 }
 
 pub(in crate::worker) async fn contain_worker_failure(
