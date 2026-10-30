@@ -67,7 +67,6 @@ pub(super) struct PreparedForward {
     pub(super) sequence_length: usize,
 }
 
-#[allow(clippy::too_many_lines)]
 pub(super) fn prepare_forward(
     runtime: &MlxRuntime,
     weights: &QwenImage21TransformerWeights,
@@ -88,6 +87,69 @@ pub(super) fn prepare_forward(
         .sum();
 
     // 1. Project both streams into the hidden width.
+    let projected_streams = project_input_streams(runtime, weights, request)?;
+
+    // 2. Joint sequence: slots expand to 2×2 latent-token groups, text copies one-to-one.
+    let slot_mask = joint_slot_mask(request.vlm_image_mask, target_tokens);
+    let joint_mask = expand_slots_to_joint_tokens(&slot_mask);
+    let joint_hidden_states = assemble_joint_sequence(
+        runtime,
+        &projected_streams.image_hidden,
+        &projected_streams.text_hidden,
+        &slot_mask,
+        batch,
+        image_token_count,
+    )?;
+    let sequence_length = joint_mask.len();
+
+    // 3. Rotary tables from the unit-tested pure module, uploaded and pair-repeated.
+    let rope_tables = build_rope_tables(runtime, rope, request, &joint_mask)?;
+
+    // 4. Attention structure: prefix segments and their additive masks.
+    let attention_structure = build_attention_structure(runtime, request, &joint_mask)?;
+
+    // 5. Timestep conditioning: the sinusoid rows plus the extra `t = 0` row for
+    // `causal_condition`, then the two projection layers.
+    let conditioning = build_timestep_conditioning(runtime, weights, request, batch)?;
+
+    // 6. Shared modulation and the AdaLN output scale, row-selected per token.
+    let geometry = SequenceGeometry {
+        batch,
+        prefix_len: attention_structure.prefix_len,
+        sequence_length,
+    };
+    let modulation_scales = build_modulation_scales(runtime, weights, &conditioning, &geometry)?;
+
+    Ok(PreparedForward {
+        joint_hidden_states,
+        rope_cosines: rope_tables.cosines,
+        rope_sines: rope_tables.sines,
+        segments: attention_structure.segments,
+        segment_masks: attention_structure.segment_masks,
+        attention_scale: mlx_math::attention_scale(HEAD_WIDTH)?,
+        attention_one_plus_scale: modulation_scales.attention_one_plus_scale,
+        attention_gate: modulation_scales.attention_gate,
+        feed_forward_one_plus_scale: modulation_scales.feed_forward_one_plus_scale,
+        feed_forward_gate: modulation_scales.feed_forward_gate,
+        head_one_plus_scale: modulation_scales.head_one_plus_scale,
+        prefix_len: attention_structure.prefix_len,
+        batch,
+        sequence_length,
+    })
+}
+
+/// One hidden-width projection per input stream: latents through `img_in`, text
+/// through the reference's norm → `txt_in` → gelu → `txt_out` stack.
+struct ProjectedStreams {
+    image_hidden: MlxArray,
+    text_hidden: MlxArray,
+}
+
+fn project_input_streams(
+    runtime: &MlxRuntime,
+    weights: &QwenImage21TransformerWeights,
+    request: &QwenImage21TransformerRequest<'_>,
+) -> Result<ProjectedStreams, QwenImage21EngineError> {
     let image_hidden = weights.img_in.forward(runtime, request.packed_latents)?;
     let text_normalized = mlx_math::fp32_zero_center_rms_norm(
         runtime,
@@ -98,31 +160,45 @@ pub(super) fn prepare_forward(
     let text_projected = weights.txt_in_layer.forward(runtime, &text_normalized)?;
     let text_activated = runtime.gelu_tanh(&text_projected)?;
     let text_hidden = weights.txt_out_layer.forward(runtime, &text_activated)?;
+    Ok(ProjectedStreams {
+        image_hidden,
+        text_hidden,
+    })
+}
 
-    // 2. Joint sequence: slots expand to 2×2 latent-token groups, text copies one-to-one.
-    let mut slot_mask = request.vlm_image_mask.to_vec();
+/// Every vision-language image slot stands for a 2×2 group of latent tokens, so
+/// the target contributes `target_tokens / IMG_TOKENS_PER_SLOT` extra slots.
+fn joint_slot_mask(vlm_image_mask: &[bool], target_tokens: usize) -> Vec<bool> {
+    let mut slot_mask = vlm_image_mask.to_vec();
     slot_mask.extend(std::iter::repeat_n(
         true,
         target_tokens / IMG_TOKENS_PER_SLOT,
     ));
-    let joint_mask: Vec<bool> = slot_mask
+    slot_mask
+}
+
+fn expand_slots_to_joint_tokens(slot_mask: &[bool]) -> Vec<bool> {
+    slot_mask
         .iter()
         .flat_map(|&is_image| {
             std::iter::repeat_n(is_image, if is_image { IMG_TOKENS_PER_SLOT } else { 1 })
         })
-        .collect();
-    let joint_hidden_states = assemble_joint_sequence(
-        runtime,
-        &image_hidden,
-        &text_hidden,
-        &slot_mask,
-        batch,
-        image_token_count,
-    )?;
-    let sequence_length = joint_mask.len();
+        .collect()
+}
 
-    // 3. Rotary tables from the unit-tested pure module, uploaded and pair-repeated.
-    let (cosine_values, sine_values) = rope.frequencies(request.img_shapes, &joint_mask);
+struct RopeTables {
+    cosines: MlxArray,
+    sines: MlxArray,
+}
+
+fn build_rope_tables(
+    runtime: &MlxRuntime,
+    rope: &QwenImage21Rope,
+    request: &QwenImage21TransformerRequest<'_>,
+    joint_mask: &[bool],
+) -> Result<RopeTables, QwenImage21EngineError> {
+    let sequence_length = joint_mask.len();
+    let (cosine_values, sine_values) = rope.frequencies(request.img_shapes, joint_mask);
     let rope_half_width = (HEAD_WIDTH / 2) as i32;
     let rope_cosines =
         runtime.array_from_f32(&cosine_values, &[sequence_length as i32, rope_half_width])?;
@@ -130,10 +206,27 @@ pub(super) fn prepare_forward(
     let rope_sines =
         runtime.array_from_f32(&sine_values, &[sequence_length as i32, rope_half_width])?;
     let rope_sines = runtime.repeat_axis(&rope_sines, 2, 1)?;
+    Ok(RopeTables {
+        cosines: rope_cosines,
+        sines: rope_sines,
+    })
+}
 
-    // 4. Attention structure: prefix segments and their additive masks.
-    let image_ids = mask::build_image_ids(request.img_shapes, &joint_mask);
-    let target_token_mask = modulation::build_target_token_mask(request.img_shapes, &joint_mask);
+/// The prefix segments and additive masks every block attends through, plus the
+/// prefix length the KV cache and modulation row selection share.
+struct AttentionStructure {
+    segments: Vec<AttentionSegment>,
+    segment_masks: Vec<MlxArray>,
+    prefix_len: usize,
+}
+
+fn build_attention_structure(
+    runtime: &MlxRuntime,
+    request: &QwenImage21TransformerRequest<'_>,
+    joint_mask: &[bool],
+) -> Result<AttentionStructure, QwenImage21EngineError> {
+    let image_ids = mask::build_image_ids(request.img_shapes, joint_mask);
+    let target_token_mask = modulation::build_target_token_mask(request.img_shapes, joint_mask);
     let prefix_len = kv_cache::prefix_length(&target_token_mask);
     let segments: Vec<AttentionSegment> = mask::prefix_segments(&image_ids, prefix_len)
         .into_iter()
@@ -145,19 +238,47 @@ pub(super) fn prepare_forward(
         })
         .collect();
     let segment_masks = build_segment_masks(runtime, &segments)?;
+    Ok(AttentionStructure {
+        segments,
+        segment_masks,
+        prefix_len,
+    })
+}
 
-    // 5. Timestep conditioning: the sinusoid rows plus the extra `t = 0` row for
-    // `causal_condition`, then the two projection layers.
+/// The batch/prefix/sequence triplet every modulation row selection needs.
+struct SequenceGeometry {
+    batch: usize,
+    prefix_len: usize,
+    sequence_length: usize,
+}
+
+/// The per-sample sinusoid rows followed by the trailing `t = 0` row that
+/// `causal_condition` reads.
+fn timestep_embedding_rows(
+    sinusoidal: &SinusoidalTimesteps,
+    timesteps: &[f32],
+    batch: usize,
+) -> Vec<f32> {
+    let mut timestep_rows = Vec::with_capacity((batch + 1) * TIMESTEP_EMBEDDING_WIDTH);
+    for &timestep in timesteps {
+        timestep_rows.extend(sinusoidal.embed(f64::from(timestep)));
+    }
+    timestep_rows.extend(sinusoidal.embed(0.0));
+    timestep_rows
+}
+
+fn build_timestep_conditioning(
+    runtime: &MlxRuntime,
+    weights: &QwenImage21TransformerWeights,
+    request: &QwenImage21TransformerRequest<'_>,
+    batch: usize,
+) -> Result<MlxArray, QwenImage21EngineError> {
     let sinusoidal = SinusoidalTimesteps::new(
         TIMESTEP_EMBEDDING_WIDTH,
         SINUSOIDAL_MAX_PERIOD,
         SINUSOIDAL_TIME_FACTOR,
     );
-    let mut timestep_rows = Vec::with_capacity((batch + 1) * TIMESTEP_EMBEDDING_WIDTH);
-    for &timestep in request.timesteps {
-        timestep_rows.extend(sinusoidal.embed(f64::from(timestep)));
-    }
-    timestep_rows.extend(sinusoidal.embed(0.0));
+    let timestep_rows = timestep_embedding_rows(&sinusoidal, request.timesteps, batch);
     let modulation_rows = (batch + 1) as i32;
     let timestep_embeddings = runtime.array_from_f32(
         &timestep_rows,
@@ -169,18 +290,35 @@ pub(super) fn prepare_forward(
         .time_embed_linear_1
         .forward(runtime, &timestep_embeddings)?;
     let timestep_activated = runtime.silu(&timestep_projected)?;
-    let conditioning = weights
+    weights
         .time_embed_linear_2
-        .forward(runtime, &timestep_activated)?;
+        .forward(runtime, &timestep_activated)
+}
 
-    // 6. Shared modulation and the AdaLN output scale, row-selected per token.
+struct ModulationScales {
+    attention_one_plus_scale: MlxArray,
+    attention_gate: MlxArray,
+    feed_forward_one_plus_scale: MlxArray,
+    feed_forward_gate: MlxArray,
+    head_one_plus_scale: MlxArray,
+}
+
+fn build_modulation_scales(
+    runtime: &MlxRuntime,
+    weights: &QwenImage21TransformerWeights,
+    conditioning: &MlxArray,
+    geometry: &SequenceGeometry,
+) -> Result<ModulationScales, QwenImage21EngineError> {
     let modulation = weights
         .modulation
-        .forward(runtime, &runtime.silu(&conditioning)?)?;
+        .forward(runtime, &runtime.silu(conditioning)?)?;
     let head_scale = weights
         .norm_out_linear
-        .forward(runtime, &runtime.silu(&conditioning)?)?;
+        .forward(runtime, &runtime.silu(conditioning)?)?;
     let modulation_width = HIDDEN_WIDTH;
+    let batch = geometry.batch;
+    let prefix_len = geometry.prefix_len;
+    let sequence_length = geometry.sequence_length;
     let attention_one_plus_scale = selected_one_plus_scale(
         runtime,
         &modulation,
@@ -226,22 +364,12 @@ pub(super) fn prepare_forward(
         prefix_len,
         sequence_length,
     )?;
-
-    Ok(PreparedForward {
-        joint_hidden_states,
-        rope_cosines,
-        rope_sines,
-        segments,
-        segment_masks,
-        attention_scale: mlx_math::attention_scale(HEAD_WIDTH)?,
+    Ok(ModulationScales {
         attention_one_plus_scale,
         attention_gate,
         feed_forward_one_plus_scale,
         feed_forward_gate,
         head_one_plus_scale,
-        prefix_len,
-        batch,
-        sequence_length,
     })
 }
 
@@ -470,3 +598,7 @@ fn build_segment_masks(
     }
     Ok(masks)
 }
+
+#[cfg(test)]
+#[path = "preparation_tests.rs"]
+mod preparation_tests;
