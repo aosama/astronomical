@@ -342,3 +342,227 @@ fn should_surface_an_overshoot_note_when_the_floor_pushes_past_the_target() {
 
     assert!(note.is_some_and(|text| text.contains("+32%")));
 }
+
+#[test]
+fn should_zero_every_figure_in_the_empty_result_and_keep_the_target() {
+    let empty_result = empty_allocation_result(&AllocationConstraints::defaults_for_target(4.5));
+
+    assert!(empty_result.decisions.is_empty());
+    assert_eq!(empty_result.achieved_bits_per_weight, 0.0);
+    assert_eq!(empty_result.module_count_at_highest_width, 0);
+    assert_eq!(empty_result.module_count_at_lowest_width, 0);
+    assert_eq!(empty_result.total_logical_parameter_count, 0);
+    assert_eq!(empty_result.estimated_weight_bytes, 0);
+    assert_eq!(empty_result.floor_upgrade_count, 0);
+    assert_eq!(empty_result.run_guard_upgrade_count, 0);
+    assert!(empty_result.non_finite_module_names.is_empty());
+    assert_eq!(empty_result.target_bits_per_weight, 4.5);
+}
+
+#[test]
+fn should_keep_even_a_boundary_target_in_the_empty_result() {
+    // The empty-table result is the one place the requested target survives
+    // untouched, whatever its value.
+    let zero_target = empty_allocation_result(&AllocationConstraints::defaults_for_target(0.0));
+    let large_target = empty_allocation_result(&AllocationConstraints::defaults_for_target(32.0));
+
+    assert_eq!(zero_target.target_bits_per_weight, 0.0);
+    assert_eq!(large_target.target_bits_per_weight, 32.0);
+}
+
+#[test]
+fn should_use_the_callers_ladder_when_one_is_supplied() {
+    let sensitivity_table = table(vec![result(
+        "model.layers.5.mlp.up_proj",
+        1000,
+        &[(4, 0.5), (8, 0.1)],
+    )]);
+    let constraints = AllocationConstraints {
+        candidate_bit_widths: Some(CandidateBitWidths::new(&[8, 4]).expect("valid ladder")),
+        ..AllocationConstraints::defaults_for_target(4.5)
+    };
+
+    let ladder = resolve_candidate_bit_widths(&sensitivity_table, &constraints)
+        .expect("the caller's ladder is valid");
+
+    assert_eq!(
+        ladder,
+        CandidateBitWidths::new(&[4, 8]).expect("valid ladder")
+    );
+}
+
+#[test]
+fn should_infer_the_ladder_from_the_union_of_observed_widths_when_none_is_supplied() {
+    // Modules measured on different grids contribute their widths to one
+    // ascending, de-duplicated ladder.
+    let sensitivity_table = table(vec![
+        result("model.layers.5.mlp.up_proj", 1000, &[(4, 0.5), (8, 0.1)]),
+        result("model.layers.6.mlp.up_proj", 1000, &[(6, 0.3)]),
+    ]);
+
+    let ladder =
+        resolve_candidate_bit_widths(&sensitivity_table, &constraints_without_block_rules(4.5))
+            .expect("the inferred ladder is valid");
+
+    assert_eq!(ladder.lowest(), bits(4));
+    assert_eq!(ladder.second_lowest(), Some(bits(6)));
+    assert_eq!(ladder.highest(), bits(8));
+}
+
+#[test]
+fn should_error_when_inferring_a_ladder_from_a_table_without_measurements() {
+    let sensitivity_table = table(vec![result("model.layers.5.mlp.up_proj", 1000, &[])]);
+
+    let resolved =
+        resolve_candidate_bit_widths(&sensitivity_table, &constraints_without_block_rules(4.5));
+
+    assert!(resolved.is_err());
+}
+
+#[test]
+fn should_infer_a_single_width_ladder_without_a_second_lowest() {
+    // A single observed width yields a valid ladder whose `second_lowest` is
+    // `None`, which disables the block-aware floor and run guard.
+    let sensitivity_table = table(vec![result(
+        "model.layers.5.mlp.up_proj",
+        1000,
+        &[(8, 0.1)],
+    )]);
+
+    let ladder =
+        resolve_candidate_bit_widths(&sensitivity_table, &constraints_without_block_rules(4.5))
+            .expect("the inferred ladder is valid");
+
+    assert_eq!(ladder.lowest(), bits(8));
+    assert_eq!(ladder.second_lowest(), None);
+}
+
+#[test]
+fn should_seed_every_module_at_the_lowest_width() {
+    let sensitivity_table = table(vec![
+        result("model.layers.5.mlp.up_proj", 1000, &[(4, 0.5), (8, 0.1)]),
+        result("model.layers.6.mlp.up_proj", 1000, &[(4, 0.2), (8, 0.1)]),
+    ]);
+
+    let allocation = seed_allocation_at_lowest_width(&sensitivity_table, bits(4));
+
+    assert_eq!(allocation.len(), 2);
+    assert_eq!(allocation["model.layers.5.mlp.up_proj"], bits(4));
+    assert_eq!(allocation["model.layers.6.mlp.up_proj"], bits(4));
+}
+
+#[test]
+fn should_seed_no_modules_for_an_empty_table() {
+    let allocation = seed_allocation_at_lowest_width(&table(Vec::new()), bits(4));
+
+    assert!(allocation.is_empty());
+}
+
+#[test]
+fn should_build_decisions_in_sweep_order_with_final_widths_and_group_size() {
+    let results = vec![
+        result("model.layers.5.mlp.up_proj", 1000, &[(4, 0.5), (8, 0.1)]),
+        result("model.layers.6.mlp.up_proj", 1000, &[(4, 0.2), (8, 0.1)]),
+    ];
+    let allocation: BTreeMap<String, BitWidth> = [
+        ("model.layers.5.mlp.up_proj".to_owned(), bits(8)),
+        ("model.layers.6.mlp.up_proj".to_owned(), bits(4)),
+    ]
+    .into_iter()
+    .collect();
+
+    let decisions = build_decisions(&results, &allocation, GroupSize::new(64).expect("valid"));
+
+    assert_eq!(decisions.len(), 2);
+    // The sweep's order, not the allocation map's order.
+    assert_eq!(decisions[0].module_name, "model.layers.5.mlp.up_proj");
+    assert_eq!(decisions[0].bit_width, bits(8));
+    assert_eq!(decisions[0].group_size, GroupSize::new(64).expect("valid"));
+    assert_eq!(decisions[0].logical_parameter_count, 1000);
+    assert_eq!(decisions[1].module_name, "model.layers.6.mlp.up_proj");
+    assert_eq!(decisions[1].bit_width, bits(4));
+}
+
+#[test]
+#[should_panic(expected = "every module has a final width")]
+fn should_panic_when_a_module_has_no_final_width() {
+    let results = vec![result("model.layers.5.mlp.up_proj", 1000, &[(4, 0.5)])];
+    let allocation: BTreeMap<String, BitWidth> = BTreeMap::new();
+
+    let _ = build_decisions(&results, &allocation, GroupSize::new(64).expect("valid"));
+}
+
+#[test]
+fn should_build_no_decisions_for_no_results() {
+    let decisions = build_decisions(&[], &BTreeMap::new(), GroupSize::new(64).expect("valid"));
+
+    assert!(decisions.is_empty());
+}
+
+#[test]
+fn should_summarize_counts_and_estimated_size_from_the_final_allocation() {
+    let inputs = AllocationSummaryInputs {
+        results: vec![
+            result("model.layers.5.mlp.up_proj", 1000, &[(4, 0.5), (8, 0.1)]),
+            result("model.layers.6.mlp.up_proj", 1000, &[(4, 0.2), (8, 0.1)]),
+        ],
+        allocation: [
+            ("model.layers.5.mlp.up_proj".to_owned(), bits(8)),
+            ("model.layers.6.mlp.up_proj".to_owned(), bits(4)),
+        ]
+        .into_iter()
+        .collect(),
+        group_size: GroupSize::new(64).expect("valid"),
+        target_bits_per_weight: 6.0,
+        lowest: bits(4),
+        highest: bits(8),
+        floor_upgrade_count: 1,
+        run_guard_upgrade_count: 2,
+        non_finite_module_names: vec!["model.layers.5.mlp.up_proj".to_owned()],
+    };
+
+    let summary = build_allocation_result(inputs);
+
+    assert_eq!(summary.decisions.len(), 2);
+    assert_eq!(summary.achieved_bits_per_weight, 6.0);
+    assert_eq!(summary.module_count_at_highest_width, 1);
+    assert_eq!(summary.module_count_at_lowest_width, 1);
+    assert_eq!(summary.total_logical_parameter_count, 2000);
+    // (8 bits * 1000 + 4 bits * 1000) / 8.
+    assert_eq!(summary.estimated_weight_bytes, 1500);
+    assert_eq!(summary.target_bits_per_weight, 6.0);
+    assert_eq!(summary.floor_upgrade_count, 1);
+    assert_eq!(summary.run_guard_upgrade_count, 2);
+    assert_eq!(
+        summary.non_finite_module_names,
+        vec!["model.layers.5.mlp.up_proj".to_owned()]
+    );
+}
+
+#[test]
+fn should_count_no_extreme_widths_when_modules_sit_between_the_ladder_extremes() {
+    // A middle-of-ladder width belongs to neither extreme count.
+    let inputs = AllocationSummaryInputs {
+        results: vec![result(
+            "model.layers.5.mlp.up_proj",
+            1000,
+            &[(4, 0.5), (6, 0.2), (8, 0.1)],
+        )],
+        allocation: [("model.layers.5.mlp.up_proj".to_owned(), bits(6))]
+            .into_iter()
+            .collect(),
+        group_size: GroupSize::new(64).expect("valid"),
+        target_bits_per_weight: 6.0,
+        lowest: bits(4),
+        highest: bits(8),
+        floor_upgrade_count: 0,
+        run_guard_upgrade_count: 0,
+        non_finite_module_names: Vec::new(),
+    };
+
+    let summary = build_allocation_result(inputs);
+
+    assert_eq!(summary.module_count_at_highest_width, 0);
+    assert_eq!(summary.module_count_at_lowest_width, 0);
+    assert_eq!(summary.achieved_bits_per_weight, 6.0);
+}

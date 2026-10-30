@@ -7,6 +7,7 @@
 mod attribution;
 mod engine_trait_impl;
 mod input_injection;
+mod prefill_chunk;
 mod sampling;
 
 use astronomical_ipc_protocol::RequestId;
