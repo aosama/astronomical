@@ -24,7 +24,6 @@ use crate::{
 };
 
 #[allow(clippy::too_many_arguments)]
-#[expect(clippy::too_many_lines)]
 pub(super) async fn handle_generate_image_command(
     worker_process: &mut WorkerProcess,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,
@@ -62,11 +61,150 @@ pub(super) async fn handle_generate_image_command(
         model_load_timeout,
     )
     .await?;
+    let swap_load_elapsed = match ensure_image_model_loaded(
+        worker_process,
+        health_snapshot,
+        is_ready,
+        model_load_deadline,
+        active_request,
+        performance_log,
+        completion_log,
+        model_load_timeout,
+        &generation_command.model,
+        model_policy_catalog,
+        &image_result_sender,
+    )
+    .await?
+    {
+        ImageModelSelectionOutcome::Proceed { swap_load_elapsed } => swap_load_elapsed,
+        ImageModelSelectionOutcome::Rejected(start_failure) => {
+            let _send_outcome = start_sender.send(Err(start_failure));
+            return Ok(());
+        }
+        ImageModelSelectionOutcome::SwapFailed => {
+            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
+            return Ok(());
+        }
+        ImageModelSelectionOutcome::ClientDisconnected => return Ok(()),
+    };
+    if image_result_sender.is_closed() {
+        tracing::info!(
+            requested_model = %generation_command.model,
+            "client disconnected before the image generation could start"
+        );
+        return Ok(());
+    }
+    if let Err(start_failure) = ensure_advertised_image_envelope(
+        health_snapshot,
+        &generation_command.model,
+        &generation_command.settings,
+    ) {
+        let _send_outcome = start_sender.send(Err(start_failure));
+        return Ok(());
+    }
+
+    let request_id = generation_command.request_id;
+    let model_id = generation_command.model.clone();
+    let settings = generation_command.settings;
+    match start_image_generation_or_reject(worker_process, generation_command).await? {
+        GenerationImageStartOutcome::Started => {}
+        GenerationImageStartOutcome::Rejected(start_failure) => {
+            let _send_outcome = start_sender.send(Err(start_failure));
+            return Ok(());
+        }
+        GenerationImageStartOutcome::Failed(start_error) => {
+            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
+            contain_worker_failure(worker_process, health_snapshot, active_request, start_error)
+                .await;
+            *is_ready = false;
+            return Ok(());
+        }
+    }
+    *active_request = Some(assemble_active_image_generation(
+        active_generation_permit,
+        request_id,
+        model_id,
+        settings,
+        admitted_at,
+        queue_wait_elapsed,
+        swap_load_elapsed,
+        Instant::now(),
+        image_generation_timeouts,
+        image_result_sender,
+    ));
+    acknowledge_or_cancel_image_start(
+        worker_process,
+        health_snapshot,
+        active_request,
+        start_sender,
+        cancellation_acknowledgement_timeout,
+        model_load_timeout,
+        is_ready,
+    )
+    .await;
+    Ok(())
+}
+
+/// Publishes the image-generation activity and answers the start sender; a
+/// failed acknowledgement (the client already hung up) cancels the running
+/// generation.
+async fn acknowledge_or_cancel_image_start(
+    worker_process: &mut WorkerProcess,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    active_request: &mut Option<ActiveWorkerRequest>,
+    start_sender: tokio::sync::oneshot::Sender<Result<(), GenerationStartError>>,
+    cancellation_acknowledgement_timeout: Duration,
+    model_load_timeout: Duration,
+    is_ready: &mut bool,
+) {
+    clear_active_request_progress(health_snapshot);
+    publish_activity(health_snapshot, WorkerActivity::ImageGeneration);
+    if start_sender.send(Ok(())).is_err() {
+        cancel_active_generation(
+            worker_process,
+            health_snapshot,
+            active_request,
+            cancellation_acknowledgement_timeout,
+            model_load_timeout,
+            is_ready,
+        )
+        .await;
+    }
+}
+
+/// The image model-selection outcome. `Proceed` carries the swap's measured
+/// load duration; `SwapFailed` is already contained inside the unit and the
+/// caller only answers the start sender.
+enum ImageModelSelectionOutcome {
+    Proceed { swap_load_elapsed: Duration },
+    Rejected(GenerationStartError),
+    SwapFailed,
+    ClientDisconnected,
+}
+
+/// Ensures the requested image model is the loaded one, swapping through the
+/// policy catalog when it is not. The swap's wait races the client
+/// disconnecting: a disconnect ends the request without a failure answer.
+#[allow(clippy::too_many_arguments)]
+async fn ensure_image_model_loaded(
+    worker_process: &mut WorkerProcess,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    is_ready: &mut bool,
+    model_load_deadline: &mut Option<Instant>,
+    active_request: &mut Option<ActiveWorkerRequest>,
+    performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
+    model_load_timeout: Duration,
+    requested_model: &str,
+    model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
+    image_result_sender: &tokio::sync::mpsc::Sender<
+        Result<ImageGenerationOutput, ImageGenerationExecutionError>,
+    >,
+) -> Result<ImageModelSelectionOutcome, WorkerControlError> {
     let loaded_model_id = health_snapshot
         .read()
         .ok()
         .and_then(|snapshot| snapshot.ready_model_id.clone());
-    let requested_model = &generation_command.model;
     let mut swap_load_elapsed = Duration::ZERO;
     if loaded_model_id.as_deref() != Some(requested_model) {
         let Some(model_policy) = model_policy_catalog.get(requested_model) else {
@@ -74,8 +212,9 @@ pub(super) async fn handle_generate_image_command(
                 requested_model = %requested_model,
                 "no runtime model policy maps the requested image model"
             );
-            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-            return Ok(());
+            return Ok(ImageModelSelectionOutcome::Rejected(
+                GenerationStartError::WorkerUnavailable,
+            ));
         };
         let expected_configuration_generation = health_snapshot.read().ok().and_then(|snapshot| {
             snapshot
@@ -94,11 +233,10 @@ pub(super) async fn handle_generate_image_command(
             )
             .await
         {
-            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
             contain_worker_failure(worker_process, health_snapshot, active_request, swap_error)
                 .await;
             *is_ready = false;
-            return Ok(());
+            return Ok(ImageModelSelectionOutcome::SwapFailed);
         }
         let mut swap_loop_state = WorkerLoopState {
             worker_process: &mut *worker_process,
@@ -134,17 +272,17 @@ pub(super) async fn handle_generate_image_command(
             Ok(ModelSwapWaitOutcome::Rejected {
                 model_load_failure_reason,
             }) => {
-                let _send_outcome = start_sender.send(Err(GenerationStartError::ModelLoadFailed {
-                    model_load_failure_reason,
-                }));
-                return Ok(());
+                return Ok(ImageModelSelectionOutcome::Rejected(
+                    GenerationStartError::ModelLoadFailed {
+                        model_load_failure_reason,
+                    },
+                ));
             }
             Err(swap_error) => {
-                let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
                 contain_worker_failure(worker_process, health_snapshot, active_request, swap_error)
                     .await;
                 *is_ready = false;
-                return Ok(());
+                return Ok(ImageModelSelectionOutcome::SwapFailed);
             }
         }
         if client_disconnected_during_swap {
@@ -152,17 +290,21 @@ pub(super) async fn handle_generate_image_command(
                 requested_model = %requested_model,
                 "client disconnected during the image model swap"
             );
-            return Ok(());
+            return Ok(ImageModelSelectionOutcome::ClientDisconnected);
         }
     }
-    if image_result_sender.is_closed() {
-        tracing::info!(
-            requested_model = %requested_model,
-            "client disconnected before the image generation could start"
-        );
-        return Ok(());
-    }
-    let envelope_rejection_reason = health_snapshot
+    Ok(ImageModelSelectionOutcome::Proceed { swap_load_elapsed })
+}
+
+/// Ensures the loaded model's advertised image envelope admits the request;
+/// a violation (or a missing advertisement) logs the named reason and
+/// answers with a worker-unavailable start failure.
+fn ensure_advertised_image_envelope(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    requested_model: &str,
+    settings: &ImageGenerationSettings,
+) -> Result<(), GenerationStartError> {
+    let rejection_reason = health_snapshot
         .read()
         .ok()
         .and_then(|snapshot| {
@@ -170,53 +312,74 @@ pub(super) async fn handle_generate_image_command(
                 .ready_model_capabilities
                 .as_ref()
                 .and_then(|capabilities| capabilities.image_generation.as_ref())
-                .map(|capabilities| {
-                    image_envelope_rejection_reason(&generation_command.settings, capabilities)
-                })
+                .map(|capabilities| image_envelope_rejection_reason(settings, capabilities))
         })
         .unwrap_or_else(|| {
-            // A missing advertisement rejects exactly like the previous boolean check:
-            // without an advertised envelope this request cannot be proven servable.
             Some("the loaded model does not advertise image-generation capabilities".to_owned())
         });
-    if let Some(rejection_reason) = envelope_rejection_reason {
-        tracing::error!(
-            requested_model = %generation_command.model,
-            reason = %rejection_reason,
-            "the loaded image model capabilities reject this admitted request"
-        );
-        let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
+    let Some(rejection_reason) = rejection_reason else {
         return Ok(());
-    }
+    };
+    tracing::error!(
+        requested_model = %requested_model,
+        reason = %rejection_reason,
+        "the loaded image model capabilities reject this admitted request"
+    );
+    Err(GenerationStartError::WorkerUnavailable)
+}
 
-    let request_id = generation_command.request_id;
-    let model_id = generation_command.model.clone();
-    let settings = generation_command.settings;
-    let execution_started_at = Instant::now();
+/// The image generation-start outcome: running on the worker, or the start
+/// failure the caller answers with (the failed case carries the process
+/// error for containment after the answer).
+enum GenerationImageStartOutcome {
+    Started,
+    Rejected(GenerationStartError),
+    Failed(WorkerControlError),
+}
+
+/// Starts the image generation on the worker process. The generic failure
+/// case contains the worker failure and clears readiness before returning
+/// `Failed`, exactly as the pre-split flow ordered it.
+async fn start_image_generation_or_reject(
+    worker_process: &mut WorkerProcess,
+    generation_command: ImageGenerationCommand,
+) -> Result<GenerationImageStartOutcome, WorkerControlError> {
     match worker_process
         .start_image_generation(generation_command)
         .await
     {
-        Ok(()) => {}
+        Ok(()) => Ok(GenerationImageStartOutcome::Started),
         Err(WorkerControlError::Protocol(ProtocolError::OutgoingMessageTooLarge {
             actual_message_bytes,
             maximum_message_bytes,
-        })) => {
-            let _send_outcome = start_sender.send(Err(GenerationStartError::RequestTooLarge {
+        })) => Ok(GenerationImageStartOutcome::Rejected(
+            GenerationStartError::RequestTooLarge {
                 actual_ipc_message_bytes: actual_message_bytes,
                 maximum_ipc_message_bytes: maximum_message_bytes,
-            }));
-            return Ok(());
-        }
-        Err(start_error) => {
-            let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-            contain_worker_failure(worker_process, health_snapshot, active_request, start_error)
-                .await;
-            *is_ready = false;
-            return Ok(());
-        }
+            },
+        )),
+        Err(start_error) => Ok(GenerationImageStartOutcome::Failed(start_error)),
     }
-    *active_request = Some(ActiveWorkerRequest::Image(ActiveImageGeneration {
+}
+
+/// Pure: assembles the active-request state one image generation owns until
+/// it resolves.
+#[allow(clippy::too_many_arguments)]
+fn assemble_active_image_generation(
+    active_generation_permit: tokio::sync::OwnedSemaphorePermit,
+    request_id: astronomical_ipc_protocol::RequestId,
+    model_id: String,
+    settings: ImageGenerationSettings,
+    admitted_at: Instant,
+    queue_wait_elapsed: Duration,
+    swap_load_elapsed: Duration,
+    execution_started_at: Instant,
+    image_generation_timeouts: ImageGenerationTimeouts,
+    image_result_sender: tokio::sync::mpsc::Sender<
+        Result<ImageGenerationOutput, ImageGenerationExecutionError>,
+    >,
+) -> ActiveWorkerRequest {
+    ActiveWorkerRequest::Image(ActiveImageGeneration {
         _active_generation_permit: active_generation_permit,
         request_id,
         model_id,
@@ -235,21 +398,7 @@ pub(super) async fn handle_generate_image_command(
         terminal_received_at: None,
         image_result_sender,
         terminal_outcome: None,
-    }));
-    clear_active_request_progress(health_snapshot);
-    publish_activity(health_snapshot, WorkerActivity::ImageGeneration);
-    if start_sender.send(Ok(())).is_err() {
-        cancel_active_generation(
-            worker_process,
-            health_snapshot,
-            active_request,
-            cancellation_acknowledgement_timeout,
-            model_load_timeout,
-            is_ready,
-        )
-        .await;
-    }
-    Ok(())
+    })
 }
 
 /// Names the first advertised capability an image request violates, if any.
