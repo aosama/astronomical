@@ -3,7 +3,8 @@
 //! row or one row per assignment is a decode token, anything wider is a
 //! chunk that keeps the materializing path.
 
-use super::paged_execution::decode_token_activation_rows;
+use super::paged_execution::{decode_token_activation_rows, expert_assignment_order};
+use crate::sparse_experts::ExpertAssignmentOrder;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_c_rust::MlxArray;
 use serial_test::serial;
@@ -116,4 +117,29 @@ fn should_reject_empty_routes_and_partial_routes_stay_decode_tokens() {
     .expect("a partial route should shape")
     .expect("a partial route of one token is a decode token");
     assert_eq!(partial_rows.shape(), [1, INPUT_WIDTH as i32]);
+}
+
+#[test]
+fn should_map_a_sorted_assignment_assertion_to_the_sorted_expert_order() {
+    assert_eq!(
+        expert_assignment_order(true),
+        ExpertAssignmentOrder::SortedByExpert
+    );
+}
+
+#[test]
+fn should_map_an_unsorted_assignment_assertion_to_the_original_router_order() {
+    assert_eq!(
+        expert_assignment_order(false),
+        ExpertAssignmentOrder::Original
+    );
+}
+
+#[test]
+fn should_promise_sorted_indices_only_for_the_sorted_expert_order() {
+    // MLX exploits the sorted promise for contiguous expert reads, so the
+    // mapping must never hand `SortedByExpert` to router-order IDs: the two
+    // bool states are the whole domain and each maps to exactly one contract.
+    assert!(ExpertAssignmentOrder::SortedByExpert.uses_sorted_indices());
+    assert!(!ExpertAssignmentOrder::Original.uses_sorted_indices());
 }
