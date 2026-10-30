@@ -4,7 +4,8 @@ use super::gated_delta_pipelined_kernel::{
     THREADGROUP_THREAD_COUNT, VALUE_ROW_BLOCK_SIZE, gated_delta_pipelined_kernel_source,
 };
 use super::gated_delta_sequence_contract::{
-    gated_delta_sequence_error, template_arguments, validate_gated_delta_sequence_shapes,
+    GatedDeltaSequenceShape, gated_delta_sequence_error, template_arguments,
+    validate_gated_delta_sequence_shapes,
 };
 use mlx_c_rust::{
     MlxArray, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput, MlxMetalKernelTemplateArgument,
@@ -79,7 +80,6 @@ pub fn qwen3_5_gated_delta_checkpoint_kernel()
 /// kernel — `None` — uses the ops-based fallback, which snapshots boundaries
 /// at exactly the same completed-token positions.
 #[allow(clippy::too_many_arguments)]
-#[expect(clippy::too_many_lines)]
 pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     runtime: &MlxRuntime,
     gated_delta_checkpoint_kernel: Option<&MlxMetalKernel>,
@@ -121,34 +121,148 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     let checkpoint_count = i32::try_from(completed_prefill_chunk_tokens.len()).map_err(|_| {
         gated_delta_sequence_error("gated-delta checkpoint count exceeds the Int32 range")
     })?;
-    let token_count = runtime.array_from_i32(&[sequence_shape.token_count], &[])?;
-    let first_checkpoint_token_count =
-        runtime.array_from_i32(&[completed_prefill_chunk_tokens[0]], &[])?;
-    let checkpoint_interval_token_count =
-        runtime.array_from_i32(&[checkpoint_interval_token_count], &[])?;
-    let checkpoint_count_input = runtime.array_from_i32(&[checkpoint_count], &[])?;
-    let mut checkpoint_template_arguments = Vec::from(template_arguments(
+    let checkpoint_plan = CheckpointSequencePlan {
         sequence_shape,
-        queries.dtype(),
-        recurrent_state.dtype(),
-    ));
-    checkpoint_template_arguments.push(MlxMetalKernelTemplateArgument::Integer {
-        name: "B",
-        integer_template_argument: sequence_shape.batch_size,
-    });
-    let outputs = runtime.apply_metal_kernel(
-        gated_delta_checkpoint_kernel,
-        &[
+        checkpoint_count,
+    };
+    let scalar_inputs = checkpoint_scalar_kernel_inputs(
+        runtime,
+        &checkpoint_plan,
+        completed_prefill_chunk_tokens[0],
+        checkpoint_interval_token_count,
+    )?;
+    let checkpoint_template_arguments =
+        checkpoint_template_arguments(sequence_shape, queries.dtype(), recurrent_state.dtype());
+    let dispatch = CheckpointKernelDispatch {
+        sequence_buffers: CheckpointSequenceBuffers {
             queries,
             keys,
             values,
             decays,
             update_rates,
             recurrent_state,
-            &token_count,
-            &first_checkpoint_token_count,
-            &checkpoint_interval_token_count,
-            &checkpoint_count_input,
+        },
+        scalar_inputs,
+        checkpoint_plan,
+    };
+    let outputs = apply_gated_delta_checkpoint_kernel(
+        runtime,
+        gated_delta_checkpoint_kernel,
+        &dispatch,
+        &checkpoint_template_arguments,
+    )?;
+    let kernel_outputs = unpack_checkpoint_kernel_outputs(outputs)?;
+    let recurrent_state_shape = recurrent_state.shape();
+    let recurrent_boundary_states = sliced_recurrent_boundary_states(
+        runtime,
+        &kernel_outputs.packed_recurrent_boundary_states,
+        &dispatch.checkpoint_plan,
+        &recurrent_state_shape,
+    )?;
+    Ok(Qwen3_5GatedDeltaBoundaryCheckpointResult {
+        sequence_outputs: kernel_outputs.sequence_outputs,
+        next_recurrent_state: kernel_outputs.next_recurrent_state,
+        recurrent_boundary_states,
+    })
+}
+
+/// Validated sequence geometry plus the checkpoint count, grouped so the
+/// dispatch and its output unpacking observe identical immutable facts.
+struct CheckpointSequencePlan {
+    sequence_shape: GatedDeltaSequenceShape,
+    checkpoint_count: i32,
+}
+
+/// The six sequence tensors the fused checkpoint kernel reads, in launch order.
+struct CheckpointSequenceBuffers<'a> {
+    queries: &'a MlxArray,
+    keys: &'a MlxArray,
+    values: &'a MlxArray,
+    decays: &'a MlxArray,
+    update_rates: &'a MlxArray,
+    recurrent_state: &'a MlxArray,
+}
+
+/// Scalar control arrays built once per forward and consumed by the launch.
+struct CheckpointScalarKernelInputs {
+    token_count: MlxArray,
+    first_checkpoint_token_count: MlxArray,
+    checkpoint_interval_token_count: MlxArray,
+    checkpoint_count_input: MlxArray,
+}
+
+/// Everything one fused checkpoint kernel launch consumes.
+struct CheckpointKernelDispatch<'a> {
+    sequence_buffers: CheckpointSequenceBuffers<'a>,
+    scalar_inputs: CheckpointScalarKernelInputs,
+    checkpoint_plan: CheckpointSequencePlan,
+}
+
+/// The three arrays one fused checkpoint kernel launch returns, in the order
+/// the kernel declares them.
+#[derive(Debug)]
+pub(super) struct CheckpointKernelOutputs {
+    pub(super) sequence_outputs: MlxArray,
+    pub(super) next_recurrent_state: MlxArray,
+    pub(super) packed_recurrent_boundary_states: MlxArray,
+}
+
+fn checkpoint_scalar_kernel_inputs(
+    runtime: &MlxRuntime,
+    checkpoint_plan: &CheckpointSequencePlan,
+    first_checkpoint_token_count: i32,
+    checkpoint_interval_token_count: i32,
+) -> Result<CheckpointScalarKernelInputs, MlxRuntimeError> {
+    Ok(CheckpointScalarKernelInputs {
+        token_count: runtime.array_from_i32(&[checkpoint_plan.sequence_shape.token_count], &[])?,
+        first_checkpoint_token_count: runtime
+            .array_from_i32(&[first_checkpoint_token_count], &[])?,
+        checkpoint_interval_token_count: runtime
+            .array_from_i32(&[checkpoint_interval_token_count], &[])?,
+        checkpoint_count_input: runtime.array_from_i32(&[checkpoint_plan.checkpoint_count], &[])?,
+    })
+}
+
+/// Extends the shape-invariant sequence template arguments with the batch
+/// size `B`: the checkpoint-write source indexes boundary states through it,
+/// so it is baked per launch while token count stays a runtime scalar.
+pub(super) fn checkpoint_template_arguments(
+    sequence_shape: GatedDeltaSequenceShape,
+    input_dtype: MlxDtype,
+    state_dtype: MlxDtype,
+) -> Vec<MlxMetalKernelTemplateArgument> {
+    let mut checkpoint_template_arguments =
+        Vec::from(template_arguments(sequence_shape, input_dtype, state_dtype));
+    checkpoint_template_arguments.push(MlxMetalKernelTemplateArgument::Integer {
+        name: "B",
+        integer_template_argument: sequence_shape.batch_size,
+    });
+    checkpoint_template_arguments
+}
+
+/// Submits one fused checkpoint kernel launch with its buffers, scalar
+/// controls, output shapes, and grid geometry, exactly as declared.
+fn apply_gated_delta_checkpoint_kernel(
+    runtime: &MlxRuntime,
+    gated_delta_checkpoint_kernel: &MlxMetalKernel,
+    dispatch: &CheckpointKernelDispatch<'_>,
+    checkpoint_template_arguments: &[MlxMetalKernelTemplateArgument],
+) -> Result<Vec<MlxArray>, MlxRuntimeError> {
+    let sequence_shape = dispatch.checkpoint_plan.sequence_shape;
+    let scalar_inputs = &dispatch.scalar_inputs;
+    let outputs = runtime.apply_metal_kernel(
+        gated_delta_checkpoint_kernel,
+        &[
+            dispatch.sequence_buffers.queries,
+            dispatch.sequence_buffers.keys,
+            dispatch.sequence_buffers.values,
+            dispatch.sequence_buffers.decays,
+            dispatch.sequence_buffers.update_rates,
+            dispatch.sequence_buffers.recurrent_state,
+            &scalar_inputs.token_count,
+            &scalar_inputs.first_checkpoint_token_count,
+            &scalar_inputs.checkpoint_interval_token_count,
+            &scalar_inputs.checkpoint_count_input,
         ],
         &[
             MlxMetalKernelOutput::new(
@@ -158,12 +272,15 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
                     sequence_shape.value_head_count,
                     sequence_shape.value_head_dimension,
                 ],
-                queries.dtype(),
+                dispatch.sequence_buffers.queries.dtype(),
             ),
-            MlxMetalKernelOutput::new(recurrent_state.shape(), recurrent_state.dtype()),
+            MlxMetalKernelOutput::new(
+                dispatch.sequence_buffers.recurrent_state.shape(),
+                dispatch.sequence_buffers.recurrent_state.dtype(),
+            ),
             MlxMetalKernelOutput::new(
                 vec![
-                    checkpoint_count,
+                    dispatch.checkpoint_plan.checkpoint_count,
                     sequence_shape.batch_size,
                     sequence_shape.value_head_count,
                     sequence_shape.value_head_dimension,
@@ -179,8 +296,16 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
             sequence_shape.batch_size,
         ],
         [THREADGROUP_THREAD_COUNT as i32, 1, 1],
-        &checkpoint_template_arguments,
+        checkpoint_template_arguments,
     )?;
+    Ok(outputs)
+}
+
+/// Unpacks the launch results in kernel-declared order, rejecting short
+/// returns before any boundary slicing can index a missing array.
+pub(super) fn unpack_checkpoint_kernel_outputs(
+    outputs: Vec<MlxArray>,
+) -> Result<CheckpointKernelOutputs, MlxRuntimeError> {
     let mut output_iterator = outputs.into_iter();
     let sequence_outputs = output_iterator.next().ok_or_else(|| {
         gated_delta_sequence_error("checkpoint kernel did not return sequence outputs")
@@ -191,11 +316,27 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
     let packed_recurrent_boundary_states = output_iterator.next().ok_or_else(|| {
         gated_delta_sequence_error("checkpoint kernel did not return boundary recurrent states")
     })?;
-    let recurrent_state_shape = recurrent_state.shape();
-    let mut recurrent_boundary_states = Vec::with_capacity(completed_prefill_chunk_tokens.len());
-    for checkpoint_index in 0..checkpoint_count {
+    Ok(CheckpointKernelOutputs {
+        sequence_outputs,
+        next_recurrent_state,
+        packed_recurrent_boundary_states,
+    })
+}
+
+/// Slices each checkpoint axis entry out of the packed boundary tensor and
+/// reshapes it back to the recurrent-state layout the prompt cache stores.
+fn sliced_recurrent_boundary_states(
+    runtime: &MlxRuntime,
+    packed_recurrent_boundary_states: &MlxArray,
+    checkpoint_plan: &CheckpointSequencePlan,
+    recurrent_state_shape: &[i32],
+) -> Result<Vec<MlxArray>, MlxRuntimeError> {
+    let sequence_shape = checkpoint_plan.sequence_shape;
+    let mut recurrent_boundary_states =
+        Vec::with_capacity(usize::try_from(checkpoint_plan.checkpoint_count).unwrap_or(0));
+    for checkpoint_index in 0..checkpoint_plan.checkpoint_count {
         let recurrent_boundary_state_with_checkpoint_axis = runtime.slice(
-            &packed_recurrent_boundary_states,
+            packed_recurrent_boundary_states,
             &[checkpoint_index, 0, 0, 0, 0],
             &[
                 checkpoint_index + 1,
@@ -208,14 +349,10 @@ pub fn qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
         )?;
         recurrent_boundary_states.push(runtime.reshape(
             &recurrent_boundary_state_with_checkpoint_axis,
-            &recurrent_state_shape,
+            recurrent_state_shape,
         )?);
     }
-    Ok(Qwen3_5GatedDeltaBoundaryCheckpointResult {
-        sequence_outputs,
-        next_recurrent_state,
-        recurrent_boundary_states,
-    })
+    Ok(recurrent_boundary_states)
 }
 
 fn validate_boundary_checkpoint_positions(

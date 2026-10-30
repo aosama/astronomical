@@ -62,7 +62,6 @@ impl MemoryDemotionRestart {
     /// transition, so no request can start between shutdown and restored-model
     /// readiness.
     #[allow(clippy::too_many_arguments)]
-    #[expect(clippy::too_many_lines)]
     pub(in crate::worker) async fn execute(
         self,
         trusted_worker_process: &mut WorkerProcess,
@@ -93,106 +92,36 @@ impl MemoryDemotionRestart {
         )
         .await?;
         let shutdown_elapsed_millis = demotion_started_at.elapsed().as_millis();
-
-        // A failed launch must leave the same truthful unavailable state as a
-        // rejected acknowledgement: the trusted worker is already gone, so
-        // pretending a model is still loading would hide that nothing serves.
-        let mut candidate_worker_process = match self.launch_candidate().await {
-            Ok(candidate_worker_process) => candidate_worker_process,
-            Err(candidate_launch_error) => {
-                publish_health(
-                    health_snapshot,
-                    WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-                );
-                tracing::error!(
-                    error = %candidate_launch_error,
-                    "memory-demotion replacement candidate could not launch"
-                );
-                return Err(candidate_launch_error);
-            }
-        };
+        let candidate_worker_process = self
+            .launch_candidate_or_publish_unavailable(health_snapshot)
+            .await?;
         let launch_elapsed_millis = demotion_started_at.elapsed().as_millis();
-
-        let candidate_acknowledgement = match timeout(
-            self.acknowledgement_timeout,
-            read_candidate_acknowledgement(
-                &mut candidate_worker_process,
-                &self.expected_configuration_generation,
-                &self.candidate_model_policy_catalog,
-            ),
-        )
-        .await
-        {
-            Ok(Ok(candidate_acknowledgement)) => candidate_acknowledgement,
-            Ok(Err(candidate_error)) => {
-                let contained_error =
-                    close_failed_candidate(candidate_worker_process, candidate_error).await;
-                publish_health(
-                    health_snapshot,
-                    WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-                );
-                tracing::error!(
-                    error = %contained_error,
-                    "memory-demotion replacement rejected its candidate acknowledgement"
-                );
-                return Err(contained_error);
-            }
-            Err(_) => {
-                let contained_error = close_failed_candidate(
-                    candidate_worker_process,
-                    WorkerControlError::CandidateAcknowledgementTimeout {
-                        acknowledgement_timeout_millis: self.acknowledgement_timeout.as_millis(),
-                    },
-                )
-                .await;
-                publish_health(
-                    health_snapshot,
-                    WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-                );
-                tracing::error!(
-                    error = %contained_error,
-                    "memory-demotion replacement timed out awaiting candidate acknowledgement"
-                );
-                return Err(contained_error);
-            }
-        };
+        let acknowledged_candidate = self
+            .handshake_candidate_or_publish_unavailable(candidate_worker_process, health_snapshot)
+            .await?;
         let handshake_elapsed_millis = demotion_started_at.elapsed().as_millis();
-
-        *trusted_worker_process = candidate_worker_process;
         let candidate_model_policy_catalog = Arc::clone(&self.candidate_model_policy_catalog);
-        *trusted_model_policy_catalog = Arc::clone(&candidate_model_policy_catalog);
-        *is_ready = false;
-        *model_load_deadline = None;
-        publish_restored_candidate(
-            candidate_acknowledgement,
+        let mut replacement_state = DemotionReplacementState {
+            trusted_worker_process,
+            trusted_model_policy_catalog,
             health_snapshot,
             is_ready,
             model_load_deadline,
+            active_generation,
             performance_log,
             completion_log,
+        };
+        let restored_runtime_configuration = commit_candidate_replacement(
+            &mut replacement_state,
+            acknowledged_candidate.candidate_worker_process,
+            acknowledged_candidate.acknowledgement,
+            &candidate_model_policy_catalog,
         )?;
-        let restored_runtime_configuration = health_snapshot
-            .read()
-            .ok()
-            .and_then(|worker_health_snapshot| {
-                worker_health_snapshot
-                    .worker_runtime_feature_configuration
-                    .clone()
-            })
-            .ok_or(WorkerControlError::WorkerProtocolViolation {
-                description: "memory-demotion restart published no runtime configuration",
-            })?;
         if let Some(previously_selected_model_id) = previously_selected_model_id {
             self.restore_selected_model(
-                trusted_worker_process,
+                &mut replacement_state,
                 previously_selected_model_id,
                 candidate_model_policy_catalog,
-                health_snapshot,
-                is_ready,
-                model_load_deadline,
-                active_generation,
-                performance_log,
-                completion_log,
                 &restored_runtime_configuration,
             )
             .await?;
@@ -207,6 +136,77 @@ impl MemoryDemotionRestart {
             "committed stop-first memory-demotion worker replacement"
         );
         Ok(restored_runtime_configuration)
+    }
+
+    /// Launches the candidate, or leaves the same truthful unavailable state
+    /// as a rejected acknowledgement: the trusted worker is already gone, so
+    /// pretending a model is still loading would hide that nothing serves.
+    async fn launch_candidate_or_publish_unavailable(
+        &self,
+        health_snapshot: &Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
+    ) -> Result<WorkerProcess, WorkerControlError> {
+        match self.launch_candidate().await {
+            Ok(candidate_worker_process) => Ok(candidate_worker_process),
+            Err(candidate_launch_error) => {
+                publish_health(
+                    health_snapshot,
+                    WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+                );
+                tracing::error!(
+                    error = %candidate_launch_error,
+                    "memory-demotion replacement candidate could not launch"
+                );
+                Err(candidate_launch_error)
+            }
+        }
+    }
+
+    /// Performs the candidate acknowledgement handshake. Any failure is
+    /// contained by closing and reaping the candidate and republishing the
+    /// truthful unavailable state; on success the still-open candidate process
+    /// is returned with its acknowledgement, and it becomes the trusted worker
+    /// only at commit time.
+    async fn handshake_candidate_or_publish_unavailable(
+        &self,
+        mut candidate_worker_process: WorkerProcess,
+        health_snapshot: &Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
+    ) -> Result<AcknowledgedCandidate, WorkerControlError> {
+        let handshake_outcome = timeout(
+            self.acknowledgement_timeout,
+            read_candidate_acknowledgement(
+                &mut candidate_worker_process,
+                &self.expected_configuration_generation,
+                &self.candidate_model_policy_catalog,
+            ),
+        )
+        .await;
+        let candidate_acknowledgement = match handshake_outcome {
+            Ok(Ok(candidate_acknowledgement)) => candidate_acknowledgement,
+            Ok(Err(candidate_error)) => {
+                return Err(contain_failed_candidate_and_publish_unavailable(
+                    candidate_worker_process,
+                    candidate_error,
+                    "memory-demotion replacement rejected its candidate acknowledgement",
+                    health_snapshot,
+                )
+                .await);
+            }
+            Err(_) => {
+                return Err(contain_failed_candidate_and_publish_unavailable(
+                    candidate_worker_process,
+                    WorkerControlError::CandidateAcknowledgementTimeout {
+                        acknowledgement_timeout_millis: self.acknowledgement_timeout.as_millis(),
+                    },
+                    "memory-demotion replacement timed out awaiting candidate acknowledgement",
+                    health_snapshot,
+                )
+                .await);
+            }
+        };
+        Ok(AcknowledgedCandidate {
+            candidate_worker_process,
+            acknowledgement: candidate_acknowledgement,
+        })
     }
 
     /// Closes and reaps the trusted worker before any candidate can exist.
@@ -274,18 +274,11 @@ impl MemoryDemotionRestart {
     /// The policy identity comes from the trusted catalog, never from user
     /// input attached to the memory request. Readiness published by
     /// `wait_for_model_swap` is the genuine loaded-model acknowledgement.
-    #[allow(clippy::too_many_arguments)]
     async fn restore_selected_model(
         &self,
-        replacement_worker_process: &mut WorkerProcess,
+        replacement_state: &mut DemotionReplacementState<'_>,
         previously_selected_model_id: String,
         candidate_model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
-        health_snapshot: &Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
-        is_ready: &mut bool,
-        model_load_deadline: &mut Option<Instant>,
-        active_generation: &mut Option<ActiveWorkerRequest>,
-        performance_log: &mut GenerationPerformanceLog,
-        completion_log: &mut CompletionAttributionLog,
         restored_runtime_configuration: &WorkerRuntimeFeatureConfiguration,
     ) -> Result<(), WorkerControlError> {
         let Some(model_policy) = candidate_model_policy_catalog.get(&previously_selected_model_id)
@@ -294,7 +287,8 @@ impl MemoryDemotionRestart {
                 description: "memory demotion could not restore an unmapped selected model",
             });
         };
-        replacement_worker_process
+        replacement_state
+            .trusted_worker_process
             .swap_model(
                 model_policy.model_directory.to_string_lossy().into_owned(),
                 model_policy.worker_model_configuration.clone(),
@@ -304,13 +298,13 @@ impl MemoryDemotionRestart {
             self.acknowledgement_timeout,
             crate::worker::process::model_swap::wait_for_model_swap(
                 &mut WorkerLoopState {
-                    worker_process: &mut *replacement_worker_process,
-                    health_snapshot,
-                    is_ready: &mut *is_ready,
-                    model_load_deadline: &mut *model_load_deadline,
-                    active_request: &mut *active_generation,
-                    performance_log: &mut *performance_log,
-                    completion_log: &mut *completion_log,
+                    worker_process: &mut *replacement_state.trusted_worker_process,
+                    health_snapshot: replacement_state.health_snapshot,
+                    is_ready: &mut *replacement_state.is_ready,
+                    model_load_deadline: &mut *replacement_state.model_load_deadline,
+                    active_request: &mut *replacement_state.active_generation,
+                    performance_log: &mut *replacement_state.performance_log,
+                    completion_log: &mut *replacement_state.completion_log,
                     // The restore path waits on the acknowledgement budget,
                     // not the initial-launch load budget.
                     model_load_timeout: self.acknowledgement_timeout,
@@ -345,6 +339,83 @@ impl MemoryDemotionRestart {
             }),
         }
     }
+}
+
+/// The loop-state cluster one memory-demotion restart installs and restores:
+/// the process being replaced, the catalog being swapped, and the readiness,
+/// deadline, active-request, and telemetry state the commit and model
+/// restoration phases mutate.
+struct DemotionReplacementState<'a> {
+    trusted_worker_process: &'a mut WorkerProcess,
+    trusted_model_policy_catalog: &'a mut Arc<HashMap<String, RuntimeModelPolicy>>,
+    health_snapshot: &'a Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
+    is_ready: &'a mut bool,
+    model_load_deadline: &'a mut Option<Instant>,
+    active_generation: &'a mut Option<ActiveWorkerRequest>,
+    performance_log: &'a mut GenerationPerformanceLog,
+    completion_log: &'a mut CompletionAttributionLog,
+}
+
+/// A candidate that completed its acknowledgement handshake with its process
+/// still open, ready to be installed as the trusted worker.
+struct AcknowledgedCandidate {
+    candidate_worker_process: WorkerProcess,
+    acknowledgement: DemotionCandidateAcknowledgement,
+}
+
+/// Installs the acknowledged candidate as the trusted worker and republishes
+/// its readiness through the ordinary event path so daemon-visible state is
+/// exactly what a fresh worker start would publish. Returns the runtime
+/// configuration the candidate acknowledged, which the model restoration and
+/// the restart answer both need.
+fn commit_candidate_replacement(
+    replacement_state: &mut DemotionReplacementState<'_>,
+    candidate_worker_process: WorkerProcess,
+    candidate_acknowledgement: DemotionCandidateAcknowledgement,
+    candidate_model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
+) -> Result<WorkerRuntimeFeatureConfiguration, WorkerControlError> {
+    *replacement_state.trusted_worker_process = candidate_worker_process;
+    *replacement_state.trusted_model_policy_catalog = Arc::clone(candidate_model_policy_catalog);
+    *replacement_state.is_ready = false;
+    *replacement_state.model_load_deadline = None;
+    publish_restored_candidate(
+        candidate_acknowledgement,
+        replacement_state.health_snapshot,
+        replacement_state.is_ready,
+        replacement_state.model_load_deadline,
+        replacement_state.performance_log,
+        replacement_state.completion_log,
+    )?;
+    replacement_state
+        .health_snapshot
+        .read()
+        .ok()
+        .and_then(|worker_health_snapshot| {
+            worker_health_snapshot
+                .worker_runtime_feature_configuration
+                .clone()
+        })
+        .ok_or(WorkerControlError::WorkerProtocolViolation {
+            description: "memory-demotion restart published no runtime configuration",
+        })
+}
+
+/// Closes and reaps a failed candidate, republishes the truthful unavailable
+/// state, and logs the failure with the phase-specific description; returns
+/// the contained error for the caller to propagate.
+async fn contain_failed_candidate_and_publish_unavailable(
+    candidate_worker_process: WorkerProcess,
+    candidate_error: WorkerControlError,
+    failure_description: &'static str,
+    health_snapshot: &Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
+) -> WorkerControlError {
+    let contained_error = close_failed_candidate(candidate_worker_process, candidate_error).await;
+    publish_health(
+        health_snapshot,
+        WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+    );
+    tracing::error!(error = %contained_error, failure_description);
+    contained_error
 }
 
 struct DemotionCandidateAcknowledgement {
