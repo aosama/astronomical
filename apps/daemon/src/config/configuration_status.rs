@@ -6,6 +6,10 @@ use serde::Serialize;
 use crate::application::ApplicationState;
 use crate::{ResolvedRuntimeConfig, WorkerHealthSnapshot};
 
+#[cfg(test)]
+#[path = "configuration_status_tests.rs"]
+mod configuration_status_tests;
+
 #[derive(Serialize)]
 pub(crate) struct ConfigurationValue<T> {
     configured: Option<T>,
@@ -221,7 +225,6 @@ fn ready_model_summary(
     })
 }
 
-#[expect(clippy::too_many_lines)]
 fn chunking_summary(
     configured_policy: Option<&crate::RuntimeModelPolicy>,
     effective_model: Option<&WorkerLoadedModelRuntimeConfiguration>,
@@ -236,115 +239,107 @@ fn chunking_summary(
         .and_then(WorkerLoadedModelRuntimeConfiguration::autoregressive)
         .map(|configuration| &configuration.chunking);
     ChunkingConfigurationSummary {
-        fixed_prompt_processing_chunk_size_tokens: ConfigurationValue {
-            configured: configured_fields
-                .fixed_prompt_processing_chunk_size_tokens
-                .then(|| {
-                    configured_chunking
-                        .map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens)
-                })
-                .flatten(),
-            default: Some(
-                astronomical_config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-            ),
-            effective: effective_chunking
-                .map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens),
-        },
-        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: ConfigurationValue {
-            configured: configured_fields
-                .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-                .then(|| {
-                    configured_chunking.map(|chunking| {
-                        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-                    })
-                })
-                .flatten(),
-            default: Some(
-                astronomical_config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
-            ),
-            effective: effective_chunking
-                .map(|chunking| chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens),
-        },
-        full_attention_key_value_growth_tokens: ConfigurationValue {
-            configured: configured_fields
-                .full_attention_key_value_growth_tokens
-                .then(|| {
-                    configured_chunking
-                        .map(|chunking| chunking.full_attention_key_value_growth_tokens)
-                })
-                .flatten(),
-            default: Some(astronomical_config::DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS),
-            effective: effective_chunking
+        fixed_prompt_processing_chunk_size_tokens: reported_chunking_configuration_value(
+            configured_fields.fixed_prompt_processing_chunk_size_tokens,
+            configured_chunking.map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens),
+            astronomical_config::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+            effective_chunking.map(|chunking| chunking.fixed_prompt_processing_chunk_size_tokens),
+        ),
+        fixed_ssd_streaming_prompt_processing_chunk_size_tokens: reported_chunking_configuration_value(
+            configured_fields.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+            configured_chunking.map(|chunking| {
+                chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+            }),
+            astronomical_config::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
+            effective_chunking.map(|chunking| {
+                chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+            }),
+        ),
+        full_attention_key_value_growth_tokens: reported_chunking_configuration_value(
+            configured_fields.full_attention_key_value_growth_tokens,
+            configured_chunking
                 .map(|chunking| chunking.full_attention_key_value_growth_tokens),
-        },
-        prefill_graph_submission_layer_interval: ConfigurationValue {
-            configured: configured_fields
-                .prefill_graph_submission_layer_interval
-                .then(|| {
-                    configured_chunking
-                        .map(|chunking| chunking.prefill_graph_submission_layer_interval)
-                })
-                .flatten(),
-            default: Some(astronomical_config::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL),
-            effective: effective_chunking
+            astronomical_config::DEFAULT_FULL_ATTENTION_KEY_VALUE_GROWTH_TOKENS,
+            effective_chunking
+                .map(|chunking| chunking.full_attention_key_value_growth_tokens),
+        ),
+        prefill_graph_submission_layer_interval: reported_chunking_configuration_value(
+            configured_fields.prefill_graph_submission_layer_interval,
+            configured_chunking
                 .map(|chunking| chunking.prefill_graph_submission_layer_interval),
-        },
-        experimental_ssd_paging_prefill_graph_submission_layer_interval: ConfigurationValue {
-            configured: configured_fields
-                .experimental_ssd_paging_prefill_graph_submission_layer_interval
-                .then(|| {
-                    configured_chunking.map(|chunking| {
-                        chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval
-                    })
-                })
-                .flatten(),
-            default: Some(
-                astronomical_config::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            ),
-            effective: effective_chunking.map(|chunking| {
+            astronomical_config::DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            effective_chunking
+                .map(|chunking| chunking.prefill_graph_submission_layer_interval),
+        ),
+        experimental_ssd_paging_prefill_graph_submission_layer_interval: reported_chunking_configuration_value(
+            configured_fields.experimental_ssd_paging_prefill_graph_submission_layer_interval,
+            configured_chunking.map(|chunking| {
                 chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval
             }),
-        },
-        experimental_ssd_paging_generation_graph_submission_layer_interval: ConfigurationValue {
-            configured: configured_fields
-                .experimental_ssd_paging_generation_graph_submission_layer_interval
-                .then(|| {
-                    configured_chunking.map(|chunking| {
-                        chunking
-                            .experimental_ssd_paging_generation_graph_submission_layer_interval
-                    })
-                })
-                .flatten(),
-            default: Some(
-                astronomical_config::DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
-            ),
-            effective: effective_chunking.map(|chunking| {
+            astronomical_config::DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            effective_chunking.map(|chunking| {
+                chunking.experimental_ssd_paging_prefill_graph_submission_layer_interval
+            }),
+        ),
+        experimental_ssd_paging_generation_graph_submission_layer_interval: reported_chunking_configuration_value(
+            configured_fields.experimental_ssd_paging_generation_graph_submission_layer_interval,
+            configured_chunking.map(|chunking| {
                 chunking.experimental_ssd_paging_generation_graph_submission_layer_interval
             }),
-        },
-        prompt_cache_block_tokens: NullableConfigurationValue {
-            is_configured: configured_fields.prompt_cache_block_tokens,
-            configured: configured_fields
-                .prompt_cache_block_tokens
-                .then(|| configured_chunking.and_then(|chunking| chunking.prompt_cache_block_tokens))
-                .flatten(),
-            default: None,
-            effective: effective_chunking.and_then(|chunking| chunking.prompt_cache_block_tokens),
-        },
-        prompt_cache_common_prefix_stride_blocks: ConfigurationValue {
-            configured: configured_fields
-                .prompt_cache_common_prefix_stride_blocks
-                .then(|| {
-                    configured_chunking
-                        .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks)
-                })
-                .flatten(),
-            default: Some(
-                astronomical_config::DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
-            ),
-            effective: effective_chunking
+            astronomical_config::DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL,
+            effective_chunking.map(|chunking| {
+                chunking.experimental_ssd_paging_generation_graph_submission_layer_interval
+            }),
+        ),
+        prompt_cache_block_tokens: reported_nullable_chunking_configuration_value(
+            configured_fields.prompt_cache_block_tokens,
+            configured_chunking.and_then(|chunking| chunking.prompt_cache_block_tokens),
+            effective_chunking.and_then(|chunking| chunking.prompt_cache_block_tokens),
+        ),
+        prompt_cache_common_prefix_stride_blocks: reported_chunking_configuration_value(
+            configured_fields.prompt_cache_common_prefix_stride_blocks,
+            configured_chunking
                 .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks),
-        },
+            astronomical_config::DEFAULT_PROMPT_CACHE_COMMON_PREFIX_STRIDE_BLOCKS,
+            effective_chunking
+                .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks),
+        ),
+    }
+}
+
+/// Builds one reported numeric chunking value from its three sources. The
+/// configured slot carries a value only when the operator explicitly set this
+/// exact field: a chunking block that omits the field reports no configured
+/// value even though its other fields are present. The default slot always
+/// carries the built-in constant, and the effective slot carries what the
+/// running worker actually resolved.
+fn reported_chunking_configuration_value<T>(
+    is_field_configured: bool,
+    configured_value: Option<T>,
+    default_value: T,
+    effective_value: Option<T>,
+) -> ConfigurationValue<T> {
+    ConfigurationValue {
+        configured: is_field_configured.then_some(configured_value).flatten(),
+        default: Some(default_value),
+        effective: effective_value,
+    }
+}
+
+/// Builds one reported nullable chunking value, where the field itself is
+/// `Option<T>`: the operator can explicitly clear it, so "configured" can be
+/// none even while the field's presence flag is true. Nullable fields have no
+/// built-in default, so that slot stays empty.
+fn reported_nullable_chunking_configuration_value<T>(
+    is_field_configured: bool,
+    configured_value: Option<T>,
+    effective_value: Option<T>,
+) -> NullableConfigurationValue<T> {
+    NullableConfigurationValue {
+        is_configured: is_field_configured,
+        configured: is_field_configured.then_some(configured_value).flatten(),
+        default: None,
+        effective: effective_value,
     }
 }
 

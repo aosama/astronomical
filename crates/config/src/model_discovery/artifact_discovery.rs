@@ -26,7 +26,6 @@ pub fn try_discover_model(model_directory: &Path) -> Option<DiscoveredModel> {
 /// This variant accepts a custom `model_id`, useful for HuggingFace cache entries
 /// where the model_id is derived from the decoded `models--org--repo` directory name
 /// rather than the snapshot hash.
-#[expect(clippy::too_many_lines)]
 pub fn try_discover_model_with_id(
     model_directory: &Path,
     model_id: &str,
@@ -37,122 +36,164 @@ pub fn try_discover_model_with_id(
         .ok()
         .flatten()?;
     match model_family {
-        ModelFamily::Qwen3_5 => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
-            let family_metadata = qwen3_5::discover_model_metadata(model_directory, &config_value)?;
-            let immutable_provenance =
-                classified_artifacts::immutable_model_provenance(model_directory);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id: immutable_provenance
-                    .as_ref()
-                    .map(|(provider_model_id, _)| provider_model_id.clone()),
-                model_family,
-                revision: immutable_provenance.map_or_else(
-                    || derive_revision_from_config_bytes(&config_bytes),
-                    |(_, revision)| revision,
-                ),
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-                    context_window: family_metadata.context_window,
-                    max_input_tokens: family_metadata.max_input_tokens,
-                    max_output_tokens: family_metadata.max_output_tokens,
-                    supports_vision: family_metadata.has_vision,
-                    supports_reasoning: family_metadata.supports_reasoning,
-                    supports_tool_calls: family_metadata.supports_tool_calls,
-                }),
-                license: None,
-                model_size_bytes: family_metadata.model_size_bytes,
-            })
-        }
-        ModelFamily::Flux2Klein => {
-            let verified_evidence = flux2_klein::verify_model_directory(model_directory).ok()?;
-            Some(DiscoveredModel {
-                model_id: verified_evidence.canonical_model_id,
-                provider_model_id: Some(verified_evidence.provider_model_id),
-                model_family,
-                revision: verified_evidence.revision,
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
-                license: Some(verified_evidence.license),
-                model_size_bytes: verified_evidence.model_size_bytes,
-            })
-        }
+        ModelFamily::Qwen3_5 => discover_qwen3_5_model(model_directory, model_id, model_family),
+        ModelFamily::Flux2Klein => discover_flux2_klein_model(model_directory, model_family),
         ModelFamily::ModernBert => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
-            let family_metadata =
-                modernbert::discover_model_metadata(model_directory, &config_value)?;
-            let immutable_provenance =
-                classified_artifacts::immutable_model_provenance(model_directory);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id: immutable_provenance
-                    .as_ref()
-                    .map(|(provider_model_id, _)| provider_model_id.clone()),
-                model_family,
-                revision: immutable_provenance.map_or_else(
-                    || derive_revision_from_config_bytes(&config_bytes),
-                    |(_, revision)| revision,
-                ),
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
-                    vector_width: family_metadata.vector_width,
-                    max_input_tokens: family_metadata.max_input_tokens,
-                }),
-                license: None,
-                model_size_bytes: family_metadata.model_size_bytes,
-            })
+            discover_modernbert_model(model_directory, model_id, model_family)
         }
         ModelFamily::PrismHadamardQwen35 => {
-            let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
-            let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
-            let family_metadata =
-                prism_hadamard_qwen35::discover_model_metadata(model_directory, &config_value)?;
-            let immutable_provenance =
-                classified_artifacts::immutable_model_provenance(model_directory);
-            Some(DiscoveredModel {
-                model_id: model_id.to_owned(),
-                provider_model_id: immutable_provenance
-                    .as_ref()
-                    .map(|(provider_model_id, _)| provider_model_id.clone()),
-                model_family,
-                revision: immutable_provenance.map_or_else(
-                    || derive_revision_from_config_bytes(&config_bytes),
-                    |(_, revision)| revision,
-                ),
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
-                    context_window: family_metadata.context_window,
-                    max_input_tokens: family_metadata.max_input_tokens,
-                    max_output_tokens: family_metadata.max_output_tokens,
-                    // The vision tower ships inside the pack, but the
-                    // executable surface in this phase is text-only, so
-                    // discovery must not advertise image input.
-                    supports_vision: false,
-                    supports_reasoning: family_metadata.supports_reasoning,
-                    supports_tool_calls: family_metadata.supports_tool_calls,
-                }),
-                license: Some(ModelLicense::Apache20),
-                model_size_bytes: family_metadata.model_size_bytes,
-            })
+            discover_prism_hadamard_qwen35_model(model_directory, model_id, model_family)
         }
         // The native T2I engine is wired end to end (worker factory arm, daemon image
         // policy, preflight, catalog), so a verified Qwen-Image-2.1 artifact now advertises
         // with the same evidence shape as FLUX.2 Klein.
-        ModelFamily::QwenImage21 => {
-            let verified_evidence = qwen_image_21::verify_model_directory(model_directory).ok()?;
-            Some(DiscoveredModel {
-                model_id: verified_evidence.canonical_model_id,
-                provider_model_id: Some(verified_evidence.provider_model_id),
-                model_family,
-                revision: verified_evidence.revision,
-                model_directory: model_directory.to_path_buf(),
-                capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
-                license: Some(verified_evidence.license),
-                model_size_bytes: verified_evidence.model_size_bytes,
-            })
-        }
+        ModelFamily::QwenImage21 => discover_qwen_image21_model(model_directory, model_family),
     }
+}
+
+/// Derives the provider model id and revision for a config-document family:
+/// provenance wins when the directory is an immutable Hugging Face snapshot,
+/// otherwise the revision is derived from the config bytes themselves.
+fn provenance_or_config_revision(
+    model_directory: &Path,
+    config_bytes: &[u8],
+) -> (Option<String>, String) {
+    let immutable_provenance = classified_artifacts::immutable_model_provenance(model_directory);
+    (
+        immutable_provenance
+            .as_ref()
+            .map(|(provider_model_id, _)| provider_model_id.clone()),
+        immutable_provenance.map_or_else(
+            || derive_revision_from_config_bytes(config_bytes),
+            |(_, revision)| revision,
+        ),
+    )
+}
+
+/// Projects a Qwen3.5 chat directory into the neutral discovery contract.
+fn discover_qwen3_5_model(
+    model_directory: &Path,
+    model_id: &str,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
+    let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
+    let family_metadata = qwen3_5::discover_model_metadata(model_directory, &config_value)?;
+    let (provider_model_id, revision) =
+        provenance_or_config_revision(model_directory, &config_bytes);
+    Some(DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id,
+        model_family,
+        revision,
+        model_directory: model_directory.to_path_buf(),
+        capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
+            context_window: family_metadata.context_window,
+            max_input_tokens: family_metadata.max_input_tokens,
+            max_output_tokens: family_metadata.max_output_tokens,
+            supports_vision: family_metadata.has_vision,
+            supports_reasoning: family_metadata.supports_reasoning,
+            supports_tool_calls: family_metadata.supports_tool_calls,
+        }),
+        license: None,
+        model_size_bytes: family_metadata.model_size_bytes,
+    })
+}
+
+/// Projects a FLUX.2 Klein image-generation directory into the neutral
+/// discovery contract from its self-verifying evidence.
+fn discover_flux2_klein_model(
+    model_directory: &Path,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let verified_evidence = flux2_klein::verify_model_directory(model_directory).ok()?;
+    Some(DiscoveredModel {
+        model_id: verified_evidence.canonical_model_id,
+        provider_model_id: Some(verified_evidence.provider_model_id),
+        model_family,
+        revision: verified_evidence.revision,
+        model_directory: model_directory.to_path_buf(),
+        capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
+        license: Some(verified_evidence.license),
+        model_size_bytes: verified_evidence.model_size_bytes,
+    })
+}
+
+/// Projects a ModernBERT embeddings directory into the neutral discovery contract.
+fn discover_modernbert_model(
+    model_directory: &Path,
+    model_id: &str,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
+    let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
+    let family_metadata = modernbert::discover_model_metadata(model_directory, &config_value)?;
+    let (provider_model_id, revision) =
+        provenance_or_config_revision(model_directory, &config_bytes);
+    Some(DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id,
+        model_family,
+        revision,
+        model_directory: model_directory.to_path_buf(),
+        capabilities: ModelCapabilities::Embeddings(EmbeddingModelCapabilities {
+            vector_width: family_metadata.vector_width,
+            max_input_tokens: family_metadata.max_input_tokens,
+        }),
+        license: None,
+        model_size_bytes: family_metadata.model_size_bytes,
+    })
+}
+
+/// Projects a prism-hadamard Qwen3.5 pack directory into the neutral discovery
+/// contract. The vision tower ships inside the pack, but the executable
+/// surface in this phase is text-only, so discovery must not advertise image
+/// input.
+fn discover_prism_hadamard_qwen35_model(
+    model_directory: &Path,
+    model_id: &str,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let config_bytes = fs::read(model_directory.join("config.json")).ok()?;
+    let config_value: serde_json::Value = serde_json::from_slice(&config_bytes).ok()?;
+    let family_metadata =
+        prism_hadamard_qwen35::discover_model_metadata(model_directory, &config_value)?;
+    let (provider_model_id, revision) =
+        provenance_or_config_revision(model_directory, &config_bytes);
+    Some(DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id,
+        model_family,
+        revision,
+        model_directory: model_directory.to_path_buf(),
+        capabilities: ModelCapabilities::Chat(ChatModelCapabilities {
+            context_window: family_metadata.context_window,
+            max_input_tokens: family_metadata.max_input_tokens,
+            max_output_tokens: family_metadata.max_output_tokens,
+            supports_vision: false,
+            supports_reasoning: family_metadata.supports_reasoning,
+            supports_tool_calls: family_metadata.supports_tool_calls,
+        }),
+        license: Some(ModelLicense::Apache20),
+        model_size_bytes: family_metadata.model_size_bytes,
+    })
+}
+
+/// Projects a Qwen-Image-2.1 directory into the neutral discovery contract
+/// from its self-verifying evidence.
+fn discover_qwen_image21_model(
+    model_directory: &Path,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let verified_evidence = qwen_image_21::verify_model_directory(model_directory).ok()?;
+    Some(DiscoveredModel {
+        model_id: verified_evidence.canonical_model_id,
+        provider_model_id: Some(verified_evidence.provider_model_id),
+        model_family,
+        revision: verified_evidence.revision,
+        model_directory: model_directory.to_path_buf(),
+        capabilities: ModelCapabilities::ImageGeneration(verified_evidence.capabilities),
+        license: Some(verified_evidence.license),
+        model_size_bytes: verified_evidence.model_size_bytes,
+    })
 }
