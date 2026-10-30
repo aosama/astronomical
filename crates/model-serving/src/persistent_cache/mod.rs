@@ -49,6 +49,7 @@ mod partial_tail_probe;
 pub(crate) mod persistent_safetensors_header;
 mod prefill_boundary;
 pub(crate) mod prefix_lookup;
+pub(crate) mod prefix_lookup_steps;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod quota_bounded_contract;
 #[cfg(feature = "direct-mlx")]

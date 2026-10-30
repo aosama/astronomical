@@ -8,7 +8,12 @@
 //! for forward processing, even when the prompt ends exactly on a block
 //! boundary.
 
-use super::partial_tail_probe;
+use super::prefix_lookup_steps::{
+    PersistentPromptCachePrefixLookupInputs, boundary_snapshot_miss_reason,
+    complete_and_maximum_restorable_block_counts, matched_sequence_state_block_keys,
+    newest_restorable_boundary_entry, prompt_too_short_lookup_result,
+    restored_prefix_lookup_result,
+};
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{PersistentPromptCacheBlockKey, PersistentPromptCacheModelContract};
 
@@ -123,14 +128,14 @@ impl PersistentPromptCacheLookupDiagnostics {
         }
     }
 
-    fn record_matched_sequence_state_block_count(
+    pub(super) fn record_matched_sequence_state_block_count(
         &mut self,
         matched_sequence_state_block_count: usize,
     ) {
         self.matched_sequence_state_block_count = matched_sequence_state_block_count;
     }
 
-    fn record_first_missing_sequence_state_block_index(
+    pub(super) fn record_first_missing_sequence_state_block_index(
         &mut self,
         missing_sequence_state_block_index: usize,
         missing_sequence_state_block_hash: Option<[u8; 32]>,
@@ -146,7 +151,7 @@ impl PersistentPromptCacheLookupDiagnostics {
         self.newest_boundary_state_snapshot_block_index = Some(boundary_state_snapshot_block_index);
     }
 
-    fn record_restored_partial_tail_block_token_count(
+    pub(super) fn record_restored_partial_tail_block_token_count(
         &mut self,
         restored_partial_tail_block_token_count: usize,
     ) {
@@ -154,7 +159,7 @@ impl PersistentPromptCacheLookupDiagnostics {
             Some(restored_partial_tail_block_token_count);
     }
 
-    fn record_miss_reason(&mut self, miss_reason: PersistentPromptCacheMissReason) {
+    pub(super) fn record_miss_reason(&mut self, miss_reason: PersistentPromptCacheMissReason) {
         self.miss_reason = Some(miss_reason);
     }
 }
@@ -162,14 +167,15 @@ impl PersistentPromptCacheLookupDiagnostics {
 /// The longest restorable persistent prompt-cache prefix, determined without MLX.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PersistentPromptCachePrefixLookupResult {
-    restored_token_count: usize,
+    pub(super) restored_token_count: usize,
     // This is copied so callers can retain the lookup outcome after the input
     // request buffer has been released. It is the exact suffix the engine must
     // still forward through the model.
-    remaining_tokens: Vec<u32>,
-    last_restored_persistent_prompt_cache_block_key: Option<PersistentPromptCacheBlockKey>,
-    restored_partial_tail_block_key: Option<PersistentPromptCacheBlockKey>,
-    lookup_diagnostics: PersistentPromptCacheLookupDiagnostics,
+    pub(super) remaining_tokens: Vec<u32>,
+    pub(super) last_restored_persistent_prompt_cache_block_key:
+        Option<PersistentPromptCacheBlockKey>,
+    pub(super) restored_partial_tail_block_key: Option<PersistentPromptCacheBlockKey>,
+    pub(super) lookup_diagnostics: PersistentPromptCacheLookupDiagnostics,
 }
 
 impl PersistentPromptCachePrefixLookupResult {
@@ -354,228 +360,82 @@ impl PersistentPromptCachePrefixLookup {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
-    fn for_prompt_with_block_causal_inputs_and_boundary_policy(
+    fn for_prompt_with_block_causal_inputs_and_boundary_policy<
+        KvBlockExists,
+        RecurrentSnapshotExists,
+    >(
         persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
         prompt_tokens: &[u32],
         block_causal_inputs: Option<&[PersistentPromptCacheBlockCausalInput]>,
         allow_exact_block_boundary_restore: bool,
         probe_partial_tail_blocks: bool,
-        persistent_prompt_cache_kv_block_exists: impl Fn(&[u8; 32]) -> bool,
-        persistent_prompt_cache_recurrent_snapshot_exists: impl Fn(&[u8; 32]) -> bool,
-    ) -> PersistentPromptCachePrefixLookupResult {
-        let persistent_prompt_cache_block_token_count =
-            persistent_prompt_cache_model_contract.block_token_count();
-        // The contract resolver guarantees a nonzero block length. Keeping the calculation here
-        // contract-driven makes lookup agree with capture on models whose state geometry selects
-        // a different boundary size than another artifact on the same machine.
-        let complete_prompt_block_count =
-            prompt_tokens.len() / persistent_prompt_cache_block_token_count;
-        // An exact block-boundary prompt must retain its final block for a
-        // forward pass. The final prompt token produces the logits used to
-        // begin decode, while restoring only recurrent state cannot substitute
-        // for that model computation.
-        let maximum_restorable_block_count = if allow_exact_block_boundary_restore {
-            complete_prompt_block_count
-        } else if prompt_tokens
-            .len()
-            .is_multiple_of(persistent_prompt_cache_block_token_count)
-        {
-            complete_prompt_block_count.saturating_sub(1)
-        } else {
-            complete_prompt_block_count
-        };
+        persistent_prompt_cache_kv_block_exists: KvBlockExists,
+        persistent_prompt_cache_recurrent_snapshot_exists: RecurrentSnapshotExists,
+    ) -> PersistentPromptCachePrefixLookupResult
+    where
+        KvBlockExists: Fn(&[u8; 32]) -> bool,
+        RecurrentSnapshotExists: Fn(&[u8; 32]) -> bool,
+    {
+        let (complete_prompt_block_count, maximum_restorable_block_count) =
+            complete_and_maximum_restorable_block_counts(
+                prompt_tokens.len(),
+                persistent_prompt_cache_model_contract.block_token_count(),
+                allow_exact_block_boundary_restore,
+            );
         let mut lookup_diagnostics = PersistentPromptCacheLookupDiagnostics::new(
             complete_prompt_block_count,
             maximum_restorable_block_count,
         );
+        let lookup_inputs = PersistentPromptCachePrefixLookupInputs {
+            persistent_prompt_cache_model_contract,
+            prompt_tokens,
+            block_causal_inputs,
+            allow_exact_block_boundary_restore,
+            probe_partial_tail_blocks,
+            persistent_prompt_cache_kv_block_exists,
+            persistent_prompt_cache_recurrent_snapshot_exists,
+        };
         if maximum_restorable_block_count == 0 {
-            // A prompt shorter than one complete block can still reuse a root
-            // tail published by a previous turn with the same short prefix.
-            if probe_partial_tail_blocks
-                && let Some(restored_partial_tail_block_key) =
-                    partial_tail_probe::probe_restorable_partial_tail_block(
-                        persistent_prompt_cache_model_contract,
-                        prompt_tokens,
-                        &[],
-                        false,
-                        allow_exact_block_boundary_restore,
-                        block_causal_inputs,
-                        &persistent_prompt_cache_kv_block_exists,
-                        &persistent_prompt_cache_recurrent_snapshot_exists,
-                    )
-            {
-                let restored_token_count = restored_partial_tail_block_key.token_count();
-                lookup_diagnostics
-                    .record_restored_partial_tail_block_token_count(restored_token_count);
-                return PersistentPromptCachePrefixLookupResult {
-                    restored_token_count,
-                    remaining_tokens: prompt_tokens[restored_token_count..].to_vec(),
-                    last_restored_persistent_prompt_cache_block_key: None,
-                    restored_partial_tail_block_key: Some(restored_partial_tail_block_key),
-                    lookup_diagnostics,
-                };
-            }
-            lookup_diagnostics.record_miss_reason(
-                PersistentPromptCacheMissReason::PromptTooShortForPersistentPromptCache,
-            );
-            return cache_miss_lookup_result(prompt_tokens, lookup_diagnostics);
+            return prompt_too_short_lookup_result(&lookup_inputs, lookup_diagnostics);
         }
-        // The key chain is constructed in prompt order. A hit for block N is
-        // meaningful only if every predecessor also matched, which prevents
-        // reuse across prompts that diverge in an earlier block.
-        let mut matched_persistent_prompt_cache_block_keys =
-            Vec::with_capacity(maximum_restorable_block_count);
-        let mut parent_persistent_prompt_cache_block_key: Option<PersistentPromptCacheBlockKey> =
-            None;
-        let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
-        for block_index in 0..maximum_restorable_block_count {
-            let block_start = block_index * persistent_prompt_cache_block_token_count;
-            let block_end = block_start + persistent_prompt_cache_block_token_count;
-            let block_tokens = &prompt_tokens[block_start..block_end];
-            let block_causal_input = match block_causal_inputs {
-                None => &empty_block_causal_input,
-                Some(block_causal_inputs) => {
-                    let Some(block_causal_input) = block_causal_inputs.get(block_index) else {
-                        lookup_diagnostics
-                            .record_first_missing_sequence_state_block_index(block_index, None);
-                        break;
-                    };
-                    block_causal_input
-                }
-            };
-            let persistent_prompt_cache_block_key =
-                match parent_persistent_prompt_cache_block_key.as_ref() {
-                    None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
-                        persistent_prompt_cache_model_contract,
-                        block_tokens,
-                        block_causal_input,
-                    ),
-                    Some(parent_persistent_prompt_cache_block_key) => {
-                        parent_persistent_prompt_cache_block_key
-                            .for_child_block_with_causal_input(block_tokens, block_causal_input)
-                    }
-                };
-            let persistent_prompt_cache_block_key = match persistent_prompt_cache_block_key {
-                // Invalid key construction is equivalent to a missing block here.
-                // This pure decision layer intentionally remains fail-soft; the
-                // engine can always process the complete prompt cold.
-                Ok(persistent_prompt_cache_block_key) => persistent_prompt_cache_block_key,
-                Err(_) => {
-                    lookup_diagnostics
-                        .record_first_missing_sequence_state_block_index(block_index, None);
-                    break;
-                }
-            };
-            if persistent_prompt_cache_model_contract.has_sequence_state()
-                && !persistent_prompt_cache_kv_block_exists(
-                    &persistent_prompt_cache_block_key.block_hash(),
-                )
-            {
-                lookup_diagnostics.record_first_missing_sequence_state_block_index(
-                    block_index,
-                    Some(persistent_prompt_cache_block_key.block_hash()),
-                );
-                break;
-            }
-            // Boundary-only models still construct the deterministic chain, but do not require
-            // a sequence-state file. Their latest complete boundary snapshot is sufficient for
-            // restore, whereas hybrid models require both forms of state at the same boundary.
-            parent_persistent_prompt_cache_block_key = Some(persistent_prompt_cache_block_key);
-            if let Some(parent_persistent_prompt_cache_block_key) =
-                &parent_persistent_prompt_cache_block_key
-            {
-                matched_persistent_prompt_cache_block_keys
-                    .push(parent_persistent_prompt_cache_block_key.clone());
-            }
-        }
+        let matched_persistent_prompt_cache_block_keys = matched_sequence_state_block_keys(
+            &lookup_inputs,
+            maximum_restorable_block_count,
+            &mut lookup_diagnostics,
+        );
         if persistent_prompt_cache_model_contract.has_sequence_state() {
             lookup_diagnostics.record_matched_sequence_state_block_count(
                 matched_persistent_prompt_cache_block_keys.len(),
             );
         }
-        let newest_recurrent_snapshot_entry = matched_persistent_prompt_cache_block_keys
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_block_index, persistent_prompt_cache_block_key)| {
-                !persistent_prompt_cache_model_contract.has_boundary_state()
-                    || persistent_prompt_cache_recurrent_snapshot_exists(
-                        &persistent_prompt_cache_block_key.block_hash(),
-                    )
-            });
+        let newest_recurrent_snapshot_entry = newest_restorable_boundary_entry(
+            persistent_prompt_cache_model_contract.has_boundary_state(),
+            &matched_persistent_prompt_cache_block_keys,
+            &lookup_inputs.persistent_prompt_cache_recurrent_snapshot_exists,
+        );
         let Some((recurrent_snapshot_block_index, restored_persistent_prompt_cache_block_key)) =
             newest_recurrent_snapshot_entry
         else {
-            let miss_reason = match (
+            let miss_reason = boundary_snapshot_miss_reason(
                 persistent_prompt_cache_model_contract.has_sequence_state(),
                 lookup_diagnostics.first_missing_sequence_state_block_index(),
-            ) {
-                (true, Some(0)) => PersistentPromptCacheMissReason::RootSequenceStateBlockMissing,
-                (true, Some(_)) | (true, None) | (false, _) => {
-                    PersistentPromptCacheMissReason::BoundaryStateSnapshotMissing
-                }
-            };
+            );
             lookup_diagnostics.record_miss_reason(miss_reason);
             return cache_miss_lookup_result(prompt_tokens, lookup_diagnostics);
         };
         lookup_diagnostics
             .record_newest_boundary_state_snapshot_block_index(recurrent_snapshot_block_index);
-        let restored_block_count =
-            (restored_persistent_prompt_cache_block_key.block_index() as usize).saturating_add(1);
-        let restored_complete_block_token_count =
-            restored_block_count.saturating_mul(persistent_prompt_cache_block_token_count);
-        if restored_complete_block_token_count == 0
-            || restored_complete_block_token_count > prompt_tokens.len()
-        {
-            lookup_diagnostics
-                .record_miss_reason(PersistentPromptCacheMissReason::BoundaryStateSnapshotMissing);
-            return cache_miss_lookup_result(prompt_tokens, lookup_diagnostics);
-        }
-        // Multi-turn prompts grow by a partial final block. When the previous
-        // turn published that suffix as a tail, restore it on top of the
-        // complete-block chain so only the uncached suffix is prefilled.
-        let restored_partial_tail_block_key = if probe_partial_tail_blocks {
-            partial_tail_probe::probe_restorable_partial_tail_block(
-                persistent_prompt_cache_model_contract,
-                prompt_tokens,
-                &matched_persistent_prompt_cache_block_keys,
-                recurrent_snapshot_block_index + 1
-                    == matched_persistent_prompt_cache_block_keys.len(),
-                allow_exact_block_boundary_restore,
-                block_causal_inputs,
-                &persistent_prompt_cache_kv_block_exists,
-                &persistent_prompt_cache_recurrent_snapshot_exists,
-            )
-        } else {
-            None
-        };
-        if let Some(restored_partial_tail_block_key) = &restored_partial_tail_block_key {
-            lookup_diagnostics.record_restored_partial_tail_block_token_count(
-                restored_partial_tail_block_key.token_count(),
-            );
-        }
-        let restored_token_count = restored_complete_block_token_count
-            + restored_partial_tail_block_key
-                .as_ref()
-                .map_or(0, PersistentPromptCacheBlockKey::token_count);
-        // Return the untouched suffix rather than a block-rounded slice. The
-        // final partial block and the required final token both belong to the
-        // normal prefill path.
-        let remaining_tokens = prompt_tokens[restored_token_count..].to_vec();
-        PersistentPromptCachePrefixLookupResult {
-            restored_token_count,
-            remaining_tokens,
-            last_restored_persistent_prompt_cache_block_key: Some(
-                restored_persistent_prompt_cache_block_key.clone(),
-            ),
-            restored_partial_tail_block_key,
+        restored_prefix_lookup_result(
+            &lookup_inputs,
+            &matched_persistent_prompt_cache_block_keys,
+            recurrent_snapshot_block_index,
+            restored_persistent_prompt_cache_block_key,
             lookup_diagnostics,
-        }
+        )
     }
 }
 
-fn cache_miss_lookup_result(
+pub(super) fn cache_miss_lookup_result(
     prompt_tokens: &[u32],
     lookup_diagnostics: PersistentPromptCacheLookupDiagnostics,
 ) -> PersistentPromptCachePrefixLookupResult {
@@ -590,3 +450,7 @@ fn cache_miss_lookup_result(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "prefix_lookup_tests.rs"]
+mod prefix_lookup_tests;
