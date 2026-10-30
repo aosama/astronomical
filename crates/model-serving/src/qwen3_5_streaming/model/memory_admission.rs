@@ -1,5 +1,6 @@
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxMemorySnapshot};
 
+use crate::expert_paging::ExpertWeightMemoryCacheStatistics;
 use crate::{ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionDecision};
 
 use super::super::inference_execution::qwen3_5_runtime_error;
@@ -7,7 +8,6 @@ use super::Qwen3_5Model;
 use crate::qwen3_5_streaming;
 
 /// Admits context against the paged expert cache, reclaiming its exact deficit.
-#[expect(clippy::too_many_lines)]
 pub(crate) fn validate_context_memory_admission(
     model: &Qwen3_5Model,
     memory_limits: MlxMemoryLimits,
@@ -24,11 +24,96 @@ pub(crate) fn validate_context_memory_admission(
         temporary_workspace_reservation_bytes,
         additional_maximum_expert_page_reservation_bytes,
     )?;
+    let context_admission_setup = build_streaming_context_admission_setup(
+        model,
+        initial_projection,
+        context_token_count_requiring_reservation,
+        temporary_workspace_reservation_bytes,
+    );
+    crate::memory::log_context_admission_projection(
+        "context_admission_after_owner_check",
+        context_token_count_requiring_reservation,
+        context_memory_reservation_bytes_per_token,
+        context_admission_setup.context_admission_requirements,
+    );
+    let context_admission_decision = context_admission_setup
+        .context_admission_requirements
+        .decide();
+    let context_reclamation_target_bytes = match context_admission_decision {
+        MemoryAdmissionDecision::Admit => return Ok(()),
+        MemoryAdmissionDecision::Reclaim { required_bytes } => {
+            usize::try_from(required_bytes).unwrap_or(usize::MAX)
+        }
+        MemoryAdmissionDecision::DemoteCompleteResidency { .. } => {
+            return Err(invalid_request_error(
+                "streaming context admission requested an unsupported residency transition",
+            ));
+        }
+        MemoryAdmissionDecision::Reject { .. } => {
+            return Err(invalid_request_error(
+                "generation context exceeds available GPU wired memory",
+            ));
+        }
+    };
+    if let Some(memory_snapshot_after_reclamation) =
+        qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
+            model,
+            context_reclamation_target_bytes,
+        )?
+    {
+        let streaming_reclaimed_outcome = evaluate_streaming_reclaimed_outcome(
+            model,
+            &context_admission_setup,
+            context_reclamation_target_bytes,
+            memory_snapshot_after_reclamation,
+        );
+        return report_streaming_reclaimed_outcome(
+            model,
+            &context_admission_setup,
+            streaming_reclaimed_outcome,
+        );
+    }
+    Err(reject_streaming_context_before_mlx_allocation(
+        &context_admission_setup,
+    ))
+}
+
+/// Reservation scalars shared by every admission projection in this file.
+#[derive(Clone, Copy)]
+struct ContextAdmissionReservations {
+    context_reservation_bytes: usize,
+    maximum_expert_page_reservation_bytes: usize,
+    temporary_workspace_reservation_bytes: usize,
+    active_memory_ceiling_bytes: usize,
+}
+
+/// Resolved inputs the admission decision paths read after the initial projection.
+struct StreamingContextAdmissionSetup {
+    context_token_count_requiring_reservation: usize,
+    initial_memory_snapshot: MlxMemorySnapshot,
+    reservations: ContextAdmissionReservations,
+    initial_projected_active_memory_bytes: usize,
+    expert_weight_memory_cache_statistics_before_reclamation: ExpertWeightMemoryCacheStatistics,
+    context_admission_requirements: ContextAdmissionRequirements,
+}
+
+fn build_streaming_context_admission_setup(
+    model: &Qwen3_5Model,
+    initial_projection: ContextMemoryAdmissionProjection,
+    context_token_count_requiring_reservation: usize,
+    temporary_workspace_reservation_bytes: usize,
+) -> StreamingContextAdmissionSetup {
     let initial_memory_snapshot = initial_projection.memory_snapshot;
     let context_reservation_bytes = initial_projection.context_reservation_bytes;
     let maximum_expert_page_reservation_bytes =
         initial_projection.maximum_expert_page_reservation_bytes;
     let configured_mlx_memory_limit_bytes = initial_projection.configured_mlx_memory_limit_bytes;
+    let reservations = ContextAdmissionReservations {
+        context_reservation_bytes,
+        maximum_expert_page_reservation_bytes,
+        temporary_workspace_reservation_bytes,
+        active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
+    };
     let initial_projected_active_memory_bytes = ContextAdmissionRequirements {
         current_active_memory_bytes: initial_memory_snapshot.active_memory_bytes(),
         context_growth_bytes: context_reservation_bytes,
@@ -54,95 +139,150 @@ pub(crate) fn validate_context_memory_admission(
         active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
         complete_experts_are_resident: false,
     };
-    crate::memory::log_context_admission_projection(
-        "context_admission_after_owner_check",
+    StreamingContextAdmissionSetup {
         context_token_count_requiring_reservation,
-        context_memory_reservation_bytes_per_token,
+        initial_memory_snapshot,
+        reservations,
+        initial_projected_active_memory_bytes,
+        expert_weight_memory_cache_statistics_before_reclamation,
         context_admission_requirements,
-    );
-    let context_admission_decision = context_admission_requirements.decide();
-    let context_reclamation_target_bytes = match context_admission_decision {
-        MemoryAdmissionDecision::Admit => return Ok(()),
-        MemoryAdmissionDecision::Reclaim { required_bytes } => {
-            usize::try_from(required_bytes).unwrap_or(usize::MAX)
-        }
-        MemoryAdmissionDecision::DemoteCompleteResidency { .. } => {
-            return Err(invalid_request_error(
-                "streaming context admission requested an unsupported residency transition",
-            ));
-        }
-        MemoryAdmissionDecision::Reject { .. } => {
-            return Err(invalid_request_error(
-                "generation context exceeds available GPU wired memory",
-            ));
-        }
-    };
-    if let Some(memory_snapshot_after_reclamation) =
-        qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
-            model,
-            context_reclamation_target_bytes,
-        )?
-    {
-        let expert_weight_memory_cache_statistics_after_reclamation =
-            model.expert_weight_memory_cache_statistics();
-        let actual_reclaimed_expert_payload_bytes =
-            expert_weight_memory_cache_statistics_before_reclamation
-                .resident_payload_byte_count
-                .saturating_sub(
-                    expert_weight_memory_cache_statistics_after_reclamation
-                        .resident_payload_byte_count,
-                );
-        let reclamation_overshoot_bytes = actual_reclaimed_expert_payload_bytes
-            .saturating_sub(u64::try_from(context_reclamation_target_bytes).unwrap_or(u64::MAX));
-        let post_reclamation_requirements = ContextAdmissionRequirements {
-            current_active_memory_bytes: memory_snapshot_after_reclamation.active_memory_bytes(),
-            context_growth_bytes: context_reservation_bytes,
-            expert_page_reservation_bytes: maximum_expert_page_reservation_bytes,
-            temporary_workspace_bytes: temporary_workspace_reservation_bytes,
-            retained_expert_payload_bytes: usize::try_from(
+    }
+}
+
+/// Payload bytes actually released by reclamation plus any excess beyond target.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ContextReclamationDelta {
+    actual_reclaimed_expert_payload_bytes: u64,
+    reclamation_overshoot_bytes: u64,
+}
+
+fn measure_context_reclamation_delta(
+    expert_weight_memory_cache_statistics_before_reclamation: &ExpertWeightMemoryCacheStatistics,
+    expert_weight_memory_cache_statistics_after_reclamation: &ExpertWeightMemoryCacheStatistics,
+    context_reclamation_target_bytes: usize,
+) -> ContextReclamationDelta {
+    let actual_reclaimed_expert_payload_bytes =
+        expert_weight_memory_cache_statistics_before_reclamation
+            .resident_payload_byte_count
+            .saturating_sub(
                 expert_weight_memory_cache_statistics_after_reclamation.resident_payload_byte_count,
-            )
-            .unwrap_or(usize::MAX),
-            active_memory_ceiling_bytes: configured_mlx_memory_limit_bytes,
-            complete_experts_are_resident: false,
-        };
-        let projected_active_memory_bytes_after_reclamation = post_reclamation_requirements
-            .projected_active_memory_bytes()
-            .unwrap_or(usize::MAX);
-        let post_reclamation_decision = post_reclamation_requirements.decide();
-        if post_reclamation_decision == MemoryAdmissionDecision::Admit {
-            tracing::info!(
-                context_token_count_requiring_reservation,
-                initial_active_memory_bytes = initial_memory_snapshot.active_memory_bytes(),
-                active_memory_bytes_after_reclamation =
-                    memory_snapshot_after_reclamation.active_memory_bytes(),
-                context_reservation_bytes,
-                maximum_expert_page_reservation_bytes,
-                temporary_workspace_reservation_bytes,
-                projected_active_memory_bytes_after_reclamation,
-                configured_mlx_memory_limit_bytes,
-                retained_expert_payload_bytes_before =
-                    expert_weight_memory_cache_statistics_before_reclamation
-                        .resident_payload_byte_count,
-                retained_expert_payload_bytes_after =
-                    expert_weight_memory_cache_statistics_after_reclamation
-                        .resident_payload_byte_count,
-                actual_reclaimed_expert_payload_bytes,
-                reclamation_overshoot_bytes,
-                expert_eviction_count_delta =
-                    expert_weight_memory_cache_statistics_after_reclamation
-                        .eviction_count
-                        .saturating_sub(
-                            expert_weight_memory_cache_statistics_before_reclamation.eviction_count,
-                        ),
-                allocator_cache_memory_bytes_after_reclamation =
-                    memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
-                "admitted generation context after reclaiming retained experts"
             );
-            return Ok(());
-        }
-        model.resume_expert_retention_after_request_memory_pressure();
-        tracing::warn!(
+    let reclamation_overshoot_bytes = actual_reclaimed_expert_payload_bytes
+        .saturating_sub(u64::try_from(context_reclamation_target_bytes).unwrap_or(u64::MAX));
+    ContextReclamationDelta {
+        actual_reclaimed_expert_payload_bytes,
+        reclamation_overshoot_bytes,
+    }
+}
+
+/// Post-reclamation verdict for the unchanged context projection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ReclaimedContextAdmissionProjection {
+    projected_active_memory_bytes_after_reclamation: usize,
+    post_reclamation_decision: MemoryAdmissionDecision,
+}
+
+fn project_reclaimed_context_admission(
+    reservations: ContextAdmissionReservations,
+    active_memory_bytes_after_reclamation: usize,
+    retained_expert_payload_bytes_after_reclamation: usize,
+) -> ReclaimedContextAdmissionProjection {
+    // Experts are already paged when a reclaim target exists, so the
+    // re-projection never charges a complete-residency owner.
+    let post_reclamation_requirements = ContextAdmissionRequirements {
+        current_active_memory_bytes: active_memory_bytes_after_reclamation,
+        context_growth_bytes: reservations.context_reservation_bytes,
+        expert_page_reservation_bytes: reservations.maximum_expert_page_reservation_bytes,
+        temporary_workspace_bytes: reservations.temporary_workspace_reservation_bytes,
+        retained_expert_payload_bytes: retained_expert_payload_bytes_after_reclamation,
+        active_memory_ceiling_bytes: reservations.active_memory_ceiling_bytes,
+        complete_experts_are_resident: false,
+    };
+    let projected_active_memory_bytes_after_reclamation = post_reclamation_requirements
+        .projected_active_memory_bytes()
+        .unwrap_or(usize::MAX);
+    let post_reclamation_decision = post_reclamation_requirements.decide();
+    ReclaimedContextAdmissionProjection {
+        projected_active_memory_bytes_after_reclamation,
+        post_reclamation_decision,
+    }
+}
+
+/// Post-reclamation state one reporting pass consumes.
+struct StreamingReclaimedOutcome {
+    memory_snapshot_after_reclamation: MlxMemorySnapshot,
+    expert_weight_memory_cache_statistics_after_reclamation: ExpertWeightMemoryCacheStatistics,
+    actual_reclaimed_expert_payload_bytes: u64,
+    reclamation_overshoot_bytes: u64,
+    projected_active_memory_bytes_after_reclamation: usize,
+    post_reclamation_decision: MemoryAdmissionDecision,
+}
+
+fn evaluate_streaming_reclaimed_outcome(
+    model: &Qwen3_5Model,
+    context_admission_setup: &StreamingContextAdmissionSetup,
+    context_reclamation_target_bytes: usize,
+    memory_snapshot_after_reclamation: MlxMemorySnapshot,
+) -> StreamingReclaimedOutcome {
+    let expert_weight_memory_cache_statistics_after_reclamation =
+        model.expert_weight_memory_cache_statistics();
+    let context_reclamation_delta = measure_context_reclamation_delta(
+        &context_admission_setup.expert_weight_memory_cache_statistics_before_reclamation,
+        &expert_weight_memory_cache_statistics_after_reclamation,
+        context_reclamation_target_bytes,
+    );
+    let post_reclamation_projection = project_reclaimed_context_admission(
+        context_admission_setup.reservations,
+        memory_snapshot_after_reclamation.active_memory_bytes(),
+        usize::try_from(
+            expert_weight_memory_cache_statistics_after_reclamation.resident_payload_byte_count,
+        )
+        .unwrap_or(usize::MAX),
+    );
+    StreamingReclaimedOutcome {
+        memory_snapshot_after_reclamation,
+        expert_weight_memory_cache_statistics_after_reclamation,
+        actual_reclaimed_expert_payload_bytes: context_reclamation_delta
+            .actual_reclaimed_expert_payload_bytes,
+        reclamation_overshoot_bytes: context_reclamation_delta.reclamation_overshoot_bytes,
+        projected_active_memory_bytes_after_reclamation: post_reclamation_projection
+            .projected_active_memory_bytes_after_reclamation,
+        post_reclamation_decision: post_reclamation_projection.post_reclamation_decision,
+    }
+}
+
+fn report_streaming_reclaimed_outcome(
+    model: &Qwen3_5Model,
+    context_admission_setup: &StreamingContextAdmissionSetup,
+    streaming_reclaimed_outcome: StreamingReclaimedOutcome,
+) -> Result<(), InferenceEngineError> {
+    let context_token_count_requiring_reservation =
+        context_admission_setup.context_token_count_requiring_reservation;
+    let initial_memory_snapshot = context_admission_setup.initial_memory_snapshot;
+    let context_reservation_bytes = context_admission_setup
+        .reservations
+        .context_reservation_bytes;
+    let maximum_expert_page_reservation_bytes = context_admission_setup
+        .reservations
+        .maximum_expert_page_reservation_bytes;
+    let temporary_workspace_reservation_bytes = context_admission_setup
+        .reservations
+        .temporary_workspace_reservation_bytes;
+    let configured_mlx_memory_limit_bytes = context_admission_setup
+        .reservations
+        .active_memory_ceiling_bytes;
+    let expert_weight_memory_cache_statistics_before_reclamation =
+        context_admission_setup.expert_weight_memory_cache_statistics_before_reclamation;
+    let StreamingReclaimedOutcome {
+        memory_snapshot_after_reclamation,
+        expert_weight_memory_cache_statistics_after_reclamation,
+        actual_reclaimed_expert_payload_bytes,
+        reclamation_overshoot_bytes,
+        projected_active_memory_bytes_after_reclamation,
+        post_reclamation_decision,
+    } = streaming_reclaimed_outcome;
+    if post_reclamation_decision == MemoryAdmissionDecision::Admit {
+        tracing::info!(
             context_token_count_requiring_reservation,
             initial_active_memory_bytes = initial_memory_snapshot.active_memory_bytes(),
             active_memory_bytes_after_reclamation =
@@ -166,12 +306,61 @@ pub(crate) fn validate_context_memory_admission(
                 ),
             allocator_cache_memory_bytes_after_reclamation =
                 memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
-            "rejected generation context after retained-expert reclamation remained insufficient"
+            "admitted generation context after reclaiming retained experts"
         );
-        return Err(invalid_request_error(
-            "generation context exceeds available GPU wired memory",
-        ));
+        return Ok(());
     }
+    model.resume_expert_retention_after_request_memory_pressure();
+    tracing::warn!(
+        context_token_count_requiring_reservation,
+        initial_active_memory_bytes = initial_memory_snapshot.active_memory_bytes(),
+        active_memory_bytes_after_reclamation =
+            memory_snapshot_after_reclamation.active_memory_bytes(),
+        context_reservation_bytes,
+        maximum_expert_page_reservation_bytes,
+        temporary_workspace_reservation_bytes,
+        projected_active_memory_bytes_after_reclamation,
+        configured_mlx_memory_limit_bytes,
+        retained_expert_payload_bytes_before =
+            expert_weight_memory_cache_statistics_before_reclamation.resident_payload_byte_count,
+        retained_expert_payload_bytes_after =
+            expert_weight_memory_cache_statistics_after_reclamation.resident_payload_byte_count,
+        actual_reclaimed_expert_payload_bytes,
+        reclamation_overshoot_bytes,
+        expert_eviction_count_delta = expert_weight_memory_cache_statistics_after_reclamation
+            .eviction_count
+            .saturating_sub(
+                expert_weight_memory_cache_statistics_before_reclamation.eviction_count,
+            ),
+        allocator_cache_memory_bytes_after_reclamation =
+            memory_snapshot_after_reclamation.allocator_cache_memory_bytes(),
+        "rejected generation context after retained-expert reclamation remained insufficient"
+    );
+    Err(invalid_request_error(
+        "generation context exceeds available GPU wired memory",
+    ))
+}
+
+fn reject_streaming_context_before_mlx_allocation(
+    context_admission_setup: &StreamingContextAdmissionSetup,
+) -> InferenceEngineError {
+    let context_token_count_requiring_reservation =
+        context_admission_setup.context_token_count_requiring_reservation;
+    let initial_memory_snapshot = context_admission_setup.initial_memory_snapshot;
+    let context_reservation_bytes = context_admission_setup
+        .reservations
+        .context_reservation_bytes;
+    let maximum_expert_page_reservation_bytes = context_admission_setup
+        .reservations
+        .maximum_expert_page_reservation_bytes;
+    let temporary_workspace_reservation_bytes = context_admission_setup
+        .reservations
+        .temporary_workspace_reservation_bytes;
+    let initial_projected_active_memory_bytes =
+        context_admission_setup.initial_projected_active_memory_bytes;
+    let configured_mlx_memory_limit_bytes = context_admission_setup
+        .reservations
+        .active_memory_ceiling_bytes;
     tracing::warn!(
         context_token_count_requiring_reservation,
         live_memory_bytes = initial_memory_snapshot.active_memory_bytes(),
@@ -182,9 +371,7 @@ pub(crate) fn validate_context_memory_admission(
         configured_mlx_memory_limit_bytes,
         "rejected generation context before MLX request allocation"
     );
-    Err(invalid_request_error(
-        "generation context exceeds available GPU wired memory",
-    ))
+    invalid_request_error("generation context exceeds available GPU wired memory")
 }
 
 struct ContextMemoryAdmissionProjection {
@@ -237,3 +424,7 @@ pub(crate) fn invalid_request_error(reason: impl Into<String>) -> InferenceEngin
         reason: reason.into(),
     }
 }
+
+#[cfg(test)]
+#[path = "streaming_memory_admission_tests.rs"]
+mod streaming_memory_admission_tests;
