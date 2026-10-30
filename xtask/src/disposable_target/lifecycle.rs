@@ -12,7 +12,7 @@
 
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, ExitCode};
+use std::process::{Child, Command, ExitCode, ExitStatus};
 use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
@@ -57,41 +57,15 @@ pub(super) struct DisposableJourney {
     pub(super) is_cleanup_pending: bool,
 }
 
-#[expect(clippy::too_many_lines)]
 pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourney) -> ExitCode {
-    let selected_lane_root = match select_lane_root() {
-        Ok(selected_lane_root) => selected_lane_root,
-        Err(lane_root_error) => {
-            print_error(&lane_root_error);
-            return ExitCode::from(1);
-        }
-    };
-    let configured_rustc_wrapper = std::env::var("RUSTC_WRAPPER")
-        .ok()
-        .filter(|value| !value.is_empty());
-    if let Some(wrapper_name) = configured_rustc_wrapper.as_deref()
-        && !command_is_available(wrapper_name)
-    {
-        print_error(&format!("required command is unavailable: {wrapper_name}"));
+    let Some(command_environment) = select_command_environment() else {
         return ExitCode::from(1);
-    }
-    let selected_rustc_wrapper = select_rustc_wrapper(
-        configured_rustc_wrapper.as_deref(),
-        command_is_available("sccache"),
-    );
-
-    let target_directory =
-        match super::create_marker_owned_target(&selected_lane_root, &journey.lane_name) {
-            Ok(target_directory) => target_directory,
-            Err(creation_error) => {
-                print_error(&format!(
-                    "could not create disposable Cargo target in {}: {creation_error}",
-                    selected_lane_root.display()
-                ));
-                return ExitCode::from(1);
-            }
-        };
-
+    };
+    let Some(target_directory) =
+        create_disposable_target(&command_environment.lane_root, &journey.lane_name)
+    else {
+        return ExitCode::from(1);
+    };
     let Some(signal_pipe) = signal_edge::SignalPipe::install() else {
         print_error("could not install the disposable lifecycle signal handlers");
         return ExitCode::from(1);
@@ -101,56 +75,16 @@ pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourne
         lane_name: journey.lane_name.clone(),
         repository_root: repository_root.to_path_buf(),
         target_directory: target_directory.clone(),
-        selected_rustc_wrapper,
+        selected_rustc_wrapper: command_environment.rustc_wrapper,
         signal_pipe_read_fd: signal_pipe.read_fd,
         cleanup_operation: CleanupOperationName::Handoff,
         removal_result_receiver: None,
         cleanup_progress_reporter: None,
         is_cleanup_pending: true,
     };
+    disposable_journey.log_start();
 
-    lifecycle_line(
-        &disposable_journey.lane_name,
-        &format!(
-            "start target_directory={} rustc_wrapper={} started_at={}",
-            disposable_journey.target_directory.display(),
-            disposable_journey
-                .selected_rustc_wrapper
-                .as_deref()
-                .unwrap_or("none"),
-            local_timestamp()
-        ),
-        false,
-    );
-
-    // A dedicated process group lets interruption stop nested Cargo and
-    // native build children before their target disappears.
-    let mut child_command = Command::new(&journey.command[0]);
-    child_command
-        .args(&journey.command[1..])
-        .current_dir(&disposable_journey.repository_root)
-        .env("CARGO_TARGET_DIR", &disposable_journey.target_directory)
-        .env("ASTRONOMICAL_CARGO_TARGET_LIFECYCLE", "disposable")
-        .env(
-            "ASTRONOMICAL_CARGO_TARGET_LANE",
-            &disposable_journey.lane_name,
-        )
-        .env(
-            DISPOSABLE_REPOSITORY_ROOT_ENV,
-            disposable_journey
-                .repository_root
-                .canonicalize()
-                .unwrap_or_else(|_| disposable_journey.repository_root.clone()),
-        )
-        .process_group(0);
-    match disposable_journey.selected_rustc_wrapper.as_deref() {
-        Some(wrapper_name) => {
-            child_command.env("RUSTC_WRAPPER", wrapper_name);
-        }
-        None => {
-            child_command.env_remove("RUSTC_WRAPPER");
-        }
-    }
+    let mut child_command = disposable_journey.build_child_command(&journey.command);
     let mut child_process = match child_command.spawn() {
         Ok(child_process) => child_process,
         Err(launch_error) => {
@@ -162,25 +96,11 @@ pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourne
     let child_process_group_id = child_process.id() as i32;
 
     let journey_started_at_seconds = unix_epoch_seconds();
-    let child_exit_status = loop {
-        if let Some(received_signal) = disposable_journey.poll_received_signal() {
-            return disposable_journey.handle_received_signal_during_child(
-                received_signal,
-                child_process_group_id,
-                &mut child_process,
-            );
-        }
-        match child_process.try_wait() {
-            Ok(Some(child_exit_status)) => break child_exit_status,
-            Ok(None) => continue,
-            Err(wait_error) => {
-                print_error(&format!(
-                    "could not observe the disposable command: {wait_error}"
-                ));
-                return ExitCode::from(1);
-            }
-        }
-    };
+    let child_exit_status =
+        match disposable_journey.await_child_exit(child_process_group_id, &mut child_process) {
+            Ok(child_exit_status) => child_exit_status,
+            Err(early_exit_code) => return early_exit_code,
+        };
 
     let process_group_stop_failed = !disposable_journey.stop_child_process_group(
         "command-finished",
@@ -194,31 +114,68 @@ pub(super) fn run_disposable_command(repository_root: &Path, journey: LaneJourne
             &mut child_process,
         );
     }
-    lifecycle_line(
-        &disposable_journey.lane_name,
-        &format!(
-            "command-finished exit_status={} elapsed_seconds={}",
-            exit_code_from_status(&child_exit_status),
-            unix_epoch_seconds().saturating_sub(journey_started_at_seconds)
-        ),
-        false,
-    );
+    disposable_journey.log_command_finished(&child_exit_status, journey_started_at_seconds);
     if process_group_stop_failed {
-        disposable_journey.is_cleanup_pending = false;
-        lifecycle_line(
-            &disposable_journey.lane_name,
-            &format!(
-                "cleanup-skipped-active-process-group target_directory={}",
-                disposable_journey.target_directory.display()
-            ),
-            true,
-        );
+        disposable_journey.skip_cleanup_for_active_process_group();
         return ExitCode::from(1);
     }
 
     let cleanup_succeeded = disposable_journey.cleanup_owned_target().is_ok();
+    exit_code_after_cleanup(&child_exit_status, cleanup_succeeded)
+}
+
+/// The lane root and rustc wrapper resolved once and consumed by every later
+/// phase of the disposable journey.
+struct CommandEnvironment {
+    lane_root: PathBuf,
+    rustc_wrapper: Option<String>,
+}
+
+fn select_command_environment() -> Option<CommandEnvironment> {
+    let selected_lane_root = match select_lane_root() {
+        Ok(selected_lane_root) => selected_lane_root,
+        Err(lane_root_error) => {
+            print_error(&lane_root_error);
+            return None;
+        }
+    };
+    let configured_rustc_wrapper = std::env::var("RUSTC_WRAPPER")
+        .ok()
+        .filter(|value| !value.is_empty());
+    if let Some(wrapper_name) = configured_rustc_wrapper.as_deref()
+        && !command_is_available(wrapper_name)
+    {
+        print_error(&format!("required command is unavailable: {wrapper_name}"));
+        return None;
+    }
+    let selected_rustc_wrapper = select_rustc_wrapper(
+        configured_rustc_wrapper.as_deref(),
+        command_is_available("sccache"),
+    );
+    Some(CommandEnvironment {
+        lane_root: selected_lane_root,
+        rustc_wrapper: selected_rustc_wrapper,
+    })
+}
+
+fn create_disposable_target(lane_root: &Path, lane_name: &str) -> Option<PathBuf> {
+    match super::create_marker_owned_target(lane_root, lane_name) {
+        Ok(target_directory) => Some(target_directory),
+        Err(creation_error) => {
+            print_error(&format!(
+                "could not create disposable Cargo target in {}: {creation_error}",
+                lane_root.display()
+            ));
+            None
+        }
+    }
+}
+
+/// The exit-code precedence after supervision ends: the child's own status
+/// outranks a cleanup failure, and a cleanup failure outranks success.
+fn exit_code_after_cleanup(child_exit_status: &ExitStatus, cleanup_succeeded: bool) -> ExitCode {
     if !child_exit_status.success() {
-        return ExitCode::from(exit_code_from_status(&child_exit_status) as u8);
+        return ExitCode::from(exit_code_from_status(child_exit_status) as u8);
     }
     if !cleanup_succeeded {
         return ExitCode::from(1);
@@ -266,6 +223,106 @@ impl DisposableJourney {
         }
     }
 
+    fn log_start(&self) {
+        lifecycle_line(
+            &self.lane_name,
+            &format!(
+                "start target_directory={} rustc_wrapper={} started_at={}",
+                self.target_directory.display(),
+                self.selected_rustc_wrapper.as_deref().unwrap_or("none"),
+                local_timestamp()
+            ),
+            false,
+        );
+    }
+
+    /// A dedicated process group lets interruption stop nested Cargo and
+    /// native build children before their target disappears.
+    fn build_child_command(&self, journey_command: &[String]) -> Command {
+        let mut child_command = Command::new(&journey_command[0]);
+        child_command
+            .args(&journey_command[1..])
+            .current_dir(&self.repository_root)
+            .env("CARGO_TARGET_DIR", &self.target_directory)
+            .env("ASTRONOMICAL_CARGO_TARGET_LIFECYCLE", "disposable")
+            .env("ASTRONOMICAL_CARGO_TARGET_LANE", &self.lane_name)
+            .env(
+                DISPOSABLE_REPOSITORY_ROOT_ENV,
+                self.repository_root
+                    .canonicalize()
+                    .unwrap_or_else(|_| self.repository_root.clone()),
+            )
+            .process_group(0);
+        match self.selected_rustc_wrapper.as_deref() {
+            Some(wrapper_name) => {
+                child_command.env("RUSTC_WRAPPER", wrapper_name);
+            }
+            None => {
+                child_command.env_remove("RUSTC_WRAPPER");
+            }
+        }
+        child_command
+    }
+
+    /// Polls for signals and child exit until the child terminates; the
+    /// error variant carries the exit code the supervisor must return early.
+    fn await_child_exit(
+        &mut self,
+        child_process_group_id: i32,
+        child_process: &mut Child,
+    ) -> Result<ExitStatus, ExitCode> {
+        loop {
+            if let Some(received_signal) = self.poll_received_signal() {
+                return Err(self.handle_received_signal_during_child(
+                    received_signal,
+                    child_process_group_id,
+                    child_process,
+                ));
+            }
+            match child_process.try_wait() {
+                Ok(Some(child_exit_status)) => return Ok(child_exit_status),
+                Ok(None) => continue,
+                Err(wait_error) => {
+                    print_error(&format!(
+                        "could not observe the disposable command: {wait_error}"
+                    ));
+                    return Err(ExitCode::from(1));
+                }
+            }
+        }
+    }
+
+    fn log_command_finished(
+        &self,
+        child_exit_status: &ExitStatus,
+        journey_started_at_seconds: u64,
+    ) {
+        lifecycle_line(
+            &self.lane_name,
+            &format!(
+                "command-finished exit_status={} elapsed_seconds={}",
+                exit_code_from_status(child_exit_status),
+                unix_epoch_seconds().saturating_sub(journey_started_at_seconds)
+            ),
+            false,
+        );
+    }
+
+    /// A process group that survived the kill escalation may still hold the
+    /// target's files open, so cleanup is abandoned and reported instead of
+    /// racing the live group.
+    fn skip_cleanup_for_active_process_group(&mut self) {
+        self.is_cleanup_pending = false;
+        lifecycle_line(
+            &self.lane_name,
+            &format!(
+                "cleanup-skipped-active-process-group target_directory={}",
+                self.target_directory.display()
+            ),
+            true,
+        );
+    }
+
     fn handle_received_signal_during_child(
         &mut self,
         received_signal: i32,
@@ -284,15 +341,7 @@ impl DisposableJourney {
             child_process_group_id,
             child_process,
         ) {
-            self.is_cleanup_pending = false;
-            lifecycle_line(
-                &self.lane_name,
-                &format!(
-                    "cleanup-skipped-active-process-group target_directory={}",
-                    self.target_directory.display()
-                ),
-                true,
-            );
+            self.skip_cleanup_for_active_process_group();
             return ExitCode::from(signal_exit_status as u8);
         }
         let _ = self.cleanup_owned_target();
@@ -349,3 +398,7 @@ impl DisposableJourney {
         true
     }
 }
+
+#[cfg(test)]
+#[path = "lifecycle_tests.rs"]
+mod lifecycle_tests;

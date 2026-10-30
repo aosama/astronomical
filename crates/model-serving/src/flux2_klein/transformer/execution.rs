@@ -85,6 +85,50 @@ impl Flux2KleinForwardAdvance {
     }
 }
 
+/// The half-open block-index range one bounded group covers within one stream.
+struct BlockGroupWindow {
+    first_block_index: usize,
+    end_block_index: usize,
+}
+
+/// Pure: clamps the requested group length to the stream's remaining blocks, so
+/// the final group of a stream may run fewer blocks than the bound allows.
+fn block_group_window(
+    next_block_index: usize,
+    maximum_blocks_per_group: usize,
+    total_block_count: usize,
+) -> BlockGroupWindow {
+    BlockGroupWindow {
+        first_block_index: next_block_index,
+        end_block_index: next_block_index
+            .saturating_add(maximum_blocks_per_group)
+            .min(total_block_count),
+    }
+}
+
+/// Everything one block-group advance reads besides the stream state it owns:
+/// the request-scoped arrays, and the cancellation-event and
+/// performance-attribution observers.
+struct BlockGroupAdvance<'a> {
+    modulation: &'a ModulationSet,
+    rope_cosines: &'a MlxArray,
+    rope_sines: &'a MlxArray,
+    record_event: &'a mut dyn FnMut(Flux2KleinBlockGroupEvent),
+    performance_attribution: &'a mut PerformanceAttribution,
+}
+
+/// The outcome of one single-stream group advance: either more single-stream
+/// groups remain, or every block has run and sampling can finalize.
+enum SingleStreamGroupAdvance {
+    GroupsRemain {
+        joint_states: MlxArray,
+        next_block_index: usize,
+    },
+    AllBlocksRan {
+        joint_states: MlxArray,
+    },
+}
+
 #[derive(Debug)]
 pub struct Flux2KleinTransformer {
     pub(super) runtime: MlxRuntime,
@@ -207,10 +251,9 @@ impl Flux2KleinTransformer {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
     pub(crate) fn advance_one_block_group_with_performance_attribution(
         &self,
-        mut forward_state: Flux2KleinForwardState,
+        forward_state: Flux2KleinForwardState,
         maximum_blocks_per_group: usize,
         record_event: &mut dyn FnMut(Flux2KleinBlockGroupEvent),
         performance_attribution: &mut PerformanceAttribution,
@@ -218,154 +261,242 @@ impl Flux2KleinTransformer {
         if maximum_blocks_per_group == 0 {
             return Err(Flux2KleinTransformerError::ZeroBlockGroupSize);
         }
-        forward_state.block_state = match forward_state.block_state {
+        let Flux2KleinForwardState {
+            timestep_embedding,
+            rope_cosines,
+            rope_sines,
+            modulation,
+            block_state,
+            text_token_count,
+        } = forward_state;
+        let block_group_advance = BlockGroupAdvance {
+            modulation: &modulation,
+            rope_cosines: &rope_cosines,
+            rope_sines: &rope_sines,
+            record_event,
+            performance_attribution,
+        };
+        match block_state {
             ForwardBlockState::DoubleStream {
-                mut state,
+                state,
                 next_block_index,
             } => {
-                let end_block_index = next_block_index
-                    .saturating_add(maximum_blocks_per_group)
-                    .min(self.geometry.double_stream_block_count());
-                let started_at = Instant::now();
-                record_event(Flux2KleinBlockGroupEvent::Started {
-                    kind: Flux2KleinBlockKind::DoubleStream,
-                    first_block_index: next_block_index,
-                    end_block_index,
-                    started_at,
-                });
-                let mut group_streamed_weights = false;
-                for block_index in next_block_index..end_block_index {
-                    let block_weights = self.weights.bind_block(&self.runtime, block_index)?;
-                    group_streamed_weights |= block_weights.is_operation_local();
-                    state = performance_attribution.measure_operation(
-                        PerformanceOperation::ImageTransformerBlockGroupGraphConstruction,
-                        |_| {
-                            double_stream_block(
-                                &self.runtime,
-                                &self.geometry,
-                                &block_weights,
-                                block_index,
-                                state,
-                                &forward_state.modulation,
-                                &forward_state.rope_cosines,
-                                &forward_state.rope_sines,
-                            )
-                        },
-                    )?;
-                    if block_weights.is_operation_local() {
-                        performance_attribution.measure_operation(
-                            PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
-                            |_| self.runtime.evaluate_arrays(&[&state.image, &state.text]),
-                        )?;
-                    }
-                }
-                if !group_streamed_weights {
-                    performance_attribution.measure_operation(
-                        PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
-                        |_| self.runtime.evaluate_arrays(&[&state.image, &state.text]),
-                    )?;
-                }
-                if group_streamed_weights {
-                    self.runtime.clear_allocator_cache()?;
-                }
-                record_event(Flux2KleinBlockGroupEvent::Completed {
-                    kind: Flux2KleinBlockKind::DoubleStream,
-                    first_block_index: next_block_index,
-                    end_block_index,
-                    started_at,
-                    ended_at: Instant::now(),
-                });
-                if end_block_index == self.geometry.double_stream_block_count() {
-                    ForwardBlockState::SingleStream {
-                        joint_states: self
-                            .runtime
-                            .concatenate_axis(&[&state.text, &state.image], 1)?,
-                        next_block_index: 0,
-                    }
-                } else {
-                    ForwardBlockState::DoubleStream {
-                        state,
-                        next_block_index: end_block_index,
-                    }
-                }
+                let block_state = self.advance_double_stream_group(
+                    block_group_advance,
+                    state,
+                    next_block_index,
+                    maximum_blocks_per_group,
+                )?;
+                Ok(Flux2KleinForwardAdvance::BlockGroupCompleted(
+                    Flux2KleinForwardState {
+                        timestep_embedding,
+                        rope_cosines,
+                        rope_sines,
+                        modulation,
+                        block_state,
+                        text_token_count,
+                    },
+                ))
             }
             ForwardBlockState::SingleStream {
-                mut joint_states,
+                joint_states,
                 next_block_index,
             } => {
-                let end_block_index = next_block_index
-                    .saturating_add(maximum_blocks_per_group)
-                    .min(self.geometry.single_stream_block_count());
-                let started_at = Instant::now();
-                record_event(Flux2KleinBlockGroupEvent::Started {
-                    kind: Flux2KleinBlockKind::SingleStream,
-                    first_block_index: next_block_index,
-                    end_block_index,
-                    started_at,
-                });
-                let mut group_streamed_weights = false;
-                for block_index in next_block_index..end_block_index {
-                    let combined_block_index =
-                        self.geometry.double_stream_block_count() + block_index;
-                    let block_weights = self
-                        .weights
-                        .bind_block(&self.runtime, combined_block_index)?;
-                    group_streamed_weights |= block_weights.is_operation_local();
-                    joint_states = performance_attribution.measure_operation(
-                        PerformanceOperation::ImageTransformerBlockGroupGraphConstruction,
-                        |_| {
-                            single_stream_block(
-                                &self.runtime,
-                                &self.geometry,
-                                &block_weights,
-                                block_index,
-                                &joint_states,
-                                &forward_state.modulation,
-                                &forward_state.rope_cosines,
-                                &forward_state.rope_sines,
-                            )
+                match self.advance_single_stream_group(
+                    block_group_advance,
+                    joint_states,
+                    next_block_index,
+                    maximum_blocks_per_group,
+                )? {
+                    SingleStreamGroupAdvance::GroupsRemain {
+                        joint_states,
+                        next_block_index,
+                    } => Ok(Flux2KleinForwardAdvance::BlockGroupCompleted(
+                        Flux2KleinForwardState {
+                            timestep_embedding,
+                            rope_cosines,
+                            rope_sines,
+                            modulation,
+                            block_state: ForwardBlockState::SingleStream {
+                                joint_states,
+                                next_block_index,
+                            },
+                            text_token_count,
                         },
-                    )?;
-                    if block_weights.is_operation_local() {
-                        performance_attribution.measure_operation(
-                            PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
-                            |_| self.runtime.evaluate_arrays(&[&joint_states]),
-                        )?;
-                    }
+                    )),
+                    SingleStreamGroupAdvance::AllBlocksRan { joint_states } => self
+                        .complete_forward(timestep_embedding, text_token_count, joint_states)
+                        .map(Flux2KleinForwardAdvance::ForwardCompleted),
                 }
-                if !group_streamed_weights {
-                    performance_attribution.measure_operation(
-                        PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
-                        |_| self.runtime.evaluate_arrays(&[&joint_states]),
-                    )?;
-                }
-                if group_streamed_weights {
-                    self.runtime.clear_allocator_cache()?;
-                }
-                record_event(Flux2KleinBlockGroupEvent::Completed {
-                    kind: Flux2KleinBlockKind::SingleStream,
-                    first_block_index: next_block_index,
-                    end_block_index,
-                    started_at,
-                    ended_at: Instant::now(),
-                });
-                if end_block_index < self.geometry.single_stream_block_count() {
-                    forward_state.block_state = ForwardBlockState::SingleStream {
-                        joint_states,
-                        next_block_index: end_block_index,
-                    };
-                    return Ok(Flux2KleinForwardAdvance::BlockGroupCompleted(forward_state));
-                }
-                return self
-                    .complete_forward(
-                        forward_state.timestep_embedding,
-                        forward_state.text_token_count,
-                        joint_states,
-                    )
-                    .map(Flux2KleinForwardAdvance::ForwardCompleted);
             }
-        };
-        Ok(Flux2KleinForwardAdvance::BlockGroupCompleted(forward_state))
+        }
+    }
+
+    /// Advances one double-stream group, emitting its start and completion
+    /// events and synchronizing the GPU between independently cancellable groups.
+    fn advance_double_stream_group(
+        &self,
+        advance: BlockGroupAdvance<'_>,
+        mut state: DoubleStreamState,
+        next_block_index: usize,
+        maximum_blocks_per_group: usize,
+    ) -> Result<ForwardBlockState, Flux2KleinTransformerError> {
+        let BlockGroupAdvance {
+            modulation,
+            rope_cosines,
+            rope_sines,
+            record_event,
+            performance_attribution,
+        } = advance;
+        let window = block_group_window(
+            next_block_index,
+            maximum_blocks_per_group,
+            self.geometry.double_stream_block_count(),
+        );
+        let started_at = Instant::now();
+        record_event(Flux2KleinBlockGroupEvent::Started {
+            kind: Flux2KleinBlockKind::DoubleStream,
+            first_block_index: window.first_block_index,
+            end_block_index: window.end_block_index,
+            started_at,
+        });
+        let mut group_streamed_weights = false;
+        for block_index in window.first_block_index..window.end_block_index {
+            let block_weights = self.weights.bind_block(&self.runtime, block_index)?;
+            group_streamed_weights |= block_weights.is_operation_local();
+            state = performance_attribution.measure_operation(
+                PerformanceOperation::ImageTransformerBlockGroupGraphConstruction,
+                |_| {
+                    double_stream_block(
+                        &self.runtime,
+                        &self.geometry,
+                        &block_weights,
+                        block_index,
+                        state,
+                        modulation,
+                        rope_cosines,
+                        rope_sines,
+                    )
+                },
+            )?;
+            if block_weights.is_operation_local() {
+                performance_attribution.measure_operation(
+                    PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
+                    |_| self.runtime.evaluate_arrays(&[&state.image, &state.text]),
+                )?;
+            }
+        }
+        if !group_streamed_weights {
+            performance_attribution.measure_operation(
+                PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
+                |_| self.runtime.evaluate_arrays(&[&state.image, &state.text]),
+            )?;
+        }
+        if group_streamed_weights {
+            self.runtime.clear_allocator_cache()?;
+        }
+        record_event(Flux2KleinBlockGroupEvent::Completed {
+            kind: Flux2KleinBlockKind::DoubleStream,
+            first_block_index: window.first_block_index,
+            end_block_index: window.end_block_index,
+            started_at,
+            ended_at: Instant::now(),
+        });
+        if window.end_block_index == self.geometry.double_stream_block_count() {
+            Ok(ForwardBlockState::SingleStream {
+                joint_states: self
+                    .runtime
+                    .concatenate_axis(&[&state.text, &state.image], 1)?,
+                next_block_index: 0,
+            })
+        } else {
+            Ok(ForwardBlockState::DoubleStream {
+                state,
+                next_block_index: window.end_block_index,
+            })
+        }
+    }
+
+    /// Advances one single-stream group; once every single-stream block has
+    /// run, hands the fused joint states back for final-layer sampling.
+    fn advance_single_stream_group(
+        &self,
+        advance: BlockGroupAdvance<'_>,
+        mut joint_states: MlxArray,
+        next_block_index: usize,
+        maximum_blocks_per_group: usize,
+    ) -> Result<SingleStreamGroupAdvance, Flux2KleinTransformerError> {
+        let BlockGroupAdvance {
+            modulation,
+            rope_cosines,
+            rope_sines,
+            record_event,
+            performance_attribution,
+        } = advance;
+        let window = block_group_window(
+            next_block_index,
+            maximum_blocks_per_group,
+            self.geometry.single_stream_block_count(),
+        );
+        let started_at = Instant::now();
+        record_event(Flux2KleinBlockGroupEvent::Started {
+            kind: Flux2KleinBlockKind::SingleStream,
+            first_block_index: window.first_block_index,
+            end_block_index: window.end_block_index,
+            started_at,
+        });
+        let mut group_streamed_weights = false;
+        for block_index in window.first_block_index..window.end_block_index {
+            let combined_block_index = self.geometry.double_stream_block_count() + block_index;
+            let block_weights = self
+                .weights
+                .bind_block(&self.runtime, combined_block_index)?;
+            group_streamed_weights |= block_weights.is_operation_local();
+            joint_states = performance_attribution.measure_operation(
+                PerformanceOperation::ImageTransformerBlockGroupGraphConstruction,
+                |_| {
+                    single_stream_block(
+                        &self.runtime,
+                        &self.geometry,
+                        &block_weights,
+                        block_index,
+                        &joint_states,
+                        modulation,
+                        rope_cosines,
+                        rope_sines,
+                    )
+                },
+            )?;
+            if block_weights.is_operation_local() {
+                performance_attribution.measure_operation(
+                    PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
+                    |_| self.runtime.evaluate_arrays(&[&joint_states]),
+                )?;
+            }
+        }
+        if !group_streamed_weights {
+            performance_attribution.measure_operation(
+                PerformanceOperation::ImageTransformerBlockGroupSynchronizationWait,
+                |_| self.runtime.evaluate_arrays(&[&joint_states]),
+            )?;
+        }
+        if group_streamed_weights {
+            self.runtime.clear_allocator_cache()?;
+        }
+        record_event(Flux2KleinBlockGroupEvent::Completed {
+            kind: Flux2KleinBlockKind::SingleStream,
+            first_block_index: window.first_block_index,
+            end_block_index: window.end_block_index,
+            started_at,
+            ended_at: Instant::now(),
+        });
+        if window.end_block_index < self.geometry.single_stream_block_count() {
+            return Ok(SingleStreamGroupAdvance::GroupsRemain {
+                joint_states,
+                next_block_index: window.end_block_index,
+            });
+        }
+        Ok(SingleStreamGroupAdvance::AllBlocksRan { joint_states })
     }
 
     fn complete_forward(
@@ -416,3 +547,7 @@ impl Flux2KleinTransformer {
         Ok(Flux2KleinTransformerOutput { sample })
     }
 }
+
+#[cfg(test)]
+#[path = "execution_tests.rs"]
+mod execution_tests;
