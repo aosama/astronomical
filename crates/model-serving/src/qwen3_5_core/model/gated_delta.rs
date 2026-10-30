@@ -22,7 +22,6 @@ mod tests;
 
 impl Qwen3_5ModelBase {
     #[allow(clippy::too_many_arguments)]
-    #[expect(clippy::too_many_lines)]
     pub(crate) fn forward_linear_attention(
         &self,
         hidden_states: &MlxArray,
@@ -36,129 +35,25 @@ impl Qwen3_5ModelBase {
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        let linear_key_head_count = self.config.linear_key_head_count() as i32;
-        let linear_value_head_count = self.config.linear_value_head_count() as i32;
-        let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
         let linear_value_dimension = self.config.linear_value_dimension() as i32;
-        let mixed_queries_keys_values = self.quantized_linear(
-            hidden_states,
-            &linear_attention_weights.input_queries_keys_values_projection,
-        )?;
-        let output_gate = self.quantized_linear(
-            hidden_states,
-            &linear_attention_weights.output_gate_projection,
-        )?;
-        let output_gate = self.runtime.reshape(
-            &output_gate,
-            &[
-                1,
+        let (mixed_queries_keys_values, output_gate, update_logits, decay_inputs) = self
+            .project_linear_attention_inputs(
+                hidden_states,
+                linear_attention_weights,
                 token_count,
-                linear_value_head_count,
-                linear_head_dimension,
-            ],
-        )?;
-        let update_logits = self.quantized_linear(
-            hidden_states,
-            &linear_attention_weights.update_rate_projection,
-        )?;
-        let decay_inputs = self.quantized_linear(
-            hidden_states,
-            &linear_attention_weights.decay_interval_projection,
-        )?;
-        evaluate_linear_attention_section(
-            &self.runtime,
-            performance_attribution,
-            PerformanceOperation::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait,
-            &[
-                &mixed_queries_keys_values,
-                &output_gate,
-                &update_logits,
-                &decay_inputs,
-            ],
-            token_count,
-        )?;
-        let convolution_weight = normalize_linear_attention_convolution_weight(
-            &self.runtime,
-            &linear_attention_weights.convolution_weight,
-            mixed_queries_keys_values.shape()[2],
-            i32::try_from(self.config.linear_convolution_kernel_dimension()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "linear convolution kernel width exceeds the MLX shape range",
-                }
-            })?,
-        )?;
+                performance_attribution,
+            )?;
         let completed_prefill_chunk_tokens = boundary_checkpoint_collector
             .as_ref()
             .map(|collector| collector.completed_prefill_chunk_tokens().to_vec());
-        let (queries, keys, values, boundary_convolution_states) =
-            match completed_prefill_chunk_tokens.as_deref() {
-                Some(completed_prefill_chunk_tokens) => {
-                    // The pre-window rolling buffer feeds the checkpoint
-                    // update, which replaces the state itself.
-                    let checkpoint_update = convolution_state.update_with_boundary_checkpoints(
-                        &self.runtime,
-                        &mixed_queries_keys_values,
-                        token_count,
-                        completed_prefill_chunk_tokens,
-                    )?;
-                    let (queries, keys, values) = self.convolution_to_normalized_heads(
-                        &checkpoint_update.convolution_input,
-                        token_count,
-                        &convolution_weight,
-                        performance_attribution,
-                    )?;
-                    (
-                        queries,
-                        keys,
-                        values,
-                        checkpoint_update.boundary_convolution_states,
-                    )
-                }
-                None => {
-                    // Launch-bound decode steps take the fused prework kernel:
-                    // one Metal launch for the rolling window, conv1d, SiLU,
-                    // q/k/v split, both RMS norms, both scales, and the next
-                    // rolling state.
-                    if is_gdn_decode_prework_eligible(
-                        self.gdn_decode_prework_kernel.as_ref(),
-                        token_count,
-                        mixed_queries_keys_values.dtype(),
-                        linear_head_dimension,
-                    ) {
-                        let convolution_state_array = convolution_state
-                            .current_or_zero(&self.runtime, mixed_queries_keys_values.dtype())?;
-                        let fused = qwen3_5_gdn_decode_prework(
-                            &self.runtime,
-                            self.gdn_decode_prework_kernel
-                                .as_ref()
-                                .expect("prework eligibility just proved the kernel is retained"),
-                            linear_key_head_count,
-                            linear_value_head_count,
-                            linear_head_dimension,
-                            &mixed_queries_keys_values,
-                            &convolution_state_array,
-                            &convolution_weight,
-                            &self.inverse_linear_head_dimension_scale,
-                            &self.inverse_square_root_linear_head_dimension_scale,
-                        )?;
-                        convolution_state.replace_state(fused.next_convolution_state)?;
-                        (fused.queries, fused.keys, fused.values, Vec::new())
-                    } else {
-                        let convolution_input = convolution_state.update(
-                            &self.runtime,
-                            &mixed_queries_keys_values,
-                            token_count,
-                        )?;
-                        let (queries, keys, values) = self.convolution_to_normalized_heads(
-                            &convolution_input,
-                            token_count,
-                            &convolution_weight,
-                            performance_attribution,
-                        )?;
-                        (queries, keys, values, Vec::new())
-                    }
-                }
-            };
+        let (queries, keys, values, boundary_convolution_states) = self.run_convolution_phase(
+            convolution_state,
+            &mixed_queries_keys_values,
+            token_count,
+            linear_attention_weights,
+            completed_prefill_chunk_tokens.as_deref(),
+            performance_attribution,
+        )?;
         let update_rates = self.runtime.sigmoid(&update_logits)?;
         // The compiled decay graph is shapeless and serves every token count:
         // the historical one-token hand-composed branch paid seven kernel
@@ -181,48 +76,17 @@ impl Qwen3_5ModelBase {
         // takes the fused Metal route; a demoted kernel falls back to the
         // ops-based public MLX route inside the dispatch, and the checkpoint
         // fallback preserves the prompt-cache boundary snapshot positions.
-        let (recurrent_output, next_recurrent_state, boundary_recurrent_states) =
-            match completed_prefill_chunk_tokens.as_deref() {
-                Some(completed_prefill_chunk_tokens) => {
-                    let checkpoint_interval_token_count = boundary_checkpoint_collector
-                        .as_ref()
-                        .map(|collector| collector.checkpoint_interval_token_count())
-                        .ok_or_else(|| {
-                            gated_delta_error("gated-delta checkpoint collector disappeared")
-                        })?;
-                    let checkpoint_result = gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
-                        &self.runtime,
-                        self.gated_delta_checkpoint_kernel.as_ref(),
-                        &queries,
-                        &keys,
-                        &values,
-                        &decays,
-                        &update_rates,
-                        &current_recurrent_state,
-                        completed_prefill_chunk_tokens,
-                        checkpoint_interval_token_count,
-                    )?;
-                    (
-                        checkpoint_result.sequence_outputs,
-                        checkpoint_result.next_recurrent_state,
-                        checkpoint_result.recurrent_boundary_states,
-                    )
-                }
-                None => {
-                    let (recurrent_output, next_recurrent_state) =
-                        gated_delta_sequence::qwen3_5_gated_delta_sequence(
-                            &self.runtime,
-                            self.gated_delta_kernel.as_ref(),
-                            &queries,
-                            &keys,
-                            &values,
-                            &decays,
-                            &update_rates,
-                            &current_recurrent_state,
-                        )?;
-                    (recurrent_output, next_recurrent_state, Vec::new())
-                }
-            };
+        let (recurrent_output, next_recurrent_state, boundary_recurrent_states) = self
+            .run_recurrence_phase(
+                boundary_checkpoint_collector.as_deref(),
+                &queries,
+                &keys,
+                &values,
+                &decays,
+                &update_rates,
+                &current_recurrent_state,
+                completed_prefill_chunk_tokens.as_deref(),
+            )?;
         evaluate_linear_attention_section(
             &self.runtime,
             performance_attribution,
@@ -261,6 +125,218 @@ impl Qwen3_5ModelBase {
             token_count,
         )?;
         Ok(projected_output)
+    }
+
+    /// Runs the four input projections under one evaluation section and
+    /// reshapes the output gate to per-head layout.
+    fn project_linear_attention_inputs(
+        &self,
+        hidden_states: &MlxArray,
+        linear_attention_weights: &Qwen3_5LinearAttentionWeights,
+        token_count: i32,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(MlxArray, MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+        let linear_value_head_count = self.config.linear_value_head_count() as i32;
+        let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
+        let mixed_queries_keys_values = self.quantized_linear(
+            hidden_states,
+            &linear_attention_weights.input_queries_keys_values_projection,
+        )?;
+        let output_gate = self.quantized_linear(
+            hidden_states,
+            &linear_attention_weights.output_gate_projection,
+        )?;
+        let output_gate = self.runtime.reshape(
+            &output_gate,
+            &[
+                1,
+                token_count,
+                linear_value_head_count,
+                linear_head_dimension,
+            ],
+        )?;
+        let update_logits = self.quantized_linear(
+            hidden_states,
+            &linear_attention_weights.update_rate_projection,
+        )?;
+        let decay_inputs = self.quantized_linear(
+            hidden_states,
+            &linear_attention_weights.decay_interval_projection,
+        )?;
+        evaluate_linear_attention_section(
+            &self.runtime,
+            performance_attribution,
+            PerformanceOperation::PrefillLinearAttentionProjectionsGraphicsProcessorCompletionWait,
+            &[
+                &mixed_queries_keys_values,
+                &output_gate,
+                &update_logits,
+                &decay_inputs,
+            ],
+            token_count,
+        )?;
+        Ok((
+            mixed_queries_keys_values,
+            output_gate,
+            update_logits,
+            decay_inputs,
+        ))
+    }
+
+    /// Runs the convolution phase: the checkpoint path updates the rolling
+    /// buffer with boundary snapshots; launch-bound decode steps take the
+    /// fused prework kernel; everything else takes the composed fallback
+    /// that must stay bit-identical to the fused kernel.
+    #[allow(clippy::too_many_arguments)]
+    fn run_convolution_phase(
+        &self,
+        convolution_state: &mut ConvolutionState,
+        mixed_queries_keys_values: &MlxArray,
+        token_count: i32,
+        linear_attention_weights: &Qwen3_5LinearAttentionWeights,
+        completed_prefill_chunk_tokens: Option<&[i32]>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(MlxArray, MlxArray, MlxArray, Vec<MlxArray>), Qwen3_5ExecutionError> {
+        let linear_key_head_count = self.config.linear_key_head_count() as i32;
+        let linear_value_head_count = self.config.linear_value_head_count() as i32;
+        let linear_head_dimension = self.config.linear_key_head_dimension() as i32;
+        let convolution_weight = normalize_linear_attention_convolution_weight(
+            &self.runtime,
+            &linear_attention_weights.convolution_weight,
+            mixed_queries_keys_values.shape()[2],
+            i32::try_from(self.config.linear_convolution_kernel_dimension()).map_err(|_| {
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "linear convolution kernel width exceeds the MLX shape range",
+                }
+            })?,
+        )?;
+        match completed_prefill_chunk_tokens {
+            Some(completed_prefill_chunk_tokens) => {
+                // The pre-window rolling buffer feeds the checkpoint
+                // update, which replaces the state itself.
+                let checkpoint_update = convolution_state.update_with_boundary_checkpoints(
+                    &self.runtime,
+                    mixed_queries_keys_values,
+                    token_count,
+                    completed_prefill_chunk_tokens,
+                )?;
+                let (queries, keys, values) = self.convolution_to_normalized_heads(
+                    &checkpoint_update.convolution_input,
+                    token_count,
+                    &convolution_weight,
+                    performance_attribution,
+                )?;
+                Ok((
+                    queries,
+                    keys,
+                    values,
+                    checkpoint_update.boundary_convolution_states,
+                ))
+            }
+            None => {
+                // Launch-bound decode steps take the fused prework kernel:
+                // one Metal launch for the rolling window, conv1d, SiLU,
+                // q/k/v split, both RMS norms, both scales, and the next
+                // rolling state.
+                if is_gdn_decode_prework_eligible(
+                    self.gdn_decode_prework_kernel.as_ref(),
+                    token_count,
+                    mixed_queries_keys_values.dtype(),
+                    linear_head_dimension,
+                ) {
+                    let convolution_state_array = convolution_state
+                        .current_or_zero(&self.runtime, mixed_queries_keys_values.dtype())?;
+                    let fused = qwen3_5_gdn_decode_prework(
+                        &self.runtime,
+                        self.gdn_decode_prework_kernel
+                            .as_ref()
+                            .expect("prework eligibility just proved the kernel is retained"),
+                        linear_key_head_count,
+                        linear_value_head_count,
+                        linear_head_dimension,
+                        mixed_queries_keys_values,
+                        &convolution_state_array,
+                        &convolution_weight,
+                        &self.inverse_linear_head_dimension_scale,
+                        &self.inverse_square_root_linear_head_dimension_scale,
+                    )?;
+                    convolution_state.replace_state(fused.next_convolution_state)?;
+                    Ok((fused.queries, fused.keys, fused.values, Vec::new()))
+                } else {
+                    let convolution_input = convolution_state.update(
+                        &self.runtime,
+                        mixed_queries_keys_values,
+                        token_count,
+                    )?;
+                    let (queries, keys, values) = self.convolution_to_normalized_heads(
+                        &convolution_input,
+                        token_count,
+                        &convolution_weight,
+                        performance_attribution,
+                    )?;
+                    Ok((queries, keys, values, Vec::new()))
+                }
+            }
+        }
+    }
+
+    /// Runs the gated-delta recurrence: the checkpoint path snapshots
+    /// recurrent states at their intervals; the plain path runs the
+    /// sequence with capability-routed kernels.
+    #[allow(clippy::too_many_arguments)]
+    fn run_recurrence_phase(
+        &self,
+        boundary_checkpoint_collector: Option<
+            &Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+        >,
+        queries: &MlxArray,
+        keys: &MlxArray,
+        values: &MlxArray,
+        decays: &MlxArray,
+        update_rates: &MlxArray,
+        current_recurrent_state: &MlxArray,
+        completed_prefill_chunk_tokens: Option<&[i32]>,
+    ) -> Result<(MlxArray, MlxArray, Vec<MlxArray>), Qwen3_5ExecutionError> {
+        match completed_prefill_chunk_tokens {
+            Some(completed_prefill_chunk_tokens) => {
+                let checkpoint_interval_token_count = boundary_checkpoint_collector
+                    .map(|collector| collector.checkpoint_interval_token_count())
+                    .ok_or_else(|| {
+                        gated_delta_error("gated-delta checkpoint collector disappeared")
+                    })?;
+                let checkpoint_result = gated_delta_boundary_checkpoints::qwen3_5_gated_delta_sequence_with_boundary_checkpoints(
+                    &self.runtime,
+                    self.gated_delta_checkpoint_kernel.as_ref(),
+                    queries,
+                    keys,
+                    values,
+                    decays,
+                    update_rates,
+                    current_recurrent_state,
+                    completed_prefill_chunk_tokens,
+                    checkpoint_interval_token_count,
+                )?;
+                Ok((
+                    checkpoint_result.sequence_outputs,
+                    checkpoint_result.next_recurrent_state,
+                    checkpoint_result.recurrent_boundary_states,
+                ))
+            }
+            None => {
+                let (recurrent_output, next_recurrent_state) =
+                    gated_delta_sequence::qwen3_5_gated_delta_sequence(
+                        &self.runtime,
+                        self.gated_delta_kernel.as_ref(),
+                        queries,
+                        keys,
+                        values,
+                        decays,
+                        update_rates,
+                        current_recurrent_state,
+                    )?;
+                Ok((recurrent_output, next_recurrent_state, Vec::new()))
+            }
+        }
     }
 
     /// The composed prefill-path arithmetic the fused decode prework kernel
