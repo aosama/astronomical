@@ -236,3 +236,293 @@ fn qwen_config_with_native_vision_mlp_output() -> Qwen3_5Config {
     Qwen3_5Config::from_json_bytes(&config_bytes)
         .expect("the synthetic affine-vision config should parse")
 }
+
+// A deliberately minimal validated vision geometry: patch and merge boundary
+// values of 1 so the derived widths (qkv=3*hidden, merger=hidden) are trivial
+// to check without the full Ornith dimensions.
+fn minimal_vision_config(block_depth: u32) -> Qwen3_5VisionConfig {
+    let vision_config_json = json!({
+        "vision_config": {
+            "deepstack_visual_indexes": [],
+            "depth": block_depth,
+            "dtype": "bfloat16",
+            "hidden_act": "gelu_pytorch_tanh",
+            "hidden_size": 64,
+            "in_channels": 3,
+            "intermediate_size": 128,
+            "model_type": "qwen3_5_vision",
+            "num_heads": 4,
+            "num_position_embeddings": 16,
+            "out_hidden_size": 32,
+            "patch_size": 1,
+            "spatial_merge_size": 1,
+            "temporal_patch_size": 1
+        }
+    });
+    Qwen3_5VisionConfig::from_json_bytes(vision_config_json.to_string().as_bytes())
+        .expect("the minimal vision config should parse")
+}
+
+#[test]
+fn should_derive_vision_geometry_dimensions_from_the_validated_config() {
+    let vision_config = Qwen3_5VisionConfig::from_json_bytes(FROZEN_VISION_CONFIG_JSON.as_bytes())
+        .expect("the frozen Ornith 1.0 vision config should parse");
+    let geometry = VisionGeometry::from_config(&vision_config);
+    assert_eq!(geometry.hidden_size, 1152);
+    assert_eq!(geometry.intermediate_size, 4304);
+    assert_eq!(geometry.depth, 27);
+    assert_eq!(geometry.patch_size, 16);
+    assert_eq!(geometry.temporal_patch_size, 2);
+    assert_eq!(geometry.in_channels, 3);
+    assert_eq!(geometry.position_embedding_count, 2304);
+    assert_eq!(geometry.out_hidden_size, 2048);
+    assert_eq!(geometry.qkv_dimension, 3456);
+    assert_eq!(geometry.merger_input_dimension, 4608);
+}
+
+#[test]
+fn should_keep_boundary_geometry_dimensions_for_the_smallest_valid_patch_and_merge() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(1));
+    assert_eq!(geometry.patch_size, 1);
+    assert_eq!(geometry.temporal_patch_size, 1);
+    // spatial_merge_size 1 is the boundary where the merger input stops being
+    // four concatenated hidden rows and collapses to exactly one hidden row,
+    // guarding against a hardcoded 4x multiplication.
+    assert_eq!(geometry.merger_input_dimension, geometry.hidden_size);
+    assert_eq!(geometry.qkv_dimension, 192);
+}
+
+#[test]
+fn should_append_patch_and_positional_embedding_tensor_profiles() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(2));
+    let mut tensor_profiles = Vec::new();
+    append_patch_embedding_tensor_profiles(&mut tensor_profiles, &geometry);
+    append_positional_embedding_tensor_profile(&mut tensor_profiles, &geometry);
+    assert_eq!(tensor_profiles.len(), 3);
+    assert_eq!(
+        tensor_profiles[0].name,
+        "vision_tower.patch_embed.proj.weight"
+    );
+    assert_eq!(tensor_profiles[0].dtype, TensorDtype::ModelFloat);
+    assert_eq!(tensor_profiles[0].shape, vec![64, 1, 1, 1, 3]);
+    assert_eq!(
+        tensor_profiles[0].equivalent_published_shapes,
+        vec![vec![64, 3, 1, 1, 1]]
+    );
+    assert_eq!(
+        tensor_profiles[1].name,
+        "vision_tower.patch_embed.proj.bias"
+    );
+    assert_eq!(tensor_profiles[1].shape, vec![64]);
+    assert_eq!(tensor_profiles[2].name, "vision_tower.pos_embed.weight");
+    assert_eq!(tensor_profiles[2].shape, vec![16, 64]);
+    for tensor_profile in &tensor_profiles {
+        assert!(
+            !tensor_profile.name.starts_with("vision_tower.blocks.")
+                && !tensor_profile.name.starts_with("vision_tower.merger."),
+            "embedding append must not leak {}",
+            tensor_profile.name
+        );
+    }
+}
+
+#[test]
+fn should_append_twelve_tensor_profiles_per_transformer_block() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(2));
+    let mut tensor_profiles = Vec::new();
+    append_transformer_block_tensor_profiles(&mut tensor_profiles, None, &geometry)
+        .expect("native block profiles use the validated vision geometry");
+    assert_eq!(tensor_profiles.len(), 24);
+    let expected_block_zero_names = [
+        "vision_tower.blocks.0.attn.qkv.weight",
+        "vision_tower.blocks.0.attn.qkv.bias",
+        "vision_tower.blocks.0.attn.proj.weight",
+        "vision_tower.blocks.0.attn.proj.bias",
+        "vision_tower.blocks.0.norm1.weight",
+        "vision_tower.blocks.0.norm1.bias",
+        "vision_tower.blocks.0.mlp.linear_fc1.weight",
+        "vision_tower.blocks.0.mlp.linear_fc1.bias",
+        "vision_tower.blocks.0.mlp.linear_fc2.weight",
+        "vision_tower.blocks.0.mlp.linear_fc2.bias",
+        "vision_tower.blocks.0.norm2.weight",
+        "vision_tower.blocks.0.norm2.bias",
+    ];
+    for (tensor_index, expected_name) in expected_block_zero_names.iter().enumerate() {
+        assert_eq!(tensor_profiles[tensor_index].name, *expected_name);
+    }
+    assert_eq!(tensor_profiles[23].name, "vision_tower.blocks.1.norm2.bias");
+    assert_eq!(tensor_profiles[0].shape, vec![192, 64]);
+    assert_eq!(tensor_profiles[7].shape, vec![128]);
+    assert_eq!(tensor_profiles[8].shape, vec![64, 128]);
+    assert_eq!(tensor_profiles[9].shape, vec![64]);
+}
+
+#[test]
+fn should_append_twelve_tensor_profiles_for_a_single_block_boundary() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(1));
+    let mut tensor_profiles = Vec::new();
+    append_transformer_block_tensor_profiles(&mut tensor_profiles, None, &geometry)
+        .expect("native block profiles use the validated vision geometry");
+    assert_eq!(tensor_profiles.len(), 12);
+    assert_eq!(tensor_profiles[11].name, "vision_tower.blocks.0.norm2.bias");
+}
+
+#[test]
+fn should_append_affine_quantized_block_tensor_profiles_from_module_profiles() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(1));
+    let mut module_quantization_profiles = HashMap::new();
+    module_quantization_profiles.insert(
+        "vision_tower.blocks.0.attn.qkv".to_owned(),
+        OptiQQuantizationProfile::affine(4, 64),
+    );
+    let mut tensor_profiles = Vec::new();
+    append_transformer_block_tensor_profiles(
+        &mut tensor_profiles,
+        Some(&module_quantization_profiles),
+        &geometry,
+    )
+    .expect("affine block profiles use the validated vision geometry");
+    // qkv contributes weight + scales + biases + bias (4), the other five
+    // modules contribute weight + bias each (10): 14 tensors for the block.
+    assert_eq!(tensor_profiles.len(), 14);
+    assert_eq!(tensor_profiles[0].dtype, TensorDtype::UInt32);
+    // Packed width = 64 input values * 4 bits / 32 bits per word = 8.
+    assert_eq!(tensor_profiles[0].shape, vec![192, 8]);
+    assert_eq!(
+        tensor_profiles[1].name,
+        "vision_tower.blocks.0.attn.qkv.scales"
+    );
+    assert_eq!(
+        tensor_profiles[1].dtype,
+        TensorDtype::AffineQuantizationFloat
+    );
+    assert_eq!(tensor_profiles[1].shape, vec![192, 1]);
+    assert_eq!(
+        tensor_profiles[2].name,
+        "vision_tower.blocks.0.attn.qkv.biases"
+    );
+    assert_eq!(
+        tensor_profiles[3].name,
+        "vision_tower.blocks.0.attn.qkv.bias"
+    );
+    assert_eq!(tensor_profiles[3].dtype, TensorDtype::ModelFloat);
+    assert_eq!(tensor_profiles[3].shape, vec![192]);
+    // Modules absent from the profile map must stay unquantized model floats.
+    assert_eq!(
+        tensor_profiles[4].name,
+        "vision_tower.blocks.0.attn.proj.weight"
+    );
+    assert_eq!(tensor_profiles[4].dtype, TensorDtype::ModelFloat);
+    assert_eq!(tensor_profiles[4].shape, vec![64, 64]);
+}
+
+#[test]
+fn should_reject_codebook_quantized_module_during_block_profile_append() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(1));
+    let mut module_quantization_profiles = HashMap::new();
+    module_quantization_profiles.insert(
+        "vision_tower.blocks.0.attn.qkv".to_owned(),
+        OptiQQuantizationProfile::jangtq2_codebook(
+            2,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
+        ),
+    );
+    let profile_result = append_transformer_block_tensor_profiles(
+        &mut Vec::new(),
+        Some(&module_quantization_profiles),
+        &geometry,
+    );
+    assert!(matches!(
+        profile_result,
+        Err(Qwen3_5ArtifactError::InvalidVisionQuantizationProfile {
+            module_name,
+            ..
+        }) if module_name == "vision_tower.blocks.0.attn.qkv"
+    ));
+}
+
+#[test]
+fn should_append_merger_tensor_profiles() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(1));
+    let mut tensor_profiles = Vec::new();
+    append_merger_tensor_profiles(&mut tensor_profiles, None, &geometry)
+        .expect("native merger profiles use the validated vision geometry");
+    assert_eq!(tensor_profiles.len(), 6);
+    assert_eq!(tensor_profiles[0].name, "vision_tower.merger.norm.weight");
+    assert_eq!(tensor_profiles[0].shape, vec![64]);
+    assert_eq!(tensor_profiles[1].name, "vision_tower.merger.norm.bias");
+    assert_eq!(
+        tensor_profiles[2].name,
+        "vision_tower.merger.linear_fc1.weight"
+    );
+    assert_eq!(tensor_profiles[2].shape, vec![64, 64]);
+    assert_eq!(
+        tensor_profiles[4].name,
+        "vision_tower.merger.linear_fc2.weight"
+    );
+    assert_eq!(tensor_profiles[4].shape, vec![32, 64]);
+    assert_eq!(
+        tensor_profiles[5].name,
+        "vision_tower.merger.linear_fc2.bias"
+    );
+    assert_eq!(tensor_profiles[5].shape, vec![32]);
+}
+
+#[test]
+fn should_append_affine_quantized_merger_fc1_companions() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(1));
+    let mut module_quantization_profiles = HashMap::new();
+    module_quantization_profiles.insert(
+        "vision_tower.merger.linear_fc1".to_owned(),
+        OptiQQuantizationProfile::affine(4, 64),
+    );
+    let mut tensor_profiles = Vec::new();
+    append_merger_tensor_profiles(
+        &mut tensor_profiles,
+        Some(&module_quantization_profiles),
+        &geometry,
+    )
+    .expect("affine merger profiles use the validated vision geometry");
+    assert_eq!(tensor_profiles.len(), 8);
+    assert_eq!(tensor_profiles[2].dtype, TensorDtype::UInt32);
+    assert_eq!(tensor_profiles[2].shape, vec![64, 8]);
+    assert_eq!(
+        tensor_profiles[3].name,
+        "vision_tower.merger.linear_fc1.scales"
+    );
+    assert_eq!(tensor_profiles[3].shape, vec![64, 1]);
+    assert_eq!(
+        tensor_profiles[4].name,
+        "vision_tower.merger.linear_fc1.biases"
+    );
+    assert_eq!(
+        tensor_profiles[5].name,
+        "vision_tower.merger.linear_fc1.bias"
+    );
+    assert_eq!(tensor_profiles[5].dtype, TensorDtype::ModelFloat);
+}
+
+#[test]
+fn should_reject_codebook_quantized_merger_module() {
+    let geometry = VisionGeometry::from_config(&minimal_vision_config(1));
+    let mut module_quantization_profiles = HashMap::new();
+    module_quantization_profiles.insert(
+        "vision_tower.merger.linear_fc2".to_owned(),
+        OptiQQuantizationProfile::jangtq2_codebook(
+            2,
+            astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
+        ),
+    );
+    let profile_result = append_merger_tensor_profiles(
+        &mut Vec::new(),
+        Some(&module_quantization_profiles),
+        &geometry,
+    );
+    assert!(matches!(
+        profile_result,
+        Err(Qwen3_5ArtifactError::InvalidVisionQuantizationProfile {
+            module_name,
+            ..
+        }) if module_name == "vision_tower.merger.linear_fc2"
+    ));
+}

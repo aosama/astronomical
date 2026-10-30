@@ -40,90 +40,144 @@ pub fn qwen3_5_vision_tensor_profiles_for_model(
     qwen3_5_vision_tensor_profiles_with_quantization(vision_config, Some(qwen3_5_config))
 }
 
-#[expect(clippy::too_many_lines)]
 fn qwen3_5_vision_tensor_profiles_with_quantization(
     vision_config: &Qwen3_5VisionConfig,
     qwen3_5_config: Option<&Qwen3_5Config>,
 ) -> Result<Vec<TensorProfile>, Qwen3_5ArtifactError> {
     let vision_quantization_profiles = qwen3_5_config
         .map(|config| qwen3_5_vision_linear_quantization_profiles(vision_config, config));
-    let hidden_size = vision_config.hidden_size() as usize;
-    let intermediate_size = vision_config.intermediate_size() as usize;
-    let depth = vision_config.depth() as usize;
-    let patch_size = vision_config.patch_size() as usize;
-    let temporal_patch_size = vision_config.temporal_patch_size() as usize;
-    let in_channels = vision_config.in_channels() as usize;
-    let spatial_merge_size = vision_config.spatial_merge_size() as usize;
-    let position_embedding_count = vision_config.position_embedding_count() as usize;
-    let out_hidden_size = vision_config.out_hidden_size() as usize;
-
-    let qkv_dimension = hidden_size * 3;
-    let merger_input_dimension = hidden_size * spatial_merge_size * spatial_merge_size;
-
+    let geometry = VisionGeometry::from_config(vision_config);
     let mut tensor_profiles = Vec::new();
+    append_patch_embedding_tensor_profiles(&mut tensor_profiles, &geometry);
+    append_positional_embedding_tensor_profile(&mut tensor_profiles, &geometry);
+    append_transformer_block_tensor_profiles(
+        &mut tensor_profiles,
+        vision_quantization_profiles.as_ref(),
+        &geometry,
+    )?;
+    append_merger_tensor_profiles(
+        &mut tensor_profiles,
+        vision_quantization_profiles.as_ref(),
+        &geometry,
+    )?;
+    Ok(tensor_profiles)
+}
 
-    // Patch embedding: [hidden_size, temporal_patch_size, patch_size, patch_size, in_channels]
-    //
-    // MLX Conv3d consumes ODHWI weights, and the converted artifacts store that
-    // order. Some published checkpoints keep the upstream PyTorch Conv3d order
-    // [hidden_size, in_channels, temporal_patch_size, patch_size, patch_size]
-    // instead — a pure axis permutation of the same values — so the profile
-    // accepts it and the vision weights loader normalizes it at load.
+/// The validated vision geometry every tensor shape in the inventory derives
+/// from, plus the two derived widths (qkv and merger input) shared by several
+/// profile sections.
+struct VisionGeometry {
+    hidden_size: usize,
+    intermediate_size: usize,
+    depth: usize,
+    patch_size: usize,
+    temporal_patch_size: usize,
+    in_channels: usize,
+    position_embedding_count: usize,
+    out_hidden_size: usize,
+    qkv_dimension: usize,
+    merger_input_dimension: usize,
+}
+
+impl VisionGeometry {
+    fn from_config(vision_config: &Qwen3_5VisionConfig) -> Self {
+        let hidden_size = vision_config.hidden_size() as usize;
+        let spatial_merge_size = vision_config.spatial_merge_size() as usize;
+        Self {
+            hidden_size,
+            intermediate_size: vision_config.intermediate_size() as usize,
+            depth: vision_config.depth() as usize,
+            patch_size: vision_config.patch_size() as usize,
+            temporal_patch_size: vision_config.temporal_patch_size() as usize,
+            in_channels: vision_config.in_channels() as usize,
+            position_embedding_count: vision_config.position_embedding_count() as usize,
+            out_hidden_size: vision_config.out_hidden_size() as usize,
+            qkv_dimension: hidden_size * 3,
+            merger_input_dimension: hidden_size * spatial_merge_size * spatial_merge_size,
+        }
+    }
+}
+
+// Patch embedding: [hidden_size, temporal_patch_size, patch_size, patch_size, in_channels]
+//
+// MLX Conv3d consumes ODHWI weights, and the converted artifacts store that
+// order. Some published checkpoints keep the upstream PyTorch Conv3d order
+// [hidden_size, in_channels, temporal_patch_size, patch_size, patch_size]
+// instead — a pure axis permutation of the same values — so the profile
+// accepts it and the vision weights loader normalizes it at load.
+fn append_patch_embedding_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    geometry: &VisionGeometry,
+) {
     tensor_profiles.push(TensorProfile {
         name: "vision_tower.patch_embed.proj.weight".to_owned(),
         dtype: TensorDtype::ModelFloat,
         shape: vec![
-            hidden_size,
-            temporal_patch_size,
-            patch_size,
-            patch_size,
-            in_channels,
+            geometry.hidden_size,
+            geometry.temporal_patch_size,
+            geometry.patch_size,
+            geometry.patch_size,
+            geometry.in_channels,
         ],
         equivalent_published_shapes: vec![vec![
-            hidden_size,
-            in_channels,
-            temporal_patch_size,
-            patch_size,
-            patch_size,
+            geometry.hidden_size,
+            geometry.in_channels,
+            geometry.temporal_patch_size,
+            geometry.patch_size,
+            geometry.patch_size,
         ]],
     });
     tensor_profiles.push(tensor_profile(
         "vision_tower.patch_embed.proj.bias".to_owned(),
         TensorDtype::ModelFloat,
-        vec![hidden_size],
+        vec![geometry.hidden_size],
     ));
+}
 
-    // Positional embedding: [position_embedding_count, hidden_size]
+// Positional embedding: [position_embedding_count, hidden_size]
+fn append_positional_embedding_tensor_profile(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    geometry: &VisionGeometry,
+) {
     tensor_profiles.push(tensor_profile(
         "vision_tower.pos_embed.weight".to_owned(),
         TensorDtype::ModelFloat,
-        vec![position_embedding_count, hidden_size],
+        vec![geometry.position_embedding_count, geometry.hidden_size],
     ));
+}
 
-    // Transformer blocks
-    for block_index in 0..depth {
+// Each transformer block contributes 12 tensors in a fixed order: attention
+// qkv, attention projection, norm1 pair, mlp fc1, mlp fc2, norm2 pair. The
+// fixed ordering is what lets artifact loaders and tests index profiles by
+// position.
+fn append_transformer_block_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    vision_quantization_profiles: Option<&HashMap<String, OptiQQuantizationProfile>>,
+    geometry: &VisionGeometry,
+) -> Result<(), Qwen3_5ArtifactError> {
+    for block_index in 0..geometry.depth {
         let block_prefix = format!("vision_tower.blocks.{block_index}");
 
         // Attention QKV: [3*hidden_size, hidden_size] + bias [3*hidden_size]
         append_linear_module_tensor_profiles(
-            &mut tensor_profiles,
+            tensor_profiles,
             &format!("{block_prefix}.attn.qkv"),
-            qkv_dimension,
-            hidden_size,
+            geometry.qkv_dimension,
+            geometry.hidden_size,
             vision_module_quantization_profile(
-                vision_quantization_profiles.as_ref(),
+                vision_quantization_profiles,
                 &format!("{block_prefix}.attn.qkv"),
             ),
         )?;
 
         // Attention projection: [hidden_size, hidden_size] + bias [hidden_size]
         append_linear_module_tensor_profiles(
-            &mut tensor_profiles,
+            tensor_profiles,
             &format!("{block_prefix}.attn.proj"),
-            hidden_size,
-            hidden_size,
+            geometry.hidden_size,
+            geometry.hidden_size,
             vision_module_quantization_profile(
-                vision_quantization_profiles.as_ref(),
+                vision_quantization_profiles,
                 &format!("{block_prefix}.attn.proj"),
             ),
         )?;
@@ -132,34 +186,34 @@ fn qwen3_5_vision_tensor_profiles_with_quantization(
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm1.weight"),
             TensorDtype::ModelFloat,
-            vec![hidden_size],
+            vec![geometry.hidden_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm1.bias"),
             TensorDtype::ModelFloat,
-            vec![hidden_size],
+            vec![geometry.hidden_size],
         ));
 
         // MLP fc1: [intermediate_size, hidden_size] + bias [intermediate_size]
         append_linear_module_tensor_profiles(
-            &mut tensor_profiles,
+            tensor_profiles,
             &format!("{block_prefix}.mlp.linear_fc1"),
-            intermediate_size,
-            hidden_size,
+            geometry.intermediate_size,
+            geometry.hidden_size,
             vision_module_quantization_profile(
-                vision_quantization_profiles.as_ref(),
+                vision_quantization_profiles,
                 &format!("{block_prefix}.mlp.linear_fc1"),
             ),
         )?;
 
         // MLP fc2: [hidden_size, intermediate_size] + bias [hidden_size]
         append_linear_module_tensor_profiles(
-            &mut tensor_profiles,
+            tensor_profiles,
             &format!("{block_prefix}.mlp.linear_fc2"),
-            hidden_size,
-            intermediate_size,
+            geometry.hidden_size,
+            geometry.intermediate_size,
             vision_module_quantization_profile(
-                vision_quantization_profiles.as_ref(),
+                vision_quantization_profiles,
                 &format!("{block_prefix}.mlp.linear_fc2"),
             ),
         )?;
@@ -168,50 +222,56 @@ fn qwen3_5_vision_tensor_profiles_with_quantization(
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm2.weight"),
             TensorDtype::ModelFloat,
-            vec![hidden_size],
+            vec![geometry.hidden_size],
         ));
         tensor_profiles.push(tensor_profile(
             format!("{block_prefix}.norm2.bias"),
             TensorDtype::ModelFloat,
-            vec![hidden_size],
+            vec![geometry.hidden_size],
         ));
     }
+    Ok(())
+}
 
-    // The 2x2 spatial merge concatenates four hidden rows, so both fc1 axes are
-    // merger_input_dimension=4*hidden_size. fc2 projects that vector to the text
-    // model's out_hidden_size.
+// The 2x2 spatial merge concatenates four hidden rows, so both fc1 axes are
+// merger_input_dimension=4*hidden_size. fc2 projects that vector to the text
+// model's out_hidden_size.
+fn append_merger_tensor_profiles(
+    tensor_profiles: &mut Vec<TensorProfile>,
+    vision_quantization_profiles: Option<&HashMap<String, OptiQQuantizationProfile>>,
+    geometry: &VisionGeometry,
+) -> Result<(), Qwen3_5ArtifactError> {
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.norm.weight".to_owned(),
         TensorDtype::ModelFloat,
-        vec![hidden_size],
+        vec![geometry.hidden_size],
     ));
     tensor_profiles.push(tensor_profile(
         "vision_tower.merger.norm.bias".to_owned(),
         TensorDtype::ModelFloat,
-        vec![hidden_size],
+        vec![geometry.hidden_size],
     ));
     append_linear_module_tensor_profiles(
-        &mut tensor_profiles,
+        tensor_profiles,
         "vision_tower.merger.linear_fc1",
-        merger_input_dimension,
-        merger_input_dimension,
+        geometry.merger_input_dimension,
+        geometry.merger_input_dimension,
         vision_module_quantization_profile(
-            vision_quantization_profiles.as_ref(),
+            vision_quantization_profiles,
             "vision_tower.merger.linear_fc1",
         ),
     )?;
     append_linear_module_tensor_profiles(
-        &mut tensor_profiles,
+        tensor_profiles,
         "vision_tower.merger.linear_fc2",
-        out_hidden_size,
-        merger_input_dimension,
+        geometry.out_hidden_size,
+        geometry.merger_input_dimension,
         vision_module_quantization_profile(
-            vision_quantization_profiles.as_ref(),
+            vision_quantization_profiles,
             "vision_tower.merger.linear_fc2",
         ),
     )?;
-
-    Ok(tensor_profiles)
+    Ok(())
 }
 
 fn append_linear_module_tensor_profiles(

@@ -15,7 +15,8 @@ use astronomical_test_harness::test_run::{TestRunConfiguration, TestRunContext};
 use crate::process_signals::SignalPipe;
 use arguments::{TestRunRequest, TestTarget};
 use cargo_artifacts::{
-    listed_test_names, parse_artifacts, test_build_arguments, workspace_binary_build_arguments,
+    CargoArtifacts, listed_test_names, parse_artifacts, test_build_arguments,
+    workspace_binary_build_arguments,
 };
 use process::{CommandOutput, OutputStyle, run_command};
 
@@ -89,12 +90,66 @@ fn finish_run(run_outcome: Result<(), RunFailure>) -> ExitCode {
     }
 }
 
-#[expect(clippy::too_many_lines)]
 fn execute(
     repository_root: &Path,
     request: &TestRunRequest,
-    mut configuration: TestRunConfiguration,
+    configuration: TestRunConfiguration,
 ) -> Result<(), RunFailure> {
+    let mut prepared = prepare_run(repository_root, configuration)?;
+    let artifacts = build_test_artifacts(
+        &prepared.repository_root,
+        &prepared.run_directory,
+        request,
+        &prepared.signals,
+    )?;
+    ensure_source_commit_unchanged(&prepared.repository_root, &prepared.source_commit)?;
+    refresh_dirty_state(&prepared.repository_root, &mut prepared.run_context)?;
+    let CargoArtifacts {
+        tests: test_executables,
+        binaries: workspace_binaries,
+    } = artifacts;
+    prepared.run_context.workspace_binaries = workspace_binaries;
+    prepared.run_context.workspace_binary_sha256 =
+        cargo_artifacts::binary_digests(&prepared.run_context.workspace_binaries)?;
+    prepared
+        .run_context
+        .write_to_directory(&prepared.run_directory)
+        .map_err(|error| error.to_string())?;
+    if test_executables.is_empty() {
+        return Err("Cargo reported no test executable for the selected target"
+            .to_owned()
+            .into());
+    }
+    let selected_cases = select_test_cases(
+        &test_executables,
+        request,
+        &prepared.run_directory,
+        &prepared.signals,
+    )?;
+    if selected_cases.is_empty() {
+        return Err("the explicit test selection matched no runnable tests"
+            .to_owned()
+            .into());
+    }
+    run_selected_cases(&selected_cases, &prepared, request)
+}
+
+/// Everything the later run stages share: the canonical repository root, the
+/// owned run directory, the installed signal pipe (kept alive for the whole
+/// run so interruption handlers stay registered), the per-run context, and the
+/// commit the build must not drift from.
+struct PreparedRun {
+    repository_root: PathBuf,
+    run_directory: PathBuf,
+    signals: SignalPipe,
+    run_context: TestRunContext,
+    source_commit: String,
+}
+
+fn prepare_run(
+    repository_root: &Path,
+    mut configuration: TestRunConfiguration,
+) -> Result<PreparedRun, RunFailure> {
     configuration.validate()?;
     let repository_root = repository_root
         .canonicalize()
@@ -104,92 +159,129 @@ fn execute(
         "[test-run] status=prepared retained_run_directory={}",
         run_directory.display()
     );
-    if configuration.evidence_directory.is_none() {
-        configuration.evidence_directory = Some(run_directory.join("evidence"));
-    } else if let Some(evidence_root) = &configuration.evidence_directory {
-        configuration.evidence_directory = Some(
-            evidence_root.join(
-                run_directory
-                    .file_name()
-                    .ok_or_else(|| "the owned run directory has no name".to_owned())?,
-            ),
-        );
-    }
+    configuration.evidence_directory = Some(owned_run_evidence_directory(
+        configuration.evidence_directory.as_deref(),
+        &run_directory,
+    )?);
     let signals = SignalPipe::install()
         .ok_or_else(|| "could not install test-run interruption handlers".to_owned())?;
     let source_commit = git_text(&repository_root, &["rev-parse", "HEAD"])?;
-    let mut run_context = TestRunContext {
+    let run_context = TestRunContext {
         configuration,
         source_commit: Some(source_commit.clone()),
         source_is_dirty: !git_text(&repository_root, &["status", "--porcelain"])?.is_empty(),
         ..TestRunContext::default()
     };
+    Ok(PreparedRun {
+        repository_root,
+        run_directory,
+        signals,
+        run_context,
+        source_commit,
+    })
+}
 
+// Evidence always lives under the run's own directory name so repeated runs
+// that share one configured evidence root never overwrite each other's files.
+fn owned_run_evidence_directory(
+    configured_evidence_directory: Option<&Path>,
+    run_directory: &Path,
+) -> Result<PathBuf, String> {
+    match configured_evidence_directory {
+        None => Ok(run_directory.join("evidence")),
+        Some(evidence_root) => Ok(evidence_root.join(
+            run_directory
+                .file_name()
+                .ok_or_else(|| "the owned run directory has no name".to_owned())?,
+        )),
+    }
+}
+
+fn build_test_artifacts(
+    repository_root: &Path,
+    run_directory: &Path,
+    request: &TestRunRequest,
+    signals: &SignalPipe,
+) -> Result<CargoArtifacts, RunFailure> {
     let built_tests = cargo_command(
-        &repository_root,
-        &run_directory,
+        repository_root,
+        run_directory,
         "build-tests",
         &test_build_arguments(request),
-        &signals,
+        signals,
     )?;
-    let mut artifacts = parse_artifacts(&built_tests.stdout, &repository_root)?;
+    let mut artifacts = parse_artifacts(&built_tests.stdout, repository_root)?;
     if let Some(binary_arguments) = workspace_binary_build_arguments(request) {
         let built_binaries = cargo_command(
-            &repository_root,
-            &run_directory,
+            repository_root,
+            run_directory,
             "build-workspace-binaries",
             &binary_arguments,
-            &signals,
+            signals,
         )?;
-        let workspace_artifacts = parse_artifacts(&built_binaries.stdout, &repository_root)?;
+        let workspace_artifacts = parse_artifacts(&built_binaries.stdout, repository_root)?;
         artifacts.binaries.extend(workspace_artifacts.binaries);
     }
-    if git_text(&repository_root, &["rev-parse", "HEAD"])? != source_commit {
+    Ok(artifacts)
+}
+
+fn ensure_source_commit_unchanged(
+    repository_root: &Path,
+    source_commit: &str,
+) -> Result<(), RunFailure> {
+    if git_text(repository_root, &["rev-parse", "HEAD"])? != source_commit {
         return Err(
             "source commit changed during the test build; run again against one revision"
                 .to_owned()
                 .into(),
         );
     }
+    Ok(())
+}
+
+fn refresh_dirty_state(
+    repository_root: &Path,
+    run_context: &mut TestRunContext,
+) -> Result<(), RunFailure> {
     run_context.source_is_dirty |=
-        !git_text(&repository_root, &["status", "--porcelain"])?.is_empty();
-    run_context.workspace_binaries = artifacts.binaries;
-    run_context.workspace_binary_sha256 =
-        cargo_artifacts::binary_digests(&run_context.workspace_binaries)?;
-    run_context
-        .write_to_directory(&run_directory)
-        .map_err(|error| error.to_string())?;
-    if artifacts.tests.is_empty() {
-        return Err("Cargo reported no test executable for the selected target"
-            .to_owned()
-            .into());
-    }
+        !git_text(repository_root, &["status", "--porcelain"])?.is_empty();
+    Ok(())
+}
+
+fn select_test_cases(
+    test_executables: &[PathBuf],
+    request: &TestRunRequest,
+    run_directory: &Path,
+    signals: &SignalPipe,
+) -> Result<Vec<(PathBuf, String)>, RunFailure> {
     let mut selected_cases = Vec::new();
-    for (executable_index, test_executable) in artifacts.tests.iter().enumerate() {
+    for (executable_index, test_executable) in test_executables.iter().enumerate() {
         let selected_names = select_test_names(
             test_executable,
             executable_index,
             request,
-            &run_directory,
-            &signals,
+            run_directory,
+            signals,
         )?;
-        selected_cases.extend(
-            selected_names
-                .into_iter()
-                .map(|test_name| (test_executable.clone(), test_name)),
-        );
+        for test_name in selected_names {
+            selected_cases.push((test_executable.clone(), test_name));
+        }
     }
-    if selected_cases.is_empty() {
-        return Err("the explicit test selection matched no runnable tests"
-            .to_owned()
-            .into());
-    }
+    Ok(selected_cases)
+}
+
+fn run_selected_cases(
+    selected_cases: &[(PathBuf, String)],
+    prepared: &PreparedRun,
+    request: &TestRunRequest,
+) -> Result<(), RunFailure> {
     let cases_started_at = Instant::now();
     for (case_index, (test_executable, test_name)) in selected_cases.iter().enumerate() {
-        let case_directory = run_directory.join(format!("case-{case_index}"));
+        let case_directory = prepared.run_directory.join(format!("case-{case_index}"));
         fs::create_dir(&case_directory).map_err(|error| error.to_string())?;
-        let mut case_context = run_context.clone();
-        case_context.configuration.evidence_directory = run_context
+        let mut case_context = prepared.run_context.clone();
+        case_context.configuration.evidence_directory = prepared
+            .run_context
             .configuration
             .evidence_directory
             .as_ref()
@@ -213,21 +305,36 @@ fn execute(
             test_name,
             TEST_BUDGET,
             OutputStyle::Test,
-            &signals,
+            &prepared.signals,
         )?;
         require_success(test_output, test_name)?;
-        let completed_cases = case_index + 1;
-        let remaining_cases = selected_cases.len() - completed_cases;
-        let estimated_remaining_seconds = cases_started_at.elapsed().as_secs_f64()
-            / completed_cases as f64
-            * remaining_cases as f64;
         eprintln!(
-            "[test-run] status=case-finished completed={completed_cases} total={} progress_percent={:.1} eta_seconds={estimated_remaining_seconds:.1}",
-            selected_cases.len(),
-            100.0 * completed_cases as f64 / selected_cases.len() as f64
+            "{}",
+            case_finished_log_line(
+                case_index + 1,
+                selected_cases.len(),
+                cases_started_at.elapsed().as_secs_f64()
+            )
         );
     }
     Ok(())
+}
+
+// The ETA extrapolates the mean per-case duration observed so far onto the
+// remaining cases, giving operators a live progress and completion estimate
+// while a long explicit selection runs.
+fn case_finished_log_line(
+    completed_cases: usize,
+    total_cases: usize,
+    cases_elapsed_seconds: f64,
+) -> String {
+    let remaining_cases = total_cases - completed_cases;
+    let estimated_remaining_seconds =
+        cases_elapsed_seconds / completed_cases as f64 * remaining_cases as f64;
+    format!(
+        "[test-run] status=case-finished completed={completed_cases} total={total_cases} progress_percent={:.1} eta_seconds={estimated_remaining_seconds:.1}",
+        100.0 * completed_cases as f64 / total_cases as f64
+    )
 }
 
 fn cargo_command(
