@@ -81,7 +81,6 @@ pub(crate) fn read_bounded_required_file_bytes(
     Ok(required_file_bytes)
 }
 
-#[expect(clippy::too_many_lines)]
 pub(crate) fn validate_required_file(
     model_directory: &Path,
     required_file_profile: &RequiredFileProfile,
@@ -109,22 +108,12 @@ pub(crate) fn validate_required_file(
     // Ordinary model directories remain symlink-free. Hugging Face snapshots are
     // the one safe exception because their files intentionally point into the
     // sibling immutable `blobs/` directory.
-    let required_file_open_path = if file_metadata.file_type().is_symlink() {
-        resolve_hugging_face_snapshot_blob_path(
-            model_directory,
-            &required_file_path,
-            &required_file_profile.file_name,
-        )?
-        .ok_or_else(|| ArtifactValidationError::RequiredFileIsSymlink {
-            file_name: required_file_profile.file_name.clone(),
-        })?
-    } else if file_metadata.file_type().is_file() {
-        required_file_path
-    } else {
-        return Err(ArtifactValidationError::RequiredFileIsNotRegular {
-            file_name: required_file_profile.file_name.clone(),
-        });
-    };
+    let required_file_open_path = resolve_required_file_open_path(
+        model_directory,
+        &required_file_path,
+        &required_file_profile.file_name,
+        &file_metadata,
+    )?;
 
     // Open the resolved blob itself with O_NOFOLLOW. If the final path changes
     // after validation, the kernel rejects it instead of following it.
@@ -169,27 +158,8 @@ pub(crate) fn validate_required_file(
         });
     }
 
-    let should_capture_bytes = matches!(
-        required_file_profile.file_name.as_str(),
-        CONFIG_FILE_NAME | TOKENIZER_FILE_NAME
-    );
-    if should_capture_bytes && actual_size_bytes > MAXIMUM_CAPTURED_FILE_SIZE_BYTES {
-        return Err(ArtifactValidationError::CapturedRequiredFileTooLarge {
-            file_name: required_file_profile.file_name.clone(),
-            actual_size_bytes,
-            maximum_size_bytes: MAXIMUM_CAPTURED_FILE_SIZE_BYTES,
-        });
-    }
-    let captured_bytes = if should_capture_bytes {
-        Some(capture_file(&file, actual_size_bytes).map_err(|source| {
-            ArtifactValidationError::ReadRequiredFileForCapture {
-                file_name: required_file_profile.file_name.clone(),
-                source,
-            }
-        })?)
-    } else {
-        None
-    };
+    let captured_bytes =
+        capture_required_file_bytes(required_file_profile, &file, actual_size_bytes)?;
     let final_file_metadata =
         file.metadata().map_err(
             |source| ArtifactValidationError::ReadRequiredFileForCapture {
@@ -197,13 +167,11 @@ pub(crate) fn validate_required_file(
                 source,
             },
         )?;
-    if validated_artifact::validated_file_identity(&final_file_metadata)
-        != validated_artifact::validated_file_identity(&file_metadata)
-    {
-        return Err(ArtifactValidationError::ValidatedFileIdentityChanged {
-            file_name: required_file_profile.file_name.clone(),
-        });
-    }
+    ensure_validated_file_identity_unchanged(
+        &required_file_profile.file_name,
+        &final_file_metadata,
+        &file_metadata,
+    )?;
 
     Ok(ValidatedRequiredFile::new(
         file,
@@ -212,6 +180,88 @@ pub(crate) fn validate_required_file(
         actual_size_bytes,
         captured_bytes,
     ))
+}
+
+/// Resolves the path the validator actually opens. Ordinary model directories
+/// stay symlink-free, so a symlink anywhere else is rejected; Hugging Face
+/// snapshots are the one safe exception because their files intentionally
+/// point into the sibling immutable `blobs/` directory, and the snapshot
+/// resolver returns none for a symlink it does not recognize.
+fn resolve_required_file_open_path(
+    model_directory: &Path,
+    required_file_path: &Path,
+    required_file_name: &str,
+    file_metadata: &fs::Metadata,
+) -> Result<PathBuf, ArtifactValidationError> {
+    if file_metadata.file_type().is_symlink() {
+        resolve_hugging_face_snapshot_blob_path(
+            model_directory,
+            required_file_path,
+            required_file_name,
+        )?
+        .ok_or_else(|| ArtifactValidationError::RequiredFileIsSymlink {
+            file_name: required_file_name.to_owned(),
+        })
+    } else if file_metadata.file_type().is_file() {
+        Ok(required_file_path.to_path_buf())
+    } else {
+        Err(ArtifactValidationError::RequiredFileIsNotRegular {
+            file_name: required_file_name.to_owned(),
+        })
+    }
+}
+
+/// Captures the bytes of the small human-readable files (config, tokenizer)
+/// that later journeys parse directly, leaving weight descriptors to be read
+/// positionally from their file. Anything outside the capture set is skipped;
+/// anything inside it that exceeds the capture ceiling is rejected rather
+/// than silently buffered.
+fn capture_required_file_bytes(
+    required_file_profile: &RequiredFileProfile,
+    file: &File,
+    actual_size_bytes: u64,
+) -> Result<Option<Vec<u8>>, ArtifactValidationError> {
+    let should_capture_bytes = matches!(
+        required_file_profile.file_name.as_str(),
+        CONFIG_FILE_NAME | TOKENIZER_FILE_NAME
+    );
+    if !should_capture_bytes {
+        return Ok(None);
+    }
+    if actual_size_bytes > MAXIMUM_CAPTURED_FILE_SIZE_BYTES {
+        return Err(ArtifactValidationError::CapturedRequiredFileTooLarge {
+            file_name: required_file_profile.file_name.clone(),
+            actual_size_bytes,
+            maximum_size_bytes: MAXIMUM_CAPTURED_FILE_SIZE_BYTES,
+        });
+    }
+    let captured_bytes = capture_file(file, actual_size_bytes).map_err(|source| {
+        ArtifactValidationError::ReadRequiredFileForCapture {
+            file_name: required_file_profile.file_name.clone(),
+            source,
+        }
+    })?;
+    Ok(Some(captured_bytes))
+}
+
+/// Guards the validated descriptor against the checked-symlink race: the file
+/// identity observed right after the no-follow open must still match the
+/// identity observed after the capture read. A mismatch means the artifact
+/// content changed underneath the validator, so the descriptor must not be
+/// trusted.
+fn ensure_validated_file_identity_unchanged(
+    required_file_name: &str,
+    final_file_metadata: &fs::Metadata,
+    validated_file_metadata: &fs::Metadata,
+) -> Result<(), ArtifactValidationError> {
+    if validated_artifact::validated_file_identity(final_file_metadata)
+        != validated_artifact::validated_file_identity(validated_file_metadata)
+    {
+        return Err(ArtifactValidationError::ValidatedFileIdentityChanged {
+            file_name: required_file_name.to_owned(),
+        });
+    }
+    Ok(())
 }
 
 /// Test seam for required-file path validation without exposing retained internal metadata.

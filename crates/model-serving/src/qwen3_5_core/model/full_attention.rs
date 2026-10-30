@@ -41,7 +41,9 @@ use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 
 use super::base::Qwen3_5ModelBase;
 use crate::decoder_cache::FullAttentionKeyValueState;
-use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5FullAttentionWeights;
+use crate::qwen3_5_core::model_math::decoder_layer_weights::{
+    Qwen3_5AffineWeights, Qwen3_5FullAttentionWeights,
+};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_core::model_math::tensor_slicing;
 
@@ -252,7 +254,6 @@ impl Qwen3_5ModelBase {
     /// into Q, K, and V; gives Q and K position information; adds K and V to
     /// the running context; applies attention; and projects the result back to
     /// the normal hidden-size vector expected by the rest of the decoder layer.
-    #[expect(clippy::too_many_lines)]
     pub(crate) fn forward_full_attention(
         &self,
         hidden_states: &MlxArray,
@@ -281,8 +282,249 @@ impl Qwen3_5ModelBase {
         // First learned projection: turn each hidden-state vector into the
         // combined query-and-gate features. Quantization changes how the matrix
         // is stored and evaluated, not the mathematical role of this projection.
-        let query_projection =
-            self.quantized_linear(hidden_states, &full_attention_weights.query_projection)?;
+        // The projection is reshaped onto the head axis and split there into the
+        // query vectors and the output gate, as computed below.
+        let (queries, output_gate) = self.prepare_query_vectors_and_output_gate(
+            hidden_states,
+            &full_attention_weights.query_projection,
+            token_count,
+            query_head_count,
+            attention_head_dimension,
+            attention_projection_head_dimension,
+        )?;
+
+        // Second learned projection: K describes what each token offers for
+        // matching. There are fewer K heads because they are shared by groups
+        // of Q heads in grouped-query attention.
+        let keys = self.project_key_value_tensors(
+            hidden_states,
+            &full_attention_weights.key_projection,
+            token_count,
+            key_value_head_count,
+            attention_head_dimension,
+        )?;
+
+        // Third learned projection: V carries the information that will be
+        // averaged together after softmax decides how relevant each key is.
+        // V uses the same head layout as K so each key position has one matching
+        // value position in the KV state.
+        let values = self.project_key_value_tensors(
+            hidden_states,
+            &full_attention_weights.value_projection,
+            token_count,
+            key_value_head_count,
+            attention_head_dimension,
+        )?;
+
+        // RoPE and RMS-norm are applied to the new keys before concatenation,
+        // exactly as the model expects. The owner then appends these rotated
+        // tensors to the cached slab and returns views over the full prefix.
+        // RMS normalization rescales each Q vector before it participates in a
+        // dot product. It is a model-defined preparation step, not softmax.
+        let normalized_queries = self.rms_normalize_attention_tensor(
+            &queries,
+            &full_attention_weights.query_normalization_weight,
+            rms_norm_epsilon,
+        )?;
+
+        // The model applies a corresponding normalization to each K vector.
+        let normalized_keys = self.rms_normalize_attention_tensor(
+            &keys,
+            &full_attention_weights.key_normalization_weight,
+            rms_norm_epsilon,
+        )?;
+
+        // Linear projections naturally use [batch, tokens, heads, features].
+        // MLX attention uses [batch, heads, tokens, features], so move the head
+        // axis before the token axis for all three attention inputs.
+        let (transposed_queries, transposed_keys, transposed_values) =
+            self.transpose_attention_heads_forward(&normalized_queries, &normalized_keys, &values)?;
+
+        // Rotary positional embedding, or RoPE, rotates pairs of Q and K
+        // features according to each token's position. Their dot product can
+        // then reflect relative position as well as feature similarity. V is
+        // intentionally not rotated. rope_offset_tokens tells RoPE where this
+        // prompt chunk or generated token starts in the existing context. The
+        // optional offset tensor carries a per-token start position, used when
+        // more than one chunk feeds the model at once.
+        let (rotated_queries, rotated_keys) = self.apply_rotary_positional_embedding(
+            &transposed_queries,
+            &transposed_keys,
+            token_position_offsets,
+            rotary_dimension,
+            rope_offset_tokens,
+        )?;
+
+        // Store only the new K and V tensors in the append-only KV state. The
+        // owner returns views over the complete used prefix, including this
+        // forward's new positions, and grows storage in fixed steps to avoid
+        // repeatedly copying all prior context for each generated token.
+        let (active_keys, active_values) =
+            self.append_rotated_tensors_to_kv_state(kv_state, &rotated_keys, &transposed_values)?;
+
+        // Execute the foundational attention formula against the active prefix,
+        // then project the gated output back into the decoder's hidden-size
+        // space. 1 / sqrt(features_per_head) is the conventional score scale.
+        // The caller adds this result to the residual stream before continuing
+        // with the rest of the layer.
+        self.run_full_attention_computation(
+            &rotated_queries,
+            &active_keys,
+            &active_values,
+            &output_gate,
+            (attention_head_dimension as f32).sqrt().recip(),
+            &full_attention_weights.output_projection,
+        )
+    }
+
+    /// Appends this step's rotated keys and transposed values to the append-only
+    /// KV state and returns views over the complete used prefix. Only the new
+    /// tensors are stored; the owner grows storage in fixed steps to avoid
+    /// copying all prior context for each generated token. The returned views
+    /// span [0..offset] and already include this step's new positions.
+    fn append_rotated_tensors_to_kv_state(
+        &self,
+        kv_state: &mut FullAttentionKeyValueState,
+        rotated_keys: &MlxArray,
+        transposed_values: &MlxArray,
+    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+        let previous_storage_offset_tokens = kv_state.offset_tokens();
+        let (active_keys, active_values) = kv_state.update_and_fetch(
+            &self.runtime,
+            rotated_keys,
+            transposed_values,
+            previous_storage_offset_tokens,
+        )?;
+        Ok((active_keys, active_values))
+    }
+
+    /// Executes the foundational attention formula against the active key/value
+    /// prefix, applies Qwen's learned output gate, and projects the blended
+    /// outputs back into the decoder's hidden-size space. The attention step is
+    /// one scaled dot-product calculation; this helper wraps it with the final
+    /// learned projection so the caller gets the hidden-size result ready for
+    /// the residual stream.
+    fn run_full_attention_computation(
+        &self,
+        rotated_queries: &MlxArray,
+        active_keys: &MlxArray,
+        active_values: &MlxArray,
+        output_gate: &MlxArray,
+        score_scale: f32,
+        output_projection_weights: &Qwen3_5AffineWeights,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let gated_output = qwen3_5_full_attention_step(
+            &self.runtime,
+            &self.compiled_elementwise_graphs,
+            rotated_queries,
+            active_keys,
+            active_values,
+            output_gate,
+            score_scale,
+        )?;
+
+        // Final learned projection: mix the concatenated head outputs back into
+        // the decoder's hidden-size space.
+        self.quantized_linear(&gated_output, output_projection_weights)
+    }
+
+    /// Applies a model-defined RMS normalization to a single attention input
+    /// tensor. Qwen normalizes both Q and K before attention but leaves V
+    /// untouched; each vector is scaled by its learned weight against a small
+    /// epsilon so the subsequent QK dot product stays numerically stable. This
+    /// helper holds the exact normalization the model documents for a single
+    /// vector; the parent calls it once for queries and once for keys.
+    fn rms_normalize_attention_tensor(
+        &self,
+        input: &MlxArray,
+        weight: &MlxArray,
+        rms_norm_epsilon: f32,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        Ok(self.runtime.rms_norm(input, weight, rms_norm_epsilon)?)
+    }
+
+    /// Permutes the head axis forward for all three attention inputs. Linear
+    /// projections produce [batch, tokens, heads, features]; MLX attention needs
+    /// [batch, heads, tokens, features]. The same [0, 2, 1, 3] permutation
+    /// applies identically to Q, K, and V so their head axes line up for the
+    /// scaled dot-product step.
+    fn transpose_attention_heads_forward(
+        &self,
+        queries: &MlxArray,
+        keys: &MlxArray,
+        values: &MlxArray,
+    ) -> Result<(MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
+        let transposed_queries = self.runtime.transpose_axes(queries, &[0, 2, 1, 3])?;
+        let transposed_keys = self.runtime.transpose_axes(keys, &[0, 2, 1, 3])?;
+        let transposed_values = self.runtime.transpose_axes(values, &[0, 2, 1, 3])?;
+        Ok((transposed_queries, transposed_keys, transposed_values))
+    }
+
+    /// Applies rotary positional embedding to the Q and K tensors so their dot
+    /// product reflects relative position as well as feature similarity. The
+    /// same rotation pattern applies to both; V is deliberately left unrotated.
+    /// When per-token start offsets are supplied the model rotates each token by
+    /// its own offset, otherwise a single fixed offset marks where this chunk
+    /// begins in the running context.
+    fn apply_rotary_positional_embedding(
+        &self,
+        queries: &MlxArray,
+        keys: &MlxArray,
+        token_position_offsets: Option<&MlxArray>,
+        rotary_dimension: i32,
+        rope_offset_tokens: i32,
+    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+        // Rope base is the model's rotary theta, read from configuration the
+        // same way it was read at the layer's start.
+        let rope_base = f32::from_bits(self.config.rope_theta_bits());
+        let (rotated_queries, rotated_keys) =
+            if let Some(token_position_offsets) = token_position_offsets {
+                (
+                    self.runtime.rope_with_token_position_offsets(
+                        queries,
+                        token_position_offsets,
+                        rotary_dimension,
+                        rope_base,
+                    )?,
+                    self.runtime.rope_with_token_position_offsets(
+                        keys,
+                        token_position_offsets,
+                        rotary_dimension,
+                        rope_base,
+                    )?,
+                )
+            } else {
+                (
+                    self.runtime
+                        .rope(queries, rotary_dimension, rope_base, rope_offset_tokens)?,
+                    self.runtime
+                        .rope(keys, rotary_dimension, rope_base, rope_offset_tokens)?,
+                )
+            };
+        Ok((rotated_queries, rotated_keys))
+    }
+
+    /// Produces the attention query vectors and the learned output gate from the
+    /// hidden-state vectors. Qwen packs two same-sized halves into one query
+    /// projection: the query half asks what information the current token should
+    /// retrieve, and the gate half controls how much of the attention output
+    /// survives. The projection is reshaped onto the head axis, the packed
+    /// halves are sliced apart, and the gate is flattened into the
+    /// [batch, tokens, heads x features] layout the attention output already
+    /// uses so the gate can be applied without further reshaping.
+    fn prepare_query_vectors_and_output_gate(
+        &self,
+        hidden_states: &MlxArray,
+        query_projection_weight: &Qwen3_5AffineWeights,
+        token_count: i32,
+        query_head_count: i32,
+        attention_head_dimension: i32,
+        attention_projection_head_dimension: i32,
+    ) -> Result<(MlxArray, MlxArray), Qwen3_5ExecutionError> {
+        // First learned projection: turn each hidden-state vector into the
+        // combined query-and-gate features. Quantization changes how the matrix
+        // is stored and evaluated, not the mathematical role of this projection.
+        let query_projection = self.quantized_linear(hidden_states, query_projection_weight)?;
 
         // Expose the Q-head axis and the two packed halves:
         // [batch, tokens, query_heads, 2 x features_per_head].
@@ -321,14 +563,25 @@ impl Qwen3_5ModelBase {
             &[1, token_count, query_head_count * attention_head_dimension],
         )?;
 
-        // Second learned projection: K describes what each token offers for
-        // matching. There are fewer K heads because they are shared by groups
-        // of Q heads in grouped-query attention.
-        let keys = self.quantized_linear(hidden_states, &full_attention_weights.key_projection)?;
+        Ok((queries, output_gate))
+    }
 
-        // K becomes [batch, tokens, key_value_heads, features_per_head].
-        let keys = self.runtime.reshape(
-            &keys,
+    /// Applies one learned projection to the hidden-state vectors and reshapes
+    /// the result onto the grouped-query head axis. The key and value
+    /// projections share this exact shape ([batch, tokens, key_value_heads,
+    /// features_per_head]) so each key position owns one matching value position
+    /// in the KV state; the caller supplies which projection's weights to use.
+    fn project_key_value_tensors(
+        &self,
+        hidden_states: &MlxArray,
+        projection_weights: &Qwen3_5AffineWeights,
+        token_count: i32,
+        key_value_head_count: i32,
+        attention_head_dimension: i32,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let projected_values = self.quantized_linear(hidden_states, projection_weights)?;
+        let projected_values = self.runtime.reshape(
+            &projected_values,
             &[
                 1,
                 token_count,
@@ -336,120 +589,6 @@ impl Qwen3_5ModelBase {
                 attention_head_dimension,
             ],
         )?;
-
-        // Third learned projection: V carries the information that will be
-        // averaged together after softmax decides how relevant each key is.
-        let values =
-            self.quantized_linear(hidden_states, &full_attention_weights.value_projection)?;
-
-        // V uses the same head layout as K so each key position has one matching
-        // value position in the KV state.
-        let values = self.runtime.reshape(
-            &values,
-            &[
-                1,
-                token_count,
-                key_value_head_count,
-                attention_head_dimension,
-            ],
-        )?;
-
-        // RoPE and RMS-norm are applied to the new keys before concatenation,
-        // exactly as the model expects. The owner then appends these rotated
-        // tensors to the cached slab and returns views over the full prefix.
-        // RMS normalization rescales each Q vector before it participates in a
-        // dot product. It is a model-defined preparation step, not softmax.
-        let normalized_queries = self.runtime.rms_norm(
-            &queries,
-            &full_attention_weights.query_normalization_weight,
-            rms_norm_epsilon,
-        )?;
-
-        // The model applies a corresponding normalization to each K vector.
-        let normalized_keys = self.runtime.rms_norm(
-            &keys,
-            &full_attention_weights.key_normalization_weight,
-            rms_norm_epsilon,
-        )?;
-
-        // Linear projections naturally use [batch, tokens, heads, features].
-        // MLX attention uses [batch, heads, tokens, features], so move the head
-        // axis before the token axis for all three attention inputs.
-        let transposed_queries = self
-            .runtime
-            .transpose_axes(&normalized_queries, &[0, 2, 1, 3])?;
-        let transposed_keys = self
-            .runtime
-            .transpose_axes(&normalized_keys, &[0, 2, 1, 3])?;
-        let transposed_values = self.runtime.transpose_axes(&values, &[0, 2, 1, 3])?;
-
-        // Rotary positional embedding, or RoPE, rotates pairs of Q and K
-        // features according to each token's position. Their dot product can
-        // then reflect relative position as well as feature similarity. V is
-        // intentionally not rotated. rope_offset_tokens tells RoPE where this
-        // prompt chunk or generated token starts in the existing context.
-        let rope_base = f32::from_bits(self.config.rope_theta_bits());
-        let (rotated_queries, rotated_keys) =
-            if let Some(token_position_offsets) = token_position_offsets {
-                (
-                    self.runtime.rope_with_token_position_offsets(
-                        &transposed_queries,
-                        token_position_offsets,
-                        rotary_dimension,
-                        rope_base,
-                    )?,
-                    self.runtime.rope_with_token_position_offsets(
-                        &transposed_keys,
-                        token_position_offsets,
-                        rotary_dimension,
-                        rope_base,
-                    )?,
-                )
-            } else {
-                (
-                    self.runtime.rope(
-                        &transposed_queries,
-                        rotary_dimension,
-                        rope_base,
-                        rope_offset_tokens,
-                    )?,
-                    self.runtime.rope(
-                        &transposed_keys,
-                        rotary_dimension,
-                        rope_base,
-                        rope_offset_tokens,
-                    )?,
-                )
-            };
-
-        // Store only the new K and V tensors in the append-only KV state. The
-        // owner returns views over the complete used prefix, including this
-        // forward's new positions. It grows storage in fixed steps to avoid
-        // repeatedly copying all prior context for each generated token.
-        let previous_storage_offset_tokens = kv_state.offset_tokens();
-        let (active_keys, active_values) = kv_state.update_and_fetch(
-            &self.runtime,
-            &rotated_keys,
-            &transposed_values,
-            previous_storage_offset_tokens,
-        )?;
-        // Execute the foundational attention formula against the active prefix.
-        // 1 / sqrt(features_per_head) is the conventional score scale. The
-        // helper uses causal mode for a multi-token prompt and unmasked mode for
-        // one-token decode, then applies Qwen's learned output gate.
-        let gated_output = qwen3_5_full_attention_step(
-            &self.runtime,
-            &self.compiled_elementwise_graphs,
-            &rotated_queries,
-            &active_keys,
-            &active_values,
-            &output_gate,
-            (attention_head_dimension as f32).sqrt().recip(),
-        )?;
-
-        // Final learned projection: mix the concatenated head outputs back into
-        // the decoder's hidden-size space. The caller adds this result to the
-        // residual stream before continuing with the rest of the layer.
-        self.quantized_linear(&gated_output, &full_attention_weights.output_projection)
+        Ok(projected_values)
     }
 }

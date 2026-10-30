@@ -9,8 +9,7 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
 use crate::{
     PerformanceAttribution, PerformanceCounter, should_commit_mandatory_complete_layer,
-    should_commit_mandatory_routed_page, should_commit_multi_token_union_as_complete_layer,
-    should_complete_partial_layer_on_prefill_read, should_seed_partial_layer_on_prefill_read,
+    should_complete_partial_layer_on_prefill_read,
 };
 
 /// How one forward should execute one mixture-of-experts layer.
@@ -252,7 +251,6 @@ impl Qwen3_5Model {
     /// growth path. Prefill pages stay off the decode warm-insert queue, which
     /// previously pinned every chunk's union, including failed attempts, until
     /// generation started.
-    #[expect(clippy::too_many_lines)]
     pub(super) fn stream_operation_local_routed_experts(
         &self,
         expert_pager: &Qwen3_5ExpertPager,
@@ -308,95 +306,31 @@ impl Qwen3_5Model {
                     retained_experts.has_complete_layer(layer_index, expert_capacity),
                 )
             };
-            // A multi-token chunk whose union covers the whole layer has
-            // already paid the complete-layer read cost; offering it to
-            // retained ownership is pure reuse. Without this offer every
-            // later chunk re-read the same bytes from storage — the
-            // 2026-10-23 Ornith flight streamed 389 GB for one 23,976-token
-            // prompt while 26.95 GB of ceiling sat unused. Budget admission
-            // inside the cache remains the only refusal path.
-            if !layer_has_complete_table
-                && should_commit_multi_token_union_as_complete_layer(
-                    route_token_count,
-                    production_default_paging,
-                    self.expert_residency_target(layer_index),
-                    routed_expert_ids.len(),
-                    expert_capacity,
-                )
-            {
-                let seated = retained_experts.borrow_mut().try_adopt_complete_layer(
-                    &self.runtime,
-                    layer_index,
-                    routed_expert_ids,
-                    &streamed_weights,
-                )?;
-                tracing::debug!(
-                    layer_index,
-                    seated,
-                    routed_expert_count = routed_expert_ids.len(),
-                    expert_capacity,
-                    streamed_payload_bytes = streamed_manifest.payload_byte_count,
-                    "multi-token union offered to retained ownership",
-                );
-                if seated {
-                    performance_attribution.record_counter(
-                        PerformanceCounter::ExpertResidencyReadThroughSeatedCompletePayloadBytes,
-                        streamed_manifest.payload_byte_count,
-                    );
-                }
-            } else if should_seed_partial_layer_on_prefill_read(
+            self.offer_multi_token_union_to_retained_ownership(
+                retained_experts,
+                layer_index,
+                expert_capacity,
                 route_token_count,
                 production_default_paging,
-                self.expert_residency_target(layer_index),
+                routed_expert_ids,
                 resident_expert_count,
-                routed_expert_ids.len(),
+                layer_has_complete_table,
+                &streamed_weights,
+                &streamed_manifest,
+                performance_attribution,
+            )?;
+            self.queue_decode_warm_inserts(
+                retained_experts,
+                layer_index,
                 expert_capacity,
-            ) {
-                let inserted_expert_count = retained_experts.borrow_mut().insert_streamed_experts(
-                    &self.runtime,
-                    layer_index,
-                    routed_expert_ids,
-                    &streamed_weights,
-                    routed_expert_ids,
-                    expert_capacity,
-                )?;
-                tracing::debug!(
-                    layer_index,
-                    inserted_expert_count,
-                    routed_expert_count = routed_expert_ids.len(),
-                    expert_capacity,
-                    streamed_payload_bytes = streamed_manifest.payload_byte_count,
-                    "multi-token prefill union offered to retained ownership as a completion seed",
-                );
-            }
-            if route_token_count == 1 && warm_slot_count > 0 && !layer_has_complete_table {
-                if should_commit_mandatory_routed_page(
-                    route_token_count,
-                    production_default_paging,
-                    self.expert_residency_target(layer_index),
-                    false,
-                ) {
-                    retained_experts
-                        .borrow_mut()
-                        .queue_pending_routed_expert_insert(
-                            layer_index,
-                            routed_expert_ids,
-                            &streamed_weights,
-                            warm_slot_count.min(expert_capacity),
-                        )?;
-                } else if performance_attribution.is_enabled() {
-                    // Issue #537: keep this token's streamed route in leftover
-                    // slots when the residency plan would have dropped it.
-                    retained_experts
-                        .borrow_mut()
-                        .queue_pending_prefetch_insert(
-                            layer_index,
-                            routed_expert_ids,
-                            &streamed_weights,
-                            routed_expert_ids.len().min(expert_capacity),
-                        )?;
-                }
-            }
+                route_token_count,
+                production_default_paging,
+                routed_expert_ids,
+                &streamed_weights,
+                warm_slot_count,
+                layer_has_complete_table,
+                performance_attribution,
+            )?;
         }
         Ok((streamed_weights, streamed_manifest))
     }
