@@ -12,6 +12,8 @@ mod expert_retention_memory_pressure;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod expert_reuse;
 #[cfg(feature = "direct-mlx")]
+mod expert_reuse_union_offer;
+#[cfg(feature = "direct-mlx")]
 mod expert_storage_streaming;
 // Reads the next streamed layer while the graphics processor computes.
 pub(crate) mod prefill_complete_layer_prefetch;
