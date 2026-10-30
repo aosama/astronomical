@@ -3,8 +3,9 @@ use tokio::io::AsyncWrite;
 
 use super::fatal;
 use super::support::{ActiveEngineGeneration, ModelFactory, WorkerRuntimeError};
+use crate::inference_engine::contract::EngineGenerationStart;
 use crate::inference_engine::contract::PreparedInferenceRequest;
-use crate::model_generation_processor::ModelGenerationProcessor;
+use crate::model_generation_processor::{ModelGenerationProcessor, PreparedModelGeneration};
 use crate::{ImageGenerationEngine, InferenceEngine, InferenceEngineError};
 
 use super::{EngineBackedWorker, LoadedRuntime};
@@ -18,7 +19,6 @@ where
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
 {
-    #[expect(clippy::too_many_lines)]
     pub(super) async fn start_generation<WriteTransport>(
         &mut self,
         generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
@@ -31,6 +31,125 @@ where
         WriteTransport: AsyncWrite + Unpin,
     {
         let request_id = generation_command.request_id;
+        let Some(prepared_generation) = self
+            .prepare_validated_chat_generation(&generation_command, request_id, event_writer)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let prompt_token_count = protocol_prompt_token_count(
+            prepared_generation.inference_request.prompt_token_count(),
+        )?;
+        let inference_request = prepared_generation.inference_request;
+        let mut streaming_retry_request = inference_request.clone_for_streaming_retry();
+        let mut streaming_retry_attempted = false;
+        // The bounded re-promotion gate runs before generation starts, so a
+        // demoted worker returns to the resident engine at most once per
+        // request and never mid-generation upward. The strict
+        // total-context inequality inside the gate is the anti-thrash
+        // hysteresis; the worker-level bound of one swap per direction per
+        // request is completed by `streaming_retry_attempted` below.
+        let incoming_total_context_token_count = super::support::request_total_context_token_count(
+            prompt_token_count,
+            generation_command.settings.max_output_tokens,
+        );
+        self.maybe_promote_demoted_engine_before_generation(
+            request_id,
+            incoming_total_context_token_count,
+            event_writer,
+        )
+        .await?;
+        let generation_start_result = {
+            let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
+            else {
+                return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
+                    reason: "the loaded model was removed before generation started".to_owned(),
+                });
+            };
+            loaded_model
+                .engine
+                .start_generation(inference_request)
+                .await
+        };
+        let generation_start = match generation_start_result {
+            Ok(generation_start) => generation_start,
+            Err(InferenceEngineError::EngineBusy) => {
+                event_writer
+                    .send_event(&WorkerEvent::Failed {
+                        request_id,
+                        reason: ChatGenerationFailureReason::EngineBusy,
+                    })
+                    .await?;
+                return Ok(None);
+            }
+            Err(InferenceEngineError::InvalidRequest { reason }) => {
+                Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
+                return Ok(None);
+            }
+            Err(InferenceEngineError::ResidentForkRequired { cause, reason }) => {
+                let retried_generation_start = match self
+                    .retry_on_streaming_after_resident_fork(
+                        request_id,
+                        &mut streaming_retry_request,
+                        cause,
+                        reason,
+                        incoming_total_context_token_count,
+                        event_writer,
+                    )
+                    .await?
+                {
+                    Ok(generation_start) => generation_start,
+                    Err(retry_error) => {
+                        return fatal::report_fatal_engine_error(
+                            request_id,
+                            retry_error,
+                            event_writer,
+                        )
+                        .await;
+                    }
+                };
+                match retried_generation_start {
+                    Some(generation_start) => {
+                        streaming_retry_attempted = true;
+                        generation_start
+                    }
+                    None => return Ok(None),
+                }
+            }
+            Err(engine_error) => {
+                return fatal::report_fatal_engine_error(request_id, engine_error, event_writer)
+                    .await;
+            }
+        };
+
+        self.emit_startup_events_and_assemble_generation(
+            request_id,
+            &generation_command,
+            generation_start,
+            prompt_token_count,
+            prepared_generation.request_output,
+            streaming_retry_request,
+            streaming_retry_attempted,
+            event_writer,
+        )
+        .await
+    }
+
+    /// Validates the command, proves the loaded runtime is autoregressive,
+    /// and prepares the generation. `Ok(None)` means the request was already
+    /// rejected to the client with its failure event.
+    async fn prepare_validated_chat_generation<WriteTransport>(
+        &self,
+        generation_command: &astronomical_ipc_protocol::ChatGenerationCommand,
+        request_id: astronomical_ipc_protocol::RequestId,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<
+        Option<PreparedModelGeneration<Processor::InferenceRequest, Processor::RequestOutput>>,
+        WorkerRuntimeError,
+    >
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
         if let Err(validation_error) = generation_command.validate() {
             tracing::warn!(request_id = request_id.value(), error = %validation_error,
                 "rejected invalid worker generation command");
@@ -56,11 +175,11 @@ where
                 .await?;
             return Ok(None);
         };
-        let prepared_generation = match loaded_model
+        match loaded_model
             .processor
-            .prepare_chat_generation(&generation_command)
+            .prepare_chat_generation(generation_command)
         {
-            Ok(prepared_generation) => prepared_generation,
+            Ok(prepared_generation) => Ok(Some(prepared_generation)),
             Err(failure_reason) => {
                 event_writer
                     .send_event(&WorkerEvent::Failed {
@@ -68,28 +187,23 @@ where
                         reason: failure_reason,
                     })
                     .await?;
-                return Ok(None);
+                Ok(None)
             }
-        };
-        let prompt_token_count = u32::try_from(
-            prepared_generation.inference_request.prompt_token_count(),
-        )
-        .map_err(|_| WorkerRuntimeError::InferenceEngineGenerationFailed {
-            reason: "chat prompt token count exceeds the protocol range".to_owned(),
-        })?;
-        let inference_request = prepared_generation.inference_request;
-        let mut streaming_retry_request = inference_request.clone_for_streaming_retry();
-        let mut streaming_retry_attempted = false;
-        // The bounded re-promotion gate runs before generation starts, so a
-        // demoted worker returns to the resident engine at most once per
-        // request and never mid-generation upward. The strict
-        // total-context inequality inside the gate is the anti-thrash
-        // hysteresis; the worker-level bound of one swap per direction per
-        // request is completed by `streaming_retry_attempted` below.
-        let incoming_total_context_token_count = super::support::request_total_context_token_count(
-            prompt_token_count,
-            generation_command.settings.max_output_tokens,
-        );
+        }
+    }
+
+    /// Runs the bounded re-promotion gate before generation starts: a demoted
+    /// worker returns to the resident engine at most once per request and
+    /// never mid-generation upward.
+    async fn maybe_promote_demoted_engine_before_generation<WriteTransport>(
+        &mut self,
+        request_id: astronomical_ipc_protocol::RequestId,
+        incoming_total_context_token_count: usize,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
         if let Some(demoted_engine_placement) = self
             .engine_placement
             .filter(|engine_placement| engine_placement.is_demoted_for_request())
@@ -121,12 +235,17 @@ where
                                 }
                             }
                             Err(promotion_error) => {
-                                return fatal::report_fatal_engine_error(
-                                    request_id,
-                                    promotion_error,
-                                    event_writer,
+                                let _ = fatal::report_fatal_engine_error::<
+                                    WriteTransport,
+                                    ActiveEngineGeneration<
+                                        Processor::RequestOutput,
+                                        Processor::InferenceRequest,
+                                    >,
+                                >(
+                                    request_id, promotion_error, event_writer
                                 )
-                                .await;
+                                .await?;
+                                return Ok(());
                             }
                         }
                     }
@@ -145,73 +264,67 @@ where
                 );
             }
         }
-        let generation_start_result = {
-            let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut()
-            else {
-                return Err(WorkerRuntimeError::InferenceEngineGenerationFailed {
-                    reason: "the loaded model was removed before generation started".to_owned(),
-                });
-            };
-            loaded_model
-                .engine
-                .start_generation(inference_request)
-                .await
+        Ok(())
+    }
+
+    /// Retries a resident-forked generation on the streaming engine. The
+    /// `Ok(None)` outcome means the failure was already reported to the
+    /// client; the raw retry error returns for the caller's fatal report.
+    async fn retry_on_streaming_after_resident_fork<WriteTransport>(
+        &mut self,
+        request_id: astronomical_ipc_protocol::RequestId,
+        streaming_retry_request: &mut Option<Processor::InferenceRequest>,
+        fork_cause: crate::StreamingEngineRequirement,
+        fork_reason: String,
+        incoming_total_context_token_count: usize,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<Result<Option<EngineGenerationStart>, InferenceEngineError>, WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        let Some(retry_request) = streaming_retry_request.take() else {
+            Self::send_invalid_request_failure(request_id, fork_reason, event_writer).await?;
+            return Ok(Ok(None));
         };
-        let generation_start = match generation_start_result {
-            Ok(generation_start) => generation_start,
-            Err(InferenceEngineError::EngineBusy) => {
-                event_writer
-                    .send_event(&WorkerEvent::Failed {
-                        request_id,
-                        reason: ChatGenerationFailureReason::EngineBusy,
-                    })
-                    .await?;
-                return Ok(None);
-            }
+        match self
+            .retry_resident_generation_on_streaming(
+                request_id,
+                retry_request,
+                fork_cause,
+                incoming_total_context_token_count,
+                fork_reason,
+            )
+            .await
+        {
+            Ok(generation_start) => Ok(Ok(Some(generation_start))),
             Err(InferenceEngineError::InvalidRequest { reason }) => {
                 Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
-                return Ok(None);
+                Ok(Ok(None))
             }
-            Err(InferenceEngineError::ResidentForkRequired { cause, reason }) => {
-                let Some(retry_request) = streaming_retry_request.take() else {
-                    Self::send_invalid_request_failure(request_id, reason, event_writer).await?;
-                    return Ok(None);
-                };
-                match self
-                    .retry_resident_generation_on_streaming(
-                        request_id,
-                        retry_request,
-                        cause,
-                        incoming_total_context_token_count,
-                        reason,
-                    )
-                    .await
-                {
-                    Ok(generation_start) => {
-                        streaming_retry_attempted = true;
-                        generation_start
-                    }
-                    Err(InferenceEngineError::InvalidRequest { reason }) => {
-                        Self::send_invalid_request_failure(request_id, reason, event_writer)
-                            .await?;
-                        return Ok(None);
-                    }
-                    Err(retry_error) => {
-                        return fatal::report_fatal_engine_error(
-                            request_id,
-                            retry_error,
-                            event_writer,
-                        )
-                        .await;
-                    }
-                }
-            }
-            Err(engine_error) => {
-                return fatal::report_fatal_engine_error(request_id, engine_error, event_writer)
-                    .await;
-            }
-        };
+            Err(retry_error) => Ok(Err(retry_error)),
+        }
+    }
 
+    /// Emits the post-start events (cache statistics, expert-memory mode,
+    /// first prefill progress) and assembles the active generation state.
+    #[allow(clippy::too_many_arguments)]
+    async fn emit_startup_events_and_assemble_generation<WriteTransport>(
+        &mut self,
+        request_id: astronomical_ipc_protocol::RequestId,
+        generation_command: &astronomical_ipc_protocol::ChatGenerationCommand,
+        generation_start: EngineGenerationStart,
+        prompt_token_count: u32,
+        prepared_request_output: Processor::RequestOutput,
+        streaming_retry_request: Option<Processor::InferenceRequest>,
+        streaming_retry_attempted: bool,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<
+        Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
+        WorkerRuntimeError,
+    >
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
         self.emit_persistent_prompt_cache_stats(event_writer)
             .await?;
         let cached_prompt_token_count = generation_start.cached_token_count();
@@ -250,11 +363,11 @@ where
         }
 
         let mut active_engine_generation = ActiveEngineGeneration::new(
-            &generation_command,
+            generation_command,
             prompt_token_count,
             cached_prompt_token_count,
             required_prompt_processing_token_count,
-            prepared_generation.request_output,
+            prepared_request_output,
             streaming_retry_request,
             streaming_retry_attempted,
         );
@@ -265,3 +378,17 @@ where
         Ok(Some(active_engine_generation))
     }
 }
+
+/// Pure: the wire protocol carries the prompt length as u32; a longer prompt
+/// is an engine-generation failure, not a silent truncation.
+fn protocol_prompt_token_count(prompt_token_count: usize) -> Result<u32, WorkerRuntimeError> {
+    u32::try_from(prompt_token_count).map_err(|_| {
+        WorkerRuntimeError::InferenceEngineGenerationFailed {
+            reason: "chat prompt token count exceeds the protocol range".to_owned(),
+        }
+    })
+}
+
+#[cfg(test)]
+#[path = "generation_start_tests.rs"]
+mod generation_start_tests;
