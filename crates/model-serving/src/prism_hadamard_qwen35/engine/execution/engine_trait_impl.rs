@@ -13,6 +13,11 @@ use mlx_c_rust::MlxArray;
 
 use super::{
     PrismHadamardQwen35ActiveGeneration, PrismHadamardQwen35InferenceExecution,
+    prefill_chunk::{
+        capture_completed_prefill_cache_block, forward_prefill_chunk_hidden_states,
+        prefill_chunk_length, prefill_progress_token, queue_prefill_first_token,
+        submit_prefill_state_evaluation,
+    },
     record_emitted_token,
     sampling::{
         record_penalized_token_id, sample_token, successor_may_be_speculated, synchronize_token_id,
@@ -26,14 +31,11 @@ use crate::InferenceEngineError;
 use crate::MlxInferenceExecution;
 use crate::MlxMemoryLimitAdjustment;
 use crate::MlxMemoryTelemetry;
-use crate::PerformanceAttribution;
 use crate::PerformanceOperation;
 use crate::Qwen3_5ThinkingBudgetState;
 use crate::inference_engine::load_result::EngineLoadResult;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
-use crate::persistent_prompt_cache_boundary_clamped_prefill_chunk_end;
 use crate::prism_hadamard_qwen35::model::PrismHadamardTextModel;
-use crate::prism_hadamard_qwen35::model::PrismStateSlotLayout;
 use crate::prism_hadamard_qwen35::model::StraightGenerationState;
 use crate::sampling_seed;
 use crate::sampling_seed::current_time_millis_since_unix_epoch;
@@ -191,7 +193,6 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         ))
     }
 
-    #[expect(clippy::too_many_lines)]
     fn decode_next_token(
         &mut self,
         request_id: RequestId,
@@ -247,16 +248,12 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
                 // successor's sampling: the device executes while the host
                 // synchronizes, and the only waste is a successor behind a
                 // token that turns out to end the sequence.
-                let speculated_successor =
-                    if successor_may_be_speculated(active) && active.remaining_output_tokens > 1 {
-                        Some(submit_successor(model, active, &sampled_token)?)
-                    } else {
-                        None
-                    };
-                let selected_token_id = active
-                    .measure_operation(PerformanceOperation::DecodeSamplingSpan, |_| {
-                        synchronize_token_id(&sampled_token)
-                    })?;
+                let (selected_token_id, speculated_successor) =
+                    speculate_successor_and_synchronize_sampled_token(
+                        model,
+                        active,
+                        &sampled_token,
+                    )?;
                 if eos_token_ids.contains(&selected_token_id) {
                     return Ok(GeneratedToken::EndOfSequence);
                 }
@@ -448,7 +445,6 @@ impl PrismHadamardQwen35InferenceExecution {
 
     /// Advances one bounded prompt-processing chunk through the straight
     /// forward pass and reports prefill progress to the worker.
-    #[expect(clippy::too_many_lines)]
     fn prefill_next_chunk(
         &mut self,
         request_id: RequestId,
@@ -475,138 +471,78 @@ impl PrismHadamardQwen35InferenceExecution {
             });
         }
         let persistent_prompt_cache = self.persistent_prompt_cache.clone();
-        let chunk_start = active.processed_prompt_token_count as usize;
-        let requested_chunk_end = chunk_start
-            + active
-                .remaining_prompt_token_ids
-                .len()
-                .min(prompt_processing_chunk_tokens as usize);
-        // A durable boundary snapshot is only valid at a forward edge, so the
-        // chunk stops at the first block boundary it would cross; at most one
-        // durable publication per forward keeps the boundary snapshot honest.
-        let clamped_chunk_end = match persistent_prompt_cache.as_ref() {
-            Some(persistent_prompt_cache) => {
-                let block_token_count = persistent_prompt_cache
-                    .model_contract_ref()
-                    .block_token_count();
-                persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
-                    chunk_start,
-                    requested_chunk_end,
-                    block_token_count,
-                )
-            }
-            None => requested_chunk_end,
-        };
-        let chunk_length = clamped_chunk_end - chunk_start;
+        let chunk_length = prefill_chunk_length(
+            active.processed_prompt_token_count,
+            active.remaining_prompt_token_ids.len(),
+            prompt_processing_chunk_tokens,
+            persistent_prompt_cache
+                .as_ref()
+                .map(|persistent_prompt_cache| {
+                    persistent_prompt_cache
+                        .model_contract_ref()
+                        .block_token_count()
+                }),
+        );
         let chunk_token_ids: Vec<i32> = active
             .remaining_prompt_token_ids
             .drain(..chunk_length)
             .map(|token_id| token_id as i32)
             .collect();
         let chunk_started_at = Instant::now();
-        let token_indices = model
-            .runtime
-            .array_from_i32(&chunk_token_ids, &[1, chunk_length as i32])
-            .map_err(gpu_error)?;
-        let hidden_states = active
-            .measure_operation(
-                PerformanceOperation::PromptPrefillAdvanceSpan,
-                |active_generation| {
-                    model.forward_hidden_states(
-                        &token_indices,
-                        &mut active_generation.generation_state,
-                    )
-                },
-            )
-            .map_err(gpu_error)?;
-        let final_logits = if active.remaining_prompt_token_ids.is_empty() {
-            Some(
-                active
-                    .measure_operation(PerformanceOperation::FinalLogitsGraphConstruction, |_| {
-                        model.logits_for_last_hidden_state(&hidden_states)
-                    })
-                    .map_err(gpu_error)?,
-            )
-        } else {
-            None
-        };
-        if let Some(final_logits) = final_logits.as_ref() {
-            active
-                .measure_operation(
-                    PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
-                    |_| {
-                        model
-                            .runtime
-                            .evaluate_arrays(&[&hidden_states, final_logits])
-                    },
-                )
-                .map_err(gpu_error)?;
-        } else {
-            active
-                .measure_operation(
-                    PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
-                    |_| model.runtime.evaluate_arrays(&[&hidden_states]),
-                )
-                .map_err(gpu_error)?;
-        }
+        let hidden_states =
+            forward_prefill_chunk_hidden_states(model, active, &chunk_token_ids, chunk_length)?;
+        let remaining_prompt_token_ids_are_empty = active.remaining_prompt_token_ids.is_empty();
+        let final_logits = submit_prefill_state_evaluation(
+            model,
+            active,
+            &hidden_states,
+            remaining_prompt_token_ids_are_empty,
+        )?;
         let elapsed_millis = chunk_started_at
             .elapsed()
             .as_millis()
             .try_into()
             .unwrap_or(u64::MAX);
-        if let Some(final_logits) = final_logits.as_ref() {
-            let first_token = active.measure_operation(
-                PerformanceOperation::DecodeSamplingSpan,
-                |active_generation| sample_token(model, final_logits, active_generation),
-            )?;
-            active
-                .measure_operation(
-                    PerformanceOperation::DecodeAsyncEvaluationSubmission,
-                    |_| model.runtime.async_eval_arrays(&[&first_token]),
-                )
-                .map_err(gpu_error)?;
-            active.pending_sampled_token =
-                successor_stays_pending(active.remaining_output_tokens).then_some(first_token);
-        }
+        queue_prefill_first_token(model, active, final_logits.as_ref())?;
         // Capture runs after the chunk's state graph was submitted: the
         // published tensors chain onto the lazy arrays and materialize during
         // publication, so no extra device synchronization happens here.
         active.processed_prompt_token_count += chunk_length as u32;
-        if let Some(persistent_prompt_cache) = persistent_prompt_cache.clone() {
-            let slot_layout = PrismStateSlotLayout::for_model(model);
-            let mut capture_attribution = std::mem::replace(
-                &mut active.performance_attribution,
-                PerformanceAttribution::disabled(),
-            );
-            let capture_result = super::super::prompt_cache::capture_completed_cache_block(
-                &model.runtime,
-                &persistent_prompt_cache,
-                active,
-                &slot_layout,
-                &mut capture_attribution,
-            );
-            active.performance_attribution = capture_attribution;
-            capture_result?;
-        }
-        // The worker accumulates per-chunk deltas into the request-wide
-        // prefill cursor, so this must stay the chunk's own token count — a
-        // cumulative count double-counts every earlier chunk and pins the
-        // status surface at 100% while most of the prompt is still processing.
-        Ok(GeneratedToken::PrefillProgress {
-            processed_token_count: chunk_length as u32,
+        capture_completed_prefill_cache_block(model, persistent_prompt_cache.as_deref(), active)?;
+        let prompt_work_reuse = WorkerPromptWorkReuse {
+            target_eligible_token_count: active.prompt_token_ids.len() as u64,
+            target_restored_token_count: u64::from(active.cached_token_count),
+        };
+        Ok(prefill_progress_token(
+            chunk_length,
             elapsed_millis,
-            forward_prefill_chunk_elapsed_millis: elapsed_millis,
-            completed_prefill_chunk_tokens: chunk_length as u32,
             mlx_memory_telemetry,
-            expert_residency_telemetry: None,
-            expert_memory_mode: Some(ExpertMemoryMode::Resident),
-            prompt_work_reuse: WorkerPromptWorkReuse {
-                target_eligible_token_count: active.prompt_token_ids.len() as u64,
-                target_restored_token_count: u64::from(active.cached_token_count),
-            },
-            persistent_prompt_cache_diagnostics: None,
-        })
+            prompt_work_reuse,
+        ))
     }
+}
+
+/// Speculates the successor of a sampled token when the output budget allows
+/// it, then synchronizes the sampled token's value inside its
+/// `DecodeSamplingSpan` region. Speculating first lets the device execute
+/// while the host synchronizes; the only waste is a successor behind a token
+/// that turns out to end the sequence.
+fn speculate_successor_and_synchronize_sampled_token(
+    model: &PrismHadamardTextModel,
+    active: &mut PrismHadamardQwen35ActiveGeneration,
+    sampled_token: &MlxArray,
+) -> Result<(u32, Option<MlxArray>), InferenceEngineError> {
+    let speculated_successor =
+        if successor_may_be_speculated(active) && active.remaining_output_tokens > 1 {
+            Some(submit_successor(model, active, sampled_token)?)
+        } else {
+            None
+        };
+    let selected_token_id = active
+        .measure_operation(PerformanceOperation::DecodeSamplingSpan, |_| {
+            synchronize_token_id(sampled_token)
+        })?;
+    Ok((selected_token_id, speculated_successor))
 }
 
 /// Builds the forward for `token_indices` (`[1, 1]`, host or device
