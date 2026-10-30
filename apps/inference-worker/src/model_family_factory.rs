@@ -14,8 +14,9 @@ use astronomical_config::{
 };
 use astronomical_ipc_protocol::{
     WorkerAutoregressiveModelConfiguration, WorkerDecodeExpertCachePolicy,
-    WorkerDiagnosticQwen3_5EngineOverride, WorkerImageGenerationModelFamily,
-    WorkerModelConfiguration,
+    WorkerDiagnosticQwen3_5EngineOverride, WorkerEmbeddingModelConfiguration,
+    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
+    WorkerQwenImage21ModelConfiguration,
 };
 use astronomical_model_serving::{
     EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine, ModelFactory,
@@ -160,7 +161,6 @@ impl
         ModernBertEmbeddingEngine,
     > for ModelFamilyFactory
 {
-    #[expect(clippy::too_many_lines)]
     async fn create(
         &self,
         model_directory: &str,
@@ -175,12 +175,6 @@ impl
         String,
     > {
         let model_directory_path = PathBuf::from(model_directory);
-        let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
-        let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
-        let prompt_cache_config = self.prompt_cache_config.clone();
-        let performance_attribution_enabled = self.performance_attribution_enabled;
-        let performance_attribution_log_path = self.performance_attribution_log_path.clone();
-        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
         let classification_directory_path = model_directory_path.clone();
         let classification_task_result = tokio::task::spawn_blocking(move || {
             classify_model_directory(&classification_directory_path)
@@ -194,192 +188,42 @@ impl
                 Some(ModelFamily::Qwen3_5),
                 WorkerModelConfiguration::Autoregressive(model_configuration),
             ) => {
-                let (generation_processor, qwen3_5_engine, engine_placement) = self
-                    .create_qwen3_5_runtime(
-                        model_directory_path,
-                        model_configuration,
-                        Qwen3_5EngineSelection::Automatic(self.diagnostic_qwen3_5_engine_override),
-                    )
-                    .await?;
-                // Automatic selection always yields a startup placement; the
-                // worker's model swap rejects a runtime without one.
-                Ok(ModelFactoryRuntime::Autoregressive {
-                    processor: ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
-                    engine: qwen3_5_engine,
-                    engine_placement,
-                })
+                self.create_qwen3_5_autoregressive_runtime(
+                    model_directory_path,
+                    model_configuration,
+                )
+                .await
             }
             (
                 Some(ModelFamily::Flux2Klein),
                 WorkerModelConfiguration::Flux2Klein(model_configuration),
             ) => {
-                let verification_directory_path = model_directory_path.clone();
-                let verification_task_result = tokio::task::spawn_blocking(move || {
-                    verify_flux2_klein_model_directory(&verification_directory_path)
-                        // Discovery retains typed diagnostics, while this worker boundary must not
-                        // reveal which mutable local artifact detail changed after selection.
-                        .map_err(|_| {
-                            "selected FLUX.2 Klein artifact failed exact-directory verification"
-                                .to_owned()
-                        })
-                })
-                .await
-                .map_err(|_| "FLUX.2 Klein verification task failed".to_owned())?;
-                let verified_evidence = verification_task_result?;
-                if model_configuration.model_family != WorkerImageGenerationModelFamily::Flux2Klein
-                    || model_configuration.model_id != verified_evidence.canonical_model_id
-                    || model_configuration.artifact_revision != verified_evidence.revision
-                {
-                    return Err(
-                        "selected FLUX.2 Klein model identity or revision is unsupported"
-                            .to_owned(),
-                    );
-                }
-                let provenance = Flux2KleinArtifactProvenance::new(
-                    verified_evidence.provider_model_id,
-                    verified_evidence.revision,
-                    verified_evidence.license.spdx_identifier(),
-                );
-                Ok(ModelFactoryRuntime::Image(
-                    ModelFamilyImageEngine::Flux2Klein(
-                        Flux2KleinImageEngine::from_model_family_factory(
-                            model_directory_path,
-                            provenance,
-                            effective_mlx_memory_ceiling_bytes,
-                            allocator_cache_memory_limit_bytes,
-                            performance_attribution_enabled,
-                            performance_attribution_log_path,
-                        ),
-                    ),
-                ))
+                self.create_flux2_klein_image_engine(model_directory_path, model_configuration)
+                    .await
             }
             (
                 Some(ModelFamily::QwenImage21),
                 WorkerModelConfiguration::QwenImage21(model_configuration),
             ) => {
-                let verification_directory_path = model_directory_path.clone();
-                let verification_task_result = tokio::task::spawn_blocking(move || {
-                    verify_qwen_image_21_model_directory(&verification_directory_path)
-                        // Discovery retains typed diagnostics, while this worker boundary must not
-                        // reveal which mutable local artifact detail changed after selection.
-                        .map_err(|_| {
-                            "selected Qwen-Image-2.1 artifact failed exact-directory verification"
-                                .to_owned()
-                        })
-                })
-                .await
-                .map_err(|_| "Qwen-Image-2.1 verification task failed".to_owned())?;
-                let verified_evidence = verification_task_result?;
-                if model_configuration.model_family != WorkerImageGenerationModelFamily::QwenImage21
-                    || model_configuration.model_id != verified_evidence.canonical_model_id
-                    || model_configuration.artifact_revision != verified_evidence.revision
-                {
-                    return Err(
-                        "selected Qwen-Image-2.1 model identity or revision is unsupported"
-                            .to_owned(),
-                    );
-                }
-                let provenance = QwenImage21ArtifactProvenance::new(
-                    verified_evidence.provider_model_id,
-                    verified_evidence.revision,
-                    verified_evidence.license.spdx_identifier(),
-                );
-                Ok(ModelFactoryRuntime::Image(
-                    ModelFamilyImageEngine::QwenImage21(
-                        QwenImage21ImageEngine::from_model_family_factory(
-                            model_directory_path,
-                            provenance,
-                            effective_mlx_memory_ceiling_bytes,
-                            allocator_cache_memory_limit_bytes,
-                            performance_attribution_enabled,
-                            performance_attribution_log_path,
-                        ),
-                    ),
-                ))
+                self.create_qwen_image_21_image_engine(model_directory_path, model_configuration)
+                    .await
             }
             (
                 Some(ModelFamily::PrismHadamardQwen35),
                 WorkerModelConfiguration::Autoregressive(model_configuration),
             ) => {
-                let initialization_task_result = tokio::task::spawn_blocking(move || {
-                    let (generation_processor, prism_engine) =
-                        initialize_prism_hadamard_qwen35_model_with_serving_settings(
-                            &model_directory_path,
-                            effective_mlx_memory_ceiling_bytes,
-                            allocator_cache_memory_limit_bytes,
-                            performance_attribution_enabled,
-                            PrismHadamardQwen35ServingSettings {
-                                maximum_context_tokens: Some(
-                                    model_configuration.maximum_context_tokens,
-                                ),
-                                maximum_output_tokens: Some(
-                                    model_configuration.maximum_output_tokens,
-                                ),
-                                prompt_processing_chunk_tokens: model_configuration
-                                    .chunking
-                                    .fixed_prompt_processing_chunk_size_tokens,
-                                // The folded pack ships the Qwen thinking
-                                // template and the shared processor honors
-                                // per-request thinking budgets.
-                                enable_thinking: true,
-                                chunking: Some(model_configuration.chunking.clone()),
-                                persistent_prompt_cache_enabled,
-                                prompt_cache_config: persistent_prompt_cache_enabled
-                                    .then_some(prompt_cache_config),
-                                performance_attribution_log_path: Some(
-                                    performance_attribution_log_path,
-                                ),
-                            },
-                        )
-                        .map_err(|startup_error| startup_error.to_string())?;
-                    Ok::<_, String>((generation_processor, prism_engine))
-                })
+                self.create_prism_hadamard_autoregressive_runtime(
+                    model_directory_path,
+                    model_configuration,
+                )
                 .await
-                .map_err(|_| "folded ternary initialization task failed".to_owned())?;
-                let (generation_processor, prism_engine) = initialization_task_result?;
-                // The folded ternary pack is dense, so complete residency is
-                // not a sparse-expert concern and the placement records that
-                // the resident engine fits by construction.
-                Ok(ModelFactoryRuntime::autoregressive(
-                    ModelFamilyGenerationProcessor::PrismHadamardQwen35(generation_processor),
-                    ModelFamilyInferenceEngine::PrismHadamardQwen35(prism_engine),
-                    astronomical_model_serving::EnginePlacement::CompleteResidencyFits,
-                ))
             }
             (
                 Some(ModelFamily::ModernBert),
                 WorkerModelConfiguration::Embeddings(model_configuration),
             ) => {
-                let verification_directory_path = model_directory_path.clone();
-                let classified_provider_model_id = tokio::task::spawn_blocking(move || {
-                    classify_model_directory(&verification_directory_path)
-                        .ok()
-                        .flatten()
-                        .filter(|family| *family == ModelFamily::ModernBert)
-                })
-                .await
-                .map_err(|_| "embedding-family classification task failed".to_owned())?;
-                if classified_provider_model_id.is_none() {
-                    return Err(
-                        "selected model configuration does not match its classified model family"
-                            .to_owned(),
-                    );
-                }
-                // The unloaded engine only reads config and tokenizer bytes; MLX
-                // runtime initialization stays inside load() on the worker runtime
-                // thread because MLX handles are not Send across task boundaries.
-                let embedding_engine = ModernBertEmbeddingEngine::new(
-                    model_configuration.model_id,
-                    &model_directory_path,
-                    effective_mlx_memory_ceiling_bytes,
-                    allocator_cache_memory_limit_bytes,
-                    performance_attribution_enabled,
-                    performance_attribution_log_path,
-                )
-                .map_err(|failure_reason| {
-                    format!("selected embedding artifact failed initialization: {failure_reason:?}")
-                })?;
-                Ok(ModelFactoryRuntime::Embeddings(embedding_engine))
+                self.create_modern_bert_embeddings_engine(model_directory_path, model_configuration)
+                    .await
             }
             (Some(_), _) => Err(
                 "selected model configuration does not match its classified model family"
@@ -480,5 +324,248 @@ impl
 
     fn performance_attribution_enabled(&self) -> bool {
         self.performance_attribution_enabled
+    }
+}
+
+impl ModelFamilyFactory {
+    /// Creates the Qwen3.5 autoregressive runtime through the automatic
+    /// startup selection. Automatic selection always yields a startup
+    /// placement; the worker's model swap rejects a runtime without one.
+    async fn create_qwen3_5_autoregressive_runtime(
+        &self,
+        model_directory_path: PathBuf,
+        model_configuration: WorkerAutoregressiveModelConfiguration,
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            ModelFamilyImageEngine,
+            ModernBertEmbeddingEngine,
+        >,
+        String,
+    > {
+        let (generation_processor, qwen3_5_engine, engine_placement) = self
+            .create_qwen3_5_runtime(
+                model_directory_path,
+                model_configuration,
+                Qwen3_5EngineSelection::Automatic(self.diagnostic_qwen3_5_engine_override),
+            )
+            .await?;
+        Ok(ModelFactoryRuntime::Autoregressive {
+            processor: ModelFamilyGenerationProcessor::Qwen3_5(generation_processor),
+            engine: qwen3_5_engine,
+            engine_placement,
+        })
+    }
+
+    /// Verifies the FLUX.2 Klein directory against the selected configuration
+    /// and builds its image engine.
+    async fn create_flux2_klein_image_engine(
+        &self,
+        model_directory_path: PathBuf,
+        model_configuration: WorkerFlux2KleinModelConfiguration,
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            ModelFamilyImageEngine,
+            ModernBertEmbeddingEngine,
+        >,
+        String,
+    > {
+        let verification_directory_path = model_directory_path.clone();
+        let verification_task_result = tokio::task::spawn_blocking(move || {
+            verify_flux2_klein_model_directory(&verification_directory_path)
+                // Discovery retains typed diagnostics, while this worker boundary must not
+                // reveal which mutable local artifact detail changed after selection.
+                .map_err(|_| {
+                    "selected FLUX.2 Klein artifact failed exact-directory verification".to_owned()
+                })
+        })
+        .await
+        .map_err(|_| "FLUX.2 Klein verification task failed".to_owned())?;
+        let verified_evidence = verification_task_result?;
+        if model_configuration.model_family != WorkerImageGenerationModelFamily::Flux2Klein
+            || model_configuration.model_id != verified_evidence.canonical_model_id
+            || model_configuration.artifact_revision != verified_evidence.revision
+        {
+            return Err(
+                "selected FLUX.2 Klein model identity or revision is unsupported".to_owned(),
+            );
+        }
+        let provenance = Flux2KleinArtifactProvenance::new(
+            verified_evidence.provider_model_id,
+            verified_evidence.revision,
+            verified_evidence.license.spdx_identifier(),
+        );
+        Ok(ModelFactoryRuntime::Image(
+            ModelFamilyImageEngine::Flux2Klein(Flux2KleinImageEngine::from_model_family_factory(
+                model_directory_path,
+                provenance,
+                self.effective_mlx_memory_ceiling_bytes,
+                self.allocator_cache_memory_limit_bytes,
+                self.performance_attribution_enabled,
+                self.performance_attribution_log_path.clone(),
+            )),
+        ))
+    }
+
+    /// Verifies the Qwen-Image-2.1 directory against the selected
+    /// configuration and builds its image engine.
+    async fn create_qwen_image_21_image_engine(
+        &self,
+        model_directory_path: PathBuf,
+        model_configuration: WorkerQwenImage21ModelConfiguration,
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            ModelFamilyImageEngine,
+            ModernBertEmbeddingEngine,
+        >,
+        String,
+    > {
+        let verification_directory_path = model_directory_path.clone();
+        let verification_task_result = tokio::task::spawn_blocking(move || {
+            verify_qwen_image_21_model_directory(&verification_directory_path)
+                // Discovery retains typed diagnostics, while this worker boundary must not
+                // reveal which mutable local artifact detail changed after selection.
+                .map_err(|_| {
+                    "selected Qwen-Image-2.1 artifact failed exact-directory verification"
+                        .to_owned()
+                })
+        })
+        .await
+        .map_err(|_| "Qwen-Image-2.1 verification task failed".to_owned())?;
+        let verified_evidence = verification_task_result?;
+        if model_configuration.model_family != WorkerImageGenerationModelFamily::QwenImage21
+            || model_configuration.model_id != verified_evidence.canonical_model_id
+            || model_configuration.artifact_revision != verified_evidence.revision
+        {
+            return Err(
+                "selected Qwen-Image-2.1 model identity or revision is unsupported".to_owned(),
+            );
+        }
+        let provenance = QwenImage21ArtifactProvenance::new(
+            verified_evidence.provider_model_id,
+            verified_evidence.revision,
+            verified_evidence.license.spdx_identifier(),
+        );
+        Ok(ModelFactoryRuntime::Image(
+            ModelFamilyImageEngine::QwenImage21(QwenImage21ImageEngine::from_model_family_factory(
+                model_directory_path,
+                provenance,
+                self.effective_mlx_memory_ceiling_bytes,
+                self.allocator_cache_memory_limit_bytes,
+                self.performance_attribution_enabled,
+                self.performance_attribution_log_path.clone(),
+            )),
+        ))
+    }
+
+    /// Initializes the folded-ternary Prism-Hadamard runtime on a blocking
+    /// task. The folded pack is dense, so complete residency is not a
+    /// sparse-expert concern and the placement records that the resident
+    /// engine fits by construction.
+    async fn create_prism_hadamard_autoregressive_runtime(
+        &self,
+        model_directory_path: PathBuf,
+        model_configuration: WorkerAutoregressiveModelConfiguration,
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            ModelFamilyImageEngine,
+            ModernBertEmbeddingEngine,
+        >,
+        String,
+    > {
+        let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
+        let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
+        let performance_attribution_enabled = self.performance_attribution_enabled;
+        let performance_attribution_log_path = self.performance_attribution_log_path.clone();
+        let persistent_prompt_cache_enabled = self.persistent_prompt_cache_enabled;
+        let prompt_cache_config = self.prompt_cache_config.clone();
+        let initialization_task_result = tokio::task::spawn_blocking(move || {
+            let (generation_processor, prism_engine) =
+                initialize_prism_hadamard_qwen35_model_with_serving_settings(
+                    &model_directory_path,
+                    effective_mlx_memory_ceiling_bytes,
+                    allocator_cache_memory_limit_bytes,
+                    performance_attribution_enabled,
+                    PrismHadamardQwen35ServingSettings {
+                        maximum_context_tokens: Some(model_configuration.maximum_context_tokens),
+                        maximum_output_tokens: Some(model_configuration.maximum_output_tokens),
+                        prompt_processing_chunk_tokens: model_configuration
+                            .chunking
+                            .fixed_prompt_processing_chunk_size_tokens,
+                        // The folded pack ships the Qwen thinking
+                        // template and the shared processor honors
+                        // per-request thinking budgets.
+                        enable_thinking: true,
+                        chunking: Some(model_configuration.chunking.clone()),
+                        persistent_prompt_cache_enabled,
+                        prompt_cache_config: persistent_prompt_cache_enabled
+                            .then_some(prompt_cache_config),
+                        performance_attribution_log_path: Some(performance_attribution_log_path),
+                    },
+                )
+                .map_err(|startup_error| startup_error.to_string())?;
+            Ok::<_, String>((generation_processor, prism_engine))
+        })
+        .await
+        .map_err(|_| "folded ternary initialization task failed".to_owned())?;
+        let (generation_processor, prism_engine) = initialization_task_result?;
+        Ok(ModelFactoryRuntime::autoregressive(
+            ModelFamilyGenerationProcessor::PrismHadamardQwen35(generation_processor),
+            ModelFamilyInferenceEngine::PrismHadamardQwen35(prism_engine),
+            astronomical_model_serving::EnginePlacement::CompleteResidencyFits,
+        ))
+    }
+
+    /// Verifies the directory classifies as ModernBert and builds the
+    /// embeddings engine. The unloaded engine only reads config and tokenizer
+    /// bytes; MLX runtime initialization stays inside load() on the worker
+    /// runtime thread because MLX handles are not Send across task boundaries.
+    async fn create_modern_bert_embeddings_engine(
+        &self,
+        model_directory_path: PathBuf,
+        model_configuration: WorkerEmbeddingModelConfiguration,
+    ) -> Result<
+        ModelFactoryRuntime<
+            ModelFamilyGenerationProcessor,
+            ModelFamilyInferenceEngine,
+            ModelFamilyImageEngine,
+            ModernBertEmbeddingEngine,
+        >,
+        String,
+    > {
+        let verification_directory_path = model_directory_path.clone();
+        let classified_provider_model_id = tokio::task::spawn_blocking(move || {
+            classify_model_directory(&verification_directory_path)
+                .ok()
+                .flatten()
+                .filter(|family| *family == ModelFamily::ModernBert)
+        })
+        .await
+        .map_err(|_| "embedding-family classification task failed".to_owned())?;
+        if classified_provider_model_id.is_none() {
+            return Err(
+                "selected model configuration does not match its classified model family"
+                    .to_owned(),
+            );
+        }
+        let embedding_engine = ModernBertEmbeddingEngine::new(
+            model_configuration.model_id,
+            &model_directory_path,
+            self.effective_mlx_memory_ceiling_bytes,
+            self.allocator_cache_memory_limit_bytes,
+            self.performance_attribution_enabled,
+            self.performance_attribution_log_path.clone(),
+        )
+        .map_err(|failure_reason| {
+            format!("selected embedding artifact failed initialization: {failure_reason:?}")
+        })?;
+        Ok(ModelFactoryRuntime::Embeddings(embedding_engine))
     }
 }
