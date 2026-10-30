@@ -9,14 +9,17 @@ use std::{
     time::Duration,
 };
 
-use astronomical_config::{AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths};
+use astronomical_config::{
+    AstronomicalConfig, AstronomicalConfigError, AstronomicalInstancePaths, LoggingConfig,
+};
 use astronomical_daemon::{
     ApplicationBuildIdentity, AstronomicalInstanceLock, CompletionAttributionLog,
     DaemonIpcGenerationContext, DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement,
     DaemonPerformanceOperation, DownloadCatalog, DownloadCatalogError, GenerationPerformanceLog,
-    ImageGenerationTimeouts, LibraryDownloadCoordinatorError, LibraryModelDiscoveryRefresh,
-    ReqwestHubTransportBuildError, ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver,
-    ShutdownController, StartupFailureStage, WorkerControlError, WorkerHandle,
+    ImageGenerationTimeouts, LibraryDownloadCoordinator, LibraryDownloadCoordinatorError,
+    LibraryModelDiscoveryRefresh, ReqwestHubTransportBuildError, ResolvedRuntimeConfig,
+    ResolvedRuntimeConfigError, ResolvedRuntimeConfigResolver, ShutdownController,
+    StartupFailureStage, WorkerControlError, WorkerHandle,
     build_application_with_full_control_and_library_download, read_instance_lock_holder,
     record_startup_failure, start_daemon_ipc_service,
 };
@@ -148,116 +151,76 @@ fn initialize_tracing(
     Ok(guard)
 }
 
-#[expect(clippy::too_many_lines)]
+/// Logging policy and the daemon performance-attribution log every phase writes through.
+struct DaemonLogContext {
+    logging_config: LoggingConfig,
+    daemon_attribution_log: DaemonPerformanceAttributionLog,
+}
+
+/// Resolver, resolved runtime snapshot, and the bound REST listener produced at startup.
+struct BoundDaemonRuntime {
+    runtime_config_resolver: ResolvedRuntimeConfigResolver,
+    resolved_runtime_config: ResolvedRuntimeConfig,
+    listener: TcpListener,
+    bound_daemon_address: SocketAddr,
+}
+
+/// Owned singletons that the REST and IPC surfaces must share, wired once at startup.
+struct DaemonServices {
+    reloadable_config: Arc<RwLock<ResolvedRuntimeConfig>>,
+    next_chat_request_id: Arc<AtomicU64>,
+    shutdown_controller: ShutdownController,
+    internal_shutdown_receiver: tokio::sync::watch::Receiver<bool>,
+    download_catalog: Arc<DownloadCatalog>,
+    library_download_coordinator: Arc<LibraryDownloadCoordinator>,
+}
+
+/// Inputs for building the shared daemon services; owned fields are consumed.
+struct DaemonServiceAssembly<'a> {
+    instance_paths: &'a AstronomicalInstancePaths,
+    user_config: &'a AstronomicalConfig,
+    worker_handle: &'a WorkerHandle,
+    runtime_config_resolver: &'a ResolvedRuntimeConfigResolver,
+    resolved_runtime_config: ResolvedRuntimeConfig,
+    download_catalog: DownloadCatalog,
+    daemon_attribution_log: &'a DaemonPerformanceAttributionLog,
+}
+
 async fn run_daemon(
     instance_paths: AstronomicalInstancePaths,
     user_config: AstronomicalConfig,
 ) -> Result<(), DaemonError> {
-    let logging_config = user_config.logging()?;
-    let daemon_attribution_log = DaemonPerformanceAttributionLog::open(
-        logging_config.directory(),
-        user_config.performance_attribution_enabled(),
-    )
-    .map_err(DaemonError::CreateDaemonPerformanceAttributionLog)?;
-    let download_catalog = daemon_attribution_log
-        .measure_operation(
-            DaemonPerformanceOperation::LibraryCatalogLoad,
-            DownloadCatalog::load_bundled,
-            |catalog_outcome| match catalog_outcome {
-                Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
-                    download_catalog.entry_count(),
-                ),
-                Err(_) => DaemonPerformanceMeasurement::failure(),
-            },
-        )
-        .map_err(DaemonError::RecordDaemonPerformanceAttribution)?
-        .map_err(DaemonError::LoadDownloadCatalog)?;
-    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_instance(
-        instance_paths.clone(),
-        fallback_worker_executable_path()?,
-    );
-    let resolved_runtime_config = runtime_config_resolver
-        .resolve(&user_config)
-        .map_err(DaemonError::ResolveRuntimeConfig)?;
-    let daemon_bind_address = resolved_runtime_config
-        .bind_address
-        .parse::<SocketAddr>()
-        .map_err(DaemonError::ParseResolvedBindAddress)?;
-    let listener = TcpListener::bind(daemon_bind_address)
-        .await
-        .map_err(DaemonError::BindDaemon)?;
-    let bound_daemon_address = listener
-        .local_addr()
-        .map_err(DaemonError::ReadBoundDaemonAddress)?;
-    tracing::info!(
-        bind_address = %bound_daemon_address,
-        channel = instance_paths
-            .runtime_instance()
-            .map_or("explicit", astronomical_config::AstronomicalRuntimeInstance::as_str),
-        version = ApplicationBuildIdentity::current().version,
-        commit = ApplicationBuildIdentity::current().commit,
-        configuration_generation = %resolved_runtime_config.configuration_generation,
-        "Astronomical REST API listener bound"
-    );
-    let performance_log = GenerationPerformanceLog::open(logging_config.directory())
-        .map_err(DaemonError::CreatePerformanceLog)?;
-    let completion_log = CompletionAttributionLog::open(
-        logging_config.directory(),
-        user_config.completion_attribution_enabled(),
-    )
-    .map_err(DaemonError::CreateCompletionAttributionLog)?;
+    let DaemonLogContext {
+        logging_config,
+        daemon_attribution_log,
+    } = open_daemon_log_context(&user_config)?;
+    let download_catalog = load_bundled_download_catalog(&daemon_attribution_log)?;
+    let BoundDaemonRuntime {
+        runtime_config_resolver,
+        resolved_runtime_config,
+        listener,
+        bound_daemon_address,
+    } = bind_daemon_listener(&instance_paths, &user_config).await?;
     let worker_handle =
-        match WorkerHandle::launch_with_startup_configuration_and_image_generation_timeouts(
-            &resolved_runtime_config.worker_executable_path,
-            WORKER_MODEL_LOAD_TIMEOUT,
-            ImageGenerationTimeouts::DEFAULT,
-            performance_log,
-            completion_log,
-            Arc::clone(&resolved_runtime_config.model_policy_catalog),
-            resolved_runtime_config.worker_startup_configuration(),
-        )
-        .await
-        {
-            Ok(worker_handle) => worker_handle,
-            Err(worker_start_error) => {
-                eprintln!("astronomicald worker unavailable: {worker_start_error}");
-                WorkerHandle::unavailable()
-            }
-        };
-    let reloadable_config = Arc::new(RwLock::new(resolved_runtime_config));
-    let next_chat_request_id = Arc::new(AtomicU64::new(1));
-    let shutdown_controller = ShutdownController::new();
-    let internal_shutdown_receiver = shutdown_controller.subscribe();
-    let download_catalog = Arc::new(download_catalog);
-    let hub_transport = Arc::new(
-        astronomical_daemon::ReqwestHubTransport::production()
-            .map_err(DaemonError::BuildHubTransport)?,
-    );
-    let discovery_refresh = Arc::new(LibraryModelDiscoveryRefresh::new(
-        runtime_config_resolver.clone(),
-        Arc::clone(&reloadable_config),
-        worker_handle.clone(),
-    ));
-    // The download coordinator is built once and is not rebuilt on config
-    // reload, so the override only takes effect on the next application start.
-    let models_download_directory = user_config
-        .model_download_directory()
-        .cloned()
-        .unwrap_or_else(|| instance_paths.models_directory());
-    let library_download_coordinator =
-        Arc::new(astronomical_daemon::LibraryDownloadCoordinator::new(
-            Arc::clone(&download_catalog),
-            models_download_directory,
-            Arc::new(astronomical_daemon::Fs4DiskCapacityQuery),
-            hub_transport.clone(),
-            hub_transport,
-            discovery_refresh,
-            daemon_attribution_log.clone(),
-        ));
-    library_download_coordinator
-        .recover_startup_state()
-        .await
-        .map_err(DaemonError::RecoverLibraryDownload)?;
+        launch_daemon_worker(&resolved_runtime_config, &logging_config, &user_config).await?;
+    let DaemonServices {
+        reloadable_config,
+        next_chat_request_id,
+        shutdown_controller,
+        internal_shutdown_receiver,
+        download_catalog,
+        library_download_coordinator,
+    } = assemble_daemon_services(DaemonServiceAssembly {
+        instance_paths: &instance_paths,
+        user_config: &user_config,
+        worker_handle: &worker_handle,
+        runtime_config_resolver: &runtime_config_resolver,
+        resolved_runtime_config,
+        download_catalog,
+        daemon_attribution_log: &daemon_attribution_log,
+    })
+    .await?;
+
     // The daemon IPC service must start before the builder consumes the
     // worker handle: the CLI socket shares the worker and the request-id
     // counter with the REST surface, so both must exist first.
@@ -303,6 +266,165 @@ async fn run_daemon(
     daemon_ipc_shutdown_result.map_err(DaemonError::ShutdownDaemonIpc)?;
 
     Ok(())
+}
+
+fn open_daemon_log_context(
+    user_config: &AstronomicalConfig,
+) -> Result<DaemonLogContext, DaemonError> {
+    let logging_config = user_config.logging()?;
+    let daemon_attribution_log = DaemonPerformanceAttributionLog::open(
+        logging_config.directory(),
+        user_config.performance_attribution_enabled(),
+    )
+    .map_err(DaemonError::CreateDaemonPerformanceAttributionLog)?;
+    Ok(DaemonLogContext {
+        logging_config,
+        daemon_attribution_log,
+    })
+}
+
+fn load_bundled_download_catalog(
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
+) -> Result<DownloadCatalog, DaemonError> {
+    daemon_attribution_log
+        .measure_operation(
+            DaemonPerformanceOperation::LibraryCatalogLoad,
+            DownloadCatalog::load_bundled,
+            |catalog_outcome| match catalog_outcome {
+                Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
+                    download_catalog.entry_count(),
+                ),
+                Err(_) => DaemonPerformanceMeasurement::failure(),
+            },
+        )
+        .map_err(DaemonError::RecordDaemonPerformanceAttribution)?
+        .map_err(DaemonError::LoadDownloadCatalog)
+}
+
+async fn bind_daemon_listener(
+    instance_paths: &AstronomicalInstancePaths,
+    user_config: &AstronomicalConfig,
+) -> Result<BoundDaemonRuntime, DaemonError> {
+    let runtime_config_resolver = ResolvedRuntimeConfigResolver::for_instance(
+        instance_paths.clone(),
+        fallback_worker_executable_path()?,
+    );
+    let resolved_runtime_config = runtime_config_resolver
+        .resolve(user_config)
+        .map_err(DaemonError::ResolveRuntimeConfig)?;
+    let daemon_bind_address = resolved_runtime_config
+        .bind_address
+        .parse::<SocketAddr>()
+        .map_err(DaemonError::ParseResolvedBindAddress)?;
+    let listener = TcpListener::bind(daemon_bind_address)
+        .await
+        .map_err(DaemonError::BindDaemon)?;
+    let bound_daemon_address = listener
+        .local_addr()
+        .map_err(DaemonError::ReadBoundDaemonAddress)?;
+    tracing::info!(
+        bind_address = %bound_daemon_address,
+        channel = instance_paths
+            .runtime_instance()
+            .map_or("explicit", astronomical_config::AstronomicalRuntimeInstance::as_str),
+        version = ApplicationBuildIdentity::current().version,
+        commit = ApplicationBuildIdentity::current().commit,
+        configuration_generation = %resolved_runtime_config.configuration_generation,
+        "Astronomical REST API listener bound"
+    );
+    Ok(BoundDaemonRuntime {
+        runtime_config_resolver,
+        resolved_runtime_config,
+        listener,
+        bound_daemon_address,
+    })
+}
+
+async fn launch_daemon_worker(
+    resolved_runtime_config: &ResolvedRuntimeConfig,
+    logging_config: &LoggingConfig,
+    user_config: &AstronomicalConfig,
+) -> Result<WorkerHandle, DaemonError> {
+    let performance_log = GenerationPerformanceLog::open(logging_config.directory())
+        .map_err(DaemonError::CreatePerformanceLog)?;
+    let completion_log = CompletionAttributionLog::open(
+        logging_config.directory(),
+        user_config.completion_attribution_enabled(),
+    )
+    .map_err(DaemonError::CreateCompletionAttributionLog)?;
+    match WorkerHandle::launch_with_startup_configuration_and_image_generation_timeouts(
+        &resolved_runtime_config.worker_executable_path,
+        WORKER_MODEL_LOAD_TIMEOUT,
+        ImageGenerationTimeouts::DEFAULT,
+        performance_log,
+        completion_log,
+        Arc::clone(&resolved_runtime_config.model_policy_catalog),
+        resolved_runtime_config.worker_startup_configuration(),
+    )
+    .await
+    {
+        Ok(worker_handle) => Ok(worker_handle),
+        Err(worker_start_error) => {
+            eprintln!("astronomicald worker unavailable: {worker_start_error}");
+            Ok(WorkerHandle::unavailable())
+        }
+    }
+}
+
+async fn assemble_daemon_services(
+    assembly: DaemonServiceAssembly<'_>,
+) -> Result<DaemonServices, DaemonError> {
+    let DaemonServiceAssembly {
+        instance_paths,
+        user_config,
+        worker_handle,
+        runtime_config_resolver,
+        resolved_runtime_config,
+        download_catalog,
+        daemon_attribution_log,
+    } = assembly;
+    let reloadable_config = Arc::new(RwLock::new(resolved_runtime_config));
+    let next_chat_request_id = Arc::new(AtomicU64::new(1));
+    let shutdown_controller = ShutdownController::new();
+    let internal_shutdown_receiver = shutdown_controller.subscribe();
+    let download_catalog = Arc::new(download_catalog);
+    let hub_transport = Arc::new(
+        astronomical_daemon::ReqwestHubTransport::production()
+            .map_err(DaemonError::BuildHubTransport)?,
+    );
+    let discovery_refresh = Arc::new(LibraryModelDiscoveryRefresh::new(
+        runtime_config_resolver.clone(),
+        Arc::clone(&reloadable_config),
+        worker_handle.clone(),
+    ));
+    // The download coordinator is built once and is not rebuilt on config
+    // reload, so the override only takes effect on the next application start.
+    let models_download_directory = user_config
+        .model_download_directory()
+        .cloned()
+        .unwrap_or_else(|| instance_paths.models_directory());
+    let library_download_coordinator =
+        Arc::new(astronomical_daemon::LibraryDownloadCoordinator::new(
+            Arc::clone(&download_catalog),
+            models_download_directory,
+            Arc::new(astronomical_daemon::Fs4DiskCapacityQuery),
+            hub_transport.clone(),
+            hub_transport,
+            discovery_refresh,
+            daemon_attribution_log.clone(),
+        ));
+    library_download_coordinator
+        .recover_startup_state()
+        .await
+        .map_err(DaemonError::RecoverLibraryDownload)?;
+    Ok(DaemonServices {
+        reloadable_config,
+        next_chat_request_id,
+        shutdown_controller,
+        internal_shutdown_receiver,
+        download_catalog,
+        library_download_coordinator,
+    })
 }
 
 fn fallback_worker_executable_path() -> Result<PathBuf, DaemonError> {

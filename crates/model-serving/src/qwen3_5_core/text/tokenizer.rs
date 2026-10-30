@@ -336,7 +336,6 @@ impl Qwen3_5Tokenizer {
         )
     }
 
-    #[expect(clippy::too_many_lines)]
     pub(crate) fn prepare_chat_with_performance_attribution(
         &self,
         chat_generation_command: &ChatGenerationCommand,
@@ -349,59 +348,52 @@ impl Qwen3_5Tokenizer {
                 |_performance_attribution| chat_generation_command.validate(),
             )
             .map_err(Qwen3_5TokenizerError::InvalidChatCommand)?;
-        // Resolve the requested model ID against the loaded model's leaf-only ID.
-        // Clients may send "org/model-name" (e.g. "astronomical/fake-mixture-of-experts")
-        // while internally the model ID is just the leaf name (e.g. "fake-mixture-of-experts").
-        let resolved_requested_model_id = astronomical_config::resolve_model_id(
-            &chat_generation_command.model,
-            &[self.model_id.as_str()],
+        reject_mismatched_model_id(&chat_generation_command.model, &self.model_id)?;
+        let effective_thinking_allowance = validate_thinking_budget_against_output_reservation(
+            chat_generation_command,
+            enable_thinking,
+            self.forced_thinking_transition_token_ids.len(),
+        )?;
+        let tokenized_chat_prompt = self.tokenize_chat_prompt(
+            chat_generation_command,
+            enable_thinking,
+            performance_attribution,
+        )?;
+        let mut inference_request = self.build_inference_request(
+            chat_generation_command,
+            enable_thinking,
+            effective_thinking_allowance,
+            tokenized_chat_prompt.input_token_ids,
         );
-        if resolved_requested_model_id != self.model_id {
-            return Err(Qwen3_5TokenizerError::ModelIdMismatch {
-                actual_model_id: chat_generation_command.model.clone(),
-            });
+        if let Some(structured_generation) = &chat_generation_command.structured_generation {
+            inference_request = self.attach_structured_generation_constraint(
+                inference_request,
+                structured_generation,
+            )?;
         }
-        let effective_thinking_allowance =
-            super::thinking_allowance::resolve_effective_thinking_allowance(
-                chat_generation_command.settings.thinking_budget,
-                enable_thinking,
-                chat_generation_command.settings.max_output_tokens,
-                self.forced_thinking_transition_token_ids.len(),
-            );
-        if let Some(effective_allowance) = effective_thinking_allowance
-            && chat_generation_command
-                .settings
-                .thinking_budget
-                .is_some_and(|budget| enable_thinking && budget > 0)
+        if !tokenized_chat_prompt
+            .prepared_chat_images
+            .processed_visual_images
+            .is_empty()
         {
-            let minimum_bounded_output_tokens =
-                super::thinking_allowance::effective_thinking_reservation_token_count(
-                    effective_thinking_allowance,
-                    self.forced_thinking_transition_token_ids.len(),
-                )
-                .unwrap_or(usize::MAX);
-            if usize::from(chat_generation_command.settings.max_output_tokens)
-                < minimum_bounded_output_tokens
-            {
-                return Err(Qwen3_5TokenizerError::ThinkingBudgetOutputReservation {
-                    max_output_tokens: chat_generation_command.settings.max_output_tokens,
-                    thinking_budget: effective_allowance,
-                    transition_token_count: self.forced_thinking_transition_token_ids.len(),
-                });
-            }
-            if Some(effective_allowance) != chat_generation_command.settings.thinking_budget {
-                tracing::warn!(
-                    request_id = chat_generation_command.request_id.value(),
-                    requested_thinking_budget = chat_generation_command
-                        .settings
-                        .thinking_budget
-                        .unwrap_or(0),
-                    effective_thinking_budget = effective_allowance,
-                    max_output_tokens = chat_generation_command.settings.max_output_tokens,
-                    "clamped the thinking allowance to fit the requested output budget"
-                );
-            }
+            inference_request = inference_request.with_processed_visual_images(
+                tokenized_chat_prompt
+                    .prepared_chat_images
+                    .processed_visual_images,
+            );
         }
+        Ok(inference_request)
+    }
+
+    /// Preprocesses chat images, renders the prompt, tokenizes it, and
+    /// validates the rendered context against the model's position and
+    /// context-window bounds.
+    fn tokenize_chat_prompt(
+        &self,
+        chat_generation_command: &ChatGenerationCommand,
+        enable_thinking: bool,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<TokenizedChatPrompt, Qwen3_5TokenizerError> {
         let prepared_chat_images = performance_attribution.measure_operation(
             PerformanceOperation::ImagePreprocessing,
             |_performance_attribution| {
@@ -439,11 +431,23 @@ impl Qwen3_5Tokenizer {
             self.maximum_position_count as usize,
             self.advertised_context_window as usize,
         )?;
-        let model_top_k = match u16::try_from(self.model_sampler_config.model_top_k) {
-            Ok(model_top_k) if model_top_k > 0 => model_top_k,
-            _ => 20,
-        };
-        let mut inference_request = Qwen3_5InferenceRequest::new_sampling_with_top_k(
+        Ok(TokenizedChatPrompt {
+            prepared_chat_images,
+            input_token_ids,
+        })
+    }
+
+    /// Assembles the sampling and thinking configuration of one inference
+    /// request from the chat command's settings and the model's defaults.
+    fn build_inference_request(
+        &self,
+        chat_generation_command: &ChatGenerationCommand,
+        enable_thinking: bool,
+        effective_thinking_allowance: Option<u16>,
+        input_token_ids: Vec<u32>,
+    ) -> Qwen3_5InferenceRequest {
+        let model_top_k = clamp_model_top_k(self.model_sampler_config.model_top_k);
+        Qwen3_5InferenceRequest::new_sampling_with_top_k(
             chat_generation_command.request_id,
             input_token_ids,
             chat_generation_command.settings.max_output_tokens,
@@ -473,27 +477,114 @@ impl Qwen3_5Tokenizer {
             effective_thinking_allowance,
             self.forced_thinking_transition_token_ids.clone(),
             self.natural_reasoning_end_token_ids.clone(),
+        )
+    }
+
+    /// Compiles and attaches the structured-generation token constraint when
+    /// the chat command requests one.
+    fn attach_structured_generation_constraint(
+        &self,
+        inference_request: Qwen3_5InferenceRequest,
+        structured_generation: &astronomical_ipc_protocol::StructuredGenerationConstraint,
+    ) -> Result<Qwen3_5InferenceRequest, Qwen3_5TokenizerError> {
+        let structured_token_constraint =
+            crate::structured_generation::StructuredTokenConstraint::compile(
+                structured_generation,
+                self.vocabulary_pieces(),
+                vec![self.end_of_text_token_id(), self.im_end_token_id()],
+                self.encoded_choice_token_sequences(structured_generation),
+            )
+            .map_err(|compile_reason| {
+                Qwen3_5TokenizerError::StructuredConstraintCompile {
+                    reason: compile_reason,
+                }
+            })?;
+        Ok(inference_request.with_structured_generation(structured_token_constraint))
+    }
+}
+
+/// The tokenized form of one rendered chat prompt plus its preprocessed images.
+struct TokenizedChatPrompt {
+    prepared_chat_images: super::chat_images::PreparedChatImages,
+    input_token_ids: Vec<u32>,
+}
+
+/// Rejects a chat command whose requested model ID does not resolve to the
+/// loaded model's leaf-only ID.
+///
+/// Clients may send "org/model-name" (e.g. "astronomical/fake-mixture-of-experts")
+/// while internally the model ID is just the leaf name (e.g. "fake-mixture-of-experts").
+fn reject_mismatched_model_id(
+    requested_model_id: &str,
+    loaded_model_id: &str,
+) -> Result<(), Qwen3_5TokenizerError> {
+    let resolved_requested_model_id =
+        astronomical_config::resolve_model_id(requested_model_id, &[loaded_model_id]);
+    if resolved_requested_model_id != loaded_model_id {
+        return Err(Qwen3_5TokenizerError::ModelIdMismatch {
+            actual_model_id: requested_model_id.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+/// Validates that the effective thinking allowance still fits inside the
+/// caller's output budget once the forced-transition reservation and one
+/// visible answer token are counted, returning the effective allowance.
+fn validate_thinking_budget_against_output_reservation(
+    chat_generation_command: &ChatGenerationCommand,
+    enable_thinking: bool,
+    transition_token_count: usize,
+) -> Result<Option<u16>, Qwen3_5TokenizerError> {
+    let effective_thinking_allowance =
+        super::thinking_allowance::resolve_effective_thinking_allowance(
+            chat_generation_command.settings.thinking_budget,
+            enable_thinking,
+            chat_generation_command.settings.max_output_tokens,
+            transition_token_count,
         );
-        if let Some(structured_generation) = &chat_generation_command.structured_generation {
-            let structured_token_constraint =
-                crate::structured_generation::StructuredTokenConstraint::compile(
-                    structured_generation,
-                    self.vocabulary_pieces(),
-                    vec![self.end_of_text_token_id(), self.im_end_token_id()],
-                    self.encoded_choice_token_sequences(structured_generation),
-                )
-                .map_err(|compile_reason| {
-                    Qwen3_5TokenizerError::StructuredConstraintCompile {
-                        reason: compile_reason,
-                    }
-                })?;
-            inference_request =
-                inference_request.with_structured_generation(structured_token_constraint);
+    if let Some(effective_allowance) = effective_thinking_allowance
+        && chat_generation_command
+            .settings
+            .thinking_budget
+            .is_some_and(|budget| enable_thinking && budget > 0)
+    {
+        let minimum_bounded_output_tokens =
+            super::thinking_allowance::effective_thinking_reservation_token_count(
+                effective_thinking_allowance,
+                transition_token_count,
+            )
+            .unwrap_or(usize::MAX);
+        if usize::from(chat_generation_command.settings.max_output_tokens)
+            < minimum_bounded_output_tokens
+        {
+            return Err(Qwen3_5TokenizerError::ThinkingBudgetOutputReservation {
+                max_output_tokens: chat_generation_command.settings.max_output_tokens,
+                thinking_budget: effective_allowance,
+                transition_token_count,
+            });
         }
-        if !prepared_chat_images.processed_visual_images.is_empty() {
-            inference_request = inference_request
-                .with_processed_visual_images(prepared_chat_images.processed_visual_images);
+        if Some(effective_allowance) != chat_generation_command.settings.thinking_budget {
+            tracing::warn!(
+                request_id = chat_generation_command.request_id.value(),
+                requested_thinking_budget = chat_generation_command
+                    .settings
+                    .thinking_budget
+                    .unwrap_or(0),
+                effective_thinking_budget = effective_allowance,
+                max_output_tokens = chat_generation_command.settings.max_output_tokens,
+                "clamped the thinking allowance to fit the requested output budget"
+            );
         }
-        Ok(inference_request)
+    }
+    Ok(effective_thinking_allowance)
+}
+
+/// Falls back to the neutral top-k default when the artifact-authored value is
+/// zero, negative, or outside the sampler's u16 range.
+fn clamp_model_top_k(configured_model_top_k: i32) -> u16 {
+    match u16::try_from(configured_model_top_k) {
+        Ok(model_top_k) if model_top_k > 0 => model_top_k,
+        _ => 20,
     }
 }
