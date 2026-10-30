@@ -40,3 +40,7 @@ pub(crate) mod tensor_slicing;
 pub(crate) mod weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod weights_validation;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "model_math/gated_delta_boundary_checkpoints_tests.rs"]
+mod gated_delta_boundary_checkpoints_tests;

@@ -167,130 +167,16 @@ struct DownloadCatalogCapabilitiesDocument {
 
 impl DownloadCatalog {
     /// Parses and validates one complete catalog document.
-    #[expect(clippy::too_many_lines)]
     pub fn parse_json(catalog_json: &str) -> Result<Self, DownloadCatalogError> {
-        // Startup validates this source-authored document before serving; explicit metadata
-        // bounds prevent release packaging mistakes from consuming arbitrary laptop resources.
-        if catalog_json.len() > MAXIMUM_DOWNLOAD_CATALOG_BYTES {
-            return Err(DownloadCatalogError::DocumentTooLarge);
-        }
-        let catalog_document: DownloadCatalogDocument =
-            serde_json::from_str(catalog_json).map_err(DownloadCatalogError::Parse)?;
-        if catalog_document.schema_version != DOWNLOAD_CATALOG_SCHEMA_VERSION {
-            return Err(DownloadCatalogError::UnsupportedSchemaVersion {
-                schema_version: catalog_document.schema_version,
-            });
-        }
-        if catalog_document.entries.len() > MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT {
-            return Err(DownloadCatalogError::TooManyEntries);
-        }
-
+        let catalog_document = parse_and_shape_check_document(catalog_json)?;
         let mut normalized_huggingface_ids = BTreeSet::new();
         let mut entries = Vec::with_capacity(catalog_document.entries.len());
         for (entry_index, entry_document) in catalog_document.entries.into_iter().enumerate() {
-            if !is_valid_huggingface_id(&entry_document.huggingface_id) {
-                return Err(DownloadCatalogError::InvalidHuggingFaceId { entry_index });
-            }
-            if !normalized_huggingface_ids
-                .insert(entry_document.huggingface_id.to_ascii_lowercase())
-            {
-                return Err(DownloadCatalogError::DuplicateHuggingFaceId);
-            }
-            if !is_valid_immutable_revision(&entry_document.revision) {
-                return Err(DownloadCatalogError::InvalidRevision { entry_index });
-            }
-            if entry_document.display_name.len() > MAXIMUM_DISPLAY_NAME_BYTES
-                || entry_document.display_name.trim().is_empty()
-                || entry_document.display_name.chars().any(char::is_control)
-            {
-                return Err(DownloadCatalogError::InvalidDisplayName { entry_index });
-            }
-            if entry_document.approximate_size_bytes == 0
-                || entry_document.approximate_size_bytes > MAXIMUM_JAVASCRIPT_SAFE_INTEGER
-            {
-                return Err(DownloadCatalogError::InvalidApproximateSize { entry_index });
-            }
-            if !entry_document.is_public {
-                return Err(DownloadCatalogError::ModelNotPublic { entry_index });
-            }
-            let description = entry_document
-                .description
-                .filter(|description| !description.trim().is_empty())
-                .map(|description| {
-                    if description.len() > MAXIMUM_DESCRIPTION_BYTES
-                        || description.chars().any(char::is_control)
-                    {
-                        return Err(DownloadCatalogError::InvalidDescription { entry_index });
-                    }
-                    Ok(description)
-                })
-                .transpose()?;
-            let capabilities = entry_document
-                .capabilities
-                .map(|capabilities_document| {
-                    if capabilities_document.supports_reasoning
-                        || capabilities_document.supports_vision
-                        || capabilities_document.supports_tool_calls
-                        || capabilities_document.context_window.is_some()
-                        || capabilities_document.max_output_tokens.is_some()
-                        || capabilities_document.supports_image_generation
-                        || capabilities_document.supports_embeddings
-                    {
-                        Ok(DownloadCatalogCapabilities {
-                            supports_reasoning: capabilities_document.supports_reasoning,
-                            supports_vision: capabilities_document.supports_vision,
-                            supports_tool_calls: capabilities_document.supports_tool_calls,
-                            context_window: capabilities_document.context_window,
-                            max_output_tokens: capabilities_document.max_output_tokens,
-                            supports_image_generation: capabilities_document
-                                .supports_image_generation,
-                            supports_embeddings: capabilities_document.supports_embeddings,
-                        })
-                    } else {
-                        Err(DownloadCatalogError::InvalidCapabilities { entry_index })
-                    }
-                })
-                .transpose()?
-                .unwrap_or_default();
-            let quantization_label = entry_document
-                .quantization_label
-                .filter(|label| !label.trim().is_empty())
-                .map(|label| {
-                    if label.len() > MAXIMUM_QUANTIZATION_LABEL_BYTES
-                        || label.chars().any(char::is_control)
-                    {
-                        return Err(DownloadCatalogError::InvalidQuantizationLabel { entry_index });
-                    }
-                    Ok(label)
-                })
-                .transpose()?;
-            let upstream_license = entry_document
-                .upstream_license
-                .filter(|license| !license.trim().is_empty())
-                .map(|license| {
-                    if license.len() > MAXIMUM_UPSTREAM_LICENSE_BYTES
-                        || license.chars().any(char::is_control)
-                    {
-                        return Err(DownloadCatalogError::InvalidUpstreamLicense { entry_index });
-                    }
-                    Ok(license)
-                })
-                .transpose()?;
-            let download_path_selection =
-                DownloadPathSelection::try_new(entry_document.included_paths)
-                    .map_err(|()| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
-            entries.push(DownloadCatalogEntry {
-                huggingface_id: entry_document.huggingface_id,
-                revision: entry_document.revision,
-                display_name: entry_document.display_name,
-                family: entry_document.family,
-                approximate_size_bytes: entry_document.approximate_size_bytes,
-                description,
-                capabilities,
-                quantization_label,
-                upstream_license,
-                download_path_selection,
-            });
+            entries.push(parse_catalog_entry(
+                entry_document,
+                entry_index,
+                &mut normalized_huggingface_ids,
+            )?);
         }
 
         Ok(Self {
@@ -327,6 +213,193 @@ impl DownloadCatalog {
     pub fn entry_count(&self) -> usize {
         self.entries.len()
     }
+}
+
+/// Enforces the document-level startup resource bounds before any per-entry
+/// work: byte size, JSON syntax, schema version, and the entry-count ceiling.
+fn parse_and_shape_check_document(
+    catalog_json: &str,
+) -> Result<DownloadCatalogDocument, DownloadCatalogError> {
+    // Startup validates this source-authored document before serving; explicit metadata
+    // bounds prevent release packaging mistakes from consuming arbitrary laptop resources.
+    if catalog_json.len() > MAXIMUM_DOWNLOAD_CATALOG_BYTES {
+        return Err(DownloadCatalogError::DocumentTooLarge);
+    }
+    let catalog_document: DownloadCatalogDocument =
+        serde_json::from_str(catalog_json).map_err(DownloadCatalogError::Parse)?;
+    if catalog_document.schema_version != DOWNLOAD_CATALOG_SCHEMA_VERSION {
+        return Err(DownloadCatalogError::UnsupportedSchemaVersion {
+            schema_version: catalog_document.schema_version,
+        });
+    }
+    if catalog_document.entries.len() > MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT {
+        return Err(DownloadCatalogError::TooManyEntries);
+    }
+    Ok(catalog_document)
+}
+
+/// Validates one entry in the authored check order — identity, display
+/// metadata, description, capabilities, quantization label, upstream license,
+/// then included paths — and converts it into the public entry type. The
+/// order decides which failure a multi-invalid entry reports.
+fn parse_catalog_entry(
+    entry_document: DownloadCatalogEntryDocument,
+    entry_index: usize,
+    normalized_huggingface_ids: &mut BTreeSet<String>,
+) -> Result<DownloadCatalogEntry, DownloadCatalogError> {
+    validate_entry_identity(&entry_document, entry_index, normalized_huggingface_ids)?;
+    validate_entry_display_metadata(&entry_document, entry_index)?;
+    let description = parse_optional_entry_description(&entry_document, entry_index)?;
+    let capabilities = parse_entry_capabilities(entry_document.capabilities.as_ref(), entry_index)?;
+    let quantization_label = parse_optional_entry_quantization_label(&entry_document, entry_index)?;
+    let upstream_license = parse_optional_entry_upstream_license(&entry_document, entry_index)?;
+    let download_path_selection = DownloadPathSelection::try_new(entry_document.included_paths)
+        .map_err(|()| DownloadCatalogError::InvalidIncludedPaths { entry_index })?;
+    Ok(DownloadCatalogEntry {
+        huggingface_id: entry_document.huggingface_id,
+        revision: entry_document.revision,
+        display_name: entry_document.display_name,
+        family: entry_document.family,
+        approximate_size_bytes: entry_document.approximate_size_bytes,
+        description,
+        capabilities,
+        quantization_label,
+        upstream_license,
+        download_path_selection,
+    })
+}
+
+/// Guards the entry identity: a Hub-safe repository id, first-seen
+/// case-insensitively across the whole catalog, plus an immutable full-length
+/// commit revision instead of a moving ref.
+fn validate_entry_identity(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+    normalized_huggingface_ids: &mut BTreeSet<String>,
+) -> Result<(), DownloadCatalogError> {
+    if !is_valid_huggingface_id(&entry_document.huggingface_id) {
+        return Err(DownloadCatalogError::InvalidHuggingFaceId { entry_index });
+    }
+    if !normalized_huggingface_ids.insert(entry_document.huggingface_id.to_ascii_lowercase()) {
+        return Err(DownloadCatalogError::DuplicateHuggingFaceId);
+    }
+    if !is_valid_immutable_revision(&entry_document.revision) {
+        return Err(DownloadCatalogError::InvalidRevision { entry_index });
+    }
+    Ok(())
+}
+
+/// Guards the human-facing display name, the JavaScript-safe size claim, and
+/// the public-visibility release rule; display-name failures are reported
+/// before size and visibility failures.
+fn validate_entry_display_metadata(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+) -> Result<(), DownloadCatalogError> {
+    if entry_document.display_name.len() > MAXIMUM_DISPLAY_NAME_BYTES
+        || entry_document.display_name.trim().is_empty()
+        || entry_document.display_name.chars().any(char::is_control)
+    {
+        return Err(DownloadCatalogError::InvalidDisplayName { entry_index });
+    }
+    if entry_document.approximate_size_bytes == 0
+        || entry_document.approximate_size_bytes > MAXIMUM_JAVASCRIPT_SAFE_INTEGER
+    {
+        return Err(DownloadCatalogError::InvalidApproximateSize { entry_index });
+    }
+    if !entry_document.is_public {
+        return Err(DownloadCatalogError::ModelNotPublic { entry_index });
+    }
+    Ok(())
+}
+
+/// Whitespace-only or absent descriptions stay absent; a present description
+/// must fit the display bound and carry no control characters.
+fn parse_optional_entry_description(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+) -> Result<Option<String>, DownloadCatalogError> {
+    let Some(description) = entry_document.description.as_deref() else {
+        return Ok(None);
+    };
+    if description.trim().is_empty() {
+        return Ok(None);
+    }
+    if description.len() > MAXIMUM_DESCRIPTION_BYTES || description.chars().any(char::is_control) {
+        return Err(DownloadCatalogError::InvalidDescription { entry_index });
+    }
+    Ok(Some(description.to_owned()))
+}
+
+/// An absent capabilities document means no badges; a present one must declare
+/// at least one badge, otherwise the catalog would advertise an empty model.
+fn parse_entry_capabilities(
+    capabilities_document: Option<&DownloadCatalogCapabilitiesDocument>,
+    entry_index: usize,
+) -> Result<DownloadCatalogCapabilities, DownloadCatalogError> {
+    let Some(capabilities_document) = capabilities_document else {
+        return Ok(DownloadCatalogCapabilities::default());
+    };
+    if capabilities_document.supports_reasoning
+        || capabilities_document.supports_vision
+        || capabilities_document.supports_tool_calls
+        || capabilities_document.context_window.is_some()
+        || capabilities_document.max_output_tokens.is_some()
+        || capabilities_document.supports_image_generation
+        || capabilities_document.supports_embeddings
+    {
+        Ok(DownloadCatalogCapabilities {
+            supports_reasoning: capabilities_document.supports_reasoning,
+            supports_vision: capabilities_document.supports_vision,
+            supports_tool_calls: capabilities_document.supports_tool_calls,
+            context_window: capabilities_document.context_window,
+            max_output_tokens: capabilities_document.max_output_tokens,
+            supports_image_generation: capabilities_document.supports_image_generation,
+            supports_embeddings: capabilities_document.supports_embeddings,
+        })
+    } else {
+        Err(DownloadCatalogError::InvalidCapabilities { entry_index })
+    }
+}
+
+/// Whitespace-only or absent quantization labels stay absent; a present label
+/// must fit its bound and carry no control characters.
+fn parse_optional_entry_quantization_label(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+) -> Result<Option<String>, DownloadCatalogError> {
+    let Some(quantization_label) = entry_document.quantization_label.as_deref() else {
+        return Ok(None);
+    };
+    if quantization_label.trim().is_empty() {
+        return Ok(None);
+    }
+    if quantization_label.len() > MAXIMUM_QUANTIZATION_LABEL_BYTES
+        || quantization_label.chars().any(char::is_control)
+    {
+        return Err(DownloadCatalogError::InvalidQuantizationLabel { entry_index });
+    }
+    Ok(Some(quantization_label.to_owned()))
+}
+
+/// Whitespace-only or absent upstream licenses stay absent; a present license
+/// must fit its bound and carry no control characters.
+fn parse_optional_entry_upstream_license(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+) -> Result<Option<String>, DownloadCatalogError> {
+    let Some(upstream_license) = entry_document.upstream_license.as_deref() else {
+        return Ok(None);
+    };
+    if upstream_license.trim().is_empty() {
+        return Ok(None);
+    }
+    if upstream_license.len() > MAXIMUM_UPSTREAM_LICENSE_BYTES
+        || upstream_license.chars().any(char::is_control)
+    {
+        return Err(DownloadCatalogError::InvalidUpstreamLicense { entry_index });
+    }
+    Ok(Some(upstream_license.to_owned()))
 }
 
 impl DownloadCatalogEntry {
@@ -417,3 +490,7 @@ fn is_valid_hugging_face_component(component: &str) -> bool {
         character.is_ascii_alphanumeric() || matches!(character, b'-' | b'_' | b'.')
     })
 }
+
+#[cfg(test)]
+#[path = "download_catalog_parse_tests.rs"]
+mod download_catalog_parse_tests;

@@ -260,7 +260,6 @@ impl Qwen3_5Model {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     fn streamed_expert_linear(
         &self,
         activations: &MlxArray,
@@ -274,11 +273,73 @@ impl Qwen3_5Model {
         // Streamed pages and resident layers intentionally converge here on the
         // same canonical operation. Paging decides which arrays are alive; this
         // adapter only describes their matrix layout and assignment ordering.
-        let assignment_order = if are_expert_indices_sorted {
-            ExpertAssignmentOrder::SortedByExpert
-        } else {
-            ExpertAssignmentOrder::Original
+        let assignment_order = expert_assignment_order(are_expert_indices_sorted);
+        let rotated_activation_owner = self.hadamard32_rotated_activations(
+            activations,
+            activation_rotation,
+            performance_attribution,
+        )?;
+        let projection_activations = rotated_activation_owner.as_ref().unwrap_or(activations);
+        let projection_inputs = StreamedProjectionInputs {
+            projection_activations,
+            selected_expert_indices,
+            assignment_order,
         };
+        match affine_weights {
+            Qwen3_5AffineWeights::Jangtq2Codebook {
+                packed_code_words,
+                row_scales,
+                codebook_bit_width,
+            } => {
+                let codebook_slices = Jangtq2CodebookProjectionSlices {
+                    packed_code_words,
+                    row_scales,
+                    codebook_bit_width: *codebook_bit_width,
+                };
+                self.project_through_jangtq2_codebook(
+                    &projection_inputs,
+                    &codebook_slices,
+                    performance_attribution,
+                )
+            }
+            Qwen3_5AffineWeights::NativeBfloat16 { weight } => self
+                .project_through_native_bfloat16(
+                    &projection_inputs,
+                    weight,
+                    performance_attribution,
+                ),
+            Qwen3_5AffineWeights::Quantized {
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                quantization_group_size,
+                quantization_bits,
+            } => {
+                let quantized_slices = QuantizedProjectionSlices {
+                    packed_weight,
+                    quantization_scales,
+                    quantization_biases,
+                    quantization_group_size: *quantization_group_size,
+                    quantization_bits: *quantization_bits,
+                };
+                self.project_through_quantized(
+                    &projection_inputs,
+                    &quantized_slices,
+                    performance_attribution,
+                )
+            }
+        }
+    }
+
+    /// Rotates the activation rows through the blockwise Hadamard-32 transform
+    /// only when the projection's codebook was quantized under that rotation;
+    /// the measured region covers exactly the rotation work, nothing else.
+    fn hadamard32_rotated_activations(
+        &self,
+        activations: &MlxArray,
+        activation_rotation: astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
         let rotated_activation_owner = match activation_rotation {
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation => None,
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32 => {
@@ -293,128 +354,170 @@ impl Qwen3_5Model {
                 )?)
             }
         };
-        let projection_activations = rotated_activation_owner.as_ref().unwrap_or(activations);
-        match affine_weights {
-            Qwen3_5AffineWeights::Jangtq2Codebook {
-                packed_code_words,
-                row_scales,
-                codebook_bit_width,
-            } => {
-                if let Some(fused_kernel) = self.fused_jangtq2_gathered_projection_kernel.as_ref()
-                    && let Some(activation_rows) = decode_token_activation_rows(
-                        &self.runtime,
-                        projection_activations,
-                        selected_expert_indices,
-                        usize::try_from(self.config.experts_per_token()).unwrap_or(0),
-                    )?
-                {
-                    // One decode token: multiply straight from the packed
-                    // codes. The kernel returns `[assignments, rows]`;
-                    // restore gather_mm's `[..., assignments, 1, rows]`
-                    // layout so the SwiGLU and reduction stay unchanged.
-                    let projected = performance_attribution.measure_operation(
-                        PerformanceOperation::DecodeFusedJangtq2GatheredProjection,
-                        |_| {
-                            let flat_expert_indices = self.runtime.reshape(
-                                selected_expert_indices,
-                                &[selected_expert_indices.element_count() as i32],
-                            )?;
-                            fused_kernel.apply(
-                                &self.runtime,
-                                &activation_rows,
-                                &flat_expert_indices,
-                                packed_code_words,
-                                row_scales,
-                                *codebook_bit_width,
-                            )
-                        },
-                    )?;
-                    let mut gathered_shape = selected_expert_indices.shape();
-                    gathered_shape.push(1);
-                    gathered_shape.push(packed_code_words.shape()[1]);
-                    return Ok(self.runtime.reshape(&projected, &gathered_shape)?);
-                }
-                // Multi-token prefill (or a worker without the fused kernel):
-                // decode a transient bfloat16 copy and gather through
-                // gather_mm, whose matrix multiply amortizes the decode over
-                // the chunk's tokens. The copy dies with this forward.
-                let decoded_weight = performance_attribution.measure_operation(
-                    PerformanceOperation::Jangtq2CodebookPageDecode,
-                    |_| {
-                        astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
-                            &self.runtime,
-                            packed_code_words,
-                            row_scales,
-                            *codebook_bit_width,
-                        )
-                    },
-                )?;
-                let packed_shape = packed_code_words.shape();
-                // The decoded bfloat16 volume is the round-trip cost the fused
-                // prefill matmul exists to remove; pricing it per forward makes
-                // chunk-size amortization visible in every request's record.
-                let decoded_element_count = (packed_shape[0] as u64)
-                    .saturating_mul(packed_shape[1] as u64)
-                    .saturating_mul(
-                        (packed_shape[2] as u64).saturating_mul(32)
-                            / u64::from(*codebook_bit_width),
-                    );
-                performance_attribution.record_counter(
-                    PerformanceCounter::Jangtq2CodebookDecodedOutputByteCount,
-                    decoded_element_count.saturating_mul(std::mem::size_of::<u16>() as u64),
-                );
-                let transposed_weights =
-                    self.runtime.transpose_axes(&decoded_weight, &[0, 2, 1])?;
-                Ok(gather_expert_projection(
-                    &self.runtime,
-                    projection_activations,
-                    StackedExpertProjection::Dense {
-                        transposed_weights: &transposed_weights,
-                    },
-                    selected_expert_indices,
-                    assignment_order,
-                    performance_attribution,
-                )?)
-            }
-            Qwen3_5AffineWeights::NativeBfloat16 { weight } => {
-                // The transpose is a lazy view from checkpoint linear layout to
-                // the `[expert, input, output]` layout expected by gather_mm.
-                let transposed_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
-                Ok(gather_expert_projection(
-                    &self.runtime,
-                    projection_activations,
-                    StackedExpertProjection::Dense {
-                        transposed_weights: &transposed_weights,
-                    },
-                    selected_expert_indices,
-                    assignment_order,
-                    performance_attribution,
-                )?)
-            }
-            Qwen3_5AffineWeights::Quantized {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                quantization_group_size,
-                quantization_bits,
-            } => Ok(gather_expert_projection(
-                &self.runtime,
-                projection_activations,
-                // Pass the streamed packed page directly to gather_qmm. Taking
-                // selected matrices first would recreate the memory expansion
-                // that gathered execution exists to avoid.
-                StackedExpertProjection::Affine {
-                    packed_weights: packed_weight,
-                    scales: quantization_scales,
-                    biases: quantization_biases,
-                    group_size: *quantization_group_size,
-                    bits: *quantization_bits,
-                },
-                selected_expert_indices,
-                assignment_order,
-                performance_attribution,
-            )?),
+        Ok(rotated_activation_owner)
+    }
+
+    /// Routes one jangtq2 codebook projection: a single decode token multiplies
+    /// straight from the packed codes through the fused kernel, and any wider
+    /// forward decodes a transient copy for the gather_mm path.
+    fn project_through_jangtq2_codebook(
+        &self,
+        projection_inputs: &StreamedProjectionInputs<'_>,
+        codebook_slices: &Jangtq2CodebookProjectionSlices<'_>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        if let Some(projected) = self.project_through_fused_jangtq2_decode_kernel(
+            projection_inputs,
+            codebook_slices,
+            performance_attribution,
+        )? {
+            return Ok(projected);
         }
+        self.project_through_decoded_jangtq2_codebook(
+            projection_inputs,
+            codebook_slices,
+            performance_attribution,
+        )
+    }
+
+    /// Attempts the fused single-decode-token projection and returns `None`
+    /// when this worker lacks the fused kernel or the forward routes more
+    /// assignments than one token, handing the work to the decoded-copy path.
+    fn project_through_fused_jangtq2_decode_kernel(
+        &self,
+        projection_inputs: &StreamedProjectionInputs<'_>,
+        codebook_slices: &Jangtq2CodebookProjectionSlices<'_>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
+        if let Some(fused_kernel) = self.fused_jangtq2_gathered_projection_kernel.as_ref()
+            && let Some(activation_rows) = decode_token_activation_rows(
+                &self.runtime,
+                projection_inputs.projection_activations,
+                projection_inputs.selected_expert_indices,
+                usize::try_from(self.config.experts_per_token()).unwrap_or(0),
+            )?
+        {
+            // One decode token: multiply straight from the packed
+            // codes. The kernel returns `[assignments, rows]`;
+            // restore gather_mm's `[..., assignments, 1, rows]`
+            // layout so the SwiGLU and reduction stay unchanged.
+            let projected = performance_attribution.measure_operation(
+                PerformanceOperation::DecodeFusedJangtq2GatheredProjection,
+                |_| {
+                    let flat_expert_indices = self.runtime.reshape(
+                        projection_inputs.selected_expert_indices,
+                        &[projection_inputs.selected_expert_indices.element_count() as i32],
+                    )?;
+                    fused_kernel.apply(
+                        &self.runtime,
+                        &activation_rows,
+                        &flat_expert_indices,
+                        codebook_slices.packed_code_words,
+                        codebook_slices.row_scales,
+                        codebook_slices.codebook_bit_width,
+                    )
+                },
+            )?;
+            let mut gathered_shape = projection_inputs.selected_expert_indices.shape();
+            gathered_shape.push(1);
+            gathered_shape.push(codebook_slices.packed_code_words.shape()[1]);
+            return Ok(Some(self.runtime.reshape(&projected, &gathered_shape)?));
+        }
+        Ok(None)
+    }
+
+    fn project_through_decoded_jangtq2_codebook(
+        &self,
+        projection_inputs: &StreamedProjectionInputs<'_>,
+        codebook_slices: &Jangtq2CodebookProjectionSlices<'_>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        // Multi-token prefill (or a worker without the fused kernel):
+        // decode a transient bfloat16 copy and gather through
+        // gather_mm, whose matrix multiply amortizes the decode over
+        // the chunk's tokens. The copy dies with this forward.
+        let decoded_weight = performance_attribution.measure_operation(
+            PerformanceOperation::Jangtq2CodebookPageDecode,
+            |_| {
+                astronomical_jangtq2_qwen35::mlx_decode::decode_expert_weight_rows(
+                    &self.runtime,
+                    codebook_slices.packed_code_words,
+                    codebook_slices.row_scales,
+                    codebook_slices.codebook_bit_width,
+                )
+            },
+        )?;
+        let packed_shape = codebook_slices.packed_code_words.shape();
+        // The decoded bfloat16 volume is the round-trip cost the fused
+        // prefill matmul exists to remove; pricing it per forward makes
+        // chunk-size amortization visible in every request's record.
+        let decoded_element_count = (packed_shape[0] as u64)
+            .saturating_mul(packed_shape[1] as u64)
+            .saturating_mul(
+                (packed_shape[2] as u64).saturating_mul(32)
+                    / u64::from(codebook_slices.codebook_bit_width),
+            );
+        performance_attribution.record_counter(
+            PerformanceCounter::Jangtq2CodebookDecodedOutputByteCount,
+            decoded_element_count.saturating_mul(std::mem::size_of::<u16>() as u64),
+        );
+        let transposed_weights = self.runtime.transpose_axes(&decoded_weight, &[0, 2, 1])?;
+        Ok(gather_expert_projection(
+            &self.runtime,
+            projection_inputs.projection_activations,
+            StackedExpertProjection::Dense {
+                transposed_weights: &transposed_weights,
+            },
+            projection_inputs.selected_expert_indices,
+            projection_inputs.assignment_order,
+            performance_attribution,
+        )?)
+    }
+
+    fn project_through_native_bfloat16(
+        &self,
+        projection_inputs: &StreamedProjectionInputs<'_>,
+        weight: &MlxArray,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        // The transpose is a lazy view from checkpoint linear layout to
+        // the `[expert, input, output]` layout expected by gather_mm.
+        let transposed_weights = self.runtime.transpose_axes(weight, &[0, 2, 1])?;
+        Ok(gather_expert_projection(
+            &self.runtime,
+            projection_inputs.projection_activations,
+            StackedExpertProjection::Dense {
+                transposed_weights: &transposed_weights,
+            },
+            projection_inputs.selected_expert_indices,
+            projection_inputs.assignment_order,
+            performance_attribution,
+        )?)
+    }
+
+    fn project_through_quantized(
+        &self,
+        projection_inputs: &StreamedProjectionInputs<'_>,
+        quantized_slices: &QuantizedProjectionSlices<'_>,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        Ok(gather_expert_projection(
+            &self.runtime,
+            projection_inputs.projection_activations,
+            // Pass the streamed packed page directly to gather_qmm. Taking
+            // selected matrices first would recreate the memory expansion
+            // that gathered execution exists to avoid.
+            StackedExpertProjection::Affine {
+                packed_weights: quantized_slices.packed_weight,
+                scales: quantized_slices.quantization_scales,
+                biases: quantized_slices.quantization_biases,
+                group_size: quantized_slices.quantization_group_size,
+                bits: quantized_slices.quantization_bits,
+            },
+            projection_inputs.selected_expert_indices,
+            projection_inputs.assignment_order,
+            performance_attribution,
+        )?)
     }
 
     pub(super) fn combine_paged_sparse_and_shared_outputs(
@@ -459,6 +562,44 @@ impl Qwen3_5Model {
             &shared_output,
             &shared_gate_logits,
         )?)
+    }
+}
+
+/// Activation rows, route indices, and assignment ordering shared by every
+/// streamed projection arm, so each arm's parameters describe only its
+/// weight layout.
+struct StreamedProjectionInputs<'a> {
+    projection_activations: &'a MlxArray,
+    selected_expert_indices: &'a MlxArray,
+    assignment_order: ExpertAssignmentOrder,
+}
+
+/// The packed on-disk jangtq2 codebook arrays one streamed projection reads.
+struct Jangtq2CodebookProjectionSlices<'a> {
+    packed_code_words: &'a MlxArray,
+    row_scales: &'a MlxArray,
+    codebook_bit_width: u32,
+}
+
+/// The packed affine quantization arrays one streamed projection reads.
+struct QuantizedProjectionSlices<'a> {
+    packed_weight: &'a MlxArray,
+    quantization_scales: &'a MlxArray,
+    quantization_biases: &'a MlxArray,
+    quantization_group_size: i32,
+    quantization_bits: i32,
+}
+
+/// Converts the sorted-assignments assertion into the semantic ordering the
+/// gathered projection kernel expects. The flag is a caller's claim about
+/// the indices, and the resulting order is a kernel-contract choice: handing
+/// MLX `SortedByExpert` for unsorted IDs would be a correctness violation,
+/// so the two must never be conflated into a bare `bool` at this boundary.
+pub(super) fn expert_assignment_order(are_expert_indices_sorted: bool) -> ExpertAssignmentOrder {
+    if are_expert_indices_sorted {
+        ExpertAssignmentOrder::SortedByExpert
+    } else {
+        ExpertAssignmentOrder::Original
     }
 }
 
