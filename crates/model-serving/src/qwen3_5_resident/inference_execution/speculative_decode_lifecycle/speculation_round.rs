@@ -30,14 +30,15 @@ use crate::PerformanceOperation;
 use crate::gpu_token_sampling;
 use crate::performance_attribution::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStack;
+use crate::qwen3_5_core::decoder::request_state::RequestDecoderStateStackCheckpoint;
 use crate::qwen3_5_resident::dflash_draft;
 use crate::qwen3_5_resident::model::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::model::VerificationLogitsMode;
 
+use super::speculation_round_finish::{VerificationArtifacts, run_measured_accepted_round_finish};
 use super::verification_decisions::{
     TokenEqualityVerificationDecision, VerificationTokenChoice, decide_token_equality_verification,
-    emitted_tokens_for_round,
 };
 
 /// Everything one round needs besides the owners it mutates.
@@ -72,11 +73,37 @@ pub struct SpeculationRoundOutcome {
     pub context_length_after_round: u32,
 }
 
+/// The round's fixed participants, threaded unchanged through every phase:
+/// only the mutable owners move from phase to phase.
+pub(super) struct SpeculationRoundParticipants<'a> {
+    pub(super) target_model: &'a Qwen3_5ResidentModel,
+    pub(super) draft_weights: &'a dflash_draft::draft_weights::DFlashDraftWeights,
+    pub(super) draft_configuration: &'a dflash_draft::draft_configuration::DFlashDraftConfiguration,
+    pub(super) round_request: &'a SpeculationRoundRequest,
+}
+
+/// The mutable owners and streams one round's verdict settlement mutates,
+/// in the order verification touches them.
+struct SettlementOwners<'a> {
+    target_decoder_state: &'a mut RequestDecoderStateStack,
+    draft_key_value_states: &'a mut dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
+    random_state: &'a mut Option<MlxArray>,
+    performance_attribution: &'a mut PerformanceAttribution,
+}
+
+/// What the rejected-prefix replay consumes beyond the participants: the
+/// transactional checkpoint to restore, and the acceptance boundary that
+/// sizes the replayed prefix.
+struct RejectedPrefixReplay<'a> {
+    target_checkpoint: RequestDecoderStateStackCheckpoint,
+    proposals: &'a [u32],
+    verification_decision: &'a TokenEqualityVerificationDecision,
+}
+
 /// Runs one speculative round. Mutates the target's decoder-state stack and
 /// the draft's key-value states in lockstep; both end at the accepted
 /// context length.
 #[allow(clippy::too_many_arguments)]
-#[expect(clippy::too_many_lines)]
 pub fn run_speculative_round(
     target_model: &Qwen3_5ResidentModel,
     target_decoder_state: &mut RequestDecoderStateStack,
@@ -91,21 +118,69 @@ pub fn run_speculative_round(
     // sampler fails in engine vocabulary, and every execution error below
     // converts into it through the existing From implementation.
     let context_length_tokens = round_request.context_length_tokens;
-    if draft_key_value_states.offset_tokens() != context_length_tokens as i32 {
+    validate_draft_context_alignment(
+        draft_key_value_states.offset_tokens(),
+        context_length_tokens,
+    )?;
+
+    let participants = SpeculationRoundParticipants {
+        target_model,
+        draft_weights,
+        draft_configuration,
+        round_request,
+    };
+    let proposals = run_measured_draft_block_pass(
+        &participants,
+        draft_key_value_states,
+        performance_attribution,
+    )?;
+    let verification_tokens =
+        assemble_verification_tokens(round_request.bonus_token_id, &proposals);
+    let settlement_owners = SettlementOwners {
+        target_decoder_state,
+        draft_key_value_states,
+        random_state,
+        performance_attribution,
+    };
+    settle_verification_verdict(
+        &participants,
+        settlement_owners,
+        &verification_tokens,
+        &proposals,
+    )
+}
+
+/// Guards the round's one invariant: the draft's key-value states must stand
+/// exactly at the target's context boundary before the round mutates them,
+/// or every later offset would silently shift.
+fn validate_draft_context_alignment(
+    draft_offset_tokens: i32,
+    context_length_tokens: u32,
+) -> Result<(), crate::InferenceEngineError> {
+    if draft_offset_tokens != context_length_tokens as i32 {
         return Err(crate::InferenceEngineError::from(
             Qwen3_5ExecutionError::InvalidInput {
                 description: "the draft key-value context length must match the target context length before a speculative round",
             },
         ));
     }
+    Ok(())
+}
 
+/// Drafts the block with one parallel trunk pass, keeping the draft-pass
+/// measurement span whole around it.
+fn run_measured_draft_block_pass(
+    participants: &SpeculationRoundParticipants<'_>,
+    draft_key_value_states: &mut dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<Vec<u32>, crate::InferenceEngineError> {
     let draft_pass_started_at = Instant::now();
     let proposals = draft_proposals(
-        target_model,
-        draft_weights,
-        draft_configuration,
+        participants.target_model,
+        participants.draft_weights,
+        participants.draft_configuration,
         draft_key_value_states,
-        round_request,
+        participants.round_request,
         performance_attribution,
     )?;
     performance_attribution.record_operation_interval(
@@ -113,14 +188,27 @@ pub fn run_speculative_round(
         draft_pass_started_at,
         Instant::now(),
     );
+    Ok(proposals)
+}
 
-    // The draft key-value state now holds the discarded block scratch at
-    // positions after the context; roll it back before the round ends so
-    // the next round starts from the clean context boundary.
-    let draft_checkpoint_offset = context_length_tokens as i32;
-
-    let verification_tokens =
-        assemble_verification_tokens(round_request.bonus_token_id, &proposals);
+/// Settles the round's verdict: checkpoint the target, verify the drafted
+/// block in one multi-token forward, choose the target's token per
+/// position, then accept or replay and finish. The verification forward's
+/// output stays a local because its type is private to the model module;
+/// its taps flow into the finish and its logits into the token choice.
+fn settle_verification_verdict(
+    participants: &SpeculationRoundParticipants<'_>,
+    settlement_owners: SettlementOwners<'_>,
+    verification_tokens: &[u32],
+    proposals: &[u32],
+) -> Result<SpeculationRoundOutcome, crate::InferenceEngineError> {
+    let SettlementOwners {
+        target_decoder_state,
+        draft_key_value_states,
+        random_state,
+        performance_attribution,
+    } = settlement_owners;
+    let context_length_tokens = participants.round_request.context_length_tokens;
     let checkpoint_started_at = Instant::now();
     let target_checkpoint = target_decoder_state
         .checkpoint()
@@ -131,14 +219,16 @@ pub fn run_speculative_round(
         Instant::now(),
     );
     let verification_started_at = Instant::now();
-    let verification_output = target_model.build_speculative_verification_forward(
-        &verification_tokens,
-        context_length_tokens,
-        target_decoder_state,
-        draft_configuration.target_layer_ids(),
-        VerificationLogitsMode::AllPositions,
-        performance_attribution,
-    )?;
+    let verification_output = participants
+        .target_model
+        .build_speculative_verification_forward(
+            verification_tokens,
+            context_length_tokens,
+            target_decoder_state,
+            participants.draft_configuration.target_layer_ids(),
+            VerificationLogitsMode::AllPositions,
+            performance_attribution,
+        )?;
     performance_attribution.record_operation_interval(
         PerformanceOperation::SpeculativeVerificationForward,
         verification_started_at,
@@ -151,9 +241,9 @@ pub fn run_speculative_round(
     )?;
     let token_choice_started_at = Instant::now();
     let target_chosen_token_ids = choose_tokens_per_position(
-        target_model,
+        participants.target_model,
         verification_logits,
-        round_request,
+        participants.round_request,
         random_state,
     )?;
     performance_attribution.record_operation_interval(
@@ -163,78 +253,91 @@ pub fn run_speculative_round(
     );
 
     let verification_decision =
-        decide_token_equality_verification(&proposals, &target_chosen_token_ids);
+        decide_token_equality_verification(proposals, &target_chosen_token_ids);
     if verification_decision.accepted_every_proposal {
-        let conditioning_started_at = Instant::now();
-        let finished_round = finish_accepted_round(
-            target_model,
-            draft_weights,
-            draft_configuration,
+        run_measured_accepted_round_finish(
+            participants,
             draft_key_value_states,
-            round_request,
-            &verification_output.hidden_state_taps,
-            &proposals,
-            &target_chosen_token_ids,
-            &verification_decision,
-            draft_checkpoint_offset,
-        );
-        performance_attribution.record_operation_interval(
-            PerformanceOperation::SpeculativeDraftKeyValueConditioning,
-            conditioning_started_at,
-            Instant::now(),
-        );
-        finished_round
+            &VerificationArtifacts {
+                hidden_state_taps: &verification_output.hidden_state_taps,
+                proposals,
+                target_chosen_token_ids: &target_chosen_token_ids,
+                verification_decision: &verification_decision,
+            },
+            performance_attribution,
+        )
     } else {
-        // Partial or empty acceptance: restore the transactional checkpoint
-        // and replay only the accepted prefix, which rebuilds the recurrent
-        // linear-attention states the rejection would otherwise corrupt.
-        // Every replayed proposal equals the target's choice at its
-        // position, so replay is identical under greedy and sampled
-        // verification alike.
-        let replay_started_at = Instant::now();
-        target_decoder_state
-            .restore_checkpoint(target_checkpoint)
-            .map_err(Qwen3_5ExecutionError::from)?;
-        let replay_tokens = assemble_replay_tokens(
-            round_request.bonus_token_id,
-            &proposals,
-            &verification_decision,
-        );
-        if !replay_tokens.is_empty() {
-            let _ = target_model.build_speculative_verification_forward(
+        run_measured_rejected_prefix_replay(
+            participants,
+            target_decoder_state,
+            RejectedPrefixReplay {
+                target_checkpoint,
+                proposals,
+                verification_decision: &verification_decision,
+            },
+            performance_attribution,
+        )?;
+        run_measured_accepted_round_finish(
+            participants,
+            draft_key_value_states,
+            &VerificationArtifacts {
+                hidden_state_taps: &verification_output.hidden_state_taps,
+                proposals,
+                target_chosen_token_ids: &target_chosen_token_ids,
+                verification_decision: &verification_decision,
+            },
+            performance_attribution,
+        )
+    }
+}
+
+/// Restores the transactional checkpoint and replays only the accepted
+/// prefix, keeping the rejected-prefix measurement span whole around the
+/// restore and the replay forward.
+fn run_measured_rejected_prefix_replay(
+    participants: &SpeculationRoundParticipants<'_>,
+    target_decoder_state: &mut RequestDecoderStateStack,
+    rejected_replay: RejectedPrefixReplay<'_>,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<(), crate::InferenceEngineError> {
+    let RejectedPrefixReplay {
+        target_checkpoint,
+        proposals,
+        verification_decision,
+    } = rejected_replay;
+    // Partial or empty acceptance: restore the transactional checkpoint
+    // and replay only the accepted prefix, which rebuilds the recurrent
+    // linear-attention states the rejection would otherwise corrupt.
+    // Every replayed proposal equals the target's choice at its
+    // position, so replay is identical under greedy and sampled
+    // verification alike.
+    let replay_started_at = Instant::now();
+    target_decoder_state
+        .restore_checkpoint(target_checkpoint)
+        .map_err(Qwen3_5ExecutionError::from)?;
+    let replay_tokens = assemble_replay_tokens(
+        participants.round_request.bonus_token_id,
+        proposals,
+        verification_decision,
+    );
+    if !replay_tokens.is_empty() {
+        let _ = participants
+            .target_model
+            .build_speculative_verification_forward(
                 &replay_tokens,
-                context_length_tokens,
+                participants.round_request.context_length_tokens,
                 target_decoder_state,
                 &[],
                 VerificationLogitsMode::NoLogits,
                 performance_attribution,
             )?;
-        }
-        performance_attribution.record_operation_interval(
-            PerformanceOperation::SpeculativeRejectedPrefixReplay,
-            replay_started_at,
-            Instant::now(),
-        );
-        let conditioning_started_at = Instant::now();
-        let finished_round = finish_accepted_round(
-            target_model,
-            draft_weights,
-            draft_configuration,
-            draft_key_value_states,
-            round_request,
-            &verification_output.hidden_state_taps,
-            &proposals,
-            &target_chosen_token_ids,
-            &verification_decision,
-            draft_checkpoint_offset,
-        );
-        performance_attribution.record_operation_interval(
-            PerformanceOperation::SpeculativeDraftKeyValueConditioning,
-            conditioning_started_at,
-            Instant::now(),
-        );
-        finished_round
     }
+    performance_attribution.record_operation_interval(
+        PerformanceOperation::SpeculativeRejectedPrefixReplay,
+        replay_started_at,
+        Instant::now(),
+    );
+    Ok(())
 }
 
 /// Chooses the target's token for every verification position: argmax per
@@ -357,71 +460,6 @@ fn draft_proposals(
     Ok(proposal_argmax)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn finish_accepted_round(
-    target_model: &Qwen3_5ResidentModel,
-    draft_weights: &dflash_draft::draft_weights::DFlashDraftWeights,
-    draft_configuration: &dflash_draft::draft_configuration::DFlashDraftConfiguration,
-    draft_key_value_states: &mut dflash_draft::draft_key_value_state::DFlashDraftKeyValueStates,
-    round_request: &SpeculationRoundRequest,
-    hidden_state_taps: &[MlxArray],
-    proposals: &[u32],
-    target_chosen_token_ids: &[u32],
-    verification_decision: &TokenEqualityVerificationDecision,
-    draft_checkpoint_offset: i32,
-) -> Result<SpeculationRoundOutcome, crate::InferenceEngineError> {
-    let accepted_context_growth =
-        super::verification_decisions::accepted_context_growth(verification_decision);
-    // Discard the draft's block scratch (context entries are re-derived from
-    // the target's taps, never the draft's own projections).
-    draft_key_value_states
-        .truncate_to_offset(draft_checkpoint_offset)
-        .map_err(Qwen3_5ExecutionError::from)?;
-    // Grow the draft's context key-value from the accepted prefix of the
-    // target's taps: rows zero..accepted growth of every tap.
-    let accepted_taps =
-        slice_taps_to_prefix(target_model, hidden_state_taps, accepted_context_growth)?;
-    let conditioned_states =
-        dflash_draft::target_hidden_state_conditioning::condition_target_hidden_states(
-            &target_model.runtime,
-            draft_weights,
-            &accepted_taps,
-            draft_configuration.rms_norm_epsilon(),
-        )
-        .map_err(Qwen3_5ExecutionError::from)?;
-    dflash_draft::draft_context_kv_projection::append_conditioned_context_key_values(
-        &target_model.runtime,
-        draft_weights,
-        draft_configuration,
-        draft_key_value_states,
-        &conditioned_states,
-        round_request.context_length_tokens as i32,
-    )
-    .map_err(Qwen3_5ExecutionError::from)?;
-
-    let emitted_token_ids = emitted_tokens_for_round(
-        round_request.bonus_token_id,
-        proposals,
-        target_chosen_token_ids,
-        verification_decision,
-    );
-    let next_bonus_token_id =
-        *emitted_token_ids
-            .last()
-            .ok_or(crate::InferenceEngineError::from(
-                Qwen3_5ExecutionError::InvalidInput {
-                    description: "a speculative round must emit at least the bonus token",
-                },
-            ))?;
-    Ok(SpeculationRoundOutcome {
-        emitted_token_ids,
-        next_bonus_token_id,
-        accepted_proposal_count: verification_decision.accepted_proposal_count,
-        context_length_after_round: round_request.context_length_tokens
-            + accepted_context_growth as u32,
-    })
-}
-
 fn assemble_block_token_ids(
     bonus_token_id: u32,
     mask_token_id: i32,
@@ -464,6 +502,14 @@ pub(super) fn assemble_block_token_ids_for_tests(
     speculation_token_count: usize,
 ) -> Vec<u32> {
     assemble_block_token_ids(bonus_token_id, mask_token_id, speculation_token_count)
+}
+
+#[cfg(test)]
+pub(super) fn validate_draft_context_alignment_for_tests(
+    draft_offset_tokens: i32,
+    context_length_tokens: u32,
+) -> Result<(), crate::InferenceEngineError> {
+    validate_draft_context_alignment(draft_offset_tokens, context_length_tokens)
 }
 
 fn assemble_verification_tokens(bonus_token_id: u32, proposals: &[u32]) -> Vec<u32> {
@@ -528,28 +574,4 @@ fn argmax_rows_to_host(
             })
         })
         .collect()
-}
-
-/// Slices every tap to its first `prefix_token_count` rows.
-fn slice_taps_to_prefix(
-    target_model: &Qwen3_5ResidentModel,
-    hidden_state_taps: &[MlxArray],
-    prefix_token_count: usize,
-) -> Result<Vec<MlxArray>, Qwen3_5ExecutionError> {
-    let prefix_tokens_i32 =
-        i32::try_from(prefix_token_count).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-            description: "accepted tap prefix exceeds the MLX int32 range",
-        })?;
-    let mut accepted_taps = Vec::with_capacity(hidden_state_taps.len());
-    for tap in hidden_state_taps {
-        let tap_hidden_size = tap.shape()[2];
-        let accepted_tap = target_model.runtime.slice(
-            tap,
-            &[0, 0, 0],
-            &[1, prefix_tokens_i32, tap_hidden_size],
-            &[1, 1, 1],
-        )?;
-        accepted_taps.push(accepted_tap);
-    }
-    Ok(accepted_taps)
 }

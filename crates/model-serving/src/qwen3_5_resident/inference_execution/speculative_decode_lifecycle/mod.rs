@@ -18,6 +18,7 @@
 
 pub mod engine_draft_runtime;
 pub mod speculation_round;
+mod speculation_round_finish;
 pub mod speculation_session_admission;
 pub mod speculative_decode_advance;
 pub mod verification_decisions;

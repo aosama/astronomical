@@ -1,12 +1,15 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
 use serial_test::serial;
 
 use super::process::{OutputStyle, run_command};
-use super::{TEST_BUDGET, create_run_directory, load_configuration, require_success};
+use super::{
+    TEST_BUDGET, case_finished_log_line, create_run_directory, load_configuration,
+    owned_run_evidence_directory, require_success,
+};
 use crate::process_signals::SignalPipe;
 
 #[test]
@@ -113,4 +116,67 @@ fn should_capture_output_preserve_failure_status_and_stop_only_a_timed_out_comma
     let timeout_output = run_fixture("sleep 30 & wait", "timeout.log", Duration::from_millis(50));
     assert_eq!(timeout_output.exit_code, 124);
     assert!(Path::new(&run_directory.path().join("timeout.log")).is_file());
+}
+
+#[test]
+fn should_default_evidence_directory_to_the_owned_run_directory() {
+    let run_directory = PathBuf::from("/test-runs/4242-172");
+    assert_eq!(
+        owned_run_evidence_directory(None, &run_directory).expect("default evidence directory"),
+        PathBuf::from("/test-runs/4242-172/evidence")
+    );
+}
+
+#[test]
+fn should_nest_explicit_evidence_directory_under_the_run_name() {
+    let owned_evidence_directory = owned_run_evidence_directory(
+        Some(Path::new("/shared/evidence")),
+        Path::new("/test-runs/4242-172"),
+    )
+    .expect("owned evidence directory");
+    assert_eq!(
+        owned_evidence_directory,
+        PathBuf::from("/shared/evidence/4242-172")
+    );
+}
+
+#[test]
+fn should_reject_evidence_resolution_when_the_run_directory_has_no_name() {
+    let root_error =
+        owned_run_evidence_directory(Some(Path::new("/shared/evidence")), Path::new("/"))
+            .expect_err("the filesystem root has no name");
+    assert_eq!(root_error, "the owned run directory has no name");
+    let dot_error =
+        owned_run_evidence_directory(Some(Path::new("/shared/evidence")), Path::new("."))
+            .expect_err("the dot path has no name");
+    assert_eq!(dot_error, "the owned run directory has no name");
+}
+
+#[test]
+fn should_report_mid_run_progress_and_eta_on_the_case_finished_line() {
+    // 20 elapsed seconds across 5 finished cases extrapolates to 5 more
+    // seconds per remaining case: 20 / 5 * 5 = 20 seconds of ETA.
+    let log_line = case_finished_log_line(5, 10, 20.0);
+    assert_eq!(
+        log_line,
+        "[test-run] status=case-finished completed=5 total=10 progress_percent=50.0 eta_seconds=20.0"
+    );
+}
+
+#[test]
+fn should_format_the_final_case_with_full_progress_and_zero_eta() {
+    let log_line = case_finished_log_line(10, 10, 40.0);
+    assert_eq!(
+        log_line,
+        "[test-run] status=case-finished completed=10 total=10 progress_percent=100.0 eta_seconds=0.0"
+    );
+}
+
+#[test]
+fn should_format_fractional_progress_rounded_to_one_decimal() {
+    let log_line = case_finished_log_line(1, 3, 2.0);
+    assert_eq!(
+        log_line,
+        "[test-run] status=case-finished completed=1 total=3 progress_percent=33.3 eta_seconds=4.0"
+    );
 }

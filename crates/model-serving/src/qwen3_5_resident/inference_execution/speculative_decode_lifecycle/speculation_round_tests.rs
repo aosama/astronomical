@@ -2,7 +2,7 @@
 
 use super::speculation_round::{
     assemble_block_token_ids_for_tests, assemble_replay_tokens_for_tests,
-    assemble_verification_tokens_for_tests,
+    assemble_verification_tokens_for_tests, validate_draft_context_alignment_for_tests,
 };
 use super::verification_decisions::{
     TokenEqualityVerificationDecision, decide_token_equality_verification,
@@ -56,4 +56,30 @@ fn should_replay_the_whole_block_on_full_acceptance() {
     let replay_tokens = assemble_replay_tokens_for_tests(6, &proposals, &decision);
 
     assert_eq!(replay_tokens, vec![6, 7, 8, 9]);
+}
+
+#[test]
+fn should_accept_a_draft_state_standing_exactly_at_the_context_boundary() {
+    let alignment = validate_draft_context_alignment_for_tests(12, 12);
+
+    assert!(alignment.is_ok());
+}
+
+#[test]
+fn should_reject_a_draft_state_offset_from_the_context_boundary() {
+    let alignment = validate_draft_context_alignment_for_tests(11, 12);
+
+    // The rejection names the invariant, so a silent offset shift is
+    // diagnosable from the error alone.
+    assert_eq!(
+        alignment.unwrap_err().to_string(),
+        "fatal engine error: invalid Qwen3.5 model input: the draft key-value context length must match the target context length before a speculative round"
+    );
+}
+
+#[test]
+fn should_accept_an_empty_context_at_the_zero_boundary() {
+    let alignment = validate_draft_context_alignment_for_tests(0, 0);
+
+    assert!(alignment.is_ok());
 }
