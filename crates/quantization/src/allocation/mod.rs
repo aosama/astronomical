@@ -174,44 +174,18 @@ impl AllocationResult {
 /// 9. Apply the block-run guard; count its upgrades.
 /// 10. Build the decisions, achieved bits-per-weight, counts, and the
 ///     estimated size `sum(bits * parameters) / 8`.
-#[expect(clippy::too_many_lines)]
 pub fn optimize_mixed_precision(
     table: &SensitivityTable,
     constraints: &AllocationConstraints,
 ) -> Result<AllocationResult, QuantizationError> {
     // 1. Empty table → empty result with zeroed figures.
     if table.results.is_empty() {
-        return Ok(AllocationResult {
-            decisions: Vec::new(),
-            target_bits_per_weight: constraints.target_bits_per_weight,
-            achieved_bits_per_weight: 0.0,
-            module_count_at_highest_width: 0,
-            module_count_at_lowest_width: 0,
-            total_logical_parameter_count: 0,
-            estimated_weight_bytes: 0,
-            floor_upgrade_count: 0,
-            run_guard_upgrade_count: 0,
-            non_finite_module_names: Vec::new(),
-        });
+        return Ok(empty_allocation_result(constraints));
     }
 
-    // 2. Resolve the ladder: the caller's, else the union of the table's
-    //    observed widths (ascending, de-duplicated). A real sweep always yields
-    //    at least one width, so this inference is non-empty; a table whose every
-    //    result has no measurements is degenerate and errors here rather than
-    //    falling back to OptiQ's `[low_bits, high_bits]` = `[4, 8]` shim,
-    //    because an empty sweep carries no information to quantize from.
-    let candidate_bit_widths = match &constraints.candidate_bit_widths {
-        Some(ladder) => ladder.clone(),
-        None => {
-            let widths: Vec<u32> = table
-                .observed_bit_widths()
-                .iter()
-                .map(|width| width.bits())
-                .collect();
-            CandidateBitWidths::new(&widths)?
-        }
-    };
+    // 2. Resolve the ladder: the caller's, else the table's observed widths
+    //    (see `resolve_candidate_bit_widths` for the degenerate-table case).
+    let candidate_bit_widths = resolve_candidate_bit_widths(table, constraints)?;
     let lowest = candidate_bit_widths.lowest();
     let highest = candidate_bit_widths.highest();
     let second_lowest = candidate_bit_widths.second_lowest();
@@ -230,27 +204,19 @@ pub fn optimize_mixed_precision(
     );
 
     // 4. Seed every module at the lowest width.
-    let mut allocation: BTreeMap<String, BitWidth> = table
-        .results
-        .iter()
-        .map(|result| (result.module_name.clone(), lowest))
-        .collect();
+    let mut allocation = seed_allocation_at_lowest_width(table, lowest);
 
     // 5. Block-aware floor, before any NaN cleaning, so it ranks on the raw
-    //    measurements. It only runs with a floor budget and a multi-width
-    //    ladder (a single-width ladder has no `second_lowest` to promote to).
-    let mut floor_upgrade_count = 0usize;
-    if constraints.floor_components_per_block > 0
-        && let Some(second) = second_lowest
-    {
-        floor_upgrade_count = block_floor::apply_block_aware_floor(
-            &mut allocation,
-            &table.results,
+    //    measurements.
+    let floor_upgrade_count = apply_block_aware_floor_if_enabled(
+        &mut allocation,
+        &table.results,
+        constraints,
+        BlockStageWidths {
             lowest,
-            second,
-            constraints.floor_components_per_block,
-        );
-    }
+            second_lowest,
+        },
+    );
 
     // 6. Replace NaN measurements with a large finite value so the greedy pass
     //    sees them as maximally sensitive; record the affected names.
@@ -263,14 +229,151 @@ pub fn optimize_mixed_precision(
         .map(|result| effective_sensitivity_result(result, &protected))
         .collect();
 
-    // 8. Seed the heap with each module's next upgrade.
+    // 8. Seed the heap with each module's next upgrade, then greedy-pop until
+    //    the running bits-per-weight reaches the target.
+    run_greedy_knapsack_pass(
+        &mut allocation,
+        GreedyPassInputs {
+            results: &results,
+            effective_results: &effective_results,
+            candidate_bit_widths: &candidate_bit_widths,
+            target_bits_per_weight: constraints.target_bits_per_weight,
+        },
+    );
+
+    // 9. Block-run guard, the post-greedy backstop.
+    let run_guard_upgrade_count = apply_block_run_guard_if_enabled(
+        &mut allocation,
+        &results,
+        constraints,
+        BlockStageWidths {
+            lowest,
+            second_lowest,
+        },
+    );
+
+    // 10. Build the decisions and the summary figures, in the sweep's order.
+    Ok(build_allocation_result(AllocationSummaryInputs {
+        results,
+        allocation,
+        group_size: constraints.group_size,
+        target_bits_per_weight: constraints.target_bits_per_weight,
+        lowest,
+        highest,
+        floor_upgrade_count,
+        run_guard_upgrade_count,
+        non_finite_module_names,
+    }))
+}
+
+/// The step-1 result: no modules, every figure zeroed, only the requested
+/// target carried through so callers can print it uniformly.
+fn empty_allocation_result(constraints: &AllocationConstraints) -> AllocationResult {
+    AllocationResult {
+        decisions: Vec::new(),
+        target_bits_per_weight: constraints.target_bits_per_weight,
+        achieved_bits_per_weight: 0.0,
+        module_count_at_highest_width: 0,
+        module_count_at_lowest_width: 0,
+        total_logical_parameter_count: 0,
+        estimated_weight_bytes: 0,
+        floor_upgrade_count: 0,
+        run_guard_upgrade_count: 0,
+        non_finite_module_names: Vec::new(),
+    }
+}
+
+/// Step 2: resolve the ladder — the caller's, else the union of the table's
+/// observed widths (ascending, de-duplicated). A real sweep always yields at
+/// least one width, so this inference is non-empty; a table whose every
+/// result has no measurements is degenerate and errors here rather than
+/// falling back to OptiQ's `[low_bits, high_bits]` = `[4, 8]` shim,
+/// because an empty sweep carries no information to quantize from.
+fn resolve_candidate_bit_widths(
+    table: &SensitivityTable,
+    constraints: &AllocationConstraints,
+) -> Result<CandidateBitWidths, QuantizationError> {
+    match &constraints.candidate_bit_widths {
+        Some(ladder) => Ok(ladder.clone()),
+        None => {
+            let widths: Vec<u32> = table
+                .observed_bit_widths()
+                .iter()
+                .map(|width| width.bits())
+                .collect();
+            CandidateBitWidths::new(&widths)
+        }
+    }
+}
+
+/// Step 4: the starting state — every module seeded at the lowest width so
+/// the greedy pass can only ever raise widths.
+fn seed_allocation_at_lowest_width(
+    table: &SensitivityTable,
+    lowest: BitWidth,
+) -> BTreeMap<String, BitWidth> {
+    table
+        .results
+        .iter()
+        .map(|result| (result.module_name.clone(), lowest))
+        .collect()
+}
+
+/// The ladder-derived widths the two block-aware stages promote to, grouped
+/// so each stage keeps a short signature.
+#[derive(Clone, Copy)]
+struct BlockStageWidths {
+    lowest: BitWidth,
+    second_lowest: Option<BitWidth>,
+}
+
+/// Step 5: the block-aware floor. It only runs with a floor budget and a
+/// multi-width ladder (a single-width ladder has no `second_lowest` to
+/// promote to).
+fn apply_block_aware_floor_if_enabled(
+    allocation: &mut BTreeMap<String, BitWidth>,
+    results: &[SensitivityResult],
+    constraints: &AllocationConstraints,
+    widths: BlockStageWidths,
+) -> usize {
+    let mut floor_upgrade_count = 0usize;
+    if constraints.floor_components_per_block > 0
+        && let Some(second) = widths.second_lowest
+    {
+        floor_upgrade_count = block_floor::apply_block_aware_floor(
+            allocation,
+            results,
+            widths.lowest,
+            second,
+            constraints.floor_components_per_block,
+        );
+    }
+    floor_upgrade_count
+}
+
+/// The heap-pass inputs, grouped so the pass takes the mutable allocation plus
+/// one named argument instead of five loose parameters.
+struct GreedyPassInputs<'a> {
+    results: &'a [SensitivityResult],
+    effective_results: &'a BTreeMap<String, SensitivityResult>,
+    candidate_bit_widths: &'a CandidateBitWidths,
+    target_bits_per_weight: f64,
+}
+
+/// Step 8: seed the heap with each module's next upgrade, then pop until the
+/// running bits-per-weight reaches the target, re-pushing the upgraded
+/// module's next step. Stale heap entries (module already moved) are skipped.
+fn run_greedy_knapsack_pass(
+    allocation: &mut BTreeMap<String, BitWidth>,
+    pass: GreedyPassInputs<'_>,
+) {
     let mut heap: BinaryHeap<knapsack::UpgradeCandidate> = BinaryHeap::new();
-    for result in &results {
+    for result in pass.results {
         let current = *allocation
             .get(&result.module_name)
             .expect("every module is seeded at the lowest width");
-        if let Some(effective) = effective_results.get(&result.module_name) {
-            knapsack::push_next_upgrade(&mut heap, effective, current, &candidate_bit_widths);
+        if let Some(effective) = pass.effective_results.get(&result.module_name) {
+            knapsack::push_next_upgrade(&mut heap, effective, current, pass.candidate_bit_widths);
         }
     }
 
@@ -278,8 +381,8 @@ pub fn optimize_mixed_precision(
     // bits-per-weight meets the target. The target is a floor, not a cap, so
     // the discrete grid's slight overshoot is accepted.
     while !heap.is_empty()
-        && bits_per_weight::bits_per_weight_of_allocation(&allocation, &results)
-            < constraints.target_bits_per_weight
+        && bits_per_weight::bits_per_weight_of_allocation(allocation, pass.results)
+            < pass.target_bits_per_weight
     {
         let candidate = heap
             .pop()
@@ -292,34 +395,97 @@ pub fn optimize_mixed_precision(
             continue;
         }
         allocation.insert(candidate.module_name.clone(), candidate.next_bit_width);
-        if let Some(effective) = effective_results.get(&candidate.module_name) {
+        if let Some(effective) = pass.effective_results.get(&candidate.module_name) {
             knapsack::push_next_upgrade(
                 &mut heap,
                 effective,
                 candidate.next_bit_width,
-                &candidate_bit_widths,
+                pass.candidate_bit_widths,
             );
         }
     }
+}
 
-    // 9. Block-run guard, the post-greedy backstop. Same single-width-ladder
-    //    guard as the floor: it needs a `second_lowest` to promote to.
+/// Step 9: the block-run guard, the post-greedy backstop. Same
+/// single-width-ladder guard as the floor: it needs a `second_lowest` to
+/// promote to.
+fn apply_block_run_guard_if_enabled(
+    allocation: &mut BTreeMap<String, BitWidth>,
+    results: &[SensitivityResult],
+    constraints: &AllocationConstraints,
+    widths: BlockStageWidths,
+) -> usize {
     let mut run_guard_upgrade_count = 0usize;
     if constraints.maximum_low_bit_block_run > 0
-        && let Some(second) = second_lowest
+        && let Some(second) = widths.second_lowest
     {
         run_guard_upgrade_count = block_run_guard::enforce_block_run_limit(
-            &mut allocation,
-            &results,
-            lowest,
+            allocation,
+            results,
+            widths.lowest,
             second,
             constraints.maximum_low_bit_block_run,
         );
     }
+    run_guard_upgrade_count
+}
 
-    // 10. Build the decisions and the summary figures, in the sweep's order.
-    let group_size = constraints.group_size;
-    let decisions: Vec<ModuleQuantizationDecision> = results
+/// The step-10 inputs, grouped so the builder takes one argument instead of
+/// eight loose parameters.
+struct AllocationSummaryInputs {
+    results: Vec<SensitivityResult>,
+    allocation: BTreeMap<String, BitWidth>,
+    group_size: GroupSize,
+    target_bits_per_weight: f64,
+    lowest: BitWidth,
+    highest: BitWidth,
+    floor_upgrade_count: usize,
+    run_guard_upgrade_count: usize,
+    non_finite_module_names: Vec<String>,
+}
+
+/// Step 10: build the decisions, the achieved bits-per-weight, the width
+/// counts, and the estimated size, then assemble the result.
+fn build_allocation_result(inputs: AllocationSummaryInputs) -> AllocationResult {
+    let decisions = build_decisions(&inputs.results, &inputs.allocation, inputs.group_size);
+
+    let achieved_bits_per_weight = bits_per_weight::bits_per_weight_of_decisions(&decisions);
+    let module_count_at_highest_width = decisions
+        .iter()
+        .filter(|decision| decision.bit_width == inputs.highest)
+        .count();
+    let module_count_at_lowest_width = decisions
+        .iter()
+        .filter(|decision| decision.bit_width == inputs.lowest)
+        .count();
+    let total_logical_parameter_count: u64 = inputs
+        .results
+        .iter()
+        .map(|result| result.logical_parameter_count)
+        .sum();
+    let estimated_weight_bytes = bits_per_weight::estimated_weight_bytes(&decisions);
+
+    AllocationResult {
+        decisions,
+        target_bits_per_weight: inputs.target_bits_per_weight,
+        achieved_bits_per_weight,
+        module_count_at_highest_width,
+        module_count_at_lowest_width,
+        total_logical_parameter_count,
+        estimated_weight_bytes,
+        floor_upgrade_count: inputs.floor_upgrade_count,
+        run_guard_upgrade_count: inputs.run_guard_upgrade_count,
+        non_finite_module_names: inputs.non_finite_module_names,
+    }
+}
+
+/// The per-module decisions, in the sweep's (input results') order.
+fn build_decisions(
+    results: &[SensitivityResult],
+    allocation: &BTreeMap<String, BitWidth>,
+    group_size: GroupSize,
+) -> Vec<ModuleQuantizationDecision> {
+    results
         .iter()
         .map(|result| ModuleQuantizationDecision {
             module_name: result.module_name.clone(),
@@ -329,35 +495,7 @@ pub fn optimize_mixed_precision(
             group_size,
             logical_parameter_count: result.logical_parameter_count,
         })
-        .collect();
-
-    let achieved_bits_per_weight = bits_per_weight::bits_per_weight_of_decisions(&decisions);
-    let module_count_at_highest_width = decisions
-        .iter()
-        .filter(|decision| decision.bit_width == highest)
-        .count();
-    let module_count_at_lowest_width = decisions
-        .iter()
-        .filter(|decision| decision.bit_width == lowest)
-        .count();
-    let total_logical_parameter_count: u64 = results
-        .iter()
-        .map(|result| result.logical_parameter_count)
-        .sum();
-    let estimated_weight_bytes = bits_per_weight::estimated_weight_bytes(&decisions);
-
-    Ok(AllocationResult {
-        decisions,
-        target_bits_per_weight: constraints.target_bits_per_weight,
-        achieved_bits_per_weight,
-        module_count_at_highest_width,
-        module_count_at_lowest_width,
-        total_logical_parameter_count,
-        estimated_weight_bytes,
-        floor_upgrade_count,
-        run_guard_upgrade_count,
-        non_finite_module_names,
-    })
+        .collect()
 }
 
 /// Replaces NaN KL measurements with a large finite value so the greedy pass
