@@ -262,74 +262,95 @@ impl PrismHadamardWeights {
     }
 }
 
-/// Loads every family tensor from the pack's retained weights file map.
-#[expect(clippy::too_many_lines)]
+/// The tensor-reading context one family pack loads through: the runtime for
+/// casting and evaluation, the safetensors map, and the reviewed activation
+/// dtype. The former load closures become its methods.
+struct FamilyTensorSource<'a> {
+    runtime: &'a MlxRuntime,
+    loaded_tensors: &'a MlxSafetensors,
+    activation_dtype: mlx_c_rust::MlxDtype,
+}
+
+impl<'a> FamilyTensorSource<'a> {
+    fn take(&self, tensor_name: &str) -> Result<MlxArray, PrismHadamardModelError> {
+        self.loaded_tensors.tensor(tensor_name).map_err(|source| {
+            PrismHadamardModelError::TensorLookup {
+                tensor_name: tensor_name.to_owned(),
+                source,
+            }
+        })
+    }
+
+    fn take_cast(&self, tensor_name: &str) -> Result<MlxArray, PrismHadamardModelError> {
+        let array = self.take(tensor_name)?;
+        self.runtime
+            .astype(&array, self.activation_dtype)
+            .map_err(PrismHadamardModelError::WeightCasting)
+    }
+
+    fn packed_projection(
+        &self,
+        module_path: &str,
+    ) -> Result<PackedProjection, PrismHadamardModelError> {
+        let stem = format!("language_model.{module_path}");
+        let packed_weight = self.take(&format!("{stem}.weight"))?;
+        let quantization_scales = self.take(&format!("{stem}.scales"))?;
+        let quantization_biases = self.take(&format!("{stem}.biases"))?;
+        let packed_shape = packed_weight.shape();
+        let input_width = packed_shape[packed_shape.len() - 1] * 32 / QUANTIZATION_BITS;
+        Ok(PackedProjection {
+            packed_weight,
+            quantization_scales,
+            quantization_biases,
+            input_width,
+        })
+    }
+
+    fn rate_projection(
+        &self,
+        layer_prefix: &str,
+    ) -> Result<GatedDeltaRateProjection, PrismHadamardModelError> {
+        let update_rate_weight =
+            self.take_cast(&format!("{layer_prefix}.linear_attn.in_proj_b.weight"))?;
+        let decay_interval_weight =
+            self.take_cast(&format!("{layer_prefix}.linear_attn.in_proj_a.weight"))?;
+        let head_count = update_rate_weight.shape()[0];
+        let fused_weight = self
+            .runtime
+            .concatenate_axis(&[&update_rate_weight, &decay_interval_weight], 0)
+            .map_err(PrismHadamardModelError::WeightCasting)?;
+        let transposed_weight = self
+            .runtime
+            .transpose_axes(&fused_weight, &[1, 0])
+            .and_then(|transposed| self.runtime.build_contiguous_row_major_copy(&transposed))
+            .map_err(PrismHadamardModelError::WeightCasting)?;
+        self.runtime
+            .evaluate_arrays(&[&transposed_weight])
+            .map_err(PrismHadamardModelError::WeightCasting)?;
+        Ok(GatedDeltaRateProjection {
+            transposed_weight,
+            head_count,
+        })
+    }
+}
+
 pub(crate) fn load_family_weights(
     runtime: &MlxRuntime,
     pack: &ValidatedFoldedPack,
     loaded_tensors: &MlxSafetensors,
 ) -> Result<PrismHadamardWeights, PrismHadamardModelError> {
     let text = pack.config().text();
-    let activation_dtype = super::fwht::activation_dtype();
-
-    let take = |tensor_name: &str| -> Result<MlxArray, PrismHadamardModelError> {
-        loaded_tensors
-            .tensor(tensor_name)
-            .map_err(|source| PrismHadamardModelError::TensorLookup {
-                tensor_name: tensor_name.to_owned(),
-                source,
-            })
+    let tensor_source = FamilyTensorSource {
+        runtime,
+        loaded_tensors,
+        activation_dtype: super::fwht::activation_dtype(),
     };
-    let take_cast = |tensor_name: &str| -> Result<MlxArray, PrismHadamardModelError> {
-        let array = take(tensor_name)?;
-        runtime
-            .astype(&array, activation_dtype)
-            .map_err(PrismHadamardModelError::WeightCasting)
-    };
-
-    let packed_projection =
-        |module_path: &str| -> Result<PackedProjection, PrismHadamardModelError> {
-            let stem = format!("language_model.{module_path}");
-            let packed_weight = take(&format!("{stem}.weight"))?;
-            let quantization_scales = take(&format!("{stem}.scales"))?;
-            let quantization_biases = take(&format!("{stem}.biases"))?;
-            let packed_shape = packed_weight.shape();
-            let input_width = packed_shape[packed_shape.len() - 1] * 32 / QUANTIZATION_BITS;
-            Ok(PackedProjection {
-                packed_weight,
-                quantization_scales,
-                quantization_biases,
-                input_width,
-            })
-        };
-    let rate_projection =
-        |layer_prefix: &str| -> Result<GatedDeltaRateProjection, PrismHadamardModelError> {
-            let update_rate_weight =
-                take_cast(&format!("{layer_prefix}.linear_attn.in_proj_b.weight"))?;
-            let decay_interval_weight =
-                take_cast(&format!("{layer_prefix}.linear_attn.in_proj_a.weight"))?;
-            let head_count = update_rate_weight.shape()[0];
-            let fused_weight = runtime
-                .concatenate_axis(&[&update_rate_weight, &decay_interval_weight], 0)
-                .map_err(PrismHadamardModelError::WeightCasting)?;
-            let transposed_weight = runtime
-                .transpose_axes(&fused_weight, &[1, 0])
-                .and_then(|transposed| runtime.build_contiguous_row_major_copy(&transposed))
-                .map_err(PrismHadamardModelError::WeightCasting)?;
-            runtime
-                .evaluate_arrays(&[&transposed_weight])
-                .map_err(PrismHadamardModelError::WeightCasting)?;
-            Ok(GatedDeltaRateProjection {
-                transposed_weight,
-                head_count,
-            })
-        };
 
     let embedding_stem = "language_model.model.embed_tokens";
     let embedding = PackedEmbedding {
-        packed_weight: take(&format!("{embedding_stem}.weight"))?,
-        quantization_scales: take(&format!("{embedding_stem}.scales"))?,
-        quantization_biases: take(&format!("{embedding_stem}.biases"))?,
+        packed_weight: tensor_source.take(&format!("{embedding_stem}.weight"))?,
+        quantization_scales: tensor_source.take(&format!("{embedding_stem}.scales"))?,
+        quantization_biases: tensor_source.take(&format!("{embedding_stem}.biases"))?,
     };
 
     let mut decoder_layers = Vec::with_capacity(text.num_hidden_layers as usize);
@@ -338,75 +359,134 @@ pub(crate) fn load_family_weights(
         Vec::with_capacity(text.num_hidden_layers as usize);
     for (layer_index, layer_type) in text.layer_types.iter().enumerate() {
         let layer_prefix = format!("language_model.model.layers.{layer_index}");
-        input_normalization_weights.push(take_cast(&format!(
-            "{layer_prefix}.input_layernorm.weight"
-        ))?);
-        post_attention_normalization_weights.push(take_cast(&format!(
-            "{layer_prefix}.post_attention_layernorm.weight"
-        ))?);
-        let mlp = DenseMlpWeights {
-            gate_and_up: FusedPackedProjection::fuse(
-                runtime,
-                [
-                    packed_projection(&format!("model.layers.{layer_index}.mlp.gate_proj"))?,
-                    packed_projection(&format!("model.layers.{layer_index}.mlp.up_proj"))?,
-                ],
-            )
-            .map_err(PrismHadamardModelError::WeightCasting)?,
-            down: packed_projection(&format!("model.layers.{layer_index}.mlp.down_proj"))?,
-        };
-        let attention = match layer_type.as_str() {
-            "linear_attention" => DecoderLayerAttentionWeights::Linear(LinearLayerWeights {
-                query_key_value_and_gate: FusedPackedProjection::fuse(
-                    runtime,
-                    [
-                        packed_projection(&format!(
-                            "model.layers.{layer_index}.linear_attn.in_proj_qkv"
-                        ))?,
-                        packed_projection(&format!(
-                            "model.layers.{layer_index}.linear_attn.in_proj_z"
-                        ))?,
-                    ],
-                )
-                .map_err(PrismHadamardModelError::WeightCasting)?,
-                output: packed_projection(&format!(
-                    "model.layers.{layer_index}.linear_attn.out_proj"
-                ))?,
-                rates: rate_projection(&layer_prefix)?,
-                convolution: take_cast(&format!("{layer_prefix}.linear_attn.conv1d.weight"))?,
-                decay_rate_logarithm: take_cast(&format!("{layer_prefix}.linear_attn.A_log"))?,
-                decay_interval_bias: take_cast(&format!("{layer_prefix}.linear_attn.dt_bias"))?,
-                normalization: take_cast(&format!("{layer_prefix}.linear_attn.norm.weight"))?,
-            }),
-            "full_attention" => DecoderLayerAttentionWeights::Full(FullLayerWeights {
-                query_key_value: FusedPackedProjection::fuse(
-                    runtime,
-                    [
-                        packed_projection(&format!("model.layers.{layer_index}.self_attn.q_proj"))?,
-                        packed_projection(&format!("model.layers.{layer_index}.self_attn.k_proj"))?,
-                        packed_projection(&format!("model.layers.{layer_index}.self_attn.v_proj"))?,
-                    ],
-                )
-                .map_err(PrismHadamardModelError::WeightCasting)?,
-                output: packed_projection(&format!("model.layers.{layer_index}.self_attn.o_proj"))?,
-                query_normalization: take_cast(&format!("{layer_prefix}.self_attn.q_norm.weight"))?,
-                key_normalization: take_cast(&format!("{layer_prefix}.self_attn.k_norm.weight"))?,
-            }),
-            other_layer_type => {
-                return Err(PrismHadamardModelError::UnsupportedLayerType {
-                    layer_type: other_layer_type.to_owned(),
-                });
-            }
-        };
-        decoder_layers.push(DecoderLayerWeights { attention, mlp });
+        input_normalization_weights
+            .push(tensor_source.take_cast(&format!("{layer_prefix}.input_layernorm.weight"))?);
+        post_attention_normalization_weights.push(
+            tensor_source.take_cast(&format!("{layer_prefix}.post_attention_layernorm.weight"))?,
+        );
+        decoder_layers.push(load_decoder_layer_weights(
+            &tensor_source,
+            layer_index,
+            layer_type.as_str(),
+            &layer_prefix,
+        )?);
     }
 
-    let final_normalization = take_cast("language_model.model.norm.weight")?;
-    let language_model_head = packed_projection("lm_head")?;
+    let final_normalization = tensor_source.take_cast("language_model.model.norm.weight")?;
+    let language_model_head = tensor_source.packed_projection("lm_head")?;
 
     // Materialize every fused projection in one evaluation: one
     // synchronization for the whole pack instead of one per layer, and the
     // concatenations never enter a forward graph.
+    materialize_stacked_projection_arrays(runtime, &decoder_layers)?;
+
+    let hadamard_contract = pack.hadamard_contract();
+    let rotations_by_width = register_family_rotation_widths(
+        runtime,
+        hadamard_contract,
+        text.hidden_size as i32,
+        language_model_head.input_width(),
+        &decoder_layers,
+    )?;
+
+    Ok(PrismHadamardWeights {
+        embedding,
+        decoder_layers,
+        input_normalization_weights,
+        post_attention_normalization_weights,
+        final_normalization,
+        language_model_head,
+        rotations_by_width,
+    })
+}
+
+/// Loads one decoder layer's attention (linear or full, by the layer-type
+/// declaration) and its dense MLP.
+fn load_decoder_layer_weights(
+    tensor_source: &FamilyTensorSource<'_>,
+    layer_index: usize,
+    layer_type: &str,
+    layer_prefix: &str,
+) -> Result<DecoderLayerWeights, PrismHadamardModelError> {
+    let mlp = DenseMlpWeights {
+        gate_and_up: FusedPackedProjection::fuse(
+            tensor_source.runtime,
+            [
+                tensor_source
+                    .packed_projection(&format!("model.layers.{layer_index}.mlp.gate_proj"))?,
+                tensor_source
+                    .packed_projection(&format!("model.layers.{layer_index}.mlp.up_proj"))?,
+            ],
+        )
+        .map_err(PrismHadamardModelError::WeightCasting)?,
+        down: tensor_source
+            .packed_projection(&format!("model.layers.{layer_index}.mlp.down_proj"))?,
+    };
+    let attention = match layer_type {
+        "linear_attention" => DecoderLayerAttentionWeights::Linear(LinearLayerWeights {
+            query_key_value_and_gate: FusedPackedProjection::fuse(
+                tensor_source.runtime,
+                [
+                    tensor_source.packed_projection(&format!(
+                        "model.layers.{layer_index}.linear_attn.in_proj_qkv"
+                    ))?,
+                    tensor_source.packed_projection(&format!(
+                        "model.layers.{layer_index}.linear_attn.in_proj_z"
+                    ))?,
+                ],
+            )
+            .map_err(PrismHadamardModelError::WeightCasting)?,
+            output: tensor_source
+                .packed_projection(&format!("model.layers.{layer_index}.linear_attn.out_proj"))?,
+            rates: tensor_source.rate_projection(layer_prefix)?,
+            convolution: tensor_source
+                .take_cast(&format!("{layer_prefix}.linear_attn.conv1d.weight"))?,
+            decay_rate_logarithm: tensor_source
+                .take_cast(&format!("{layer_prefix}.linear_attn.A_log"))?,
+            decay_interval_bias: tensor_source
+                .take_cast(&format!("{layer_prefix}.linear_attn.dt_bias"))?,
+            normalization: tensor_source
+                .take_cast(&format!("{layer_prefix}.linear_attn.norm.weight"))?,
+        }),
+        "full_attention" => DecoderLayerAttentionWeights::Full(FullLayerWeights {
+            query_key_value: FusedPackedProjection::fuse(
+                tensor_source.runtime,
+                [
+                    tensor_source.packed_projection(&format!(
+                        "model.layers.{layer_index}.self_attn.q_proj"
+                    ))?,
+                    tensor_source.packed_projection(&format!(
+                        "model.layers.{layer_index}.self_attn.k_proj"
+                    ))?,
+                    tensor_source.packed_projection(&format!(
+                        "model.layers.{layer_index}.self_attn.v_proj"
+                    ))?,
+                ],
+            )
+            .map_err(PrismHadamardModelError::WeightCasting)?,
+            output: tensor_source
+                .packed_projection(&format!("model.layers.{layer_index}.self_attn.o_proj"))?,
+            query_normalization: tensor_source
+                .take_cast(&format!("{layer_prefix}.self_attn.q_norm.weight"))?,
+            key_normalization: tensor_source
+                .take_cast(&format!("{layer_prefix}.self_attn.k_norm.weight"))?,
+        }),
+        other_layer_type => {
+            return Err(PrismHadamardModelError::UnsupportedLayerType {
+                layer_type: other_layer_type.to_owned(),
+            });
+        }
+    };
+    Ok(DecoderLayerWeights { attention, mlp })
+}
+
+/// Materializes every fused projection in one evaluation: one
+/// synchronization for the whole pack instead of one per layer, and the
+/// concatenations never enter a forward graph.
+fn materialize_stacked_projection_arrays(
+    runtime: &MlxRuntime,
+    decoder_layers: &[DecoderLayerWeights],
+) -> Result<(), PrismHadamardModelError> {
     let stacked_arrays: Vec<&MlxArray> = decoder_layers
         .iter()
         .flat_map(|decoder_layer| {
@@ -426,8 +506,19 @@ pub(crate) fn load_family_weights(
     runtime
         .evaluate_arrays(&stacked_arrays)
         .map_err(PrismHadamardModelError::WeightCasting)?;
+    Ok(())
+}
 
-    let hadamard_contract = pack.hadamard_contract();
+/// Registers one Hadamard rotation per distinct activation width the family
+/// touches: the text hidden size, the language-model head's input width, and
+/// every layer's projection widths.
+fn register_family_rotation_widths(
+    runtime: &MlxRuntime,
+    hadamard_contract: &crate::prism_hadamard_qwen35::hadamard::HadamardContract,
+    text_hidden_size: i32,
+    language_model_head_input_width: i32,
+    decoder_layers: &[DecoderLayerWeights],
+) -> Result<BTreeMap<i32, HadamardRotation>, PrismHadamardModelError> {
     let mut rotations_by_width = BTreeMap::new();
     let mut register_width = |width: i32| -> Result<(), PrismHadamardModelError> {
         if rotations_by_width.contains_key(&width) {
@@ -450,9 +541,9 @@ pub(crate) fn load_family_weights(
         rotations_by_width.insert(width, rotation);
         Ok(())
     };
-    register_width(text.hidden_size as i32)?;
-    register_width(language_model_head.input_width())?;
-    for decoder_layer in &decoder_layers {
+    register_width(text_hidden_size)?;
+    register_width(language_model_head_input_width)?;
+    for decoder_layer in decoder_layers {
         let input_widths: Vec<i32> = match &decoder_layer.attention {
             DecoderLayerAttentionWeights::Linear(linear_layer) => vec![
                 linear_layer.query_key_value_and_gate.input_width(),
@@ -470,18 +561,8 @@ pub(crate) fn load_family_weights(
             register_width(input_width)?;
         }
     }
-
-    Ok(PrismHadamardWeights {
-        embedding,
-        decoder_layers,
-        input_normalization_weights,
-        post_attention_normalization_weights,
-        final_normalization,
-        language_model_head,
-        rotations_by_width,
-    })
+    Ok(rotations_by_width)
 }
-
 /// The GDN query/key normalization scales folded into per-channel weights,
 /// mirroring the core's construction: every channel carries `1/hd` for
 /// queries and `1/sqrt(hd)` for keys through the activation dtype rounding.
