@@ -13,7 +13,28 @@ use super::{
 };
 use crate::phase::MemoryPhase;
 
-#[expect(clippy::too_many_lines)]
+/// The per-layer planning facts every foundation-and-overlay stage reads.
+struct FoundationOverlayLayerFacts<'a> {
+    geometries: &'a [ExpertLayerGeometry],
+    current_by_layer: &'a [Option<&'a CurrentExpertLayerResidency>],
+    routed_floor_bytes: &'a [u64],
+}
+
+/// The complete-layer foundation chosen inside the retained-bytes ceiling.
+#[derive(Debug)]
+struct CompleteLayerSelection {
+    complete_targets: Vec<bool>,
+    foundation_and_floor_bytes: u64,
+}
+
+/// The preserved and newly retained byte charges of the planned targets.
+#[derive(Debug)]
+struct LayerResidencyAccounting {
+    preserved_bytes: u64,
+    new_retained_bytes: u64,
+    layer_targets: Vec<ExpertLayerResidencyTarget>,
+}
+
 pub(super) fn foundation_and_overlay_plan(
     phase: MemoryPhase,
     ceiling_bytes: u64,
@@ -22,16 +43,79 @@ pub(super) fn foundation_and_overlay_plan(
     routed_floor_bytes: &[u64],
     all_layer_routed_floor_bytes: u64,
 ) -> Result<ExpertResidencyPlan, ExpertResidencyPlanError> {
-    let mut complete_targets = vec![false; geometries.len()];
+    let layer_facts = FoundationOverlayLayerFacts {
+        geometries,
+        current_by_layer,
+        routed_floor_bytes,
+    };
+    let complete_selection = select_complete_layers_within_ceiling(
+        &layer_facts,
+        ceiling_bytes,
+        all_layer_routed_floor_bytes,
+    )?;
+    let preserve_partial = select_preserved_partial_layers(
+        &layer_facts,
+        ceiling_bytes,
+        complete_selection.foundation_and_floor_bytes,
+        &complete_selection.complete_targets,
+    );
+    let residency_accounting = account_planned_layer_charges(
+        &layer_facts,
+        &complete_selection.complete_targets,
+        &preserve_partial,
+    )?;
+    let reserved_routed_overlay_bytes =
+        validation::checked_sum(routed_floor_bytes.iter().enumerate().filter_map(
+            |(layer_index, floor_bytes)| {
+                (!complete_selection.complete_targets[layer_index]).then_some(*floor_bytes)
+            },
+        ))?;
+    let target_capacity_bytes = validation::checked_sum(geometries.iter().map(|geometry| {
+        if complete_selection.complete_targets[geometry.layer_index] {
+            geometry.complete_layer_payload_bytes
+        } else {
+            routed_floor_bytes[geometry.layer_index]
+        }
+    }))?;
+    if target_capacity_bytes > ceiling_bytes {
+        return Err(ExpertResidencyPlanError::PlannedResidencyExceedsCeiling);
+    }
+    Ok(ExpertResidencyPlan {
+        phase,
+        retained_expert_ceiling_bytes: ceiling_bytes,
+        complete_layer_targets: complete_selection
+            .complete_targets
+            .iter()
+            .enumerate()
+            .filter_map(|(layer_index, is_complete)| is_complete.then_some(layer_index))
+            .collect(),
+        layer_targets: residency_accounting.layer_targets,
+        reserved_routed_overlay_bytes,
+        expected_preserved_bytes: residency_accounting.preserved_bytes,
+        maximum_new_retained_bytes: residency_accounting.new_retained_bytes,
+        deterministic_release_order: release_order(current_by_layer),
+        is_low_budget_partial_mode: false,
+    })
+}
+
+/// Promotes the cheapest complete layers on top of the routed-floor foundation
+/// until the retained-bytes ceiling is exhausted.
+fn select_complete_layers_within_ceiling(
+    layer_facts: &FoundationOverlayLayerFacts<'_>,
+    ceiling_bytes: u64,
+    all_layer_routed_floor_bytes: u64,
+) -> Result<CompleteLayerSelection, ExpertResidencyPlanError> {
+    let mut complete_targets = vec![false; layer_facts.geometries.len()];
     let mut foundation_and_floor_bytes = all_layer_routed_floor_bytes;
-    let mut complete_candidates = geometries
+    let mut complete_candidates = layer_facts
+        .geometries
         .iter()
         .map(|geometry| {
             let layer_index = geometry.layer_index;
             (
                 layer_index,
-                geometry.complete_layer_payload_bytes - routed_floor_bytes[layer_index],
-                current_by_layer[layer_index].is_some_and(|residency| {
+                geometry.complete_layer_payload_bytes - layer_facts.routed_floor_bytes[layer_index],
+                layer_facts.current_by_layer[layer_index].is_some_and(|residency| {
                     residency.class == RetainedExpertPageClass::StableCompleteLayer
                 }),
             )
@@ -48,10 +132,24 @@ pub(super) fn foundation_and_overlay_plan(
                 .ok_or(ExpertResidencyPlanError::ByteCountOverflow)?;
         }
     }
+    Ok(CompleteLayerSelection {
+        complete_targets,
+        foundation_and_floor_bytes,
+    })
+}
 
+/// Preserves seated elastic pages that fit inside the overlay budget left
+/// above the routed-floor foundation, skipping layers with complete targets.
+fn select_preserved_partial_layers(
+    layer_facts: &FoundationOverlayLayerFacts<'_>,
+    ceiling_bytes: u64,
+    foundation_and_floor_bytes: u64,
+    complete_targets: &[bool],
+) -> Vec<bool> {
     let mut overlay_extra_bytes = ceiling_bytes.saturating_sub(foundation_and_floor_bytes);
-    let mut preserve_partial = vec![false; geometries.len()];
-    let mut partial_candidates = current_by_layer
+    let mut preserve_partial = vec![false; layer_facts.geometries.len()];
+    let mut partial_candidates = layer_facts
+        .current_by_layer
         .iter()
         .enumerate()
         .filter_map(|(layer_index, residency)| {
@@ -65,18 +163,27 @@ pub(super) fn foundation_and_overlay_plan(
     for (layer_index, residency) in partial_candidates {
         let incremental_bytes = residency
             .payload_bytes
-            .saturating_sub(routed_floor_bytes[layer_index]);
+            .saturating_sub(layer_facts.routed_floor_bytes[layer_index]);
         if incremental_bytes <= overlay_extra_bytes {
             preserve_partial[layer_index] = true;
             overlay_extra_bytes = overlay_extra_bytes.saturating_sub(incremental_bytes);
         }
     }
+    preserve_partial
+}
 
+/// Charges every planned target against the preserved and new-retention byte
+/// budgets.
+fn account_planned_layer_charges(
+    layer_facts: &FoundationOverlayLayerFacts<'_>,
+    complete_targets: &[bool],
+    preserve_partial: &[bool],
+) -> Result<LayerResidencyAccounting, ExpertResidencyPlanError> {
     let mut preserved_bytes = 0_u64;
     let mut new_retained_bytes = 0_u64;
-    let mut layer_targets = Vec::with_capacity(geometries.len());
-    for layer_index in 0..geometries.len() {
-        let current_residency = current_by_layer[layer_index];
+    let mut layer_targets = Vec::with_capacity(layer_facts.geometries.len());
+    for layer_index in 0..layer_facts.geometries.len() {
+        let current_residency = layer_facts.current_by_layer[layer_index];
         let target = if complete_targets[layer_index] {
             if current_residency.is_some_and(|residency| {
                 residency.class == RetainedExpertPageClass::StableCompleteLayer
@@ -102,9 +209,9 @@ pub(super) fn foundation_and_overlay_plan(
         // The layer's charged capacity: its complete payload when seated,
         // otherwise the routed floor the plan reserves for it.
         let charged_capacity_bytes = if complete_targets[layer_index] {
-            geometries[layer_index].complete_layer_payload_bytes
+            layer_facts.geometries[layer_index].complete_layer_payload_bytes
         } else {
-            routed_floor_bytes[layer_index]
+            layer_facts.routed_floor_bytes[layer_index]
         };
         match target {
             ExpertLayerResidencyTarget::PreserveComplete
@@ -134,7 +241,11 @@ pub(super) fn foundation_and_overlay_plan(
                 // whole table instead — issue #1522 — which is exactly the
                 // re-read churn this accounting now makes visible.)
                 let retained_floor_bytes = current_residency
-                    .map(|residency| residency.payload_bytes.min(routed_floor_bytes[layer_index]))
+                    .map(|residency| {
+                        residency
+                            .payload_bytes
+                            .min(layer_facts.routed_floor_bytes[layer_index])
+                    })
                     .unwrap_or(0);
                 preserved_bytes = preserved_bytes
                     .checked_add(retained_floor_bytes)
@@ -161,33 +272,13 @@ pub(super) fn foundation_and_overlay_plan(
         }
         layer_targets.push(target);
     }
-    let reserved_routed_overlay_bytes =
-        validation::checked_sum(routed_floor_bytes.iter().enumerate().filter_map(
-            |(layer_index, floor_bytes)| (!complete_targets[layer_index]).then_some(*floor_bytes),
-        ))?;
-    let target_capacity_bytes = validation::checked_sum(geometries.iter().map(|geometry| {
-        if complete_targets[geometry.layer_index] {
-            geometry.complete_layer_payload_bytes
-        } else {
-            routed_floor_bytes[geometry.layer_index]
-        }
-    }))?;
-    if target_capacity_bytes > ceiling_bytes {
-        return Err(ExpertResidencyPlanError::PlannedResidencyExceedsCeiling);
-    }
-    Ok(ExpertResidencyPlan {
-        phase,
-        retained_expert_ceiling_bytes: ceiling_bytes,
-        complete_layer_targets: complete_targets
-            .iter()
-            .enumerate()
-            .filter_map(|(layer_index, is_complete)| is_complete.then_some(layer_index))
-            .collect(),
+    Ok(LayerResidencyAccounting {
+        preserved_bytes,
+        new_retained_bytes,
         layer_targets,
-        reserved_routed_overlay_bytes,
-        expected_preserved_bytes: preserved_bytes,
-        maximum_new_retained_bytes: new_retained_bytes,
-        deterministic_release_order: release_order(current_by_layer),
-        is_low_budget_partial_mode: false,
     })
 }
+
+#[cfg(test)]
+#[path = "foundation_overlay_tests.rs"]
+mod foundation_overlay_tests;
