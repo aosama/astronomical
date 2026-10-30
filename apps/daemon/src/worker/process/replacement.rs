@@ -1,6 +1,11 @@
 //! Validates and commits one candidate worker without exposing partial startup state.
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use astronomical_ipc_protocol::{
     WorkerEvent, WorkerRuntimeFeatureConfiguration, WorkerStartupConfiguration,
@@ -43,7 +48,6 @@ impl WorkerReplacement {
     }
 
     #[allow(clippy::too_many_arguments)]
-    #[expect(clippy::too_many_lines)]
     pub(crate) async fn execute(
         self,
         trusted_worker_process: &mut WorkerProcess,
@@ -60,27 +64,80 @@ impl WorkerReplacement {
             expected_configuration_generation = %self.expected_configuration_generation,
             "starting transactional worker replacement"
         );
-        let candidate_launch_result = match self.candidate_startup_configuration {
-            Some(candidate_startup_configuration) => {
-                WorkerProcess::launch_with_startup_configuration(
-                    &self.candidate_executable_path,
-                    candidate_startup_configuration,
-                )
-                .await
-            }
-            None => WorkerProcess::launch(&self.candidate_executable_path).await,
+        let acquired_candidate = match self.acquire_candidate(replacement_started_at).await {
+            Ok(acquired_candidate) => acquired_candidate,
+            Err(contained_error) => return Err(contained_error),
         };
-        let mut candidate_worker_process = match candidate_launch_result {
-            Ok(candidate_worker_process) => candidate_worker_process,
-            Err(candidate_launch_error) => {
-                tracing::warn!(
-                    replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
-                    error = %candidate_launch_error,
-                    "transactional worker replacement failed during candidate launch"
-                );
-                return Err(candidate_launch_error);
-            }
-        };
+        let AcquiredCandidate {
+            candidate_worker_process,
+            candidate_acknowledgement,
+            candidate_model_policy_catalog,
+            acknowledgement_timeout,
+        } = acquired_candidate;
+
+        let trusted_close_started_at = Instant::now();
+        if let Err(trusted_close_error) = trusted_worker_process.close().await {
+            let containment_arguments = TrustedCloseContainment {
+                trusted_worker_process,
+                candidate_worker_process,
+                trusted_close_error,
+                acknowledgement_timeout,
+                replacement_started_at,
+                health_snapshot,
+                is_ready: &mut *is_ready,
+                model_load_deadline: &mut *model_load_deadline,
+            };
+            return Err(contain_failed_trusted_close(containment_arguments).await);
+        }
+        tracing::info!(
+            trusted_worker_close_elapsed_millis = trusted_close_started_at.elapsed().as_millis(),
+            "closed trusted worker before replacement commit"
+        );
+
+        *trusted_worker_process = candidate_worker_process;
+        *trusted_model_policy_catalog = candidate_model_policy_catalog;
+        *is_ready = false;
+        *model_load_deadline = None;
+        let publish_result = publish_candidate_acknowledgement(
+            candidate_acknowledgement.clone(),
+            health_snapshot,
+            is_ready,
+            model_load_deadline,
+            active_generation,
+            performance_log,
+            completion_log,
+        );
+        if let Err(publish_error) = publish_result {
+            let containment_arguments = FailedPublicationContainment {
+                trusted_worker_process,
+                publish_error,
+                replacement_started_at,
+                health_snapshot,
+                is_ready: &mut *is_ready,
+            };
+            return Err(contain_failed_publication(containment_arguments).await);
+        }
+        tracing::info!(
+            replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
+            "committed transactional worker replacement"
+        );
+        Ok(candidate_acknowledgement.runtime_feature_configuration)
+    }
+
+    /// Launches the candidate and collects its bounded startup acknowledgement,
+    /// containing every launch and handshake rejection before the trusted
+    /// worker is touched. The surviving candidate plus the replacement fields
+    /// still needed for the commit are handed back on success.
+    async fn acquire_candidate(
+        self,
+        replacement_started_at: Instant,
+    ) -> Result<AcquiredCandidate, WorkerControlError> {
+        let mut candidate_worker_process = launch_candidate_process(
+            &self.candidate_executable_path,
+            self.candidate_startup_configuration,
+            replacement_started_at,
+        )
+        .await?;
         let acknowledgement_started_at = Instant::now();
         let candidate_acknowledgement = match timeout(
             self.acknowledgement_timeout,
@@ -124,83 +181,153 @@ impl WorkerReplacement {
                 acknowledgement_started_at.elapsed().as_millis(),
             "candidate worker acknowledged readiness and runtime configuration"
         );
+        Ok(AcquiredCandidate {
+            candidate_worker_process,
+            candidate_acknowledgement,
+            candidate_model_policy_catalog: self.candidate_model_policy_catalog,
+            acknowledgement_timeout: self.acknowledgement_timeout,
+        })
+    }
+}
 
-        let trusted_close_started_at = Instant::now();
-        if let Err(trusted_close_error) = trusted_worker_process.close().await {
-            let trusted_containment_error = trusted_worker_process.force_terminate().await.err();
-            let candidate_cleanup_error = match candidate_worker_process.close().await {
-                Ok(_) => None,
-                Err(candidate_cleanup_error) => {
-                    continue_candidate_reaping(candidate_worker_process);
-                    Some(candidate_cleanup_error)
-                }
-            };
-            *is_ready = false;
-            // A failed force-termination keeps the trusted child under loop ownership;
-            // the deadline path retries containment and replacement commands stay blocked.
-            *model_load_deadline = trusted_containment_error
-                .as_ref()
-                .map(|_| Instant::now() + self.acknowledgement_timeout);
-            publish_health(
-                health_snapshot,
-                WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-            );
-            let contained_error = combine_replacement_cleanup_errors(
-                trusted_close_error,
-                trusted_containment_error,
-                candidate_cleanup_error,
-            );
-            tracing::error!(
-                replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
-                error = %contained_error,
-                "transactional worker replacement could not contain the trusted worker"
-            );
-            return Err(contained_error);
-        }
-        tracing::info!(
-            trusted_worker_close_elapsed_millis = trusted_close_started_at.elapsed().as_millis(),
-            "closed trusted worker before replacement commit"
-        );
+/// Everything a successful candidate acquisition hands back to the commit phase.
+struct AcquiredCandidate {
+    candidate_worker_process: WorkerProcess,
+    candidate_acknowledgement: CandidateAcknowledgement,
+    candidate_model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
+    acknowledgement_timeout: Duration,
+}
 
-        *trusted_worker_process = candidate_worker_process;
-        *trusted_model_policy_catalog = self.candidate_model_policy_catalog;
-        *is_ready = false;
-        *model_load_deadline = None;
-        let publish_result = publish_candidate_acknowledgement(
-            candidate_acknowledgement.clone(),
-            health_snapshot,
-            is_ready,
-            model_load_deadline,
-            active_generation,
-            performance_log,
-            completion_log,
-        );
-        if let Err(publish_error) = publish_result {
-            let cleanup_error = trusted_worker_process.force_terminate().await.err();
-            *is_ready = false;
-            publish_health(
-                health_snapshot,
-                WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-            );
-            let contained_error = match cleanup_error {
-                Some(cleanup_error) => WorkerControlError::OperationAndCleanupFailed {
-                    operation: Box::new(publish_error),
-                    cleanup: Box::new(cleanup_error),
-                },
-                None => publish_error,
-            };
-            tracing::error!(
-                replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
-                error = %contained_error,
-                "transactional worker replacement could not publish committed state"
-            );
-            return Err(contained_error);
+/// Inputs for containing a replacement whose trusted-worker close failed.
+struct TrustedCloseContainment<'a> {
+    trusted_worker_process: &'a mut WorkerProcess,
+    candidate_worker_process: WorkerProcess,
+    trusted_close_error: WorkerControlError,
+    acknowledgement_timeout: Duration,
+    replacement_started_at: Instant,
+    health_snapshot: &'a Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
+    is_ready: &'a mut bool,
+    model_load_deadline: &'a mut Option<Instant>,
+}
+
+/// Inputs for containing a replacement whose committed state could not be published.
+struct FailedPublicationContainment<'a> {
+    trusted_worker_process: &'a mut WorkerProcess,
+    publish_error: WorkerControlError,
+    replacement_started_at: Instant,
+    health_snapshot: &'a Arc<std::sync::RwLock<WorkerHealthSnapshot>>,
+    is_ready: &'a mut bool,
+}
+
+async fn launch_candidate_process(
+    candidate_executable_path: &Path,
+    candidate_startup_configuration: Option<WorkerStartupConfiguration>,
+    replacement_started_at: Instant,
+) -> Result<WorkerProcess, WorkerControlError> {
+    let candidate_launch_outcome = match candidate_startup_configuration {
+        Some(candidate_startup_configuration) => {
+            WorkerProcess::launch_with_startup_configuration(
+                candidate_executable_path,
+                candidate_startup_configuration,
+            )
+            .await
         }
-        tracing::info!(
-            replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
-            "committed transactional worker replacement"
-        );
-        Ok(candidate_acknowledgement.runtime_feature_configuration)
+        None => WorkerProcess::launch(candidate_executable_path).await,
+    };
+    match candidate_launch_outcome {
+        Ok(candidate_worker_process) => Ok(candidate_worker_process),
+        Err(candidate_launch_error) => {
+            tracing::warn!(
+                replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
+                error = %candidate_launch_error,
+                "transactional worker replacement failed during candidate launch"
+            );
+            Err(candidate_launch_error)
+        }
+    }
+}
+
+async fn contain_failed_trusted_close(
+    containment_arguments: TrustedCloseContainment<'_>,
+) -> WorkerControlError {
+    let TrustedCloseContainment {
+        trusted_worker_process,
+        mut candidate_worker_process,
+        trusted_close_error,
+        acknowledgement_timeout,
+        replacement_started_at,
+        health_snapshot,
+        is_ready,
+        model_load_deadline,
+    } = containment_arguments;
+    let trusted_containment_error = trusted_worker_process.force_terminate().await.err();
+    let candidate_cleanup_error = match candidate_worker_process.close().await {
+        Ok(_) => None,
+        Err(candidate_cleanup_error) => {
+            continue_candidate_reaping(candidate_worker_process);
+            Some(candidate_cleanup_error)
+        }
+    };
+    *is_ready = false;
+    // A failed force-termination keeps the trusted child under loop ownership;
+    // the deadline path retries containment and replacement commands stay blocked.
+    *model_load_deadline = trusted_containment_error
+        .as_ref()
+        .map(|_| Instant::now() + acknowledgement_timeout);
+    publish_health(
+        health_snapshot,
+        WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+    );
+    let contained_error = combine_replacement_cleanup_errors(
+        trusted_close_error,
+        trusted_containment_error,
+        candidate_cleanup_error,
+    );
+    tracing::error!(
+        replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
+        error = %contained_error,
+        "transactional worker replacement could not contain the trusted worker"
+    );
+    contained_error
+}
+
+async fn contain_failed_publication(
+    containment_arguments: FailedPublicationContainment<'_>,
+) -> WorkerControlError {
+    let FailedPublicationContainment {
+        trusted_worker_process,
+        publish_error,
+        replacement_started_at,
+        health_snapshot,
+        is_ready,
+    } = containment_arguments;
+    let cleanup_error = trusted_worker_process.force_terminate().await.err();
+    *is_ready = false;
+    publish_health(
+        health_snapshot,
+        WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+    );
+    let contained_error = combine_publication_errors(publish_error, cleanup_error);
+    tracing::error!(
+        replacement_elapsed_millis = replacement_started_at.elapsed().as_millis(),
+        error = %contained_error,
+        "transactional worker replacement could not publish committed state"
+    );
+    contained_error
+}
+
+/// Wraps a failed commit publication with its own failed cleanup, keeping the
+/// operation failure as the primary cause exactly as it reached the caller.
+fn combine_publication_errors(
+    publish_error: WorkerControlError,
+    cleanup_error: Option<WorkerControlError>,
+) -> WorkerControlError {
+    match cleanup_error {
+        Some(cleanup_error) => WorkerControlError::OperationAndCleanupFailed {
+            operation: Box::new(publish_error),
+            cleanup: Box::new(cleanup_error),
+        },
+        None => publish_error,
     }
 }
 
@@ -423,3 +550,7 @@ fn combine_replacement_cleanup_errors(
         None => operation_error,
     }
 }
+
+#[cfg(test)]
+#[path = "replacement_tests.rs"]
+mod replacement_tests;
