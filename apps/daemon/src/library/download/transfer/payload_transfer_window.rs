@@ -18,7 +18,9 @@ use super::{
     payload_transfer_segment::{PayloadSegment, SegmentedFileAssembler, plan_payload_segments},
 };
 use crate::library::{DownloadJob, DownloadJobError, DownloadJobFile, DownloadProgressSnapshot};
-use crate::{DaemonPerformanceMeasurement, DaemonPerformanceOperation};
+use crate::{
+    DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
+};
 
 /// Concurrent in-flight ranged transfers per journey. The bound is deliberately network-scoped:
 /// stream count does not scale with model size or machine hardware, so one value serves every
@@ -136,8 +138,21 @@ fn pending_segment_queue(
     segment_queue
 }
 
+/// Finds the pending file manifest entry whose relative path matches the
+/// selection key used by the transfer window.
+fn pending_file_for_relative_path(
+    download_job: &DownloadJob,
+    relative_path: &str,
+) -> DownloadJobFile {
+    download_job
+        .files()
+        .iter()
+        .find(|download_file| download_file.relative_path() == relative_path)
+        .cloned()
+        .expect("selected relative paths always come from the job's own file manifest")
+}
+
 impl DownloadPayloadTransfer {
-    #[expect(clippy::too_many_lines)]
     pub(super) async fn download_pending_files_within_bounded_window(
         &self,
         download_job: &mut DownloadJob,
@@ -146,7 +161,6 @@ impl DownloadPayloadTransfer {
         let observed_transfer_progress =
             ObservedTransferProgress::new(download_job.clone(), self.progress_snapshot().clone());
         // One shared-reference binding keeps the boxed per-segment futures self-contained.
-        let transfer = self;
         let observed_transfer_progress = &observed_transfer_progress;
         let mut segment_queue = pending_segment_queue(download_job);
         let mut in_flight_transfers = FuturesUnordered::new();
@@ -165,74 +179,33 @@ impl DownloadPayloadTransfer {
                 };
                 let relative_path = pending_file.relative_path();
                 if !selected_relative_paths.contains(relative_path) {
-                    self.select_pending_file_durably(
-                        download_job,
-                        &pending_file,
-                        updated_at_unix_millis,
-                        observed_transfer_progress,
-                    )
-                    .await
-                    .map_err(TransferWindowStop::TransferFailed)?;
+                    let assembler = self
+                        .select_pending_file_and_open_assembler(
+                            download_job,
+                            pending_file.relative_path(),
+                            updated_at_unix_millis,
+                            observed_transfer_progress,
+                        )
+                        .await?;
                     selected_relative_paths.insert(relative_path.to_owned());
-                    let job_store = self.job_store();
-                    let assembler = SegmentedFileAssembler::open(
-                        job_store.models_directory(),
-                        &download_job
-                            .staging_directory(job_store.models_directory())
-                            .join(relative_path),
-                        pending_file.bytes_on_disk(),
-                    )
-                    .await
-                    .map_err(TransferWindowStop::TransferFailed)?;
-                    open_assemblers.insert(relative_path.to_owned(), Arc::new(assembler));
+                    open_assemblers.insert(relative_path.to_owned(), assembler);
                 }
                 let assembler = open_assemblers
                     .get(relative_path)
                     .cloned()
                     .expect("assembler should exist for every launched file");
-                let transfer_job = download_job.clone();
-                let attribution_log = self.attribution_log();
-                let huggingface_id = download_job.huggingface_id().to_owned();
-                let revision = download_job.revision().to_owned();
-                in_flight_transfers.push(Box::pin(async move {
-                    let segment_start_bytes = payload_segment.start_offset_bytes();
-                    let outcome = attribution_log
-                        .measure_async_operation(
-                            DaemonPerformanceOperation::FileTransfer,
-                            || {
-                                transfer.transfer_payload_segment(
-                                    &transfer_job,
-                                    &pending_file,
-                                    &payload_segment,
-                                    assembler,
-                                    updated_at_unix_millis,
-                                    observed_transfer_progress,
-                                )
-                            },
-                            |transfer_outcome| {
-                                let measurement = if transfer_outcome.is_ok() {
-                                    DaemonPerformanceMeasurement::success()
-                                } else {
-                                    DaemonPerformanceMeasurement::failure()
-                                };
-                                measurement
-                                    .with_file_transfer(
-                                        &huggingface_id,
-                                        &revision,
-                                        pending_file.relative_path(),
-                                        segment_start_bytes,
-                                        transfer_outcome.as_ref().map_or(0, |segment_outcome| {
-                                            segment_outcome.contiguous_end_bytes
-                                        }),
-                                    )
-                                    .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
-                            },
-                        )
-                        .await
-                        .map_err(DownloadPayloadTransferError::Attribution)
-                        .and_then(std::convert::identity);
-                    (pending_file, outcome)
-                }));
+                in_flight_transfers.push(Box::pin(transfer_segment_with_attribution(
+                    SegmentTransferContext {
+                        transfer: self,
+                        attribution_log: self.attribution_log(),
+                        transfer_job: download_job.clone(),
+                        updated_at_unix_millis,
+                        observed_transfer_progress,
+                    },
+                    pending_file,
+                    payload_segment,
+                    assembler,
+                )));
             }
 
             let Some((pending_file, transfer_result)) = in_flight_transfers.next().await else {
@@ -240,18 +213,14 @@ impl DownloadPayloadTransfer {
             };
             match transfer_result {
                 Ok(segment_outcome) => {
-                    if segment_outcome.file_completed
-                        && completed_relative_paths.insert(pending_file.relative_path().to_owned())
-                    {
-                        self.record_file_progress_durably(
-                            download_job,
-                            &pending_file,
-                            segment_outcome.contiguous_end_bytes,
-                            updated_at_unix_millis,
-                        )
-                        .await
-                        .map_err(TransferWindowStop::TransferFailed)?;
-                    }
+                    self.record_completed_file_progress_if_new(
+                        download_job,
+                        &pending_file,
+                        &segment_outcome,
+                        &mut completed_relative_paths,
+                        updated_at_unix_millis,
+                    )
+                    .await?;
                 }
                 Err(transfer_error) => {
                     deferred_transfer_error.get_or_insert(transfer_error);
@@ -265,11 +234,64 @@ impl DownloadPayloadTransfer {
         self.finalize_open_assemblers(&open_assemblers)
             .await
             .map_err(TransferWindowStop::TransferFailed)?;
-        match deferred_transfer_error {
-            Some(transfer_error) => Err(TransferWindowStop::TransferFailed(transfer_error)),
-            None if self.is_pause_requested() => Err(TransferWindowStop::Paused),
-            None => Ok(()),
+        transfer_window_stop(deferred_transfer_error, self.is_pause_requested())
+    }
+
+    /// Durably selects one pending file for this window and opens its
+    /// segmented assembler over the staging path.
+    async fn select_pending_file_and_open_assembler(
+        &self,
+        download_job: &mut DownloadJob,
+        relative_path: &str,
+        updated_at_unix_millis: u64,
+        observed_transfer_progress: &ObservedTransferProgress,
+    ) -> Result<Arc<SegmentedFileAssembler>, TransferWindowStop> {
+        let pending_file = pending_file_for_relative_path(download_job, relative_path);
+        self.select_pending_file_durably(
+            download_job,
+            &pending_file,
+            updated_at_unix_millis,
+            observed_transfer_progress,
+        )
+        .await
+        .map_err(TransferWindowStop::TransferFailed)?;
+        let job_store = self.job_store();
+        let assembler = SegmentedFileAssembler::open(
+            job_store.models_directory(),
+            &download_job
+                .staging_directory(job_store.models_directory())
+                .join(relative_path),
+            pending_file.bytes_on_disk(),
+        )
+        .await
+        .map_err(TransferWindowStop::TransferFailed)?;
+        Ok(Arc::new(assembler))
+    }
+
+    /// Records durable progress the first time a file completes inside this
+    /// window; repeat completion signals for an already-recorded file are
+    /// ignored.
+    async fn record_completed_file_progress_if_new(
+        &self,
+        download_job: &mut DownloadJob,
+        pending_file: &DownloadJobFile,
+        segment_outcome: &SegmentOutcome,
+        completed_relative_paths: &mut BTreeSet<String>,
+        updated_at_unix_millis: u64,
+    ) -> Result<(), TransferWindowStop> {
+        if segment_outcome.file_completed
+            && completed_relative_paths.insert(pending_file.relative_path().to_owned())
+        {
+            self.record_file_progress_durably(
+                download_job,
+                pending_file,
+                segment_outcome.contiguous_end_bytes,
+                updated_at_unix_millis,
+            )
+            .await
+            .map_err(TransferWindowStop::TransferFailed)?;
         }
+        Ok(())
     }
 
     async fn finalize_open_assemblers(
@@ -289,3 +311,81 @@ impl DownloadPayloadTransfer {
         deferred_error.map_or(Ok(()), Err)
     }
 }
+
+/// The caller-supplied context every per-segment transfer task shares.
+struct SegmentTransferContext<'a> {
+    transfer: &'a DownloadPayloadTransfer,
+    attribution_log: &'a DaemonPerformanceAttributionLog,
+    transfer_job: DownloadJob,
+    updated_at_unix_millis: u64,
+    observed_transfer_progress: &'a ObservedTransferProgress,
+}
+
+/// Transfers one payload segment under its attributed measurement region,
+/// returning the owning file beside the segment outcome so the completion
+/// path can attribute durable progress.
+async fn transfer_segment_with_attribution(
+    segment_transfer: SegmentTransferContext<'_>,
+    pending_file: DownloadJobFile,
+    payload_segment: PayloadSegment,
+    assembler: Arc<SegmentedFileAssembler>,
+) -> (
+    DownloadJobFile,
+    Result<SegmentOutcome, DownloadPayloadTransferError>,
+) {
+    let segment_start_bytes = payload_segment.start_offset_bytes();
+    let transfer_outcome = segment_transfer
+        .attribution_log
+        .measure_async_operation(
+            DaemonPerformanceOperation::FileTransfer,
+            || {
+                segment_transfer.transfer.transfer_payload_segment(
+                    &segment_transfer.transfer_job,
+                    &pending_file,
+                    &payload_segment,
+                    assembler,
+                    segment_transfer.updated_at_unix_millis,
+                    segment_transfer.observed_transfer_progress,
+                )
+            },
+            |transfer_outcome| {
+                let measurement = if transfer_outcome.is_ok() {
+                    DaemonPerformanceMeasurement::success()
+                } else {
+                    DaemonPerformanceMeasurement::failure()
+                };
+                measurement
+                    .with_file_transfer(
+                        segment_transfer.transfer_job.huggingface_id(),
+                        segment_transfer.transfer_job.revision(),
+                        pending_file.relative_path(),
+                        segment_start_bytes,
+                        transfer_outcome
+                            .as_ref()
+                            .map_or(0, |segment_outcome| segment_outcome.contiguous_end_bytes),
+                    )
+                    .unwrap_or_else(|_| DaemonPerformanceMeasurement::failure())
+            },
+        )
+        .await
+        .map_err(DownloadPayloadTransferError::Attribution)
+        .and_then(std::convert::identity);
+    (pending_file, transfer_outcome)
+}
+
+/// Pure: the window's terminal outcome — a deferred transfer failure wins,
+/// then an observed pause request, and a fully drained window succeeds.
+fn transfer_window_stop(
+    deferred_transfer_error: Option<DownloadPayloadTransferError>,
+    is_pause_requested: bool,
+) -> Result<(), TransferWindowStop> {
+    match deferred_transfer_error {
+        Some(transfer_error) => Err(TransferWindowStop::TransferFailed(transfer_error)),
+        None if is_pause_requested => Err(TransferWindowStop::Paused),
+        None => Ok(()),
+    }
+}
+
+#[cfg(test)]
+#[path = "payload_transfer_window_tests.rs"]
+mod payload_transfer_window_tests;
