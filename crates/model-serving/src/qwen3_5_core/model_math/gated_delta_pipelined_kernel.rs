@@ -309,14 +309,57 @@ fn checkpoint_write_source_for_token(
     checkpoint_write_source_template.replace(CHECKPOINT_TOKEN_EXPRESSION_MARKER, token_expression)
 }
 
-#[expect(clippy::too_many_lines)]
+/// The per-step source fragments the pipelining mode alone decides: the
+/// block-local token expression, the refill of the next step's operands, and
+/// where the step publishes its query-dot partial.
+struct PipeliningStageSources {
+    token_expression: String,
+    next_refill_source: String,
+    partial_publication_source: String,
+}
+
+/// The fragments interpolated into one pipelined step body.
+struct StepBodyFragments {
+    token_expression: String,
+    next_refill_source: String,
+    reduction_source: String,
+    checkpoint_write_source: String,
+    partial_publication_source: String,
+}
+
+/// Emits one pipelined step body. The pipelining mode decides the token
+/// expression, the next-step refill, and the partial publication; the
+/// reduction kind decides which earlier partials are reduced onto
+/// `staged_outputs`; the boundary-checkpoint write is injected at the step's
+/// token expression.
 fn pipelined_step_source(
     step_pipelining: StepPipelining,
     previous_step_reduction: PreviousStepReduction,
     checkpoint_write_source_template: &str,
 ) -> String {
-    let (token_expression, next_refill_source, partial_publication_source) = match step_pipelining
-    {
+    let stage_sources = pipelining_stage_sources(step_pipelining);
+    let reduction_source =
+        previous_step_reduction_source(previous_step_reduction, &stage_sources.token_expression);
+    let checkpoint_write_source = checkpoint_write_source_for_token(
+        checkpoint_write_source_template,
+        &stage_sources.token_expression,
+    );
+    render_step_body(StepBodyFragments {
+        token_expression: stage_sources.token_expression,
+        next_refill_source: stage_sources.next_refill_source,
+        reduction_source,
+        checkpoint_write_source,
+        partial_publication_source: stage_sources.partial_publication_source,
+    })
+}
+
+/// The pipelining-mode-specific fragments. Unrolled full-block steps use the
+/// literal token index, refill unconditionally from the next staged token
+/// when one exists (a full block never reads past the staged region), and
+/// publish into the four-slot scatter array; the rolled tail-block step uses
+/// the loop variable, a bounds-guarded refill, and the single carry slot.
+fn pipelining_stage_sources(step_pipelining: StepPipelining) -> PipeliningStageSources {
+    match step_pipelining {
         StepPipelining::Unrolled {
             token_index,
             next_staged_token,
@@ -341,15 +384,15 @@ fn pipelined_step_source(
                 "                step_query_partials[{}] = state_query_dot_partials.x +\n                    state_query_dot_partials.y;\n",
                 token_index % 4
             );
-            (
+            PipeliningStageSources {
                 token_expression,
                 next_refill_source,
                 partial_publication_source,
-            )
+            }
         }
-        StepPipelining::Rolled => (
-            "token_in_block".to_owned(),
-            r#"                if (token_in_block + 1 < tokens_in_block) {
+        StepPipelining::Rolled => PipeliningStageSources {
+            token_expression: "token_in_block".to_owned(),
+            next_refill_source: r#"                if (token_in_block + 1 < tokens_in_block) {
                     for (int fragment_index = 0; fragment_index < 4;
                          ++fragment_index) {
                         next_keys[fragment_index] = float4(
@@ -365,11 +408,23 @@ fn pipelined_step_source(
                 }
 "#
             .to_owned(),
-            "                previous_step_query_partial = state_query_dot_partials.x +\n                    state_query_dot_partials.y;\n"
-                .to_owned(),
-        ),
-    };
-    let reduction_source = match &previous_step_reduction {
+            partial_publication_source:
+                "                previous_step_query_partial = state_query_dot_partials.x +\n                    state_query_dot_partials.y;\n"
+                    .to_owned(),
+        },
+    }
+}
+
+/// The earlier-steps query-dot partial reduction injected between the key-dot
+/// loop and the remembered-value reduction: the four-step scatter reduces a
+/// whole scatter-array group onto `staged_outputs` in one pass, the carry
+/// reduces the previous step's partial, and step zero has nothing earlier to
+/// reduce.
+fn previous_step_reduction_source(
+    previous_step_reduction: PreviousStepReduction,
+    token_expression: &str,
+) -> String {
+    match &previous_step_reduction {
         PreviousStepReduction::ScatterFourSteps {
             first_reduced_token,
         } => reduce_scatter_four_steps_source(*first_reduced_token),
@@ -392,9 +447,15 @@ fn pipelined_step_source(
             token_expression = token_expression
         ),
         PreviousStepReduction::NoPreviousSteps => String::new(),
-    };
-    let checkpoint_write_source =
-        checkpoint_write_source_for_token(checkpoint_write_source_template, &token_expression);
+    }
+}
+
+/// Renders the pipelined step body: rotate the prefetched next-step operands
+/// into current, decay-and-accumulate the key dot products, reduce earlier
+/// partials, form the delta update, accumulate the query dot products, and
+/// interpolate the caller's checkpoint write and the partial publication at
+/// their fixed points.
+fn render_step_body(fragments: StepBodyFragments) -> String {
     format!(
         r#"            {{
                 float4 current_keys[4];
@@ -450,11 +511,11 @@ fn pipelined_step_source(
                 }}
 {checkpoint_write_source}{partial_publication_source}            }}
 "#,
-        next_refill_source = next_refill_source,
-        reduction_source = reduction_source,
-        checkpoint_write_source = checkpoint_write_source,
-        partial_publication_source = partial_publication_source,
-        token_expression = token_expression
+        next_refill_source = fragments.next_refill_source,
+        reduction_source = fragments.reduction_source,
+        checkpoint_write_source = fragments.checkpoint_write_source,
+        partial_publication_source = fragments.partial_publication_source,
+        token_expression = fragments.token_expression
     )
 }
 
@@ -493,3 +554,7 @@ fn reduce_scatter_four_steps_source(first_reduced_token: usize) -> String {
         first_reduced_token = first_reduced_token
     )
 }
+
+#[cfg(test)]
+#[path = "gated_delta_pipelined_kernel_tests.rs"]
+mod gated_delta_pipelined_kernel_tests;
