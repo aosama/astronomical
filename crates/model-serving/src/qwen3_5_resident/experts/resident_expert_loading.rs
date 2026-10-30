@@ -18,59 +18,25 @@ use mlx_c_rust::{MlxArray, MlxDtype};
 type ResidentSourceTensorKey = (PathBuf, String);
 type ResidentSourceTensorMap = HashMap<ResidentSourceTensorKey, MlxArray>;
 
+#[cfg(test)]
+#[path = "resident_expert_loading_tests.rs"]
+mod resident_expert_loading_tests;
+
 impl Qwen3_5ResidentExpertWeights {
     /// Materializes all complete expert layers directly from their shared plans.
-    #[expect(clippy::too_many_lines)]
     pub(crate) fn load(
         runtime: &MlxRuntime,
         layer_plans: &[QuantizedExpertLayerPlan],
         positional_file_read_metrics: Option<Arc<PositionalFileReadMetrics>>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let complete_model_payload_bytes =
-            layer_plans
-                .iter()
-                .try_fold(0_u64, |total_payload_bytes, layer_plan| {
-                    let layer_payload_bytes = layer_plan
-                        .complete_expert_payload_byte_count()
-                        .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
-                            description: plan_error.to_string(),
-                        })?;
-                    total_payload_bytes.checked_add(layer_payload_bytes).ok_or(
-                        Qwen3_5ExecutionError::InvalidInput {
-                            description: "complete expert payload byte count overflowed",
-                        },
-                    )
-                })?;
-        let complete_model_expert_entry_count =
-            layer_plans.iter().fold(0_usize, |entry_count, layer_plan| {
-                entry_count.saturating_add(layer_plan.expert_capacity)
-            });
-        let source_file_paths = layer_plans
-            .iter()
-            .flat_map(|layer_plan| {
-                layer_plan
-                    .tensor_sources
-                    .iter()
-                    .map(|tensor_source| tensor_source.source_file.clone())
-            })
-            .collect::<BTreeSet<_>>();
-        let mut resident_source_shards = HashMap::new();
-        for source_file_path in source_file_paths {
-            let resident_source_file =
-                std::fs::File::open(&source_file_path).map_err(|open_error| {
-                    Qwen3_5ExecutionError::ExpertSourceFailure {
-                        description: format!(
-                            "opening expert source file {} failed: {open_error}",
-                            source_file_path.display()
-                        ),
-                    }
-                })?;
-            let resident_source_shard = runtime.load_safetensors(
-                resident_source_file,
-                positional_file_read_metrics.as_ref().map(Arc::clone),
-            )?;
-            resident_source_shards.insert(source_file_path, resident_source_shard);
-        }
+        let complete_model_payload_bytes = complete_model_payload_bytes(layer_plans)?;
+        let complete_model_expert_entry_count = complete_model_expert_entry_count(layer_plans);
+        let source_file_paths = collect_source_file_paths(layer_plans);
+        let resident_source_shards = load_resident_source_shards(
+            runtime,
+            &source_file_paths,
+            &positional_file_read_metrics,
+        )?;
         tracing::debug!(
             source_shard_count = resident_source_shards.len(),
             "started detaching resident expert tensors from safetensors source maps"
@@ -85,58 +51,16 @@ impl Qwen3_5ResidentExpertWeights {
             resident_source_tensor_count = resident_source_tensors.len(),
             "completed detaching resident expert tensors from safetensors source maps"
         );
-        let mut resident_layers = Vec::with_capacity(layer_plans.len());
-        let mut fused_gate_up_layer_count = 0_usize;
-        let mut separate_gate_up_layer_count = 0_usize;
-
         // Evaluate one complete layer before advancing. This bounds lazy source
         // graphs and makes each progress record correspond to materialized MLX
-        // storage, not merely constructed safetensors views.
-        for (layer_index, layer_plan) in layer_plans.iter().enumerate() {
-            let complete_layer_payload_bytes = layer_plan
-                .complete_expert_payload_byte_count()
-                .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
-                    description: plan_error.to_string(),
-                })?;
-            tracing::info!(
-                layer_index,
-                total_layer_count = layer_plans.len(),
-                layer_prefix = layer_plan.layer_prefix,
-                complete_layer_payload_bytes,
-                "started materializing one complete resident expert layer"
-            );
-            let resident_layer =
-                load_resident_layer(runtime, &mut resident_source_tensors, layer_plan)?;
-            let gate_up_fusion_applied = resident_layer.gate_up_weights.is_fused();
-            let gate_up_fusion_transient_payload_bytes = resident_layer
-                .gate_up_weights
-                .materialization_transient_payload_bytes();
-            let gate_up_fusion_incompatibility_reason =
-                resident_layer.gate_up_weights.incompatibility_reason();
-            let mut complete_layer_arrays = Vec::new();
-            resident_layer.append_array_references(&mut complete_layer_arrays);
-            runtime.evaluate_arrays(&complete_layer_arrays)?;
-            if gate_up_fusion_applied {
-                // Synchronous evaluation detached the fused owner from its source
-                // concatenation. Drain reclaimable buffers before the next layer.
-                runtime.clear_allocator_cache()?;
-            }
-            if gate_up_fusion_applied {
-                fused_gate_up_layer_count = fused_gate_up_layer_count.saturating_add(1);
-            } else {
-                separate_gate_up_layer_count = separate_gate_up_layer_count.saturating_add(1);
-            }
-            tracing::info!(
-                completed_layer_count = layer_index + 1,
-                total_layer_count = layer_plans.len(),
-                complete_layer_payload_bytes,
-                gate_up_fusion_applied,
-                gate_up_fusion_transient_payload_bytes,
-                gate_up_fusion_incompatibility_reason,
-                "materialized one complete resident expert layer"
-            );
-            resident_layers.push(resident_layer);
-        }
+        // storage, not merely constructed safetensors views. The helper reports
+        // the fusion tallies the completion log needs.
+        let ResidentLayerMaterialization {
+            resident_layers,
+            fused_gate_up_layer_count,
+            separate_gate_up_layer_count,
+        } = materialize_resident_layers(runtime, &mut resident_source_tensors, layer_plans)?;
+
         if let Some(((_, unconsumed_tensor_name), _)) = resident_source_tensors.iter().next() {
             return Err(Qwen3_5ExecutionError::InvalidTensor {
                 tensor_name: unconsumed_tensor_name.clone(),
@@ -158,6 +82,162 @@ impl Qwen3_5ResidentExpertWeights {
         );
         Ok(candidate_owner)
     }
+}
+
+/// The materialized resident layers plus the gate/up fusion tallies the
+/// completion log reports. Fused layers release their transient source
+/// tensors during synchronous evaluation; separate layers keep their tensors
+/// as independent owners. The split tells the operator how much of the model
+/// took the memory-saving fused path.
+struct ResidentLayerMaterialization {
+    resident_layers: Vec<Qwen3_5ResidentExpertLayerWeights>,
+    fused_gate_up_layer_count: usize,
+    separate_gate_up_layer_count: usize,
+}
+
+/// Materializes every complete resident expert layer in plan order, evaluating
+/// each layer's arrays synchronously before advancing to the next. Evaluating
+/// one layer at a time bounds how many lazy source graphs are alive at once,
+/// so the memory footprint stays close to the materialized layers rather than
+/// the whole safetensors source. Fused gate/up layers drain the allocator
+/// cache right after their synchronous evaluation detaches them from the
+/// source concatenation, returning reclaimable buffers before the next layer
+/// reserves its storage.
+fn materialize_resident_layers(
+    runtime: &MlxRuntime,
+    resident_source_tensors: &mut ResidentSourceTensorMap,
+    layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<ResidentLayerMaterialization, Qwen3_5ExecutionError> {
+    let mut resident_layers = Vec::with_capacity(layer_plans.len());
+    let mut fused_gate_up_layer_count = 0_usize;
+    let mut separate_gate_up_layer_count = 0_usize;
+    for (layer_index, layer_plan) in layer_plans.iter().enumerate() {
+        let complete_layer_payload_bytes = layer_plan
+            .complete_expert_payload_byte_count()
+            .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                description: plan_error.to_string(),
+            })?;
+        tracing::info!(
+            layer_index,
+            total_layer_count = layer_plans.len(),
+            layer_prefix = layer_plan.layer_prefix,
+            complete_layer_payload_bytes,
+            "started materializing one complete resident expert layer"
+        );
+        let resident_layer = load_resident_layer(runtime, resident_source_tensors, layer_plan)?;
+        let gate_up_fusion_applied = resident_layer.gate_up_weights.is_fused();
+        let gate_up_fusion_transient_payload_bytes = resident_layer
+            .gate_up_weights
+            .materialization_transient_payload_bytes();
+        let gate_up_fusion_incompatibility_reason =
+            resident_layer.gate_up_weights.incompatibility_reason();
+        let mut complete_layer_arrays = Vec::new();
+        resident_layer.append_array_references(&mut complete_layer_arrays);
+        runtime.evaluate_arrays(&complete_layer_arrays)?;
+        if gate_up_fusion_applied {
+            // Synchronous evaluation detached the fused owner from its source
+            // concatenation. Drain reclaimable buffers before the next layer.
+            runtime.clear_allocator_cache()?;
+        }
+        if gate_up_fusion_applied {
+            fused_gate_up_layer_count = fused_gate_up_layer_count.saturating_add(1);
+        } else {
+            separate_gate_up_layer_count = separate_gate_up_layer_count.saturating_add(1);
+        }
+        tracing::info!(
+            completed_layer_count = layer_index + 1,
+            total_layer_count = layer_plans.len(),
+            complete_layer_payload_bytes,
+            gate_up_fusion_applied,
+            gate_up_fusion_transient_payload_bytes,
+            gate_up_fusion_incompatibility_reason,
+            "materialized one complete resident expert layer"
+        );
+        resident_layers.push(resident_layer);
+    }
+    Ok(ResidentLayerMaterialization {
+        resident_layers,
+        fused_gate_up_layer_count,
+        separate_gate_up_layer_count,
+    })
+}
+
+/// Counts every expert entry the resident owner will hold by summing each
+/// layer plan's expert capacity. Saturating on overflow is deliberate here:
+/// this count only sizes bookkeeping, while the byte total above is the
+/// overflow-checked one.
+fn complete_model_expert_entry_count(layer_plans: &[QuantizedExpertLayerPlan]) -> usize {
+    layer_plans.iter().fold(0_usize, |entry_count, layer_plan| {
+        entry_count.saturating_add(layer_plan.expert_capacity)
+    })
+}
+
+/// Collects the distinct safetensors files the layer plans read from. The
+/// `BTreeSet` both deduplicates shared source files (layers of one model
+/// frequently share a shard) and gives the shard-loading loop a deterministic
+/// order so logs are reproducible run to run.
+fn collect_source_file_paths(layer_plans: &[QuantizedExpertLayerPlan]) -> BTreeSet<PathBuf> {
+    layer_plans
+        .iter()
+        .flat_map(|layer_plan| {
+            layer_plan
+                .tensor_sources
+                .iter()
+                .map(|tensor_source| tensor_source.source_file.clone())
+        })
+        .collect::<BTreeSet<_>>()
+}
+
+/// Opens every distinct expert source file and loads its safetensors shard
+/// through the runtime. The deterministic `BTreeSet` iteration order makes the
+/// load sequence and its logs reproducible. Each shard keeps the runtime's
+/// lazy descriptor reader alive until the caller drops the returned map.
+fn load_resident_source_shards(
+    runtime: &MlxRuntime,
+    source_file_paths: &BTreeSet<PathBuf>,
+    positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
+) -> Result<HashMap<PathBuf, MlxSafetensors>, Qwen3_5ExecutionError> {
+    let mut resident_source_shards = HashMap::new();
+    for source_file_path in source_file_paths {
+        let resident_source_file = std::fs::File::open(source_file_path).map_err(|open_error| {
+            Qwen3_5ExecutionError::ExpertSourceFailure {
+                description: format!(
+                    "opening expert source file {} failed: {open_error}",
+                    source_file_path.display()
+                ),
+            }
+        })?;
+        let resident_source_shard = runtime.load_safetensors(
+            resident_source_file,
+            positional_file_read_metrics.as_ref().map(Arc::clone),
+        )?;
+        resident_source_shards.insert(source_file_path.clone(), resident_source_shard);
+    }
+    Ok(resident_source_shards)
+}
+
+/// Sums every layer plan's complete expert payload byte count with overflow
+/// detection. A single `u64` covers the whole resident model, so one plan
+/// reporting a bad count or an overflowing total must fail the load before any
+/// storage is reserved.
+fn complete_model_payload_bytes(
+    layer_plans: &[QuantizedExpertLayerPlan],
+) -> Result<u64, Qwen3_5ExecutionError> {
+    layer_plans
+        .iter()
+        .try_fold(0_u64, |total_payload_bytes, layer_plan| {
+            let layer_payload_bytes =
+                layer_plan
+                    .complete_expert_payload_byte_count()
+                    .map_err(|plan_error| Qwen3_5ExecutionError::ExpertLayerPlan {
+                        description: plan_error.to_string(),
+                    })?;
+            total_payload_bytes.checked_add(layer_payload_bytes).ok_or(
+                Qwen3_5ExecutionError::InvalidInput {
+                    description: "complete expert payload byte count overflowed",
+                },
+            )
+        })
 }
 
 fn load_resident_layer(
