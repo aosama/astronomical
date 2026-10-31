@@ -267,28 +267,6 @@ jobs:
           restore-keys: |
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
-      - name: Restore aws-lc-sys build-script cache
-        id: aws-lc-sys-cache
-        uses: ./.github/actions/astronomical-cache
-        with:
-          operation: restore
-          owner: aws-lc-sys
-          # aws-lc-sys's build.rs drives a full CMake build of AWS libcrypto
-          # (measured 45.5s in the 2026-10-31 CI hunt — the single largest
-          # unit in the largest step of the required macOS build). sccache
-          # wraps rustc only, so a build script's EXECUTION can never be
-          # cached by it, and target/ is ephemeral — the CMake tree was
-          # rebuilt on every run regardless of what changed. Restoring the
-          # build-script output plus its fingerprint makes cargo treat the
-          # script as fresh and skip it; if a fingerprint ever goes stale the
-          # script simply re-runs, which is exactly the pre-cache behavior,
-          # so this is a pure accelerator with no correctness surface.
-          path: |
-            target/debug/build/aws-lc-sys-*
-            target/debug/.fingerprint/aws-lc-sys-*
-            target/aarch64-apple-darwin/debug/build/aws-lc-sys-*
-            target/aarch64-apple-darwin/debug/.fingerprint/aws-lc-sys-*
-          key: astronomical-v2-aws-lc-sys-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
       - name: Run the app-builder packaging journey
         run: |
           trap 'scripts/ci/ci-step-timing.sh end app-builder-journey' EXIT
@@ -504,19 +482,6 @@ jobs:
           owner: native-build
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
-      - name: Save aws-lc-sys build-script cache
-        id: aws-lc-sys-cache-save
-        if: ${{ !cancelled() && steps.aws-lc-sys-cache.outputs.cache-hit != 'true' }}
-        uses: ./.github/actions/astronomical-cache
-        with:
-          operation: save
-          owner: aws-lc-sys
-          path: |
-            target/debug/build/aws-lc-sys-*
-            target/debug/.fingerprint/aws-lc-sys-*
-            target/aarch64-apple-darwin/debug/build/aws-lc-sys-*
-            target/aarch64-apple-darwin/debug/.fingerprint/aws-lc-sys-*
-          key: astronomical-v2-aws-lc-sys-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
       - name: Enforce sccache cache budget
         id: sccache-budget
         # A restore that hits the primary key marks cache-hit=true and skips

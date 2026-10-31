@@ -16,6 +16,7 @@ use super::transport::{
     MAXIMUM_RESPONSE_BODY_CHUNKS,
 };
 use super::{HubPayloadFuture, HubPayloadRequest, HubPayloadResponse, HubPayloadTransport};
+use crate::library::crypto_provider::install_default_tls_crypto_provider;
 
 const HUGGING_FACE_HOST: &str = "huggingface.co";
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -43,6 +44,11 @@ pub struct ReqwestHubTransportBuildError {
 
 impl ReqwestHubTransport {
     pub fn production() -> Result<Self, ReqwestHubTransportBuildError> {
+        // reqwest is built with `rustls-no-provider`; the clients below fail
+        // to build unless a process-wide provider is installed first. The
+        // install is idempotent, so every construction path — binary, tests,
+        // future embedders — is covered by this single choke point.
+        install_default_tls_crypto_provider();
         let redirect_policy = redirect::Policy::custom(|attempt| {
             if attempt.previous().len() >= MAXIMUM_REDIRECT_COUNT {
                 return attempt.error("Hugging Face redirect limit exceeded");
