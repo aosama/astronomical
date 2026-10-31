@@ -79,14 +79,11 @@ fn should_return_none_for_generation_tps_when_token_count_is_zero() {
     );
 }
 
-#[test]
-#[expect(clippy::too_many_lines)]
-fn should_open_and_append_to_performance_log() {
-    let temp_dir = tempfile::tempdir().expect("test directory should be created");
-    let mut performance_log =
-        GenerationPerformanceLog::open(temp_dir.path()).expect("performance log should open");
-
-    let record = GenerationPerformanceRecord {
+/// A fully populated performance record: every field carries a distinct,
+/// recognizable value so the serialized-line assertions can fail with the
+/// exact drifted field rather than a generic mismatch.
+fn sample_generation_performance_record() -> GenerationPerformanceRecord {
+    GenerationPerformanceRecord {
         timestamp_millis: 1_700_000_000_000,
         request_id: 42,
         model_id: "test-model".to_owned(),
@@ -147,7 +144,16 @@ fn should_open_and_append_to_performance_log() {
             expert_bytes_reclaimed_for_restore: 16_384,
             in_memory_prefix_adoption: None,
         }),
-    };
+    }
+}
+
+#[test]
+fn should_open_and_append_to_performance_log() {
+    let temp_dir = tempfile::tempdir().expect("test directory should be created");
+    let mut performance_log =
+        GenerationPerformanceLog::open(temp_dir.path()).expect("performance log should open");
+
+    let record = sample_generation_performance_record();
 
     performance_log.record(&record);
 
