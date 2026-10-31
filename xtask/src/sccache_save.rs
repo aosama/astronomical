@@ -8,8 +8,11 @@
 use std::path::Path;
 use std::process::Command;
 
-const MAX_DIRECTORY_BYTES: u64 = 450_000_000;
-const MAX_ENTRY_BYTES: u64 = 450_000_000;
+/// 600M binary sccache cap = 629,145,600 tracked bytes; the directory trim
+/// and the stored-entry refusal share a decimal 680 MB ceiling so the saved
+/// entry plus cache-archive overhead stays under the prune's family ceiling.
+const MAX_DIRECTORY_BYTES: u64 = 680_000_000;
+const MAX_ENTRY_BYTES: u64 = 680_000_000;
 
 /// The save decision the workflow's thin save step consumes. An exact-key
 /// restore skips the save step entirely, so this gate exists to shrink the

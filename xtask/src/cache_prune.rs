@@ -12,9 +12,9 @@ const NATIVE_BUILD_KEEP_COUNT: usize = 2;
 const DEFAULT_KEEP_COUNT: usize = 1;
 /// Size ceilings are family-scoped because only sccache generations ratchet
 /// upward; 0 disables the ceiling for families that own bounded artifacts.
-/// The sccache cap (`SCCACHE_CACHE_SIZE=400M`, 0.419 decimal GB of tracked
+/// The sccache cap (`SCCACHE_CACHE_SIZE=600M`, 0.629 decimal GB of tracked
 /// entries) plus archive overhead must land under this decimal ceiling.
-const SCCACHE_MAX_ENTRY_BYTES: u64 = 450_000_000;
+const SCCACHE_MAX_ENTRY_BYTES: u64 = 680_000_000;
 const DEFAULT_MAX_ENTRY_BYTES: u64 = 0;
 /// sccache saves are default-branch-only, so a non-default-ref sccache entry
 /// is never superseded and only burns budget; every other family keeps one
