@@ -113,7 +113,6 @@ where
     Ok(())
 }
 
-#[expect(clippy::too_many_lines)]
 pub(crate) fn scan_current_format_block_directories(
     blocks_directory: &Path,
     tracked_files: &mut PersistentPromptCacheDiskStoreIndex,
@@ -151,31 +150,31 @@ pub(crate) fn scan_current_format_block_directories(
             .file_name()
             .and_then(|name| name.to_str())
         else {
-            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
-            remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
-            startup_cleanup_evidence
-                .corrupt_current_format
-                .record_block(removed_byte_count);
+            discard_block_directory(
+                &block_directory_path,
+                startup_cleanup_evidence,
+                BlockDirectoryDiscardReason::CorruptCurrentFormat,
+            )?;
             continue;
         };
         // A staging name proves publication never reached its atomic directory
         // rename. Remove the whole transaction; individual files are not salvageable.
         if block_directory_name.contains(".staging-") {
-            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
-            remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
-            startup_cleanup_evidence
-                .interrupted_transaction_recovery
-                .record_block(removed_byte_count);
+            discard_block_directory(
+                &block_directory_path,
+                startup_cleanup_evidence,
+                BlockDirectoryDiscardReason::InterruptedTransaction,
+            )?;
             continue;
         }
         let Some(block_hash_from_directory) =
             parse_persistent_prompt_cache_file_hash_from_path(&block_directory_path)
         else {
-            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
-            remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
-            startup_cleanup_evidence
-                .corrupt_current_format
-                .record_block(removed_byte_count);
+            discard_block_directory(
+                &block_directory_path,
+                startup_cleanup_evidence,
+                BlockDirectoryDiscardReason::CorruptCurrentFormat,
+            )?;
             continue;
         };
         let block_manifest = match PersistentPromptCacheBlockManifest::read_from_block_directory(
@@ -184,43 +183,30 @@ pub(crate) fn scan_current_format_block_directories(
         ) {
             Ok(block_manifest) => block_manifest,
             Err(_) => {
-                let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
-                remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
-                startup_cleanup_evidence
-                    .corrupt_current_format
-                    .record_block(removed_byte_count);
+                discard_block_directory(
+                    &block_directory_path,
+                    startup_cleanup_evidence,
+                    BlockDirectoryDiscardReason::CorruptCurrentFormat,
+                )?;
                 continue;
             }
         };
         if block_manifest.block_hash().ok() != Some(block_hash_from_directory) {
-            let removed_byte_count = cache_owned_directory_byte_count(&block_directory_path)?;
-            remove_cache_owned_directory_or_confirm_absent(&block_directory_path)?;
-            startup_cleanup_evidence
-                .corrupt_current_format
-                .record_block(removed_byte_count);
+            discard_block_directory(
+                &block_directory_path,
+                startup_cleanup_evidence,
+                BlockDirectoryDiscardReason::CorruptCurrentFormat,
+            )?;
             continue;
         }
         // Missing or invalid state remains `None` until topology reconciliation.
         // That later phase can distinguish a legal compacted parent boundary from
         // an incomplete leaf or a block missing required sequence state.
-        let sequence_state_file = if block_manifest.has_sequence_state() {
-            validate_block_state_file(
-                &block_directory_path.join(SEQUENCE_STATE_FILE_NAME),
-                PersistentPromptCacheFileKind::SequenceStateBlock,
-                persistent_prompt_cache_model_contract,
-            )?
-        } else {
-            None
-        };
-        let boundary_state_file = if block_manifest.has_boundary_state() {
-            validate_block_state_file(
-                &block_directory_path.join(BOUNDARY_STATE_FILE_NAME),
-                PersistentPromptCacheFileKind::BoundaryStateSnapshot,
-                persistent_prompt_cache_model_contract,
-            )?
-        } else {
-            None
-        };
+        let (sequence_state_file, boundary_state_file) = validated_state_files_for_manifest(
+            &block_directory_path,
+            &block_manifest,
+            persistent_prompt_cache_model_contract,
+        )?;
         block_candidate_by_hash.insert(
             block_hash_from_directory,
             BlockDirectoryCandidate {
@@ -247,6 +233,73 @@ struct BlockDirectoryCandidate {
     parent_block_hash: Option<[u8; 32]>,
     sequence_state_file: Option<TrackedPersistentPromptCacheFile>,
     boundary_state_file: Option<TrackedPersistentPromptCacheFile>,
+}
+
+/// Why a block directory was removed during startup scan. The reason selects
+/// the evidence bucket the removal is recorded under, so the operator-facing
+/// cleanup report separates interrupted transactions (expected after a crash
+/// mid-publish) from genuinely corrupt current-format directories.
+enum BlockDirectoryDiscardReason {
+    CorruptCurrentFormat,
+    InterruptedTransaction,
+}
+
+/// Removes one cache-owned block directory and records its reclaimed bytes in
+/// the evidence bucket matching the discard reason. Every scan rejection path
+/// funnels through here so byte accounting and removal can never drift apart.
+fn discard_block_directory(
+    block_directory_path: &Path,
+    startup_cleanup_evidence: &mut PersistentPromptCacheStartupCleanupEvidence,
+    discard_reason: BlockDirectoryDiscardReason,
+) -> Result<(), PersistentPromptCacheDiskStoreError> {
+    let removed_byte_count = cache_owned_directory_byte_count(block_directory_path)?;
+    remove_cache_owned_directory_or_confirm_absent(block_directory_path)?;
+    match discard_reason {
+        BlockDirectoryDiscardReason::CorruptCurrentFormat => startup_cleanup_evidence
+            .corrupt_current_format
+            .record_block(removed_byte_count),
+        BlockDirectoryDiscardReason::InterruptedTransaction => startup_cleanup_evidence
+            .interrupted_transaction_recovery
+            .record_block(removed_byte_count),
+    }
+    Ok(())
+}
+
+/// Validates the state files a block manifest declares, skipping (as `None`)
+/// the kinds it does not. Missing or invalid state remains `None` until
+/// topology reconciliation, which can distinguish a legal compacted parent
+/// boundary from an incomplete leaf or a block missing required sequence
+/// state.
+fn validated_state_files_for_manifest(
+    block_directory_path: &Path,
+    block_manifest: &PersistentPromptCacheBlockManifest,
+    persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+) -> Result<
+    (
+        Option<TrackedPersistentPromptCacheFile>,
+        Option<TrackedPersistentPromptCacheFile>,
+    ),
+    PersistentPromptCacheDiskStoreError,
+> {
+    let sequence_state_file = if block_manifest.has_sequence_state() {
+        validate_block_state_file(
+            &block_directory_path.join(SEQUENCE_STATE_FILE_NAME),
+            PersistentPromptCacheFileKind::SequenceStateBlock,
+            persistent_prompt_cache_model_contract,
+        )?
+    } else {
+        None
+    };
+    let boundary_state_file = if block_manifest.has_boundary_state() {
+        validate_block_state_file(
+            &block_directory_path.join(BOUNDARY_STATE_FILE_NAME),
+            PersistentPromptCacheFileKind::BoundaryStateSnapshot,
+            persistent_prompt_cache_model_contract,
+        )?
+    } else {
+        None
+    };
+    Ok((sequence_state_file, boundary_state_file))
 }
 
 fn validate_block_state_file(
