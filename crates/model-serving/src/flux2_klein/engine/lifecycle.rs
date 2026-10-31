@@ -137,6 +137,69 @@ impl Flux2KleinImageEngine {
             elapsed_millis: Self::elapsed_millis(active_request),
         }
     }
+
+    /// Terminal encoding step: encodes the decoded latents to PNG, finalizes
+    /// the request's attribution as a success, and returns the completed
+    /// image with its result metadata. A failed encode fails the active
+    /// request; a failed finalize after a successful encode is fatal because
+    /// the image exists but the accounting contract cannot be honored.
+    fn complete_encoded_request(
+        &mut self,
+        active_request: ActiveRequest,
+    ) -> Result<ImageGenerationEngineStep, ImageGenerationFailureReason> {
+        let png_bytes = match self.components.encode_png() {
+            Ok(png_bytes) => png_bytes,
+            Err(reason) => {
+                return Err(self.fail_active_request(
+                    reason,
+                    "FLUX.2 Klein could not encode the generated image",
+                ));
+            }
+        };
+        let elapsed_millis = Self::elapsed_millis(&active_request);
+        let encoded_byte_count = u64::try_from(png_bytes.len()).unwrap_or(u64::MAX);
+        if self
+            .components
+            .finalize_request(
+                PerformanceAttributionOutcome::Success,
+                Some(encoded_byte_count),
+                None,
+            )
+            .is_err()
+        {
+            return Err(ImageGenerationFailureReason::FatalExecution {
+                reason: "FLUX.2 Klein could not finalize the generated image".to_owned(),
+            });
+        }
+        Ok(ImageGenerationEngineStep::Completed {
+            generated_image: GeneratedImage {
+                mime_type: "image/png".to_owned(),
+                encoded_bytes: png_bytes,
+            },
+            result_metadata: ImageGenerationResultMetadata {
+                width_pixels: active_request.dimensions.width_pixels(),
+                height_pixels: active_request.dimensions.height_pixels(),
+                steps: Flux2KleinOfficialProfile::inference_step_count() as u16,
+                guidance_thousandths: Flux2KleinOfficialProfile::guidance_thousandths(),
+                seed: active_request.seed,
+                elapsed_millis,
+            },
+        })
+    }
+
+    /// Restores a still-running request as active and reports its progress
+    /// step. Used by the partial-phase branches: the phase's work advanced
+    /// but did not complete, so the request continues from where it stands.
+    fn restore_with_progress(
+        &mut self,
+        active_request: ActiveRequest,
+        phase: ImageGenerationPhase,
+        completed_steps: u16,
+    ) -> ImageGenerationEngineStep {
+        let progress = Self::progress(&active_request, phase, completed_steps);
+        self.active_request = Some(active_request);
+        progress
+    }
 }
 
 impl ImageGenerationEngine for Flux2KleinImageEngine {
@@ -210,7 +273,6 @@ impl ImageGenerationEngine for Flux2KleinImageEngine {
         Ok(())
     }
 
-    #[expect(clippy::too_many_lines)]
     fn advance_generation(
         &mut self,
         request_id: RequestId,
@@ -251,73 +313,33 @@ impl ImageGenerationEngine for Flux2KleinImageEngine {
                         decoding_completed = Some(did_complete_decoding);
                     })
             }
-            RequestPhase::Encoding => {
-                let png_bytes = match self.components.encode_png() {
-                    Ok(png_bytes) => png_bytes,
-                    Err(reason) => {
-                        return Err(self.fail_active_request(
-                            reason,
-                            "FLUX.2 Klein could not encode the generated image",
-                        ));
-                    }
-                };
-                let elapsed_millis = Self::elapsed_millis(&active_request);
-                let encoded_byte_count = u64::try_from(png_bytes.len()).unwrap_or(u64::MAX);
-                if self
-                    .components
-                    .finalize_request(
-                        PerformanceAttributionOutcome::Success,
-                        Some(encoded_byte_count),
-                        None,
-                    )
-                    .is_err()
-                {
-                    return Err(ImageGenerationFailureReason::FatalExecution {
-                        reason: "FLUX.2 Klein could not finalize the generated image".to_owned(),
-                    });
-                }
-                return Ok(ImageGenerationEngineStep::Completed {
-                    generated_image: GeneratedImage {
-                        mime_type: "image/png".to_owned(),
-                        encoded_bytes: png_bytes,
-                    },
-                    result_metadata: ImageGenerationResultMetadata {
-                        width_pixels: active_request.dimensions.width_pixels(),
-                        height_pixels: active_request.dimensions.height_pixels(),
-                        steps: Flux2KleinOfficialProfile::inference_step_count() as u16,
-                        guidance_thousandths: Flux2KleinOfficialProfile::guidance_thousandths(),
-                        seed: active_request.seed,
-                        elapsed_millis,
-                    },
-                });
-            }
+            RequestPhase::Encoding => return self.complete_encoded_request(active_request),
         };
         if let Err(reason) = operation {
             let public_failure_description = active_request.phase.public_failure_description();
             return Err(self.fail_active_request(reason, public_failure_description));
         }
         if conditioning_completed == Some(false) {
-            let progress = Self::progress(&active_request, ImageGenerationPhase::EncodingPrompt, 0);
-            self.active_request = Some(active_request);
-            return Ok(progress);
+            return Ok(self.restore_with_progress(
+                active_request,
+                ImageGenerationPhase::EncodingPrompt,
+                0,
+            ));
         }
         if denoising_advance == Some(false) {
-            let progress = Self::progress(
-                &active_request,
+            let completed_denoising_steps = active_request.completed_denoising_steps();
+            return Ok(self.restore_with_progress(
+                active_request,
                 ImageGenerationPhase::Denoising,
-                active_request.completed_denoising_steps(),
-            );
-            self.active_request = Some(active_request);
-            return Ok(progress);
+                completed_denoising_steps,
+            ));
         }
         if decoding_completed == Some(false) {
-            let progress = Self::progress(
-                &active_request,
+            return Ok(self.restore_with_progress(
+                active_request,
                 ImageGenerationPhase::Decoding,
                 Flux2KleinOfficialProfile::inference_step_count() as u16,
-            );
-            self.active_request = Some(active_request);
-            return Ok(progress);
+            ));
         }
         let (phase, completed_steps) = active_request.advance_phase();
         let progress = Self::progress(&active_request, phase, completed_steps);
