@@ -1,5 +1,6 @@
 //! Shared accessors for the workflow structural contract tests: typed
-//! navigation over the parsed `ci.yml` and composite-action YAML so each
+//! navigation over the parsed `ci.yml`, the nightly
+//! `notices-freshness.yml` lane, and composite-action YAML so each
 //! contract test reads as the assertion it pins. Each contract binary uses a
 //! subset of this module, so unused members are expected per binary.
 #![allow(dead_code)]
@@ -30,6 +31,10 @@ fn parse_yaml_file(file_path: &Path) -> Value {
 
 pub(crate) fn workflow_contract() -> Value {
     parse_yaml_file(&repository_root().join(".github/workflows/ci.yml"))
+}
+
+pub(crate) fn notices_freshness_workflow_contract() -> Value {
+    parse_yaml_file(&repository_root().join(".github/workflows/notices-freshness.yml"))
 }
 
 pub(crate) fn composite_action_contract() -> Value {

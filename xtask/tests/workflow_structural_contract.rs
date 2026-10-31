@@ -12,9 +12,9 @@ mod contract_support;
 
 use contract_support::{
     EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP, EXPECTED_OBSERVATORY_COMMAND,
-    EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id, find_step_by_name, required_bool,
-    required_field, required_job, required_text, required_u64, run_text_of, steps_of, triggers_of,
-    workflow_contract,
+    EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id, find_step_by_name,
+    notices_freshness_workflow_contract, required_bool, required_field, required_job,
+    required_text, required_u64, run_text_of, steps_of, triggers_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -261,35 +261,102 @@ fn required_check_steps_keep_their_bounded_contracts() {
 }
 
 #[test]
-fn dependency_notices_steps_stay_out_of_the_pull_request_lane() {
-    // The dependency-notices lane is main-only: pull requests run no
-    // notices work (the freshness gate repeatedly failed pull requests
-    // whose authors had not regenerated locally, and freshness of the
-    // committed copy is repository hygiene, not a property of the change
-    // under review), while default-branch and dispatch builds regenerate
-    // so the bundled app never ships stale notices. The verify step must
-    // not come back silently.
+fn ci_runs_no_dependency_notices_work() {
+    // The dependency-notices lane left ci.yml entirely (issue #1684): the
+    // in-run refresh regenerated third-party/RUST_DEPENDENCY_NOTICES into
+    // the runner's ephemeral working tree, where no bundle ever consumed
+    // it. Neither the strict pull-request freshness gate (removed once
+    // before for failing pull requests whose authors had not regenerated
+    // locally) nor the in-run refresh may come back silently — freshness
+    // is now the nightly notices-freshness workflow's contract.
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    let verification_step_names: Vec<&str> = verification_steps
-        .iter()
-        .filter_map(|step| step.get("name").and_then(|value| value.as_str()))
-        .collect();
+    let mut step_names: Vec<&str> = Vec::new();
+    for step in &verification_steps {
+        if let Some(step_name) = step.get("name").and_then(Value::as_str) {
+            step_names.push(step_name);
+        }
+    }
+    for step_name in &step_names {
+        assert!(
+            !step_name.to_lowercase().contains("dependency notices"),
+            "a dependency-notices step crept back into the ci.yml macOS lane; freshness belongs to the nightly notices-freshness workflow"
+        );
+    }
+    for step in &verification_steps {
+        if let Some(run_text) = step.get("run").and_then(Value::as_str) {
+            assert!(
+                !run_text.contains("xtask notices"),
+                "notices generation crept back into the ci.yml macOS lane; freshness belongs to the nightly notices-freshness workflow"
+            );
+        }
+    }
+}
+
+#[test]
+fn nightly_notices_freshness_lane_stays_pinned() {
+    // The freshness contract that replaced the retired in-run refresh
+    // (issue #1684): without this lane, a bot-merged dependency update can
+    // leave the committed notices one regeneration behind with nothing
+    // failing. The lane must stay scheduled nightly, keep the on-demand
+    // dispatch, stay read-only, and check the committed copy.
+    let freshness_lane = notices_freshness_workflow_contract();
+    let freshness_triggers = triggers_of(&freshness_lane);
     assert!(
-        !verification_step_names
-            .iter()
-            .any(|&step_name| step_name.contains("dependency notices")
-                && !step_name.contains("for the bundled app")),
-        "a dependency-notices step outside the bundled-app refresh crept back into the pull-request lane"
+        freshness_triggers.get("workflow_dispatch").is_some(),
+        "the notices-freshness lane lost its on-demand dispatch trigger"
     );
-    let refresh_notices_step = find_step_by_name(
-        &verification_steps,
-        "Refresh Rust dependency notices for the bundled app",
+    let schedule_entries = required_field(
+        freshness_triggers,
+        "schedule",
+        "the notices-freshness triggers",
+    )
+    .as_sequence()
+    .expect("the notices-freshness schedule must be a sequence");
+    assert!(
+        !schedule_entries.is_empty(),
+        "the notices-freshness lane lost its schedule"
+    );
+    let cron_expression = required_text(
+        &schedule_entries[0],
+        "cron",
+        "the notices-freshness schedule entry",
+    );
+    let cron_fields: Vec<&str> = cron_expression.split_whitespace().collect();
+    assert_eq!(
+        cron_fields.len(),
+        5,
+        "the notices-freshness cron expression must stay a five-field cron"
+    );
+    // Day-of-month, month, and day-of-week must stay wildcard so the check
+    // runs every night; drift beyond a day is what the lane exists to catch.
+    assert!(
+        cron_fields[2] == "*" && cron_fields[3] == "*" && cron_fields[4] == "*",
+        "the notices-freshness schedule must stay nightly"
+    );
+    let lane_permissions = required_field(
+        &freshness_lane,
+        "permissions",
+        "the notices-freshness workflow",
     );
     assert!(
-        required_text(refresh_notices_step, "if", "notices-refresh-gate")
-            .contains("github.event_name != 'pull_request'"),
-        "notices generation runs inside pull-request builds"
+        required_text(
+            lane_permissions,
+            "contents",
+            "the notices-freshness permissions"
+        ) == "read",
+        "the read-only freshness lane gained write permissions"
+    );
+    let freshness_steps = steps_of(required_job(&freshness_lane, "check"), "check");
+    let freshness_check_step = find_step_by_name(
+        &freshness_steps,
+        "Check committed Rust dependency notices freshness",
+    );
+    let freshness_check_run_text = run_text_of(freshness_check_step, "notices-freshness-check");
+    assert!(
+        freshness_check_run_text.contains("-p xtask")
+            && freshness_check_run_text.contains("notices --check"),
+        "the notices-freshness lane no longer checks the committed copy through the locked xtask runner"
     );
 }
 
