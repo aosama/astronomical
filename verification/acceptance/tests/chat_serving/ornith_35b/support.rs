@@ -114,7 +114,7 @@ fn isolated_home(
     config_document["chunking"]["experimental_decode_stage_attribution_enabled"] =
         serde_json::json!(false);
     if let Some(persistent_prompt_cache_enabled) = persistent_prompt_cache_enabled {
-        config_document["persistent_prompt_cache"]["persistent_prompt_cache_enabled"] =
+        config_document["prompt_cache"]["enabled"] =
             serde_json::json!(persistent_prompt_cache_enabled);
     }
     if let Some(prefix_adoption_enabled) = run_configuration.prefix_adoption_enabled {
