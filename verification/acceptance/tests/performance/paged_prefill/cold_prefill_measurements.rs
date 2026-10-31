@@ -459,7 +459,12 @@ fn five_thousand_word_case() -> ColdPrefillMeasurementCase {
 fn fifty_thousand_word_case() -> ColdPrefillMeasurementCase {
     ColdPrefillMeasurementCase {
         instruction: "Read the following public-domain book excerpt and reply with OK.",
-        maximum_output_tokens: 1,
+        // The budget is a cap, not a target: the model still emits only "OK"
+        // plus its end-of-sequence token. It must clear the chat template's
+        // fixed transition tokens (about two dozen for this artifact family)
+        // plus the one visible answer token, or the worker rejects the
+        // request before prefill — defeating the measurement's purpose.
+        maximum_output_tokens: 64,
         source_document: CACHE_SCALING_FIXTURE,
         source_word_count: 50_000,
         should_require_three_paragraphs: false,
