@@ -143,7 +143,7 @@ impl Qwen3_5EngineState {
             .map_err(InferenceEngineError::from)?;
         // Demand evidence recorded by discarded chunks must not steer the
         // decode handoff, so the retry opens a fresh window.
-        active_request.has_opened_expert_demand_window = false;
+        active_request.has_opened_prefill_demand_window = false;
         tracing::warn!(
             request_id = request_id.value(),
             failed_prefill_start,

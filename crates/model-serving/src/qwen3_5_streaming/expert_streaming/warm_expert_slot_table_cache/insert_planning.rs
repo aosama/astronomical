@@ -7,9 +7,10 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decode_cache_policy::{
-    DecodeExpertSlotState, HISTORICAL_HOT_DEMAND_COUNT,
-    MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP, available_probationary_slot_count,
+    DecodeExpertSlotState, MAXIMUM_CANDIDATE_SLOT_REPLACEMENTS_PER_DECODE_STEP,
+    available_probationary_slot_count,
 };
+use super::demand_history::HISTORICAL_HOT_DEMAND_COUNT;
 use super::slot_writes::{
     create_warm_table_weights, materialize_and_detach_table_weights, write_expert_into_slot,
 };

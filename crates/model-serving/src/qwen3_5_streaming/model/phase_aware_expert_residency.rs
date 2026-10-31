@@ -7,28 +7,34 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::ExpertPagingError;
 use crate::qwen3_5_streaming::expert_streaming::retained_expert_layer_page_payload_bytes;
 use crate::{
     CurrentExpertLayerResidency, ExpertLayerResidencyTarget, ExpertResidencyPlan, MemoryPhase,
-    PerformanceAttribution, PerformanceCounter, PerformanceOperation, RetainedExpertPageClass,
-    RetainedExpertReclamation, plan_expert_residency, publish_request_stable_residency_plan,
-    retained_resident_ceiling_after_budget_refresh, seated_complete_layer_count,
-    should_enact_planned_expert_release,
+    PerformanceAttribution, PerformanceCounter, PerformanceOperation, RequestExpertResidency,
+    RetainedExpertPageClass, RetainedExpertReclamation, plan_expert_residency,
+    publish_request_stable_residency_plan, retained_resident_ceiling_after_budget_refresh,
+    seated_complete_layer_count, should_enact_planned_expert_release,
 };
 
 use super::streaming_model::Qwen3_5StreamingModel;
 
 impl Qwen3_5StreamingModel {
-    /// Clears demand evidence after one topology plan consumes it.
-    pub(crate) fn clear_expert_demand_for_residency(&self) {
+    /// Opens one request's prefill demand window: the previous request's
+    /// prefill evidence is spent, while lifetime decode evidence persists
+    /// (see `demand_phase`).
+    pub(crate) fn begin_prefill_demand_window_for_residency(&self) {
         if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts.borrow_mut().clear_expert_demand();
+            retained_experts.borrow_mut().begin_prefill_demand_window();
         }
     }
 
-    /// Scales demand recorded by subsequent forwards until restored or cleared.
-    pub(crate) fn set_expert_demand_assignment_weight_for_residency(&self, assignment_weight: u64) {
+    /// Scales prefill demand recorded by subsequent forwards of this chunk.
+    /// Decode evidence ignores the multiplier (see `demand_phase`).
+    pub(crate) fn set_prefill_demand_assignment_weight_for_residency(
+        &self,
+        assignment_weight: u64,
+    ) {
         if let Some(retained_experts) = self.retained_experts.as_ref() {
             retained_experts
                 .borrow_mut()
-                .set_demand_assignment_weight(assignment_weight);
+                .set_prefill_demand_assignment_weight(assignment_weight);
         }
     }
 
@@ -72,24 +78,10 @@ impl Qwen3_5StreamingModel {
             *self.active_expert_residency_plan.borrow_mut() = None;
             return Ok(());
         };
-        let budget_phase = planning_budget_phase(phase);
-        let budget_snapshot = self.mlx_ram_budget.borrow().plan(
-            budget_phase,
+        let retained_expert_ceiling_bytes = self.compose_phase_aware_expert_budget(
+            phase,
             context_token_count,
             operation_token_count,
-            0,
-        );
-        let retained_expert_ceiling_bytes = budget_snapshot.retained_expert_budget_bytes;
-        tracing::info!(
-            ?phase,
-            context_token_count,
-            mlx_active_memory_ceiling_bytes = budget_snapshot.mlx_active_memory_ceiling_bytes,
-            model_core_payload_bytes = budget_snapshot.model_core_payload_bytes,
-            context_window_reserve_bytes = budget_snapshot.context_window_reserve_bytes,
-            activation_headroom_bytes = budget_snapshot.activation_headroom_bytes,
-            complete_layer_stream_slot_bytes = budget_snapshot.complete_layer_stream_slot_bytes,
-            retained_expert_ceiling_bytes,
-            "composed Prefill/Decode leftover expert budget"
         );
         let experts_per_token =
             usize::try_from(self.config.experts_per_token()).unwrap_or(usize::MAX);
@@ -103,10 +95,7 @@ impl Qwen3_5StreamingModel {
             )?;
         tracing::info!(
             current_residency_count = current_residencies.len(),
-            current_residency_payload_bytes = current_residencies
-                .iter()
-                .map(|residency| residency.payload_bytes)
-                .fold(0_u64, u64::saturating_add),
+            current_residency_payload_bytes = summed_residency_payload_bytes(&current_residencies),
             leftover_expert_budget_bytes = retained_expert_ceiling_bytes,
             retained_page_ceiling_bytes,
             "topology snapshot before residency planning"
@@ -126,20 +115,76 @@ impl Qwen3_5StreamingModel {
             .map_err(|plan_error| ExpertPagingError::InvalidPagingPlan {
                 description: plan_error.to_string(),
             })?;
+        self.publish_phase_aware_residency_decisions(
+            phase,
+            retained_expert_ceiling_bytes,
+            residency_plan,
+            &layer_geometries,
+            &budget_reclamation,
+            &current_residencies,
+            performance_attribution,
+        );
+        Ok(())
+    }
+
+    /// Composes the phase budget snapshot and reports it: the leftover expert
+    /// budget every later residency decision arbitrates against.
+    fn compose_phase_aware_expert_budget(
+        &self,
+        phase: MemoryPhase,
+        context_token_count: u64,
+        operation_token_count: u64,
+    ) -> u64 {
+        let budget_phase = planning_budget_phase(phase);
+        let budget_snapshot = self.mlx_ram_budget.borrow().plan(
+            budget_phase,
+            context_token_count,
+            operation_token_count,
+            0,
+        );
+        let retained_expert_ceiling_bytes = budget_snapshot.retained_expert_budget_bytes;
+        tracing::info!(
+            ?phase,
+            context_token_count,
+            mlx_active_memory_ceiling_bytes = budget_snapshot.mlx_active_memory_ceiling_bytes,
+            model_core_payload_bytes = budget_snapshot.model_core_payload_bytes,
+            context_window_reserve_bytes = budget_snapshot.context_window_reserve_bytes,
+            activation_headroom_bytes = budget_snapshot.activation_headroom_bytes,
+            complete_layer_stream_slot_bytes = budget_snapshot.complete_layer_stream_slot_bytes,
+            retained_expert_ceiling_bytes,
+            "composed Prefill/Decode leftover expert budget"
+        );
+        retained_expert_ceiling_bytes
+    }
+
+    /// Publishes the request-stable plan, enacts its releases without loading
+    /// replacements, reports the occupancy-truth telemetry, and installs the
+    /// plan as the active residency target.
+    #[allow(clippy::too_many_arguments)]
+    fn publish_phase_aware_residency_decisions(
+        &self,
+        phase: MemoryPhase,
+        retained_expert_ceiling_bytes: u64,
+        residency_plan: ExpertResidencyPlan,
+        layer_geometries: &[ExpertLayerGeometry],
+        budget_reclamation: &RetainedExpertReclamation,
+        current_residencies: &[CurrentExpertLayerResidency],
+        performance_attribution: &mut PerformanceAttribution,
+    ) {
         let (next_request_residency, residency_plan) = publish_request_stable_residency_plan(
             phase,
             self.request_expert_residency.borrow().as_ref(),
             residency_plan,
-            &current_residencies,
+            current_residencies,
             budget_reclamation.released_complete_payload_bytes,
-            &layer_geometries,
+            layer_geometries,
         );
         *self.request_expert_residency.borrow_mut() = next_request_residency;
         if phase == MemoryPhase::GenerationPreparation {
             record_generation_preparation_plan_counters(
                 performance_attribution,
                 &residency_plan,
-                &current_residencies,
+                current_residencies,
             );
         }
         // Enact releases without loading replacements. This makes the planner's
@@ -147,7 +192,7 @@ impl Qwen3_5StreamingModel {
         self.enact_planned_expert_releases(
             phase,
             &residency_plan,
-            &current_residencies,
+            current_residencies,
             performance_attribution,
         );
         // Occupancy truth first: the pinned count published here must equal
@@ -157,12 +202,12 @@ impl Qwen3_5StreamingModel {
         // because both the contract's pin roles and the occupancy were
         // conflated into one field; the contract's pin count is published
         // separately as `contracted_complete_layer_count`.
-        let seated_complete_layer_count = seated_complete_layer_count(&current_residencies);
+        let seated_complete_layer_count = seated_complete_layer_count(current_residencies);
         let contracted_complete_layer_count = self
             .request_expert_residency
             .borrow()
             .as_ref()
-            .map(|request_residency| request_residency.pinned_complete_layer_indexes().len())
+            .map(request_residency_pinned_layer_count)
             .unwrap_or(0);
         publish_phase_aware_residency_plan_info(
             phase,
@@ -170,10 +215,9 @@ impl Qwen3_5StreamingModel {
             &residency_plan,
             seated_complete_layer_count,
             contracted_complete_layer_count,
-            &budget_reclamation,
+            budget_reclamation,
         );
         *self.active_expert_residency_plan.borrow_mut() = Some(residency_plan);
-        Ok(())
     }
 
     /// Snapshots the resident topology, floors the refreshed ceiling at the
@@ -280,6 +324,21 @@ impl Qwen3_5StreamingModel {
             .get(layer_index)
             .copied()
     }
+}
+
+/// Pure: total payload bytes across a topology snapshot, saturated — the
+/// topology telemetry's `current_residency_payload_bytes` field.
+fn summed_residency_payload_bytes(current_residencies: &[CurrentExpertLayerResidency]) -> u64 {
+    let mut total_payload_bytes = 0_u64;
+    for current_residency in current_residencies {
+        total_payload_bytes = total_payload_bytes.saturating_add(current_residency.payload_bytes);
+    }
+    total_payload_bytes
+}
+
+/// Pure: how many complete layers a request-stable residency contract pins.
+fn request_residency_pinned_layer_count(request_residency: &RequestExpertResidency) -> usize {
+    request_residency.pinned_complete_layer_indexes().len()
 }
 
 /// Logs the published phase-aware expert residency plan with its occupancy
