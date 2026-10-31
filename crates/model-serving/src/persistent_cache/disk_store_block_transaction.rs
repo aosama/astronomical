@@ -38,7 +38,6 @@ use super::retention_policy;
 use mlx_c_rust::MlxArray;
 
 impl PersistentPromptCacheDiskStore {
-    #[expect(clippy::too_many_lines)]
     pub(super) fn publish_new_block_transaction(
         &self,
         runtime: &MlxRuntime,
@@ -54,9 +53,8 @@ impl PersistentPromptCacheDiskStore {
         let final_block_directory = self.blocks_directory.join(&block_directory_name);
         let staging_block_directory =
             unique_staging_block_directory(&self.blocks_directory, &block_directory_name);
-        create_staging_directory(&staging_block_directory)?;
 
-        let staged_files = match self.stage_complete_block(
+        let staged_files = self.stage_and_admit_block(
             runtime,
             block_key,
             parent_block_key,
@@ -64,89 +62,21 @@ impl PersistentPromptCacheDiskStore {
             boundary_state_tensors,
             performance_attribution,
             &staging_block_directory,
-        ) {
-            Ok(staged_files) => staged_files,
-            Err(staging_error) => {
-                remove_cache_owned_directory_or_confirm_absent(&staging_block_directory)?;
-                return Err(staging_error);
-            }
-        };
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCachePublicationSynchronizationWait,
-                |_performance_attribution| synchronize_directory(&staging_block_directory),
-            )
-            .map_err(|sync_error| {
-                cleanup_staging_after_error(&staging_block_directory, sync_error)
-            })?;
-
+            &final_block_directory,
+        )?;
         // Quota projection may subtract this boundary because it becomes
         // redundant after commit. The file is not physically removed until the
         // child rename and parent-directory synchronization have succeeded.
         let parent_boundary_reclaim = self
             .parent_boundary_reclaim_after_commit(parent_block_key, staged_files.total_size_bytes);
-        let mut protected_block_directory_paths =
-            self.protected_ancestry_for_commit(parent_block_key);
-        protected_block_directory_paths.push(final_block_directory.clone());
-        performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheGlobalQuotaEviction,
-                |_performance_attribution| {
-                    self.enforce_global_prompt_cache_quota_for_commit(
-                        staged_files.total_size_bytes,
-                        parent_boundary_reclaim
-                            .as_ref()
-                            .map_or(0, |parent_boundary_reclaim| {
-                                parent_boundary_reclaim.file_size_bytes
-                            }),
-                        &protected_block_directory_paths,
-                        Some(&staging_block_directory),
-                    )
-                },
-            )
-            .map_err(|quota_error| {
-                cleanup_staging_after_error(&staging_block_directory, quota_error)
-            })?;
-        // A writer holding the process-local publication lock should not race
-        // itself. Presence here therefore means disk topology changed outside
-        // this transaction; do not replace content we did not validate.
-        if final_block_directory.exists() {
-            remove_cache_owned_directory_or_confirm_absent(&staging_block_directory)?;
-            return Err(
-                PersistentPromptCacheDiskStoreError::ExistingBlockTopologyMismatch {
-                    block_hash: block_key.block_hash(),
-                },
-            );
-        }
-        performance_attribution.measure_operation(
-            PerformanceOperation::PersistentPromptCacheAtomicCommit,
-            |_performance_attribution| {
-                std::fs::rename(&staging_block_directory, &final_block_directory).map_err(
-                    |source| {
-                        let _cleanup_result = remove_cache_owned_directory_or_confirm_absent(
-                            &staging_block_directory,
-                        );
-                        PersistentPromptCacheDiskStoreError::RenameTempFile {
-                            temp_file_path: staging_block_directory.clone(),
-                            block_file_path: final_block_directory.clone(),
-                            source,
-                        }
-                    },
-                )
-            },
-        )?;
-        performance_attribution.measure_operation(
-            PerformanceOperation::PersistentPromptCachePublicationSynchronizationWait,
-            |_performance_attribution| synchronize_directory(&self.blocks_directory),
-        )?;
-        // Index publication occurs after durable filesystem publication. A
-        // lookup can therefore never observe an indexed staging transaction.
-        self.track_committed_block(
+        self.commit_and_publish_block(
             block_key,
             parent_block_key,
+            &staging_block_directory,
             &final_block_directory,
             staged_files,
-        );
+            performance_attribution,
+        )?;
         if let Some(parent_boundary_reclaim) = parent_boundary_reclaim {
             performance_attribution.measure_operation(
                 PerformanceOperation::PersistentPromptCacheRetentionCleanup,
@@ -267,6 +197,127 @@ impl PersistentPromptCacheDiskStore {
             },
         );
         self.refresh_global_prompt_cache_accounting()?;
+        Ok(())
+    }
+
+    /// Stages the complete block and admits it under the global quota:
+    /// creates the unique staging directory, writes and validates every state
+    /// file, synchronizes the staging directory, enforces the quota eviction
+    /// with the parent-boundary reclaim and protected ancestry in play, and
+    /// finally refuses an existing final directory (a writer holding the
+    /// process-local publication lock cannot race itself, so presence means
+    /// the disk topology changed outside this transaction). Every failure
+    /// removes the staging directory before propagating.
+    #[allow(clippy::too_many_arguments)]
+    fn stage_and_admit_block(
+        &self,
+        runtime: &MlxRuntime,
+        block_key: &PersistentPromptCacheBlockKey,
+        parent_block_key: Option<&PersistentPromptCacheBlockKey>,
+        sequence_state_tensors: &HashMap<String, MlxArray>,
+        boundary_state_tensors: &HashMap<String, MlxArray>,
+        performance_attribution: &mut PerformanceAttribution,
+        staging_block_directory: &Path,
+        final_block_directory: &Path,
+    ) -> Result<StagedBlockFiles, PersistentPromptCacheDiskStoreError> {
+        create_staging_directory(staging_block_directory)?;
+        let staged_files = match self.stage_complete_block(
+            runtime,
+            block_key,
+            parent_block_key,
+            sequence_state_tensors,
+            boundary_state_tensors,
+            performance_attribution,
+            staging_block_directory,
+        ) {
+            Ok(staged_files) => staged_files,
+            Err(staging_error) => {
+                remove_cache_owned_directory_or_confirm_absent(staging_block_directory)?;
+                return Err(staging_error);
+            }
+        };
+        performance_attribution
+            .measure_operation(
+                PerformanceOperation::PersistentPromptCachePublicationSynchronizationWait,
+                |_performance_attribution| synchronize_directory(staging_block_directory),
+            )
+            .map_err(|sync_error| {
+                cleanup_staging_after_error(staging_block_directory, sync_error)
+            })?;
+        let parent_boundary_reclaim = self
+            .parent_boundary_reclaim_after_commit(parent_block_key, staged_files.total_size_bytes);
+        let mut protected_block_directory_paths =
+            self.protected_ancestry_for_commit(parent_block_key);
+        protected_block_directory_paths.push(final_block_directory.to_path_buf());
+        performance_attribution
+            .measure_operation(
+                PerformanceOperation::PersistentPromptCacheGlobalQuotaEviction,
+                |_performance_attribution| {
+                    self.enforce_global_prompt_cache_quota_for_commit(
+                        staged_files.total_size_bytes,
+                        parent_boundary_reclaim
+                            .as_ref()
+                            .map_or(0, |parent_boundary_reclaim| {
+                                parent_boundary_reclaim.file_size_bytes
+                            }),
+                        &protected_block_directory_paths,
+                        Some(staging_block_directory),
+                    )
+                },
+            )
+            .map_err(|quota_error| {
+                cleanup_staging_after_error(staging_block_directory, quota_error)
+            })?;
+        if final_block_directory.exists() {
+            remove_cache_owned_directory_or_confirm_absent(staging_block_directory)?;
+            return Err(
+                PersistentPromptCacheDiskStoreError::ExistingBlockTopologyMismatch {
+                    block_hash: block_key.block_hash(),
+                },
+            );
+        }
+        Ok(staged_files)
+    }
+
+    /// Atomically commits the staged block and publishes it to the index:
+    /// the measured staging-to-final rename (with staging cleanup on failure),
+    /// the blocks-directory synchronization, then index publication — which
+    /// strictly follows durable filesystem publication so a lookup can never
+    /// observe an indexed staging transaction.
+    #[allow(clippy::too_many_arguments)]
+    fn commit_and_publish_block(
+        &self,
+        block_key: &PersistentPromptCacheBlockKey,
+        parent_block_key: Option<&PersistentPromptCacheBlockKey>,
+        staging_block_directory: &Path,
+        final_block_directory: &Path,
+        staged_files: StagedBlockFiles,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), PersistentPromptCacheDiskStoreError> {
+        performance_attribution.measure_operation(
+            PerformanceOperation::PersistentPromptCacheAtomicCommit,
+            |_performance_attribution| {
+                std::fs::rename(staging_block_directory, final_block_directory).map_err(|source| {
+                    let _cleanup_result =
+                        remove_cache_owned_directory_or_confirm_absent(staging_block_directory);
+                    PersistentPromptCacheDiskStoreError::RenameTempFile {
+                        temp_file_path: staging_block_directory.to_path_buf(),
+                        block_file_path: final_block_directory.to_path_buf(),
+                        source,
+                    }
+                })
+            },
+        )?;
+        performance_attribution.measure_operation(
+            PerformanceOperation::PersistentPromptCachePublicationSynchronizationWait,
+            |_performance_attribution| synchronize_directory(&self.blocks_directory),
+        )?;
+        self.track_committed_block(
+            block_key,
+            parent_block_key,
+            final_block_directory,
+            staged_files,
+        );
         Ok(())
     }
 

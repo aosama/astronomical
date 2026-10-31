@@ -153,7 +153,6 @@ fn print_scan_usage() {
     );
 }
 
-#[expect(clippy::too_many_lines)]
 fn run_scan(
     repository_root: &Path,
     target_directory_override: Option<String>,
@@ -171,6 +170,47 @@ fn run_scan(
         },
     };
 
+    let Some(canonical_scan_roots) = canonicalized_scan_roots(&target_directory, extra_scan_roots)
+    else {
+        return ExitCode::from(1);
+    };
+
+    let scan_started_at = Instant::now();
+    let RetiredScanTotals {
+        total_retired_bytes,
+        total_retired_directories,
+        total_unreadable_directories,
+    } = scan_and_aggregate_roots(&canonical_scan_roots, scan_started_at);
+
+    // The summary line stays in raw bytes exactly like every other
+    // lifecycle log; the trailing human figure converts with the Apple
+    // marketing convention 1 GB = 1,073,741,824 bytes (2^30).
+    let total_retired_gb_whole = total_retired_bytes / (1024 * 1024 * 1024);
+    print_output_line(
+        &format!(
+            "[retired-native-scan] status=summary found={total_retired_directories} unreadable_directories={total_unreadable_directories} allocated_bytes={total_retired_bytes} allocated_gb={total_retired_gb_whole} elapsed_seconds={}",
+            scan_started_at.elapsed().as_secs()
+        ),
+        false,
+    );
+    if fail_on_found && total_retired_directories > 0 {
+        print_output_line(&gate_error_message(total_retired_directories), true);
+        return ExitCode::from(1);
+    }
+    ExitCode::SUCCESS
+}
+
+/// Canonicalizes the scan roots (target directory plus any extras), refusing
+/// filesystem roots, current/parent directories, missing directories, and
+/// duplicates. Canonicalizing before the refusal check matters: `Path` does
+/// not normalize, so spelling variants of the filesystem root ("/.", "//",
+/// symlinked roots) would otherwise bypass the string comparison; the
+/// canonical form also keys the duplicate-root deduplication. Returns none
+/// after printing the refusing error.
+fn canonicalized_scan_roots(
+    target_directory: &Path,
+    extra_scan_roots: Vec<String>,
+) -> Option<Vec<PathBuf>> {
     let configured_scan_roots: Vec<String> = [target_directory.to_string_lossy().into_owned()]
         .into_iter()
         .chain(extra_scan_roots)
@@ -184,13 +224,9 @@ fn run_scan(
                 ),
                 true,
             );
-            return ExitCode::from(1);
+            return None;
         }
         let scan_root_path = PathBuf::from(scan_root);
-        // Canonicalize before the refusal check: Path does not normalize, so
-        // spelling variants of the filesystem root ("/.", "//", symlinked
-        // roots) would otherwise bypass the string comparison. The canonical
-        // form also keys the duplicate-root deduplication below.
         let Ok(canonical_scan_root) = scan_root_path.canonicalize() else {
             print_output_line(
                 &format!(
@@ -199,7 +235,7 @@ fn run_scan(
                 ),
                 true,
             );
-            return ExitCode::from(1);
+            return None;
         };
         if scan_root_is_refused(&canonical_scan_root.to_string_lossy()) {
             print_output_line(
@@ -209,7 +245,7 @@ fn run_scan(
                 ),
                 true,
             );
-            return ExitCode::from(1);
+            return None;
         }
         if canonical_scan_roots.contains(&canonical_scan_root) {
             // An overlapping or repeated scan root would count the same
@@ -219,17 +255,30 @@ fn run_scan(
         }
         canonical_scan_roots.push(canonical_scan_root);
     }
+    Some(canonical_scan_roots)
+}
 
-    let scan_started_at = Instant::now();
+/// The whole-scan totals the retirement gate reads.
+struct RetiredScanTotals {
+    total_retired_bytes: u64,
+    total_retired_directories: u64,
+    total_unreadable_directories: u64,
+}
+
+/// Scans every canonical root and aggregates the global totals, printing each
+/// root's walk summary and its found directories as it goes. Totals key
+/// candidates canonically so overlapping scan roots can never count one
+/// physical retired directory twice in the summary the retirement gate reads.
+fn scan_and_aggregate_roots(
+    canonical_scan_roots: &[PathBuf],
+    scan_started_at: Instant,
+) -> RetiredScanTotals {
     let mut next_progress_at = scan_started_at + PROGRESS_INTERVAL;
-    // Global totals key candidates canonically so overlapping scan roots
-    // can never count one physical retired directory twice in the summary
-    // the retirement gate reads.
     let mut counted_retired_canonical_paths: BTreeSet<PathBuf> = BTreeSet::new();
     let mut total_retired_bytes: u64 = 0;
     let mut total_retired_directories: u64 = 0;
     let mut total_unreadable_directories: u64 = 0;
-    for scan_root in &canonical_scan_roots {
+    for scan_root in canonical_scan_roots {
         let scan_summary =
             scan_root_for_retired_candidates(scan_root, scan_started_at, &mut next_progress_at);
         total_unreadable_directories += scan_summary.unreadable_directories;
@@ -264,23 +313,11 @@ fn run_scan(
             total_retired_bytes += allocated_bytes_under(retired_directory);
         }
     }
-
-    // The summary line stays in raw bytes exactly like every other
-    // lifecycle log; the trailing human figure converts with the Apple
-    // marketing convention 1 GB = 1,073,741,824 bytes (2^30).
-    let total_retired_gb_whole = total_retired_bytes / (1024 * 1024 * 1024);
-    print_output_line(
-        &format!(
-            "[retired-native-scan] status=summary found={total_retired_directories} unreadable_directories={total_unreadable_directories} allocated_bytes={total_retired_bytes} allocated_gb={total_retired_gb_whole} elapsed_seconds={}",
-            scan_started_at.elapsed().as_secs()
-        ),
-        false,
-    );
-    if fail_on_found && total_retired_directories > 0 {
-        print_output_line(&gate_error_message(total_retired_directories), true);
-        return ExitCode::from(1);
+    RetiredScanTotals {
+        total_retired_bytes,
+        total_retired_directories,
+        total_unreadable_directories,
     }
-    ExitCode::SUCCESS
 }
 
 /// The operator guidance a tripped `--fail-on-found` gate prints: with the

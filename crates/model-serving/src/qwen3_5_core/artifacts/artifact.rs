@@ -1,12 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+use crate::TensorProfile;
 use crate::artifact_validation::{
-    ArtifactValidationError, RequiredFileProfile, ValidatedSafetensorsSource,
-    hugging_face_snapshot_model_id, validate_required_file, validate_required_files,
+    ArtifactValidationError, RequiredFileProfile, TensorInventory, TensorSourceId,
+    ValidatedRequiredFile, ValidatedSafetensorsSource, hugging_face_snapshot_model_id,
+    validate_required_file, validate_required_files,
 };
 
 use super::artifact_helpers::{
@@ -43,7 +45,6 @@ impl Qwen3_5ArtifactValidator {
     /// - Vision sidecar presence from the index
     /// - Model ID from the leaf directory name
     /// - Revision from a SHA-256 hash of `config.json` bytes
-    #[expect(clippy::too_many_lines)]
     pub fn validate(
         self,
         model_directory: impl AsRef<Path>,
@@ -64,38 +65,12 @@ impl Qwen3_5ArtifactValidator {
             return Self::validate_streaming_revision(model_directory, max_output_tokens);
         }
 
-        // Build required file profiles for the core config files.
-        // Shard files are discovered later from the safetensors index.
-        let mut required_file_profiles = vec![
-            required_file("config.json"),
-            required_file("model.safetensors.index.json"),
-            required_file("tokenizer.json"),
-        ];
-
-        // optiq_metadata.json is optional — validate it if present.
-        let optiq_metadata_path = model_directory.join("optiq_metadata.json");
-        if optiq_metadata_path.is_file() {
-            required_file_profiles.push(required_file("optiq_metadata.json"));
-        }
-        if model_directory.join("generation_config.json").is_file() {
-            required_file_profiles.push(required_file("generation_config.json"));
-        }
-
-        let required_files = validate_required_files(model_directory, &required_file_profiles)?;
-
-        // Read config.json and derive the revision hash from its bytes.
-        let config_bytes = captured_required_file_bytes(&required_files, "config.json")?;
-        let revision = derive_revision_from_config_bytes(config_bytes);
-
-        let mut config = Qwen3_5Config::from_json_bytes(config_bytes)?;
-        let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)?;
-
-        // Validate optiq_metadata.json if present.
-        if let Some(optiq_metadata_required_file) = required_files.get("optiq_metadata.json") {
-            let optiq_metadata_bytes = read_required_file_bytes(optiq_metadata_required_file)?;
-            OptiQMetadata::from_json_bytes(&optiq_metadata_bytes)?
-                .validate_against_config(&config)?;
-        }
+        let required_files = validated_core_required_files(model_directory)?;
+        let ParsedArtifactConfig {
+            mut config,
+            vision_config,
+            revision,
+        } = parsed_artifact_config(&required_files)?;
 
         // Read the shard index to discover shard names, tensor names, and
         // resolve which modules are quantized vs. stored as bfloat16.
@@ -131,26 +106,15 @@ impl Qwen3_5ArtifactValidator {
         let mut recognized_tensor_profiles = language_tensor_profiles.clone();
         recognized_tensor_profiles.extend(vision_tensor_profiles.clone());
         let source_id_by_file_name = artifact_inventory::source_id_by_file_name(&shard_index)?;
-        let mut safetensors_sources = HashMap::new();
-        let mut total_payload_bytes = 0_u64;
-        for (file_name, source_id) in &source_id_by_file_name {
-            let required_file = validate_required_file(
-                model_directory,
-                &RequiredFileProfile {
-                    file_name: file_name.clone(),
-                    size_bytes: 0,
-                },
-            )?;
-            let source = ValidatedSafetensorsSource::parse(*source_id, required_file)?;
-            source.validate_required_inventory_profiles(
-                &tensor_inventory,
-                &recognized_tensor_profiles,
-            )?;
-            total_payload_bytes = total_payload_bytes
-                .checked_add(source.payload_bytes())
-                .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
-            safetensors_sources.insert(*source_id, source);
-        }
+        let ValidatedSafetensorsSources {
+            safetensors_sources,
+            total_payload_bytes,
+        } = validated_safetensors_sources(
+            model_directory,
+            &source_id_by_file_name,
+            &tensor_inventory,
+            &recognized_tensor_profiles,
+        )?;
 
         // Derive model_id from the leaf directory name.
         let model_id = hugging_face_snapshot_model_id(model_directory).unwrap_or_else(|| {
@@ -176,6 +140,109 @@ impl Qwen3_5ArtifactValidator {
             max_output_tokens,
         })
     }
+}
+
+/// The validated core configuration triple every artifact carries: the parsed
+/// text configuration, the optional vision configuration, and the
+/// revision hash derived from the exact config bytes (so prompt-cache blocks
+/// invalidate when the config changes).
+struct ParsedArtifactConfig {
+    config: Qwen3_5Config,
+    vision_config: Option<Qwen3_5VisionConfig>,
+    revision: String,
+}
+
+/// Validates and parses the core config files: the always-required trio
+/// (config, shard index, tokenizer) plus the optional optiq metadata and
+/// generation config when their files exist, then the config document and
+/// optional vision document themselves, cross-checking optiq metadata
+/// against the parsed config when present.
+fn validated_core_required_files(
+    model_directory: &Path,
+) -> Result<HashMap<String, ValidatedRequiredFile>, Qwen3_5ArtifactValidationError> {
+    // Build required file profiles for the core config files.
+    // Shard files are discovered later from the safetensors index.
+    let mut required_file_profiles = vec![
+        required_file("config.json"),
+        required_file("model.safetensors.index.json"),
+        required_file("tokenizer.json"),
+    ];
+
+    // optiq_metadata.json is optional — validate it if present.
+    let optiq_metadata_path = model_directory.join("optiq_metadata.json");
+    if optiq_metadata_path.is_file() {
+        required_file_profiles.push(required_file("optiq_metadata.json"));
+    }
+    if model_directory.join("generation_config.json").is_file() {
+        required_file_profiles.push(required_file("generation_config.json"));
+    }
+    Ok(validate_required_files(
+        model_directory,
+        &required_file_profiles,
+    )?)
+}
+
+fn parsed_artifact_config(
+    required_files: &HashMap<String, ValidatedRequiredFile>,
+) -> Result<ParsedArtifactConfig, Qwen3_5ArtifactValidationError> {
+    // Read config.json and derive the revision hash from its bytes.
+    let config_bytes = captured_required_file_bytes(required_files, "config.json")?;
+    let revision = derive_revision_from_config_bytes(config_bytes);
+
+    let config = Qwen3_5Config::from_json_bytes(config_bytes)?;
+    let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)?;
+
+    // Validate optiq_metadata.json if present.
+    if let Some(optiq_metadata_required_file) = required_files.get("optiq_metadata.json") {
+        let optiq_metadata_bytes = read_required_file_bytes(optiq_metadata_required_file)?;
+        OptiQMetadata::from_json_bytes(&optiq_metadata_bytes)?.validate_against_config(&config)?;
+    }
+    Ok(ParsedArtifactConfig {
+        config,
+        vision_config,
+        revision,
+    })
+}
+
+/// The validated safetensors sources and their overflow-checked total
+/// payload bytes.
+struct ValidatedSafetensorsSources {
+    safetensors_sources: HashMap<TensorSourceId, ValidatedSafetensorsSource>,
+    total_payload_bytes: u64,
+}
+
+/// Validates every shard file the index references: each file must exist and
+/// validate, its tensor inventory must match the recognized profiles, and
+/// its payload contributes to a checked total so a hostile index cannot
+/// overflow the size accounting.
+fn validated_safetensors_sources(
+    model_directory: &Path,
+    source_id_by_file_name: &BTreeMap<String, TensorSourceId>,
+    tensor_inventory: &TensorInventory,
+    recognized_tensor_profiles: &[TensorProfile],
+) -> Result<ValidatedSafetensorsSources, Qwen3_5ArtifactValidationError> {
+    let mut safetensors_sources = HashMap::new();
+    let mut total_payload_bytes = 0_u64;
+    for (file_name, source_id) in source_id_by_file_name {
+        let required_file = validate_required_file(
+            model_directory,
+            &RequiredFileProfile {
+                file_name: file_name.clone(),
+                size_bytes: 0,
+            },
+        )?;
+        let source = ValidatedSafetensorsSource::parse(*source_id, required_file)?;
+        source
+            .validate_required_inventory_profiles(tensor_inventory, recognized_tensor_profiles)?;
+        total_payload_bytes = total_payload_bytes
+            .checked_add(source.payload_bytes())
+            .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
+        safetensors_sources.insert(*source_id, source);
+    }
+    Ok(ValidatedSafetensorsSources {
+        safetensors_sources,
+        total_payload_bytes,
+    })
 }
 
 /// Derives a 12-character hex revision string from the SHA-256 hash of config.json bytes.

@@ -360,7 +360,6 @@ pub fn build_application_with_full_control_and_download_catalog(
     application_router(application_state)
 }
 
-#[expect(clippy::too_many_lines)]
 pub(crate) fn application_router(application_state: ApplicationState) -> Router {
     let supports_config_reload = application_state.reloadable_config.is_some()
         && application_state.runtime_config_resolver.is_some();
@@ -368,7 +367,25 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     let supports_cache_clear = application_state.worker_control.is_some();
     let supports_live_mlx_memory_control =
         supports_config_reload && application_state.worker_control.is_some();
-    let router = Router::new()
+    let router = core_api_routes();
+    let router = openai_generation_routes(router);
+    let router = capability_conditional_routes(
+        router,
+        supports_config_reload,
+        supports_cache_clear,
+        supports_live_mlx_memory_control,
+        supports_shutdown,
+    );
+    router
+        .layer(canvas_cors_layer())
+        .with_state(application_state)
+}
+
+/// The always-present routes: console/catalog/telemetry merges plus the
+/// health, readiness, status, cache-stats, model listing, and the two
+/// body-budgeted OpenAI text endpoints (chat completions and responses).
+fn core_api_routes() -> Router<ApplicationState> {
+    Router::new()
         .merge(console_routes())
         .merge(library_catalog_routes())
         .merge(library_download_routes())
@@ -395,7 +412,12 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
                 .layer(axum::middleware::from_fn(
                     enforce_openai_request_body_budget,
                 )),
-        );
+        )
+}
+
+/// The image-generation and embeddings endpoints, each under the same
+/// OpenAI request body budget as the text endpoints.
+fn openai_generation_routes(router: Router<ApplicationState>) -> Router<ApplicationState> {
     let router = router.route(
         "/v1/images/generations",
         post(crate::rest::openai::image_generation_endpoint::create_image_generation)
@@ -404,14 +426,28 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
                 enforce_openai_request_body_budget,
             )),
     );
-    let router = router.route(
+    router.route(
         "/v1/embeddings",
         post(crate::rest::openai::embeddings_endpoint::create_embeddings)
             .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
             .layer(axum::middleware::from_fn(
                 enforce_openai_request_body_budget,
             )),
-    );
+    )
+}
+
+/// Adds each control-plane route only when the daemon was built with the
+/// capability it exercises: config reload needs the reloadable config and
+/// resolver, cache clear needs a worker, the live MLX memory ceiling needs
+/// both reload and worker control, and shutdown needs the shutdown
+/// controller.
+fn capability_conditional_routes(
+    router: Router<ApplicationState>,
+    supports_config_reload: bool,
+    supports_cache_clear: bool,
+    supports_live_mlx_memory_control: bool,
+    supports_shutdown: bool,
+) -> Router<ApplicationState> {
     let router = if supports_config_reload {
         router.route(
             "/v1/config/reload",
@@ -434,25 +470,28 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
     } else {
         router
     };
-    let router = if supports_shutdown {
+    if supports_shutdown {
         router.route(
             "/v1/control/shutdown",
             post(crate::shutdown_control::request_daemon_shutdown),
         )
     } else {
         router
-    };
-    // The Thin Talk canvas runs inside a WKWebView served from the
-    // thintalk-asset:// shell scheme and calls this REST API directly with
-    // fetch, so the browser enforces CORS against that exact origin. Only the
-    // shell origin, the loopback origins the page may also target, and the
-    // methods/headers the client uses are allowed.
+    }
+}
+
+/// The CORS policy for the Thin Talk canvas: it runs inside a WKWebView
+/// served from the thintalk-asset:// shell scheme and calls this REST API
+/// directly with fetch, so the browser enforces CORS against that exact
+/// origin. Only the shell origin, the loopback origins the page may also
+/// target, and the methods/headers the client uses are allowed.
+fn canvas_cors_layer() -> CorsLayer {
     let canvas_origins = [
         "thintalk-asset://shell".to_string(),
         "http://127.0.0.1".to_string(),
         "http://localhost".to_string(),
     ];
-    let cors = CorsLayer::new()
+    CorsLayer::new()
         .allow_origin(AllowOrigin::predicate(move |origin, _| {
             canvas_origins.iter().any(|allowed| {
                 origin
@@ -467,6 +506,5 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
         }))
         .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
         .allow_headers([header::CONTENT_TYPE])
-        .max_age(Duration::from_secs(3600));
-    router.layer(cors).with_state(application_state)
+        .max_age(Duration::from_secs(3600))
 }
