@@ -43,6 +43,27 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
     else
         printf '%s\n' '[pre-commit] status=skipped check=crap-complexity-ratchet reason=cargo-crap-not-installed hint=brew install cargo-binstall && cargo binstall cargo-crap (CI enforces the same ratchet)' >&2
     fi
+
+    # The 100-code-line budget (clippy.toml, issue #1637) — enforced HERE
+    # and only here: no clippy runs in GitHub Actions. The workspace lints
+    # tables deny clippy::too_many_lines, and the 68 pre-existing
+    # over-budget functions carry #[expect], so this single default-world
+    # pass fails when a function crosses the budget without an expect, and
+    # an #[expect] self-cleans when its function shrinks below the budget.
+    # Default world only: the pass is warm-cache incremental so commits
+    # stay fast, and feature-gated code stays linted by the developer's
+    # own lane runs.
+    printf '%s\n' "[pre-commit] status=start check=function-length-budget root=${REPOSITORY_ROOT}"
+    budget_started_epoch_seconds="$(date +%s)"
+    if cargo clippy --workspace --all-targets; then
+        budget_elapsed_seconds=$(( $(date +%s) - budget_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=function-length-budget elapsed_seconds=${budget_elapsed_seconds}"
+    else
+        budget_elapsed_seconds=$(( $(date +%s) - budget_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=function-length-budget elapsed_seconds=${budget_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=a function crossed the 100-line budget, or an #[expect] became unfulfilled after a function shrank — fix the function or drop the expect' >&2
+        exit 1
+    fi
 fi
 
 # Coverage floor for the memory-policy crate (local hook only; deliberately
