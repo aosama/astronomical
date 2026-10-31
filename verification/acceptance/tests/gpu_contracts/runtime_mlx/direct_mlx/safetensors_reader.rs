@@ -9,6 +9,7 @@ use std::{
 
 use astronomical_runtime_integration::{
     BoundedReadInterval, MlxMemoryLimits, MlxRuntime, MlxRuntimeError, PositionalFileReadMetrics,
+    PositionalFileReadMetricsSnapshot,
 };
 use mlx_c_rust::MlxDtype;
 
@@ -230,21 +231,7 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
         u64::try_from(CONCURRENT_READ_TENSOR_BYTE_COUNT * 4)
             .expect("the test payload byte count should fit u64")
     );
-    // The bounded reader's process-wide limiter is min(available parallelism,
-    // 16) — the cap its own unit tests pin (see
-    // safetensors::bounded_range_read_concurrency). Four tensors whose
-    // intervals are each partitioned into multiple reads may legitimately
-    // exceed four concurrent reads, so the journey bound must match the
-    // limiter's policy, not the tensor count.
-    let positional_read_concurrency_cap = std::thread::available_parallelism()
-        .map(usize::from)
-        .unwrap_or(1)
-        .min(16);
-    assert!(
-        positional_file_read_snapshot.maximum_concurrent_read_count
-            <= positional_read_concurrency_cap as u64,
-        "bounded positional reads should respect the process-wide concurrency limit"
-    );
+    assert_respects_process_wide_positional_read_cap(&positional_file_read_snapshot);
     eprintln!(
         "[safetensors-positional-read] status=success tensors=4 reads={} bytes={} maximum_concurrent_reads={} summed_read_milliseconds={:.3} evaluation_milliseconds={:.3}",
         positional_file_read_snapshot.read_call_count,
@@ -252,6 +239,26 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
         positional_file_read_snapshot.maximum_concurrent_read_count,
         positional_file_read_snapshot.total_read_elapsed_nanoseconds as f64 / 1_000_000.0,
         concurrent_evaluation_elapsed.as_secs_f64() * 1_000.0,
+    );
+}
+
+/// The bounded reader caps concurrent positional reads at the process-wide
+/// limit of `min(available parallelism, 16)` — the policy its own unit tests
+/// pin (see `safetensors::bounded_range_read_concurrency`). Four tensors whose
+/// intervals are each partitioned into multiple reads may legitimately exceed
+/// four concurrent reads, so this journey bound must match the limiter's
+/// policy, not the tensor count.
+fn assert_respects_process_wide_positional_read_cap(
+    positional_file_read_snapshot: &PositionalFileReadMetricsSnapshot,
+) {
+    let process_wide_read_concurrency_cap = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(16);
+    assert!(
+        positional_file_read_snapshot.maximum_concurrent_read_count
+            <= process_wide_read_concurrency_cap as u64,
+        "bounded positional reads should respect the process-wide concurrency limit"
     );
 }
 
