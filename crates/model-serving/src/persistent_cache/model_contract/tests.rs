@@ -18,13 +18,13 @@ use super::PersistentPromptCacheModelContract;
 const TEST_MLX_MEMORY_CEILING_BYTES: u64 = 20_000_000_000;
 const TEST_SSD_QUOTA_BYTES: u64 = 50_000_000_000;
 
-#[test]
-#[expect(clippy::too_many_lines)]
-fn should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadata() {
+/// Resolves the frozen Ornith 1.0 storage contract (and the frozen config it
+/// was resolved from, for the position-count invariant) so each facet test
+/// below holds only the facts it verifies.
+fn frozen_ornith_storage_contract() -> (PersistentPromptCacheModelContract, Qwen3_5Config) {
     let ornith_config = frozen_ornith_1_0_config();
     let decoder_layer_cache_dtypes = bfloat16_decoder_layer_cache_dtypes(&ornith_config);
-
-    let persistent_prompt_cache_model_contract = PersistentPromptCacheModelContract::resolve(
+    let storage_contract = PersistentPromptCacheModelContract::resolve(
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID.to_owned(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION.to_owned(),
         qwen3_5_decoder_cache_layout(&ornith_config, 256, &decoder_layer_cache_dtypes)
@@ -36,24 +36,48 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadat
         4,
     )
     .expect("the frozen model should resolve an SSD storage contract");
+    (storage_contract, ornith_config)
+}
+
+#[test]
+fn should_report_frozen_model_identity_and_layer_geometry() {
+    let (storage_contract, _ornith_config) = frozen_ornith_storage_contract();
     let persistent_visual_embedding_model_contract = persistent_visual_embedding_model_contract();
 
     assert_eq!(
-        persistent_prompt_cache_model_contract.model_id(),
+        storage_contract.model_id(),
         ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID
     );
     assert_eq!(
-        persistent_prompt_cache_model_contract.model_revision(),
+        storage_contract.model_revision(),
         ORNITH_1_0_35B_OPTIQ_4BIT_REVISION
     );
+    assert_eq!(storage_contract.decoder_cache_layout().layer_count(), 40);
     assert_eq!(
-        persistent_prompt_cache_model_contract
+        storage_contract
             .decoder_cache_layout()
-            .layer_count(),
-        40
+            .sequence_tensor_count(),
+        20
     );
     assert_eq!(
-        persistent_prompt_cache_model_contract
+        storage_contract
+            .decoder_cache_layout()
+            .boundary_tensor_count(),
+        60
+    );
+    assert_eq!(
+        persistent_visual_embedding_model_contract.maximum_visual_embedding_token_count(),
+        16_384
+    );
+}
+
+#[test]
+fn should_report_frozen_tensor_shapes_for_sequence_boundary_and_visual_state() {
+    let (storage_contract, _ornith_config) = frozen_ornith_storage_contract();
+    let persistent_visual_embedding_model_contract = persistent_visual_embedding_model_contract();
+
+    assert_eq!(
+        storage_contract
             .decoder_cache_layout()
             .sequence_tensor_layouts()
             .first()
@@ -63,7 +87,7 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadat
         &[1, 2, 0, 256]
     );
     assert_eq!(
-        persistent_prompt_cache_model_contract
+        storage_contract
             .decoder_cache_layout()
             .boundary_tensor_layouts()
             .first()
@@ -76,23 +100,13 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadat
         persistent_visual_embedding_model_contract.visual_embedding_shape(1_560),
         [1_560, 2_048]
     );
-    assert_eq!(
-        persistent_visual_embedding_model_contract.maximum_visual_embedding_token_count(),
-        16_384
-    );
-    assert_eq!(
-        persistent_prompt_cache_model_contract
-            .decoder_cache_layout()
-            .sequence_tensor_count(),
-        20
-    );
-    assert_eq!(
-        persistent_prompt_cache_model_contract
-            .decoder_cache_layout()
-            .boundary_tensor_count(),
-        60
-    );
-    let decoder_cache_layout = persistent_prompt_cache_model_contract.decoder_cache_layout();
+}
+
+#[test]
+fn should_preserve_frozen_dtype_composition_across_the_cache_layout() {
+    let (storage_contract, _ornith_config) = frozen_ornith_storage_contract();
+    let decoder_cache_layout = storage_contract.decoder_cache_layout();
+
     assert!(
         decoder_cache_layout
             .sequence_tensor_layouts()
@@ -101,39 +115,37 @@ fn should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadat
                 == DecoderCacheTensorDtype::BFloat16)
     );
     let boundary_tensor_layouts = decoder_cache_layout.boundary_tensor_layouts();
-    assert_eq!(
-        boundary_tensor_layouts
-            .iter()
-            .filter(|tensor_layout| {
-                tensor_layout.tensor_layout().dtype() == DecoderCacheTensorDtype::BFloat16
-            })
-            .count(),
-        30
-    );
-    assert_eq!(
-        boundary_tensor_layouts
-            .iter()
-            .filter(|tensor_layout| {
-                tensor_layout.tensor_layout().dtype() == DecoderCacheTensorDtype::Float32
-            })
-            .count(),
-        30
-    );
-    let block_token_count = persistent_prompt_cache_model_contract.block_token_count();
+    let mut bfloat16_boundary_count = 0_usize;
+    let mut float32_boundary_count = 0_usize;
+    for tensor_layout in boundary_tensor_layouts {
+        match tensor_layout.tensor_layout().dtype() {
+            DecoderCacheTensorDtype::BFloat16 => bfloat16_boundary_count += 1,
+            DecoderCacheTensorDtype::Float32 => float32_boundary_count += 1,
+            // The frozen layout pins only these two dtypes for boundary state;
+            // any other variant still fails the exact counts asserted below.
+            _ => {}
+        }
+    }
+    assert_eq!(bfloat16_boundary_count, 30);
+    assert_eq!(float32_boundary_count, 30);
+}
+
+#[test]
+fn should_account_frozen_payload_bytes_per_block_within_the_position_budget() {
+    let (storage_contract, ornith_config) = frozen_ornith_storage_contract();
+
+    let block_token_count = storage_contract.block_token_count();
     assert!(block_token_count.is_multiple_of(256));
     assert!(block_token_count <= ornith_config.maximum_position_count() as usize);
     assert!(
-        persistent_prompt_cache_model_contract.sequence_state_payload_bytes_per_block()
-            >= persistent_prompt_cache_model_contract.boundary_state_payload_bytes()
+        storage_contract.sequence_state_payload_bytes_per_block()
+            >= storage_contract.boundary_state_payload_bytes()
     );
     assert_eq!(
-        persistent_prompt_cache_model_contract.sequence_state_payload_bytes_per_block(),
+        storage_contract.sequence_state_payload_bytes_per_block(),
         block_token_count * 20_480
     );
-    assert_ne!(
-        persistent_prompt_cache_model_contract.storage_contract_fingerprint(),
-        [0_u8; 32]
-    );
+    assert_ne!(storage_contract.storage_contract_fingerprint(), [0_u8; 32]);
 }
 
 #[test]

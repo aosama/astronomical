@@ -13,15 +13,15 @@ use contract_support::{
 };
 use serde_yaml::Value;
 
-/// Asserts one cache owner's restore/save pair through the shared composite
-/// action and accumulates the restored paths for the disjointness check.
-#[expect(clippy::too_many_lines)]
-fn assert_composite_cache_owner(
-    job_steps: &[&Value],
+/// Asserts one cache owner's restore step through the shared composite action
+/// and accumulates its restored paths for the disjointness check. Returns the
+/// restore path text and configuration so the save half can prove it matches.
+fn assert_cache_restore_step<'a>(
+    job_steps: &[&'a Value],
     owner_id: &str,
     expected_paths: &[&str],
     restored_paths: &mut Vec<String>,
-) {
+) -> (&'a str, &'a Value) {
     let restore_step = find_step_by_id(job_steps, owner_id);
     let restore_uses = required_text(
         restore_step,
@@ -61,7 +61,9 @@ fn assert_composite_cache_owner(
         !path_lines(path_text).contains(&"target"),
         "cache owner {owner_id} must not cache target"
     );
-    restored_paths.extend(path_lines(path_text).iter().map(|line| line.to_string()));
+    for restored_path in path_lines(path_text) {
+        restored_paths.push(restored_path.to_string());
+    }
     let expected_report_owner = owner_id
         .strip_suffix("-cache")
         .expect("cache owner ids end in -cache");
@@ -74,7 +76,18 @@ fn assert_composite_cache_owner(
         expected_report_owner,
         "cache owner {owner_id} has the wrong report owner"
     );
+    (path_text, restore_configuration)
+}
 
+/// Asserts the matching save half: the same composite action, the save
+/// operation, a bounded save condition, and paths and keys identical to the
+/// restore half.
+fn assert_cache_save_step_matches_restore(
+    job_steps: &[&Value],
+    owner_id: &str,
+    restore_path_text: &str,
+    restore_configuration: &Value,
+) {
     let save_step_id = format!("{owner_id}-save");
     let save_step = find_step_by_id(job_steps, &save_step_id);
     let save_uses = required_text(
@@ -112,7 +125,7 @@ fn assert_composite_cache_owner(
             "path",
             &format!("cache owner {save_step_id} save")
         ),
-        path_text,
+        restore_path_text,
         "cache owner {owner_id} save path diverges from its restore path"
     );
     assert_eq!(
@@ -127,6 +140,24 @@ fn assert_composite_cache_owner(
             &format!("cache owner {owner_id} restore")
         ),
         "cache owner {owner_id} save key diverges from its restore key"
+    );
+}
+
+/// Asserts one cache owner's restore/save pair through the shared composite
+/// action and accumulates the restored paths for the disjointness check.
+fn assert_composite_cache_owner(
+    job_steps: &[&Value],
+    owner_id: &str,
+    expected_paths: &[&str],
+    restored_paths: &mut Vec<String>,
+) {
+    let (restore_path_text, restore_configuration) =
+        assert_cache_restore_step(job_steps, owner_id, expected_paths, restored_paths);
+    assert_cache_save_step_matches_restore(
+        job_steps,
+        owner_id,
+        restore_path_text,
+        restore_configuration,
     );
 }
 

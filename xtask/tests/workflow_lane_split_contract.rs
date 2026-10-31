@@ -110,8 +110,7 @@ fn archive_aliases_carry_the_selections_the_compile_step_builds() {
 }
 
 #[test]
-#[expect(clippy::too_many_lines)]
-fn tier_lanes_run_their_own_archives_without_compiling() {
+fn every_tier_lane_runs_its_own_archive_without_compiling() {
     let workflow = workflow_contract();
     for (lane_id, lane_name) in TIER_LANES {
         let lane = required_job(&workflow, lane_id);
@@ -158,7 +157,55 @@ fn tier_lanes_run_their_own_archives_without_compiling() {
             "the {lane_id} lane runs without its build archive"
         );
     }
+}
 
+/// The direct-MLX runtime tests need the metallib: the archive layout shifts
+/// the beside-the-executable lookup, so the unit lane must download the
+/// builder's metallib and point the environment override at it — and the
+/// build job must upload it.
+fn assert_unit_lane_ships_the_native_metallib(
+    unit_steps: &[&Value],
+    unit_text: &str,
+    build_steps: &[&Value],
+) {
+    assert!(
+        unit_text.contains("export ASTRONOMICAL_MLX_METALLIB_PATH="),
+        "the unit lane lost its metallib override"
+    );
+    let mut downloads_native_metallib = false;
+    for step in unit_steps {
+        let uses_text = step.get("uses").and_then(Value::as_str);
+        let artifact_name = step
+            .get("with")
+            .and_then(|with| with.get("name"))
+            .and_then(Value::as_str);
+        let downloads_from_actions = match uses_text {
+            Some(uses_text) => uses_text.contains("actions/download-artifact"),
+            None => false,
+        };
+        if downloads_from_actions && artifact_name == Some("native-metallib") {
+            downloads_native_metallib = true;
+        }
+    }
+    assert!(
+        downloads_native_metallib,
+        "the unit lane does not download the native metallib artifact"
+    );
+    let mut uploads_native_metallib = false;
+    for step in build_steps {
+        if let Some("Upload native metallib") = step.get("name").and_then(Value::as_str) {
+            uploads_native_metallib = true;
+        }
+    }
+    assert!(
+        uploads_native_metallib,
+        "the build job does not upload the native metallib artifact"
+    );
+}
+
+#[test]
+fn every_tier_lane_applies_its_kind_and_archive_filters() {
+    let workflow = workflow_contract();
     // Tier-specific filters: unit tests take the lib kind plus the harness
     // fixtures archive, integration tests take the test kind, REST keeps
     // its library subset and exact-name wire contract, and E2E runs the
@@ -172,39 +219,8 @@ fn tier_lanes_run_their_own_archives_without_compiling() {
         unit_text.contains("-E 'kind(lib)'") && unit_text.contains("test-harness.tar.zst"),
         "the unit lane lost its lib-kind filter or the harness-fixtures archive"
     );
-    // The direct-MLX runtime tests need the metallib: the archive layout
-    // shifts the beside-the-executable lookup, so the unit lane must
-    // download the builder's metallib and point the environment override
-    // at it — and the build job must upload it.
-    assert!(
-        unit_text.contains("export ASTRONOMICAL_MLX_METALLIB_PATH="),
-        "the unit lane lost its metallib override"
-    );
-    assert!(
-        unit_steps.iter().any(|step| {
-            step.get("uses")
-                .and_then(Value::as_str)
-                .map(|uses_text| uses_text.contains("actions/download-artifact"))
-                .unwrap_or(false)
-                && step
-                    .get("with")
-                    .and_then(|with| with.get("name"))
-                    .and_then(Value::as_str)
-                    .map(|name| name == "native-metallib")
-                    .unwrap_or(false)
-        }),
-        "the unit lane does not download the native metallib artifact"
-    );
     let build_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    assert!(
-        build_steps.iter().any(|step| {
-            step.get("name")
-                .and_then(Value::as_str)
-                .map(|name| name == "Upload native metallib")
-                .unwrap_or(false)
-        }),
-        "the build job does not upload the native metallib artifact"
-    );
+    assert_unit_lane_ships_the_native_metallib(&unit_steps, unit_text, &build_steps);
     let integration_steps = steps_of(
         required_job(&workflow, "integration-tests"),
         "integration-tests",
