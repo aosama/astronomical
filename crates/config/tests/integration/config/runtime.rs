@@ -2,9 +2,19 @@
 
 use super::*;
 
-#[test]
-#[expect(clippy::too_many_lines)]
-fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run() {
+struct FirstRunDocuments {
+    astronomical_config: AstronomicalConfig,
+    generated_config: serde_json::Value,
+    generated_schema: Vec<u8>,
+    checked_in_schema: Vec<u8>,
+    checked_in_schema_json: serde_json::Value,
+}
+
+/// Loads every first-run artifact the three specification tests below verify.
+/// The temporary home directory is read fully before the loader returns, so the
+/// config instance stays valid without keeping the directory alive: every
+/// accessor the tests use reads the in-memory v1 document, not the disk.
+fn load_first_run_documents() -> FirstRunDocuments {
     let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
 
     let astronomical_config =
@@ -26,88 +36,151 @@ fn should_create_minimal_v1_config_and_byte_identical_local_schema_on_first_run(
     let checked_in_schema_json: serde_json::Value =
         serde_json::from_slice(&checked_in_schema).expect("checked-in schema should be valid JSON");
 
-    assert_eq!(
-        generated_config["$schema"],
-        "./astronomical-config.schema.json"
-    );
-    assert_eq!(generated_config["schema_version"], 1);
-    assert_eq!(
-        generated_config["runtime"]["model_directories"],
-        serde_json::json!([])
-    );
+    FirstRunDocuments {
+        astronomical_config,
+        generated_config,
+        generated_schema,
+        checked_in_schema,
+        checked_in_schema_json,
+    }
+}
+
+/// Every field the first-run document must carry, as a JSON pointer plus its
+/// expected value. One row per contract fact keeps the assertions scannable,
+/// and a drifting pointer is named in the failure message.
+#[test]
+fn should_create_minimal_v1_config_document_on_first_run() {
+    let first_run_documents = load_first_run_documents();
+    let generated_config = &first_run_documents.generated_config;
+
+    let expected_generated_fields: [(&str, serde_json::Value); 6] = [
+        (
+            "/$schema",
+            serde_json::json!("./astronomical-config.schema.json"),
+        ),
+        ("/schema_version", serde_json::json!(1)),
+        ("/runtime/model_directories", serde_json::json!([])),
+        (
+            "/chunking/fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
+            serde_json::json!(2_048),
+        ),
+        (
+            "/chunking/prefill_graph_submission_layer_interval",
+            serde_json::json!(0),
+        ),
+        (
+            "/chunking/experimental_ssd_paging_prefill_graph_submission_layer_interval",
+            serde_json::json!(1),
+        ),
+    ];
+    for (json_pointer, expected_value) in expected_generated_fields {
+        assert_eq!(
+            generated_config.pointer(json_pointer),
+            Some(&expected_value),
+            "generated first-run config at {json_pointer}"
+        );
+    }
     assert_eq!(
         generated_config.as_object().map(serde_json::Map::len),
         Some(4)
     );
-    assert_eq!(generated_schema, checked_in_schema);
+}
+
+/// The schema the first run writes to disk must be byte-for-byte the checked-in
+/// copy, and its identity metadata must pin the v1 location.
+#[test]
+fn should_copy_the_checked_in_schema_byte_for_byte_and_pin_its_identity() {
+    let first_run_documents = load_first_run_documents();
     assert_eq!(
-        checked_in_schema_json["$schema"],
-        "https://json-schema.org/draft/2020-12/schema"
+        first_run_documents.generated_schema,
+        first_run_documents.checked_in_schema
     );
-    assert_eq!(
-        checked_in_schema_json["$id"],
-        "https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json"
-    );
-    assert_eq!(checked_in_schema_json["additionalProperties"], false);
-    assert_eq!(
-        checked_in_schema_json["$defs"]["runtime"]["properties"]["model_directories"]["items"]["pattern"],
-        "^/"
-    );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["generation_defaults"]["properties"]["maximum_output_tokens"]
-            ["maximum"],
-        65_535
-    );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["generation_defaults"]["properties"]["temperature"]["multipleOf"],
-        0.001
-    );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["generation_defaults"]["properties"]["top_p"]["multipleOf"],
-        0.001
-    );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["runtime"]["properties"]["maximum_mlx_memory_gb"]["maximum"],
-        18_446_744_073_u64
-    );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["prompt_cache"]["properties"]["maximum_size_gb"]["maximum"],
-        18_446_744_073_u64
-    );
+
+    let checked_in_schema_json = &first_run_documents.checked_in_schema_json;
+    let identity_fields: [(&str, serde_json::Value); 3] = [
+        (
+            "/$schema",
+            serde_json::json!("https://json-schema.org/draft/2020-12/schema"),
+        ),
+        (
+            "/$id",
+            serde_json::json!(
+                "https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json"
+            ),
+        ),
+        ("/additionalProperties", serde_json::json!(false)),
+    ];
+    for (json_pointer, expected_value) in identity_fields {
+        assert_eq!(
+            checked_in_schema_json.pointer(json_pointer),
+            Some(&expected_value),
+            "checked-in schema at {json_pointer}"
+        );
+    }
     assert!(
-        checked_in_schema_json["$defs"]["runtime"]["properties"]
-            .get("experimental_qwen_thinking_channel_seed_enabled")
+        checked_in_schema_json
+            .pointer("/$defs/runtime/properties/experimental_qwen_thinking_channel_seed_enabled")
             .is_none(),
         "thinking-channel seed must stay expunged from the runtime schema"
     );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["diagnostics"]["properties"]["performance_attribution_enabled"]
-            ["x-astronomical-apply-mode"],
-        "application-restart"
-    );
-    assert_eq!(
-        checked_in_schema_json["$defs"]["diagnostics"]["properties"]["completion_attribution_enabled"]
-            ["x-astronomical-apply-mode"],
-        "application-restart"
-    );
+}
+
+/// The generation, memory, and attribution constraints the schema pins, plus
+/// the typed defaults the in-memory first-run config must expose.
+#[test]
+fn should_pin_generation_memory_and_attribution_constraints_in_the_checked_in_schema() {
+    let first_run_documents = load_first_run_documents();
+    let checked_in_schema_json = &first_run_documents.checked_in_schema_json;
+
+    let constraint_fields: [(&str, serde_json::Value); 8] = [
+        (
+            "/$defs/runtime/properties/model_directories/items/pattern",
+            serde_json::json!("^/"),
+        ),
+        (
+            "/$defs/generation_defaults/properties/maximum_output_tokens/maximum",
+            serde_json::json!(65_535),
+        ),
+        (
+            "/$defs/generation_defaults/properties/temperature/multipleOf",
+            serde_json::json!(0.001),
+        ),
+        (
+            "/$defs/generation_defaults/properties/top_p/multipleOf",
+            serde_json::json!(0.001),
+        ),
+        (
+            "/$defs/runtime/properties/maximum_mlx_memory_gb/maximum",
+            serde_json::json!(18_446_744_073_u64),
+        ),
+        (
+            "/$defs/prompt_cache/properties/maximum_size_gb/maximum",
+            serde_json::json!(18_446_744_073_u64),
+        ),
+        (
+            "/$defs/diagnostics/properties/performance_attribution_enabled/x-astronomical-apply-mode",
+            serde_json::json!("application-restart"),
+        ),
+        (
+            "/$defs/diagnostics/properties/completion_attribution_enabled/x-astronomical-apply-mode",
+            serde_json::json!("application-restart"),
+        ),
+    ];
+    for (json_pointer, expected_value) in constraint_fields {
+        assert_eq!(
+            checked_in_schema_json.pointer(json_pointer),
+            Some(&expected_value),
+            "checked-in schema at {json_pointer}"
+        );
+    }
+
+    let astronomical_config = &first_run_documents.astronomical_config;
     assert!(astronomical_config.model_directories().is_empty());
     assert_eq!(
         astronomical_config.maximum_mlx_memory_bytes().unwrap(),
         None
     );
     assert_eq!(astronomical_config.chunking().unwrap(), Default::default());
-    assert_eq!(
-        generated_config["chunking"]["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
-        2_048
-    );
-    assert_eq!(
-        generated_config["chunking"]["prefill_graph_submission_layer_interval"],
-        0
-    );
-    assert_eq!(
-        generated_config["chunking"]["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
-        1
-    );
     assert!(astronomical_config.persistent_prompt_cache_enabled());
     assert!(!astronomical_config.performance_attribution_enabled());
     assert!(!astronomical_config.completion_attribution_enabled());
