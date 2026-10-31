@@ -285,13 +285,24 @@ pub(crate) fn read_decode_cache_diagnostic_evidence(
 ) -> Option<DecodeCacheDiagnosticEvidence> {
     let attribution_log =
         fs::read_to_string(logging_directory.join("performance-attribution.jsonl")).ok()?;
-    let generation_report = attribution_log
-        .lines()
-        .filter_map(|json_line| serde_json::from_str::<serde_json::Value>(json_line).ok())
-        .find(|attribution_report| {
-            attribution_report["report_kind"] == "generation"
-                && attribution_report["request_id"].as_u64() == Some(request_id)
-        })?;
+    // A request can carry more than one generation report: the worker emits
+    // an early report (for example while expert loading is still settling)
+    // before the final one that carries the complete counters. Consuming the
+    // FIRST match silently reads the empty early report — which once turned
+    // a 86-GB-streaming turn into a reported zero — so the LAST generation
+    // report for the request is the authoritative one.
+    let mut generation_report: Option<serde_json::Value> = None;
+    for json_line in attribution_log.lines() {
+        let Ok(attribution_report) = serde_json::from_str::<serde_json::Value>(json_line) else {
+            continue;
+        };
+        if attribution_report["report_kind"] == "generation"
+            && attribution_report["request_id"].as_u64() == Some(request_id)
+        {
+            generation_report = Some(attribution_report);
+        }
+    }
+    let generation_report = generation_report?;
     let counters = generation_report.get("counters")?.as_array()?;
     let expert_streaming_source_summaries = generation_report
         .get("expert_streaming_source_summaries")?

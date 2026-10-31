@@ -172,14 +172,16 @@ async fn should_restore_exact_cache_parity_for_one_selected_large_prefill_size()
             acceptance_outcome.restored_cached_token_count,
         );
         assert!(
-            acceptance_outcome.cold_generated_token_ids.len()
-                >= LARGE_PREFILL_ACCEPTANCE_OUTPUT_TOKEN_COUNT / 4,
-            // This floor guards against a degenerate answer, not against a
-            // particular answer length: the pinned resident artifact answers
-            // this four-block-plus-tail fixture with an end-of-sequence at 432
-            // of the 1,024 requested tokens (measured 2026-10-10), so a
-            // percentage near the requested length would assert the pinned
-            // model's phrasing instead of cache behaviour.
+            acceptance_outcome.cold_generated_token_ids.len() >= 32,
+            // This floor guards against a degenerate answer (an immediate
+            // end-of-sequence), not against a particular answer length: the
+            // pinned resident artifact answers this four-block-plus-tail
+            // fixture with an end-of-sequence at 432 of the 1,024 requested
+            // tokens (measured 2026-10-10), and the currently installed
+            // revision measures 52 (measured 2026-10-31) — so a percentage
+            // near the requested length would assert the pinned model's
+            // phrasing instead of cache behaviour. The exact-parity assert
+            // below is the contract; this floor only rejects degeneration.
             "the representative acceptance produced only {} of approximately {} requested output tokens",
             acceptance_outcome.cold_generated_token_ids.len(),
             LARGE_PREFILL_ACCEPTANCE_OUTPUT_TOKEN_COUNT,

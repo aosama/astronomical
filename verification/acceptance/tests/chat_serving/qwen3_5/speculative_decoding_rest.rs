@@ -45,7 +45,7 @@ const SPECULATIVE_OUTPUT_TOKEN_COUNT: u64 = 64;
 const DRAFT_RESIDENCY_HEADROOM_BYTES: u64 = 2_000_000_000;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "loads the resident engine with its DFlash draft and serves a greedy chat through speculative decoding"]
+#[ignore = "DFlash speculative decoding is disabled by design (see qwen3_5_resident model_loading: measured 0.50x-1.15x throughput at serving temperature); this journey is the diagnostic instrument for the re-enable decision and cannot pass while the feature is off"]
 #[serial]
 async fn should_serve_a_chat_through_speculative_decoding_with_the_paired_draft() {
     timeout(
@@ -57,7 +57,7 @@ async fn should_serve_a_chat_through_speculative_decoding_with_the_paired_draft(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "serves a temperature 0.7 chat through speculative decoding with exact sampled semantics"]
+#[ignore = "DFlash speculative decoding is disabled by design (see qwen3_5_resident model_loading: measured 0.50x-1.15x throughput at serving temperature); this journey is the diagnostic instrument for the re-enable decision and cannot pass while the feature is off"]
 #[serial]
 async fn should_serve_a_sampled_chat_through_speculative_decoding() {
     timeout(

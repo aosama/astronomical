@@ -230,9 +230,19 @@ fn should_preserve_large_bounded_model_weight_intervals_during_parallel_position
         u64::try_from(CONCURRENT_READ_TENSOR_BYTE_COUNT * 4)
             .expect("the test payload byte count should fit u64")
     );
+    // The bounded reader's process-wide limiter is min(available parallelism,
+    // 16) — the cap its own unit tests pin (see
+    // safetensors::bounded_range_read_concurrency). Four tensors whose
+    // intervals are each partitioned into multiple reads may legitimately
+    // exceed four concurrent reads, so the journey bound must match the
+    // limiter's policy, not the tensor count.
+    let positional_read_concurrency_cap = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(16);
     assert!(
         positional_file_read_snapshot.maximum_concurrent_read_count
-            <= available_read_parallelism as u64,
+            <= positional_read_concurrency_cap as u64,
         "bounded positional reads should respect the process-wide concurrency limit"
     );
     eprintln!(

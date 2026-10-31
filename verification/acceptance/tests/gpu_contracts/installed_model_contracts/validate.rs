@@ -89,6 +89,14 @@ fn should_validate_a_text_only_artifact_without_the_vision_sidecar() {
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 fn should_validate_a_vision_enabled_artifact_with_the_vision_sidecar() {
     let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
+    // The journey copies the artifact's optiq vision sidecar; when the
+    // installed large-sparse revision ships without one the copy silently
+    // produces a text-only artifact and the sidecar asserts below starve.
+    // Failing here names the actual environment gap instead.
+    assert!(
+        model_directory.join("optiq").is_dir(),
+        "the configured large-sparse artifact must ship the optiq vision sidecar for this journey; the installed revision has none"
+    );
     let vision_artifact_directory = tempfile::tempdir()
         .expect("the acceptance test should create a temporary vision artifact directory");
     // Link all files from the model directory including the optiq vision sidecar.
