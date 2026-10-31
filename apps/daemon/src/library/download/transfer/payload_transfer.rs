@@ -28,6 +28,19 @@ use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
 };
 
+/// How one resumed download window ended for the resume orchestration:
+/// download completed (continue to verification), an operator pause stopped
+/// it (return the pause transition's own outcome), or the transfer failed
+/// (persist the mapped public failure code, then re-raise the error).
+enum ResumeDownloadOutcome {
+    Completed,
+    Paused(Result<DownloadPayloadTransferOutcome, DownloadPayloadTransferError>),
+    Failed {
+        public_error_code: DownloadJobPublicErrorCode,
+        transfer_error: DownloadPayloadTransferError,
+    },
+}
+
 const LIVE_PROGRESS_PUBLICATION_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Clone, Default)]
@@ -122,7 +135,6 @@ impl DownloadPayloadTransfer {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
     pub async fn resume(
         &self,
         updated_at_unix_millis: u64,
@@ -146,13 +158,49 @@ impl DownloadPayloadTransfer {
         self.progress_snapshot.publish(download_job.clone());
 
         match self
-            .download_pending_files_within_bounded_window(&mut download_job, updated_at_unix_millis)
+            .resume_download_window(&mut download_job, updated_at_unix_millis)
+            .await?
+        {
+            ResumeDownloadOutcome::Completed => {}
+            ResumeDownloadOutcome::Paused(pause_outcome) => return pause_outcome,
+            ResumeDownloadOutcome::Failed {
+                public_error_code,
+                transfer_error,
+            } => {
+                self.persist_failure(public_error_code, updated_at_unix_millis)
+                    .await?;
+                return Err(transfer_error);
+            }
+        }
+
+        self.verify_and_recover(&mut download_job, updated_at_unix_millis)
+            .await?;
+        let published_download_job = self
+            .publish_reconciled_download_job(download_job, updated_at_unix_millis)
+            .await?;
+        Ok(DownloadPayloadTransferOutcome::ReadyToPublish(
+            published_download_job,
+        ))
+    }
+
+    /// Runs one bounded download window and classifies how it ended. Paused
+    /// carries the pause transition's own outcome for the caller to return;
+    /// Failed carries both the public failure code (gated vs failed, so the
+    /// operator sees why bytes stopped) and the transfer error to re-raise
+    /// after the failure is persisted.
+    async fn resume_download_window(
+        &self,
+        download_job: &mut DownloadJob,
+        updated_at_unix_millis: u64,
+    ) -> Result<ResumeDownloadOutcome, DownloadPayloadTransferError> {
+        match self
+            .download_pending_files_within_bounded_window(download_job, updated_at_unix_millis)
             .await
         {
-            Ok(()) => {}
-            Err(TransferWindowStop::Paused) => {
-                return self.pause(updated_at_unix_millis).await;
-            }
+            Ok(()) => Ok(ResumeDownloadOutcome::Completed),
+            Err(TransferWindowStop::Paused) => Ok(ResumeDownloadOutcome::Paused(
+                self.pause(updated_at_unix_millis).await,
+            )),
             Err(TransferWindowStop::TransferFailed(transfer_error)) => {
                 let public_error_code =
                     if matches!(transfer_error, DownloadPayloadTransferError::DownloadGated) {
@@ -160,12 +208,24 @@ impl DownloadPayloadTransfer {
                     } else {
                         DownloadJobPublicErrorCode::DownloadFailed
                     };
-                self.persist_failure(public_error_code, updated_at_unix_millis)
-                    .await?;
-                return Err(transfer_error);
+                Ok(ResumeDownloadOutcome::Failed {
+                    public_error_code,
+                    transfer_error,
+                })
             }
         }
+    }
 
+    /// Marks the job verifying, re-publishes it, runs the measured checksum
+    /// verification, and routes the failure: a checksum mismatch primes the
+    /// retry path (the mismatched file alone is re-downloaded), any other
+    /// verification failure persists a terminal checksum failure. The
+    /// verification error itself always propagates to the caller.
+    async fn verify_and_recover(
+        &self,
+        download_job: &mut DownloadJob,
+        updated_at_unix_millis: u64,
+    ) -> Result<(), DownloadPayloadTransferError> {
         download_job
             .mark_verifying(updated_at_unix_millis)
             .map_err(DownloadJobStoreError::from)?;
@@ -200,12 +260,8 @@ impl DownloadPayloadTransfer {
             if let DownloadPayloadTransferError::ChecksumMismatch { relative_path } =
                 &verification_error
             {
-                self.prepare_checksum_retry(
-                    &mut download_job,
-                    relative_path,
-                    updated_at_unix_millis,
-                )
-                .await?;
+                self.prepare_checksum_retry(download_job, relative_path, updated_at_unix_millis)
+                    .await?;
             } else {
                 self.persist_failure(
                     DownloadJobPublicErrorCode::ChecksumMismatch,
@@ -215,6 +271,19 @@ impl DownloadPayloadTransfer {
             }
             return Err(verification_error);
         }
+        Ok(())
+    }
+
+    /// Marks the job publishing and reconciles the publication intent. An
+    /// already-published model maps to the dedicated public code; any other
+    /// store failure persists a download failure. On success the marked job
+    /// returns as the caller's ready-to-publish payload.
+    async fn publish_reconciled_download_job(
+        &self,
+        download_job: DownloadJob,
+        updated_at_unix_millis: u64,
+    ) -> Result<DownloadJob, DownloadPayloadTransferError> {
+        let mut download_job = download_job;
         download_job
             .mark_publishing(updated_at_unix_millis)
             .map_err(DownloadJobStoreError::from)?;
@@ -237,7 +306,7 @@ impl DownloadPayloadTransfer {
                 .await?;
             return Err(DownloadPayloadTransferError::JobStore(publication_error));
         }
-        Ok(DownloadPayloadTransferOutcome::ReadyToPublish(download_job))
+        Ok(download_job)
     }
 
     /// Streams one segment's ranged response through the file's ordered assembler while

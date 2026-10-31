@@ -41,13 +41,20 @@ pub struct Qwen3_5SpeculativeVerificationOutput {
     pub hidden_state_taps: Vec<MlxArray>,
 }
 
+/// Range-checked inputs for one speculative verification forward: the RoPE
+/// offset, the token count, and the materialized token-id tensor.
+struct SpeculativeVerificationInputs {
+    rope_offset_tokens: i32,
+    token_count: i32,
+    token_indices: MlxArray,
+}
+
 impl Qwen3_5ResidentModel {
     /// Runs one multi-token verification forward at `starting_position_tokens`.
     ///
     /// `target_hidden_state_tap_layer_ids` names target decoder layers whose
     /// output hidden states the caller conditions the draft on; the draft's
     /// configuration pins them and the caller keeps the order stable.
-    #[expect(clippy::too_many_lines)]
     pub fn build_speculative_verification_forward(
         &self,
         token_ids: &[u32],
@@ -57,36 +64,15 @@ impl Qwen3_5ResidentModel {
         logits_mode: VerificationLogitsMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5SpeculativeVerificationOutput, Qwen3_5ExecutionError> {
-        let rope_offset_tokens = i32::try_from(starting_position_tokens).map_err(|_| {
-            Qwen3_5ExecutionError::InvalidInput {
-                description: "starting position exceeds the MLX int32 range",
-            }
-        })?;
-        let token_count =
-            i32::try_from(token_ids.len()).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                description: "verification token count exceeds the MLX int32 range",
-            })?;
-        let signed_token_ids = token_ids
-            .iter()
-            .map(|token_id| {
-                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                    description: "token ID exceeds the MLX int32 range",
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let token_indices = self
-            .runtime
-            .array_from_i32(&signed_token_ids, &[1, token_count])?;
-        for &tap_layer_id in target_hidden_state_tap_layer_ids {
-            let tap_layer_index = usize::try_from(tap_layer_id)
-                .ok()
-                .filter(|tap_layer_index| *tap_layer_index < self.config.layer_count() as usize);
-            if tap_layer_index.is_none() {
-                return Err(Qwen3_5ExecutionError::InvalidInput {
-                    description: "a DFlash target hidden-state tap names a layer outside the target model",
-                });
-            }
-        }
+        let SpeculativeVerificationInputs {
+            rope_offset_tokens,
+            token_count,
+            token_indices,
+        } = self.validated_speculative_verification_inputs(
+            token_ids,
+            starting_position_tokens,
+            target_hidden_state_tap_layer_ids,
+        )?;
 
         let mut hidden_states = self.embedding_lookup(&token_indices)?;
         let mut hidden_state_tap_slots: Vec<Option<MlxArray>> = (0
@@ -142,17 +128,83 @@ impl Qwen3_5ResidentModel {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        let per_position_logits =
+            self.verification_per_position_logits(&hidden_states, logits_mode, token_count)?;
+        Ok(Qwen3_5SpeculativeVerificationOutput {
+            per_position_logits,
+            hidden_state_taps,
+        })
+    }
+
+    /// The range-checked inputs one verification forward needs: the RoPE
+    /// offset as MLX's int32, the token count in the same range, and the
+    /// token-id tensor materialized from signed ids. Also proves every
+    /// requested hidden-state tap names a real decoder layer of this model —
+    /// a tap outside the target model can never be captured later.
+    fn validated_speculative_verification_inputs(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        target_hidden_state_tap_layer_ids: &[i32],
+    ) -> Result<SpeculativeVerificationInputs, Qwen3_5ExecutionError> {
+        let rope_offset_tokens = i32::try_from(starting_position_tokens).map_err(|_| {
+            Qwen3_5ExecutionError::InvalidInput {
+                description: "starting position exceeds the MLX int32 range",
+            }
+        })?;
+        let token_count =
+            i32::try_from(token_ids.len()).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                description: "verification token count exceeds the MLX int32 range",
+            })?;
+        let signed_token_ids = token_ids
+            .iter()
+            .map(|token_id| {
+                i32::try_from(*token_id).map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "token ID exceeds the MLX int32 range",
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let token_indices = self
+            .runtime
+            .array_from_i32(&signed_token_ids, &[1, token_count])?;
+        for &tap_layer_id in target_hidden_state_tap_layer_ids {
+            let tap_layer_index = usize::try_from(tap_layer_id)
+                .ok()
+                .filter(|tap_layer_index| *tap_layer_index < self.config.layer_count() as usize);
+            if tap_layer_index.is_none() {
+                return Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "a DFlash target hidden-state tap names a layer outside the target model",
+                });
+            }
+        }
+        Ok(SpeculativeVerificationInputs {
+            rope_offset_tokens,
+            token_count,
+            token_indices,
+        })
+    }
+
+    /// Produces the requested logits from the final hidden states. NoLogits
+    /// skips the head entirely. LastRowOnly reads just the terminal prefill
+    /// position — the only row whose distribution the caller consumes — while
+    /// AllPositions reads every row because each position's logits are the
+    /// target's distribution over its next token. The head output is widened
+    /// to float32 for deterministic verification comparisons.
+    fn verification_per_position_logits(
+        &self,
+        hidden_states: &MlxArray,
+        logits_mode: VerificationLogitsMode,
+        token_count: i32,
+    ) -> Result<Option<MlxArray>, Qwen3_5ExecutionError> {
         let per_position_logits = match logits_mode {
             VerificationLogitsMode::NoLogits => None,
             VerificationLogitsMode::LastRowOnly | VerificationLogitsMode::AllPositions => {
                 let normalized_states = self.runtime.rms_norm(
-                    &hidden_states,
+                    hidden_states,
                     &self.weights.final_normalization_weight,
                     f32::from_bits(self.config.rms_norm_epsilon_bits()),
                 )?;
                 let head_input = if logits_mode == VerificationLogitsMode::LastRowOnly {
-                    // The terminal prefill position is the only row whose
-                    // distribution the caller consumes.
                     self.runtime.slice(
                         &normalized_states,
                         &[0, token_count - 1, 0],
@@ -160,21 +212,13 @@ impl Qwen3_5ResidentModel {
                         &[1, 1, 1],
                     )?
                 } else {
-                    // Verification reads every row: each position's logits
-                    // are the target's distribution over its next token.
                     normalized_states
                 };
-                let per_position_logits =
+                let head_logits =
                     self.quantized_linear(&head_input, &self.weights.language_model_head_weights)?;
-                Some(
-                    self.runtime
-                        .astype(&per_position_logits, MlxDtype::Float32)?,
-                )
+                Some(self.runtime.astype(&head_logits, MlxDtype::Float32)?)
             }
         };
-        Ok(Qwen3_5SpeculativeVerificationOutput {
-            per_position_logits,
-            hidden_state_taps,
-        })
+        Ok(per_position_logits)
     }
 }

@@ -322,94 +322,17 @@ fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArgu
     })
 }
 
-#[expect(clippy::too_many_lines)]
 fn parse_respond_arguments(
     remaining_arguments: &[OsString],
 ) -> Result<RespondArguments, UsageError> {
-    let mut prompt = None;
-    let mut prompt_from_text = false;
-    let mut model_id = None;
-    let mut instructions = None;
-    let mut thinking_budget = None;
-    let mut no_stream = false;
-    let mut images = Vec::new();
-    let mut schema_path = None;
+    let mut accumulated_respond_arguments = RespondArgumentAccumulator::default();
     let mut argument_index = 0;
     while argument_index < remaining_arguments.len() {
         let argument = &remaining_arguments[argument_index];
-        if argument == "--schema" {
-            if schema_path.is_some() {
-                return Err(UsageError::RepeatedArgument("--schema"));
-            }
-            schema_path = Some(PathBuf::from(flag_value(
-                remaining_arguments,
-                argument_index + 1,
-                "--schema",
-            )?));
-            argument_index += 2;
-            continue;
-        }
-        if argument == "--image" {
-            let image_value = flag_value(remaining_arguments, argument_index + 1, "--image")?;
-            images.push(PathBuf::from(image_value));
-            argument_index += 2;
-            continue;
-        }
-        if argument == "--model" {
-            if model_id.is_some() {
-                return Err(UsageError::RepeatedArgument("--model"));
-            }
-            model_id = Some(flag_value(
-                remaining_arguments,
-                argument_index + 1,
-                "--model",
-            )?);
-            argument_index += 2;
-            continue;
-        }
-        if argument == "--text" {
-            // An alternative to the positional prompt; the two are exclusive.
-            if prompt_from_text {
-                return Err(UsageError::RepeatedArgument("--text"));
-            }
-            if prompt.is_some() {
-                return Err(UsageError::RespondPromptConflict);
-            }
-            prompt = Some(flag_value(
-                remaining_arguments,
-                argument_index + 1,
-                "--text",
-            )?);
-            prompt_from_text = true;
-            argument_index += 2;
-            continue;
-        }
-        if argument == "--instructions" {
-            if instructions.is_some() {
-                return Err(UsageError::RepeatedArgument("--instructions"));
-            }
-            instructions = Some(flag_value(
-                remaining_arguments,
-                argument_index + 1,
-                "--instructions",
-            )?);
-            argument_index += 2;
-            continue;
-        }
-        if argument == "--thinking-budget" {
-            if thinking_budget.is_some() {
-                return Err(UsageError::RepeatedArgument("--thinking-budget"));
-            }
-            thinking_budget = Some(parse_thinking_budget(remaining_arguments, argument_index)?);
-            argument_index += 2;
-            continue;
-        }
-        if argument == "--no-stream" {
-            if no_stream {
-                return Err(UsageError::RepeatedArgument("--no-stream"));
-            }
-            no_stream = true;
-            argument_index += 1;
+        if let Some(consumed_argument_count) =
+            accumulated_respond_arguments.apply_respond_flag(remaining_arguments, argument_index)?
+        {
+            argument_index += consumed_argument_count;
             continue;
         }
         if argument.to_string_lossy().starts_with('-') {
@@ -417,25 +340,127 @@ fn parse_respond_arguments(
                 argument.to_string_lossy().into_owned(),
             ));
         }
-        if prompt.is_some() {
+        if accumulated_respond_arguments.prompt.is_some() {
             return Err(UsageError::RespondPromptConflict);
         }
         let raw_prompt = argument
             .to_str()
             .ok_or_else(|| UsageError::UnknownArgument(argument.to_string_lossy().into_owned()))?;
-        prompt = Some(raw_prompt.to_owned());
+        accumulated_respond_arguments.prompt = Some(raw_prompt.to_owned());
         argument_index += 1;
     }
 
     Ok(RespondArguments {
-        prompt: prompt.ok_or(UsageError::RespondPromptRequired)?,
-        images,
-        model_id,
-        instructions,
-        thinking_budget,
-        schema_path,
-        no_stream,
+        prompt: accumulated_respond_arguments
+            .prompt
+            .ok_or(UsageError::RespondPromptRequired)?,
+        images: accumulated_respond_arguments.images,
+        model_id: accumulated_respond_arguments.model_id,
+        instructions: accumulated_respond_arguments.instructions,
+        thinking_budget: accumulated_respond_arguments.thinking_budget,
+        schema_path: accumulated_respond_arguments.schema_path,
+        no_stream: accumulated_respond_arguments.no_stream,
     })
+}
+
+/// Every `respond` flag's parsed state while the argument loop runs. Flags
+/// mutate their own field; the positional prompt only lands when no flag
+/// matched and no earlier prompt (positional or `--text`) exists.
+#[derive(Default)]
+struct RespondArgumentAccumulator {
+    prompt: Option<String>,
+    prompt_from_text: bool,
+    model_id: Option<String>,
+    instructions: Option<String>,
+    thinking_budget: Option<u16>,
+    no_stream: bool,
+    images: Vec<PathBuf>,
+    schema_path: Option<PathBuf>,
+}
+
+impl RespondArgumentAccumulator {
+    /// Applies one argument as a `respond` flag. Returns how many arguments
+    /// the flag consumed (value flags take their value, bare flags take one)
+    /// or `None` when the argument is not a `respond` flag, so the caller can
+    /// treat it as the positional prompt. Every duplicate flag names itself;
+    /// `--text` and the positional prompt are exclusive in both directions.
+    fn apply_respond_flag(
+        &mut self,
+        remaining_arguments: &[OsString],
+        argument_index: usize,
+    ) -> Result<Option<usize>, UsageError> {
+        let argument = &remaining_arguments[argument_index];
+        if argument == "--schema" {
+            if self.schema_path.is_some() {
+                return Err(UsageError::RepeatedArgument("--schema"));
+            }
+            self.schema_path = Some(PathBuf::from(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--schema",
+            )?));
+            return Ok(Some(2));
+        }
+        if argument == "--image" {
+            let image_value = flag_value(remaining_arguments, argument_index + 1, "--image")?;
+            self.images.push(PathBuf::from(image_value));
+            return Ok(Some(2));
+        }
+        if argument == "--model" {
+            if self.model_id.is_some() {
+                return Err(UsageError::RepeatedArgument("--model"));
+            }
+            self.model_id = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--model",
+            )?);
+            return Ok(Some(2));
+        }
+        if argument == "--text" {
+            // An alternative to the positional prompt; the two are exclusive.
+            if self.prompt_from_text {
+                return Err(UsageError::RepeatedArgument("--text"));
+            }
+            if self.prompt.is_some() {
+                return Err(UsageError::RespondPromptConflict);
+            }
+            self.prompt = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--text",
+            )?);
+            self.prompt_from_text = true;
+            return Ok(Some(2));
+        }
+        if argument == "--instructions" {
+            if self.instructions.is_some() {
+                return Err(UsageError::RepeatedArgument("--instructions"));
+            }
+            self.instructions = Some(flag_value(
+                remaining_arguments,
+                argument_index + 1,
+                "--instructions",
+            )?);
+            return Ok(Some(2));
+        }
+        if argument == "--thinking-budget" {
+            if self.thinking_budget.is_some() {
+                return Err(UsageError::RepeatedArgument("--thinking-budget"));
+            }
+            self.thinking_budget =
+                Some(parse_thinking_budget(remaining_arguments, argument_index)?);
+            return Ok(Some(2));
+        }
+        if argument == "--no-stream" {
+            if self.no_stream {
+                return Err(UsageError::RepeatedArgument("--no-stream"));
+            }
+            self.no_stream = true;
+            return Ok(Some(1));
+        }
+        Ok(None)
+    }
 }
 
 /// Parses `--thinking-budget`'s value as a bounded token count. Missing,

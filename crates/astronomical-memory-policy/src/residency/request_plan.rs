@@ -108,21 +108,14 @@ impl RequestExpertResidency {
     /// operation-local streaming so the plan never authorizes an adoption
     /// offer it budgets zero bytes for (issue #1278).
     #[must_use]
-    #[expect(clippy::too_many_lines)]
     pub fn stabilize_prefill_plan(
         &self,
         mut candidate_plan: ExpertResidencyPlan,
         current_residencies: &[CurrentExpertLayerResidency],
         layer_geometries: &[ExpertLayerGeometry],
     ) -> ExpertResidencyPlan {
-        let mut layer_is_currently_complete = vec![false; self.layer_roles.len()];
-        for current_residency in current_residencies {
-            if current_residency.layer_index < layer_is_currently_complete.len()
-                && current_residency.class == RetainedExpertPageClass::StableCompleteLayer
-            {
-                layer_is_currently_complete[current_residency.layer_index] = true;
-            }
-        }
+        let layer_is_currently_complete =
+            currently_complete_layer_flags(self.layer_roles.len(), current_residencies);
         if candidate_plan.layer_targets.len() < self.layer_roles.len() {
             // Extend-only: a candidate plan longer than the roles carries
             // planner targets for layers beyond the contract's span, and
@@ -132,34 +125,81 @@ impl RequestExpertResidency {
                 ExpertLayerResidencyTarget::StreamOperationLocal,
             );
         }
-        // The stream-admission headroom is what remains of the composed
-        // ceiling after every claimable pinned layer: each pin, seated or
-        // not, reserves its full complete payload, because a seated pin's
-        // table holds exactly that payload and an unseated pin claims it on
-        // promotion. A seated pin's claim always holds — its bytes are
-        // already resident — but an unseated pin only claims while the
-        // ceiling can fund it: pins frozen at request open must not keep
-        // claiming past a ceiling that context growth shrank, because the
-        // over-claim saturates headroom to zero while naming promotion
-        // targets the budget cannot honor (the 2026-10-23 under-utilization
-        // flight: 34 claims of 855,638,016 bytes against a 28,938,405,632
-        // -byte ceiling left 26.95 GB unused and streamed 389 GB from SSD).
-        // Unfunded pins fall through to streamed handling below; funding is
-        // spent in ascending layer order, so the loss of funding lands on
-        // the tail pins first, mirroring the contract's shrink order.
-        //
-        // Every seated layer the plan preserves — pinned or streamed role —
-        // is charged here, before anything new is funded. A seated streamed
-        // layer is preserved without a fresh admission, so leaving its bytes
-        // out of the headroom let every chunk admit one more complete layer
-        // past the ceiling (the 2026-10-25 cached-suffix flight: a 12-layer
-        // contract grew to 14 seated layers and 14.5 GB of retained experts
-        // against an 11.16 GB ceiling, then the 2,048-token chunk ran out of
-        // active memory twice and the request failed).
-        let mut pin_claim_is_funded = vec![false; self.layer_roles.len()];
-        let mut stream_admission_headroom_bytes = candidate_plan.retained_expert_ceiling_bytes;
-        let mut expected_preserved_bytes = 0_u64;
+        let PrefillFundingState {
+            pin_claim_is_funded,
+            stream_admission_headroom_bytes,
+            expected_preserved_bytes,
+        } = self.prefill_funding_state(
+            &layer_is_currently_complete,
+            current_residencies,
+            layer_geometries,
+            candidate_plan.retained_expert_ceiling_bytes,
+        );
+        let mut stream_admission_headroom_bytes = stream_admission_headroom_bytes;
         let mut maximum_new_retained_bytes = 0_u64;
+        for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
+            candidate_plan.layer_targets[layer_index] = stabilized_layer_target(
+                *layer_role,
+                layer_index,
+                layer_is_currently_complete[layer_index],
+                pin_claim_is_funded[layer_index],
+                layer_geometries,
+                &mut stream_admission_headroom_bytes,
+                &mut maximum_new_retained_bytes,
+            );
+        }
+        candidate_plan.complete_layer_targets = self
+            .layer_roles
+            .iter()
+            .enumerate()
+            .filter_map(|(layer_index, layer_role)| {
+                matches!(layer_role, RequestExpertLayerRole::PinnedComplete)
+                    .then_some(layer_index)
+                    .filter(|funded_layer_index| pin_claim_is_funded[*funded_layer_index])
+            })
+            .collect();
+        candidate_plan.reserved_routed_overlay_bytes = 0;
+        candidate_plan.expected_preserved_bytes = expected_preserved_bytes;
+        candidate_plan.maximum_new_retained_bytes = maximum_new_retained_bytes;
+        candidate_plan.is_low_budget_partial_mode = false;
+        candidate_plan
+    }
+
+    /// Charges every preserved seated layer against the composed ceiling and
+    /// funds the remaining unseated pin claims, in that order. The
+    /// stream-admission headroom is what remains of the composed ceiling
+    /// after every claimable pinned layer: each pin, seated or not, reserves
+    /// its full complete payload, because a seated pin's table holds exactly
+    /// that payload and an unseated pin claims it on promotion. A seated
+    /// pin's claim always holds — its bytes are already resident — but an
+    /// unseated pin only claims while the ceiling can fund it: pins frozen at
+    /// request open must not keep claiming past a ceiling that context growth
+    /// shrank, because the over-claim saturates headroom to zero while naming
+    /// promotion targets the budget cannot honor (the 2026-10-23
+    /// under-utilization flight: 34 claims of 855,638,016 bytes against a
+    /// 28,938,405,632-byte ceiling left 26.95 GB unused and streamed 389 GB
+    /// from SSD). Unfunded pins fall through to streamed handling; funding is
+    /// spent in ascending layer order, so the loss of funding lands on the
+    /// tail pins first, mirroring the contract's shrink order.
+    ///
+    /// Every seated layer the plan preserves — pinned or streamed role — is
+    /// charged here, before anything new is funded. A seated streamed layer
+    /// is preserved without a fresh admission, so leaving its bytes out of
+    /// the headroom let every chunk admit one more complete layer past the
+    /// ceiling (the 2026-10-25 cached-suffix flight: a 12-layer contract grew
+    /// to 14 seated layers and 14.5 GB of retained experts against an 11.16
+    /// GB ceiling, then the 2,048-token chunk ran out of active memory twice
+    /// and the request failed).
+    fn prefill_funding_state(
+        &self,
+        layer_is_currently_complete: &[bool],
+        current_residencies: &[CurrentExpertLayerResidency],
+        layer_geometries: &[ExpertLayerGeometry],
+        retained_expert_ceiling_bytes: u64,
+    ) -> PrefillFundingState {
+        let mut pin_claim_is_funded = vec![false; self.layer_roles.len()];
+        let mut stream_admission_headroom_bytes = retained_expert_ceiling_bytes;
+        let mut expected_preserved_bytes = 0_u64;
         for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
             let is_preserved_seated_layer = matches!(
                 layer_role,
@@ -201,70 +241,92 @@ impl RequestExpertResidency {
                     stream_admission_headroom_bytes.saturating_sub(pinned_complete_claim_bytes);
             }
         }
-        for (layer_index, layer_role) in self.layer_roles.iter().enumerate() {
-            let layer_target = match *layer_role {
-                RequestExpertLayerRole::PinnedComplete
-                    if layer_is_currently_complete[layer_index] =>
-                {
-                    ExpertLayerResidencyTarget::PreserveComplete
-                }
-                RequestExpertLayerRole::PinnedComplete if pin_claim_is_funded[layer_index] => {
-                    ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
-                }
-                // A streamed role whose whole expert set is already seated:
-                // the mandatory read paid the complete-layer cost in an
-                // earlier chunk, and evicting it would make every later chunk
-                // re-stream the same bytes. Preserve it the way a seated pin
-                // is preserved so it is never evicted and re-streamed (the 2026-10-24
-                // flight: 31 streamed layers froze the allowance while
-                // 19.6 GB of the paid ceiling sat unused and 90 GB were
-                // re-streamed). Its bytes were charged with the seated pins.
-                RequestExpertLayerRole::Streamed if layer_is_currently_complete[layer_index] => {
-                    ExpertLayerResidencyTarget::PreserveComplete
-                }
-                RequestExpertLayerRole::Streamed | RequestExpertLayerRole::PinnedComplete => {
-                    let complete_layer_payload_bytes = layer_geometries
-                        .get(layer_index)
-                        .map(|geometry| geometry.complete_layer_payload_bytes)
-                        .unwrap_or(u64::MAX);
-                    if complete_layer_payload_bytes <= stream_admission_headroom_bytes {
-                        stream_admission_headroom_bytes = stream_admission_headroom_bytes
-                            .saturating_sub(complete_layer_payload_bytes);
-                        maximum_new_retained_bytes =
-                            maximum_new_retained_bytes.saturating_add(complete_layer_payload_bytes);
-                        // A streamed layer's mandatory read pays the complete-layer
-                        // cost the moment the chunk routes nearly every expert, so
-                        // keeping what was read is pure reuse while the leftover
-                        // budget admits the payload.
-                        ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
-                    } else {
-                        ExpertLayerResidencyTarget::StreamOperationLocal
-                    }
-                }
-                // A capacity-recovery demotion may never re-seat: re-admitting
-                // what a recovery just released lets every later attempt
-                // re-seat, re-fail, and re-evict the same table (issue #1278).
-                RequestExpertLayerRole::DemotedByCapacityFailure => {
-                    ExpertLayerResidencyTarget::StreamOperationLocal
-                }
-            };
-            candidate_plan.layer_targets[layer_index] = layer_target;
+        PrefillFundingState {
+            pin_claim_is_funded,
+            stream_admission_headroom_bytes,
+            expected_preserved_bytes,
         }
-        candidate_plan.complete_layer_targets = self
-            .layer_roles
-            .iter()
-            .enumerate()
-            .filter_map(|(layer_index, layer_role)| {
-                matches!(layer_role, RequestExpertLayerRole::PinnedComplete)
-                    .then_some(layer_index)
-                    .filter(|funded_layer_index| pin_claim_is_funded[*funded_layer_index])
-            })
-            .collect();
-        candidate_plan.reserved_routed_overlay_bytes = 0;
-        candidate_plan.expected_preserved_bytes = expected_preserved_bytes;
-        candidate_plan.maximum_new_retained_bytes = maximum_new_retained_bytes;
-        candidate_plan.is_low_budget_partial_mode = false;
-        candidate_plan
+    }
+}
+
+/// Marks each layer currently resident as a complete layer. A residency
+/// entry naming a layer outside the contract's span is ignored.
+fn currently_complete_layer_flags(
+    layer_count: usize,
+    current_residencies: &[CurrentExpertLayerResidency],
+) -> Vec<bool> {
+    let mut layer_is_currently_complete = vec![false; layer_count];
+    for current_residency in current_residencies {
+        if current_residency.layer_index < layer_is_currently_complete.len()
+            && current_residency.class == RetainedExpertPageClass::StableCompleteLayer
+        {
+            layer_is_currently_complete[current_residency.layer_index] = true;
+        }
+    }
+    layer_is_currently_complete
+}
+
+/// The funding facts the target-assignment pass reads: which pin claims the
+/// ceiling funds, the headroom left for streamed-layer admissions, and the
+/// preserved bytes the plan expects to keep.
+struct PrefillFundingState {
+    pin_claim_is_funded: Vec<bool>,
+    stream_admission_headroom_bytes: u64,
+    expected_preserved_bytes: u64,
+}
+
+/// Decides one layer's stabilized target. Seated layers preserve; funded
+/// unseated pins promote on mandatory read; a streamed role whose whole
+/// expert set is already seated preserves too — the mandatory read paid the
+/// complete-layer cost in an earlier chunk, and evicting it would make every
+/// later chunk re-stream the same bytes (the 2026-10-24 flight: 31 streamed
+/// layers froze the allowance while 19.6 GB of the paid ceiling sat unused
+/// and 90 GB were re-streamed). Remaining streamed and unfunded-pin layers
+/// admit only while the leftover budget fits their complete payload, else
+/// they stay operation-local. A capacity-recovery demotion may never re-seat:
+/// re-admitting what a recovery just released lets every later attempt
+/// re-seat, re-fail, and re-evict the same table (issue #1278).
+fn stabilized_layer_target(
+    layer_role: RequestExpertLayerRole,
+    layer_index: usize,
+    layer_is_currently_complete: bool,
+    pin_claim_is_funded: bool,
+    layer_geometries: &[ExpertLayerGeometry],
+    stream_admission_headroom_bytes: &mut u64,
+    maximum_new_retained_bytes: &mut u64,
+) -> ExpertLayerResidencyTarget {
+    match layer_role {
+        RequestExpertLayerRole::PinnedComplete if layer_is_currently_complete => {
+            ExpertLayerResidencyTarget::PreserveComplete
+        }
+        RequestExpertLayerRole::PinnedComplete if pin_claim_is_funded => {
+            ExpertLayerResidencyTarget::PromoteCompleteOnMandatoryRead
+        }
+        RequestExpertLayerRole::Streamed if layer_is_currently_complete => {
+            ExpertLayerResidencyTarget::PreserveComplete
+        }
+        RequestExpertLayerRole::Streamed | RequestExpertLayerRole::PinnedComplete => {
+            let complete_layer_payload_bytes = layer_geometries
+                .get(layer_index)
+                .map(|geometry| geometry.complete_layer_payload_bytes)
+                .unwrap_or(u64::MAX);
+            if complete_layer_payload_bytes <= *stream_admission_headroom_bytes {
+                *stream_admission_headroom_bytes =
+                    stream_admission_headroom_bytes.saturating_sub(complete_layer_payload_bytes);
+                *maximum_new_retained_bytes =
+                    maximum_new_retained_bytes.saturating_add(complete_layer_payload_bytes);
+                // A streamed layer's mandatory read pays the complete-layer
+                // cost the moment the chunk routes nearly every expert, so
+                // keeping what was read is pure reuse while the leftover
+                // budget admits the payload.
+                ExpertLayerResidencyTarget::AdmitCompleteOnMandatoryRead
+            } else {
+                ExpertLayerResidencyTarget::StreamOperationLocal
+            }
+        }
+        RequestExpertLayerRole::DemotedByCapacityFailure => {
+            ExpertLayerResidencyTarget::StreamOperationLocal
+        }
     }
 }
 
