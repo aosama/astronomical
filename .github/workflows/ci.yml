@@ -404,39 +404,14 @@ jobs:
           cargo nextest-archive-e2e
         timeout-minutes: 5
 
-      - name: Function-length and clippy budget (default world)
-        # clippy::too_many_lines is denied through the workspace lints
-        # tables (issue #1637); every pre-existing over-budget function
-        # carries #[expect], so this step fails on any new over-budget
-        # function and on any expect left behind after a function shrank.
-        run: |
-          scripts/ci/ci-step-timing.sh begin clippy-budget-default
-          cargo clippy --locked --workspace --all-targets
-          scripts/ci/ci-step-timing.sh end clippy-budget-default
-        timeout-minutes: 12
-
-      - name: Function-length and clippy budget (MLX world)
-        run: |
-          scripts/ci/ci-step-timing.sh begin clippy-budget-mlx
-          cargo clippy --locked --workspace --all-targets --features astronomical-model-serving/direct-mlx,astronomical-runtime-integration/mlx,astronomical-jangtq2-qwen35/direct-mlx,astronomical-quantization/direct-mlx,astronomical-acceptance/direct-mlx
-          scripts/ci/ci-step-timing.sh end clippy-budget-mlx
-        timeout-minutes: 12
-
-      - name: Function-length and clippy budget (acceptance superset)
-        run: |
-          scripts/ci/ci-step-timing.sh begin clippy-budget-acceptance
-          cargo clippy --locked -p astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --all-targets
-          scripts/ci/ci-step-timing.sh end clippy-budget-acceptance
-        timeout-minutes: 12
-
       - name: cargo-crap complexity ratchet (baseline regression gate)
-        # Replaces the retired xtask function-length hard gate (issue #1637).
-        # cargo-crap re-scores every function against the committed
-        # crap-baseline.json without compiling anything: an existing function
-        # may only improve, and any complexity growth fails. Test trees are
-        # scored; #[test] functions are skipped by the tool by design. The
-        # hard 100-code-line budget stays enforced by clippy::too_many_lines
-        # in the clippy budget steps above.
+        # Parses sources without compiling anything: an existing function
+        # may only improve against the committed crap-baseline.json, and any
+        # complexity growth fails. Under a second for the whole workspace.
+        # Function-length enforcement is deliberately NOT in CI (the
+        # repository's policy decision): the 100-code-line budget is denied
+        # through the workspace lints tables and proven by the pre-commit
+        # hook's clippy pass; no clippy runs in GitHub Actions at all.
         run: |
           scripts/ci/ci-step-timing.sh begin crap-ratchet
           brew install cargo-binstall

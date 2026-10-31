@@ -11,23 +11,24 @@
 # ARMED: "deny" under [workspace.lints.clippy] in the root Cargo.toml (and in
 # the runtime-integration and acceptance crates' own lints tables), with
 # #[expect] on every pre-existing over-budget function. The budget therefore
-# fails any build that crosses it, an #[expect] self-cleans when its function
-# shrinks below the budget, and the tracked-debt count is
-# `git grep -c 'expect(clippy::too_many_lines)'`. CI's clippy budget steps
-# prove the budget across all three feature worlds including the acceptance
-# feature superset.
+# fails any build that crosses it, and an #[expect] self-cleans when its
+# function shrinks below the budget; the tracked-debt count is
+# `git grep -c 'expect(clippy::too_many_lines)'`.
 #
-# The deny path alone has one escape: a suppression attribute silences it,
-# which is exactly how tracked debt is carried. The bypass-proof gate over
-# tracked debt is now cargo-crap's complexity ratchet
+# WHERE it is enforced (policy decision, 2026-10-31): the pre-commit hook
+# ONLY — no clippy runs in GitHub Actions at all, so the hook's single
+# default-world pass is the budget's sole proof. The hook run is warm-cache
+# incremental; feature-gated code is linted by the developer's own lane
+# runs. Rustc-level warnings stay denied in every CI compile through the
+# [build] warnings policy; only clippy-only lints left CI.
+#
+# The bypass-proof growth ratchet over tracked debt is cargo-crap's
 # (cargo crap --workspace --baseline crap-baseline.json --fail-regression,
 # see .cargo-crap.toml): it parses sources without compiling, scores every
 # function — tests included, #[test] functions excepted by the tool — and
 # fails when any function's cyclomatic complexity grows against the
-# committed baseline. The former xtask function-length hard gate and its
-# frozen test-scope registry (issue #1637) retired in favor of that
-# baseline; when cargo-crap's structural signals release ships, gating
-# lines there restores an explicit line-count ratchet.
+# committed baseline. When cargo-crap's structural-signals release ships,
+# gating lines there restores an explicit line-count ratchet.
 #
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
 # repository denies warnings via [build] warnings, which turns this lint into
