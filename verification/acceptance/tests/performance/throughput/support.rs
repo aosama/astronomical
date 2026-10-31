@@ -21,16 +21,14 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
-use astronomical_daemon::{
-    ChatGenerationExecutor, GenerationPerformanceLog, WorkerHandle, WorkerHealthSnapshot,
-};
+use astronomical_daemon::{ChatGenerationExecutor, WorkerHealthSnapshot};
 use astronomical_ipc_protocol::{
-    ChatImageInput, RequestId, WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+    ChatImageInput, WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
 };
-use tokio::time::sleep;
 
 pub(crate) use crate::performance_throughput::completion::{
     drive_completion, dump_worker_logging_directory, read_decode_cache_diagnostic_evidence,
@@ -309,7 +307,15 @@ pub(crate) async fn run_throughput_journey(
     measurement
 }
 
-#[expect(clippy::too_many_lines)]
+mod journey_stages;
+
+use journey_stages::{
+    JourneyCompletions, apply_journey_overrides, budget_exhausted_measurement,
+    budget_exhausted_outcome, drive_journey_completions, launch_servable_worker,
+    remaining_journey_budget, resolve_budget_exhausted_stage, spawn_progress_sampler,
+    take_preserved_progress,
+};
+
 pub(crate) async fn measure_throughput(
     model_id: &str,
     journey: &ThroughputJourney,
@@ -320,11 +326,10 @@ pub(crate) async fn measure_throughput(
     // outside, because the worker thread it owns cannot be cancelled from
     // inside — a panic on the driver thread leaves the runtime running.
     let cell_deadline = tokio::time::Instant::now() + journey.journey_timeout;
-    let remaining_budget = || cell_deadline.saturating_duration_since(tokio::time::Instant::now());
-    let model_directory = journey
-        .model_directory
-        .clone()
-        .unwrap_or_else(|| crate::support::configured_installed_model_directory_by_id(model_id));
+    let model_directory = match journey.model_directory.clone() {
+        Some(journey_model_directory) => journey_model_directory,
+        None => crate::support::configured_installed_model_directory_by_id(model_id),
+    };
     let (
         _isolated_home,
         worker_executable_path,
@@ -332,55 +337,21 @@ pub(crate) async fn measure_throughput(
         model_policy_catalog,
         mut worker_startup_configuration,
     ) = perf_worker_environment(model_id, &model_directory, journey.attribution_enabled);
-    worker_startup_configuration.configured_maximum_mlx_memory_bytes =
-        journey.maximum_mlx_memory_bytes;
-    worker_startup_configuration.decode_expert_cache_policy = journey.decode_expert_cache_policy;
-    worker_startup_configuration.diagnostic_qwen3_5_engine_override =
-        journey.diagnostic_qwen3_5_engine_override;
-    worker_startup_configuration.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes =
-        journey.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes;
+    apply_journey_overrides(&mut worker_startup_configuration, journey);
     let performance_log_path = logging_directory.join("performance.jsonl");
     fs::create_dir_all(&logging_directory)
         .expect("the throughput performance log directory should be created");
 
-    let worker_handle = match tokio::time::timeout(remaining_budget(), async {
-        let worker_handle = WorkerHandle::launch_with_startup_configuration(
+    let worker_handle = match tokio::time::timeout(
+        remaining_journey_budget(cell_deadline),
+        launch_servable_worker(
             worker_executable_path,
-            MODEL_LOAD_TIMEOUT,
-            GenerationPerformanceLog::open(&logging_directory)
-                .expect("the throughput performance log should open"),
+            &logging_directory,
             model_policy_catalog,
             worker_startup_configuration,
-        )
-        .await
-        .expect("the daemon should launch the measured worker");
-        wait_until_idle(&worker_handle, READY_ATTEMPT_LIMIT).await;
-        if let Some(configured_maximum_mlx_memory_bytes) = journey.maximum_mlx_memory_bytes {
-            let effective_mlx_memory_ceiling_bytes =
-                worker_handle.worker_health_snapshot().mlx_memory_ceiling_bytes;
-            if matches!(journey.journey_kind, ThroughputJourneyKind::DecodeFullFit) {
-                assert_eq!(
-                    effective_mlx_memory_ceiling_bytes,
-                    astronomical_test_harness::sparse_decode_full_fit::MEMORY_CEILING_BYTES,
-                    "the full-fit diagnostic must exercise 37 GB, not a clamped streaming cell",
-                );
-            } else {
-                assert!(
-                effective_mlx_memory_ceiling_bytes <= MAXIMUM_MODEL_MEMORY_BYTES,
-                "the configured {configured_maximum_mlx_memory_bytes}-byte real-model journey must be capped at or below the {MAXIMUM_MODEL_MEMORY_BYTES}-byte effective limit before model loading, got {effective_mlx_memory_ceiling_bytes}",
-                );
-            }
-            if matches!(
-                journey.journey_kind,
-                ThroughputJourneyKind::MemoryCeilingSweep
-            ) {
-                eprintln!(
-                    "[memory-ceiling-sweep] preflight configured_bytes={configured_maximum_mlx_memory_bytes} effective_bytes={effective_mlx_memory_ceiling_bytes} maximum_effective_bytes={MAXIMUM_MODEL_MEMORY_BYTES} status=passed"
-                );
-            }
-        }
-        worker_handle
-    })
+            journey,
+        ),
+    )
     .await
     {
         Ok(worker_handle) => worker_handle,
@@ -389,191 +360,53 @@ pub(crate) async fn measure_throughput(
                 "[performance-throughput] budget_exhausted=true model={model_id} stage=launch-or-idle budget_seconds={} — the cell never became servable inside the budget",
                 journey.journey_timeout.as_secs(),
             );
-            return JourneyRunOutcome {
-                measurement: ThroughputMeasurement {
-                    model_id: model_id.to_owned(),
-                    decode_expert_cache_policy: journey.decode_expert_cache_policy,
-                    total_input_tokens: 0,
-                    total_output_tokens: 0,
-                    cached_tokens: 0,
-                    prefill_time_seconds: 0.0,
-                    decode_time_seconds: 0.0,
-                    prefill_tokens_per_second: 0.0,
-                    decode_tokens_per_second: 0.0,
-                    mlx_peak_memory_bytes: None,
-                    measured_output_text: None,
-                    decode_cache_diagnostic_evidence: None,
-                },
-                measured_budget_exhausted: true,
-                budget_exhausted_stage: Some(MemoryCellBudgetExhaustedStage::LaunchOrIdle),
-                final_health_snapshot: WorkerHandle::unavailable().worker_health_snapshot(),
-                last_observed_active_request_progress: None,
+            return budget_exhausted_outcome(
+                model_id,
+                journey,
                 logging_directory,
-            };
+                MemoryCellBudgetExhaustedStage::LaunchOrIdle,
+            );
         }
     };
 
-    // The progress sampler preserves the LAST observed per-phase progress even
-    // after cancellation clears the health snapshot, so a budget-exhausted
-    // cell still reports the prefill or decode rate it was dying at.
-    let last_observed_active_request_progress = std::sync::Arc::new(std::sync::Mutex::new(
-        None::<astronomical_daemon::ActiveRequestProgress>,
-    ));
-    let sampler_stop_signal = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let progress_sampler = tokio::spawn({
-        let worker_handle = worker_handle.clone();
-        let last_observed_active_request_progress =
-            std::sync::Arc::clone(&last_observed_active_request_progress);
-        let sampler_stop_signal = std::sync::Arc::clone(&sampler_stop_signal);
-        async move {
-            while !sampler_stop_signal.load(std::sync::atomic::Ordering::Relaxed) {
-                sleep(Duration::from_secs(2)).await;
-                if sampler_stop_signal.load(std::sync::atomic::Ordering::Relaxed) {
-                    break;
-                }
-                if let Some(active_request_progress) = worker_handle
-                    .worker_health_snapshot()
-                    .active_request_progress
-                {
-                    *last_observed_active_request_progress
-                        .lock()
-                        .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner()) =
-                        Some(active_request_progress);
-                }
-            }
-        }
-    });
+    let (preserved_progress_slot, sampler_stop_signal, progress_sampler) =
+        spawn_progress_sampler(&worker_handle);
 
-    // A zero-output warmup marks a single-request lane: each journey launches a
-    // fresh worker and measures exactly one completion. The streaming hybrid
-    // engine cannot serve two sequential requests under one ceiling once the
-    // first request leaves its warm expert tables resident — the second
-    // request's prefill streams the remaining layers beside them — so the
-    // in-worker warmup is skipped and first-use JIT cost lands on both arms
-    // identically through the alternating paired order.
-    let warmup_completed = if journey.warmup_output_tokens == 0 {
-        eprintln!(
-            "[performance-throughput] single-request lane: skipping the in-worker warmup completion model={model_id}"
-        );
-        true
-    } else {
-        eprintln!("[performance-throughput] warmup model={model_id}");
-        tokio::time::timeout(
-            remaining_budget(),
-            drive_completion(
-                &worker_handle,
-                RequestId::new(1),
-                model_id,
-                &journey.warmup_input_prompt,
-                journey.warmup_images.clone(),
-                journey.warmup_output_tokens,
-                journey.temperature_thousandths,
-            ),
-        )
-        .await
-        .map(|warmup_result| match warmup_result {
-            Ok(_) => true,
-            Err(drive_error) => {
-                dump_worker_logging_directory(&logging_directory, WORKER_LOG_DUMP_LINE_LIMIT);
-                panic!("the throughput completion for {model_id} failed: {drive_error}");
-            }
-        })
-        .unwrap_or_else(|_| {
-            // Dropping the pending drive future drops its event receiver, which is
-            // the client-disconnect cancellation signal; the worker releases its
-            // generation permit and finalizes a cancelled attribution report.
-            eprintln!(
-                "[performance-throughput] budget_exhausted=true model={model_id} stage=warmup budget_seconds={} — a warmup that cannot finish inside the budget is itself the collapse signal",
-                journey.journey_timeout.as_secs(),
-            );
-            false
-        })
-    };
-    let mut measured_completed = false;
-    let mut measured_output_text = None;
-    if warmup_completed {
-        eprintln!("[performance-throughput] measured model={model_id}");
-        measured_completed = tokio::time::timeout(
-            remaining_budget(),
-            drive_completion(
-                &worker_handle,
-                RequestId::new(MEASURED_REQUEST_ID),
-                model_id,
-                &journey.measured_input_prompt,
-                journey.measured_images.clone(),
-                journey.measured_output_tokens,
-                journey.temperature_thousandths,
-            ),
-        )
-        .await
-        .map(|measured_result| match measured_result {
-            Ok(generated_text) => {
-                measured_output_text = Some(generated_text);
-                true
-            }
-            Err(drive_error) => {
-                dump_worker_logging_directory(&logging_directory, WORKER_LOG_DUMP_LINE_LIMIT);
-                panic!("the throughput completion for {model_id} failed: {drive_error}");
-            }
-        })
-        .unwrap_or_else(|_| {
-            eprintln!(
-                "[performance-throughput] budget_exhausted=true model={model_id} stage=measured budget_seconds={} — dropping the stream receiver to cancel via client disconnect",
-                journey.journey_timeout.as_secs(),
-            );
-            false
-        });
-    }
-    let budget_exhausted_stage = if !warmup_completed {
-        Some(MemoryCellBudgetExhaustedStage::Warmup)
-    } else if !measured_completed {
-        Some(MemoryCellBudgetExhaustedStage::Measured)
-    } else {
-        None
-    };
+    let journey_completions = drive_journey_completions(
+        &worker_handle,
+        model_id,
+        journey,
+        cell_deadline,
+        &logging_directory,
+    )
+    .await;
+    let JourneyCompletions {
+        warmup_completed,
+        measured_completed,
+        measured_output_text,
+    } = journey_completions;
+    let budget_exhausted_stage =
+        resolve_budget_exhausted_stage(warmup_completed, measured_completed);
     let measured_budget_exhausted = budget_exhausted_stage.is_some();
     let final_health_snapshot = worker_handle.worker_health_snapshot();
-    // The sampler holds one final poll's worth of lag; stop it, then prefer the
-    // live snapshot's progress and fall back to what the sampler preserved.
-    sampler_stop_signal.store(true, std::sync::atomic::Ordering::Relaxed);
+    sampler_stop_signal.store(true, Ordering::Relaxed);
     progress_sampler.abort();
-    let last_observed_active_request_progress = final_health_snapshot
-        .active_request_progress
-        .clone()
-        .or_else(|| {
-            last_observed_active_request_progress
-                .lock()
-                .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
-                .take()
-        });
+    let last_observed_active_request_progress =
+        match final_health_snapshot.active_request_progress.clone() {
+            Some(active_request_progress) => Some(active_request_progress),
+            None => take_preserved_progress(&preserved_progress_slot),
+        };
     worker_handle
         .shutdown()
         .await
         .expect("the measured worker should terminate and be reaped");
-    // A budget-exhausted completion wrote no performance-log sample, so its rates
-    // are zero here. Callers that own an evidence lane (the memory-ceiling
-    // sweep) recover partial rates from the preserved request progress and the
-    // cancelled attribution report; this driver only reports the shortfall.
     let mut measurement = match read_measured_completion(
         &performance_log_path,
         model_id,
         journey.decode_expert_cache_policy,
     ) {
         Some(measurement) => measurement,
-        None if measured_budget_exhausted => ThroughputMeasurement {
-            model_id: model_id.to_owned(),
-            decode_expert_cache_policy: journey.decode_expert_cache_policy,
-            total_input_tokens: 0,
-            total_output_tokens: 0,
-            cached_tokens: 0,
-            prefill_time_seconds: 0.0,
-            decode_time_seconds: 0.0,
-            prefill_tokens_per_second: 0.0,
-            decode_tokens_per_second: 0.0,
-            mlx_peak_memory_bytes: None,
-            measured_output_text: None,
-            decode_cache_diagnostic_evidence: None,
-        },
+        None if measured_budget_exhausted => budget_exhausted_measurement(model_id, journey),
         None => panic!("the measured completion should produce a performance sample"),
     };
     measurement.measured_output_text = measured_output_text;

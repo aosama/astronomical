@@ -68,10 +68,12 @@ pub(crate) fn is_exempted_production_site(source_path: &str, function_name: &str
 /// fails the gate. Paying a site down removes its entry; a site that shrinks
 /// below the budget stops reporting and its entry becomes inert.
 ///
-/// The initial list captures the 83 over-budget test-scope sites inventoried on
-/// issue #1637 after the first paydown batch. Adding an entry requires an
-/// accepting decision on the tracking issue, for the same reason a production
-/// exemption does.
+/// The initial list captured the 83 over-budget test-scope sites inventoried on
+/// issue #1637 after the first paydown batch; the first monolith batch paid
+/// three of them down (the prefill gathered-dequant measurement, the
+/// throughput journey driver, and the vision padding probe), so 80 remain
+/// frozen. Adding an entry requires an accepting decision on the tracking
+/// issue, for the same reason a production exemption does.
 pub(crate) struct TestScopeFreezeEntry {
     pub(crate) path: &'static str,
     pub(crate) function_name: &'static str,
@@ -165,16 +167,6 @@ pub(crate) const TEST_SCOPE_FREEZE: &[TestScopeFreezeEntry] = &[
         frozen_code_lines: 132,
     },
     TestScopeFreezeEntry {
-        path: "crates/astronomical-jangtq2-qwen35/tests/direct_mlx/prefill_gathered_dequant.rs",
-        function_name: "measure_prefill_gathered_dequant",
-        frozen_code_lines: 349,
-    },
-    TestScopeFreezeEntry {
-        path: "verification/acceptance/tests/performance/throughput/support.rs",
-        function_name: "measure_throughput",
-        frozen_code_lines: 250,
-    },
-    TestScopeFreezeEntry {
         path: "verification/acceptance/tests/performance/measurement/model_persistent_prompt_cache_warmup_worker.rs",
         function_name: "measure_worker_summarization",
         frozen_code_lines: 123,
@@ -193,11 +185,6 @@ pub(crate) const TEST_SCOPE_FREEZE: &[TestScopeFreezeEntry] = &[
         path: "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/prompt_cache_restore_reconstruction_probe.rs",
         function_name: "probe_restore_reconstruction",
         frozen_code_lines: 107,
-    },
-    TestScopeFreezeEntry {
-        path: "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/vision_padding_fusion_probe.rs",
-        function_name: "probe_vision_padding_cache",
-        frozen_code_lines: 145,
     },
     TestScopeFreezeEntry {
         path: "verification/acceptance/tests/gpu_contracts/direct_mlx/qwen3_5/vision_rope_fusion_probe.rs",
