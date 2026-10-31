@@ -1,0 +1,46 @@
+name: Notices freshness
+
+# Nightly freshness contract for third-party/RUST_DEPENDENCY_NOTICES. The
+# retired in-run refresh in the macOS build job regenerated the file into
+# that runner's ephemeral working tree, where no bundle ever consumed it —
+# 41 seconds of every default-branch run buying nothing durable. This lane
+# replaces it with the honest version of the original intent: verify the
+# COMMITTED artifact and fail loudly when a bot-merged dependency update
+# leaves it one regeneration behind, so someone runs `cargo xtask notices`
+# and commits the result before a release bundles stale notices.
+#
+# Deliberately not a pull-request gate: PR authors are not blocked over
+# notices hygiene (the strict PR gate was removed once before for exactly
+# that friction). Nightly cadence catches drift within a day at negligible
+# cost; workflow_dispatch allows an on-demand check after dependency churn.
+
+on:
+  schedule:
+    # Nightly at 02:23 UTC — off the hour to dodge GitHub's top-of-hour
+    # schedule congestion.
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notices-freshness
+  # Never cancel an in-flight scheduled check; they never overlap anyway.
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Rust dependency notices freshness
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install pinned verification tools (cargo-about, sccache)
+        run: cargo run --locked --quiet -p xtask -- install-verification-tools
+      - name: Check committed Rust dependency notices freshness
+        # Fails when regenerating from the current manifests differs from
+        # the committed file. The digest memo may lag behind (manifest edits
+        # that cannot change license output); only text drift fails here.
+        run: cargo run --locked --quiet -p xtask -- notices --check
