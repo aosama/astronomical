@@ -1,0 +1,15 @@
+# cargo-crap ratchets function complexity against the committed baseline
+# (crap-baseline.json): an existing function may only improve, and any
+# complexity growth fails the gate. Test trees are scored too — the
+# acceptance helpers are the repository's largest functions — while #[test]
+# functions themselves are skipped by the tool by design. The hard
+# 100-code-line budget stays enforced by clippy::too_many_lines (denied
+# through the workspace lints tables) in the CI clippy lanes.
+#
+# When cargo-crap 0.10 ships (structural signals), add [signals] with lines
+# in the gate set and limits.lines = 100 to restore an explicit line-count
+# ratchet for new functions on top of this complexity ratchet.
+sort = "file"
+# Score tests/** like any other source; the built-in default would drop the
+# whole tests tree from the ratchet.
+default-excludes = []
