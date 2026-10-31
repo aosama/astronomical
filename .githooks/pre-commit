@@ -21,27 +21,29 @@ else
     exit 1
 fi
 
-# cargo-crap complexity ratchet: scores every function against the
-# committed baseline in crap-baseline.json without compiling anything, so
-# a Rust-touching commit re-proves the ratchet in seconds. An existing
-# function may only improve; growth fails the commit. The 100-line hard
-# budget stays denied by clippy::too_many_lines in the CI clippy lanes.
-# Requires cargo-crap: brew install cargo-binstall && cargo binstall cargo-crap
+# cargo-crap complexity ratchet: HARD FAIL, pre-commit ONLY (policy,
+# 2026-10-31 — CI runs no code-shape enforcement at all). Scores every
+# function against the committed baseline in crap-baseline.json without
+# compiling anything; an existing function may only improve, and growth
+# fails the commit. A missing cargo-crap is a hard failure too: install
+# it with `brew install cargo-binstall && cargo binstall cargo-crap`.
 if git diff --cached --name-only | grep -q '\.rs$'; then
-    if command -v cargo-crap >/dev/null 2>&1; then
-        printf '%s\n' "[pre-commit] status=start check=crap-complexity-ratchet root=${REPOSITORY_ROOT}"
-        gate_started_epoch_seconds="$(date +%s)"
-        if cargo crap --workspace --baseline "${REPOSITORY_ROOT}/crap-baseline.json" --fail-regression; then
-            gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
-            printf '%s\n' "[pre-commit] status=success check=crap-complexity-ratchet elapsed_seconds=${gate_elapsed_seconds}"
-        else
-            gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
-            printf '%s\n' "[pre-commit] status=failed check=crap-complexity-ratchet elapsed_seconds=${gate_elapsed_seconds}" >&2
-            printf '%s\n' '[pre-commit] hint=a function grew in complexity against crap-baseline.json — split it, or regenerate the baseline when growth is a deliberately accepted decision' >&2
-            exit 1
-        fi
+    printf '%s\n' "[pre-commit] status=start check=crap-complexity-ratchet root=${REPOSITORY_ROOT}"
+    gate_started_epoch_seconds="$(date +%s)"
+    if ! command -v cargo-crap >/dev/null 2>&1; then
+        gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=crap-complexity-ratchet elapsed_seconds=${gate_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=cargo-crap is required (this hook is the sole complexity gate): brew install cargo-binstall && cargo binstall cargo-crap' >&2
+        exit 1
+    fi
+    if cargo crap --workspace --baseline "${REPOSITORY_ROOT}/crap-baseline.json" --fail-regression; then
+        gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=crap-complexity-ratchet elapsed_seconds=${gate_elapsed_seconds}"
     else
-        printf '%s\n' '[pre-commit] status=skipped check=crap-complexity-ratchet reason=cargo-crap-not-installed hint=brew install cargo-binstall && cargo binstall cargo-crap (CI enforces the same ratchet)' >&2
+        gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=crap-complexity-ratchet elapsed_seconds=${gate_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=a function grew in complexity against crap-baseline.json — split it, or regenerate the baseline when growth is a deliberately accepted decision' >&2
+        exit 1
     fi
 
     # The 100-code-line budget (clippy.toml, issue #1637) — enforced HERE
