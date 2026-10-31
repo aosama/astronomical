@@ -278,6 +278,30 @@ fn sample_to_measurement(
     }
 }
 
+/// A request can carry more than one generation report: the worker emits an
+/// early one (for example while expert loading is still settling) before the
+/// final report that carries the complete counters. Consuming the FIRST
+/// match silently reads the empty early report — which once turned an
+/// 86-GB-streaming turn into a reported zero — so the LAST generation
+/// report for the request is the authoritative one.
+fn final_generation_report_for_request(
+    attribution_log: &str,
+    request_id: u64,
+) -> Option<serde_json::Value> {
+    let mut final_generation_report: Option<serde_json::Value> = None;
+    for json_line in attribution_log.lines() {
+        let Ok(attribution_report) = serde_json::from_str::<serde_json::Value>(json_line) else {
+            continue;
+        };
+        if attribution_report["report_kind"] == "generation"
+            && attribution_report["request_id"].as_u64() == Some(request_id)
+        {
+            final_generation_report = Some(attribution_report);
+        }
+    }
+    final_generation_report
+}
+
 #[expect(clippy::too_many_lines)]
 pub(crate) fn read_decode_cache_diagnostic_evidence(
     logging_directory: &Path,
@@ -285,13 +309,7 @@ pub(crate) fn read_decode_cache_diagnostic_evidence(
 ) -> Option<DecodeCacheDiagnosticEvidence> {
     let attribution_log =
         fs::read_to_string(logging_directory.join("performance-attribution.jsonl")).ok()?;
-    let generation_report = attribution_log
-        .lines()
-        .filter_map(|json_line| serde_json::from_str::<serde_json::Value>(json_line).ok())
-        .find(|attribution_report| {
-            attribution_report["report_kind"] == "generation"
-                && attribution_report["request_id"].as_u64() == Some(request_id)
-        })?;
+    let generation_report = final_generation_report_for_request(&attribution_log, request_id)?;
     let counters = generation_report.get("counters")?.as_array()?;
     let expert_streaming_source_summaries = generation_report
         .get("expert_streaming_source_summaries")?

@@ -182,34 +182,58 @@ fn should_report_streaming_sparse_moe_decode_route_materialization_evidence() {
             .is_some_and(|decode_advance| decode_advance.occurrence_count > 0),
         "the streaming run should record complete decode-advance spans"
     );
+    // Route evidence comes in two shapes. When the decode cache does NOT
+    // retain routes, decode host-materializes the selected experts per layer
+    // (`decode_expert_route_host_materialization`). When retention is active
+    // (the Baseline policy), the retained route table supplies the route and
+    // host materialization never runs — the authoritative evidence is then
+    // retained-route hits beside per-layer router graph construction. The
+    // journey accepts either shape; requiring the materialization op alone
+    // would pin the pre-retention engine.
     assert!(
         diagnostic_evidence
             .decode_expert_route_host_materialization
             .as_ref()
-            .is_some_and(|route_materialization| route_materialization.occurrence_count > 0),
-        "the streaming run should record per-layer route host materialization"
+            .is_some_and(|route_materialization| route_materialization.occurrence_count > 0)
+            || (diagnostic_evidence.retained_route_assignment_hit_count > 0
+                && diagnostic_evidence
+                    .paged_router_graph_construction
+                    .as_ref()
+                    .is_some_and(|router_graph| router_graph.occurrence_count > 0)),
+        "the streaming run should record per-layer route evidence — either host materialization or retained-route hits beside router graph construction"
     );
-    assert!(
-        diagnostic_evidence
-            .decode_expert_route_contiguous_array_construction
-            .as_ref()
-            .is_some_and(|array_construction| array_construction.occurrence_count > 0),
-        "the streaming run should record route array construction"
-    );
-    assert!(
-        diagnostic_evidence
-            .decode_expert_route_array_evaluation
-            .as_ref()
-            .is_some_and(|array_evaluation| array_evaluation.occurrence_count > 0),
-        "the streaming run should record route array evaluation"
-    );
-    assert!(
-        diagnostic_evidence
-            .decode_expert_route_host_copy
-            .as_ref()
-            .is_some_and(|host_copy| host_copy.occurrence_count > 0),
-        "the streaming run should record route host copies"
-    );
+    // The host-route chain (materialization -> contiguous array construction
+    // -> array evaluation -> host copy) fires as one unit, and only when the
+    // decode cache does NOT retain routes. Under retention the whole chain
+    // is legitimately absent, so its integrity is asserted only when the
+    // chain's first op engaged.
+    let host_route_chain_engaged = diagnostic_evidence
+        .decode_expert_route_host_materialization
+        .as_ref()
+        .is_some_and(|route_materialization| route_materialization.occurrence_count > 0);
+    if host_route_chain_engaged {
+        assert!(
+            diagnostic_evidence
+                .decode_expert_route_contiguous_array_construction
+                .as_ref()
+                .is_some_and(|array_construction| array_construction.occurrence_count > 0),
+            "the streaming run should record route array construction"
+        );
+        assert!(
+            diagnostic_evidence
+                .decode_expert_route_array_evaluation
+                .as_ref()
+                .is_some_and(|array_evaluation| array_evaluation.occurrence_count > 0),
+            "the streaming run should record route array evaluation"
+        );
+        assert!(
+            diagnostic_evidence
+                .decode_expert_route_host_copy
+                .as_ref()
+                .is_some_and(|host_copy| host_copy.occurrence_count > 0),
+            "the streaming run should record route host copies"
+        );
+    }
     report_streaming_decode_stage_evidence(&measured_throughput, diagnostic_evidence);
 }
 
