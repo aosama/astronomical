@@ -75,31 +75,19 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # xtask sources. `cargo xtask audit-test-declarations` walks every crate's
 # tests/ tree and fails when a test file is unreachable from any target
 # through `mod` declarations (the class of silent-orphan bug that once hid
-# seven tests in an undeclared file). `cargo xtask function-length` reports
-# every UNTRACKED function over the 100-code-line budget from clippy.toml
-# across the default, MLX, and acceptance feature worlds — the budget lint
-# itself is denied through the lints tables, so tracked debt is #[expect]
-# and a clean lane means nothing crossed the budget untracked (see
-# clippy.toml for the counting semantics and the warnings-policy trap the
-# lane works around). `cargo xtask function-length --fail-on-production |
-# --fail-on-tests [--lanes NAME[,NAME...]]` is the HARD gate over the same
-# budget: it force-warns the lint, which overrides every #[expect]/#[allow].
-# --fail-on-production fails when any production function exceeds the budget
-# unless it is one of the explicit Family D exemptions listed in the gate
-# source; --fail-on-tests freezes test-scope debt as a ratchet — known sites
-# must not grow past their frozen counts and unnamed sites are new debt
-# (issue #1637). The pre-commit hook runs both toggles over the default and
-# MLX worlds on Rust-touching commits; CI runs the same gate over every
-# feature world. `cargo xtask function-length-top` ranks every
-# over-budget function worst-first WITH names — it force-warns the budget
-# lint, which overrides the #[expect] ratchet, across the same three worlds;
-# `--top N` caps the table (0 = everything, default 10) and `--scope
-# production|tests|all` filters which tree is ranked, while the summary
-# always describes the full set. `cargo xtask test-run` builds exact Cargo
-# executables and
+# seven tests in an undeclared file). `cargo xtask test-run` builds exact
+# Cargo executables and
 # runs each selected test in its own process, with a 120-second budget,
 # five-second progress, and retained manifests/logs under target/test-runs;
 # serving measurements must use this runner.
+#
+# Function-length enforcement (issue #1637) is cargo-crap territory now:
+# `cargo crap --workspace --baseline crap-baseline.json --fail-regression`
+# re-scores every function (tests included) against the committed baseline
+# without compiling anything — existing functions may only improve. The
+# 100-line hard budget remains denied by clippy::too_many_lines in the CI
+# clippy lanes. The retired xtask function-length gate lived in git history
+# until the cargo-crap swap.
 xtask = "run -p xtask --"
 
 # Compile the whole workspace across ALL targets without running anything;

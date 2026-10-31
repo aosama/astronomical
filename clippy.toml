@@ -12,27 +12,22 @@
 # the runtime-integration and acceptance crates' own lints tables), with
 # #[expect] on every pre-existing over-budget function. The budget therefore
 # fails any build that crosses it, an #[expect] self-cleans when its function
-# shrinks below the budget, and `cargo xtask function-length` now reports
-# UNTRACKED over-budget functions (zero while every site carries its expect;
-# the tracked-debt count is `git grep -c 'expect(clippy::too_many_lines)'`).
-# The pre-commit hook re-proves the default and MLX worlds on Rust-touching
-# commits; CI's clippy budget steps cover all three worlds including the
-# acceptance feature superset.
+# shrinks below the budget, and the tracked-debt count is
+# `git grep -c 'expect(clippy::too_many_lines)'`. CI's clippy budget steps
+# prove the budget across all three feature worlds including the acceptance
+# feature superset.
 #
 # The deny path alone has one escape: a suppression attribute silences it,
-# which is exactly how tracked debt is carried. The production rule (see
-# AGENTS.md) therefore also gets a hard gate the attribute cannot bypass:
-# `cargo xtask function-length --fail-on-production` force-warns this lint —
-# overriding every #[expect]/#[allow] — and fails when any production
-# function exceeds the budget unless it is one of the explicit Family D
-# exemptions listed in the gate source (issue #1637). `--fail-on-tests`
-# extends the same run to test scope as a RATCHET, not an exemption: the
-# gate source carries a freeze list of every over-budget test function with
-# the code-line count captured when the list was written; a known site must
-# not grow past its frozen count and any test site the list does not name is
-# new debt. The pre-commit hook runs both toggles after the plain clippy
-# budget check over the default and MLX worlds; CI runs the same gate over
-# every feature world including the acceptance superset.
+# which is exactly how tracked debt is carried. The bypass-proof gate over
+# tracked debt is now cargo-crap's complexity ratchet
+# (cargo crap --workspace --baseline crap-baseline.json --fail-regression,
+# see .cargo-crap.toml): it parses sources without compiling, scores every
+# function — tests included, #[test] functions excepted by the tool — and
+# fails when any function's cyclomatic complexity grows against the
+# committed baseline. The former xtask function-length hard gate and its
+# frozen test-scope registry (issue #1637) retired in favor of that
+# baseline; when cargo-crap's structural signals release ships, gating
+# lines there restores an explicit line-count ratchet.
 #
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
 # repository denies warnings via [build] warnings, which turns this lint into
