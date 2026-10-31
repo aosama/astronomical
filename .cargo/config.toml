@@ -81,7 +81,13 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # itself is denied through the lints tables, so tracked debt is #[expect]
 # and a clean lane means nothing crossed the budget untracked (see
 # clippy.toml for the counting semantics and the warnings-policy trap the
-# lane works around). `cargo xtask function-length-top` ranks every
+# lane works around). `cargo xtask function-length --fail-on-production
+# [--lanes NAME[,NAME...]]` is the HARD gate over the same budget: it
+# force-warns the lint, which overrides every #[expect]/#[allow], and fails
+# when any production function exceeds the budget unless it is one of the
+# explicit Family D exemptions listed in the gate source (issue #1637); the
+# pre-commit hook runs it over the default and MLX worlds on Rust-touching
+# commits. `cargo xtask function-length-top` ranks every
 # over-budget function worst-first WITH names — it force-warns the budget
 # lint, which overrides the #[expect] ratchet, across the same three worlds;
 # `--top N` caps the table (0 = everything, default 10) and `--scope

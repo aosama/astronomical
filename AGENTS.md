@@ -1,5 +1,9 @@
 # Instructions for the Astronomical Project
 
+## General Instructions
+
+- Production lane methods and functions must not exceed 100 lines of code.
+
 ## Never Hardwire Local Developer Environment Into the Codebase
 
 - Never hardwire a developer home directory, workstation path, local model path, local endpoint, or machine-specific hardware assumption into production code, tests, fixtures, acceptance artifacts, documentation, GitHub content, or agent instructions.
