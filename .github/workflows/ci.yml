@@ -292,22 +292,14 @@ jobs:
           cargo run --quiet -p xtask -- install-verification-tools
       - name: Provision pinned cargo-nextest
         uses: ./.github/actions/provision-cargo-nextest
-      # Default-branch and dispatch builds bundle the app, so they refresh
-      # the notices in place: a bot-merged dependency update can land one
-      # regeneration behind, and the bundle must never ship stale notices.
-      # Pull requests run no notices work at all: the committed copy's
-      # freshness is repository hygiene, not a property of the change under
-      # review, and the gate failed pull requests whose authors had not
-      # regenerated locally. Commit the regenerated file alongside dependency
-      # changes when convenient; nothing in CI demands it.
-      - name: Refresh Rust dependency notices for the bundled app
-        if: ${{ github.event_name != 'pull_request' }}
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end dependency-notices-refresh' EXIT
-          scripts/ci/ci-step-timing.sh begin dependency-notices-refresh
-          cargo xtask notices
-          printf '%s\n' '[rust-dependency-notices] status=refreshed-for-bundle'
-        timeout-minutes: 2
+      # The retired "Refresh Rust dependency notices" step lived here: it
+      # regenerated third-party/RUST_DEPENDENCY_NOTICES into this runner's
+      # ephemeral working tree "so the bundle never ships stale notices" —
+      # but no step in any workflow bundles the app or uploads the notices,
+      # so the refreshed bytes died with the runner. Freshness is now a
+      # contract instead: the nightly notices-freshness workflow runs
+      # `cargo xtask notices --check` and fails loudly when a bot-merged
+      # dependency update leaves the committed file one regeneration behind.
       - name: Provision verified native dependencies
         id: native-archive-provisioning
         run: |
