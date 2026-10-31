@@ -5,10 +5,12 @@
 use std::fs;
 use std::path::Path;
 
-use super::function_length::OverBudgetFunction;
+use super::function_length::{
+    OverBudgetFunction, function_name_near_span, merge_world_findings_maximum,
+    parse_function_declaration_name,
+};
 use super::function_length_top::{
-    ScopeFilter, TRACKED_EXPECT_MARKER, count_tracked_expect_markers, function_name_near_span,
-    merge_world_findings_maximum, parse_function_declaration_name, parse_ranked_report_arguments,
+    ScopeFilter, TRACKED_EXPECT_MARKER, count_tracked_expect_markers, parse_ranked_report_arguments,
 };
 
 /// Builds an expect-ratchet attribute line for fixtures without embedding
