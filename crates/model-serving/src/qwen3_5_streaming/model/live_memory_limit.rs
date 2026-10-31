@@ -12,6 +12,17 @@ use crate::{
 
 use super::Qwen3_5Model;
 
+/// The live runtime facts one ceiling-change decision reads: limits currently
+/// installed, the ceiling they imply, the model's geometry-safe minimum, and
+/// currently active memory. Snapshotting them together keeps the decision
+/// operating on one coherent instant of the runtime.
+struct LiveMemoryObservation {
+    current_mlx_memory_limits: MlxMemoryLimits,
+    current_mlx_memory_ceiling_bytes: u64,
+    minimum_mlx_memory_ceiling_bytes: u64,
+    current_active_memory_bytes: u64,
+}
+
 impl Qwen3_5Model {
     pub(crate) fn minimum_mlx_memory_ceiling_bytes(&self) -> Result<u64, InferenceEngineError> {
         Ok(geometry_safe_minimum_mlx_memory_ceiling_bytes(
@@ -19,30 +30,17 @@ impl Qwen3_5Model {
         ))
     }
 
-    #[expect(clippy::too_many_lines)]
     pub(crate) fn update_mlx_memory_limit(
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(u64, MlxMemoryLimits), InferenceEngineError> {
-        let current_mlx_memory_limits = self.runtime.memory_limits();
-        let current_mlx_memory_ceiling_bytes =
-            u64::try_from(current_mlx_memory_limits.active_memory_limit_bytes()).map_err(|_| {
-                super::super::inference_execution::fatal_engine_error(
-                    "current MLX memory ceiling exceeds the u64 range",
-                )
-            })?;
-        let minimum_mlx_memory_ceiling_bytes = self.minimum_mlx_memory_ceiling_bytes()?;
-        let current_active_memory_bytes = u64::try_from(
-            self.runtime
-                .memory_snapshot()
-                .map_err(super::super::inference_execution::qwen3_5_runtime_error)?
-                .active_memory_bytes(),
-        )
-        .map_err(|_| {
-            super::super::inference_execution::fatal_engine_error(
-                "current MLX active memory exceeds the u64 range",
-            )
-        })?;
+        let live_memory_observation = self.observed_live_memory_state()?;
+        let LiveMemoryObservation {
+            current_mlx_memory_limits,
+            current_mlx_memory_ceiling_bytes,
+            minimum_mlx_memory_ceiling_bytes,
+            current_active_memory_bytes,
+        } = live_memory_observation;
         let expert_statistics = self.expert_weight_memory_cache_statistics();
         let ceiling_change_decision = MemoryCeilingChangeRequirements {
             current_ceiling_bytes: current_mlx_memory_ceiling_bytes,
@@ -89,44 +87,19 @@ impl Qwen3_5Model {
         if is_lowering_mlx_memory_ceiling {
             // Native eviction comes first because the old MLX ceiling still
             // permits the bookkeeping and synchronization needed to release
-            // pages. Installing the smaller runtime limit first could make the
-            // reclamation operation reject its own temporary work.
-            self.prepare_expert_residency_for_lower_mlx_memory_limit(
+            // pages; the helper enforces that order and rolls the pager
+            // ceiling back if reclaimed memory still exceeds the request.
+            self.lower_ceiling_with_expert_reclamation(
                 requested_mlx_memory_ceiling_bytes,
                 ceiling_change_decision,
+                previous_expert_paging_memory_ceiling_bytes,
             )?;
-            let post_reclamation_mlx_memory_snapshot = self
-                .runtime
-                .synchronize_gpu_stream_and_clear_allocator_cache()
-                .and_then(|()| self.runtime.memory_snapshot())
-                .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
-            let post_reclamation_active_memory_bytes = u64::try_from(
-                post_reclamation_mlx_memory_snapshot.active_memory_bytes(),
-            )
-            .map_err(|_| {
-                super::super::inference_execution::fatal_engine_error(
-                    "post-reclamation MLX active memory exceeds the u64 range",
-                )
-            })?;
-            if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
-                self.restore_expert_paging_memory_ceiling(
-                    previous_expert_paging_memory_ceiling_bytes,
-                )?;
-                return Err(super::super::inference_execution::fatal_engine_error(
-                    "retained model memory remained above the requested MLX ceiling after expert reclamation",
-                ));
-            }
         }
 
-        if let Err(runtime_update_error) = self
-            .runtime
-            .update_memory_limits(requested_mlx_memory_limits)
-        {
-            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes)?;
-            return Err(super::super::inference_execution::qwen3_5_runtime_error(
-                runtime_update_error,
-            ));
-        }
+        self.install_runtime_memory_limit_with_rollback(
+            requested_mlx_memory_limits,
+            previous_expert_paging_memory_ceiling_bytes,
+        )?;
         if !is_lowering_mlx_memory_ceiling
             && let Err(policy_update_error) = self
                 .update_expert_residency_for_live_mlx_memory_limit(
@@ -143,6 +116,99 @@ impl Qwen3_5Model {
             minimum_mlx_memory_ceiling_bytes,
             requested_mlx_memory_limits,
         ))
+    }
+
+    /// Everything the ceiling-change decision needs to observe about the live
+    /// runtime before any limit moves: the limits currently installed, the
+    /// ceiling they imply, the geometry-safe minimum for this model, and the
+    /// memory actually active right now.
+    fn observed_live_memory_state(&self) -> Result<LiveMemoryObservation, InferenceEngineError> {
+        let current_mlx_memory_limits = self.runtime.memory_limits();
+        let current_mlx_memory_ceiling_bytes =
+            u64::try_from(current_mlx_memory_limits.active_memory_limit_bytes()).map_err(|_| {
+                super::super::inference_execution::fatal_engine_error(
+                    "current MLX memory ceiling exceeds the u64 range",
+                )
+            })?;
+        let minimum_mlx_memory_ceiling_bytes = self.minimum_mlx_memory_ceiling_bytes()?;
+        let current_active_memory_bytes = u64::try_from(
+            self.runtime
+                .memory_snapshot()
+                .map_err(super::super::inference_execution::qwen3_5_runtime_error)?
+                .active_memory_bytes(),
+        )
+        .map_err(|_| {
+            super::super::inference_execution::fatal_engine_error(
+                "current MLX active memory exceeds the u64 range",
+            )
+        })?;
+        Ok(LiveMemoryObservation {
+            current_mlx_memory_limits,
+            current_mlx_memory_ceiling_bytes,
+            minimum_mlx_memory_ceiling_bytes,
+            current_active_memory_bytes,
+        })
+    }
+
+    /// Lowers the ceiling by first reclaiming retained experts under the old,
+    /// larger limit, then proving the reclaimed memory fits the new one.
+    /// Native eviction comes first because the old MLX ceiling still permits
+    /// the bookkeeping and synchronization needed to release pages;
+    /// installing the smaller runtime limit first could make the reclamation
+    /// operation reject its own temporary work. If active memory still
+    /// exceeds the request after reclamation, the pager ceiling is restored
+    /// and the whole transition fails without ever touching the runtime.
+    fn lower_ceiling_with_expert_reclamation(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+        ceiling_change_decision: MemoryCeilingChangeDecision,
+        previous_expert_paging_memory_ceiling_bytes: Option<u64>,
+    ) -> Result<(), InferenceEngineError> {
+        self.prepare_expert_residency_for_lower_mlx_memory_limit(
+            requested_mlx_memory_ceiling_bytes,
+            ceiling_change_decision,
+        )?;
+        let post_reclamation_mlx_memory_snapshot = self
+            .runtime
+            .synchronize_gpu_stream_and_clear_allocator_cache()
+            .and_then(|()| self.runtime.memory_snapshot())
+            .map_err(super::super::inference_execution::qwen3_5_runtime_error)?;
+        let post_reclamation_active_memory_bytes = u64::try_from(
+            post_reclamation_mlx_memory_snapshot.active_memory_bytes(),
+        )
+        .map_err(|_| {
+            super::super::inference_execution::fatal_engine_error(
+                "post-reclamation MLX active memory exceeds the u64 range",
+            )
+        })?;
+        if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
+            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes)?;
+            return Err(super::super::inference_execution::fatal_engine_error(
+                "retained model memory remained above the requested MLX ceiling after expert reclamation",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Installs the new runtime limits, rolling the pager ceiling back if the
+    /// runtime refuses them. A restore failure propagates as-is (it is its
+    /// own fatal condition); the refused update error is wrapped as the
+    /// runtime error the caller reports.
+    fn install_runtime_memory_limit_with_rollback(
+        &mut self,
+        requested_mlx_memory_limits: MlxMemoryLimits,
+        previous_expert_paging_memory_ceiling_bytes: Option<u64>,
+    ) -> Result<(), InferenceEngineError> {
+        if let Err(runtime_update_error) = self
+            .runtime
+            .update_memory_limits(requested_mlx_memory_limits)
+        {
+            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes)?;
+            return Err(super::super::inference_execution::qwen3_5_runtime_error(
+                runtime_update_error,
+            ));
+        }
+        Ok(())
     }
 
     fn prepare_expert_residency_for_lower_mlx_memory_limit(
