@@ -276,8 +276,8 @@ pub(crate) fn is_test_scope(path: &str) -> bool {
 }
 
 /// Reports the function-length budget across every feature world, or — when
-/// invoked as `function-length --fail-on-production` — delegates to the hard
-/// production-scope gate that no suppression attribute can bypass.
+/// invoked with `--fail-on-production` or `--fail-on-tests` — delegates to the
+/// hard gate that no suppression attribute can bypass.
 ///
 /// The report is deliberately not a gate: findings are printed and summarized,
 /// and the command succeeds while debt exists. Only a failing cargo invocation —
@@ -287,11 +287,13 @@ pub(crate) fn run(repository_root: &Path, arguments: &[String]) -> Result<(), St
     if arguments.is_empty() {
         return run_report(repository_root);
     }
-    if arguments[0] == "--fail-on-production" {
-        return crate::function_length_gate::run(repository_root, &arguments[1..]);
+    let is_gate_invocation =
+        arguments[0] == "--fail-on-production" || arguments[0] == "--fail-on-tests";
+    if is_gate_invocation {
+        return crate::function_length_gate::run(repository_root, arguments);
     }
     Err(format!(
-        "[function-length] unknown argument {}; supported: --fail-on-production [--lanes NAME[,NAME...]]",
+        "[function-length] unknown argument {}; supported: --fail-on-production, --fail-on-tests, [--lanes NAME[,NAME...]]",
         arguments[0]
     ))
 }

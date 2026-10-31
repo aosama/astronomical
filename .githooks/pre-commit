@@ -39,23 +39,26 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
         exit 1
     fi
 
-    # Hard production-scope function-length gate (issue #1637): the budget
-    # check above fails untracked over-budget functions, but a suppression
-    # attribute silences it — which is how tracked debt is carried. This gate
-    # force-warns the budget lint, overriding every #[expect]/#[allow], and
-    # fails when any production function exceeds 100 code lines unless it is
-    # one of the explicit Family D exemptions in the xtask gate source. Same
-    # lane policy as the budget check: default and MLX worlds locally, the
-    # acceptance feature superset stays CI-owned.
-    printf '%s\n' "[pre-commit] status=start check=function-length-production-gate root=${REPOSITORY_ROOT}"
+    # Hard function-length gate (issue #1637): the budget check above fails
+    # untracked over-budget functions, but a suppression attribute silences it
+    # — which is how tracked debt is carried. This gate force-warns the budget
+    # lint, overriding every #[expect]/#[allow]. --fail-on-production fails
+    # when any production function exceeds 100 code lines unless it is one of
+    # the explicit Family D exemptions in the xtask gate source.
+    # --fail-on-tests freezes test-scope debt: a known site must not grow past
+    # its frozen code-line count, and any test site the freeze list does not
+    # name is new debt and fails the commit. Same lane policy as the budget
+    # check: default and MLX worlds locally, the acceptance feature superset
+    # stays CI-owned.
+    printf '%s\n' "[pre-commit] status=start check=function-length-budget-gate root=${REPOSITORY_ROOT}"
     gate_started_epoch_seconds="$(date +%s)"
-    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- function-length --fail-on-production --lanes default-world,mlx-world; then
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- function-length --fail-on-production --fail-on-tests --lanes default-world,mlx-world; then
         gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
-        printf '%s\n' "[pre-commit] status=success check=function-length-production-gate elapsed_seconds=${gate_elapsed_seconds}"
+        printf '%s\n' "[pre-commit] status=success check=function-length-budget-gate elapsed_seconds=${gate_elapsed_seconds}"
     else
         gate_elapsed_seconds=$(( $(date +%s) - gate_started_epoch_seconds ))
-        printf '%s\n' "[pre-commit] status=failed check=function-length-production-gate elapsed_seconds=${gate_elapsed_seconds}" >&2
-        printf '%s\n' '[pre-commit] hint=a production function exceeded 100 code lines even with its suppression attribute — split it, or record an accepting decision on issue #1637 before adding an exemption entry' >&2
+        printf '%s\n' "[pre-commit] status=failed check=function-length-budget-gate elapsed_seconds=${gate_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=a function crossed the budget even with its suppression attribute — production: split it or record an accepting decision on issue #1637 before adding an exemption; tests: split it or record a freeze decision on issue #1637' >&2
         exit 1
     fi
 fi
