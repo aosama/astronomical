@@ -1,19 +1,21 @@
-//! Hard production-scope gate over the function-length budget.
+//! Hard function-length gate over the budget, for production scope and — as a
+//! ratchet — for test scope.
 //!
 //! The denied budget lint already fails any build that crosses 100 code
 //! lines, but a suppression attribute (`#[expect]` or `#[allow]`) silences
 //! it — that is precisely how tracked debt is carried. This gate closes the
-//! attribute escape for production sources: it force-warns the budget lint,
-//! which overrides every suppression attribute, resolves each finding's
-//! function name, and fails the run unless the only production findings are
-//! the explicit exemptions below. Test-scope findings are reported for
-//! visibility but never fail the gate; test-side length is a separate,
-//! owner-tracked decision.
+//! attribute escape: it force-warns the budget lint, which overrides every
+//! suppression attribute, resolves each finding's function name, and fails
+//! the run on any production finding outside the accepted exemptions, or —
+//! with `--fail-on-tests` — on any test-scope finding that grows past its
+//! frozen count or that the freeze list does not name.
 //!
-//! An exemption is deliberate, visible, and cannot be created by editing the
-//! function it covers: it lives here as data, keyed by source path plus
-//! function name, and every entry must cite the decision that accepted the
-//! debt.
+//! The accepted-debt lists are deliberate, visible data that cannot be
+//! created by editing the function they cover; they live in the debt registry
+//! (`function_length_debt`), keyed by source path plus function name, and
+//! every entry must cite the decision that accepted the debt. This module
+//! owns the gate mechanics: lane running, classification, argument parsing,
+//! and outcome reporting.
 
 use std::path::Path;
 use std::time::Instant;
@@ -22,59 +24,11 @@ use crate::function_length::{
     FunctionLengthLane, OverBudgetFunction, function_length_lanes, is_test_scope,
     merge_world_findings_maximum, resolve_function_name, run_lane_with_forced_budget_lint,
 };
+use crate::function_length_debt::{frozen_test_scope_code_lines, is_exempted_production_site};
 
 /// The status prefix every gate line carries, matching the report lanes'
 /// convention.
 const GATE_STATUS_PREFIX: &str = "[function-length-gate]";
-
-/// One accepted-debt site: a production function whose code length exceeds
-/// the budget by explicit decision. Keyed by source path plus function name
-/// (not line number, which drifts with every edit above the site).
-pub(crate) struct ProductionScopeExemption {
-    pub(crate) path: &'static str,
-    pub(crate) function_name: &'static str,
-}
-
-/// The complete set of production functions allowed over the 100-code-line
-/// budget. The campaign tracked by issue #1637 classified all remaining
-/// over-budget production functions as Family D — declarative tables where
-/// serialized data is spelled as code; splitting them would obscure the data
-/// they encode. The identifier tables enumerate one arm per catalog entry and
-/// the tensor-profile builders enumerate one statement per physical tensor.
-/// Adding an entry requires an accepting decision on the tracking issue;
-/// anything else over budget in production scope fails the gate.
-pub(crate) const PRODUCTION_SCOPE_EXEMPTIONS: &[ProductionScopeExemption] = &[
-    ProductionScopeExemption {
-        path: "crates/model-serving/src/performance_attribution/catalog.rs",
-        function_name: "identifier",
-    },
-    ProductionScopeExemption {
-        path: "crates/model-serving/src/performance_attribution/counter_catalog.rs",
-        function_name: "identifier",
-    },
-    ProductionScopeExemption {
-        path: "crates/model-serving/src/qwen_image_21/tensor_profiles/text_encoder.rs",
-        function_name: "text_encoder_tensor_profiles",
-    },
-    ProductionScopeExemption {
-        path: "crates/model-serving/src/qwen_image_21/tensor_profiles/vae.rs",
-        function_name: "vae_tensor_profiles",
-    },
-];
-
-/// Matches a finding site against the exemption list. Path plus name must
-/// both match: two `identifier` tables exist, and the path is what tells
-/// them apart. An unresolved name ("unknown") matches nothing, so a moved or
-/// mangled source file fails the gate instead of silently keeping its
-/// exemption.
-pub(crate) fn is_exempted_production_site(source_path: &str, function_name: &str) -> bool {
-    for exemption in PRODUCTION_SCOPE_EXEMPTIONS {
-        if exemption.path == source_path && exemption.function_name == function_name {
-            return true;
-        }
-    }
-    false
-}
 
 /// One over-budget finding with its resolved function name.
 #[derive(Clone, Debug)]
@@ -120,22 +74,81 @@ pub(crate) fn classify_named_findings(
     }
 }
 
+/// The two ways a test-scope site can break the freeze.
+#[derive(Debug)]
+pub(crate) enum TestScopeFreezeViolationKind {
+    /// A test-scope site over budget that is not in the freeze list at all:
+    /// new debt appearing where the freeze says none may.
+    NewSite,
+    /// A known frozen site reporting more code lines than it was frozen at:
+    /// the ratchet being pushed the wrong way.
+    Grew { frozen_code_lines: u64 },
+}
+
+/// One test-scope finding that breaks the freeze, plus how it breaks it.
+#[derive(Debug)]
+pub(crate) struct TestScopeFreezeViolation {
+    pub(crate) finding: NamedOverBudgetFinding,
+    pub(crate) kind: TestScopeFreezeViolationKind,
+}
+
+/// Checks the frozen test-scope sites against the observed findings. Pure:
+/// values in, values out. A finding that is neither frozen nor grown is the
+/// success case the ratchet exists to preserve.
+pub(crate) fn check_test_scope_freeze(
+    test_scope_findings: &[NamedOverBudgetFinding],
+) -> Vec<TestScopeFreezeViolation> {
+    let mut violations = Vec::new();
+    for finding in test_scope_findings {
+        match frozen_test_scope_code_lines(&finding.finding.path, &finding.function_name) {
+            None => violations.push(TestScopeFreezeViolation {
+                finding: finding.clone(),
+                kind: TestScopeFreezeViolationKind::NewSite,
+            }),
+            Some(frozen_code_lines) if finding.finding.code_lines > frozen_code_lines => violations
+                .push(TestScopeFreezeViolation {
+                    finding: finding.clone(),
+                    kind: TestScopeFreezeViolationKind::Grew { frozen_code_lines },
+                }),
+            Some(_) => {}
+        }
+    }
+    violations
+}
+
 /// The gate's caller-supplied knobs. `lane_names` is None for every lane and
 /// Some(comma-separated names) for an explicit subset — the pre-commit hook
 /// runs the default and MLX worlds locally and leaves the acceptance feature
 /// superset to CI, mirroring the untracked-budget check it accompanies.
+/// At least one of the two check toggles must be set; a gate run with neither
+/// would vacuously pass.
 #[derive(Debug)]
 pub(crate) struct GateArguments {
     pub(crate) lane_names: Option<String>,
+    pub(crate) fail_on_production: bool,
+    pub(crate) fail_on_tests: bool,
 }
 
-/// Parses `--lanes NAME[,NAME...]`. Unknown input fails the gate rather than
-/// being silently ignored.
+/// Parses `--fail-on-production`, `--fail-on-tests`, and `--lanes
+/// NAME[,NAME...]`. Unknown input and a run with no check toggle fail the gate
+/// rather than being silently ignored.
 pub(crate) fn parse_gate_arguments(arguments: &[String]) -> Result<GateArguments, String> {
-    let mut parsed_arguments = GateArguments { lane_names: None };
+    let mut parsed_arguments = GateArguments {
+        lane_names: None,
+        fail_on_production: false,
+        fail_on_tests: false,
+    };
     let mut argument_index = 0usize;
     while argument_index < arguments.len() {
         match arguments[argument_index].as_str() {
+            "--fail-on-production" => {
+                parsed_arguments.fail_on_production = true;
+                argument_index += 1;
+            }
+            "--fail-on-tests" => {
+                parsed_arguments.fail_on_tests = true;
+                argument_index += 1;
+            }
             "--lanes" => {
                 let Some(lane_names) = arguments.get(argument_index + 1) else {
                     return Err(format!(
@@ -147,10 +160,15 @@ pub(crate) fn parse_gate_arguments(arguments: &[String]) -> Result<GateArguments
             }
             unknown_argument => {
                 return Err(format!(
-                    "{GATE_STATUS_PREFIX} unknown argument {unknown_argument}; supported: --lanes NAME[,NAME...]"
+                    "{GATE_STATUS_PREFIX} unknown argument {unknown_argument}; supported: --fail-on-production, --fail-on-tests, --lanes NAME[,NAME...]"
                 ));
             }
         }
+    }
+    if !parsed_arguments.fail_on_production && !parsed_arguments.fail_on_tests {
+        return Err(format!(
+            "{GATE_STATUS_PREFIX} at least one of --fail-on-production or --fail-on-tests is required"
+        ));
     }
     Ok(parsed_arguments)
 }
@@ -257,6 +275,29 @@ pub(crate) fn run(repository_root: &Path, arguments: &[String]) -> Result<(), St
     }
     let classification = classify_named_findings(&named_findings);
 
+    summarize_gate_result(&parsed_arguments, &classification, started_at)
+}
+
+/// Evaluates the enabled checks against the classification, prints every
+/// bucket, and returns the gate outcome. Each check runs only when its toggle
+/// is on, so `--fail-on-production` alone keeps today's production behavior and
+/// `--fail-on-tests` alone freezes test-side debt without gating production.
+fn summarize_gate_result(
+    parsed_arguments: &GateArguments,
+    classification: &ProductionGateClassification,
+    started_at: Instant,
+) -> Result<(), String> {
+    let production_failures: &[NamedOverBudgetFinding] = if parsed_arguments.fail_on_production {
+        &classification.failures
+    } else {
+        &[]
+    };
+    let test_scope_violations = if parsed_arguments.fail_on_tests {
+        check_test_scope_freeze(&classification.test_scope)
+    } else {
+        Vec::new()
+    };
+
     for exempted_finding in &classification.exempted {
         println!(
             "{GATE_STATUS_PREFIX} status=exempted path={} line={} function={} code_lines={}",
@@ -266,7 +307,7 @@ pub(crate) fn run(repository_root: &Path, arguments: &[String]) -> Result<(), St
             exempted_finding.finding.code_lines
         );
     }
-    for failure_finding in &classification.failures {
+    for failure_finding in production_failures {
         println!(
             "{GATE_STATUS_PREFIX} status=over_budget path={} line={} function={} code_lines={}",
             failure_finding.finding.path,
@@ -275,9 +316,32 @@ pub(crate) fn run(repository_root: &Path, arguments: &[String]) -> Result<(), St
             failure_finding.finding.code_lines
         );
     }
-    if classification.failures.is_empty() {
+    for violation in &test_scope_violations {
+        match violation.kind {
+            TestScopeFreezeViolationKind::NewSite => {
+                println!(
+                    "{GATE_STATUS_PREFIX} status=new_test_site path={} line={} function={} code_lines={}",
+                    violation.finding.finding.path,
+                    violation.finding.finding.line,
+                    violation.finding.function_name,
+                    violation.finding.finding.code_lines
+                );
+            }
+            TestScopeFreezeViolationKind::Grew { frozen_code_lines } => {
+                println!(
+                    "{GATE_STATUS_PREFIX} status=test_site_grew path={} line={} function={} code_lines={} frozen_code_lines={}",
+                    violation.finding.finding.path,
+                    violation.finding.finding.line,
+                    violation.finding.function_name,
+                    violation.finding.finding.code_lines,
+                    frozen_code_lines
+                );
+            }
+        }
+    }
+    if production_failures.is_empty() && test_scope_violations.is_empty() {
         println!(
-            "{GATE_STATUS_PREFIX} status=success over_budget_production=0 exempted={} test_scope={} elapsed_seconds={}",
+            "{GATE_STATUS_PREFIX} status=success over_budget_production=0 test_scope_frozen_violations=0 exempted={} test_scope={} elapsed_seconds={}",
             classification.exempted.len(),
             classification.test_scope.len(),
             started_at.elapsed().as_secs()
@@ -285,8 +349,9 @@ pub(crate) fn run(repository_root: &Path, arguments: &[String]) -> Result<(), St
         Ok(())
     } else {
         Err(format!(
-            "{GATE_STATUS_PREFIX} status=failed over_budget_production={} exempted={} test_scope={} elapsed_seconds={} hint=split the function, or record an accepting decision on issue #1637 before adding an exemption entry",
-            classification.failures.len(),
+            "{GATE_STATUS_PREFIX} status=failed over_budget_production={} test_scope_frozen_violations={} exempted={} test_scope={} elapsed_seconds={} hint=split the function, or record an accepting decision on issue #1637 before adding an exemption or freeze entry",
+            production_failures.len(),
+            test_scope_violations.len(),
             classification.exempted.len(),
             classification.test_scope.len(),
             started_at.elapsed().as_secs()

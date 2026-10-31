@@ -25,8 +25,13 @@
 # `cargo xtask function-length --fail-on-production` force-warns this lint —
 # overriding every #[expect]/#[allow] — and fails when any production
 # function exceeds the budget unless it is one of the explicit Family D
-# exemptions listed in the gate source (issue #1637). The pre-commit hook
-# runs this gate after the plain clippy budget check.
+# exemptions listed in the gate source (issue #1637). `--fail-on-tests`
+# extends the same run to test scope as a RATCHET, not an exemption: the
+# gate source carries a freeze list of every over-budget test function with
+# the code-line count captured when the list was written; a known site must
+# not grow past its frozen count and any test site the list does not name is
+# new debt. The pre-commit hook runs both toggles after the plain clippy
+# budget check.
 #
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
 # repository denies warnings via [build] warnings, which turns this lint into
