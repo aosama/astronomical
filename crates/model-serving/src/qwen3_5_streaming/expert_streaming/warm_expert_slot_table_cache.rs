@@ -18,13 +18,22 @@ use crate::qwen3_5_streaming::expert_streaming::expert_pager::Qwen3_5PagedExpert
 use slot_writes::RetainedReferenceOk;
 
 mod decode_cache_policy;
-mod demand;
+mod demand_history;
+mod demand_phase;
+mod demand_recording;
 mod flush;
 mod insert;
 mod insert_planning;
 mod previous_token_prefetch;
 mod reclamation;
 mod slot_writes;
+mod topology_snapshot;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod demand_history_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
+mod demand_phase_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod memory_behavior_tests;
@@ -91,11 +100,29 @@ struct PendingSlotInsert {
 pub struct WarmExpertSlotTableCache {
     tables_by_layer: Vec<Option<ExpertSlotTable>>,
     pending_inserts: Vec<PendingSlotInsert>,
-    expert_demand_counts_by_layer: Vec<Vec<u64>>,
-    /// Persisted demand counts seeded at construction (colibri's `.coli_usage`
-    /// analog): historically hot experts skip probation on first admission and
-    /// the demand ranking starts warm instead of at the first-touch floor.
-    historical_demand_counts_by_layer: Vec<Vec<u64>>,
+    /// Per-request prompt-prefill demand counts: what the current request's
+    /// route union needs admitted now. Cleared when each request opens its
+    /// prefill window (`demand_phase`), weighted so the final chunk's token
+    /// density ranks the prompt tail.
+    prefill_demand_counts_by_layer: Vec<Vec<u64>>,
+    /// Lifetime decode demand counts: what generated tokens keep re-using,
+    /// across requests within this session and seeded from the persisted
+    /// decode record at startup. Halved at every generation persistence so
+    /// idle experts fade while hot ones re-climb (`demand_history`).
+    decode_demand_counts_by_layer: Vec<Vec<u64>>,
+    /// The persisted prefill record as last written, kept so the next
+    /// persistence can age it and merge the current request's window
+    /// (`demand_history`).
+    persisted_prefill_demand_counts_by_layer: Vec<Vec<u64>>,
+    /// The persisted decode record as loaded, frozen for insert-time
+    /// historical hotness checks (`demand_history`). In-session warmth is
+    /// earned through live reuse scores, not through this copy.
+    persisted_decode_demand_counts_by_layer: Vec<Vec<u64>>,
+    /// Which serving phase demand evidence is currently recorded into
+    /// (`demand_phase`); decides the stream `record_expert_demand` feeds.
+    demand_phase: demand_phase::ExpertDemandPhase,
+    /// Prefill-scoped demand multiplier (final-chunk boost). Decode evidence
+    /// ignores it; see `demand_recording`.
     demand_assignment_weight: u64,
     resident_payload_bytes: u64,
     normal_maximum_resident_payload_bytes: u64,
@@ -131,8 +158,11 @@ impl WarmExpertSlotTableCache {
         Self {
             tables_by_layer: (0..layer_count).map(|_| None).collect(),
             pending_inserts: Vec::new(),
-            expert_demand_counts_by_layer: (0..layer_count).map(|_| Vec::new()).collect(),
-            historical_demand_counts_by_layer: Vec::new(),
+            prefill_demand_counts_by_layer: (0..layer_count).map(|_| Vec::new()).collect(),
+            decode_demand_counts_by_layer: (0..layer_count).map(|_| Vec::new()).collect(),
+            persisted_prefill_demand_counts_by_layer: Vec::new(),
+            persisted_decode_demand_counts_by_layer: Vec::new(),
+            demand_phase: demand_phase::ExpertDemandPhase::Prefill,
             demand_assignment_weight: 1,
             resident_payload_bytes: 0,
             normal_maximum_resident_payload_bytes: 0,
@@ -155,6 +185,13 @@ impl WarmExpertSlotTableCache {
 
     pub(crate) fn begin_decode_forward(&mut self) {
         self.decode_forward_active = true;
+        // The first decode forward of a generation switches the demand
+        // stream: prefill evidence served its admission purpose, and decode
+        // evidence — the lifetime stream — takes over. The final-chunk boost
+        // multiplier is prefill-scoped, so the switch also restores plain
+        // weight (see `demand_phase` and `demand_recording`).
+        self.demand_phase = demand_phase::ExpertDemandPhase::Decode;
+        self.demand_assignment_weight = 1;
         if self.decode_expert_cache_policy == WorkerDecodeExpertCachePolicy::Candidate {
             self.decode_step_epoch = self.decode_step_epoch.saturating_add(1);
             for table in self.tables_by_layer.iter_mut().flatten() {
@@ -169,64 +206,18 @@ impl WarmExpertSlotTableCache {
         self.decode_forward_active = false;
     }
 
-    /// Seeds demand ranking and candidate admission from a persisted usage
-    /// history. Historically hot experts skip probation at first admission;
-    /// the seeded demand counts also rank residency ahead of first-touch noise
-    /// for the least-frequently-used order.
-    pub(crate) fn seed_expert_demand_history(
-        &mut self,
-        historical_demand_counts_by_layer: Vec<Vec<u64>>,
-    ) {
-        if historical_demand_counts_by_layer.len() != self.tables_by_layer.len() {
-            tracing::warn!(
-                seeded_layer_count = historical_demand_counts_by_layer.len(),
-                expected_layer_count = self.tables_by_layer.len(),
-                "expert usage history shape mismatch; starting cold"
-            );
-            return;
-        }
-        let seeded_expert_count: u64 = historical_demand_counts_by_layer
-            .iter()
-            .flat_map(|layer_counts| layer_counts.iter())
-            .filter(|demand_count| **demand_count > 0)
-            .count()
-            .try_into()
-            .unwrap_or(u64::MAX);
-        for (layer_index, historical_layer_counts) in
-            historical_demand_counts_by_layer.iter().enumerate()
-        {
-            let live_layer_counts = &mut self.expert_demand_counts_by_layer[layer_index];
-            if live_layer_counts.len() < historical_layer_counts.len() {
-                live_layer_counts.resize(historical_layer_counts.len(), 0);
-            }
-            for (expert_id, historical_demand_count) in historical_layer_counts.iter().enumerate() {
-                live_layer_counts[expert_id] =
-                    live_layer_counts[expert_id].saturating_add(*historical_demand_count);
-            }
-        }
-        self.historical_demand_counts_by_layer = historical_demand_counts_by_layer;
-        tracing::info!(
-            seeded_expert_count,
-            "seeded expert warm tables from persisted usage history"
-        );
-    }
-
-    /// Persisted demand count for one expert, zero when no history was seeded.
-    pub(crate) fn historical_demand_count(&self, layer_index: usize, expert_id: usize) -> u64 {
-        self.historical_demand_counts_by_layer
-            .get(layer_index)
-            .and_then(|layer_counts| layer_counts.get(expert_id))
-            .copied()
-            .unwrap_or(0)
-    }
-
-    /// Live per-layer expert demand counts for usage-history persistence.
-    pub(crate) fn expert_demand_counts(&self) -> &[Vec<u64>] {
-        &self.expert_demand_counts_by_layer
-    }
-
     pub(crate) fn take_decode_slot_eviction_count(&mut self) -> u64 {
         std::mem::take(&mut self.decode_slot_eviction_count)
+    }
+
+    /// Counts streamed expert payloads and storage batches read this session.
+    pub fn record_disk_load(&mut self, expert_count: usize, batch_count: usize) {
+        self.disk_page_load_count = self
+            .disk_page_load_count
+            .saturating_add(u64::try_from(expert_count).unwrap_or(u64::MAX));
+        self.disk_batch_load_count = self
+            .disk_batch_load_count
+            .saturating_add(u64::try_from(batch_count).unwrap_or(u64::MAX));
     }
 
     /// Route experts absent from this layer's table, or `None` when the layer

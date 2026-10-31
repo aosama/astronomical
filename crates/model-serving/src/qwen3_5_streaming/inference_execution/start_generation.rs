@@ -557,7 +557,7 @@ impl Qwen3_5EngineState {
                 .persistent_prompt_cache_diagnostics
                 .clone(),
             generation_residency_preparation_attempted: false,
-            has_opened_expert_demand_window: false,
+            has_opened_prefill_demand_window: false,
             reserved_context_tokens,
             completed_prefill_memory_recovery_attempt_count: 0,
             first_decode_forward_elapsed_millis: None,

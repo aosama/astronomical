@@ -84,11 +84,9 @@ impl Qwen3_5EngineState {
                     );
                 }
             };
-        // Decode records its own route demand at plain assignment weight; the
-        // boost belongs to the final prefill chunk's evidence only.
-        if let Some(model) = self.model.as_ref() {
-            model.set_expert_demand_assignment_weight_for_residency(1);
-        }
+        // No post-chunk weight reset is needed: decode evidence ignores the
+        // prefill multiplier entirely (see `demand_phase`), and the next
+        // chunk's window-open sets its own weight before recording.
         let forward_chunk_elapsed_millis =
             prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
         let boundary_checkpoints = prompt_prefill_chunk_outcome.boundary_checkpoints;
@@ -197,17 +195,19 @@ impl Qwen3_5EngineState {
         attempted_prefill_chunk_token_count: usize,
         prefill_end_exclusive: usize,
     ) {
-        // One demand-evidence window per request's prefill: earlier chunks
-        // record at weight one and the final chunk records boosted, so the
-        // prefill-to-decode handoff ranks prompt-tail routes by token density
-        // instead of raw assignment count.
-        if !active_request.has_opened_expert_demand_window {
+        // One prefill demand window per request: the first chunk opens it —
+        // discarding the previous request's prompt evidence while lifetime
+        // decode evidence persists — and every chunk sets its own weight so
+        // earlier chunks record at weight one while the final chunk records
+        // boosted, ranking prompt-tail routes by token density for the
+        // prefill-to-decode handoff.
+        if !active_request.has_opened_prefill_demand_window {
             if let Some(model) = self.model.as_ref() {
-                model.clear_expert_demand_for_residency();
+                model.begin_prefill_demand_window_for_residency();
             }
-            active_request.has_opened_expert_demand_window = true;
+            active_request.has_opened_prefill_demand_window = true;
         }
-        let demand_assignment_weight =
+        let prefill_chunk_demand_weight =
             if prefill_start + attempted_prefill_chunk_token_count >= prefill_end_exclusive {
                 last_prefill_chunk_demand_weight(
                     u64::try_from(prefill_start).unwrap_or(u64::MAX),
@@ -217,7 +217,7 @@ impl Qwen3_5EngineState {
                 1
             };
         if let Some(model) = self.model.as_ref() {
-            model.set_expert_demand_assignment_weight_for_residency(demand_assignment_weight);
+            model.set_prefill_demand_assignment_weight_for_residency(prefill_chunk_demand_weight);
         }
     }
 
