@@ -109,6 +109,7 @@ async fn should_persist_the_stage_of_a_budget_exhausted_cell() {
                 prefill_time_seconds: 0.0,
                 decode_time_seconds: 0.0,
                 configured_maximum_mlx_memory_bytes: Some(23 * BYTES_PER_GIGABYTE),
+                completion_ordinal_in_worker: 2,
                 memory_cell: Some(memory_cell),
             };
             append_throughput_history(&throughput_record, &history_path)
@@ -217,6 +218,7 @@ fn journey_run_outcome_with_budget_stage(
             mlx_peak_memory_bytes: None,
             measured_output_text: None,
             decode_cache_diagnostic_evidence: None,
+            completion_ordinal_in_worker: 2,
         },
         measured_budget_exhausted: budget_exhausted_stage.is_some(),
         budget_exhausted_stage,

@@ -49,10 +49,25 @@ pub(super) fn apply_journey_overrides(
 /// rates are zero here. Callers that own an evidence lane (the memory-ceiling
 /// sweep) recover partial rates from the preserved request progress and the
 /// cancelled attribution report; this driver only reports the shortfall.
+/// Pure: which completion of the worker's life the measured run is for this
+/// journey shape — ordinal two in a standard journey (the in-worker warmup
+/// runs first), ordinal one in a single-request lane with no in-worker
+/// warmup. Extracted so both the live measurement and the budget-exhausted
+/// fallback report the ordinal from one definition.
+fn measured_completion_ordinal_for_journey(journey: &ThroughputJourney) -> u32 {
+    if journey.warmup_output_tokens == 0 {
+        1
+    } else {
+        2
+    }
+}
+
 pub(super) fn budget_exhausted_measurement(
     model_id: &str,
     journey: &ThroughputJourney,
 ) -> ThroughputMeasurement {
+    // The rate is zero here, but the ordinal still says which worker state
+    // the shortfall happened in.
     ThroughputMeasurement {
         model_id: model_id.to_owned(),
         decode_expert_cache_policy: journey.decode_expert_cache_policy,
@@ -66,6 +81,7 @@ pub(super) fn budget_exhausted_measurement(
         mlx_peak_memory_bytes: None,
         measured_output_text: None,
         decode_cache_diagnostic_evidence: None,
+        completion_ordinal_in_worker: measured_completion_ordinal_for_journey(journey),
     }
 }
 
@@ -278,6 +294,11 @@ pub(super) struct JourneyCompletions {
     pub(super) warmup_completed: bool,
     pub(super) measured_completed: bool,
     pub(super) measured_output_text: Option<String>,
+    /// Which completion of the worker's life the measured run was: ordinal
+    /// two when the warmup ran first, ordinal one in a single-request lane
+    /// with no in-worker warmup. The durable record carries it so cold and
+    /// warmed worker rates can never be compared as one series again.
+    pub(super) measured_completion_ordinal_in_worker: u32,
 }
 
 /// Runs the warmup (unless the journey is a single-request lane) and then the
@@ -296,11 +317,18 @@ pub(super) async fn drive_journey_completions(
     // request's prefill streams the remaining layers beside them — so the
     // in-worker warmup is skipped and first-use JIT cost lands on both arms
     // identically through the alternating paired order.
-    let warmup_completed = if journey.warmup_output_tokens == 0 {
+    //
+    // The warmup's presence is also the measured completion's ordinal in the
+    // worker's life: a standard journey measures ordinal two, a
+    // single-request lane measures ordinal one. The record carries it so
+    // first-touch and warmed rates stay distinguishable forever.
+    let (warmup_completed, measured_completion_ordinal_in_worker) = if journey.warmup_output_tokens
+        == 0
+    {
         eprintln!(
             "[performance-throughput] single-request lane: skipping the in-worker warmup completion model={model_id}"
         );
-        true
+        (true, measured_completion_ordinal_for_journey(journey))
     } else {
         eprintln!("[performance-throughput] warmup model={model_id}");
         let warmup_request = BudgetedCompletionRequest {
@@ -321,8 +349,8 @@ pub(super) async fn drive_journey_completions(
         )
         .await
         {
-            BudgetedCompletion::Completed(_) => true,
-            BudgetedCompletion::BudgetExhausted => false,
+            BudgetedCompletion::Completed(_) => (true, 2),
+            BudgetedCompletion::BudgetExhausted => (false, 2),
         }
     };
     let mut measured_output_text = None;
@@ -359,5 +387,6 @@ pub(super) async fn drive_journey_completions(
         warmup_completed,
         measured_completed,
         measured_output_text,
+        measured_completion_ordinal_in_worker,
     }
 }

@@ -137,6 +137,16 @@ pub struct ThroughputRecord {
     /// ran under the default serving ceiling.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
+    /// Which completion of the worker's life this measured run was: the
+    /// in-worker warmup is ordinal one, the first measured completion ordinal
+    /// two, later measured completions count on. Early ordinals are
+    /// systematically slower (first-use graph compilation, cold warm tables),
+    /// and the durable record once let a cold worker's 607 tokens/s sit
+    /// beside a warmed worker's 2,445 tokens/s from the same minute with
+    /// nothing to tell them apart — the misreading that motivated this field.
+    /// First-touch rates and warmed rates must never be compared as if they
+    /// were the same measurement configuration.
+    pub completion_ordinal_in_worker: u32,
     /// Present only on memory-ceiling-sweep records; omitted on every other
     /// journey so historical lines stay additive-compatible.
     #[serde(skip_serializing_if = "Option::is_none")]
