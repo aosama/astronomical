@@ -2,6 +2,7 @@
 
 pub(crate) mod application;
 pub(crate) mod catalog;
+pub(crate) mod crypto_provider;
 pub(crate) mod download;
 pub(crate) mod hub;
 pub(crate) mod model_discovery_refresh;
