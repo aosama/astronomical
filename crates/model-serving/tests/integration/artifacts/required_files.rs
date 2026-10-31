@@ -6,6 +6,100 @@ use astronomical_model_serving::{
     ArtifactValidationError, RequiredFileProfile, validate_required_file_for_tests,
 };
 
+/// Builds a Hugging Face cache entry whose snapshot symlinks `config.json`
+/// into its own blob directory, then an install directory that reaches the
+/// snapshot through a symlink — the symlink-farm install shape a conversion
+/// pipeline produces when it links an installed model at the cache's
+/// snapshot instead of copying it.
+fn symlink_farm_over_hugging_face_snapshot() -> (tempfile::TempDir, PathBuf) {
+    let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
+    let model_cache_directory = temporary_directory.path().join("models--example--model");
+    let blob_directory = model_cache_directory.join("blobs");
+    let snapshot_directory = model_cache_directory.join("snapshots/commit-hash");
+    std::fs::create_dir_all(&blob_directory).expect("the test should create the blob directory");
+    std::fs::create_dir_all(&snapshot_directory)
+        .expect("the test should create the snapshot directory");
+    let expected_config_bytes = br#"{"model_type":"qwen3_5_moe"}"#;
+    std::fs::write(blob_directory.join("config-blob"), expected_config_bytes)
+        .expect("the test should write the immutable blob");
+    symlink(
+        "../../blobs/config-blob",
+        snapshot_directory.join("config.json"),
+    )
+    .expect("the test should create the Hugging Face snapshot symlink");
+    let install_directory = temporary_directory.path().join("install-farm/commit-hash");
+    std::fs::create_dir_all(
+        install_directory
+            .parent()
+            .expect("the farm parent should exist"),
+    )
+    .expect("the test should create the install farm directory");
+    symlink(&snapshot_directory, &install_directory)
+        .expect("the test should create the install farm symlink");
+    (temporary_directory, install_directory)
+}
+
+#[test]
+fn should_accept_a_model_directory_symlinked_to_a_hugging_face_snapshot() {
+    // The temporary root owns the fixture's lifetime and must be held for
+    // the whole test; its name is deliberately unused.
+    let (_temporary_directory, install_directory) = symlink_farm_over_hugging_face_snapshot();
+    let expected_config_bytes = br#"{"model_type":"qwen3_5_moe"}"#;
+
+    // The install path is a symlink whose parent is not a `snapshots`
+    // directory; validation must judge the artifact at the canonical
+    // location, not the path form it arrived through.
+    let validated_weights_file = validate_required_file_for_tests(
+        &install_directory,
+        &RequiredFileProfile {
+            file_name: "config.json".to_owned(),
+            size_bytes: expected_config_bytes.len() as u64,
+        },
+    )
+    .expect("a symlinked model directory over a Hugging Face snapshot should validate");
+    let mut validated_file = validated_weights_file.into_file();
+    let mut actual_config_bytes = Vec::new();
+    validated_file
+        .read_to_end(&mut actual_config_bytes)
+        .expect("the retained descriptor should read the validated blob");
+    assert_eq!(actual_config_bytes, expected_config_bytes);
+}
+
+#[test]
+fn should_reject_a_model_directory_symlinked_outside_a_hugging_face_cache() {
+    let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
+    let plain_model_directory = temporary_directory.path().join("plain-model");
+    std::fs::create_dir_all(&plain_model_directory)
+        .expect("the test should create the plain model directory");
+    symlink("/etc/hosts", plain_model_directory.join("config.json"))
+        .expect("the test should create the outside-pointing symlink");
+    let install_directory = temporary_directory.path().join("install-farm/commit-hash");
+    std::fs::create_dir_all(
+        install_directory
+            .parent()
+            .expect("the farm parent should exist"),
+    )
+    .expect("the test should create the install farm directory");
+    symlink(&plain_model_directory, &install_directory)
+        .expect("the test should create the install farm symlink");
+
+    let validation_error = validate_required_file_for_tests(
+        &install_directory,
+        &RequiredFileProfile {
+            file_name: "config.json".to_owned(),
+            size_bytes: 0,
+        },
+    )
+    .expect_err("a symlinked model directory outside a Hugging Face cache must stay rejected");
+    assert!(
+        matches!(
+            validation_error,
+            ArtifactValidationError::RequiredFileIsSymlink { .. }
+        ),
+        "the canonicalization fix must not weaken the ordinary symlink rejection, got: {validation_error}"
+    );
+}
+
 #[test]
 fn should_accept_a_hugging_face_snapshot_symlink_to_its_own_blob_directory() {
     let temporary_directory = tempfile::tempdir().expect("the test should create a temporary root");
