@@ -41,6 +41,57 @@ fn family_extraction_stops_at_the_runner_platform_segment() {
 }
 
 #[test]
+fn thin_talk_swiftpm_key_lands_in_its_own_prune_family() {
+    // The menu and thin-talk SwiftPM caches share no bytes but once shared
+    // the `swiftpm` family, whose keep-one policy made the prune delete them
+    // in alternation — every run rebuilt whichever package the previous run
+    // had evicted (observed across the three main runs of 2026-10-31). The
+    // thin-talk key therefore carries its own family segment, and this pin
+    // keeps that segment distinct from the menu cache's family.
+    assert_eq!(
+        family_of_key("astronomical-v2-swiftpm-thin-talk-macOS-ARM64-toolchain-package-sources"),
+        "swiftpm-thin-talk"
+    );
+    assert_eq!(
+        family_of_key("astronomical-v2-swiftpm-macOS-ARM64-toolchain-package-sources"),
+        "swiftpm"
+    );
+    assert_ne!(
+        family_of_key("astronomical-v2-swiftpm-thin-talk-macOS-ARM64-toolchain-package-sources"),
+        family_of_key("astronomical-v2-swiftpm-macOS-ARM64-toolchain-package-sources"),
+        "menu and thin-talk caches must prune in separate families"
+    );
+}
+
+#[test]
+fn plan_keeps_one_entry_per_swiftpm_family_not_one_entry_total() {
+    // A menu entry and a thin-talk entry, same ref, thin-talk newest: the
+    // keep-one-per-family policy must keep BOTH because they are different
+    // families, which is the whole point of the family segment split.
+    let entries = vec![
+        cache_entry(
+            1,
+            "astronomical-v2-swiftpm-macOS-ARM64-toolchain-menu-hash",
+            "refs/heads/main",
+            "2026-10-31T15:00:00Z",
+            100,
+        ),
+        cache_entry(
+            2,
+            "astronomical-v2-swiftpm-thin-talk-macOS-ARM64-toolchain-thin-talk-hash",
+            "refs/heads/main",
+            "2026-10-31T15:05:00Z",
+            100,
+        ),
+    ];
+    let deletions = deletion_plan(&entries, "refs/heads/main");
+    assert!(
+        deletions.is_empty(),
+        "the prune deleted a swiftpm family entry that owns its own family slot: {deletions:?}"
+    );
+}
+
+#[test]
 fn plan_keeps_newest_per_ref_class_and_native_build_keeps_two() {
     let entries = vec![
         cache_entry(
@@ -131,7 +182,7 @@ fn oversize_sccache_entries_are_deleted_even_when_newest() {
             "astronomical-v2-sccache-macOS-newest",
             "refs/heads/main",
             "2026-10-09",
-            500_000_000,
+            700_000_000,
         ),
         cache_entry(
             2,

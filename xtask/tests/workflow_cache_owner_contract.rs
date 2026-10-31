@@ -193,6 +193,17 @@ fn cache_owners_are_disjoint_composite_users() {
         &mut restored_paths,
     );
     assert_composite_cache_owner(
+        &verification_steps,
+        "aws-lc-sys-cache",
+        &[
+            "target/debug/build/aws-lc-sys-*",
+            "target/debug/.fingerprint/aws-lc-sys-*",
+            "target/aarch64-apple-darwin/debug/build/aws-lc-sys-*",
+            "target/aarch64-apple-darwin/debug/.fingerprint/aws-lc-sys-*",
+        ],
+        &mut restored_paths,
+    );
+    assert_composite_cache_owner(
         &swift_steps,
         "swiftpm-cache",
         &["apps/astronomical-menu/.build"],
@@ -308,6 +319,38 @@ fn native_and_sccache_keys_keep_their_identity_couplings() {
     assert!(
         thin_talk_key.contains("SWIFT_TOOLCHAIN_IDENTITY"),
         "Thin Talk cache omits toolchain compatibility"
+    );
+    // The thin-talk key must live in its OWN prune family: the prune derives
+    // each entry's family from the key prefix before `-macOS` and keeps one
+    // entry per family, so a shared `astronomical-v2-swiftpm-` prefix made
+    // the prune evict menu and thin-talk in alternation (2026-10-31 hunt).
+    assert!(
+        thin_talk_key.starts_with("astronomical-v2-swiftpm-thin-talk-"),
+        "thin-talk cache shares the swiftpm prune family and will be evicted in alternation with the menu cache"
+    );
+}
+
+#[test]
+fn aws_lc_sys_key_keeps_toolchain_and_lockfile_couplings() {
+    let workflow = workflow_contract();
+    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    let aws_lc_sys_configuration = required_field(
+        find_step_by_id(&verification_steps, "aws-lc-sys-cache"),
+        "with",
+        "aws-lc-sys-cache restore",
+    );
+    let aws_lc_sys_key = required_text(aws_lc_sys_configuration, "key", "aws-lc-sys-cache restore");
+    assert!(
+        aws_lc_sys_key.contains("Cargo.lock"),
+        "aws-lc-sys build-script cache is not stable by dependency graph"
+    );
+    assert!(
+        aws_lc_sys_key.contains("rust-toolchain.toml"),
+        "aws-lc-sys build-script cache omits the compiler identity its fingerprints embed"
+    );
+    assert!(
+        !aws_lc_sys_key.contains("NATIVE_BUILD_IDENTITY"),
+        "aws-lc-sys build-script cache couples to the native build identity"
     );
 }
 

@@ -19,18 +19,18 @@ fn should_skip_the_save_when_a_stored_entry_is_within_budget() {
 #[test]
 fn should_skip_the_save_when_the_directory_is_over_budget_even_after_deletions() {
     assert_eq!(
-        save_decision(450_000_001, 1, 1, false),
+        save_decision(680_000_001, 1, 1, false),
         SccacheSaveDecision::DirectoryOverBudget
     );
     assert_eq!(
-        save_decision(450_000_001, 0, 0, false),
+        save_decision(680_000_001, 0, 0, false),
         SccacheSaveDecision::DirectoryOverBudget
     );
 }
 
 #[test]
 fn should_save_directories_at_the_fixed_budget_boundary() {
-    for directory_bytes in [0, 449_999_999, 450_000_000] {
+    for directory_bytes in [0, 679_999_999, 680_000_000] {
         assert_eq!(
             save_decision(directory_bytes, 0, 0, false),
             SccacheSaveDecision::NewGeneration
