@@ -115,6 +115,7 @@ fn fixture_throughput_record(configured_maximum_mlx_memory_bytes: Option<u64>) -
         prefill_time_seconds: 0.0,
         decode_time_seconds: 0.0,
         configured_maximum_mlx_memory_bytes,
+        completion_ordinal_in_worker: 2,
         memory_cell: None,
     }
 }

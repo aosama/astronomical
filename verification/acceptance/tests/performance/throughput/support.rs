@@ -268,6 +268,7 @@ pub(crate) async fn run_throughput_journey(
         prefill_time_seconds: measurement.prefill_time_seconds,
         decode_time_seconds: measurement.decode_time_seconds,
         configured_maximum_mlx_memory_bytes: journey.maximum_mlx_memory_bytes,
+        completion_ordinal_in_worker: measurement.completion_ordinal_in_worker,
         memory_cell: None,
     };
     eprintln!(
@@ -384,6 +385,7 @@ pub(crate) async fn measure_throughput(
         warmup_completed,
         measured_completed,
         measured_output_text,
+        measured_completion_ordinal_in_worker,
     } = journey_completions;
     let budget_exhausted_stage =
         resolve_budget_exhausted_stage(warmup_completed, measured_completed);
@@ -404,6 +406,7 @@ pub(crate) async fn measure_throughput(
         &performance_log_path,
         model_id,
         journey.decode_expert_cache_policy,
+        measured_completion_ordinal_in_worker,
     ) {
         Some(measurement) => measurement,
         None if measured_budget_exhausted => budget_exhausted_measurement(model_id, journey),

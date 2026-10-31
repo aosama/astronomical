@@ -128,14 +128,20 @@ fn should_measure_streaming_sparse_moe_prompt_processing_throughput() {
         journey,
     );
     throughput_support::assert_measurement_shape(&measured_throughput);
-    // Calibrated 2026-10-24 on a cold streaming worker: 607 tokens/second.
-    // The cold worker seats nothing before chunk 1, so this number carries
-    // the full first-turn stream; a seating-utilization fix should raise the
-    // measured rate and with it this floor. The floor's job is to fail a
-    // collapse (re-stream growth, admission thrash) loudly, at 20% margin.
+    // Fresh-session floor calibrated 2026-10-31: three fresh-worker sessions
+    // measured 1,988 / 2,193 / 2,218 tokens/second on this laptop, so a 500
+    // tokens/s floor (raised 2026-10-24 from the then-cold 607 tokens/s
+    // calibration) would never catch a real collapse again. The floor is 25%
+    // below the slowest observed fresh session; its job stays the same —
+    // fail a collapse (re-stream growth, admission thrash) loudly. The warm
+    // steady state on this machine has held ~2,400–2,600 tokens/s since
+    // early October; the fresh-session rate is the one that moved (607 →
+    // ~2,000 across the last week of October), and the record's
+    // `completion_ordinal_in_worker` field now keeps those two populations
+    // from ever being compared as one series again.
     assert!(
-        measured_throughput.prefill_tokens_per_second >= 500.0,
-        "the streaming prefill rate collapsed to {:.0} tokens/second (floor 500): \
+        measured_throughput.prefill_tokens_per_second >= 1500.0,
+        "the streaming prefill rate collapsed to {:.0} tokens/second (floor 1500): \
          expert seating or streaming regressed",
         measured_throughput.prefill_tokens_per_second
     );
@@ -494,6 +500,7 @@ async fn run_two_turn_streaming_journey(
         model_id,
         WorkerDecodeExpertCachePolicy::Baseline,
         throughput_support::CompletionIndex::First,
+        1,
     )
     .expect("the first turn should write a performance sample");
     let second = throughput_support::read_completion_by_index(
@@ -501,6 +508,7 @@ async fn run_two_turn_streaming_journey(
         model_id,
         WorkerDecodeExpertCachePolicy::Baseline,
         throughput_support::CompletionIndex::Last,
+        2,
     )
     .expect("the second turn should write a performance sample");
 
