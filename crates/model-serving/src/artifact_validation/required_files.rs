@@ -86,7 +86,20 @@ pub(crate) fn validate_required_file(
     required_file_profile: &RequiredFileProfile,
 ) -> Result<ValidatedRequiredFile, ArtifactValidationError> {
     validate_required_file_relative_path(&required_file_profile.file_name)?;
-    let required_file_path = model_directory.join(&required_file_profile.file_name);
+    // Install layouts may reach the validator through a path form other than
+    // the artifact's real location — a symlink-farm install directory that
+    // points at a Hugging Face snapshot, for example. Validation must judge
+    // the artifact, not the path form, so the directory is canonicalized
+    // here: the Hugging Face snapshot resolver recognizes the snapshot
+    // layout from the canonical path, and every downstream control
+    // (blob-directory containment, O_NOFOLLOW opens, snapshot-tree record
+    // authentication) keeps operating on that canonical base. Best effort by
+    // contract: when the directory cannot be canonicalized the original path
+    // is used, and the existing per-file checks report the failure exactly
+    // as before.
+    let canonical_model_directory =
+        fs::canonicalize(model_directory).unwrap_or_else(|_| model_directory.to_path_buf());
+    let required_file_path = canonical_model_directory.join(&required_file_profile.file_name);
     tracing::debug!(
         model_directory = %model_directory.display(),
         required_file_name = %required_file_profile.file_name,
@@ -109,7 +122,7 @@ pub(crate) fn validate_required_file(
     // the one safe exception because their files intentionally point into the
     // sibling immutable `blobs/` directory.
     let required_file_open_path = resolve_required_file_open_path(
-        model_directory,
+        &canonical_model_directory,
         &required_file_path,
         &required_file_profile.file_name,
         &file_metadata,
