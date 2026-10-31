@@ -404,21 +404,12 @@ jobs:
           cargo nextest-archive-e2e
         timeout-minutes: 5
 
-      - name: cargo-crap complexity ratchet (baseline regression gate)
-        # Parses sources without compiling anything: an existing function
-        # may only improve against the committed crap-baseline.json, and any
-        # complexity growth fails. Under a second for the whole workspace.
-        # Function-length enforcement is deliberately NOT in CI (the
-        # repository's policy decision): the 100-code-line budget is denied
-        # through the workspace lints tables and proven by the pre-commit
-        # hook's clippy pass; no clippy runs in GitHub Actions at all.
-        run: |
-          scripts/ci/ci-step-timing.sh begin crap-ratchet
-          brew install cargo-binstall
-          cargo binstall --no-confirm cargo-crap@0.9.0
-          cargo crap --workspace --baseline crap-baseline.json --fail-regression
-          scripts/ci/ci-step-timing.sh end crap-ratchet
-        timeout-minutes: 5
+      # Code-shape enforcement is pre-commit territory ONLY (policy,
+      # 2026-10-31): the pre-commit hook runs the cargo-crap complexity
+      # ratchet (hard fail, see .githooks/pre-commit) and the clippy
+      # function-length budget. The retired cargo-crap CI step lived here —
+      # 13 seconds of every run, 10 of them installing the tool — and the
+      # three clippy budget lanes above it left earlier the same day.
       - name: Upload integration test archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
