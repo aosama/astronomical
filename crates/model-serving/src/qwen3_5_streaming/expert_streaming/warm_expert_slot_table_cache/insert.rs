@@ -24,8 +24,9 @@ use std::collections::HashMap;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use super::decode_cache_policy::{
-    DecodeExpertSlotState, HISTORICAL_HOT_DEMAND_COUNT, MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER,
+    DecodeExpertSlotState, MAXIMUM_PROBATIONARY_EXPERT_SLOTS_PER_LAYER,
 };
+use super::demand_history::HISTORICAL_HOT_DEMAND_COUNT;
 use super::insert_planning::{
     assemble_planned_slots, grow_free_slots_within_budget, plan_evictable_slots,
     plan_new_expert_rows, snapshot_insert_planning_inputs, write_planned_experts,

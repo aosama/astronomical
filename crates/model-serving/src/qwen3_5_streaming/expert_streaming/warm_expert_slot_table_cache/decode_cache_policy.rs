@@ -24,12 +24,6 @@ pub(super) struct DecodeExpertSlotState {
     probationary_until_epoch: Option<u64>,
 }
 
-/// Demand count a persisted history must show before a first admission is
-/// treated as historically hot and skips probation: high enough that noise
-/// from one prompt does not pin experts, low enough that a hot expert from a
-/// previous session is warm from its first touch.
-pub(super) const HISTORICAL_HOT_DEMAND_COUNT: u64 = 4;
-
 impl DecodeExpertSlotState {
     pub(super) fn mark_probationary(&mut self, decode_step_epoch: u64) {
         self.recent_reuse_score = 0;
