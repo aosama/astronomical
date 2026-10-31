@@ -214,6 +214,7 @@ async fn append_memory_cell_record(
         prefill_time_seconds: measurement.prefill_time_seconds,
         decode_time_seconds: measurement.decode_time_seconds,
         configured_maximum_mlx_memory_bytes: Some(configured_maximum_mlx_memory_bytes),
+        completion_ordinal_in_worker: measurement.completion_ordinal_in_worker,
         memory_cell: Some(memory_cell),
     };
     eprintln!(

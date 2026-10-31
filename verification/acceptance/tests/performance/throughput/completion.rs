@@ -38,6 +38,14 @@ pub(crate) struct ThroughputMeasurement {
     pub(crate) mlx_peak_memory_bytes: Option<u64>,
     pub(crate) measured_output_text: Option<String>,
     pub(crate) decode_cache_diagnostic_evidence: Option<DecodeCacheDiagnosticEvidence>,
+    /// Which completion of this worker's life the measurement came from:
+    /// the warmup is ordinal one, the first measured completion ordinal two,
+    /// and every later measured completion counts on. First-touch graph
+    /// compilation and cold warm tables make early ordinals systematically
+    /// slower, so without this field a fresh worker's rate could be silently
+    /// compared against a warmed worker's and read as a regression or a
+    /// gain (the October 2026 history conflation this field exists to end).
+    pub(crate) completion_ordinal_in_worker: u32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -211,12 +219,14 @@ pub(crate) fn read_measured_completion(
     log_path: &Path,
     model_id: &str,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    completion_ordinal_in_worker: u32,
 ) -> Option<ThroughputMeasurement> {
     read_completion_by_index(
         log_path,
         model_id,
         decode_expert_cache_policy,
         CompletionIndex::Last,
+        completion_ordinal_in_worker,
     )
 }
 
@@ -230,11 +240,16 @@ pub(crate) enum CompletionIndex {
 
 /// Reads one journey completion by its performance-log position, so a
 /// two-turn journey can compare the first turn's evidence with the second's.
+/// The caller supplies which completion of the worker's life this sample was
+/// (the first turn of a two-turn journey is ordinal one, the second ordinal
+/// two, and a standard warmup-plus-measured journey reads ordinal two), so
+/// the durable record can tell a fresh worker's rate from a warmed one's.
 pub(crate) fn read_completion_by_index(
     log_path: &Path,
     model_id: &str,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     completion_index: CompletionIndex,
+    completion_ordinal_in_worker: u32,
 ) -> Option<ThroughputMeasurement> {
     let samples = read_throughput_samples(log_path)?;
     let sample = match completion_index {
@@ -244,6 +259,7 @@ pub(crate) fn read_completion_by_index(
     Some(sample_to_measurement(
         model_id,
         decode_expert_cache_policy,
+        completion_ordinal_in_worker,
         sample,
     ))
 }
@@ -260,6 +276,7 @@ fn read_throughput_samples(log_path: &Path) -> Option<Vec<ThroughputSample>> {
 fn sample_to_measurement(
     model_id: &str,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
+    completion_ordinal_in_worker: u32,
     measured: &ThroughputSample,
 ) -> ThroughputMeasurement {
     ThroughputMeasurement {
@@ -275,6 +292,7 @@ fn sample_to_measurement(
         mlx_peak_memory_bytes: measured.mlx_peak_memory_bytes,
         measured_output_text: None,
         decode_cache_diagnostic_evidence: None,
+        completion_ordinal_in_worker,
     }
 }
 
