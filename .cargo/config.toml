@@ -89,7 +89,8 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # source; --fail-on-tests freezes test-scope debt as a ratchet — known sites
 # must not grow past their frozen counts and unnamed sites are new debt
 # (issue #1637). The pre-commit hook runs both toggles over the default and
-# MLX worlds on Rust-touching commits. `cargo xtask function-length-top` ranks every
+# MLX worlds on Rust-touching commits; CI runs the same gate over every
+# feature world. `cargo xtask function-length-top` ranks every
 # over-budget function worst-first WITH names — it force-warns the budget
 # lint, which overrides the #[expect] ratchet, across the same three worlds;
 # `--top N` caps the table (0 = everything, default 10) and `--scope
