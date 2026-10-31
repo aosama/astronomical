@@ -152,6 +152,17 @@ fn should_prepare_a_validated_structured_chat_command_for_prefill() {
 #[test]
 #[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
 fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
+    // This journey needs a vision-capable artifact: the tokenizer's
+    // prepare_chat accepts images only when the artifact carries visual
+    // inputs (the optiq vision sidecar). When the installed large-sparse
+    // revision ships text-only, prepare_chat correctly refuses images, so
+    // the gap is named here instead of surfacing as a confusing
+    // ImageInputUnsupported below.
+    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
+    assert!(
+        model_directory.join("optiq").is_dir(),
+        "the configured large-sparse artifact must ship the optiq vision sidecar for image-chat preparation; the installed revision has none"
+    );
     let tokenizer = load_tokenizer();
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(801),

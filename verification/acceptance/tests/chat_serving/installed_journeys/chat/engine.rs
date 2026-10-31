@@ -18,7 +18,7 @@ const ROMEO_AND_JULIET_SOURCE: &str = include_str!(
 const ROMEO_CONTINUATION_MAX_TOKENS: usize = 20;
 
 #[tokio::test]
-#[ignore = "loads a configured dense model and continues a Romeo and Juliet prompt"]
+#[ignore = "STALE CONTRACT: the streaming engine is the SSD-paging sparse-MoE engine and its startup residency selection requires a sparse expert payload (qwen3_5_core/artifacts/ram_budget_measurements.rs rejects dense artifacts by design); dense serving is covered end to end by the daemon e2e and public REST journeys"]
 async fn should_generate_continuation_through_the_engine_trait() {
     timeout(Duration::from_secs(120), run_romeo_continuation())
         .await
