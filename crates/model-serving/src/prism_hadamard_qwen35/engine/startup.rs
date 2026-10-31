@@ -52,7 +52,6 @@ pub enum PrismHadamardQwen35StartupError {
 /// The pack validation and tokenizer load run on the caller thread (CPU-only
 /// document work); MLX runtime initialization and weight loading stay inside
 /// `load` on the owner thread because MLX handles are not `Send`.
-#[expect(clippy::too_many_lines)]
 pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
     model_directory: &Path,
     effective_mlx_memory_ceiling_bytes: usize,
@@ -77,19 +76,8 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         })
         .map_err(PrismHadamardQwen35StartupError::PackValidation)?;
     let declared_context_tokens = pack.config().text().max_position_embeddings;
-    let context_window = serving_settings
-        .maximum_context_tokens
-        .unwrap_or(declared_context_tokens)
-        .min(declared_context_tokens);
-    if context_window == 0 {
-        return Err(PrismHadamardQwen35StartupError::ContextWindowExceeded {
-            requested_context_tokens: context_window,
-            declared_context_tokens,
-        });
-    }
-    let max_output_tokens = serving_settings
-        .maximum_output_tokens
-        .unwrap_or_else(|| u32::from(u16::MAX).min(context_window - 1));
+    let (context_window, max_output_tokens) =
+        resolved_serving_window(declared_context_tokens, &serving_settings)?;
     let model_id = pack.model_id().to_owned();
     let model_revision = pack.revision().to_owned();
     let model_vocabulary_size = pack.config().text().vocab_size;
@@ -124,39 +112,14 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         }
         None => PerformanceAttributionLog::disabled(),
     };
-    let prompt_cache_disk_store_config = serving_settings
-        .prompt_cache_config
-        .as_ref()
-        .filter(|_| serving_settings.persistent_prompt_cache_enabled)
-        .map(|prompt_cache_config| {
-            let per_model_prompt_cache_config =
-                prompt_cache_config.for_model(&model_id, &model_revision);
-            PersistentPromptCacheDiskStoreConfig::new(
-                per_model_prompt_cache_config
-                    .active_model_prompt_cache_directory()
-                    .clone(),
-                per_model_prompt_cache_config
-                    .global_prompt_cache_root_directory()
-                    .clone(),
-                per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
-            )
-        });
+    let prompt_cache_disk_store_config =
+        prompt_cache_disk_store_config_for(&serving_settings, &model_id, &model_revision);
     // The durable cache block size and checkpoint stride are prompt-cache
     // configuration, not the prefill chunk size: they are contract identity
     // (the storage fingerprint embeds the block count) and must satisfy the
     // layout's persistence alignment, which an arbitrary chunk size does not.
-    let configured_prompt_cache_block_token_count =
-        serving_settings.chunking.as_ref().and_then(|chunking| {
-            chunking
-                .prompt_cache_block_tokens
-                .map(|block_token_count| block_token_count as usize)
-        });
-    let prompt_cache_common_prefix_stride_blocks = serving_settings
-        .chunking
-        .as_ref()
-        .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks)
-        .unwrap_or(1)
-        .max(1);
+    let (configured_prompt_cache_block_token_count, prompt_cache_common_prefix_stride_blocks) =
+        resolved_prompt_cache_layout(&serving_settings);
     let pending_startup = PrismHadamardQwen35PendingStartup {
         validated_pack: pack,
         effective_mlx_memory_ceiling_bytes,
@@ -178,4 +141,85 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         reason: error.to_string(),
     })?;
     Ok((generation_processor, engine))
+}
+
+/// Resolves the effective serving window from the pack's declared limit and
+/// the requested settings: the context window defaults to the declared
+/// maximum and never exceeds it, and the output cap defaults to the smaller
+/// of the u16 sentinel and one token below the context window (a response can
+/// never be as long as its own prompt slot). A zero window — which an
+/// explicit request of zero or a pack declaring zero produces — fails before
+/// any token is decoded.
+fn resolved_serving_window(
+    declared_context_tokens: u32,
+    serving_settings: &PrismHadamardQwen35ServingSettings,
+) -> Result<(u32, u32), PrismHadamardQwen35StartupError> {
+    let context_window = serving_settings
+        .maximum_context_tokens
+        .unwrap_or(declared_context_tokens)
+        .min(declared_context_tokens);
+    if context_window == 0 {
+        return Err(PrismHadamardQwen35StartupError::ContextWindowExceeded {
+            requested_context_tokens: context_window,
+            declared_context_tokens,
+        });
+    }
+    let max_output_tokens = serving_settings
+        .maximum_output_tokens
+        .unwrap_or_else(|| u32::from(u16::MAX).min(context_window - 1));
+    Ok((context_window, max_output_tokens))
+}
+
+/// Derives the durable prompt-cache disk-store configuration when persistent
+/// caching is enabled and a cache configuration was supplied. The per-model
+/// scoping (model id and revision bound into the directory layout) happens
+/// here so the store a pack opens can never collide with another model's
+/// blocks.
+fn prompt_cache_disk_store_config_for(
+    serving_settings: &PrismHadamardQwen35ServingSettings,
+    model_id: &str,
+    model_revision: &str,
+) -> Option<PersistentPromptCacheDiskStoreConfig> {
+    serving_settings
+        .prompt_cache_config
+        .as_ref()
+        .filter(|_| serving_settings.persistent_prompt_cache_enabled)
+        .map(|prompt_cache_config| {
+            let per_model_prompt_cache_config =
+                prompt_cache_config.for_model(model_id, model_revision);
+            PersistentPromptCacheDiskStoreConfig::new(
+                per_model_prompt_cache_config
+                    .active_model_prompt_cache_directory()
+                    .clone(),
+                per_model_prompt_cache_config
+                    .global_prompt_cache_root_directory()
+                    .clone(),
+                per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
+            )
+        })
+}
+
+/// Reads the durable-cache layout knobs from the chunking settings: the
+/// configured block token count (none unless the operator set it) and the
+/// common-prefix stride in blocks, floored at one so checkpointing always has
+/// a stride. These are prompt-cache contract identity, not prefill chunking.
+fn resolved_prompt_cache_layout(
+    serving_settings: &PrismHadamardQwen35ServingSettings,
+) -> (Option<usize>, u32) {
+    let configured_prompt_cache_block_token_count =
+        serving_settings.chunking.as_ref().and_then(|chunking| {
+            chunking
+                .prompt_cache_block_tokens
+                .map(|block_token_count| block_token_count as usize)
+        });
+    let prompt_cache_common_prefix_stride_blocks = serving_settings
+        .chunking
+        .as_ref()
+        .map(|chunking| chunking.prompt_cache_common_prefix_stride_blocks)
+        .unwrap_or(1)
+        .max(1);
+    (
+        configured_prompt_cache_block_token_count,
+        prompt_cache_common_prefix_stride_blocks,
+    )
 }
