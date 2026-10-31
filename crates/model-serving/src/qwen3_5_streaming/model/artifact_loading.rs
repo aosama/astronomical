@@ -267,18 +267,18 @@ fn load_streaming_expert_runtime(
         ),
     );
     // Seed demand ranking from the persisted usage history beside
-    // the artifact (colibri's `.coli_usage` analog). A missing or
-    // stale file simply leaves the session cold.
+    // the artifact (colibri's `.coli_usage` analog). Only the decode record
+    // seeds hotness; a missing or stale file simply leaves the session cold.
     let usage_file_path =
         qwen3_5_streaming::expert_streaming::expert_usage_file_path(model_directory);
     match qwen3_5_streaming::expert_streaming::read_expert_usage(
         &usage_file_path,
         expert_pager.layer_count(),
     ) {
-        Some(historical_demand_counts_by_layer) => {
+        Some(persisted_usage) => {
             retained_experts
                 .borrow_mut()
-                .seed_expert_demand_history(historical_demand_counts_by_layer);
+                .seed_expert_demand_history(persisted_usage);
         }
         None => tracing::info!(
             usage_file_path = usage_file_path.display().to_string(),

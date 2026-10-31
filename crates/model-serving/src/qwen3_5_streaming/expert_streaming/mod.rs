@@ -20,6 +20,8 @@ pub mod route_observation;
 mod warm_expert_slot_table_cache;
 
 #[cfg(feature = "direct-mlx")]
+pub(crate) use expert_usage_history::PersistedExpertUsage;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use expert_usage_history::{
     expert_usage_file_path, read_expert_usage, write_expert_usage,
 };

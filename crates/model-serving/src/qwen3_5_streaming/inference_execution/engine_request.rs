@@ -62,11 +62,12 @@ pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     /// One-shot guard for no-I/O prefill-to-decode residency reconciliation.
     /// Mandatory decode reads populate any remaining elastic route ownership.
     pub(super) generation_residency_preparation_attempted: bool,
-    /// Whether this request's prefill has cleared the expert-demand counters
-    /// once to open a fresh evidence window. Earlier chunks record at weight
-    /// one; the final chunk records boosted. A failed attempt reopens the
-    /// window so a retry never mixes discarded evidence.
-    pub(super) has_opened_expert_demand_window: bool,
+    /// Whether this request's prefill has opened its demand window: the
+    /// per-request prefill evidence stream starts empty while lifetime
+    /// decode evidence persists. Earlier chunks record at weight one; the
+    /// final chunk records boosted. A failed attempt reopens the window so
+    /// a retry never mixes discarded evidence.
+    pub(super) has_opened_prefill_demand_window: bool,
     /// Context tokens admitted at request start; prefill memory recovery
     /// re-seeds the persistent prompt cache against this same total.
     pub(super) reserved_context_tokens: usize,

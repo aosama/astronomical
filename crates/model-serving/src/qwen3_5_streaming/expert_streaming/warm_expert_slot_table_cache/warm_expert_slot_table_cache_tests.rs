@@ -5,6 +5,7 @@
 use super::*;
 use crate::memory::RetainedExpertPageClass;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
+use crate::qwen3_5_streaming::expert_streaming::PersistedExpertUsage;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use serial_test::serial;
 
@@ -208,20 +209,21 @@ fn should_scale_final_prefill_chunk_demand_above_earlier_prompt_frequency() {
     // Five earlier-prompt routes at plain weight; three final-chunk routes
     // recorded under the token-density boost.
     cache.record_expert_demand(0, EXPERT_CAPACITY, &[7, 7, 7, 7, 7]);
-    cache.set_demand_assignment_weight(2);
+    cache.set_prefill_demand_assignment_weight(2);
     cache.record_expert_demand(1, EXPERT_CAPACITY, &[3, 3, 3]);
     let snapshot = cache.topology_snapshot(EXPERT_CAPACITY);
     assert_eq!(snapshot[0].covered_weighted_demand, 5);
     assert_eq!(snapshot[1].covered_weighted_demand, 6);
 
     // A zero weight must not discard assignments; it floors at one.
-    cache.set_demand_assignment_weight(0);
+    cache.set_prefill_demand_assignment_weight(0);
     cache.record_expert_demand(1, EXPERT_CAPACITY, &[3]);
     let snapshot = cache.topology_snapshot(EXPERT_CAPACITY);
     assert_eq!(snapshot[1].covered_weighted_demand, 7);
 
-    // A cleared window restores the plain assignment weight.
-    cache.clear_expert_demand();
+    // A new request's window clears the prompt evidence while lifetime
+    // decode evidence — empty here — is preserved by design.
+    cache.begin_prefill_demand_window();
     cache.record_expert_demand(0, EXPERT_CAPACITY, &[7]);
     let snapshot = cache.topology_snapshot(EXPERT_CAPACITY);
     assert_eq!(snapshot[0].covered_weighted_demand, 1);
@@ -578,8 +580,12 @@ fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
     let runtime = test_runtime();
     let mut seeded_cache = WarmExpertSlotTableCache::new(1);
     seeded_cache.update_maximum_resident_payload_bytes(1024 * 1024 * 1024);
-    // Persisted history says experts 4 and 5 of this layer are hot.
-    seeded_cache.seed_expert_demand_history(vec![vec![0, 0, 0, 0, 9, 7]]);
+    // Persisted history says experts 4 and 5 of this layer are
+    // conversation-hot (decode record); the prefill record stays empty.
+    seeded_cache.seed_expert_demand_history(PersistedExpertUsage {
+        prefill_demand_counts_by_layer: vec![Vec::new()],
+        decode_demand_counts_by_layer: vec![vec![0, 0, 0, 0, 9, 7]],
+    });
     let weights = streamed_weights(&runtime);
     seeded_cache
         .queue_pending_routed_expert_insert(0, &[4, 5], &weights, WARM_SLOT_COUNT)
@@ -587,15 +593,17 @@ fn should_raise_demand_coverage_ranking_from_seeded_usage_history() {
     seeded_cache
         .flush_pending_inserts(&runtime)
         .expect("the warm flush should succeed");
-    // Live demand adds one more sighting of expert 4 on top of the history.
+    // The current request's prefill adds one more sighting of expert 4 on
+    // top of the seeded decode heat.
     seeded_cache.record_expert_demand(0, EXPERT_CAPACITY, &[4]);
 
     let covered_weighted_demand =
         seeded_cache.topology_snapshot(EXPERT_CAPACITY)[0].covered_weighted_demand;
     assert_eq!(
         covered_weighted_demand, 17,
-        "the planner's coverage score must rank seated layers by history plus \
-         live demand: 9 + 7 seeded plus 1 live sighting"
+        "the planner's coverage score must rank seated layers by the sum of \
+         seeded decode heat plus the current request's prefill demand: \
+         9 + 7 seeded plus 1 prefill sighting"
     );
 
     // The control: an identical session without history ranks the same

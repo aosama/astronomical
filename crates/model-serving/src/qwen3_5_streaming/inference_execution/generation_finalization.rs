@@ -241,10 +241,13 @@ impl Qwen3_5EngineState {
         )
     }
 
-    /// Persists the live expert demand counts beside the artifact so the next
-    /// session's warm tables start hot instead of at the first-touch floor
-    /// (colibri's `.coli_usage` analog). Best-effort by contract: the store
-    /// logs write failures and serving continues unchanged.
+    /// Persists the phase-split expert demand records beside the artifact so
+    /// the next session's warm tables start hot instead of at the
+    /// first-touch floor (colibri's `.coli_usage` analog). The snapshot ages
+    /// both records in place — prior evidence halves, the current generation
+    /// is added — so heat must be re-earned to survive. Best-effort by
+    /// contract: the store logs write failures and serving continues
+    /// unchanged.
     fn persist_expert_usage_history(&self) {
         let Some(model) = self.model.as_ref() else {
             return;
@@ -255,10 +258,11 @@ impl Qwen3_5EngineState {
         let usage_file_path = crate::qwen3_5_streaming::expert_streaming::expert_usage_file_path(
             &self.model_directory,
         );
+        let persisted_usage = retained_experts.borrow_mut().take_persisted_expert_usage();
         crate::qwen3_5_streaming::expert_streaming::write_expert_usage(
             &usage_file_path,
             self.model_id.as_deref(),
-            retained_experts.borrow().expert_demand_counts(),
+            &persisted_usage,
         );
     }
 
