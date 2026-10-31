@@ -2,6 +2,10 @@
 
 mod png_validation;
 
+#[cfg(test)]
+#[path = "image_generation/png_validation_tests.rs"]
+mod png_validation_tests;
+
 use std::io::Cursor;
 
 use image::{ColorType, ImageDecoder, ImageError, Limits, codecs::png::PngDecoder};
