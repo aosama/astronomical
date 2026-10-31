@@ -322,3 +322,39 @@ fn should_treat_omitted_zero_counters_as_zero() {
             .is_none()
     );
 }
+
+#[test]
+fn should_prefer_the_final_generation_report_when_a_request_emits_an_early_empty_one() {
+    let logging_directory =
+        tempfile::tempdir().expect("the worker logging directory should be created");
+    // A request can emit an early empty generation report before its final
+    // one (for example while expert loading is still settling). The evidence
+    // reader must consume the LAST report for the request: reading the first
+    // match once turned an 86-GB-streaming turn into a reported zero and
+    // failed three attribution journeys with missing evidence.
+    let early_empty_report = serde_json::json!({
+        "report_kind": "generation",
+        "request_id": 42,
+        "counters": []
+    });
+    let final_report = serde_json::json!({
+        "report_kind": "generation",
+        "request_id": 42,
+        "expert_streaming_source_summaries": [],
+        "counters": [
+            {"counter": "mandatory_decode_expert_source_payload_bytes", "amount": 321}
+        ]
+    });
+    fs::write(
+        logging_directory
+            .path()
+            .join("performance-attribution.jsonl"),
+        format!("{early_empty_report}\n{final_report}\n"),
+    )
+    .expect("the attribution reports should be written");
+
+    let diagnostic_evidence = read_decode_cache_diagnostic_evidence(logging_directory.path(), 42)
+        .expect("the final report for the request should be parsed");
+
+    assert_eq!(diagnostic_evidence.decode_expert_source_payload_bytes, 321);
+}
