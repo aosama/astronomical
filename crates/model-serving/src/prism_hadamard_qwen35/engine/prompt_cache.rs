@@ -90,7 +90,6 @@ pub(super) struct PrismPromptCacheRestoreOutcome {
 /// The terminal block is dropped when it would consume the whole prompt: the
 /// final forward must process at least one prompt token to produce the first
 /// logits, exactly like every family that restores complete blocks only.
-#[expect(clippy::too_many_lines)]
 pub(super) fn lookup_and_restore_prompt_prefix(
     model: &PrismHadamardTextModel,
     persistent_prompt_cache: &PersistentPromptCacheDiskStore,
@@ -125,83 +124,28 @@ pub(super) fn lookup_and_restore_prompt_prefix(
     }
     *generation_state = StraightGenerationState::restored_prefix_slot_owners(model);
     let slot_layout = PrismStateSlotLayout::for_model(model);
-    let complete_block_count = restored_token_count / block_token_count;
-    let mut loaded_block_tensors: Vec<HashMap<String, MlxArray>> =
-        Vec::with_capacity(complete_block_count);
-    let mut last_restored_block_key = None;
-    for block_index in 0..complete_block_count {
-        let block_start = block_index * block_token_count;
-        let block_end = block_start + block_token_count;
-        let block_key = chain_block_key(
-            model_contract,
-            &prompt_token_ids[block_start..block_end],
-            last_restored_block_key.as_ref(),
-        )?;
-        let loaded_sequence_block = performance_attribution
-            .measure_operation(
-                PerformanceOperation::PersistentPromptCacheKvBlockRead,
-                |attribution| {
-                    persistent_prompt_cache.load_kv_block(
-                        &model.runtime,
-                        &block_key,
-                        attribution.positional_file_read_metrics(),
-                    )
-                },
-            )
-            .map_err(|store_error| InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary prompt-cache sequence block could not load: {store_error}"
-                ),
-            })?
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason:
-                    "folded-ternary prompt-cache sequence block was reported present but missing"
-                        .to_owned(),
-            })?;
-        loaded_block_tensors.push(loaded_sequence_block);
-        last_restored_block_key = Some(block_key);
-    }
-    performance_attribution.measure_operation(
-        PerformanceOperation::PersistentPromptCacheStateReconstruction,
-        |_performance_attribution| {
-            restore_generation_state_from_blocks(
-                model,
-                &slot_layout,
-                &loaded_block_tensors,
-                restored_token_count,
-                generation_state,
-            )
-        },
+    let LoadedPromptCacheBlocks {
+        loaded_block_tensors,
+        last_restored_block_key,
+    } = load_complete_kv_blocks(
+        model,
+        persistent_prompt_cache,
+        model_contract,
+        prompt_token_ids,
+        restored_token_count,
+        block_token_count,
+        performance_attribution,
     )?;
-    drop(loaded_block_tensors);
-    // The newest boundary snapshot rides the last complete block; without it
-    // the linear-attention recurrence would restart from zero mid-prefix.
-    if let Some(snapshot_block_key) = last_restored_block_key.as_ref() {
-        let snapshot_tensors = persistent_prompt_cache
-            .load_recurrent_snapshot(
-                &model.runtime,
-                snapshot_block_key,
-                performance_attribution.positional_file_read_metrics(),
-            )
-            .map_err(|store_error| InferenceEngineError::Fatal {
-                reason: format!(
-                    "folded-ternary prompt-cache boundary snapshot could not load: {store_error}"
-                ),
-            })?
-            .ok_or_else(|| InferenceEngineError::Fatal {
-                reason:
-                    "folded-ternary prompt-cache boundary snapshot was reported present but missing"
-                        .to_owned(),
-            })?;
-        absorb_boundary_snapshot(&slot_layout, &snapshot_tensors, generation_state)?;
-        let restored_arrays = restored_evaluation_arrays(generation_state, &slot_layout);
-        model
-            .runtime
-            .evaluate_arrays(&restored_arrays)
-            .map_err(|error| InferenceEngineError::Fatal {
-                reason: format!("folded-ternary restored cache evaluation failed: {error}"),
-            })?;
-    }
+    restore_state_and_absorb_boundary_snapshot(
+        model,
+        persistent_prompt_cache,
+        &slot_layout,
+        loaded_block_tensors,
+        last_restored_block_key.as_ref(),
+        restored_token_count,
+        generation_state,
+        performance_attribution,
+    )?;
     generation_state.set_sequence_position_offset(restored_token_count as i32);
     persistent_prompt_cache_counters.record_cache_hit(restored_token_count);
     Ok(PrismPromptCacheRestoreOutcome {
@@ -525,6 +469,130 @@ fn slice_token_range(
         .map_err(|error| InferenceEngineError::Fatal {
             reason: format!("folded-ternary cache slice failed: {error}"),
         })
+}
+
+/// The complete KV blocks loaded for one restored prefix, plus the chain key
+/// of the newest block — the boundary snapshot rides that block.
+struct LoadedPromptCacheBlocks {
+    loaded_block_tensors: Vec<HashMap<String, MlxArray>>,
+    last_restored_block_key: Option<PersistentPromptCacheBlockKey>,
+}
+
+/// Walks the restored prefix's complete blocks in chain order, loading each
+/// block's tensors under its own measured read. Chaining means each block's
+/// key commits to its parent, so a prefix can only restore along the exact
+/// chain it was written with.
+#[allow(clippy::too_many_arguments)]
+fn load_complete_kv_blocks(
+    model: &PrismHadamardTextModel,
+    persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+    model_contract: &PersistentPromptCacheModelContract,
+    prompt_token_ids: &[u32],
+    restored_token_count: usize,
+    block_token_count: usize,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<LoadedPromptCacheBlocks, InferenceEngineError> {
+    let complete_block_count = restored_token_count / block_token_count;
+    let mut loaded_block_tensors: Vec<HashMap<String, MlxArray>> =
+        Vec::with_capacity(complete_block_count);
+    let mut last_restored_block_key = None;
+    for block_index in 0..complete_block_count {
+        let block_start = block_index * block_token_count;
+        let block_end = block_start + block_token_count;
+        let block_key = chain_block_key(
+            model_contract,
+            &prompt_token_ids[block_start..block_end],
+            last_restored_block_key.as_ref(),
+        )?;
+        let loaded_sequence_block = performance_attribution
+            .measure_operation(
+                PerformanceOperation::PersistentPromptCacheKvBlockRead,
+                |attribution| {
+                    persistent_prompt_cache.load_kv_block(
+                        &model.runtime,
+                        &block_key,
+                        attribution.positional_file_read_metrics(),
+                    )
+                },
+            )
+            .map_err(|store_error| InferenceEngineError::Fatal {
+                reason: format!(
+                    "folded-ternary prompt-cache sequence block could not load: {store_error}"
+                ),
+            })?
+            .ok_or_else(|| InferenceEngineError::Fatal {
+                reason:
+                    "folded-ternary prompt-cache sequence block was reported present but missing"
+                        .to_owned(),
+            })?;
+        loaded_block_tensors.push(loaded_sequence_block);
+        last_restored_block_key = Some(block_key);
+    }
+    Ok(LoadedPromptCacheBlocks {
+        loaded_block_tensors,
+        last_restored_block_key,
+    })
+}
+
+/// Rebuilds the generation state from the loaded blocks, then absorbs the
+/// boundary snapshot riding the newest block and evaluates the restored
+/// arrays. The newest boundary snapshot is mandatory: without it the
+/// linear-attention recurrence would restart from zero mid-prefix.
+#[allow(clippy::too_many_arguments)]
+fn restore_state_and_absorb_boundary_snapshot(
+    model: &PrismHadamardTextModel,
+    persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+    slot_layout: &PrismStateSlotLayout,
+    loaded_block_tensors: Vec<HashMap<String, MlxArray>>,
+    last_restored_block_key: Option<&PersistentPromptCacheBlockKey>,
+    restored_token_count: usize,
+    generation_state: &mut StraightGenerationState,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<(), InferenceEngineError> {
+    performance_attribution.measure_operation(
+        PerformanceOperation::PersistentPromptCacheStateReconstruction,
+        |_performance_attribution| {
+            restore_generation_state_from_blocks(
+                model,
+                slot_layout,
+                &loaded_block_tensors,
+                restored_token_count,
+                generation_state,
+            )
+        },
+    )?;
+    // Release the block tensors before the snapshot load: the reconstructed
+    // state owns evaluated copies, so the source tensors are dead weight.
+    drop(loaded_block_tensors);
+    // The newest boundary snapshot rides the last complete block; without it
+    // the linear-attention recurrence would restart from zero mid-prefix.
+    if let Some(snapshot_block_key) = last_restored_block_key {
+        let snapshot_tensors = persistent_prompt_cache
+            .load_recurrent_snapshot(
+                &model.runtime,
+                snapshot_block_key,
+                performance_attribution.positional_file_read_metrics(),
+            )
+            .map_err(|store_error| InferenceEngineError::Fatal {
+                reason: format!(
+                    "folded-ternary prompt-cache boundary snapshot could not load: {store_error}"
+                ),
+            })?
+            .ok_or_else(|| InferenceEngineError::Fatal {
+                reason:
+                    "folded-ternary prompt-cache boundary snapshot was reported present but missing"
+                        .to_owned(),
+            })?;
+        absorb_boundary_snapshot(slot_layout, &snapshot_tensors, generation_state)?;
+        let restored_arrays = restored_evaluation_arrays(generation_state, slot_layout);
+        model
+            .runtime
+            .evaluate_arrays(&restored_arrays)
+            .map_err(|error| InferenceEngineError::Fatal {
+                reason: format!("folded-ternary restored cache evaluation failed: {error}"),
+            })?;
+    }
+    Ok(())
 }
 
 fn chain_block_key(

@@ -2,7 +2,8 @@ use serde::Serialize;
 
 use super::{
     EnabledPerformanceAttribution, PerformanceAttribution, PerformanceCounter,
-    PerformanceOperation, expert_streaming_source::ExpertStreamingSourceSummary, unix_epoch_millis,
+    PerformanceOperation, expert_streaming_source::ExpertStreamingSourceSummary,
+    measurement_catalog::PerformanceOperationMeasurement, unix_epoch_millis,
 };
 
 const DECODE_TOKEN_FORWARD_LATENCY_BUCKET_WIDTH_NANOSECONDS: u64 = 1_000_000;
@@ -387,39 +388,14 @@ fn image_memory_snapshot(
 }
 
 impl EnabledPerformanceAttribution {
-    #[expect(clippy::too_many_lines)]
     fn finish_common_report(
         &self,
         outcome: PerformanceAttributionOutcome,
     ) -> CommonPerformanceAttributionReport {
         let report_elapsed_nanoseconds =
             duration_nanoseconds_saturating(self.report_started_at.elapsed());
-        let mut operation_reports = Vec::new();
-        let mut attributed_elapsed_nanoseconds = 0_u64;
-        // Zip by discriminant order: catalog arrays intentionally avoid a map
-        // allocation on every measured operation.
-        for (performance_operation, operation_measurement) in PerformanceOperation::ALL
-            .into_iter()
-            .zip(self.operation_measurements)
-        {
-            if operation_measurement.occurrence_count == 0 {
-                continue;
-            }
-            if performance_operation.contributes_to_attributed_elapsed() {
-                attributed_elapsed_nanoseconds = attributed_elapsed_nanoseconds
-                    .saturating_add(operation_measurement.total_elapsed_nanoseconds);
-            }
-            operation_reports.push(PerformanceOperationReport {
-                operation: performance_operation.identifier(),
-                occurrence_count: operation_measurement.occurrence_count,
-                total_elapsed_nanoseconds: operation_measurement.total_elapsed_nanoseconds,
-                minimum_elapsed_nanoseconds: operation_measurement.minimum_elapsed_nanoseconds,
-                maximum_elapsed_nanoseconds: operation_measurement.maximum_elapsed_nanoseconds,
-                first_started_offset_nanoseconds: operation_measurement
-                    .first_started_offset_nanoseconds,
-                last_ended_offset_nanoseconds: operation_measurement.last_ended_offset_nanoseconds,
-            });
-        }
+        let (operation_reports, attributed_elapsed_nanoseconds) =
+            operation_reports_from_measurements(&self.operation_measurements);
         #[cfg(feature = "direct-mlx")]
         let counter_values = {
             let mut counter_values = self.counter_values;
@@ -457,18 +433,7 @@ impl EnabledPerformanceAttribution {
         };
         #[cfg(not(feature = "direct-mlx"))]
         let counter_values = self.counter_values;
-        let mut counter_reports = Vec::new();
-        for (performance_counter, counter_amount) in
-            PerformanceCounter::ALL.into_iter().zip(counter_values)
-        {
-            if counter_amount == 0 {
-                continue;
-            }
-            counter_reports.push(PerformanceCounterReport {
-                counter: performance_counter.identifier(),
-                amount: counter_amount,
-            });
-        }
+        let counter_reports = counter_reports_from_values(&counter_values);
         // Saturation keeps overlapping or clock-edge diagnostics from wrapping;
         // correctly classified leaf totals should remain within report elapsed.
         let unattributed_elapsed_nanoseconds =
@@ -504,6 +469,62 @@ impl EnabledPerformanceAttribution {
             process_io_unavailability_reason: process_io_evidence.2,
         }
     }
+}
+
+/// Builds the per-operation report rows from the fixed measurement array.
+/// Zip by discriminant order: catalog arrays intentionally avoid a map
+/// allocation on every measured operation. Returns the rows plus the total
+/// elapsed time attributed to operations that count toward attributed
+/// elapsed.
+fn operation_reports_from_measurements(
+    operation_measurements: &[PerformanceOperationMeasurement; PerformanceOperation::COUNT],
+) -> (Vec<PerformanceOperationReport>, u64) {
+    let mut operation_reports = Vec::new();
+    let mut attributed_elapsed_nanoseconds = 0_u64;
+    for (performance_operation, operation_measurement) in PerformanceOperation::ALL
+        .into_iter()
+        .zip(operation_measurements.iter().copied())
+    {
+        if operation_measurement.occurrence_count == 0 {
+            continue;
+        }
+        if performance_operation.contributes_to_attributed_elapsed() {
+            attributed_elapsed_nanoseconds = attributed_elapsed_nanoseconds
+                .saturating_add(operation_measurement.total_elapsed_nanoseconds);
+        }
+        operation_reports.push(PerformanceOperationReport {
+            operation: performance_operation.identifier(),
+            occurrence_count: operation_measurement.occurrence_count,
+            total_elapsed_nanoseconds: operation_measurement.total_elapsed_nanoseconds,
+            minimum_elapsed_nanoseconds: operation_measurement.minimum_elapsed_nanoseconds,
+            maximum_elapsed_nanoseconds: operation_measurement.maximum_elapsed_nanoseconds,
+            first_started_offset_nanoseconds: operation_measurement
+                .first_started_offset_nanoseconds,
+            last_ended_offset_nanoseconds: operation_measurement.last_ended_offset_nanoseconds,
+        });
+    }
+    (operation_reports, attributed_elapsed_nanoseconds)
+}
+
+/// Builds the per-counter report rows from the fixed counter array, skipping
+/// counters that never incremented.
+fn counter_reports_from_values(
+    counter_values: &[u64; PerformanceCounter::COUNT],
+) -> Vec<PerformanceCounterReport> {
+    let mut counter_reports = Vec::new();
+    for (performance_counter, counter_amount) in PerformanceCounter::ALL
+        .into_iter()
+        .zip(counter_values.iter().copied())
+    {
+        if counter_amount == 0 {
+            continue;
+        }
+        counter_reports.push(PerformanceCounterReport {
+            counter: performance_counter.identifier(),
+            amount: counter_amount,
+        });
+    }
+    counter_reports
 }
 
 #[cfg(feature = "direct-mlx")]

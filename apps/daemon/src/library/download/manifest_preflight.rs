@@ -1,6 +1,7 @@
 //! Ordered, attributed journey from one catalog entry to exact durable transfer state.
 
 use std::io;
+use std::path::Path;
 
 use thiserror::Error;
 
@@ -62,7 +63,6 @@ where
     }
 
     /// Persists each restart boundary and never performs Hub I/O before initial disk admission.
-    #[expect(clippy::too_many_lines)]
     pub async fn prepare(
         &self,
         catalog_entry: &DownloadCatalogEntry,
@@ -70,26 +70,9 @@ where
         fetching_manifest_at_unix_millis: u64,
         manifest_ready_at_unix_millis: u64,
     ) -> Result<DownloadJob, DownloadManifestPreflightError> {
-        let mut premanifest_job = match self.recover_job(checking_disk_at_unix_millis).await? {
-            Some(existing_job) => {
-                if existing_job.huggingface_id() != catalog_entry.huggingface_id()
-                    || existing_job.revision() != catalog_entry.revision()
-                {
-                    return Err(DownloadJobStoreError::JobIdentityMismatch.into());
-                }
-                existing_job
-            }
-            None => {
-                let new_job = DownloadJob::new_checking_disk(
-                    catalog_entry.huggingface_id(),
-                    catalog_entry.revision(),
-                    catalog_entry.approximate_size_bytes(),
-                    checking_disk_at_unix_millis,
-                )?;
-                self.create_job(&new_job).await?;
-                new_job
-            }
-        };
+        let mut premanifest_job = self
+            .recovered_or_new_premanifest_job(catalog_entry, checking_disk_at_unix_millis)
+            .await?;
         let models_directory = self.job_store.models_directory();
 
         if premanifest_job.has_exact_manifest() {
@@ -98,8 +81,67 @@ where
             return Ok(premanifest_job);
         }
 
-        // Two failure layers: the outer wait fails when the attribution
-        // machinery itself errors; the inner Result is the measured operation.
+        self.measured_initial_disk_capacity(catalog_entry, models_directory)
+            .await?;
+        premanifest_job.mark_fetching_manifest(fetching_manifest_at_unix_millis)?;
+        self.replace_job(&premanifest_job).await?;
+
+        let manifest_outcome = self.measured_manifest_fetch(catalog_entry).await?;
+        self.validate_executable_identity(catalog_entry, &manifest_outcome)
+            .await?;
+        let exact_job =
+            DownloadJob::from_manifest(&manifest_outcome, manifest_ready_at_unix_millis)?;
+        self.replace_job(&exact_job).await?;
+        let reconciled_exact_job = self
+            .recover_job(manifest_ready_at_unix_millis)
+            .await?
+            .ok_or(DownloadJobStoreError::JobNotFound)?;
+        self.check_exact_capacity(catalog_entry, &reconciled_exact_job)
+            .await?;
+        Ok(reconciled_exact_job)
+    }
+
+    /// Recovers the persisted pre-manifest job for this catalog entry, or
+    /// creates and persists a fresh checking-disk job. A recovered job for a
+    /// different model or revision is an identity mismatch: the persisted
+    /// state does not belong to this download.
+    async fn recovered_or_new_premanifest_job(
+        &self,
+        catalog_entry: &DownloadCatalogEntry,
+        checking_disk_at_unix_millis: u64,
+    ) -> Result<DownloadJob, DownloadManifestPreflightError> {
+        Ok(
+            match self.recover_job(checking_disk_at_unix_millis).await? {
+                Some(existing_job) => {
+                    if existing_job.huggingface_id() != catalog_entry.huggingface_id()
+                        || existing_job.revision() != catalog_entry.revision()
+                    {
+                        return Err(DownloadJobStoreError::JobIdentityMismatch.into());
+                    }
+                    existing_job
+                }
+                None => {
+                    let new_job = DownloadJob::new_checking_disk(
+                        catalog_entry.huggingface_id(),
+                        catalog_entry.revision(),
+                        catalog_entry.approximate_size_bytes(),
+                        checking_disk_at_unix_millis,
+                    )?;
+                    self.create_job(&new_job).await?;
+                    new_job
+                }
+            },
+        )
+    }
+
+    /// Runs the measured initial disk-capacity check. Two failure layers:
+    /// the outer wait fails when the attribution machinery itself errors;
+    /// the inner Result is the measured operation.
+    async fn measured_initial_disk_capacity(
+        &self,
+        catalog_entry: &DownloadCatalogEntry,
+        models_directory: &Path,
+    ) -> Result<(), DownloadManifestPreflightError> {
         let initial_capacity_join = self
             .attribution_log
             .measure_blocking_operation(
@@ -125,9 +167,16 @@ where
             }
         };
         let _initial_capacity = initial_capacity_result?;
-        premanifest_job.mark_fetching_manifest(fetching_manifest_at_unix_millis)?;
-        self.replace_job(&premanifest_job).await?;
+        Ok(())
+    }
 
+    /// Runs the measured manifest fetch from the Hub. As with the disk
+    /// preflight, the outer wait fails when attribution errors and the inner
+    /// Result is the measured fetch itself.
+    async fn measured_manifest_fetch(
+        &self,
+        catalog_entry: &DownloadCatalogEntry,
+    ) -> Result<crate::library::HuggingFaceManifest, DownloadManifestPreflightError> {
         let manifest_fetch_join = self
             .attribution_log
             .measure_async_operation(
@@ -165,19 +214,7 @@ where
                 ));
             }
         };
-        let manifest_outcome = manifest_fetch_result?;
-        self.validate_executable_identity(catalog_entry, &manifest_outcome)
-            .await?;
-        let exact_job =
-            DownloadJob::from_manifest(&manifest_outcome, manifest_ready_at_unix_millis)?;
-        self.replace_job(&exact_job).await?;
-        let reconciled_exact_job = self
-            .recover_job(manifest_ready_at_unix_millis)
-            .await?
-            .ok_or(DownloadJobStoreError::JobNotFound)?;
-        self.check_exact_capacity(catalog_entry, &reconciled_exact_job)
-            .await?;
-        Ok(reconciled_exact_job)
+        Ok(manifest_fetch_result?)
     }
 
     async fn validate_executable_identity(

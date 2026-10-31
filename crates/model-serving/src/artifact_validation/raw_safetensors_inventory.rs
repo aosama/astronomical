@@ -49,7 +49,6 @@ struct RawSafetensorsTensorDeclaration {
 }
 
 /// Reads and validates raw tensor declarations from one retained artifact descriptor.
-#[expect(clippy::too_many_lines)]
 pub(crate) fn read_raw_safetensors_inventory(
     validated_required_file: &ValidatedRequiredFile,
 ) -> Result<RawSafetensorsInventory, ArtifactValidationError> {
@@ -61,78 +60,17 @@ pub(crate) fn read_raw_safetensors_inventory(
         MAXIMUM_ARTIFACT_SAFETENSORS_HEADER_LENGTH_BYTES,
     )
     .map_err(|header_error| artifact_safetensors_header_error(header_error, weights_file_name))?;
-
-    // Metadata remains validated as a string map but never enters the tensor
-    // inventory consumed by family-owned normalization.
-    if let Some(metadata_json_value) = bounded_header.metadata_json_value {
-        serde_json::from_value::<HashMap<String, String>>(metadata_json_value).map_err(
-            |source| ArtifactValidationError::InvalidSafetensorsHeader {
-                file_name: weights_file_name.to_owned(),
-                source,
-            },
-        )?;
-    }
+    validated_header_metadata(bounded_header.metadata_json_value, weights_file_name)?;
 
     let data_section_start_bytes = bounded_header.data_section_start_bytes;
-    let tensor_count = bounded_header.tensor_json_values.len();
-    let mut tensor_declarations = Vec::with_capacity(tensor_count);
-    let mut shard_payload_bytes = 0_u64;
-    for (tensor_name, tensor_json_value) in bounded_header.tensor_json_values {
-        validate_tensor_name(&tensor_name, weights_file_name)?;
-        let tensor_view: SafetensorsTensorView = serde_json::from_value(tensor_json_value)
-            .map_err(|source| ArtifactValidationError::InvalidSafetensorsHeader {
-                file_name: weights_file_name.to_owned(),
-                source,
-            })?;
-        let dtype = safetensors_dtype::parse_raw_safetensors_dtype(
-            &tensor_view.dtype,
-            weights_file_name,
-            &tensor_name,
-        )?;
-        let tensor_payload_bytes =
-            validate_tensor_payload_bytes(&tensor_name, &tensor_view, dtype, weights_file_name)?;
-        shard_payload_bytes = shard_payload_bytes
-            .checked_add(tensor_payload_bytes)
-            .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
-        let data_start_offset = tensor_view.data_start_offset();
-        let data_end_offset = tensor_view.data_end_offset();
-        tensor_declarations.push(RawSafetensorsTensorDeclaration {
-            tensor_name,
-            dtype,
-            shape: tensor_view.shape,
-            data_start_offset,
-            data_end_offset,
-            tensor_payload_bytes,
-        });
-    }
-
-    let mut tensor_descriptors = Vec::with_capacity(tensor_count);
-    for tensor_declaration in tensor_declarations {
-        let data_start_offset_bytes = absolute_tensor_offset(
-            data_section_start_bytes,
-            tensor_declaration.data_start_offset,
-            tensor_declaration.data_end_offset,
-            file_size_bytes,
-            weights_file_name,
-            &tensor_declaration.tensor_name,
-        )?;
-        let data_end_offset_bytes = absolute_tensor_offset(
-            data_section_start_bytes,
-            tensor_declaration.data_end_offset,
-            tensor_declaration.data_end_offset,
-            file_size_bytes,
-            weights_file_name,
-            &tensor_declaration.tensor_name,
-        )?;
-        tensor_descriptors.push(RawSafetensorsTensorDescriptor {
-            tensor_name: tensor_declaration.tensor_name,
-            dtype: tensor_declaration.dtype,
-            shape: tensor_declaration.shape,
-            data_start_offset_bytes,
-            data_end_offset_bytes,
-            tensor_payload_bytes: tensor_declaration.tensor_payload_bytes,
-        });
-    }
+    let (tensor_declarations, shard_payload_bytes) =
+        parsed_tensor_declarations(bounded_header.tensor_json_values, weights_file_name)?;
+    let mut tensor_descriptors = tensor_descriptors_with_absolute_offsets(
+        tensor_declarations,
+        data_section_start_bytes,
+        file_size_bytes,
+        weights_file_name,
+    )?;
 
     validate_contiguous_intervals(
         &tensor_descriptors,
@@ -163,6 +101,103 @@ pub(crate) fn read_raw_safetensors_inventory(
         tensor_descriptors,
         shard_payload_bytes,
     })
+}
+
+/// Validates the header's optional metadata block as a string map. Metadata
+/// never enters the tensor inventory consumed by family-owned normalization
+/// — an invalid metadata block still rejects the file, it just contributes
+/// no fields.
+fn validated_header_metadata(
+    metadata_json_value: Option<serde_json::Value>,
+    weights_file_name: &str,
+) -> Result<(), ArtifactValidationError> {
+    if let Some(metadata_json_value) = metadata_json_value {
+        serde_json::from_value::<HashMap<String, String>>(metadata_json_value).map_err(
+            |source| ArtifactValidationError::InvalidSafetensorsHeader {
+                file_name: weights_file_name.to_owned(),
+                source,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+/// Parses every header tensor entry into a validated declaration: the name,
+/// dtype, shape, relative offsets, and payload size, summing payload sizes
+/// with overflow detection. Any malformed entry fails the whole file.
+fn parsed_tensor_declarations(
+    tensor_json_values: serde_json::Map<String, serde_json::Value>,
+    weights_file_name: &str,
+) -> Result<(Vec<RawSafetensorsTensorDeclaration>, u64), ArtifactValidationError> {
+    let mut tensor_declarations = Vec::with_capacity(tensor_json_values.len());
+    let mut shard_payload_bytes = 0_u64;
+    for (tensor_name, tensor_json_value) in tensor_json_values {
+        validate_tensor_name(&tensor_name, weights_file_name)?;
+        let tensor_view: SafetensorsTensorView = serde_json::from_value(tensor_json_value)
+            .map_err(|source| ArtifactValidationError::InvalidSafetensorsHeader {
+                file_name: weights_file_name.to_owned(),
+                source,
+            })?;
+        let dtype = safetensors_dtype::parse_raw_safetensors_dtype(
+            &tensor_view.dtype,
+            weights_file_name,
+            &tensor_name,
+        )?;
+        let tensor_payload_bytes =
+            validate_tensor_payload_bytes(&tensor_name, &tensor_view, dtype, weights_file_name)?;
+        shard_payload_bytes = shard_payload_bytes
+            .checked_add(tensor_payload_bytes)
+            .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?;
+        let data_start_offset = tensor_view.data_start_offset();
+        let data_end_offset = tensor_view.data_end_offset();
+        tensor_declarations.push(RawSafetensorsTensorDeclaration {
+            tensor_name,
+            dtype,
+            shape: tensor_view.shape,
+            data_start_offset,
+            data_end_offset,
+            tensor_payload_bytes,
+        });
+    }
+    Ok((tensor_declarations, shard_payload_bytes))
+}
+
+/// Maps each declaration's data-section-relative offsets to absolute file
+/// offsets, validating them against the file's real size.
+fn tensor_descriptors_with_absolute_offsets(
+    tensor_declarations: Vec<RawSafetensorsTensorDeclaration>,
+    data_section_start_bytes: u64,
+    file_size_bytes: u64,
+    weights_file_name: &str,
+) -> Result<Vec<RawSafetensorsTensorDescriptor>, ArtifactValidationError> {
+    let mut tensor_descriptors = Vec::with_capacity(tensor_declarations.len());
+    for tensor_declaration in tensor_declarations {
+        let data_start_offset_bytes = absolute_tensor_offset(
+            data_section_start_bytes,
+            tensor_declaration.data_start_offset,
+            tensor_declaration.data_end_offset,
+            file_size_bytes,
+            weights_file_name,
+            &tensor_declaration.tensor_name,
+        )?;
+        let data_end_offset_bytes = absolute_tensor_offset(
+            data_section_start_bytes,
+            tensor_declaration.data_end_offset,
+            tensor_declaration.data_end_offset,
+            file_size_bytes,
+            weights_file_name,
+            &tensor_declaration.tensor_name,
+        )?;
+        tensor_descriptors.push(RawSafetensorsTensorDescriptor {
+            tensor_name: tensor_declaration.tensor_name,
+            dtype: tensor_declaration.dtype,
+            shape: tensor_declaration.shape,
+            data_start_offset_bytes,
+            data_end_offset_bytes,
+            tensor_payload_bytes: tensor_declaration.tensor_payload_bytes,
+        });
+    }
+    Ok(tensor_descriptors)
 }
 
 fn validate_tensor_name(
