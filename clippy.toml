@@ -31,7 +31,8 @@
 # the code-line count captured when the list was written; a known site must
 # not grow past its frozen count and any test site the list does not name is
 # new debt. The pre-commit hook runs both toggles after the plain clippy
-# budget check.
+# budget check over the default and MLX worlds; CI runs the same gate over
+# every feature world including the acceptance superset.
 #
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
 # repository denies warnings via [build] warnings, which turns this lint into
