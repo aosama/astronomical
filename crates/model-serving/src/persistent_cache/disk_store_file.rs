@@ -9,7 +9,9 @@ use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensorsWriterError};
+use astronomical_runtime_integration::{
+    MlxRuntime, MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError,
+};
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -26,7 +28,6 @@ pub(crate) enum PersistentPromptCacheFileKind {
     VisualEmbedding,
 }
 
-#[expect(clippy::too_many_lines)]
 pub(super) fn save_direct_safetensors_file_with_name(
     runtime: &MlxRuntime,
     directory: &Path,
@@ -36,23 +37,8 @@ pub(super) fn save_direct_safetensors_file_with_name(
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StagedPersistentPromptCacheStateFile, PersistentPromptCacheDiskStoreError> {
-    // Accept only the two contract-owned names. Allowing an arbitrary caller
-    // name would bypass state-kind validation and broaden cleanup authority.
-    let (file_kind, serialization_operation) = match file_name {
-        super::block_manifest::SEQUENCE_STATE_FILE_NAME => (
-            PersistentPromptCacheFileKind::SequenceStateBlock,
-            PerformanceOperation::PersistentPromptCacheKvBlockSerialization,
-        ),
-        super::block_manifest::BOUNDARY_STATE_FILE_NAME => (
-            PersistentPromptCacheFileKind::BoundaryStateSnapshot,
-            PerformanceOperation::PersistentPromptCacheRecurrentSnapshotSerialization,
-        ),
-        _ => {
-            return Err(PersistentPromptCacheDiskStoreError::InvalidStateFileName {
-                file_name: file_name.to_owned(),
-            });
-        }
-    };
+    let (file_kind, serialization_operation) =
+        state_file_kind_and_serialization_operation(file_name)?;
     let block_file_path = directory.join(file_name);
     let temporary_file_path = directory.join(format!("{file_name}.tmp"));
     remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
@@ -75,20 +61,9 @@ pub(super) fn save_direct_safetensors_file_with_name(
     // The header records the block's own token count so partial tails
     // self-describe their geometry; tensor layout validation reads this same
     // header, keeping the file self-consistent.
-    let block_token_count_metadata = block_token_count.to_string();
-    let storage_contract_fingerprint_metadata =
-        persistent_prompt_cache_model_contract.storage_contract_fingerprint_hex();
-    let metadata_entries: [(&str, &str); 3] = [
-        (
-            "format_version",
-            super::block_format::PERSISTENT_PROMPT_CACHE_FORMAT_VERSION,
-        ),
-        ("block_token_count", block_token_count_metadata.as_str()),
-        (
-            "storage_contract_fingerprint",
-            storage_contract_fingerprint_metadata.as_str(),
-        ),
-    ];
+    let prepared_metadata =
+        PreparedSafetensorsMetadata::new(block_token_count, persistent_prompt_cache_model_contract);
+    let metadata_entries = prepared_metadata.entries();
     let write_outcome = match performance_attribution.measure_operation(
         serialization_operation,
         |_performance_attribution| {
@@ -104,22 +79,14 @@ pub(super) fn save_direct_safetensors_file_with_name(
     // Verify both native accounting and the safetensors contract before rename.
     // A successful native status alone is not sufficient evidence of a complete
     // file when descriptor I/O callbacks can fail independently.
-    let actual_file_size_bytes = match read_file_size_bytes(&temporary_file_path) {
-        Ok(actual_file_size_bytes) => actual_file_size_bytes,
-        Err(metadata_error) => {
-            remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-            return Err(metadata_error);
-        }
-    };
-    if actual_file_size_bytes != write_outcome.written_byte_count() {
-        let size_mismatch_error = PersistentPromptCacheDiskStoreError::WrittenFileSizeMismatch {
-            file_path: temporary_file_path.clone(),
-            reported_size_bytes: write_outcome.written_byte_count(),
-            actual_size_bytes: actual_file_size_bytes,
+    let actual_file_size_bytes =
+        match confirm_written_file_size_bytes(&temporary_file_path, &write_outcome) {
+            Ok(actual_file_size_bytes) => actual_file_size_bytes,
+            Err(metadata_error) => {
+                remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
+                return Err(metadata_error);
+            }
         };
-        remove_cache_owned_file_or_confirm_absent(&temporary_file_path)?;
-        return Err(size_mismatch_error);
-    }
     let temporary_file = match open_without_following_symlinks(&temporary_file_path) {
         Ok(temporary_file) => temporary_file,
         Err(source) => {
@@ -167,6 +134,92 @@ pub(super) fn save_direct_safetensors_file_with_name(
 pub(super) struct StagedPersistentPromptCacheStateFile {
     pub(super) file_path: PathBuf,
     pub(super) file_size_bytes: u64,
+}
+
+/// Accepts only the two contract-owned state-file names, mapping each to its
+/// state kind and its serialization attribution operation. Allowing an
+/// arbitrary caller name would bypass state-kind validation and broaden
+/// cleanup authority.
+fn state_file_kind_and_serialization_operation(
+    file_name: &str,
+) -> Result<
+    (PersistentPromptCacheFileKind, PerformanceOperation),
+    PersistentPromptCacheDiskStoreError,
+> {
+    match file_name {
+        super::block_manifest::SEQUENCE_STATE_FILE_NAME => Ok((
+            PersistentPromptCacheFileKind::SequenceStateBlock,
+            PerformanceOperation::PersistentPromptCacheKvBlockSerialization,
+        )),
+        super::block_manifest::BOUNDARY_STATE_FILE_NAME => Ok((
+            PersistentPromptCacheFileKind::BoundaryStateSnapshot,
+            PerformanceOperation::PersistentPromptCacheRecurrentSnapshotSerialization,
+        )),
+        _ => Err(PersistentPromptCacheDiskStoreError::InvalidStateFileName {
+            file_name: file_name.to_owned(),
+        }),
+    }
+}
+
+/// The safetensors header metadata a state file carries: the format version,
+/// the block's own token count (so partial tails self-describe their
+/// geometry), and the model contract's storage fingerprint (so a layout
+/// change can never be silently mixed with old blocks). Owns the two derived
+/// strings so the borrowed entries live as long as one serialization call.
+struct PreparedSafetensorsMetadata {
+    block_token_count_metadata: String,
+    storage_contract_fingerprint_metadata: String,
+}
+
+impl PreparedSafetensorsMetadata {
+    fn new(
+        block_token_count: usize,
+        persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+    ) -> Self {
+        PreparedSafetensorsMetadata {
+            block_token_count_metadata: block_token_count.to_string(),
+            storage_contract_fingerprint_metadata: persistent_prompt_cache_model_contract
+                .storage_contract_fingerprint_hex(),
+        }
+    }
+
+    fn entries(&self) -> [(&str, &str); 3] {
+        [
+            (
+                "format_version",
+                super::block_format::PERSISTENT_PROMPT_CACHE_FORMAT_VERSION,
+            ),
+            (
+                "block_token_count",
+                self.block_token_count_metadata.as_str(),
+            ),
+            (
+                "storage_contract_fingerprint",
+                self.storage_contract_fingerprint_metadata.as_str(),
+            ),
+        ]
+    }
+}
+
+/// Confirms the bytes the native writer reported match the file the
+/// filesystem sees. Native accounting and descriptor I/O can disagree when a
+/// callback fails independently, so both numbers must be checked before the
+/// file is allowed to progress toward publication.
+fn confirm_written_file_size_bytes(
+    temporary_file_path: &Path,
+    write_outcome: &MlxSafetensorsWriteOutcome,
+) -> Result<u64, PersistentPromptCacheDiskStoreError> {
+    let actual_file_size_bytes = read_file_size_bytes(temporary_file_path)?;
+    if actual_file_size_bytes != write_outcome.written_byte_count() {
+        return Err(
+            PersistentPromptCacheDiskStoreError::WrittenFileSizeMismatch {
+                file_path: temporary_file_path.to_path_buf(),
+                reported_size_bytes: write_outcome.written_byte_count(),
+                actual_size_bytes: actual_file_size_bytes,
+            },
+        );
+    }
+    Ok(actual_file_size_bytes)
 }
 
 pub(crate) fn map_safetensors_writer_error(

@@ -66,7 +66,6 @@ where
     run_initialized_worker(worker_startup_configuration, command_reader, event_writer).await
 }
 
-#[expect(clippy::too_many_lines)]
 async fn run_initialized_worker<ReadTransport, WriteTransport>(
     worker_startup_configuration: WorkerStartupConfiguration,
     command_reader: ProtocolReader<ReadTransport>,
@@ -76,75 +75,26 @@ where
     ReadTransport: AsyncRead + Unpin,
     WriteTransport: AsyncWrite + Unpin,
 {
-    let prompt_cache_config = PromptCacheConfig::new(
-        worker_startup_configuration
-            .global_prompt_cache_root_directory
-            .clone(),
-        worker_startup_configuration.global_prompt_cache_maximum_size_bytes,
-    );
-    let performance_attribution_enabled =
-        worker_startup_configuration.performance_attribution_enabled;
-    let performance_attribution_log_path = worker_startup_configuration
-        .logging_directory
-        .join(PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME);
-    let persistent_prompt_cache_enabled =
-        worker_startup_configuration.persistent_prompt_cache_enabled;
-    let worker_runtime_feature_configuration = WorkerRuntimeFeatureConfiguration {
-        configuration_generation: worker_startup_configuration
-            .configuration_generation
-            .clone(),
+    let derived_worker_configuration =
+        worker_startup_derived_configuration(&worker_startup_configuration);
+    let WorkerStartupDerivedConfiguration {
+        prompt_cache_config,
+        performance_attribution_enabled,
+        performance_attribution_log_path,
         persistent_prompt_cache_enabled,
-        prompt_cache_maximum_size_bytes: worker_startup_configuration
-            .global_prompt_cache_maximum_size_bytes,
-        loaded_model: None,
-    };
-    let machine_mlx_memory_ceiling_bytes = machine_mlx_memory_ceiling_bytes()
-        .await
-        .map_err(WorkerProcessError::Startup)?;
-    let machine_mlx_memory_ceiling_bytes_u64 = u64::try_from(machine_mlx_memory_ceiling_bytes)
-        .map_err(|_| {
-            WorkerProcessError::Startup(WorkerStartupError::InvalidPhysicalMemorySize {
-                description: "machine MLX memory ceiling exceeds the u64 range",
-            })
-        })?;
+        worker_runtime_feature_configuration,
+    } = derived_worker_configuration;
     let configured_maximum_mlx_memory_bytes =
         worker_startup_configuration.configured_maximum_mlx_memory_bytes;
-    let effective_mlx_memory_ceiling_bytes_u64 = effective_mlx_memory_ceiling_bytes(
-        configured_maximum_mlx_memory_bytes,
-        machine_mlx_memory_ceiling_bytes_u64,
-    );
-    if let Some(configured_maximum_mlx_memory_bytes) = configured_maximum_mlx_memory_bytes
-        && configured_maximum_mlx_memory_bytes > effective_mlx_memory_ceiling_bytes_u64
-    {
-        tracing::warn!(
-            configured_maximum_mlx_memory_bytes,
-            machine_mlx_memory_ceiling_bytes,
-            effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes_u64,
-            "configured MLX memory ceiling exceeds the machine bound and was clamped to the effective ceiling"
-        );
-    }
-    let claimed_wired_residency_budget_bytes =
-        wired_claim::claim_wired_residency_up_to(machine_mlx_memory_ceiling_bytes);
-    let effective_ceiling_before_wired_claim_bytes = effective_mlx_memory_ceiling_bytes_u64;
-    let effective_mlx_memory_ceiling_bytes_u64 = effective_mlx_memory_ceiling_after_wired_claim(
-        effective_mlx_memory_ceiling_bytes_u64,
-        claimed_wired_residency_budget_bytes
-            .and_then(|budget_bytes| u64::try_from(budget_bytes).ok()),
-    );
-    if effective_mlx_memory_ceiling_bytes_u64 < effective_ceiling_before_wired_claim_bytes {
-        tracing::warn!(
-            effective_mlx_memory_ceiling_bytes = effective_mlx_memory_ceiling_bytes_u64,
-            claimed_wired_residency_budget_bytes,
-            machine_mlx_memory_ceiling_bytes,
-            "serving ceiling clamped to the plannable wired residency (wired budget minus the Metal working-set margin)"
-        );
-    }
-    let effective_mlx_memory_ceiling_bytes =
-        usize::try_from(effective_mlx_memory_ceiling_bytes_u64).map_err(|_| {
-            WorkerProcessError::Startup(WorkerStartupError::InvalidPhysicalMemorySize {
-                description: "effective MLX memory ceiling exceeds the platform integer range",
-            })
-        })?;
+    let effective_mlx_memory_ceiling =
+        resolve_effective_mlx_memory_ceiling(configured_maximum_mlx_memory_bytes).await?;
+    let EffectiveMlxMemoryCeiling {
+        machine_ceiling_bytes: machine_mlx_memory_ceiling_bytes,
+        machine_ceiling_bytes_u64: machine_mlx_memory_ceiling_bytes_u64,
+        effective_ceiling_bytes: effective_mlx_memory_ceiling_bytes,
+        effective_ceiling_bytes_u64: effective_mlx_memory_ceiling_bytes_u64,
+        claimed_wired_residency_budget_bytes,
+    } = effective_mlx_memory_ceiling;
     tracing::info!(
         global_prompt_cache_maximum_size_bytes = ?prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         performance_attribution_enabled,
@@ -173,19 +123,154 @@ where
     .with_diagnostic_qwen3_5_resident_prefill_activation_floor_bytes(
         worker_startup_configuration.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes,
     );
-    let engine_worker: InferenceWorker =
-        InferenceWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
-            model_factory,
-            machine_mlx_memory_ceiling_bytes_u64,
-            effective_mlx_memory_ceiling_bytes_u64,
-        )
-        .with_wired_residency_budget_bytes(
-            claimed_wired_residency_budget_bytes
-                .and_then(|budget_bytes| u64::try_from(budget_bytes).ok()),
-        )
-        .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration);
+    let engine_worker: InferenceWorker = idle_engine_worker_from_factory(
+        model_factory,
+        machine_mlx_memory_ceiling_bytes_u64,
+        effective_mlx_memory_ceiling_bytes_u64,
+        claimed_wired_residency_budget_bytes
+            .and_then(|budget_bytes| u64::try_from(budget_bytes).ok()),
+        worker_runtime_feature_configuration,
+    );
     engine_worker
         .run_with_protocol(command_reader, event_writer)
         .await
         .map_err(WorkerProcessError::Runtime)
+}
+
+/// The startup values derived once from the daemon's InitializeWorker command
+/// and reused by the diagnostics log, the model factory, and the worker
+/// acknowledgement: the prompt-cache configuration, attribution settings, the
+/// persistent prompt-cache decision, and the runtime feature configuration the
+/// worker later echoes back when it acknowledges a configuration generation.
+struct WorkerStartupDerivedConfiguration {
+    prompt_cache_config: PromptCacheConfig,
+    performance_attribution_enabled: bool,
+    performance_attribution_log_path: std::path::PathBuf,
+    persistent_prompt_cache_enabled: bool,
+    worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration,
+}
+
+fn worker_startup_derived_configuration(
+    worker_startup_configuration: &WorkerStartupConfiguration,
+) -> WorkerStartupDerivedConfiguration {
+    let prompt_cache_config = PromptCacheConfig::new(
+        worker_startup_configuration
+            .global_prompt_cache_root_directory
+            .clone(),
+        worker_startup_configuration.global_prompt_cache_maximum_size_bytes,
+    );
+    let performance_attribution_enabled =
+        worker_startup_configuration.performance_attribution_enabled;
+    let performance_attribution_log_path = worker_startup_configuration
+        .logging_directory
+        .join(PERFORMANCE_ATTRIBUTION_LOG_FILE_NAME);
+    let persistent_prompt_cache_enabled =
+        worker_startup_configuration.persistent_prompt_cache_enabled;
+    let worker_runtime_feature_configuration = WorkerRuntimeFeatureConfiguration {
+        configuration_generation: worker_startup_configuration
+            .configuration_generation
+            .clone(),
+        persistent_prompt_cache_enabled,
+        prompt_cache_maximum_size_bytes: worker_startup_configuration
+            .global_prompt_cache_maximum_size_bytes,
+        loaded_model: None,
+    };
+    WorkerStartupDerivedConfiguration {
+        prompt_cache_config,
+        performance_attribution_enabled,
+        performance_attribution_log_path,
+        persistent_prompt_cache_enabled,
+        worker_runtime_feature_configuration,
+    }
+}
+
+/// The resolved serving memory envelope: the machine's sampled MLX ceiling in
+/// both integer widths, the effective serving ceiling after both clamps (the
+/// configured bound, then the plannable wired-residency claim), and the wired
+/// budget claimed for Metal residency.
+struct EffectiveMlxMemoryCeiling {
+    machine_ceiling_bytes: usize,
+    machine_ceiling_bytes_u64: u64,
+    effective_ceiling_bytes: usize,
+    effective_ceiling_bytes_u64: u64,
+    claimed_wired_residency_budget_bytes: Option<usize>,
+}
+
+/// Samples the machine MLX ceiling and derives the effective serving ceiling
+/// with both clamps applied in order: first the configured bound against the
+/// machine ceiling, then the wired-residency claim against the plannable
+/// budget. Each clamp warns exactly when it actually lowered the ceiling, so
+/// the log order mirrors the clamp order.
+async fn resolve_effective_mlx_memory_ceiling(
+    configured_maximum_mlx_memory_bytes: Option<u64>,
+) -> Result<EffectiveMlxMemoryCeiling, WorkerProcessError> {
+    let machine_ceiling_bytes = machine_mlx_memory_ceiling_bytes()
+        .await
+        .map_err(WorkerProcessError::Startup)?;
+    let machine_ceiling_bytes_u64 = u64::try_from(machine_ceiling_bytes).map_err(|_| {
+        WorkerProcessError::Startup(WorkerStartupError::InvalidPhysicalMemorySize {
+            description: "machine MLX memory ceiling exceeds the u64 range",
+        })
+    })?;
+    let effective_ceiling_bytes_u64 = effective_mlx_memory_ceiling_bytes(
+        configured_maximum_mlx_memory_bytes,
+        machine_ceiling_bytes_u64,
+    );
+    if let Some(configured_maximum_mlx_memory_bytes) = configured_maximum_mlx_memory_bytes
+        && configured_maximum_mlx_memory_bytes > effective_ceiling_bytes_u64
+    {
+        tracing::warn!(
+            configured_maximum_mlx_memory_bytes,
+            machine_mlx_memory_ceiling_bytes = machine_ceiling_bytes,
+            effective_mlx_memory_ceiling_bytes = effective_ceiling_bytes_u64,
+            "configured MLX memory ceiling exceeds the machine bound and was clamped to the effective ceiling"
+        );
+    }
+    let claimed_wired_residency_budget_bytes =
+        wired_claim::claim_wired_residency_up_to(machine_ceiling_bytes);
+    let effective_ceiling_before_wired_claim_bytes = effective_ceiling_bytes_u64;
+    let effective_ceiling_bytes_u64 = effective_mlx_memory_ceiling_after_wired_claim(
+        effective_ceiling_bytes_u64,
+        claimed_wired_residency_budget_bytes
+            .and_then(|budget_bytes| u64::try_from(budget_bytes).ok()),
+    );
+    if effective_ceiling_bytes_u64 < effective_ceiling_before_wired_claim_bytes {
+        tracing::warn!(
+            effective_mlx_memory_ceiling_bytes = effective_ceiling_bytes_u64,
+            claimed_wired_residency_budget_bytes,
+            machine_mlx_memory_ceiling_bytes = machine_ceiling_bytes,
+            "serving ceiling clamped to the plannable wired residency (wired budget minus the Metal working-set margin)"
+        );
+    }
+    let effective_ceiling_bytes = usize::try_from(effective_ceiling_bytes_u64).map_err(|_| {
+        WorkerProcessError::Startup(WorkerStartupError::InvalidPhysicalMemorySize {
+            description: "effective MLX memory ceiling exceeds the platform integer range",
+        })
+    })?;
+    Ok(EffectiveMlxMemoryCeiling {
+        machine_ceiling_bytes,
+        machine_ceiling_bytes_u64,
+        effective_ceiling_bytes,
+        effective_ceiling_bytes_u64,
+        claimed_wired_residency_budget_bytes,
+    })
+}
+
+/// Assembles the idle inference worker from the constructed model factory and
+/// the resolved memory envelope. The worker starts with no model loaded; the
+/// daemon's SwapModel command drives everything after this point.
+fn idle_engine_worker_from_factory(
+    model_factory: ModelFamilyFactory,
+    machine_ceiling_bytes_u64: u64,
+    effective_ceiling_bytes_u64: u64,
+    claimed_wired_residency_budget_bytes: Option<u64>,
+    worker_runtime_feature_configuration: WorkerRuntimeFeatureConfiguration,
+) -> InferenceWorker {
+    InferenceWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+        model_factory,
+        machine_ceiling_bytes_u64,
+        effective_ceiling_bytes_u64,
+    )
+    .with_wired_residency_budget_bytes(claimed_wired_residency_budget_bytes)
+    .with_worker_runtime_feature_configuration(worker_runtime_feature_configuration)
 }
