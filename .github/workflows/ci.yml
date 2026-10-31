@@ -429,22 +429,21 @@ jobs:
           scripts/ci/ci-step-timing.sh end clippy-budget-acceptance
         timeout-minutes: 12
 
-      - name: Function-length hard gate (production exemptions and test freeze)
-        # The clippy budget steps above fail on untracked over-budget
-        # functions, but a suppression attribute silences that lint — which
-        # is exactly how tracked debt is carried. The xtask gate force-warns
-        # the budget lint, overriding every #[expect]/#[allow], across every
-        # feature world (the pre-commit hook re-proves only the default and
-        # MLX worlds; CI owns the acceptance superset). It fails when any
-        # production function exceeds the budget outside the Family D
-        # exemptions in the gate source, or when a test-scope site grows
-        # past its frozen code-line count or appears outside the freeze
-        # list (issue #1637).
+      - name: cargo-crap complexity ratchet (baseline regression gate)
+        # Replaces the retired xtask function-length hard gate (issue #1637).
+        # cargo-crap re-scores every function against the committed
+        # crap-baseline.json without compiling anything: an existing function
+        # may only improve, and any complexity growth fails. Test trees are
+        # scored; #[test] functions are skipped by the tool by design. The
+        # hard 100-code-line budget stays enforced by clippy::too_many_lines
+        # in the clippy budget steps above.
         run: |
-          scripts/ci/ci-step-timing.sh begin function-length-gate
-          cargo run --locked --quiet -p xtask -- function-length --fail-on-production --fail-on-tests
-          scripts/ci/ci-step-timing.sh end function-length-gate
-        timeout-minutes: 15
+          scripts/ci/ci-step-timing.sh begin crap-ratchet
+          brew install cargo-binstall
+          cargo binstall --no-confirm cargo-crap@0.9.0
+          cargo crap --workspace --baseline crap-baseline.json --fail-regression
+          scripts/ci/ci-step-timing.sh end crap-ratchet
+        timeout-minutes: 5
       - name: Upload integration test archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

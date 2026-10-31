@@ -25,16 +25,6 @@ mod coverage_floor_tests;
 mod disposable_target;
 #[cfg(test)]
 mod disposable_target_tests;
-mod function_length;
-mod function_length_debt;
-mod function_length_gate;
-#[cfg(test)]
-mod function_length_gate_tests;
-#[cfg(test)]
-mod function_length_tests;
-mod function_length_top;
-#[cfg(test)]
-mod function_length_top_tests;
 mod install_verification_tools;
 #[cfg(test)]
 mod install_verification_tools_tests;
@@ -115,12 +105,6 @@ fn main() -> ExitCode {
         Some("audit-test-declarations") => {
             run_command(audit_test_declarations::run(&resolve_root()))
         }
-        Some("function-length") => {
-            run_command(function_length::run(&resolve_root(), &arguments[1..]))
-        }
-        Some("function-length-top") => {
-            run_command(function_length_top::run(&resolve_root(), &arguments[1..]))
-        }
         Some("prune-caches") => run_command(cache_prune::run(arguments[1..].iter().cloned())),
         Some("save-sccache") => run_command(sccache_save::run(&arguments[1..])),
         Some("install-verification-tools") => run_command(install_verification_tools::run(
@@ -132,7 +116,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | classify-scope | check-architecture | audit-test-declarations | function-length [--fail-on-production | --fail-on-tests] [--lanes NAME[,NAME...]] | function-length-top [--top N] [--scope production|tests|all] | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
