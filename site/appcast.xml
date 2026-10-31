@@ -4,28 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.84</title>
-            <pubDate>Tue, 27 Oct 2026 17:14:01 -0400</pubDate>
-            <sparkle:version>1726</sparkle:version>
-            <sparkle:shortVersionString>0.2.84</sparkle:shortVersionString>
+            <title>0.2.85</title>
+            <pubDate>Sat, 31 Oct 2026 18:32:32 -0400</pubDate>
+            <sparkle:version>1857</sparkle:version>
+            <sparkle:shortVersionString>0.2.85</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.84
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.85
 
-## Thin Talk canvas zoom-in now answers ⌘+
+### Expert warmth that survives restarts
 
-The View menu's Zoom In shortcut advertised ⌘+, but the keystroke never reached it: SwiftUI matches menu shortcuts against the unshifted key character, which for ⌘+ (Shift+⌘+=) is `=` and can never be `+`. Zoom-in now answers every spelling users actually press — ⌘+, the numpad plus, and bare ⌘= — while ⌘− and ⌘0 behave exactly as before, and each keystroke still zooms exactly one step. The View menu displays ⌘= for Zoom In.
+For sparse-MoE models served from storage, the per-model expert usage history now keeps phase-separated prefill and decode evidence, ages old evidence with a one-generation half-life, and uses decode evidence alone to pre-warm tables. A model you use regularly starts measurably warmer with every launch instead of remembering only the last request. The history file beside streamed MoE artifacts upgrades to format 2; the first launch after upgrading starts that model cold once, and warmth accumulates from then on.
 
-## Compatibility
+### Lighter, faster builds; ring crypto for downloads
 
-No configuration changes: existing configuration files and installed models keep working as before, and upgrading preserves all user state.
+The Amazon `aws-lc` crypto dependency is gone: model downloads run over rustls with the ring provider installed at the transport layer, and builds no longer compile AWS libcrypto — removing the single largest build unit. Third-party notices no longer carry aws-lc entries.
 
-This release is distributed as a signed and notarized DMG. The Sparkle update feed and its signatures cover the exact published bytes.
+### Serving measurements you can trust
+
+Durable throughput records now carry the completion's ordinal within its worker, so first-touch rates and warmed rates can never be silently compared as one series, and the streaming prefill floor reflects the current fresh-session calibration.
+
+### Under the hood
+
+Code-shape enforcement (complexity ratchet, function-length budget) moved entirely to pre-commit; SwiftPM cache self-eviction fixed and the sccache budget raised; a workspace-wide function-length and readability paydown; acceptance-battery defect fixes; and a nightly notices freshness lane.
+
+Compatibility: configuration format unchanged; existing model directories, catalogs, and instance state are preserved. No REST/IPC surface changes.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.84/Astronomical-0.2.84-macOS-arm64.dmg" length="18474138" type="application/octet-stream" sparkle:edSignature="Nz+fRO56MJpPInL6vVWFnnYrXo+yzGQTCVOKIwk4RpqwmnDFRf8+4wBi8d5y0uXfl3noppjbUkg2Ia+XVzf1Bw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.85/Astronomical-0.2.85-macOS-arm64.dmg" length="17939435" type="application/octet-stream" sparkle:edSignature="45DyxOhLCC/0SACS1qbDIT4h22jHNyf1O9+TJ7dI+2+XPWTgkk0GmZEe8FcKvcP/k492ULvnz7j+g84+Mq6mDw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: VUCDvGrTvDHc7I45wTb1xRaAwloPJstccVSUesOqy5oUQPczvwuo5GzkZK9tmKOReiL+jDaSm+v8nbCgu891DA==
-length: 2043
+edSignature: G63xmcW20B7MOaIY1thBnMPUBLsIU0mFSj/37eBI3+GVhqAdgixAgRs8rTUnOBC0k+4qCInjiQ6YayUab6GaBg==
+length: 2891
 -->
