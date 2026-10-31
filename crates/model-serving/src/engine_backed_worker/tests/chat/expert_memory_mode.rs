@@ -257,9 +257,10 @@ async fn should_emit_finalized_residency_and_memory_before_cancellation_completi
     close_worker_transport(daemon_writer, worker_task).await;
 }
 
-#[tokio::test]
-#[expect(clippy::too_many_lines)]
-async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
+/// One scripted decode token that finalizes the generation to Resident mode
+/// with a fully populated memory telemetry snapshot, so the wire events can
+/// prove finalization lands before the normal completion.
+fn finalized_resident_generation_token() -> GeneratedToken {
     let final_mlx_memory_telemetry = MlxMemoryTelemetry::new(
         24_000,
         0,
@@ -270,20 +271,69 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
             context_state_payload_bytes: 0,
         },
     );
+    GeneratedToken::TokenId {
+        token_id: 1,
+        is_reasoning_token: false,
+        expert_memory_mode: Some(ExpertMemoryMode::Paged),
+        mlx_memory_telemetry: None,
+        first_decode_forward_elapsed_millis: None,
+        generation_finalization: Some(GenerationFinalization::new(
+            Some(ExpertMemoryMode::Resident),
+            Some(final_mlx_memory_telemetry),
+            None,
+        )),
+    }
+}
+
+/// Proves a terminally finalized engine accepts a follow-up request and
+/// repeats the mode-changed, finalized, output, completed sequence for it.
+async fn assert_follow_up_request_after_terminal_finalization<
+    ReadTransport: tokio::io::AsyncRead + Unpin,
+    WriteTransport: tokio::io::AsyncWrite + Unpin,
+>(
+    daemon_reader: &mut ProtocolReader<ReadTransport>,
+    daemon_writer: &mut ProtocolWriter<WriteTransport>,
+) {
+    daemon_writer
+        .send_command(&WorkerCommand::Generate(chat_command(748, 2)))
+        .await
+        .expect("a terminally finalized engine should accept a follow-up request");
+    assert!(matches!(
+        next_event(daemon_reader).await,
+        WorkerEvent::ExpertMemoryModeChanged {
+            expert_memory_mode: ExpertMemoryMode::Paged
+        }
+    ));
+    assert!(matches!(
+        next_event(daemon_reader).await,
+        WorkerEvent::GenerationFinalized {
+            request_id,
+            ..
+        } if request_id == RequestId::new(748)
+    ));
+    assert!(matches!(
+        next_event(daemon_reader).await,
+        WorkerEvent::Output {
+            request_id,
+            generated_token_count: 1,
+            ..
+        } if request_id == RequestId::new(748)
+    ));
+    assert!(matches!(
+        next_event(daemon_reader).await,
+        WorkerEvent::Completed {
+            request_id,
+            generated_token_count: 1,
+            ..
+        } if request_id == RequestId::new(748)
+    ));
+}
+
+#[tokio::test]
+async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
     let mut scripted_engine = ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
         0,
-        vec![GeneratedToken::TokenId {
-            token_id: 1,
-            is_reasoning_token: false,
-            expert_memory_mode: Some(ExpertMemoryMode::Paged),
-            mlx_memory_telemetry: None,
-            first_decode_forward_elapsed_millis: None,
-            generation_finalization: Some(GenerationFinalization::new(
-                Some(ExpertMemoryMode::Resident),
-                Some(final_mlx_memory_telemetry),
-                None,
-            )),
-        }],
+        vec![finalized_resident_generation_token()],
     );
     scripted_engine.initial_expert_memory_mode = Some(ExpertMemoryMode::Paged);
     let cancellation_count = scripted_engine.cancellation_count();
@@ -356,39 +406,8 @@ async fn should_emit_finalized_residency_and_memory_before_normal_completion() {
         0,
         "an engine that already emitted terminal finalization must not receive a redundant cancellation"
     );
-    daemon_writer
-        .send_command(&WorkerCommand::Generate(chat_command(748, 2)))
-        .await
-        .expect("a terminally finalized engine should accept a follow-up request");
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::ExpertMemoryModeChanged {
-            expert_memory_mode: ExpertMemoryMode::Paged
-        }
-    ));
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::GenerationFinalized {
-            request_id,
-            ..
-        } if request_id == RequestId::new(748)
-    ));
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::Output {
-            request_id,
-            generated_token_count: 1,
-            ..
-        } if request_id == RequestId::new(748)
-    ));
-    assert!(matches!(
-        next_event(&mut daemon_reader).await,
-        WorkerEvent::Completed {
-            request_id,
-            generated_token_count: 1,
-            ..
-        } if request_id == RequestId::new(748)
-    ));
+    assert_follow_up_request_after_terminal_finalization(&mut daemon_reader, &mut daemon_writer)
+        .await;
 
     close_worker_transport(daemon_writer, worker_task).await;
 }

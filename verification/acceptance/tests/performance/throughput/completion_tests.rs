@@ -1,16 +1,11 @@
 use super::*;
 
-#[test]
-#[expect(clippy::too_many_lines)]
-fn should_parse_the_measured_generation_cache_evidence() {
-    let logging_directory =
-        tempfile::tempdir().expect("the worker logging directory should be created");
-    let warmup_report = serde_json::json!({
-        "report_kind": "generation",
-        "request_id": 1,
-        "counters": []
-    });
-    let measured_report = serde_json::json!({
+/// The measured request's attribution report fixture: two routing stages per
+/// decode step, a two-bucket latency histogram, both streaming payload
+/// summaries, and the complete counter set the diagnostic evidence parser
+/// must recover.
+fn measured_generation_cache_report() -> serde_json::Value {
+    serde_json::json!({
         "report_kind": "generation",
         "request_id": 42,
         "decode_token_forward_latency_p95_nanoseconds": 21_000_000,
@@ -83,17 +78,70 @@ fn should_parse_the_measured_generation_cache_evidence() {
         ],
         "process_physical_disk_read_bytes": 2_048,
         "mlx_peak_memory_bytes": 3_072
+    })
+}
+
+/// Writes the warmup report plus the measured fixture the way the worker
+/// does: one JSON report per line in performance-attribution.jsonl.
+fn write_generation_cache_reports(logging_directory: &std::path::Path) {
+    let warmup_report = serde_json::json!({
+        "report_kind": "generation",
+        "request_id": 1,
+        "counters": []
     });
     fs::write(
-        logging_directory
-            .path()
-            .join("performance-attribution.jsonl"),
-        format!("{warmup_report}\n{measured_report}\n"),
+        logging_directory.join("performance-attribution.jsonl"),
+        format!("{warmup_report}\n{}\n", measured_generation_cache_report()),
     )
     .expect("the attribution reports should be written");
+}
 
-    let diagnostic_evidence = read_decode_cache_diagnostic_evidence(logging_directory.path(), 42)
-        .expect("the measured request report should be parsed");
+/// Parses the measured request's evidence from the written reports; every
+/// facet test below starts from this same parsed value.
+fn parse_measured_generation_cache_evidence(
+    logging_directory: &std::path::Path,
+) -> DecodeCacheDiagnosticEvidence {
+    read_decode_cache_diagnostic_evidence(logging_directory, 42)
+        .expect("the measured request report should be parsed")
+}
+
+/// Field extractors for the optional operation rows: they preserve the exact
+/// Some/None semantics (a missing row must fail the assertion) while keeping
+/// each operation assertion one line.
+fn operation_occurrence_count(
+    operation_evidence: Option<&PerformanceOperationEvidence>,
+) -> Option<u64> {
+    match operation_evidence {
+        Some(operation_evidence) => Some(operation_evidence.occurrence_count),
+        None => None,
+    }
+}
+
+fn operation_total_elapsed_nanoseconds(
+    operation_evidence: Option<&PerformanceOperationEvidence>,
+) -> Option<u64> {
+    match operation_evidence {
+        Some(operation_evidence) => Some(operation_evidence.total_elapsed_nanoseconds),
+        None => None,
+    }
+}
+
+fn operation_maximum_elapsed_nanoseconds(
+    operation_evidence: Option<&PerformanceOperationEvidence>,
+) -> Option<u64> {
+    match operation_evidence {
+        Some(operation_evidence) => Some(operation_evidence.maximum_elapsed_nanoseconds),
+        None => None,
+    }
+}
+
+#[test]
+fn should_parse_the_decode_latency_histogram_from_the_measured_generation_report() {
+    let logging_directory =
+        tempfile::tempdir().expect("the worker logging directory should be created");
+    write_generation_cache_reports(logging_directory.path());
+
+    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
 
     assert_eq!(
         diagnostic_evidence.decode_token_forward_latency_p95_nanoseconds,
@@ -103,48 +151,68 @@ fn should_parse_the_measured_generation_cache_evidence() {
         diagnostic_evidence.decode_token_forward_latency_sample_count,
         Some(10)
     );
+}
+
+#[test]
+fn should_parse_every_operation_row_from_the_measured_generation_report() {
+    let logging_directory =
+        tempfile::tempdir().expect("the worker logging directory should be created");
+    write_generation_cache_reports(logging_directory.path());
+
+    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
+
     assert_eq!(
-        diagnostic_evidence
-            .decode_advance_span
-            .as_ref()
-            .map(|operation_evidence| operation_evidence.occurrence_count),
+        operation_occurrence_count(diagnostic_evidence.decode_advance_span.as_ref()),
         Some(2)
     );
     assert_eq!(
-        diagnostic_evidence
-            .decode_expert_route_host_materialization
-            .as_ref()
-            .map(|operation_evidence| operation_evidence.total_elapsed_nanoseconds),
+        operation_total_elapsed_nanoseconds(
+            diagnostic_evidence
+                .decode_expert_route_host_materialization
+                .as_ref()
+        ),
         Some(60)
     );
     assert_eq!(
-        diagnostic_evidence
-            .decode_expert_route_contiguous_array_construction
-            .as_ref()
-            .map(|operation_evidence| operation_evidence.total_elapsed_nanoseconds),
+        operation_total_elapsed_nanoseconds(
+            diagnostic_evidence
+                .decode_expert_route_contiguous_array_construction
+                .as_ref()
+        ),
         Some(16)
     );
     assert_eq!(
-        diagnostic_evidence
-            .decode_expert_route_array_evaluation
-            .as_ref()
-            .map(|operation_evidence| operation_evidence.total_elapsed_nanoseconds),
+        operation_total_elapsed_nanoseconds(
+            diagnostic_evidence
+                .decode_expert_route_array_evaluation
+                .as_ref()
+        ),
         Some(36)
     );
     assert_eq!(
-        diagnostic_evidence
-            .decode_expert_route_host_copy
-            .as_ref()
-            .map(|operation_evidence| operation_evidence.total_elapsed_nanoseconds),
+        operation_total_elapsed_nanoseconds(
+            diagnostic_evidence.decode_expert_route_host_copy.as_ref()
+        ),
         Some(8)
     );
     assert_eq!(
-        diagnostic_evidence
-            .rust_expert_streaming_layer_preparation
-            .as_ref()
-            .map(|operation_evidence| operation_evidence.maximum_elapsed_nanoseconds),
+        operation_maximum_elapsed_nanoseconds(
+            diagnostic_evidence
+                .rust_expert_streaming_layer_preparation
+                .as_ref()
+        ),
         Some(15)
     );
+}
+
+#[test]
+fn should_parse_every_counter_from_the_measured_generation_report() {
+    let logging_directory =
+        tempfile::tempdir().expect("the worker logging directory should be created");
+    write_generation_cache_reports(logging_directory.path());
+
+    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
+
     assert_eq!(diagnostic_evidence.decode_expert_source_payload_bytes, 321);
     assert_eq!(
         diagnostic_evidence.decode_expert_source_summary_payload_bytes,
@@ -177,6 +245,16 @@ fn should_parse_the_measured_generation_cache_evidence() {
         diagnostic_evidence.positional_file_read_maximum_concurrent_count,
         2
     );
+}
+
+#[test]
+fn should_parse_process_and_memory_totals_from_the_measured_generation_report() {
+    let logging_directory =
+        tempfile::tempdir().expect("the worker logging directory should be created");
+    write_generation_cache_reports(logging_directory.path());
+
+    let diagnostic_evidence = parse_measured_generation_cache_evidence(logging_directory.path());
+
     assert_eq!(
         diagnostic_evidence.process_physical_disk_read_bytes,
         Some(2_048)

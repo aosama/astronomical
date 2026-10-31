@@ -184,36 +184,20 @@ fn stable_bundle_signs_for_distribution_and_keeps_the_development_artifact() {
     );
 }
 
-#[test]
-#[expect(clippy::too_many_lines)]
-fn app_store_bundle_is_sparkle_free_and_assigns_sandbox_entitlements() {
-    let sandbox = AppBuilderSandbox::install();
-    let outcome = sandbox.run_builder(&BuilderJourney {
-        channel: "app-store",
-        signing_identity: Some("Apple Distribution: Example (ABCDE12345)"),
-        metallib_path: sandbox.fixture_metallib_path.clone(),
-        journey_log_stem: "app-store",
-    });
-
+/// The bundle-level identity contract: the channel and app-store bundle
+/// identifier in the plist, the updater and state-directory keys expunged, no
+/// Sparkle artifacts, the Sparkle-free menu product requested through SwiftPM,
+/// and the Stable icon identity.
+fn assert_app_store_bundle_identity(
+    sandbox: &AppBuilderSandbox,
+    app_store_bundle: &std::path::Path,
+) {
     assert!(
-        outcome.succeeded,
-        "the app-store journey failed; stderr:\n{}",
-        outcome.standard_error_text
-    );
-    assert!(
-        outcome
-            .standard_output_text
-            .contains("Astronomical app-store app ready"),
-        "the app-store journey did not reach its success summary; stdout:\n{}",
-        outcome.standard_output_text
-    );
-    let app_store_bundle = sandbox.app_store_bundle_path();
-    assert!(
-        plist_string(&app_store_bundle, "AstronomicalChannel").as_deref() == Some("app-store"),
+        plist_string(app_store_bundle, "AstronomicalChannel").as_deref() == Some("app-store"),
         "the app-store bundle did not declare its channel"
     );
     assert!(
-        plist_string(&app_store_bundle, "CFBundleIdentifier").as_deref()
+        plist_string(app_store_bundle, "CFBundleIdentifier").as_deref()
             == Some("app.astronomical.appstore"),
         "the app-store bundle did not carry the app-store bundle identifier"
     );
@@ -224,7 +208,7 @@ fn app_store_bundle_is_sparkle_free_and_assigns_sandbox_entitlements() {
         "AstronomicalStateDirectoryName",
     ] {
         assert!(
-            plist_string(&app_store_bundle, absent_plist_key).is_none(),
+            plist_string(app_store_bundle, absent_plist_key).is_none(),
             "the app-store bundle unexpectedly embeds {absent_plist_key}"
         );
     }
@@ -251,16 +235,19 @@ fn app_store_bundle_is_sparkle_free_and_assigns_sandbox_entitlements() {
         "the app-store build did not build the Sparkle-free menu product"
     );
     assert_eq!(
-        resource_text(&app_store_bundle, "Astronomical.icns"),
+        resource_text(app_store_bundle, "Astronomical.icns"),
         "stable",
         "the app-store bundle did not request the Stable icon identity"
     );
+}
 
-    // The fake codesign only records its arguments, so the entitlement
-    // contract is asserted from the signing log: the main executable and the
-    // bundle seal carry the sandbox profile; helpers join it through
-    // inheritance.
-    let app_store_codesign_text = file_text(&outcome.codesign_log_path);
+/// The fake codesign only records its arguments, so the entitlement contract
+/// is asserted from the signing log: the main executable and the bundle seal
+/// carry the sandbox profile; helpers join it through inheritance; and the
+/// CLI stays bare because it runs from the user's terminal — no entitlements
+/// profile of any kind may ride on it (the trailing-object match keeps the
+/// CLI distinct from astronomicald and the bundle seal).
+fn assert_app_store_entitlements_contract(app_store_codesign_text: &str) {
     for (entitlements_file_name, code_object_name) in [
         ("app-store-application.entitlements", "astronomical-menu"),
         ("app-store-inherited.entitlements", "astronomicald"),
@@ -270,28 +257,59 @@ fn app_store_bundle_is_sparkle_free_and_assigns_sandbox_entitlements() {
         ),
         ("app-store-application.entitlements", "Astronomical.app"),
     ] {
+        let mut object_signed_with_profile = false;
+        for codesign_line in app_store_codesign_text.lines() {
+            if codesign_line.contains(entitlements_file_name)
+                && codesign_line.contains(code_object_name)
+            {
+                object_signed_with_profile = true;
+            }
+        }
         assert!(
-            app_store_codesign_text.lines().any(|codesign_line| {
-                codesign_line.contains(entitlements_file_name)
-                    && codesign_line.contains(code_object_name)
-            }),
+            object_signed_with_profile,
             "the app-store {code_object_name} was not signed with {entitlements_file_name}"
         );
     }
-    // The CLI runs from the user's terminal, so it must be signed bare: no
-    // entitlements profile of any kind may ride on it. The trailing-object
-    // match keeps the CLI distinct from astronomicald and the bundle seal.
-    let cli_entitlements_line_count = app_store_codesign_text
-        .lines()
-        .filter(|codesign_line| {
-            codesign_line.contains("--entitlements")
-                && codesign_line.trim_end().ends_with("MacOS/astronomical")
-        })
-        .count();
+    let mut cli_entitlements_line_count = 0_usize;
+    for codesign_line in app_store_codesign_text.lines() {
+        let carries_entitlements = codesign_line.contains("--entitlements");
+        let names_cli = codesign_line.trim_end().ends_with("MacOS/astronomical");
+        if carries_entitlements && names_cli {
+            cli_entitlements_line_count += 1;
+        }
+    }
     assert_eq!(
         cli_entitlements_line_count, 0,
         "the app-store CLI was signed with an entitlements profile"
     );
+}
+
+#[test]
+fn app_store_bundle_is_sparkle_free_and_assigns_sandbox_entitlements() {
+    let sandbox = AppBuilderSandbox::install();
+    let outcome = sandbox.run_builder(&BuilderJourney {
+        channel: "app-store",
+        signing_identity: Some("Apple Distribution: Example (ABCDE12345)"),
+        metallib_path: sandbox.fixture_metallib_path.clone(),
+        journey_log_stem: "app-store",
+    });
+
+    assert!(
+        outcome.succeeded,
+        "the app-store journey failed; stderr:\n{}",
+        outcome.standard_error_text
+    );
+    assert!(
+        outcome
+            .standard_output_text
+            .contains("Astronomical app-store app ready"),
+        "the app-store journey did not reach its success summary; stdout:\n{}",
+        outcome.standard_output_text
+    );
+    assert_app_store_bundle_identity(&sandbox, &sandbox.app_store_bundle_path());
+
+    let app_store_codesign_text = file_text(&outcome.codesign_log_path);
+    assert_app_store_entitlements_contract(&app_store_codesign_text);
 
     let cargo_arguments_text = sandbox.cargo_arguments_text();
     assert_eq!(

@@ -71,8 +71,8 @@ pub(crate) fn is_exempted_production_site(source_path: &str, function_name: &str
 /// The initial list captured the 83 over-budget test-scope sites inventoried on
 /// issue #1637 after the first paydown batch; the first monolith batch paid
 /// three of them down (the prefill gathered-dequant measurement, the
-/// throughput journey driver, and the vision padding probe), so 80 remain
-/// frozen. Adding an entry requires an accepting decision on the tracking
+/// throughput journey driver, and the vision padding probe) and a second
+/// batch paid down the nine assertion-table sites, so 71 remain frozen. Adding an entry requires an accepting decision on the tracking
 /// issue, for the same reason a production exemption does.
 pub(crate) struct TestScopeFreezeEntry {
     pub(crate) path: &'static str,
@@ -87,24 +87,9 @@ pub(crate) struct TestScopeFreezeEntry {
 /// grown.
 pub(crate) const TEST_SCOPE_FREEZE: &[TestScopeFreezeEntry] = &[
     TestScopeFreezeEntry {
-        path: "xtask/tests/integration_app_builder_journeys.rs",
-        function_name: "app_store_bundle_is_sparkle_free_and_assigns_sandbox_entitlements",
-        frozen_code_lines: 103,
-    },
-    TestScopeFreezeEntry {
-        path: "xtask/tests/workflow_cache_owner_contract.rs",
-        function_name: "assert_composite_cache_owner",
-        frozen_code_lines: 105,
-    },
-    TestScopeFreezeEntry {
         path: "verification/acceptance/tests/expert_paging/journeys/ssd_paging_decode_expert_reuse_rest_journey/support.rs",
         function_name: "assert_decode_expert_reuse_attribution",
         frozen_code_lines: 128,
-    },
-    TestScopeFreezeEntry {
-        path: "verification/acceptance/tests/expert_paging/journeys/cached_suffix_streaming_prefill_rest_journey/reports.rs",
-        function_name: "assert_reported_interaction",
-        frozen_code_lines: 127,
     },
     TestScopeFreezeEntry {
         path: "verification/acceptance/tests/gpu_contracts/../chat_serving/installed_journeys/expert_paging/paged_prefill_chunk_attribution.rs",
@@ -342,21 +327,6 @@ pub(crate) const TEST_SCOPE_FREEZE: &[TestScopeFreezeEntry] = &[
         frozen_code_lines: 131,
     },
     TestScopeFreezeEntry {
-        path: "crates/model-serving/src/persistent_cache/model_contract/tests.rs",
-        function_name: "should_derive_persistent_prompt_cache_tensor_shapes_from_frozen_model_metadata",
-        frozen_code_lines: 111,
-    },
-    TestScopeFreezeEntry {
-        path: "crates/model-serving/src/engine_backed_worker/tests/chat/generation_lifecycle.rs",
-        function_name: "should_emit_every_parallel_tool_call_completed_after_thinking",
-        frozen_code_lines: 121,
-    },
-    TestScopeFreezeEntry {
-        path: "crates/model-serving/src/engine_backed_worker/tests/chat/expert_memory_mode.rs",
-        function_name: "should_emit_finalized_residency_and_memory_before_normal_completion",
-        frozen_code_lines: 129,
-    },
-    TestScopeFreezeEntry {
         path: "crates/model-serving/src/engine_backed_worker/tests/chat/prefill_progress.rs",
         function_name: "should_exclude_the_complete_restored_prompt_prefix_from_progress_without_inflating_cached_usage",
         frozen_code_lines: 186,
@@ -385,16 +355,6 @@ pub(crate) const TEST_SCOPE_FREEZE: &[TestScopeFreezeEntry] = &[
         path: "crates/astronomical-memory-policy/src/memory_equation_tests.rs",
         function_name: "should_match_request_and_resident_guard_verdicts_when_the_analytic_floor_is_the_same_workspace",
         frozen_code_lines: 123,
-    },
-    TestScopeFreezeEntry {
-        path: "apps/daemon/src/performance/generation_log_tests.rs",
-        function_name: "should_open_and_append_to_performance_log",
-        frozen_code_lines: 112,
-    },
-    TestScopeFreezeEntry {
-        path: "verification/acceptance/tests/performance/throughput/completion_tests.rs",
-        function_name: "should_parse_the_measured_generation_cache_evidence",
-        frozen_code_lines: 177,
     },
     TestScopeFreezeEntry {
         path: "apps/daemon/tests/integration/download_payload_concurrency.rs",
@@ -455,11 +415,6 @@ pub(crate) const TEST_SCOPE_FREEZE: &[TestScopeFreezeEntry] = &[
         path: "apps/astronomical-cli/tests/integration/support/stub_daemon.rs",
         function_name: "spawn_stub_daemon",
         frozen_code_lines: 243,
-    },
-    TestScopeFreezeEntry {
-        path: "xtask/tests/workflow_lane_split_contract.rs",
-        function_name: "tier_lanes_run_their_own_archives_without_compiling",
-        frozen_code_lines: 118,
     },
     TestScopeFreezeEntry {
         path: "xtask/tests/workflow_verdict_contract.rs",
