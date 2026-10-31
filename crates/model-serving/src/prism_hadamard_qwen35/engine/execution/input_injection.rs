@@ -7,7 +7,6 @@ use super::sampling::sample_token;
 use super::{PrismHadamardQwen35InferenceExecution, successor_stays_pending};
 use crate::{InferenceEngineError, PerformanceOperation};
 
-#[expect(clippy::too_many_lines)]
 pub(super) fn inject_input_tokens(
     execution: &mut PrismHadamardQwen35InferenceExecution,
     request_id: RequestId,
@@ -16,6 +15,34 @@ pub(super) fn inject_input_tokens(
     if input_token_ids.is_empty() {
         return Ok(());
     }
+    let token_count = validated_feedback_token_count(execution, request_id, &input_token_ids)?;
+    let model = execution
+        .model
+        .as_ref()
+        .ok_or_else(|| InferenceEngineError::Fatal {
+            reason: "folded-ternary model is not loaded".to_owned(),
+        })?;
+    let feedback_token_indices: Vec<i32> = input_token_ids
+        .iter()
+        .map(|token_id| *token_id as i32)
+        .collect();
+    let token_indices = model
+        .runtime
+        .array_from_i32(&feedback_token_indices, &[1, token_count])
+        .map_err(gpu_error)?;
+    run_feedback_forward_and_sample(execution, &token_indices)
+}
+
+/// Validates one feedback injection before any tensor work: the active
+/// generation must belong to this request, every token must be inside the
+/// vocabulary, and the projected context (processed context plus this
+/// feedback plus the remaining output reserve) must fit the model's window.
+/// Returns the feedback's token count in the model's i32 shape range.
+fn validated_feedback_token_count(
+    execution: &mut PrismHadamardQwen35InferenceExecution,
+    request_id: RequestId,
+    input_token_ids: &[u32],
+) -> Result<i32, InferenceEngineError> {
     let maximum_context_tokens = execution.maximum_context_tokens;
     let model = execution
         .model
@@ -66,23 +93,38 @@ pub(super) fn inject_input_tokens(
             reason: "folded-ternary model-visible feedback exceeds the context window".to_owned(),
         });
     }
-    let token_count =
-        i32::try_from(input_token_ids.len()).map_err(|_| InferenceEngineError::InvalidRequest {
-            reason: "folded-ternary feedback token count exceeds the model shape range".to_owned(),
+    i32::try_from(input_token_ids.len()).map_err(|_| InferenceEngineError::InvalidRequest {
+        reason: "folded-ternary feedback token count exceeds the model shape range".to_owned(),
+    })
+}
+
+/// Runs the measured feedback forward and samples its next token: prefill
+/// advance over the feedback tokens, final-logits construction, synchronous
+/// evaluation of both graphs, decode sampling, the decode evaluation
+/// submission, and the pending-token bookkeeping. Every stage stays inside
+/// its own attribution span in the original order.
+fn run_feedback_forward_and_sample(
+    execution: &mut PrismHadamardQwen35InferenceExecution,
+    token_indices: &mlx_c_rust::MlxArray,
+) -> Result<(), InferenceEngineError> {
+    let model = execution
+        .model
+        .as_ref()
+        .ok_or_else(|| InferenceEngineError::Fatal {
+            reason: "folded-ternary model is not loaded".to_owned(),
         })?;
-    let feedback_token_indices: Vec<i32> = input_token_ids
-        .iter()
-        .map(|token_id| *token_id as i32)
-        .collect();
-    let token_indices = model
-        .runtime
-        .array_from_i32(&feedback_token_indices, &[1, token_count])
-        .map_err(gpu_error)?;
+    let active_generation =
+        execution
+            .active
+            .as_mut()
+            .ok_or_else(|| InferenceEngineError::Fatal {
+                reason: "folded-ternary has no active generation".to_owned(),
+            })?;
     let hidden_states = active_generation
         .measure_operation(
             PerformanceOperation::PromptPrefillAdvanceSpan,
             |active_generation| {
-                model.forward_hidden_states(&token_indices, &mut active_generation.generation_state)
+                model.forward_hidden_states(token_indices, &mut active_generation.generation_state)
             },
         )
         .map_err(gpu_error)?;

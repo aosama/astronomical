@@ -62,7 +62,6 @@ pub fn forward_draft_block(
 }
 
 #[allow(clippy::too_many_arguments)]
-#[expect(clippy::too_many_lines)]
 fn forward_one_draft_layer(
     runtime: &MlxRuntime,
     layer_weights: &DFlashDraftLayerWeights,
@@ -94,10 +93,65 @@ fn forward_one_draft_layer(
         first_block_absolute_position,
     )?;
     let new_values = projected_values(runtime, layer_weights, configuration, &normalized_input)?;
+    let queries = projected_rotated_queries(
+        runtime,
+        layer_weights,
+        configuration,
+        &normalized_input,
+        first_block_absolute_position,
+        block_token_count,
+    )?;
 
+    let (active_keys, active_values) = layer_key_value_state.update_and_fetch(
+        runtime,
+        &new_keys,
+        &new_values,
+        first_block_absolute_position,
+    )?;
+
+    let attention_output = attended_block_output(
+        runtime,
+        attention_kind,
+        configuration,
+        &queries,
+        &active_keys,
+        &active_values,
+        first_block_absolute_position,
+        block_token_count,
+        performance_attribution,
+    )?;
+    let hidden_after_attention = projected_attention_residual(
+        runtime,
+        layer_weights,
+        configuration,
+        residual_before_attention,
+        &attention_output,
+        block_token_count,
+    )?;
+
+    swiglu_mlp_hidden(
+        runtime,
+        layer_weights,
+        configuration,
+        &hidden_after_attention,
+    )
+}
+
+/// Builds the block's query tensor: project, expose the head axis, normalize
+/// each head's query, move heads forward for attention, and rotate by the
+/// block's absolute position — mirroring how the trunk prepares queries.
+#[allow(clippy::too_many_arguments)]
+fn projected_rotated_queries(
+    runtime: &MlxRuntime,
+    layer_weights: &DFlashDraftLayerWeights,
+    configuration: &DFlashDraftConfiguration,
+    normalized_input: &MlxArray,
+    first_block_absolute_position: i32,
+    block_token_count: i32,
+) -> Result<MlxArray, MlxRuntimeError> {
     let transposed_query_projection =
         runtime.transpose_axes(&layer_weights.query_projection, &[1, 0])?;
-    let queries = runtime.matmul(&normalized_input, &transposed_query_projection)?;
+    let queries = runtime.matmul(normalized_input, &transposed_query_projection)?;
     let queries = runtime.reshape(
         &queries,
         &[
@@ -113,25 +167,34 @@ fn forward_one_draft_layer(
         configuration.rms_norm_epsilon(),
     )?;
     let queries = runtime.transpose_axes(&queries, &[0, 2, 1, 3])?;
-    let queries = runtime.rope(
+    Ok(runtime.rope(
         &queries,
         configuration.head_dimension(),
         configuration.rope_theta(),
         first_block_absolute_position,
-    )?;
+    )?)
+}
 
-    let (active_keys, active_values) = layer_key_value_state.update_and_fetch(
-        runtime,
-        &new_keys,
-        &new_values,
-        first_block_absolute_position,
-    )?;
-
-    // After the block append, every layer's key-value view spans the context
-    // plus the block: the mask grid's key axis is exactly that length.
+/// Runs the block's attention under the layer's route: a sliding-window layer
+/// builds the causal windowed mask over the full key view; an unmasked layer
+/// attends plainly. After the block append, every layer's key-value view
+/// spans the context plus the block: the mask grid's key axis is exactly
+/// that length.
+#[allow(clippy::too_many_arguments)]
+fn attended_block_output(
+    runtime: &MlxRuntime,
+    attention_kind: DFlashDraftLayerAttentionKind,
+    configuration: &DFlashDraftConfiguration,
+    queries: &MlxArray,
+    active_keys: &MlxArray,
+    active_values: &MlxArray,
+    first_block_absolute_position: i32,
+    block_token_count: i32,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<MlxArray, MlxRuntimeError> {
     let key_view_token_count = first_block_absolute_position + block_token_count;
     let attention_scale = (configuration.head_dimension() as f32).recip().sqrt();
-    let attention_output = match attention_route_for(attention_kind) {
+    Ok(match attention_route_for(attention_kind) {
         DFlashDraftAttentionRoute::SlidingWindowMasked { window_size } => {
             let sliding_window_mask = build_causal_sliding_window_mask(
                 runtime,
@@ -143,21 +206,34 @@ fn forward_one_draft_layer(
                 performance_attribution,
             )?;
             runtime.masked_scaled_dot_product_attention(
-                &queries,
-                &active_keys,
-                &active_values,
+                queries,
+                active_keys,
+                active_values,
                 attention_scale,
                 &sliding_window_mask,
             )?
         }
         DFlashDraftAttentionRoute::Unmasked => runtime.scaled_dot_product_attention(
-            &queries,
-            &active_keys,
-            &active_values,
+            queries,
+            active_keys,
+            active_values,
             attention_scale,
         )?,
-    };
-    let attention_output = runtime.transpose_axes(&attention_output, &[0, 2, 1, 3])?;
+    })
+}
+
+/// Projects the attended output back to hidden width and adds the attention
+/// residual: transpose heads back behind tokens, flatten the head axis, and
+/// apply the output projection.
+fn projected_attention_residual(
+    runtime: &MlxRuntime,
+    layer_weights: &DFlashDraftLayerWeights,
+    configuration: &DFlashDraftConfiguration,
+    residual_before_attention: &MlxArray,
+    attention_output: &MlxArray,
+    block_token_count: i32,
+) -> Result<MlxArray, MlxRuntimeError> {
+    let attention_output = runtime.transpose_axes(attention_output, &[0, 2, 1, 3])?;
     let attention_output = runtime.reshape(
         &attention_output,
         &[
@@ -169,9 +245,17 @@ fn forward_one_draft_layer(
     let transposed_output_projection =
         runtime.transpose_axes(&layer_weights.output_projection, &[1, 0])?;
     let attended_hidden = runtime.matmul(&attention_output, &transposed_output_projection)?;
-    let hidden_after_attention = runtime.add(residual_before_attention, &attended_hidden)?;
+    Ok(runtime.add(residual_before_attention, &attended_hidden)?)
+}
 
-    let residual_before_mlp = &hidden_after_attention;
+/// The draft's gated MLP: normalize the attended residual, apply the
+/// SiLU-gated up/gate/down sandwich, and add the MLP residual.
+fn swiglu_mlp_hidden(
+    runtime: &MlxRuntime,
+    layer_weights: &DFlashDraftLayerWeights,
+    configuration: &DFlashDraftConfiguration,
+    residual_before_mlp: &MlxArray,
+) -> Result<MlxArray, MlxRuntimeError> {
     let normalized_hidden = runtime.rms_norm(
         residual_before_mlp,
         &layer_weights.post_attention_normalization,
