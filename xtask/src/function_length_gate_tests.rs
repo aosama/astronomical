@@ -348,5 +348,5 @@ fn should_treat_an_unresolved_test_scope_name_as_a_new_site() {
 fn should_expose_the_frozen_test_scope_baseline_size() {
     // Boundary: pin the baseline so every freeze-list addition is a deliberate,
     // visible change.
-    assert_eq!(TEST_SCOPE_FREEZE.len(), 80);
+    assert_eq!(TEST_SCOPE_FREEZE.len(), 71);
 }

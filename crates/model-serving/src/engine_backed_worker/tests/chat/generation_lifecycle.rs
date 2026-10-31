@@ -104,39 +104,45 @@ async fn should_emit_ordered_outputs_and_reuse_capacity_after_cancellation() {
     close_worker_transport(daemon_writer, worker_task).await;
 }
 
+/// The three scripted decode tokens that exercise the parallel-tool-call
+/// sequence: one reasoning token carrying the first-decode timing, then two
+/// plain tokens the scripted processor splits into two parallel tool calls.
+fn parallel_tool_call_script_tokens() -> Vec<GeneratedToken> {
+    vec![
+        GeneratedToken::TokenId {
+            token_id: 1,
+            is_reasoning_token: true,
+            expert_memory_mode: None,
+            mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: Some(123),
+            generation_finalization: None,
+        },
+        GeneratedToken::TokenId {
+            token_id: 2,
+            is_reasoning_token: false,
+            expert_memory_mode: None,
+            mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
+            generation_finalization: None,
+        },
+        GeneratedToken::TokenId {
+            token_id: 3,
+            is_reasoning_token: false,
+            expert_memory_mode: None,
+            mlx_memory_telemetry: None,
+            first_decode_forward_elapsed_millis: None,
+            generation_finalization: None,
+        },
+    ]
+}
+
 #[tokio::test]
-#[expect(clippy::too_many_lines)]
 async fn should_emit_every_parallel_tool_call_completed_after_thinking() {
     let engine_worker = EngineBackedWorker::new(
         ScriptedChatProcessor::with_parallel_tool_calls(),
         ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
             0,
-            vec![
-                GeneratedToken::TokenId {
-                    token_id: 1,
-                    is_reasoning_token: true,
-                    expert_memory_mode: None,
-                    mlx_memory_telemetry: None,
-                    first_decode_forward_elapsed_millis: Some(123),
-                    generation_finalization: None,
-                },
-                GeneratedToken::TokenId {
-                    token_id: 2,
-                    is_reasoning_token: false,
-                    expert_memory_mode: None,
-                    mlx_memory_telemetry: None,
-                    first_decode_forward_elapsed_millis: None,
-                    generation_finalization: None,
-                },
-                GeneratedToken::TokenId {
-                    token_id: 3,
-                    is_reasoning_token: false,
-                    expert_memory_mode: None,
-                    mlx_memory_telemetry: None,
-                    first_decode_forward_elapsed_millis: None,
-                    generation_finalization: None,
-                },
-            ],
+            parallel_tool_call_script_tokens(),
         ),
     );
     let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);

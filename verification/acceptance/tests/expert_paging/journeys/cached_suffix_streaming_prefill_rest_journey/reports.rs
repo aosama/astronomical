@@ -42,27 +42,11 @@ fn read_json_lines(log_path: &Path) -> Vec<Value> {
         .collect()
 }
 
-/// Verifies memory bounds, cache reuse, truthful topology, and attribution.
-#[expect(clippy::too_many_lines)]
-pub(super) fn assert_reported_interaction(
-    reports: &InteractionReports,
-    cold_outcome: &ObservedRequestOutcome,
-    append_outcome: &ObservedRequestOutcome,
-    allocated_mlx_memory_bytes: u64,
-) {
-    assert!(
-        cold_outcome.live_evidence.maximum_active_memory_bytes <= allocated_mlx_memory_bytes,
-        "cold request active MLX memory must remain within the allocated ceiling"
-    );
-    assert!(
-        append_outcome.live_evidence.maximum_active_memory_bytes <= allocated_mlx_memory_bytes,
-        "append request active MLX memory must remain within the allocated ceiling"
-    );
-    assert_eq!(reports.performance_records.len(), 2);
-    assert_eq!(reports.attribution_reports.len(), 2);
-    // Throughput is evidence rather than a hardware-specific pass threshold.
-    // Require both measurements to exist and remain mathematically usable so
-    // every successful journey can report them on any supported laptop.
+/// Throughput is evidence rather than a hardware-specific pass threshold.
+/// Require both requests' measurements to exist and remain mathematically
+/// usable so every successful journey can report them on any supported
+/// laptop.
+fn assert_throughput_measurements_exist(reports: &InteractionReports) {
     for (request_label, performance_record) in [
         ("cold", &reports.performance_records[0]),
         ("append", &reports.performance_records[1]),
@@ -77,6 +61,13 @@ pub(super) fn assert_reported_interaction(
             );
         }
     }
+}
+
+/// The append request's cache-reuse contract: it consumed cached tokens,
+/// reported its first-output and first-decode timings, prepared without eager
+/// expert reads on both the record and the attribution, streamed a multi-chunk
+/// cached suffix, and preserved useful expert topology.
+fn assert_append_request_reused_the_cached_suffix(reports: &InteractionReports) {
     let append_performance = &reports.performance_records[1];
     assert!(
         append_performance["cached_token_count"]
@@ -131,6 +122,13 @@ pub(super) fn assert_reported_interaction(
         preserved_expert_bytes > 0,
         "the append-only request must preserve useful expert topology"
     );
+}
+
+/// Both requests must publish visible text or finish with tool calls.
+fn assert_requests_published_visible_output(
+    cold_outcome: &ObservedRequestOutcome,
+    append_outcome: &ObservedRequestOutcome,
+) {
     assert!(
         cold_outcome.first_output_elapsed_millis.is_some()
             || matches!(cold_outcome.finish_reason.as_deref(), Some("tool_calls")),
@@ -141,14 +139,21 @@ pub(super) fn assert_reported_interaction(
             || matches!(append_outcome.finish_reason.as_deref(), Some("tool_calls")),
         "append request must publish visible text or finish with tool calls"
     );
-    // The completion record folds the worker's in-request MLX samples and is
-    // frozen when the request completes, while the status endpoint keeps
-    // publishing cumulative peak samples until the worker goes idle. One
-    // post-completion sampler tick can therefore sit a fraction of a percent
-    // above the record without any memory being misreported. The defect this
-    // guards against — the record carrying final memory instead of the request
-    // peak — is a five-percent drop, so a one-percent envelope keeps that
-    // guard sharp while tolerating the sampler race.
+}
+
+/// The completion record folds the worker's in-request MLX samples and is
+/// frozen when the request completes, while the status endpoint keeps
+/// publishing cumulative peak samples until the worker goes idle. One
+/// post-completion sampler tick can therefore sit a fraction of a percent
+/// above the record without any memory being misreported. The defect this
+/// guards against — the record carrying final memory instead of the request
+/// peak — is a five-percent drop, so a one-percent envelope keeps that
+/// guard sharp while tolerating the sampler race.
+fn assert_performance_records_retain_request_peak_memory(
+    reports: &InteractionReports,
+    cold_outcome: &ObservedRequestOutcome,
+    append_outcome: &ObservedRequestOutcome,
+) {
     let recorded_cold_peak_memory_bytes = reports.performance_records[0]["mlx_peak_memory_bytes"]
         .as_u64()
         .unwrap_or(0);
@@ -161,7 +166,7 @@ pub(super) fn assert_reported_interaction(
         "the performance record must retain the request maximum rather than overwrite it with final memory: recorded={recorded_cold_peak_memory_bytes} observed={}",
         cold_outcome.live_evidence.maximum_peak_memory_bytes
     );
-    let recorded_append_peak_memory_bytes = append_performance["mlx_peak_memory_bytes"]
+    let recorded_append_peak_memory_bytes = reports.performance_records[1]["mlx_peak_memory_bytes"]
         .as_u64()
         .unwrap_or(0);
     assert!(
@@ -173,6 +178,14 @@ pub(super) fn assert_reported_interaction(
         "the append performance record must retain the request maximum peak: recorded={recorded_append_peak_memory_bytes} observed={}",
         append_outcome.live_evidence.maximum_peak_memory_bytes
     );
+}
+
+/// Decode must retain routed experts after prefill, and the append record's
+/// resident payload must match the final status snapshot's.
+fn assert_decode_retained_routed_experts(
+    reports: &InteractionReports,
+    append_outcome: &ObservedRequestOutcome,
+) {
     let final_residency = &append_outcome.live_evidence.final_status["expert_residency"];
     let resident_expert_count = final_residency["resident_expert_count"]
         .as_u64()
@@ -185,9 +198,33 @@ pub(super) fn assert_reported_interaction(
         "decode must retain routed experts after prefill"
     );
     assert_eq!(
-        append_performance["final_resident_expert_payload_bytes"],
+        reports.performance_records[1]["final_resident_expert_payload_bytes"],
         final_residency["resident_expert_payload_bytes"]
     );
+}
+
+/// Verifies memory bounds, cache reuse, truthful topology, and attribution.
+pub(super) fn assert_reported_interaction(
+    reports: &InteractionReports,
+    cold_outcome: &ObservedRequestOutcome,
+    append_outcome: &ObservedRequestOutcome,
+    allocated_mlx_memory_bytes: u64,
+) {
+    assert!(
+        cold_outcome.live_evidence.maximum_active_memory_bytes <= allocated_mlx_memory_bytes,
+        "cold request active MLX memory must remain within the allocated ceiling"
+    );
+    assert!(
+        append_outcome.live_evidence.maximum_active_memory_bytes <= allocated_mlx_memory_bytes,
+        "append request active MLX memory must remain within the allocated ceiling"
+    );
+    assert_eq!(reports.performance_records.len(), 2);
+    assert_eq!(reports.attribution_reports.len(), 2);
+    assert_throughput_measurements_exist(reports);
+    assert_append_request_reused_the_cached_suffix(reports);
+    assert_requests_published_visible_output(cold_outcome, append_outcome);
+    assert_performance_records_retain_request_peak_memory(reports, cold_outcome, append_outcome);
+    assert_decode_retained_routed_experts(reports, append_outcome);
 }
 
 fn assert_prefill_stream_counts_stay_seated_or_fully_streamed(
