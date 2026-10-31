@@ -81,12 +81,12 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # five-second progress, and retained manifests/logs under target/test-runs;
 # serving measurements must use this runner.
 #
-# Function-length enforcement (issue #1637) is pre-commit territory now:
-# the hook's clippy pass denies clippy::too_many_lines (the 100-line
-# budget, #[expect]-tracked debt) and `cargo crap --workspace --baseline
-# crap-baseline.json --fail-regression` ratchets complexity against the
-# committed baseline. No clippy runs in GitHub Actions — CI keeps only the
-# sub-second cargo-crap ratchet step.
+# Function-length and complexity enforcement (issue #1637) is pre-commit
+# territory ONLY (policy, 2026-10-31): the hook's clippy pass denies
+# clippy::too_many_lines (the 100-line budget, #[expect]-tracked debt) and
+# `cargo crap --workspace --baseline crap-baseline.json --fail-regression`
+# ratchets complexity against the committed baseline as a hard failure.
+# GitHub Actions runs no code-shape enforcement at all.
 xtask = "run -p xtask --"
 
 # Compile the whole workspace across ALL targets without running anything;
