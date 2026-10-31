@@ -19,6 +19,15 @@
 # commits; CI's clippy budget steps cover all three worlds including the
 # acceptance feature superset.
 #
+# The deny path alone has one escape: a suppression attribute silences it,
+# which is exactly how tracked debt is carried. The production rule (see
+# AGENTS.md) therefore also gets a hard gate the attribute cannot bypass:
+# `cargo xtask function-length --fail-on-production` force-warns this lint —
+# overriding every #[expect]/#[allow] — and fails when any production
+# function exceeds the budget unless it is one of the explicit Family D
+# exemptions listed in the gate source (issue #1637). The pre-commit hook
+# runs this gate after the plain clippy budget check.
+#
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
 # repository denies warnings via [build] warnings, which turns this lint into
 # an error and aborts dependent crates, truncating the report. Never set
