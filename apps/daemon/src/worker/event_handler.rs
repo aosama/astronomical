@@ -149,7 +149,7 @@ pub(super) fn handle_worker_event(
 /// Publishes prompt-cache and expert-streaming snapshots that ride alongside
 /// generation. They are observations, so they stay out of the generation match
 /// and do not change request ownership.
-fn dispatch_observability_worker_event(
+pub(in crate::worker) fn dispatch_observability_worker_event(
     worker_event: WorkerEvent,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
 ) {

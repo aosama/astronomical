@@ -7,22 +7,20 @@ use astronomical_ipc_protocol::{
     WorkerPromptProcessingPhase,
 };
 
+mod scripted_worker_cancellation;
 mod scripted_worker_chat;
 mod scripted_worker_image;
 
+use scripted_worker_cancellation::{
+    CancellationMlxTelemetry, EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID,
+    cancellation_memory_snapshot, emit_cancellation_telemetry,
+};
 use scripted_worker_image::{
     ScriptedImageCommandOutcome, handle_image_command, image_capabilities, send_failed_image,
 };
 
 const READY_MODEL_ID_ENVIRONMENT_VARIABLE: &str = "ASTRONOMICAL_TEST_WORKER_READY_MODEL_ID";
 const DEFAULT_READY_MODEL_ID: &str = "astronomical/test-worker";
-
-/// Selects the memory telemetry emitted before a cancellation acknowledgement.
-enum CancellationMlxTelemetry {
-    None,
-    Publish,
-    Clear,
-}
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -44,6 +42,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut should_acknowledge_cancellation = true;
     let mut should_emit_unexpected_cancellation_event = false;
     let mut should_emit_cache_stats_before_cancellation_acknowledgement = false;
+    let mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement = false;
     let mut cancellation_mlx_telemetry = CancellationMlxTelemetry::None;
     let ready_model_id = std::env::var(READY_MODEL_ID_ENVIRONMENT_VARIABLE)
         .unwrap_or_else(|_| DEFAULT_READY_MODEL_ID.to_owned());
@@ -108,6 +107,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             &mut should_emit_unexpected_cancellation_event,
                         should_emit_cache_stats_before_cancellation_acknowledgement:
                             &mut should_emit_cache_stats_before_cancellation_acknowledgement,
+                        should_emit_expert_streaming_stats_before_cancellation_acknowledgement:
+                            &mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
                     };
                     let should_exit_worker = dispatch_unstructured_chat(
                         generation_command,
@@ -145,49 +146,16 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .await?;
                     continue;
                 }
-                if should_emit_cache_stats_before_cancellation_acknowledgement {
-                    should_emit_cache_stats_before_cancellation_acknowledgement = false;
-                    event_writer
-                        .send_event(&WorkerEvent::PersistentPromptCacheStats {
-                            persistent_prompt_cache_hits: 1,
-                            persistent_prompt_cache_misses: 0,
-                            persistent_prompt_cache_tokens_saved: 2_048,
-                            persistent_prompt_cache_block_token_count: 2_048,
-                            persistent_prompt_cache_sequence_state_block_count: 1,
-                            persistent_prompt_cache_boundary_state_snapshot_count: 1,
-                            persistent_prompt_cache_visual_embedding_count: 0,
-                            persistent_prompt_cache_total_size_bytes: 4_096,
-                            persistent_prompt_cache_visual_embedding_total_size_bytes: 0,
-                            persistent_prompt_cache_maximum_size_bytes: 50_000_000_000,
-                            persistent_prompt_cache_visual_embedding_hits: 0,
-                            persistent_prompt_cache_visual_embedding_misses: 0,
-                            persistent_prompt_cache_visual_embedding_rows_loaded: 0,
-                            persistent_prompt_cache_partial_tail_hits: 0,
-                        })
-                        .await?;
-                }
-                match std::mem::replace(
+                // Telemetry a real worker can still flush while a cancelled
+                // generation winds down must pass through the drain
+                // without failing it; the helper fires each flag once.
+                emit_cancellation_telemetry(
+                    &mut event_writer,
+                    &mut should_emit_cache_stats_before_cancellation_acknowledgement,
+                    &mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
                     &mut cancellation_mlx_telemetry,
-                    CancellationMlxTelemetry::None,
-                ) {
-                    CancellationMlxTelemetry::None => {}
-                    CancellationMlxTelemetry::Publish => {
-                        event_writer
-                            .send_event(&WorkerEvent::MlxMemorySample {
-                                mlx_memory_snapshot: Some(cancellation_memory_snapshot(44_000)),
-                                expert_residency: None,
-                            })
-                            .await?;
-                    }
-                    CancellationMlxTelemetry::Clear => {
-                        event_writer
-                            .send_event(&WorkerEvent::MlxMemorySample {
-                                mlx_memory_snapshot: None,
-                                expert_residency: None,
-                            })
-                            .await?;
-                    }
-                }
+                )
+                .await?;
                 if should_acknowledge_cancellation && request_id.value() >= 100 {
                     send_failed_image(request_id, &mut event_writer).await?;
                     continue;
@@ -241,20 +209,6 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
 }
 
-/// Builds deterministic memory telemetry for cancellation-containment tests.
-fn cancellation_memory_snapshot(active_memory_bytes: u64) -> WorkerMlxMemorySnapshot {
-    WorkerMlxMemorySnapshot {
-        source: MlxMemorySnapshotSource::Finalized,
-        active_memory_bytes,
-        allocator_cache_memory_bytes: 2_000,
-        peak_memory_bytes: active_memory_bytes + 1_000,
-        expert_payload_bytes: 20_000,
-        model_core_payload_bytes: 10_000,
-        context_state_payload_bytes: 5_000,
-        memory_ceiling_utilization: None,
-    }
-}
-
 /// The shared cancellation-script state the Generate and Cancel arms both
 /// mutate; one bundle keeps the dispatch signature readable.
 struct CancellationFixtureState<'a> {
@@ -264,6 +218,7 @@ struct CancellationFixtureState<'a> {
     cancellation_mlx_telemetry: &'a mut CancellationMlxTelemetry,
     should_emit_unexpected_cancellation_event: &'a mut bool,
     should_emit_cache_stats_before_cancellation_acknowledgement: &'a mut bool,
+    should_emit_expert_streaming_stats_before_cancellation_acknowledgement: &'a mut bool,
 }
 
 /// Dispatches the schema-free chat fixture arms, which mutate the shared
@@ -282,6 +237,7 @@ async fn dispatch_unstructured_chat(
         cancellation_mlx_telemetry,
         should_emit_unexpected_cancellation_event,
         should_emit_cache_stats_before_cancellation_acknowledgement,
+        should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
     } = cancellation_fixture_state;
     match generation_command.model.as_str() {
         "astronomical/accepted-chat-fixture" => {
@@ -333,10 +289,18 @@ async fn dispatch_unstructured_chat(
             *should_acknowledge_cancellation = true;
             *should_emit_unexpected_cancellation_event = true;
         }
-        "astronomical/cache-stats-during-cancellation-fixture" => {
+        "astronomical/cache-stats-during-cancellation-fixture"
+        | EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID => {
             *active_request_id = Some(request_id);
             *should_acknowledge_cancellation = true;
-            *should_emit_cache_stats_before_cancellation_acknowledgement = true;
+            // Both fixtures drain exactly one telemetry event before the
+            // acknowledgement; only the published kind differs.
+            let emits_expert_streaming_stats =
+                generation_command.model.as_str() == EXPERT_STREAMING_TELEMETRY_FIXTURE_MODEL_ID;
+            *should_emit_cache_stats_before_cancellation_acknowledgement =
+                !emits_expert_streaming_stats;
+            *should_emit_expert_streaming_stats_before_cancellation_acknowledgement =
+                emits_expert_streaming_stats;
         }
         "astronomical/mlx-memory-during-cancellation-fixture" => {
             *active_request_id = Some(request_id);
