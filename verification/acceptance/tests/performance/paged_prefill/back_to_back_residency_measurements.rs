@@ -1,3 +1,8 @@
+//! **Performance measurement — run on demand, not in regression runs.**
+//! Run with `cargo measure-paged-prefill` when comparing prefill or residency
+//! strategies; the regression lane (`cargo test-acceptance`) does not build
+//! this target's measurements. Results: issue #1716, PR #1721.
+//!
 //! Back-to-back requests on the large sparse model (issue #1716).
 //!
 //! Decode seats every layer at these ceilings while prefill plans against a

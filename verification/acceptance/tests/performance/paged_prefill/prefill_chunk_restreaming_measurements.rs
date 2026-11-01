@@ -1,3 +1,8 @@
+//! **Performance measurement — run on demand, not in regression runs.**
+//! Run with `cargo measure-paged-prefill` when comparing prefill or residency
+//! strategies; the regression lane (`cargo test-acceptance`) does not build
+//! this target's measurements. Results: issue #1717, PR #1730.
+//!
 //! Prefill chunk size versus cold-layer re-streaming (issue #1717).
 //!
 //! A 2,048-token prefill chunk routes essentially every expert of a layer, so
