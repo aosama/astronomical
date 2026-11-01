@@ -39,6 +39,9 @@ mod demand_phase_tests;
 mod memory_behavior_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
+mod request_pressure_tests;
+
+#[cfg(all(test, feature = "direct-mlx"))]
 mod prefill_seed_tests;
 
 #[cfg(all(test, feature = "direct-mlx"))]
@@ -127,6 +130,14 @@ pub struct WarmExpertSlotTableCache {
     resident_payload_bytes: u64,
     normal_maximum_resident_payload_bytes: u64,
     request_pressure_maximum_resident_payload_bytes: Option<u64>,
+    /// Set by prefill memory recovery: holds the effective ceiling at zero so
+    /// the retry streams experts instead of re-seating them. Kept apart from
+    /// the request-pressure override because per-chunk admission budgets,
+    /// staging loans and plan refreshes legitimately replace or lift that
+    /// override within a request, and each of them used to undo the freeze
+    /// (issue #1729). Lifted only at decode handoff, finalization, or a
+    /// failed request start.
+    is_frozen_for_prefill_memory_recovery: bool,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     decode_forward_active: bool,
     decode_step_epoch: u64,
@@ -167,6 +178,7 @@ impl WarmExpertSlotTableCache {
             resident_payload_bytes: 0,
             normal_maximum_resident_payload_bytes: 0,
             request_pressure_maximum_resident_payload_bytes: None,
+            is_frozen_for_prefill_memory_recovery: false,
             decode_expert_cache_policy,
             decode_forward_active: false,
             decode_step_epoch: 0,

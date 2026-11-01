@@ -10,5 +10,6 @@ mod large_sparse_moe_streaming_paging_memory_shape_rest_journey;
 mod leftover_complete_layer_seating_rest_journey;
 mod live_memory_ceiling_expert_residency_round_trip_rest_journey;
 mod prefill_memory_progress_rest_journey;
+mod prefill_memory_recovery_rest_journey;
 mod reverse_swap_cached_prompt_rest_journey;
 mod ssd_paging_decode_expert_reuse_rest_journey;

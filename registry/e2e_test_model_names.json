@@ -1,6 +1,7 @@
 {
   "flux2_klein": "FLUX.2-klein-4B",
   "large_sparse_moe_streaming": "Ornith-1.5-35B-A3B-MLX-8bit",
+  "largest_sparse_moe_streaming": "Ornith-1.5-122B-MLX-mixed-2bit",
   "ornith_dflash_draft": "Ornith-1.5-35B-A3B-DFlash",
   "resident_sparse_moe": "Ornith-1.5-35B-A3B-OptiQ-4bit",
   "small_dense": "Qwen3.5-0.8B-MLX-4bit"

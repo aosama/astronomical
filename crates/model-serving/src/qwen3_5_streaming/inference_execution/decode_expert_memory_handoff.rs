@@ -36,6 +36,8 @@ impl Qwen3_5EngineState {
         // that kept generation at about one gigabyte of experts.
         let resumed_after_prefill_memory_pressure =
             model.resume_expert_retention_after_request_memory_pressure();
+        // Decode's small footprint ends the prefill memory-recovery freeze.
+        model.lift_prefill_memory_recovery_freeze();
         if resumed_after_prefill_memory_pressure {
             tracing::info!(
                 request_id = request_id.value(),

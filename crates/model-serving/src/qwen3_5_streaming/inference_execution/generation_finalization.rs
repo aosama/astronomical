@@ -13,6 +13,14 @@ use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
 
 impl Qwen3_5EngineState {
+    /// A request that never reached decode still ends its prefill
+    /// memory-recovery freeze here, so the next request starts unfrozen.
+    fn lift_prefill_memory_recovery_freeze_at_finalization(&self) {
+        if let Some(model) = self.model.as_ref() {
+            model.lift_prefill_memory_recovery_freeze();
+        }
+    }
+
     pub(super) fn collect_current_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
@@ -117,6 +125,7 @@ impl Qwen3_5EngineState {
             .model
             .as_ref()
             .is_some_and(|model| model.resume_expert_retention_after_request_memory_pressure());
+        self.lift_prefill_memory_recovery_freeze_at_finalization();
         if let Some(model) = self.model.as_ref() {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();

@@ -27,6 +27,19 @@ impl WarmExpertSlotTableCache {
         self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
     }
 
+    /// Freezes retention at zero for the rest of a prefill after memory
+    /// recovery, evicting every retained table now. Returns whether any
+    /// table was released.
+    pub fn freeze_for_prefill_memory_recovery(&mut self) -> bool {
+        self.is_frozen_for_prefill_memory_recovery = true;
+        self.reclaim_to_effective_ceiling().released_payload_bytes() > 0
+    }
+
+    /// Lifts the prefill memory-recovery freeze. Returns whether one was set.
+    pub fn lift_prefill_memory_recovery_freeze(&mut self) -> bool {
+        std::mem::replace(&mut self.is_frozen_for_prefill_memory_recovery, false)
+    }
+
     pub fn resume_after_request_pressure(&mut self) -> bool {
         self.request_pressure_maximum_resident_payload_bytes
             .take()
@@ -165,7 +178,29 @@ impl WarmExpertSlotTableCache {
     }
 
     pub(super) fn effective_maximum_resident_payload_bytes(&self) -> u64 {
-        self.request_pressure_maximum_resident_payload_bytes
-            .unwrap_or(self.normal_maximum_resident_payload_bytes)
+        effective_retained_expert_ceiling_bytes(
+            self.is_frozen_for_prefill_memory_recovery,
+            self.request_pressure_maximum_resident_payload_bytes,
+            self.normal_maximum_resident_payload_bytes,
+        )
+    }
+}
+
+/// Pure: the retained-expert ceiling in force. The prefill memory-recovery
+/// freeze outranks every other cap; otherwise a request-pressure override
+/// replaces the normal ceiling.
+const fn effective_retained_expert_ceiling_bytes(
+    is_frozen_for_prefill_memory_recovery: bool,
+    request_pressure_maximum_resident_payload_bytes: Option<u64>,
+    normal_maximum_resident_payload_bytes: u64,
+) -> u64 {
+    if is_frozen_for_prefill_memory_recovery {
+        return 0;
+    }
+    match request_pressure_maximum_resident_payload_bytes {
+        Some(request_pressure_maximum_resident_payload_bytes) => {
+            request_pressure_maximum_resident_payload_bytes
+        }
+        None => normal_maximum_resident_payload_bytes,
     }
 }

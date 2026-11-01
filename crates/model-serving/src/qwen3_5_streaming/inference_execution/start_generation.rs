@@ -95,6 +95,7 @@ impl Qwen3_5EngineState {
             && let Some(model) = self.model.as_ref()
         {
             model.resume_expert_retention_after_request_memory_pressure();
+            model.lift_prefill_memory_recovery_freeze();
         }
         admitted_generation_start
     }

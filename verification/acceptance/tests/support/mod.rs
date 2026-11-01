@@ -32,8 +32,8 @@ mod e2e_test_model_names;
 #[allow(unused_imports)]
 pub(crate) use e2e_test_model_names::{
     e2e_test_model_ids, flux2_klein_model_id, large_sparse_moe_streaming_model_id,
-    ornith_dflash_draft_model_id, required_e2e_test_model_ids, resident_sparse_moe_model_id,
-    small_dense_model_id,
+    largest_sparse_moe_streaming_model_id, ornith_dflash_draft_model_id,
+    required_e2e_test_model_ids, resident_sparse_moe_model_id, small_dense_model_id,
 };
 
 // Shared across several performance-throughput and acceptance binaries; not every
@@ -134,6 +134,19 @@ pub(crate) fn configured_discovered_models() -> Vec<astronomical_config::Discove
             configured_model_directory_scan.discovered_models
         })
         .collect()
+}
+
+/// The Development configuration's model-directory roots. A journey whose
+/// model lives in a Hugging Face hub cache must configure these roots rather
+/// than the snapshot directory: discovery names a model by its repository
+/// only when it scans from a root, and by the snapshot hash otherwise.
+#[allow(dead_code)]
+pub(crate) fn configured_model_directory_roots() -> Vec<PathBuf> {
+    let astronomical_config =
+        astronomical_config::AstronomicalConfig::load_from_development_location().expect(
+            "the Development Astronomical configuration should load for model-directory roots",
+        );
+    astronomical_config.model_directories().to_vec()
 }
 
 pub(crate) fn configured_installed_model_directory_by_id(model_id: &str) -> PathBuf {
