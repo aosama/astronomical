@@ -362,9 +362,14 @@ async fn dispatch_unstructured_chat(
         "astronomical/duplicate-generation-preparation-fixture" => {
             let generation_preparation_event = WorkerEvent::GenerationPreparationStarted {
                 request_id,
-                total_layer_count: 40,
-                resident_expert_count: 40,
-                resident_expert_payload_bytes: 23_073_914_880,
+                expert_residency: astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+                    total_layer_count: 40,
+                    resident_expert_count: 40,
+                    resident_expert_payload_bytes: 23_073_914_880,
+                    complete_expert_payload_byte_count: 23_073_914_880,
+                    expert_capacity: 256,
+                    layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+                },
                 mlx_memory_snapshot: None,
             };
             event_writer

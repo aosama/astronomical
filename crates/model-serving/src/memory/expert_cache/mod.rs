@@ -12,7 +12,21 @@ mod page_materialization;
 #[cfg(test)]
 mod page_materialization_tests;
 
+// Session counters are pure arithmetic. Direct-MLX streaming owns them at
+// runtime; the unit tests own them without the graphics-processor runtime.
+// Leaving the module ungated makes a default build fail on unused items,
+// because warnings are denied.
+#[cfg(any(feature = "direct-mlx", test))]
+mod streaming_stats;
+#[cfg(test)]
+mod streaming_stats_tests;
+
 #[cfg(any(feature = "direct-mlx", test))]
 pub use page_materialization::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
 pub use page_materialization::source_expert_page_payload_bytes;
+#[cfg(any(feature = "direct-mlx", test))]
+pub(crate) use streaming_stats::{
+    ExpertStreamingSessionCounters, RouteCoverageClass, SessionStreamingPhase,
+    expert_layer_topology_from_residency,
+};

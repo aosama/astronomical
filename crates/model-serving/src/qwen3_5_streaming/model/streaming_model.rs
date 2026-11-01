@@ -60,6 +60,12 @@ pub struct Qwen3_5StreamingModel {
     pub(crate) prefill_complete_layer_prefetch: RefCell<
         Option<crate::qwen3_5_streaming::model::prefill_complete_layer_prefetch::PrefetchedCompleteLayer>,
     >,
+    /// Layers whose prefill completion read the ceiling already refused.
+    /// Remembering the refusal stops every later chunk from re-reading the
+    /// unseated remainder and then the experts already in RAM.
+    pub(crate) prefill_layer_completion_refused: RefCell<
+        crate::qwen3_5_streaming::model::prefill_partial_layer_read::PrefillLayerCompletionRefusals,
+    >,
     /// The fused jangtq2 decode-token projection kernel; `None` for models
     /// without codebook experts or when the capability probe or compilation failed.
     /// Without it decode tokens decode a transient bfloat16 page like prefill.

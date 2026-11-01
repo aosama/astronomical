@@ -81,6 +81,7 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
         "/overview",
         "/chat",
         "/model",
+        "/experts",
         "/library",
         "/connect",
         "/settings",
@@ -319,6 +320,93 @@ async fn should_serve_the_embedded_connection_material_script() {
     assert!(
         script_text.contains("openai-completions"),
         "the connection material must publish a Pi provider block"
+    );
+}
+
+#[tokio::test]
+async fn should_serve_the_embedded_experts_view_assets() {
+    for experts_asset_path in [
+        (
+            "/experts.js",
+            "application/javascript",
+            "pollExpertObservatory",
+        ),
+        (
+            "/experts-render.js",
+            "application/javascript",
+            "expertMemoryModePhrase",
+        ),
+        ("/experts.css", "text/css", "experts-bar-ssd"),
+    ] {
+        let application =
+            astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
+        let response = application
+            .oneshot(
+                Request::builder()
+                    .uri(experts_asset_path.0)
+                    .body(Body::empty())
+                    .expect("the experts asset request should be valid"),
+            )
+            .await
+            .expect("the application should return the experts asset");
+
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "path: {}",
+            experts_asset_path.0
+        );
+        assert!(
+            response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .is_some_and(|content_type| content_type
+                    .to_str()
+                    .is_ok_and(|content_type| content_type.starts_with(experts_asset_path.1))),
+            "content type for {}",
+            experts_asset_path.0
+        );
+        let response_body = to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .expect("the experts asset body should be readable");
+        let asset_text =
+            String::from_utf8(response_body.to_vec()).expect("the experts asset should be UTF-8");
+        assert!(
+            asset_text.contains(experts_asset_path.2),
+            "asset {} must contain its marker",
+            experts_asset_path.0
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_expose_the_experts_view_region_in_the_shell() {
+    let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/experts")
+                .body(Body::empty())
+                .expect("the experts deep-link request should be valid"),
+        )
+        .await
+        .expect("the application should return the Observatory shell");
+    let response_body = to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .expect("the Observatory shell body should be readable");
+    let shell_text =
+        String::from_utf8(response_body.to_vec()).expect("the Observatory shell should be UTF-8");
+    assert!(
+        shell_text.contains("data-observatory-view=\"experts\""),
+        "the shell must contain the experts view region"
+    );
+    assert!(
+        shell_text.contains("data-observatory-destination=\"experts\""),
+        "the shell must contain the experts navigation button"
+    );
+    assert!(
+        shell_text.contains("src=\"/experts.js\""),
+        "the shell must load the experts behavior script"
     );
 }
 

@@ -158,9 +158,7 @@ pub(super) async fn emit_generation_preparation_started<
     RetryRequest,
 >(
     active_generation: &ActiveEngineGeneration<RequestOutput, RetryRequest>,
-    total_layer_count: u32,
-    resident_expert_count: u32,
-    resident_expert_payload_bytes: u64,
+    expert_residency: crate::inference_engine::contract::ExpertResidencyTelemetry,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     event_writer: &mut ProtocolWriter<WriteTransport>,
 ) -> Result<(), WorkerRuntimeError>
@@ -170,9 +168,7 @@ where
     event_writer
         .send_event(&WorkerEvent::GenerationPreparationStarted {
             request_id: active_generation.request_id,
-            total_layer_count,
-            resident_expert_count,
-            resident_expert_payload_bytes,
+            expert_residency: super::output::worker_expert_residency_snapshot(expert_residency),
             mlx_memory_snapshot: mlx_memory_telemetry.map(|mlx_memory_telemetry| {
                 super::output::worker_memory_snapshot(
                     MlxMemorySnapshotSource::DecodeSubmitted,

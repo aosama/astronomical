@@ -1,5 +1,8 @@
 //! Selects retained or streamed expert pages for mixture-of-experts forwards.
 
+use super::prefill_partial_layer_read::{
+    prefill_read_expert_ids, prefill_storage_read_scope, should_remember_prefill_completion_refusal,
+};
 use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
@@ -66,25 +69,57 @@ impl Qwen3_5Model {
                 missing_expert_ids: routed_expert_ids.to_vec(),
             },
         };
-        if route_coverage.missing_expert_ids.is_empty() {
+        // One classification answer feeds both the opt-in attribution
+        // counters and the always-on observatory session counters, so the
+        // two can never disagree about the same token.
+        let session_coverage_class = if route_coverage.missing_expert_ids.is_empty() {
             performance_attribution
                 .record_counter(PerformanceCounter::HotExpertRouteFullyCoveredCount, 1);
+            crate::memory::RouteCoverageClass::FullyCovered
         } else if route_coverage.retained_expert_ids.is_empty() {
             performance_attribution
                 .record_counter(PerformanceCounter::HotExpertRouteFullyMissedCount, 1);
+            crate::memory::RouteCoverageClass::Missed
         } else {
             performance_attribution
                 .record_counter(PerformanceCounter::HotExpertRoutePartiallyCoveredCount, 1);
-        }
+            crate::memory::RouteCoverageClass::PartiallyCovered
+        };
+        let retained_assignment_count =
+            u64::try_from(route_coverage.retained_expert_ids.len()).unwrap_or(u64::MAX);
+        let storage_assignment_count =
+            u64::try_from(route_coverage.missing_expert_ids.len()).unwrap_or(u64::MAX);
         performance_attribution.record_counter(
             PerformanceCounter::HotExpertRouteRetainedAssignmentCount,
-            u64::try_from(route_coverage.retained_expert_ids.len()).unwrap_or(u64::MAX),
+            retained_assignment_count,
         );
         performance_attribution.record_counter(
             PerformanceCounter::HotExpertRouteMissingAssignmentCount,
-            u64::try_from(route_coverage.missing_expert_ids.len()).unwrap_or(u64::MAX),
+            storage_assignment_count,
+        );
+        self.record_session_coverage_for_paged_experts(
+            retained_assignment_count,
+            storage_assignment_count,
+            session_coverage_class,
         );
         route_coverage
+    }
+
+    /// Session counters stay always-on, including when attribution diagnostics
+    /// are off, so decode coverage is recorded once per classified token.
+    fn record_session_coverage_for_paged_experts(
+        &self,
+        retained_assignment_count: u64,
+        storage_assignment_count: u64,
+        session_coverage_class: crate::memory::RouteCoverageClass,
+    ) {
+        if let Some(expert_pager) = self.expert_pager.as_ref() {
+            expert_pager.record_session_route_coverage(
+                retained_assignment_count,
+                storage_assignment_count,
+                session_coverage_class,
+            );
+        }
     }
 
     /// Returns the cached complete packed page.
@@ -267,9 +302,9 @@ impl Qwen3_5Model {
         // turns every later chunk into a table hit. Streaming the whole union
         // re-read experts already in RAM on every chunk — the 2026-10-23
         // flights held ~17 GB of partial tables yet still read 27.8 GB per
-        // request. When the plan funds the layer's complete claim, the read
-        // extends to every non-resident expert so the table converges to a
-        // complete layer in one pass instead of a few experts per chunk.
+        // request. When the plan funds the layer's complete claim, the first
+        // read extends to every non-resident expert. A ceiling that refuses
+        // that insert is remembered, and later chunks read only routed misses.
         if route_token_count > 1
             && let Some(warm_table_page) = self.serve_multi_token_route_from_warm_table(
                 expert_pager,
@@ -336,10 +371,10 @@ impl Qwen3_5Model {
     }
 
     /// Serves a multi-token routed union from the warm table, streaming only
-    /// what the table lacks. Returns `None` when the layer has no table (the
-    /// caller owns cold-union seeding or adoption) or when budget
-    /// admission refused enough table growth that the route still is not
-    /// covered (the caller falls back to the full union stream).
+    /// what the table lacks. Returns `None` when the layer has no table, so
+    /// the caller can seed one from storage. A ceiling that refuses to finish
+    /// the layer still returns a page assembled from the retained rows and the
+    /// misses just streamed.
     #[allow(clippy::too_many_arguments)]
     fn serve_multi_token_route_from_warm_table(
         &self,
@@ -364,50 +399,130 @@ impl Qwen3_5Model {
             return Ok(None);
         };
         if missing_route_expert_ids.is_empty() {
-            // The table already covers the whole union: serve the routed
-            // subset from RAM. The subset page — not the whole table — is
-            // the contract multi-token decoding needs, because the chunk
-            // materializes exactly the page it multiplies; handing it the
-            // full table would decode every resident expert whatever the
-            // route size.
-            retained_experts
-                .borrow_mut()
-                .record_routed_reads(layer_index, routed_expert_ids);
-            if let Some(subset_page) =
-                self.routed_subset_of_cached_page(layer_index, routed_expert_ids, expert_capacity)?
-            {
-                performance_attribution.record_counter(
-                    PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
-                    subset_page.1.payload_byte_count,
-                );
-                return Ok(Some(subset_page));
-            }
-            return Ok(None);
+            return self.covered_prefill_page(
+                layer_index,
+                routed_expert_ids,
+                expert_capacity,
+                performance_attribution,
+            );
         }
-        let resident_expert_count = retained_experts.borrow().occupied_slot_count(layer_index);
-        let read_expert_ids = if should_complete_partial_layer_on_prefill_read(
+        let read_scope = self.prefill_partial_read_scope(
+            layer_index,
+            expert_capacity,
+            production_default_paging,
+        );
+        let non_resident_expert_ids = retained_experts
+            .borrow()
+            .non_resident_expert_ids(layer_index, expert_capacity);
+        let read_expert_ids = prefill_read_expert_ids(
+            read_scope,
+            &missing_route_expert_ids,
+            non_resident_expert_ids.as_deref(),
+        );
+        let (streamed_weights, streamed_manifest) = self.stream_partial_prefill_page(
+            expert_pager,
+            layer_index,
+            route_token_count,
+            expert_capacity,
+            routed_expert_ids,
+            &read_expert_ids,
+            performance_attribution,
+        )?;
+        let layer_is_complete_after_insert = retained_experts
+            .borrow()
+            .has_complete_layer(layer_index, expert_capacity);
+        if should_remember_prefill_completion_refusal(read_scope, layer_is_complete_after_insert) {
+            self.prefill_layer_completion_refused
+                .borrow_mut()
+                .remember(layer_index);
+        }
+        if let Some(covered_page) = self.covered_prefill_page(
+            layer_index,
+            routed_expert_ids,
+            expert_capacity,
+            performance_attribution,
+        )? {
+            return Ok(Some(covered_page));
+        }
+        // The insert did not cover the route. The misses are already in
+        // `streamed_weights`; assembling them with the retained rows avoids
+        // the full-union file read that repeated experts already in RAM.
+        tracing::debug!(
+            layer_index,
+            missing_route_expert_count = missing_route_expert_ids.len(),
+            "warm-table growth left a prefill route partial"
+        );
+        let Some(missing_after_refusal) = retained_experts
+            .borrow()
+            .missing_route_expert_ids(layer_index, routed_expert_ids)
+        else {
+            return Err(Qwen3_5ExecutionError::InvalidInput {
+                description: "a partial prefill layer lost its warm table during the read",
+            });
+        };
+        let assembled_page = self.assemble_refused_prefill_page(
+            layer_index,
+            expert_capacity,
+            routed_expert_ids,
+            &missing_after_refusal,
+            &streamed_weights,
+            &streamed_manifest,
+            performance_attribution,
+        )?;
+        Ok(Some(assembled_page))
+    }
+
+    /// Whether this chunk may still try to finish the layer in one read.
+    fn prefill_partial_read_scope(
+        &self,
+        layer_index: usize,
+        expert_capacity: usize,
+        production_default_paging: bool,
+    ) -> super::prefill_partial_layer_read::PrefillStorageReadScope {
+        let mut resident_expert_count = 0;
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
+            resident_expert_count = retained_experts.borrow().occupied_slot_count(layer_index);
+        }
+        let completion_is_funded = should_complete_partial_layer_on_prefill_read(
             production_default_paging,
             self.expert_residency_target(layer_index),
             resident_expert_count,
             expert_capacity,
-        ) {
-            retained_experts
-                .borrow()
-                .non_resident_expert_ids(layer_index, expert_capacity)
-                .unwrap_or_else(|| missing_route_expert_ids.clone())
-        } else {
-            missing_route_expert_ids.clone()
-        };
+        );
+        let layer_completion_was_refused = self
+            .prefill_layer_completion_refused
+            .borrow()
+            .was_refused(layer_index);
+        prefill_storage_read_scope(completion_is_funded, layer_completion_was_refused)
+    }
+
+    /// Streams the chosen ids, offers them to the warm table, and reports a
+    /// completion that actually seated.
+    #[allow(clippy::too_many_arguments)]
+    fn stream_partial_prefill_page(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        route_token_count: i32,
+        expert_capacity: usize,
+        routed_expert_ids: &[usize],
+        read_expert_ids: &[usize],
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
+    {
         let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage(
             expert_pager,
             layer_index,
-            &read_expert_ids,
+            read_expert_ids,
             Qwen3_5ExpertStreamingRequestShape {
                 route_token_count,
                 routed_expert_count: read_expert_ids.len(),
             },
             performance_attribution,
         )?;
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return Ok((streamed_weights, streamed_manifest));
+        };
         retained_experts.borrow_mut().record_disk_load(
             read_expert_ids.len(),
             streamed_manifest.source_manifests.len(),
@@ -423,7 +538,7 @@ impl Qwen3_5Model {
         let inserted_expert_count = retained_experts.borrow_mut().insert_streamed_experts(
             &self.runtime,
             layer_index,
-            &read_expert_ids,
+            read_expert_ids,
             &streamed_weights,
             routed_expert_ids,
             expert_capacity,
@@ -438,28 +553,44 @@ impl Qwen3_5Model {
                 streamed_manifest.payload_byte_count,
             );
         }
-        if let Some(subset_page) = {
-            retained_experts
-                .borrow_mut()
-                .record_routed_reads(layer_index, routed_expert_ids);
+        Ok((streamed_weights, streamed_manifest))
+    }
+
+    /// The routed subset when the warm table already holds every routed expert.
+    ///
+    /// The subset page — not the whole table — is what a multi-token chunk
+    /// multiplies. Handing it the full table would decode every resident
+    /// expert whatever the route size.
+    fn covered_prefill_page(
+        &self,
+        layer_index: usize,
+        routed_expert_ids: &[usize],
+        expert_capacity: usize,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<
+        Option<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest)>,
+        Qwen3_5ExecutionError,
+    > {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return Ok(None);
+        };
+        retained_experts
+            .borrow_mut()
+            .record_routed_reads(layer_index, routed_expert_ids);
+        let Some(subset_page) =
             self.routed_subset_of_cached_page(layer_index, routed_expert_ids, expert_capacity)?
-        } {
-            performance_attribution.record_counter(
-                PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
-                subset_page.1.payload_byte_count,
-            );
-            return Ok(Some(subset_page));
-        }
-        // Budget admission refused part of the growth, so the table still
-        // misses part of the route; the caller's full union stream stays
-        // correct and merely re-reads what this pass could not seat.
-        tracing::debug!(
-            layer_index,
-            inserted_expert_count,
-            missing_route_expert_count = missing_route_expert_ids.len(),
-            "warm-table growth could not cover the multi-token route"
+        else {
+            return Ok(None);
+        };
+        // Partial-table hits already reported this attribution counter. The
+        // session tile stays with the complete-layer hit path, which charges
+        // a seated layer's full payload; adding the subset here would count
+        // the same RAM serve a second way.
+        performance_attribution.record_counter(
+            PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
+            subset_page.1.payload_byte_count,
         );
-        Ok(None)
+        Ok(Some(subset_page))
     }
 
     /// Returns the warm-table page when it covers every routed expert of this

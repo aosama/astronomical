@@ -30,7 +30,22 @@ impl ChatGenerationExecutor for WorkerHandle {
 
     fn worker_health_snapshot(&self) -> WorkerHealthSnapshot {
         match self.health_snapshot.read() {
-            Ok(health_snapshot) => health_snapshot.clone(),
+            Ok(health_snapshot) => {
+                tracing::info!(
+                    snapshot_ptr = std::sync::Arc::as_ptr(&self.health_snapshot) as usize,
+                    ready_model_id = ?health_snapshot.ready_model_id,
+                    observatory_has_latest = health_snapshot
+                        .expert_streaming_observatory
+                        .latest_stats
+                        .is_some(),
+                    observatory_transition_count = health_snapshot
+                        .expert_streaming_observatory
+                        .mode_transitions
+                        .len(),
+                    "executor health snapshot read"
+                );
+                health_snapshot.clone()
+            }
             Err(_) => WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
         }
     }

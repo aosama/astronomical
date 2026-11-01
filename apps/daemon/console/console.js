@@ -15,6 +15,7 @@ const OBSERVATORY_PATH_MAP = {
     overview: "/overview",
     chat: "/chat",
     model: "/model",
+    experts: "/experts",
     library: "/library",
     connect: "/connect",
     settings: "/settings"
@@ -36,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wireObservatoryNavigation();
     wireLibraryCatalog();
     wireConnectMaterial();
+    wireExpertObservatory();
     pollStatus();
     pollCacheStats();
     pollModels();
@@ -324,16 +326,25 @@ function renderSparkline() {
     compactLine.setAttribute("points", points);
 }
 
+function readExpertPlacement(statusDocument) {
+    if (typeof expertPlacementCopy !== "function") {
+        return { stockSentence: "", replySentence: "" };
+    }
+    return expertPlacementCopy(statusDocument);
+}
+
 function renderAboutFromStatus(data) {
     if (data.ready_model_id) {
         document.getElementById("about-model-id").textContent = data.ready_model_id;
     }
-    const expertMemory = data.expert_memory_mode;
     const expertMemoryElement = document.getElementById("about-expert-memory");
-    if (expertMemory) {
-        expertMemoryElement.textContent =
-            expertMemory.charAt(0).toUpperCase() + expertMemory.slice(1);
-    } else { expertMemoryElement.textContent = "—"; }
+    const placement = readExpertPlacement(data);
+    if (placement.replySentence) {
+        expertMemoryElement.textContent = placement.replySentence;
+        return;
+    }
+    const expertMemoryPhrase = expertMemoryModePhrase(data.expert_memory_mode);
+    expertMemoryElement.textContent = expertMemoryPhrase || "—";
 }
 
 function renderAboutFromModels(model) {
@@ -364,13 +375,15 @@ function renderAboutEnhanced(data) {
     } else if (data.ready_model_id) {
         document.getElementById("about-disk-size").textContent = "Not measured";
     }
-    const expertMemoryMode = data.expert_memory_mode;
     const residencyElement = document.getElementById("about-residency");
-    if (expertMemoryMode) {
-        residencyElement.textContent =
-            expertMemoryMode === "paged" ? "RAM + SSD streaming"
-            : expertMemoryMode === "resident" ? "Fully in memory"
-            : "Not loaded";
+    const placement = readExpertPlacement(data);
+    if (placement.stockSentence) {
+        residencyElement.textContent = placement.stockSentence;
+        return;
+    }
+    const residencyPhrase = expertMemoryModePhrase(data.expert_memory_mode);
+    if (residencyPhrase) {
+        residencyElement.textContent = residencyPhrase;
     } else if (data.status !== "ready") {
         residencyElement.textContent = "Not loaded";
     }

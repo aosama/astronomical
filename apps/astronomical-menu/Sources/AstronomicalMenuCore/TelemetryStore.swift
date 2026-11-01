@@ -304,7 +304,11 @@ final class TelemetryStore: ObservableObject {
       case .success = controlActionFeedback
     else { return }
 
-    if statusDocument.mlxMemoryCeilingBytes == pendingMaximumMlxMemoryCeilingBytes {
+    if liveMlxMemoryCeilingAdoptedRequest(
+      liveCeilingBytes: statusDocument.mlxMemoryCeilingBytes,
+      requestedCeilingBytes: pendingMaximumMlxMemoryCeilingBytes,
+      wiredResidencyBudgetBytes: statusDocument.wiredResidencyBudgetBytes
+    ) {
       self.pendingMaximumMlxMemoryCeilingBytes = nil
       scheduleMaximumMlxMemoryFeedbackDismissal()
     } else if let mlxMemoryLimitError = statusDocument.mlxMemoryLimitError {

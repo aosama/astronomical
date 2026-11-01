@@ -2,8 +2,9 @@ use std::future::Future;
 
 use crate::InferenceEngineError;
 use astronomical_ipc_protocol::{
-    ExpertMemoryMode, RequestId, WorkerEvent, WorkerPersistentPromptCacheRequestDiagnostics,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    ExpertLayerSeatingCounts, ExpertMemoryMode, RequestId, WorkerEvent,
+    WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptProcessingPhase,
+    WorkerPromptWorkReuse,
 };
 
 use super::EngineLoadResult;
@@ -278,14 +279,107 @@ pub struct ExpertResidencyTelemetry {
     pub total_layer_count: u32,
     pub resident_expert_count: u32,
     pub resident_expert_payload_bytes: u64,
+    /// Expert-library bytes if every sparse expert were resident. Zero means
+    /// unmeasured; Observatory hides the SSD remainder in that case.
+    pub complete_expert_payload_byte_count: u64,
+    /// Experts in one sparse layer. Uniform across the loaded model's layers.
+    pub expert_capacity: u32,
+    /// Per-layer retained counts. Zero seated layers means this sample has
+    /// no map yet, so Observatory keeps the end-of-reply topology.
+    pub layer_seating: ExpertLayerSeatingCounts,
+}
+
+/// One decoder layer's retained expert identities captured for observatory.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ExpertLayerTopology {
+    pub layer_index: u32,
+    pub retained_expert_ids: Vec<u32>,
+    pub retained_payload_bytes: u64,
+    pub is_complete_layer: bool,
+    pub covered_demand: u64,
+}
+
+/// Session-scoped expert-streaming measurements captured at finalization.
+///
+/// Counters accumulate across every generation of the current engine load,
+/// recorded always-on at the same central sites the diagnostics attribution
+/// reads, so observatory value panels never depend on diagnostics being
+/// enabled.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExpertStreamingStats {
+    pub model_id: Option<String>,
+    pub expert_memory_mode: ExpertMemoryMode,
+    pub total_layer_count: u32,
+    pub resident_expert_count: u32,
+    pub resident_expert_payload_bytes: u64,
+    /// Expert-library bytes if every sparse expert were resident.
+    pub complete_expert_payload_byte_count: u64,
+    /// Experts in one sparse layer.
+    pub expert_capacity: u32,
+    pub layer_topology: Vec<ExpertLayerTopology>,
+    pub retained_route_assignment_count: u64,
+    pub storage_route_assignment_count: u64,
+    pub hot_route_fully_covered_token_count: u64,
+    pub hot_route_partially_covered_token_count: u64,
+    pub hot_route_missed_token_count: u64,
+    pub expert_source_read_call_count: u64,
+    pub expert_source_read_byte_count: u64,
+    pub expert_source_read_elapsed_nanoseconds: u64,
+    pub avoided_complete_layer_source_bytes: u64,
+    pub mandatory_prefill_source_bytes: u64,
+    pub mandatory_decode_source_bytes: u64,
+    pub prompt_token_count: u64,
+    pub generated_token_count: u64,
+}
+
+impl Default for ExpertStreamingStats {
+    /// Zero state for engines without expert streaming: nothing retained,
+    /// every layer represented as absent from the topology.
+    fn default() -> Self {
+        Self {
+            model_id: None,
+            expert_memory_mode: ExpertMemoryMode::Paged,
+            total_layer_count: 0,
+            resident_expert_count: 0,
+            resident_expert_payload_bytes: 0,
+            complete_expert_payload_byte_count: 0,
+            expert_capacity: 0,
+            layer_topology: Vec::new(),
+            retained_route_assignment_count: 0,
+            storage_route_assignment_count: 0,
+            hot_route_fully_covered_token_count: 0,
+            hot_route_partially_covered_token_count: 0,
+            hot_route_missed_token_count: 0,
+            expert_source_read_call_count: 0,
+            expert_source_read_byte_count: 0,
+            expert_source_read_elapsed_nanoseconds: 0,
+            avoided_complete_layer_source_bytes: 0,
+            mandatory_prefill_source_bytes: 0,
+            mandatory_decode_source_bytes: 0,
+            prompt_token_count: 0,
+            generated_token_count: 0,
+        }
+    }
+}
+
+impl ExpertStreamingStats {
+    /// Returns whether any expert-streaming evidence exists for this engine.
+    #[must_use]
+    pub const fn has_streaming_evidence(&self) -> bool {
+        self.total_layer_count > 0 || self.resident_expert_count > 0
+    }
 }
 
 /// Final engine state available after a generation ends or is cancelled.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+///
+/// Not `Copy` since expert-streaming stats carry a heap topology; consumers
+/// receive it once by value at the emission boundary.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct GenerationFinalization {
     expert_memory_mode: Option<ExpertMemoryMode>,
     mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     expert_residency_telemetry: Option<ExpertResidencyTelemetry>,
+    expert_streaming_stats: Option<Box<ExpertStreamingStats>>,
 }
 
 impl GenerationFinalization {
@@ -299,33 +393,61 @@ impl GenerationFinalization {
             expert_memory_mode,
             mlx_memory_telemetry,
             expert_residency_telemetry,
+            expert_streaming_stats: None,
         }
     }
 
+    /// Attaches session expert-streaming stats without disturbing `Copy`.
     #[must_use]
-    pub const fn expert_memory_mode(self) -> Option<ExpertMemoryMode> {
+    pub fn with_expert_streaming_stats(
+        mut self,
+        expert_streaming_stats: Option<Box<ExpertStreamingStats>>,
+    ) -> Self {
+        self.expert_streaming_stats = expert_streaming_stats;
+        self
+    }
+
+    #[must_use]
+    pub fn expert_streaming_stats(&self) -> Option<&ExpertStreamingStats> {
+        self.expert_streaming_stats.as_deref()
+    }
+
+    #[must_use]
+    pub const fn expert_memory_mode(&self) -> Option<ExpertMemoryMode> {
         self.expert_memory_mode
     }
 
     #[must_use]
-    pub const fn mlx_memory_telemetry(self) -> Option<MlxMemoryTelemetry> {
+    pub const fn mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         self.mlx_memory_telemetry
     }
 
     #[must_use]
-    pub const fn expert_residency_telemetry(self) -> Option<ExpertResidencyTelemetry> {
+    pub const fn expert_residency_telemetry(&self) -> Option<ExpertResidencyTelemetry> {
         self.expert_residency_telemetry
     }
 
+    /// Placement, memory, and residency are the pre-session facts. Streaming
+    /// stats are a separate report, so they stay out of this predicate and
+    /// the caller combines the two answers.
     #[must_use]
-    pub const fn has_reportable_state(self) -> bool {
+    const fn has_placement_or_memory_telemetry(&self) -> bool {
         self.expert_memory_mode.is_some()
             || self.mlx_memory_telemetry.is_some()
             || self.expert_residency_telemetry.is_some()
     }
+
+    #[must_use]
+    pub const fn has_reportable_state(&self) -> bool {
+        self.has_placement_or_memory_telemetry() || self.expert_streaming_stats.is_some()
+    }
 }
 
 /// One bounded progress boundary from the engine.
+// The inline `Option<MlxMemoryTelemetry>` carries the seating array so a
+// residency sample stays `Copy` on the hot path; boxing it would trade a
+// size gap on a transient value for an allocation per decode token.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GeneratedToken {
     /// A generated token ID that must be decoded by the active model processor.
@@ -338,7 +460,10 @@ pub enum GeneratedToken {
         first_decode_forward_elapsed_millis: Option<u64>,
         /// Present only after the engine has released this request. The worker
         /// reports the finalization but must not cancel the engine again.
-        generation_finalization: Option<GenerationFinalization>,
+        /// Boxed because it embeds full memory and expert-residency telemetry
+        /// (including the 128-entry seating array) yet appears on a single
+        /// terminal token; boxing keeps every decode token from moving it.
+        generation_finalization: Option<Box<GenerationFinalization>>,
     },
     /// One bounded native prefill chunk completed without producing a token yet.
     PrefillProgress {
@@ -370,9 +495,7 @@ pub enum GeneratedToken {
     /// residency so the public status never pairs fresh residency with a stale
     /// prefill-era measurement (issue #337).
     GenerationPreparationStarted {
-        total_layer_count: u32,
-        resident_expert_count: u32,
-        resident_expert_payload_bytes: u64,
+        expert_residency: ExpertResidencyTelemetry,
         mlx_memory_telemetry: Option<crate::memory::telemetry::MlxMemoryTelemetry>,
     },
     /// Engine-side end-of-sequence without an explicit token ID.
@@ -393,7 +516,7 @@ impl GeneratedToken {
         } = &mut self
         {
             *expert_memory_mode = generation_finalization.expert_memory_mode();
-            *generated_token_finalization = Some(generation_finalization);
+            *generated_token_finalization = Some(Box::new(generation_finalization));
         }
         self
     }

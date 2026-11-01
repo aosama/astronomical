@@ -178,6 +178,7 @@ impl Qwen3_5Model {
             ),
             deferred_expert_demand: RefCell::default(),
             prefill_complete_layer_prefetch: RefCell::default(),
+            prefill_layer_completion_refused: RefCell::default(),
             active_expert_residency_plan: RefCell::new(None),
             request_expert_residency: RefCell::new(None),
             paged_forward_missing_route_collector:

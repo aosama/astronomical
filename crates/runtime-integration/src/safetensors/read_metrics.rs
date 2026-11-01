@@ -25,12 +25,16 @@
 //!   proof of equal physical SSD (Solid-State Drive) traffic.
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 /// Lock-free aggregate of positional file reads performed by lazy MLX arrays.
 ///
 /// Share one instance across readers by wrapping it in an `Arc`; every
-/// method is thread-safe.
+/// method is thread-safe. An instance may carry one `peer_read_metrics`
+/// target installed once (see [`Self::install_peer_read_metrics`]); every
+/// counter then mirrors into the peer, so a request-scoped aggregate and a
+/// session-scoped aggregate can both stay truthful from the same reads.
 #[derive(Debug, Default)]
 pub struct PositionalFileReadMetrics {
     active_read_count: AtomicU64,
@@ -40,6 +44,7 @@ pub struct PositionalFileReadMetrics {
     total_read_elapsed_nanoseconds: AtomicU64,
     maximum_read_elapsed_nanoseconds: AtomicU64,
     read_failure_count: AtomicU64,
+    peer_read_metrics: OnceLock<Arc<PositionalFileReadMetrics>>,
 }
 
 /// Immutable positional file-read counters captured without synchronizing MLX execution.
@@ -77,18 +82,35 @@ impl PositionalFileReadMetrics {
         }
     }
 
+    /// Installs the session-scoped mirror target for this aggregate.
+    ///
+    /// Called once by the pager's streaming path when diagnostics
+    /// attribution owns a request-scoped aggregate: the readers keep feeding
+    /// the request aggregate (so per-request report deltas stay exact) and
+    /// every counter mirrors into the session aggregate so the observatory
+    /// expert page stays truthful even while diagnostics run. A second
+    /// install is ignored; one peer per aggregate is the whole model.
+    pub fn install_peer_read_metrics(&self, peer_read_metrics: Arc<Self>) {
+        let _already_installed = self.peer_read_metrics.set(peer_read_metrics);
+    }
+
     /// Measures one read operation, updating every counter around it.
     ///
     /// Used only by the readers in this module family: the wrapper records
     /// concurrency (current and peak), then call count, byte count on
     /// success, total and maximum elapsed time, and failures. The boolean
     /// result of the wrapped operation passes through untouched so callers
-    /// keep their own failure semantics.
+    /// keep their own failure semantics. Every cumulative counter mirrors
+    /// into the installed peer so request-scoped and session-scoped
+    /// aggregates observe the same reads; the peer needs no live
+    /// active-read tracking because snapshots only expose the concurrency
+    /// peak, which is mirrored directly.
     pub(crate) fn measure_read(
         &self,
         byte_count: usize,
         read_operation: impl FnOnce() -> bool,
     ) -> bool {
+        let peer_read_metrics = self.peer_read_metrics.get();
         let concurrent_read_count = self.active_read_count.fetch_add(1, Ordering::Relaxed) + 1;
         self.maximum_concurrent_read_count
             .fetch_max(concurrent_read_count, Ordering::Relaxed);
@@ -112,6 +134,50 @@ impl PositionalFileReadMetrics {
         if !read_succeeded {
             self.read_failure_count.fetch_add(1, Ordering::Relaxed);
         }
+        Self::mirror_completed_read_into_peer(
+            peer_read_metrics,
+            concurrent_read_count,
+            byte_count,
+            elapsed_nanoseconds,
+            read_succeeded,
+        );
         read_succeeded
+    }
+
+    /// Mirrors one completed read into the session aggregate when this request
+    /// aggregate has a peer. The peer skips live active-read tracking because
+    /// snapshots only expose the concurrency peak, which is mirrored directly.
+    fn mirror_completed_read_into_peer(
+        peer_read_metrics: Option<&Arc<Self>>,
+        concurrent_read_count: u64,
+        byte_count: usize,
+        elapsed_nanoseconds: u64,
+        read_succeeded: bool,
+    ) {
+        if let Some(peer_read_metrics) = peer_read_metrics {
+            peer_read_metrics
+                .maximum_concurrent_read_count
+                .fetch_max(concurrent_read_count, Ordering::Relaxed);
+            peer_read_metrics
+                .read_call_count
+                .fetch_add(1, Ordering::Relaxed);
+            if read_succeeded {
+                peer_read_metrics.read_byte_count.fetch_add(
+                    u64::try_from(byte_count).unwrap_or(u64::MAX),
+                    Ordering::Relaxed,
+                );
+            }
+            peer_read_metrics
+                .total_read_elapsed_nanoseconds
+                .fetch_add(elapsed_nanoseconds, Ordering::Relaxed);
+            peer_read_metrics
+                .maximum_read_elapsed_nanoseconds
+                .fetch_max(elapsed_nanoseconds, Ordering::Relaxed);
+            if !read_succeeded {
+                peer_read_metrics
+                    .read_failure_count
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+        }
     }
 }

@@ -16,8 +16,11 @@ const LIBRARY_RENDER_JS: &str = include_str!("../../console/library-render.js");
 const OVERVIEW_COMPACT_JS: &str = include_str!("../../console/overview-compact.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../../console/memory-control.js");
 const CONNECT_JS: &str = include_str!("../../console/connect.js");
+const EXPERTS_JS: &str = include_str!("../../console/experts.js");
+const EXPERTS_RENDER_JS: &str = include_str!("../../console/experts-render.js");
 const CONSOLE_CSS: &str = include_str!("../../console/console.css");
 const LIBRARY_CSS: &str = include_str!("../../console/library.css");
+const EXPERTS_CSS: &str = include_str!("../../console/experts.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
 const JAVASCRIPT_CONTENT_TYPE: &str = "application/javascript; charset=utf-8";
@@ -34,6 +37,7 @@ where
         .route("/overview", get(console_index))
         .route("/chat", get(console_index))
         .route("/model", get(console_index))
+        .route("/experts", get(console_index))
         .route("/library", get(console_index))
         .route("/connect", get(console_index))
         .route("/settings", get(console_index))
@@ -43,8 +47,11 @@ where
         .route("/overview-compact.js", get(overview_compact_script))
         .route("/memory-control.js", get(memory_control_script))
         .route("/connect.js", get(connect_script))
+        .route("/experts.js", get(experts_script))
+        .route("/experts-render.js", get(experts_render_script))
         .route("/console.css", get(console_stylesheet))
         .route("/library.css", get(library_stylesheet))
+        .route("/experts.css", get(experts_stylesheet))
 }
 
 /// `GET /` — the Observatory single-page shell. References the per-view scripts and
@@ -82,6 +89,20 @@ pub(crate) async fn memory_control_script() -> Response {
 /// actually listens on rather than a port baked in when the sample was written.
 pub(crate) async fn connect_script() -> Response {
     embedded_text_response(CONNECT_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn experts_script() -> Response {
+    embedded_text_response(EXPERTS_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn experts_render_script() -> Response {
+    embedded_text_response(EXPERTS_RENDER_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /experts.css` — the Experts view styling (library bar, layer rows,
+/// session totals, and the measurement disclosure).
+pub(crate) async fn experts_stylesheet() -> Response {
+    embedded_text_response(EXPERTS_CSS, CSS_CONTENT_TYPE)
 }
 
 /// `GET /console.css` — the Observatory dark-mode styling with large fonts.

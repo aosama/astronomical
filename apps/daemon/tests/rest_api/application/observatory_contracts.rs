@@ -195,6 +195,9 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
         total_layer_count: 40,
         resident_expert_count: 32,
         resident_expert_payload_bytes: 13_000_000_000,
+        complete_expert_payload_byte_count: 21_000_000_000,
+        expert_capacity: 256,
+        layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
     });
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::GenerationPreparation {
         request_started_at,
@@ -234,6 +237,32 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
         status_document["expert_residency"]["resident_expert_payload_bytes"],
         13_000_000_000_u64
     );
+}
+
+#[tokio::test]
+async fn should_report_an_unavailable_experts_document_before_any_streaming_event() {
+    let application = build_application(ContractScriptedExecutor::ready(
+        ready_health_snapshot_with_model(),
+    ));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/experts/stats")
+                .body(Body::empty())
+                .expect("the experts-stats request should be valid"),
+        )
+        .await
+        .expect("the application should return an experts-stats response");
+    assert_eq!(response.status(), StatusCode::OK);
+    let response_body = to_bytes(response.into_body(), 8 * 1024)
+        .await
+        .expect("the experts-stats body should be readable");
+    let experts_document: serde_json::Value =
+        serde_json::from_slice(&response_body).expect("the experts-stats body should contain JSON");
+    assert_eq!(experts_document["available"], false);
+    // The transition feed must always be present so the panel never sees a
+    // missing field.
+    assert!(experts_document["mode_transitions"].is_array());
 }
 
 #[tokio::test]

@@ -14,6 +14,8 @@ pub(crate) mod chat_diagnostics;
 pub(crate) mod config_reload;
 pub(crate) mod config_reload_memory;
 pub(crate) mod config_reveal;
+pub(crate) mod expert_placement;
+pub(crate) mod experts;
 pub(crate) mod maximum_mlx_memory;
 pub(crate) mod status;
 
@@ -21,3 +23,7 @@ pub(crate) mod status;
 mod chat_diagnostics_tests;
 #[cfg(test)]
 mod config_reload_tests;
+#[cfg(test)]
+mod expert_placement_tests;
+#[cfg(test)]
+mod experts_tests;

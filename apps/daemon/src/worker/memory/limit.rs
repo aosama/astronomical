@@ -47,6 +47,7 @@ pub(in crate::worker) async fn apply_mlx_memory_limit(
     performance_log: &mut GenerationPerformanceLog,
     completion_log: &mut CompletionAttributionLog,
 ) -> Result<MlxMemoryLimitUpdateOutcome, WorkerControlError> {
+    let configuration_generation_for_relaunch = configuration_generation.clone();
     let update_outcome = timeout(memory_limit_update_timeout, async {
         worker_process
             .update_mlx_memory_limit(effective_mlx_memory_ceiling_bytes, configuration_generation)
@@ -84,7 +85,12 @@ pub(in crate::worker) async fn apply_mlx_memory_limit(
     })
     .await;
     match update_outcome {
-        Ok(update_outcome) => update_outcome,
+        Ok(memory_limit_update_outcome) => adopt_applied_ceiling_into_relaunch_snapshot(
+            worker_process,
+            memory_limit_update_outcome,
+            effective_mlx_memory_ceiling_bytes,
+            &configuration_generation_for_relaunch,
+        ),
         Err(_) => {
             let memory_limit_update_timeout_millis = memory_limit_update_timeout.as_millis();
             containment::contain_worker_failure(
@@ -102,6 +108,39 @@ pub(in crate::worker) async fn apply_mlx_memory_limit(
             })
         }
     }
+}
+
+/// Stores the requested ceiling on the launch snapshot only after the worker
+/// adopts it. A queued, rejected, or failed update must leave the snapshot
+/// that the next process boots from unchanged.
+fn adopt_applied_ceiling_into_relaunch_snapshot(
+    worker_process: &mut WorkerProcess,
+    memory_limit_update_outcome: Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>,
+    effective_mlx_memory_ceiling_bytes: u64,
+    configuration_generation: &str,
+) -> Result<MlxMemoryLimitUpdateOutcome, WorkerControlError> {
+    if memory_limit_outcome_was_applied(&memory_limit_update_outcome) {
+        worker_process.record_applied_memory_ceiling_for_relaunch(
+            effective_mlx_memory_ceiling_bytes,
+            configuration_generation,
+        );
+    }
+    memory_limit_update_outcome
+}
+
+/// Reports whether this update adopted a ceiling the running worker will keep.
+///
+/// A queued raise has not landed yet, and the pending update still lives on
+/// the worker loop. A restart launches from its own candidate snapshot. A
+/// rejection or a control error must not overwrite the ceiling the next
+/// process boots from.
+fn memory_limit_outcome_was_applied(
+    memory_limit_update_outcome: &Result<MlxMemoryLimitUpdateOutcome, WorkerControlError>,
+) -> bool {
+    matches!(
+        memory_limit_update_outcome,
+        Ok(MlxMemoryLimitUpdateOutcome::Applied)
+    )
 }
 
 pub(in crate::worker) async fn contain_mlx_memory_limit_failure(
@@ -219,3 +258,7 @@ pub(in crate::worker) async fn take_generation_start_after_pending_memory_limit(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "limit_outcome_tests.rs"]
+mod limit_outcome_tests;

@@ -1,21 +1,28 @@
 use crate::serving::serving_session_snapshot::ServingSessionSnapshot;
 use astronomical_ipc_protocol::{
-    DaemonWorkerStatus, ExpertMemoryMode, WorkerEvent, WorkerExpertResidencySnapshot,
-    WorkerMlxMemorySnapshot, WorkerModelCapabilities, WorkerPromptProcessingPhase,
-    WorkerRuntimeFeatureConfiguration,
+    DaemonWorkerStatus, ExpertLayerSeatingCounts, ExpertMemoryMode, WorkerEvent,
+    WorkerExpertResidencySnapshot, WorkerMlxMemorySnapshot, WorkerModelCapabilities,
+    WorkerPromptProcessingPhase, WorkerRuntimeFeatureConfiguration,
 };
 use tokio::time::Instant;
 
 mod publisher;
 
+#[cfg(test)]
+#[path = "health/expert_streaming_tests.rs"]
+mod expert_streaming_tests;
+
+pub(crate) mod expert_streaming;
+
 pub(crate) use publisher::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot,
     publish_active_request_progress, publish_activity, publish_expert_memory_mode,
-    publish_expert_residency, publish_health, publish_latest_mlx_memory_snapshot,
-    publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
-    publish_mlx_memory_limit_restart_required, publish_pending_mlx_memory_ceiling,
-    publish_pending_prompt_cache_clear, publish_persistent_prompt_cache_stats,
-    publish_worker_expert_residency, record_prompt_work_reuse, record_serving_session,
+    publish_expert_residency, publish_expert_streaming_stats, publish_health,
+    publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
+    publish_mlx_memory_limit_rejection, publish_mlx_memory_limit_restart_required,
+    publish_pending_mlx_memory_ceiling, publish_pending_prompt_cache_clear,
+    publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
+    record_prompt_work_reuse, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -129,6 +136,9 @@ pub struct ExpertResidencySnapshot {
     pub total_layer_count: u32,
     pub resident_expert_count: u32,
     pub resident_expert_payload_bytes: u64,
+    pub complete_expert_payload_byte_count: u64,
+    pub expert_capacity: u32,
+    pub layer_seating: ExpertLayerSeatingCounts,
 }
 
 impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
@@ -137,6 +147,9 @@ impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
             total_layer_count: expert_residency.total_layer_count,
             resident_expert_count: expert_residency.resident_expert_count,
             resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
+            complete_expert_payload_byte_count: expert_residency.complete_expert_payload_byte_count,
+            expert_capacity: expert_residency.expert_capacity,
+            layer_seating: expert_residency.layer_seating,
         }
     }
 }
@@ -236,6 +249,10 @@ pub struct WorkerHealthSnapshot {
     pub worker_runtime_feature_configuration: Option<WorkerRuntimeFeatureConfiguration>,
     /// Latest persistent prompt-cache observability stats from the worker.
     pub persistent_prompt_cache_stats: Option<WorkerEvent>,
+    /// Daemon-accumulated expert-streaming observatory state (issue #1693's
+    /// user-facing surface): latest snapshot, session token totals, and the
+    /// bounded mode-transition feed.
+    pub expert_streaming_observatory: expert_streaming::ExpertStreamingObservatory,
     /// Latest worker-owned MLX allocator observation, regardless of request lifecycle phase.
     pub latest_mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     /// Immutable maximum reported by the worker's macOS/MLX startup probe.
@@ -280,6 +297,7 @@ impl WorkerHealthSnapshot {
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
+            expert_streaming_observatory: expert_streaming::ExpertStreamingObservatory::empty(),
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes: 0,
             wired_residency_budget_bytes: None,
@@ -351,6 +369,7 @@ impl WorkerHealthSnapshot {
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
+            expert_streaming_observatory: expert_streaming::ExpertStreamingObservatory::empty(),
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes,
             wired_residency_budget_bytes,
@@ -378,6 +397,7 @@ impl WorkerHealthSnapshot {
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
+            expert_streaming_observatory: expert_streaming::ExpertStreamingObservatory::empty(),
             latest_mlx_memory_snapshot: None,
             machine_mlx_memory_ceiling_bytes: 0,
             wired_residency_budget_bytes: None,

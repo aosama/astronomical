@@ -21,6 +21,9 @@ impl WorkerEvent {
             Self::GenerationFinalized { request_id, .. } => {
                 format!("generation_finalized request_id={}", request_id.value())
             }
+            Self::ExpertStreamingStats { .. } | Self::PersistentPromptCacheStats { .. } => {
+                observatory_event_diagnostic_summary(self)
+            }
             Self::ImageGenerationProgress { request_id, .. } => format!(
                 "image_generation_progress request_id={}",
                 request_id.value()
@@ -73,10 +76,26 @@ impl WorkerEvent {
             }
             Self::ModelSwapped { .. } => "model_swapped".to_owned(),
             Self::ModelSwapFailed { .. } => "model_swap_failed".to_owned(),
-            Self::PersistentPromptCacheStats { .. } => "persistent_prompt_cache_stats".to_owned(),
             Self::PromptCacheCleared { model_id, .. } => {
                 format!("prompt_cache_cleared model_id={model_id:?}")
             }
         }
+    }
+}
+
+/// Observatory events share one arm of [`WorkerEvent::diagnostic_summary`].
+/// The caller routes only these two variants; the final arm keeps this helper
+/// exhaustive without printing generated text or image bytes.
+fn observatory_event_diagnostic_summary(event: &WorkerEvent) -> String {
+    match event {
+        WorkerEvent::ExpertStreamingStats { stats } => format!(
+            "expert_streaming_stats model_id={} retained_assignments={}",
+            stats.model_id.as_deref().unwrap_or("<none>"),
+            stats.retained_route_assignment_count
+        ),
+        WorkerEvent::PersistentPromptCacheStats { .. } => {
+            "persistent_prompt_cache_stats".to_owned()
+        }
+        _ => "worker_event".to_owned(),
     }
 }

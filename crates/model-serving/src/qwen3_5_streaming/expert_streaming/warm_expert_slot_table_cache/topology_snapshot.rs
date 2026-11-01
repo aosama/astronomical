@@ -76,4 +76,43 @@ impl WarmExpertSlotTableCache {
         }
         covered_weighted_demand
     }
+
+    /// One retained count per decoder layer, including layers with no warm
+    /// table. Missing tables stay zero so the column count matches the model.
+    /// Identities are left for the end-of-reply topology: sorting every expert
+    /// id on a decode token is the cost this count walk avoids.
+    #[must_use]
+    pub fn retained_expert_counts(&self) -> Vec<u32> {
+        let layer_count = self.tables_by_layer.len();
+        let mut retained_expert_counts = Vec::with_capacity(layer_count);
+        let mut layer_index = 0;
+        while layer_index < layer_count {
+            let retained_count = match self.tables_by_layer.get(layer_index) {
+                Some(Some(warm_table)) => {
+                    u32::try_from(warm_table.slot_by_expert_id.len()).unwrap_or(u32::MAX)
+                }
+                _ => 0,
+            };
+            retained_expert_counts.push(retained_count);
+            layer_index += 1;
+        }
+        retained_expert_counts
+    }
+}
+
+#[cfg(test)]
+mod retained_expert_count_tests {
+    use super::super::WarmExpertSlotTableCache;
+
+    #[test]
+    fn should_report_zero_retained_experts_when_the_cache_has_no_layers() {
+        let warm_cache = WarmExpertSlotTableCache::new(0);
+        assert!(warm_cache.retained_expert_counts().is_empty());
+    }
+
+    #[test]
+    fn should_report_a_zero_for_every_layer_that_has_no_warm_table() {
+        let warm_cache = WarmExpertSlotTableCache::new(3);
+        assert_eq!(warm_cache.retained_expert_counts(), vec![0, 0, 0]);
+    }
 }

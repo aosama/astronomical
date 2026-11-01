@@ -39,6 +39,53 @@ impl std::ops::DerefMut for Qwen3_5ResidentModel {
     }
 }
 
+/// Library size and uniform expert count from the resident layer plans.
+///
+/// One failed layer measurement publishes a zero library so Observatory does
+/// not subtract the model file from the resident expert bytes. The capacity
+/// is the first plan's count; resident layers share it.
+fn resident_expert_library_facts(expert_layer_plans: &[QuantizedExpertLayerPlan]) -> (u64, u32) {
+    let mut complete_expert_payload_byte_count = 0_u64;
+    let mut expert_capacity = 0_u32;
+    for expert_layer_plan in expert_layer_plans {
+        if expert_capacity == 0 {
+            expert_capacity = u32::try_from(expert_layer_plan.expert_capacity).unwrap_or(u32::MAX);
+        }
+        match expert_layer_plan.complete_expert_payload_byte_count() {
+            Ok(layer_payload_byte_count) => {
+                complete_expert_payload_byte_count =
+                    complete_expert_payload_byte_count.saturating_add(layer_payload_byte_count);
+            }
+            Err(_) => return (0, expert_capacity),
+        }
+    }
+    (complete_expert_payload_byte_count, expert_capacity)
+}
+
+/// Every resident layer is fully seated. A zero capacity means the plans did
+/// not name an expert count, and a fabricated zero-count map would paint the
+/// library as still on the SSD.
+fn resident_layer_seating(
+    expert_layer_plans: &[QuantizedExpertLayerPlan],
+    expert_capacity: u32,
+) -> astronomical_ipc_protocol::ExpertLayerSeatingCounts {
+    if expert_capacity == 0 || expert_layer_plans.is_empty() {
+        return astronomical_ipc_protocol::ExpertLayerSeatingCounts::default();
+    }
+    let seated_layer_count = expert_layer_plans
+        .len()
+        .min(astronomical_ipc_protocol::EXPERT_LAYER_SEATING_LIMIT);
+    let mut retained_expert_counts = Vec::with_capacity(seated_layer_count);
+    let mut layer_index = 0;
+    while layer_index < seated_layer_count {
+        retained_expert_counts.push(expert_capacity);
+        layer_index += 1;
+    }
+    astronomical_ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(
+        &retained_expert_counts,
+    )
+}
+
 impl Qwen3_5ResidentModel {
     #[must_use]
     pub fn expert_memory_mode(&self) -> astronomical_ipc_protocol::ExpertMemoryMode {
@@ -96,12 +143,17 @@ impl Qwen3_5ResidentModel {
         active_memory_breakdown: &crate::memory::telemetry::MlxActiveMemoryBreakdown,
     ) -> crate::inference_engine::contract::ExpertResidencyTelemetry {
         let resident_expert_statistics = self.expert_weight_memory_cache_statistics();
+        let (complete_expert_payload_byte_count, expert_capacity) =
+            resident_expert_library_facts(&self.expert_layer_plans);
         crate::inference_engine::contract::ExpertResidencyTelemetry {
             total_layer_count: u32::try_from(resident_expert_statistics.complete_layer_count)
                 .unwrap_or(u32::MAX),
             resident_expert_count: u32::try_from(resident_expert_statistics.entry_count)
                 .unwrap_or(u32::MAX),
             resident_expert_payload_bytes: active_memory_breakdown.expert_payload_bytes,
+            complete_expert_payload_byte_count,
+            expert_capacity,
+            layer_seating: resident_layer_seating(&self.expert_layer_plans, expert_capacity),
         }
     }
 
@@ -223,3 +275,6 @@ impl Qwen3_5ResidentModel {
         )
     }
 }
+
+#[cfg(test)]
+mod resident_expert_library_facts_tests;
