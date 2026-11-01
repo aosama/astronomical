@@ -8,8 +8,9 @@
 //! * `{"mode": "jangtq2", "bits": 2, "rotation": "hadamard32"}` — routed
 //!   expert projections stored as codebook-packed tensors.
 //! * `{"bits": 8, "group_size": 64}` — standard MLX affine quantization.
-//!   Older OptiQ documents repeat the document-level `"mode": "affine"`
-//!   inside every entry; that restatement is accepted as redundant.
+//!   oMLX oQ documents repeat the document-level `"mode": "affine"`
+//!   inside every entry (OptiQ omits it); that restatement is accepted as
+//!   redundant.
 //! * `false` — the module is stored as native floating point (routers,
 //!   shared-expert gates, norms); the MLX loader convention treats a missing
 //!   or `false` entry as unquantized.
@@ -31,7 +32,7 @@ use super::codebook;
 /// Discriminator string routing an entry to the JANGTQ v2 codebook format.
 const CODEBOOK_MODE_WIRE_NAME: &str = "jangtq2";
 
-/// Mode string older OptiQ documents repeat inside every affine entry. The
+/// Mode string oMLX oQ documents repeat inside every affine entry. The
 /// document-level `mode` is the authority; per-module affine entries may
 /// restate it (historical artifacts do) or omit it, and both parse.
 const AFFINE_MODE_WIRE_NAME: &str = "affine";
@@ -168,8 +169,8 @@ impl<'de> Deserialize<'de> for Jangtq2WeightOverrideEntry {
                 })
             }
             // An affine entry restating its mode is accepted: the repeated
-            // string is redundant with the document-level mode, and older
-            // OptiQ artifacts carry it in every entry. This arm must precede
+            // string is redundant with the document-level mode, and oMLX oQ
+            // artifacts carry it in every entry. This arm must precede
             // the unknown-mode catch-all below it.
             Some(AFFINE_MODE_WIRE_NAME) | None => {
                 if rotation_wire_name.is_some() {
@@ -247,8 +248,8 @@ impl Jangtq2WeightOverrideEntry {
     /// Validates the entry against the format's own rules.
     ///
     /// Affine bit widths and group sizes are deliberately not checked here:
-    /// those belong to the MLX affine grid, which the caller (the OptiQ
-    /// quantization config) already validates. This method owns exactly the
+    /// those belong to the MLX affine grid, which the caller (the MLX
+    /// quantization document) already validates. This method owns exactly the
     /// jangtq2-specific constraints.
     pub fn validate(&self) -> Result<(), Jangtq2ConfigurationError> {
         match self {
@@ -395,7 +396,7 @@ mod tests {
 
     #[test]
     fn should_parse_affine_entry_that_repeats_the_affine_mode() {
-        // Older OptiQ artifacts restate the document-level mode inside every
+        // oMLX oQ artifacts restate the document-level mode inside every
         // affine entry; the extra string is redundant, never a conflict.
         let parsed_entry = parse_entry(AFFINE_ENTRY_REPEATING_THE_AFFINE_MODE)
             .expect("affine entries restating their mode must keep parsing");
