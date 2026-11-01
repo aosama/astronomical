@@ -388,7 +388,9 @@ pub use qwen3_5_core::configuration::{
 
 pub use qwen3_5_core::decoder::{Qwen3_5DecoderLayerCacheDtypes, qwen3_5_decoder_cache_layout};
 
-pub use qwen3_5_core::quantizations::producers::optiq::{OptiQMetadata, OptiQMetadataError};
+pub use qwen3_5_core::quantizations::producers::optiq::{
+    OptiQMetadata, OptiQMetadataError, resolve_optiq_metadata_relative_path,
+};
 pub use qwen3_5_core::quantizations::producers::oq::{OqImatrixProvenance, OqImatrixReportError};
 pub use qwen3_5_core::quantizations::producers::{
     QuantizationProducer, detect_quantization_producer, detect_quantization_producer_in_directory,

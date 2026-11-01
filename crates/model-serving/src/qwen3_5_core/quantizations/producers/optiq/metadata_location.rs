@@ -27,7 +27,7 @@ pub(crate) fn choose_optiq_metadata_relative_path(
 
 /// Returns the model-directory-relative path of the OptiQ metadata file that
 /// exists on disk, or `None` for artifacts that carry none.
-pub(crate) fn resolve_optiq_metadata_relative_path(model_directory: &Path) -> Option<&'static str> {
+pub fn resolve_optiq_metadata_relative_path(model_directory: &Path) -> Option<&'static str> {
     choose_optiq_metadata_relative_path(
         model_directory.join(OPTIQ_METADATA_RELATIVE_PATH).is_file(),
         model_directory

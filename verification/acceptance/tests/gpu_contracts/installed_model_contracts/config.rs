@@ -1,4 +1,6 @@
-use astronomical_model_serving::{OptiQMetadata, Qwen3_5Config};
+use astronomical_model_serving::{
+    OptiQMetadata, Qwen3_5Config, resolve_optiq_metadata_relative_path,
+};
 
 #[test]
 #[ignore = "requires model_directories to discover the large sparse MoE streaming installed model"]
@@ -21,10 +23,11 @@ fn should_parse_the_large_sparse_moe_streaming_config() {
         "default affine group size must be a supported MLX group size"
     );
 
-    // Some OptiQ packages ship root metadata; mixed static packages do not.
-    // Production serving reads config.json either way.
-    let metadata_path = model_directory.join("optiq_metadata.json");
-    if metadata_path.is_file() {
+    // OptiQ packages keep metadata under optiq/ (older ones at the root);
+    // other producers ship none. Production serving reads config.json either
+    // way and resolves the metadata exactly like this.
+    if let Some(metadata_relative_path) = resolve_optiq_metadata_relative_path(&model_directory) {
+        let metadata_path = model_directory.join(metadata_relative_path);
         let metadata_bytes = std::fs::read(&metadata_path)
             .expect("readable OptiQ metadata should load when the file is present");
         let optiq_metadata = OptiQMetadata::from_json_bytes(&metadata_bytes)
