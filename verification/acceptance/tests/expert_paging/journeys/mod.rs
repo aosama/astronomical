@@ -1,5 +1,6 @@
 //! Production REST acceptance journeys and their resident comparison controls.
 
+mod back_to_back_residency_rest_journey;
 mod cached_suffix_streaming_prefill_rest_journey;
 mod complete_expert_residency_rest_journey;
 mod decode_expert_retention_rest_journey;

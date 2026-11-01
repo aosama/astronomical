@@ -226,6 +226,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             | WorkerEvent::GenerationFinalized { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::PersistentPromptCacheStats { .. }
+            | WorkerEvent::ExpertStreamingStats { .. }
             | WorkerEvent::PromptCacheCleared { .. }
             | WorkerEvent::ModelSwapped { .. }
             | WorkerEvent::Idle { .. }
