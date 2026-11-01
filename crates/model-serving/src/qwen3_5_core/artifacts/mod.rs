@@ -3,6 +3,7 @@ mod artifact_helpers;
 mod artifact_inventory;
 #[cfg(feature = "direct-mlx")]
 pub mod expert_gate_up_fusion_plan;
+mod optiq_metadata_validation;
 pub mod quantized_expert_layer_plan;
 mod ram_budget_measurements;
 mod shard_index;

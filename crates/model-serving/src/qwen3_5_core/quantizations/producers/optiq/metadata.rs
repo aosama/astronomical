@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
 use thiserror::Error;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
@@ -9,6 +8,8 @@ use crate::qwen3_5_core::quantizations::mlx_quantization::document::{
     ModuleQuantizationProfile, is_mlx_affine_quantization_bit_width_supported,
     is_mlx_affine_quantization_group_size_supported,
 };
+
+use super::metadata_document::OptiQMetadataDocument;
 
 const MAXIMUM_OPTIQ_METADATA_BYTES: usize = 128 * 1024;
 /// Strict metadata for the measured portion of the pinned OptiQ bit map.
@@ -20,8 +21,9 @@ pub struct OptiQMetadata {
 impl OptiQMetadata {
     /// Parses and validates the complete bounded OptiQ metadata document.
     ///
-    /// Two document shapes are accepted. A document carrying `per_layer` is a
-    /// measured bit-map and keeps the exact strict contract: unknown fields are
+    /// Three document shapes are accepted. A document carrying `per_layer` is a
+    /// measured bit-map in either the `optiq_mixed_precision` or the static
+    /// allocator layout and keeps the exact strict contract: unknown fields are
     /// rejected and every measured profile must match the config. A document
     /// without `per_layer` is provenance-only (expert-compressed variants such
     /// as REAP-pruned or merged artifacts publish compression-run evidence
@@ -35,10 +37,10 @@ impl OptiQMetadata {
                 maximum_size_bytes: MAXIMUM_OPTIQ_METADATA_BYTES,
             });
         }
-        match serde_json::from_slice::<OptiQMetadataDocument>(metadata_bytes) {
+        match OptiQMetadataDocument::from_json_bytes(metadata_bytes) {
             Ok(metadata_document) => {
                 let mut measured_module_profiles = BTreeMap::new();
-                for (module_name, quantization_override) in metadata_document.per_layer {
+                for (module_name, quantization_override) in metadata_document.into_per_layer() {
                     if !is_mlx_affine_quantization_group_size_supported(
                         quantization_override.group_size,
                     ) {
@@ -83,12 +85,8 @@ impl OptiQMetadata {
         metadata_bytes: &[u8],
         strict_deserialization_error: serde_json::Error,
     ) -> Result<Self, OptiQMetadataError> {
-        let json_value: serde_json::Value =
-            serde_json::from_slice(metadata_bytes).map_err(|_| {
-                OptiQMetadataError::DeserializeMetadata(
-                    serde_json::from_slice::<OptiQMetadataDocument>(metadata_bytes).unwrap_err(),
-                )
-            })?;
+        let json_value: serde_json::Value = serde_json::from_slice(metadata_bytes)
+            .map_err(OptiQMetadataError::DeserializeMetadata)?;
         let is_provenance_only = json_value
             .as_object()
             .is_some_and(|document| !document.contains_key("per_layer"));
@@ -147,38 +145,6 @@ impl OptiQMetadata {
         }
         Ok(())
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct OptiQMetadataDocument {
-    #[allow(dead_code)]
-    method: String,
-    #[allow(dead_code)]
-    base_model: String,
-    #[allow(dead_code)]
-    reference: String,
-    #[serde(default)]
-    #[allow(dead_code)]
-    sensitivity_measured_on: Option<String>,
-    #[allow(dead_code)]
-    target_bpw: f64,
-    #[allow(dead_code)]
-    achieved_bpw: f64,
-    #[allow(dead_code)]
-    n_high_bits: usize,
-    #[allow(dead_code)]
-    n_low_bits: usize,
-    #[allow(dead_code)]
-    threshold: f64,
-    per_layer: BTreeMap<String, OptiQQuantizationOverride>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(deny_unknown_fields)]
-struct OptiQQuantizationOverride {
-    bits: u32,
-    group_size: u32,
 }
 
 /// A strict mismatch in the pinned OptiQ sensitivity metadata.

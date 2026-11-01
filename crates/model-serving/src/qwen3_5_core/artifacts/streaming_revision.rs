@@ -12,16 +12,17 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 use super::artifact::derive_revision_from_config_bytes;
-use super::artifact_helpers::{
-    captured_required_file_bytes, read_required_file_bytes, required_file,
-};
+use super::artifact_helpers::{captured_required_file_bytes, required_file};
 use super::artifact_inventory::{build_index_tensor_inventory, source_id_by_file_name};
+use super::optiq_metadata_validation::{
+    register_optional_optiq_metadata, validate_optional_optiq_metadata,
+};
 use super::tensor_spec;
 use super::validated_artifact::ValidatedQwen3_5Artifact;
 use super::vision_validation::{self};
 use super::{
-    OptiQMetadata, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5Config,
-    Qwen3_5ShardIndex, Qwen3_5VisionConfig,
+    Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ShardIndex,
+    Qwen3_5VisionConfig,
 };
 use crate::artifact_validation::{
     ArtifactValidationError, RequiredFileProfile, TensorInventory, TensorSourceId,
@@ -73,11 +74,7 @@ impl Qwen3_5ArtifactValidator {
         let revision = derive_revision_from_config_bytes(config_bytes);
         let mut config = Qwen3_5Config::from_json_bytes(config_bytes)?;
         let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)?;
-        if let Some(optiq_metadata_required_file) = required_files.get("optiq_metadata.json") {
-            let optiq_metadata_bytes = read_required_file_bytes(optiq_metadata_required_file)?;
-            OptiQMetadata::from_json_bytes(&optiq_metadata_bytes)?
-                .validate_against_config(&config)?;
-        }
+        validate_optional_optiq_metadata(&required_files, &config)?;
         review_streaming_manifest_completeness(model_directory)?;
         let (resident_header, vision_header) =
             parse_streaming_revision_bundle_headers(model_directory, &vision_config)?;
@@ -125,9 +122,7 @@ fn collect_streaming_revision_required_files(
     if model_directory.join("generation_config.json").is_file() {
         required_file_profiles.push(required_file("generation_config.json"));
     }
-    if model_directory.join("optiq_metadata.json").is_file() {
-        required_file_profiles.push(required_file("optiq_metadata.json"));
-    }
+    register_optional_optiq_metadata(&mut required_file_profiles, model_directory);
     Ok(validate_required_files(
         model_directory,
         &required_file_profiles,
