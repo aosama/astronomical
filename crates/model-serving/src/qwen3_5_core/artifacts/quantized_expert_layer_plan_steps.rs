@@ -13,7 +13,9 @@ use crate::expert_paging::quantized_expert_manifest::{
 };
 use crate::expert_paging::safetensors_header::SafetensorsHeader;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantizationProfile};
+use crate::qwen3_5_core::quantizations::mlx_quantization::{
+    ModuleQuantizationProfile, ModuleWeightCodec,
+};
 
 use super::{
     ProjectionStorageContract, layer_quantization_mode, projection_storage_contract,
@@ -144,7 +146,7 @@ fn validate_projection_storage_geometry(
     projection_name: &str,
     projection_sources: &HashMap<&'static str, Option<QuantizedTensorSource>>,
     projection_storage: &ProjectionStorageContract,
-    projection_quantization_profile: OptiQQuantizationProfile,
+    projection_quantization_profile: ModuleQuantizationProfile,
 ) -> Result<(), ExpertManifestError> {
     let packed_parameter_name = match projection_storage.quantization_mode {
         QuantizationMode::Jangtq2Codebook => "tq2_packed",

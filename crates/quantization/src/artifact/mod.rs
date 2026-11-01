@@ -4,7 +4,7 @@
 //! The output format is OptiQ's, so three independent readers accept it:
 //! stock mlx-lm (through `config.json`'s `quantization` document), OptiQ's
 //! own tools (through `optiq/metadata.json` and `optiq/sensitivity.json`),
-//! and Astronomical's model-serving crate, whose `OptiQQuantizationConfig`
+//! and Astronomical's model-serving crate, whose `MlxQuantizationDocument`
 //! and `OptiQMetadata` parse these documents strictly and validate them
 //! against each other at load. The integration round-trip test in model-serving
 //! feeds this module's output straight into those readers.

@@ -78,6 +78,26 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
     fi
 fi
 
+# Model-serving on its own, default features (issue #1719). The workspace
+# pass above unifies features, which switches direct-mlx on for
+# model-serving and hides dead code that only the direct-MLX engines use;
+# that drift once broke the plain `cargo test -p astronomical-model-serving`
+# lane. Gated on staged model-serving paths so other commits never pay the
+# second feature world.
+if git diff --cached --name-only | grep -q '^crates/model-serving/'; then
+    printf '%s\n' "[pre-commit] status=start check=model-serving-default-features root=${REPOSITORY_ROOT}"
+    default_features_started_epoch_seconds="$(date +%s)"
+    if cargo clippy -p astronomical-model-serving --all-targets; then
+        default_features_elapsed_seconds=$(( $(date +%s) - default_features_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=success check=model-serving-default-features elapsed_seconds=${default_features_elapsed_seconds}"
+    else
+        default_features_elapsed_seconds=$(( $(date +%s) - default_features_started_epoch_seconds ))
+        printf '%s\n' "[pre-commit] status=failed check=model-serving-default-features elapsed_seconds=${default_features_elapsed_seconds}" >&2
+        printf '%s\n' '[pre-commit] hint=code used only with direct-mlx must carry that feature gate (or any(test, feature = "direct-mlx") for pure units with unit tests)' >&2
+        exit 1
+    fi
+fi
+
 # Coverage floor for the memory-policy crate (local hook only; deliberately
 # no continuous-integration step). The crate is the admission and eviction
 # brain, so any commit staging changes to its sources — deletions included,

@@ -373,7 +373,7 @@ fn should_append_affine_quantized_block_tensor_profiles_from_module_profiles() {
     let mut module_quantization_profiles = HashMap::new();
     module_quantization_profiles.insert(
         "vision_tower.blocks.0.attn.qkv".to_owned(),
-        OptiQQuantizationProfile::affine(4, 64),
+        ModuleQuantizationProfile::affine(4, 64),
     );
     let mut tensor_profiles = Vec::new();
     append_transformer_block_tensor_profiles(
@@ -422,7 +422,7 @@ fn should_reject_codebook_quantized_module_during_block_profile_append() {
     let mut module_quantization_profiles = HashMap::new();
     module_quantization_profiles.insert(
         "vision_tower.blocks.0.attn.qkv".to_owned(),
-        OptiQQuantizationProfile::jangtq2_codebook(
+        ModuleQuantizationProfile::jangtq2_codebook(
             2,
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::Hadamard32,
         ),
@@ -474,7 +474,7 @@ fn should_append_affine_quantized_merger_fc1_companions() {
     let mut module_quantization_profiles = HashMap::new();
     module_quantization_profiles.insert(
         "vision_tower.merger.linear_fc1".to_owned(),
-        OptiQQuantizationProfile::affine(4, 64),
+        ModuleQuantizationProfile::affine(4, 64),
     );
     let mut tensor_profiles = Vec::new();
     append_merger_tensor_profiles(
@@ -508,7 +508,7 @@ fn should_reject_codebook_quantized_merger_module() {
     let mut module_quantization_profiles = HashMap::new();
     module_quantization_profiles.insert(
         "vision_tower.merger.linear_fc2".to_owned(),
-        OptiQQuantizationProfile::jangtq2_codebook(
+        ModuleQuantizationProfile::jangtq2_codebook(
             2,
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,
         ),

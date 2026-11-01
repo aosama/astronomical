@@ -255,7 +255,7 @@ fn should_resolve_a_jangtq2_codebook_module_into_a_codebook_profile() {
         .quantization_profile_for_module("language_model.model.layers.0.mlp.switch_mlp.up_proj");
     assert_eq!(
         affine_profile.weight_codec,
-        crate::qwen3_5_core::quantizations::optiq::ModuleWeightCodec::MlxAffineQuantized
+        crate::qwen3_5_core::quantizations::mlx_quantization::ModuleWeightCodec::MlxAffineQuantized
     );
     assert_eq!(affine_profile.bits, 6);
     assert_eq!(affine_profile.group_size, 64);

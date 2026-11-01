@@ -23,7 +23,9 @@ use crate::expert_paging::safetensors_header::{
     SafetensorsDtype, SafetensorsHeader, TensorHeaderEntry,
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantizationProfile};
+use crate::qwen3_5_core::quantizations::mlx_quantization::{
+    ModuleQuantizationProfile, ModuleWeightCodec,
+};
 
 use self::quantized_expert_layer_plan_steps::{
     ProjectionPlanInputs, assemble_expert_layer_plan, build_projection_source_collection,
@@ -147,7 +149,7 @@ pub(crate) struct ProjectionStorageContract {
 
 pub(crate) fn projection_storage_contract(
     module_name: &str,
-    projection_quantization_profile: OptiQQuantizationProfile,
+    projection_quantization_profile: ModuleQuantizationProfile,
 ) -> Result<ProjectionStorageContract, ExpertManifestError> {
     if projection_quantization_profile.is_unquantized() {
         return Ok(ProjectionStorageContract {
@@ -338,7 +340,7 @@ fn validate_projection_codebook_geometry(
     packed_source: &QuantizedTensorSource,
     scales_source: &QuantizedTensorSource,
     bit_width: i32,
-    quantization_profile: OptiQQuantizationProfile,
+    quantization_profile: ModuleQuantizationProfile,
     qwen3_5_config: &Qwen3_5Config,
 ) -> Result<(), ExpertManifestError> {
     let ModuleWeightCodec::Jangtq2CodebookQuantized { rotation } =

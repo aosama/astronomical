@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::config::{ModelWeightStorage, Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
-use super::quantizations::optiq::OptiQQuantizationProfile;
+use super::quantizations::mlx_quantization::ModuleQuantizationProfile;
 use astronomical_jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 impl Qwen3_5Config {
@@ -31,7 +31,7 @@ impl Qwen3_5Config {
 
     /// Returns the validated OptiQ quantization profile for every executable quantized module.
     #[must_use]
-    pub const fn quantized_module_profiles(&self) -> &BTreeMap<String, OptiQQuantizationProfile> {
+    pub const fn quantized_module_profiles(&self) -> &BTreeMap<String, ModuleQuantizationProfile> {
         &self.quantized_module_profiles
     }
 
@@ -44,11 +44,11 @@ impl Qwen3_5Config {
     /// Returns the quantization profile for a specific module, falling back to the
     /// model-wide default profile if the module is not found in the override map.
     #[must_use]
-    pub fn quantization_profile_for_module(&self, module_name: &str) -> OptiQQuantizationProfile {
+    pub fn quantization_profile_for_module(&self, module_name: &str) -> ModuleQuantizationProfile {
         self.quantized_module_profiles
             .get(module_name)
             .copied()
-            .unwrap_or(OptiQQuantizationProfile::affine(
+            .unwrap_or(ModuleQuantizationProfile::affine(
                 self.default_quantization_bits,
                 self.default_quantization_group_size,
             ))
@@ -80,7 +80,7 @@ impl Qwen3_5Config {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         for native_module_name in native_module_names {
-            let native_quantization_profile = OptiQQuantizationProfile::unquantized();
+            let native_quantization_profile = ModuleQuantizationProfile::unquantized();
             self.quantized_module_profiles
                 .insert(native_module_name, native_quantization_profile);
         }

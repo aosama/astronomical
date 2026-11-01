@@ -15,13 +15,14 @@ use super::artifact_helpers::{
     captured_required_file_bytes, read_required_file_bytes, required_file,
 };
 use super::artifact_inventory;
+use super::optiq_metadata_validation::{
+    register_optional_optiq_metadata, validate_optional_optiq_metadata,
+};
 use super::tensor_spec;
 use super::validated_artifact::ValidatedQwen3_5Artifact;
 use super::vision_tensor_spec;
 use super::vision_validation;
-use super::{
-    OptiQMetadata, OptiQMetadataError, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5VisionConfig,
-};
+use super::{OptiQMetadataError, Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5VisionConfig};
 use super::{Qwen3_5ArtifactError, Qwen3_5ShardIndex};
 
 /// Validates the complete Qwen3.5 artifact before any native allocation.
@@ -168,11 +169,7 @@ fn validated_core_required_files(
         required_file("tokenizer.json"),
     ];
 
-    // optiq_metadata.json is optional — validate it if present.
-    let optiq_metadata_path = model_directory.join("optiq_metadata.json");
-    if optiq_metadata_path.is_file() {
-        required_file_profiles.push(required_file("optiq_metadata.json"));
-    }
+    register_optional_optiq_metadata(&mut required_file_profiles, model_directory);
     if model_directory.join("generation_config.json").is_file() {
         required_file_profiles.push(required_file("generation_config.json"));
     }
@@ -192,11 +189,7 @@ fn parsed_artifact_config(
     let config = Qwen3_5Config::from_json_bytes(config_bytes)?;
     let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)?;
 
-    // Validate optiq_metadata.json if present.
-    if let Some(optiq_metadata_required_file) = required_files.get("optiq_metadata.json") {
-        let optiq_metadata_bytes = read_required_file_bytes(optiq_metadata_required_file)?;
-        OptiQMetadata::from_json_bytes(&optiq_metadata_bytes)?.validate_against_config(&config)?;
-    }
+    validate_optional_optiq_metadata(required_files, &config)?;
     Ok(ParsedArtifactConfig {
         config,
         vision_config,

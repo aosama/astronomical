@@ -223,7 +223,7 @@
                 "supports_tool_calls": true,
                 "context_window": 262144
             },
-            "quantization_label": "OptiQ mixed-precision 6/8-bit (affine, group 64)",
+            "quantization_label": "oQ6e mixed-precision 6/8-bit (affine, group 64/128)",
             "upstream_license": "MIT"
         },
         {

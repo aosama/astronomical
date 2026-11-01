@@ -4,7 +4,7 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;
 
-use crate::qwen3_5_core::quantizations::optiq::OptiQQuantizationProfile;
+use crate::qwen3_5_core::quantizations::mlx_quantization::ModuleQuantizationProfile;
 
 use super::Qwen3_5VisionWeights;
 
@@ -49,7 +49,7 @@ fn should_apply_quantized_vision_linear_and_preserve_the_native_module_bias() {
         bound_tensors,
         quantization_profiles: HashMap::from([(
             linear_module_name.to_owned(),
-            OptiQQuantizationProfile::affine(8, 64),
+            ModuleQuantizationProfile::affine(8, 64),
         )]),
         vision_sidecars: Vec::new(),
         total_payload_bytes: 0,
