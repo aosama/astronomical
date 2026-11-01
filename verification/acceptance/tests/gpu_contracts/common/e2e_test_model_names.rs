@@ -11,12 +11,14 @@ const E2E_TEST_MODEL_NAMES_JSON: &str = include_str!(concat!(
     "/../../registry/e2e_test_model_names.json"
 ));
 const LARGE_SPARSE_MOE_STREAMING_ROLE: &str = "large_sparse_moe_streaming";
+const LARGEST_SPARSE_MOE_STREAMING_ROLE: &str = "largest_sparse_moe_streaming";
 const RESIDENT_SPARSE_MOE_ROLE: &str = "resident_sparse_moe";
 const ORNITH_DFLASH_DRAFT_ROLE: &str = "ornith_dflash_draft";
 const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
-const E2E_TEST_MODEL_ROLES: [&str; 5] = [
+const E2E_TEST_MODEL_ROLES: [&str; 6] = [
     LARGE_SPARSE_MOE_STREAMING_ROLE,
+    LARGEST_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
     ORNITH_DFLASH_DRAFT_ROLE,
     SMALL_DENSE_ROLE,
@@ -70,6 +72,13 @@ fn model_id_for_role(role: &str) -> &'static str {
 
 pub(crate) fn large_sparse_moe_streaming_model_id() -> &'static str {
     model_id_for_role(LARGE_SPARSE_MOE_STREAMING_ROLE)
+}
+
+/// The largest sparse model in the catalog: its 4,096-token prefill chunk
+/// leaves almost no headroom at a 37 GiB ceiling, which is what exposed the
+/// prefill memory-recovery freeze being undone (issue #1729).
+pub(crate) fn largest_sparse_moe_streaming_model_id() -> &'static str {
+    model_id_for_role(LARGEST_SPARSE_MOE_STREAMING_ROLE)
 }
 
 pub(crate) fn resident_sparse_moe_model_id() -> &'static str {

@@ -126,6 +126,27 @@ impl Qwen3_5Model {
         ))
     }
 
+    /// Freezes expert retention at zero after prefill memory recovery so the
+    /// retried prefill streams experts rather than re-seating them.
+    pub(crate) fn freeze_expert_retention_for_prefill_memory_recovery(&self) -> bool {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return false;
+        };
+        retained_experts
+            .borrow_mut()
+            .freeze_for_prefill_memory_recovery()
+    }
+
+    /// Lifts the prefill memory-recovery freeze; `true` when one was set.
+    pub(crate) fn lift_prefill_memory_recovery_freeze(&self) -> bool {
+        let Some(retained_experts) = self.retained_experts.as_ref() else {
+            return false;
+        };
+        retained_experts
+            .borrow_mut()
+            .lift_prefill_memory_recovery_freeze()
+    }
+
     /// Removes the temporary request-pressure ceiling.
     ///
     /// This does not load pages. It only makes the normal budget visible again.

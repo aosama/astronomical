@@ -139,8 +139,7 @@ impl Qwen3_5EngineState {
         self.model
             .as_ref()
             .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
-            .limit_expert_retention_for_request_memory_pressure(usize::MAX)
-            .map_err(InferenceEngineError::from)?;
+            .freeze_expert_retention_for_prefill_memory_recovery();
         // Demand evidence recorded by discarded chunks must not steer the
         // decode handoff, so the retry opens a fresh window.
         active_request.has_opened_prefill_demand_window = false;
