@@ -53,7 +53,7 @@ repository = "https://github.com/aosama/astronomical"
 # exact compiler remains pinned by rust-toolchain.toml
 # (nightly-2026-10-18); this field only records the major.minor floor.
 rust-version = "1.101"
-version = "0.2.85"
+version = "0.2.86"
 
 [workspace.dependencies]
 # The complete stock MLX-C bridge, published to crates.io as mlx-c-rust.
