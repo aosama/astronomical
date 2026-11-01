@@ -3,7 +3,7 @@
 use super::*;
 
 #[test]
-fn should_default_to_fixed_2048_prompt_processing_chunks() {
+fn should_default_to_2048_resident_and_4096_ssd_streaming_chunks() {
     let temp_home = tempfile::tempdir().expect("temp home should be created");
     write_config(temp_home.path(), "{}");
 
@@ -15,7 +15,7 @@ fn should_default_to_fixed_2048_prompt_processing_chunks() {
     assert_eq!(chunking.fixed_prompt_processing_chunk_size_tokens(), 2_048);
     assert_eq!(
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
-        2_048
+        4_096
     );
     let persisted_config = serde_json::from_str::<serde_json::Value>(
         &std::fs::read_to_string(temp_home.path().join(".astronomical/config.json"))
@@ -28,7 +28,7 @@ fn should_default_to_fixed_2048_prompt_processing_chunks() {
     );
     assert_eq!(
         persisted_config["chunking"]["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
-        2_048
+        4_096
     );
 }
 
@@ -186,4 +186,52 @@ fn should_reject_every_retired_optimizer_configuration_key() {
             Err(AstronomicalConfigError::ParseConfigFile { .. })
         ));
     }
+}
+
+#[test]
+fn should_carry_the_retired_ssd_streaming_chunk_default_forward() {
+    let temp_home = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temp_home.path(),
+        r#"{"chunking":{"fixed_ssd_streaming_prompt_processing_chunk_size_tokens":2048}}"#,
+    );
+
+    let chunking = AstronomicalConfig::load_from_home_directory(temp_home.path())
+        .expect("a config with the retired default should load")
+        .chunking()
+        .expect("chunking should resolve");
+
+    assert_eq!(
+        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
+        4_096
+    );
+}
+
+#[test]
+fn should_keep_a_deliberate_ssd_streaming_chunk_value() {
+    let temp_home = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temp_home.path(),
+        r#"{"chunking":{"fixed_ssd_streaming_prompt_processing_chunk_size_tokens":1024}}"#,
+    );
+
+    let chunking = AstronomicalConfig::load_from_home_directory(temp_home.path())
+        .expect("a config with a deliberate chunk should load")
+        .chunking()
+        .expect("chunking should resolve");
+
+    assert_eq!(
+        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens(),
+        1_024
+    );
+}
+
+#[test]
+fn should_materialize_the_ssd_streaming_chunk_only_when_absent_or_retired() {
+    use astronomical_config::should_materialize_ssd_streaming_chunk_default;
+    assert!(should_materialize_ssd_streaming_chunk_default(None));
+    assert!(should_materialize_ssd_streaming_chunk_default(Some(2_048)));
+    assert!(!should_materialize_ssd_streaming_chunk_default(Some(4_096)));
+    assert!(!should_materialize_ssd_streaming_chunk_default(Some(2_047)));
+    assert!(!should_materialize_ssd_streaming_chunk_default(Some(2_049)));
 }
