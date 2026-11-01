@@ -432,7 +432,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "shlex",
- "syn 3.0.3",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1353,9 +1353,9 @@ dependencies = [
 
 [[package]]
 name = "mlx-c-rust"
-version = "0.32.4-alpha.2"
+version = "0.32.4-alpha.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74493be5ec8cd0ff740dadded15a0e8fe8b4cc092acf6ff88d4b715daa58b4f0"
+checksum = "6b3edb8efb1385cf0cc28990d48297bb4d43eaa76e2445c420f90f1cc5b856cd"
 dependencies = [
  "bindgen",
  "pkg-config",
