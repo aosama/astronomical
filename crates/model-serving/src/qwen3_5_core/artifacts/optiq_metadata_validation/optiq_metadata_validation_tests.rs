@@ -72,10 +72,12 @@ fn should_pass_an_artifact_without_optiq_metadata() {
 fn should_reject_canonical_metadata_that_disagrees_with_the_config() {
     let mut metadata_document: Value =
         serde_json::from_slice(&mixed_precision_metadata_bytes()).expect("decodes");
-    let first_module_name = metadata_document["per_layer"]
-        .as_object()
-        .and_then(|per_layer| per_layer.keys().next().cloned())
-        .expect("fixture has modules");
+    let Some(per_layer_profiles) = metadata_document["per_layer"].as_object() else {
+        panic!("fixture has a per_layer map");
+    };
+    let Some(first_module_name) = per_layer_profiles.keys().next().cloned() else {
+        panic!("fixture has modules");
+    };
     metadata_document["per_layer"][&first_module_name]["bits"] = json!(2);
     let mismatched_bytes = serde_json::to_vec(&metadata_document).expect("serializes");
 
