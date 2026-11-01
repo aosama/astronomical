@@ -237,7 +237,9 @@ fn run_staged_mode() -> Result<(), String> {
 fn run_pre_push_mode() -> Result<(), String> {
     let mut pre_push_input = String::new();
     if let Err(read_error) = std::io::stdin().read_to_string(&mut pre_push_input) {
-        return Err(format!("[commit-identity] status=failed reason=stdin {read_error}"));
+        return Err(format!(
+            "[commit-identity] status=failed reason=stdin {read_error}"
+        ));
     }
     let mut commit_object_ids = Vec::new();
     for pre_push_line in pre_push_input.lines() {
@@ -316,7 +318,9 @@ fn git_stdout_owned(git_arguments: &[String]) -> Result<String, String> {
     let git_output = match Command::new("git").args(git_arguments).output() {
         Ok(git_output) => git_output,
         Err(spawn_error) => {
-            return Err(format!("[commit-identity] status=failed reason=git {spawn_error}"));
+            return Err(format!(
+                "[commit-identity] status=failed reason=git {spawn_error}"
+            ));
         }
     };
     if !git_output.status.success() {

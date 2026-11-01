@@ -131,7 +131,9 @@ fn take_repository_root_override(arguments: &mut Vec<String>) -> Option<std::pat
         return Some(repository_root);
     }
     match std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV) {
-        Ok(journey_root) if !journey_root.is_empty() => Some(std::path::PathBuf::from(journey_root)),
+        Ok(journey_root) if !journey_root.is_empty() => {
+            Some(std::path::PathBuf::from(journey_root))
+        }
         _ => None,
     }
 }

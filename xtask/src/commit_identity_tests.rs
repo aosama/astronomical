@@ -19,38 +19,62 @@ fn raw_commit(author_email: &str, committer_email: &str, message_text: &str) -> 
 
 #[test]
 fn should_accept_the_numeric_github_noreply_address() {
-    assert!(is_publishable_identity_email("583231+octocat@users.noreply.github.com", &[]));
+    assert!(is_publishable_identity_email(
+        "583231+octocat@users.noreply.github.com",
+        &[]
+    ));
 }
 
 #[test]
 fn should_accept_github_owned_and_service_noreply_addresses() {
     assert!(is_publishable_identity_email("noreply@github.com", &[]));
     assert!(is_publishable_identity_email("noreply@anthropic.com", &[]));
-    assert!(is_publishable_identity_email("49699333+dependabot[bot]@users.noreply.github.com", &[]));
+    assert!(is_publishable_identity_email(
+        "49699333+dependabot[bot]@users.noreply.github.com",
+        &[]
+    ));
 }
 
 #[test]
 fn should_accept_reserved_fixture_domains() {
-    assert!(is_publishable_identity_email("fixture@astronomical.invalid", &[]));
+    assert!(is_publishable_identity_email(
+        "fixture@astronomical.invalid",
+        &[]
+    ));
     assert!(is_publishable_identity_email("fixture@build.test", &[]));
     assert!(is_publishable_identity_email("fixture@host.local", &[]));
 }
 
 #[test]
 fn should_reject_a_personal_mailbox() {
-    assert!(!is_publishable_identity_email("person@mail.example.org", &[]));
+    assert!(!is_publishable_identity_email(
+        "person@mail.example.org",
+        &[]
+    ));
 }
 
 #[test]
 fn should_reject_a_login_only_noreply_address_that_github_credits_to_a_stranger() {
-    assert!(!is_publishable_identity_email("octocat@users.noreply.github.com", &[]));
+    assert!(!is_publishable_identity_email(
+        "octocat@users.noreply.github.com",
+        &[]
+    ));
 }
 
 #[test]
 fn should_reject_a_noreply_address_with_a_non_numeric_account_id() {
-    assert!(!is_publishable_identity_email("12ab+octocat@users.noreply.github.com", &[]));
-    assert!(!is_publishable_identity_email("+octocat@users.noreply.github.com", &[]));
-    assert!(!is_publishable_identity_email("583231+@users.noreply.github.com", &[]));
+    assert!(!is_publishable_identity_email(
+        "12ab+octocat@users.noreply.github.com",
+        &[]
+    ));
+    assert!(!is_publishable_identity_email(
+        "+octocat@users.noreply.github.com",
+        &[]
+    ));
+    assert!(!is_publishable_identity_email(
+        "583231+@users.noreply.github.com",
+        &[]
+    ));
 }
 
 #[test]
@@ -64,7 +88,10 @@ fn should_reject_empty_and_malformed_addresses() {
 #[test]
 fn should_compare_addresses_case_insensitively() {
     assert!(is_publishable_identity_email("NoReply@GitHub.com", &[]));
-    assert!(!is_publishable_identity_email("OctoCat@Users.NoReply.GitHub.com", &[]));
+    assert!(!is_publishable_identity_email(
+        "OctoCat@Users.NoReply.GitHub.com",
+        &[]
+    ));
 }
 
 #[test]
@@ -147,33 +174,44 @@ fn should_select_only_unpublished_commits_for_a_new_remote_branch() {
 
 #[test]
 fn should_select_nothing_for_a_branch_deletion() {
-    let pre_push_line =
-        format!("(delete) {ABSENT_OBJECT_ID} refs/heads/topic {REMOTE_OBJECT_ID}");
+    let pre_push_line = format!("(delete) {ABSENT_OBJECT_ID} refs/heads/topic {REMOTE_OBJECT_ID}");
     assert_eq!(rev_list_arguments_for_pre_push_line(&pre_push_line), None);
 }
 
 #[test]
 fn should_select_nothing_for_a_malformed_pre_push_line() {
     assert_eq!(rev_list_arguments_for_pre_push_line(""), None);
-    assert_eq!(rev_list_arguments_for_pre_push_line("refs/heads/topic only-two"), None);
+    assert_eq!(
+        rev_list_arguments_for_pre_push_line("refs/heads/topic only-two"),
+        None
+    );
 }
 
 #[test]
 fn should_accept_an_address_the_developer_declared_publishable() {
     let declared_emails = vec!["Relay.Address@mail.example.org".to_owned()];
-    assert!(is_publishable_identity_email("relay.address@mail.example.org", &declared_emails));
+    assert!(is_publishable_identity_email(
+        "relay.address@mail.example.org",
+        &declared_emails
+    ));
 }
 
 #[test]
 fn should_still_reject_undeclared_addresses_when_others_are_declared() {
     let declared_emails = vec!["relay.address@mail.example.org".to_owned()];
-    assert!(!is_publishable_identity_email("person@mail.example.org", &declared_emails));
+    assert!(!is_publishable_identity_email(
+        "person@mail.example.org",
+        &declared_emails
+    ));
 }
 
 #[test]
 fn should_ignore_blank_declared_entries() {
     let declared_emails = vec!["   ".to_owned()];
-    assert!(!is_publishable_identity_email("person@mail.example.org", &declared_emails));
+    assert!(!is_publishable_identity_email(
+        "person@mail.example.org",
+        &declared_emails
+    ));
 }
 
 #[test]
