@@ -87,6 +87,14 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # `cargo crap --workspace --baseline crap-baseline.json --fail-regression`
 # ratchets complexity against the committed baseline as a hard failure.
 # GitHub Actions runs no code-shape enforcement at all.
+#
+# `cargo xtask commit-identity --staged` (pre-commit) and
+# `cargo xtask commit-identity --pre-push` (pre-push, reads git's ref lines on
+# stdin) refuse author, committer, and Co-authored-by emails that are not safe
+# to publish: only the numeric `<id>+<login>@users.noreply.github.com` form,
+# GitHub-owned addresses, `noreply@` service addresses, and reserved fixture
+# domains pass. A login-only no-reply address is refused because GitHub
+# credits it to whichever stranger owns that login.
 xtask = "run -p xtask --"
 
 # Compile the whole workspace across ALL targets without running anything;

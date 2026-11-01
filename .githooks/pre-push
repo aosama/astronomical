@@ -7,6 +7,17 @@ REPOSITORY_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
     exit 1
 }
 
+# Publishing an identity cannot be undone (forks, pull request refs and
+# scrapers keep it), so this check runs before the skip switch below and is
+# never skipped. git hands the hook one line per pushed ref on stdin.
+printf '%s\n' "[pre-push] status=start check=commit-identity root=${REPOSITORY_ROOT}"
+if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- commit-identity --pre-push; then
+    printf '%s\n' "[pre-push] status=success check=commit-identity"
+else
+    printf '%s\n' "[pre-push] status=failed check=commit-identity" >&2
+    exit 1
+fi
+
 # Every push triggers a paid GitHub Actions round trip; a compile failure that
 # one local `cargo verify` compile would have caught wastes that money and
 # several minutes of wall clock. Gate the push on the full workspace compile
