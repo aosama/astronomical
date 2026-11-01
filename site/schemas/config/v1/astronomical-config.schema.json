@@ -117,7 +117,7 @@
         "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": {
           "type": "integer",
           "minimum": 1,
-          "default": 2048,
+          "default": 4096,
           "description": "Prompt-processing rows evaluated in one forward while sparse experts stream from storage. Independent of the resident chunk. Persistent-cache publication may still clamp each forward to the next durable block boundary.",
           "x-astronomical-apply-mode": "model-reload"
         },

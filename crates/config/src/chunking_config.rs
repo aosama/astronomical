@@ -189,7 +189,34 @@ pub const DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
 /// intent and is preserved.
 pub const LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
 /// Independent SSD-paged prompt chunk. Owned separately from the resident chunk.
-pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
+///
+/// Each SSD-paged prefill chunk re-streams every nonresident expert layer, so
+/// halving the chunk count halves that traffic. A controlled A/B on the large
+/// sparse model (issue #1717: second-of-two warm requests, alternating order,
+/// three rounds, resident chunk held at 2,048) measured 4,096 faster in 12 of
+/// 12 pairings: 21% at a 24 GiB ceiling (about 40% fewer bytes read from the
+/// SSD) and 13% at 37 GiB, with identical peak memory and 41k-token prompts
+/// still admitted. The resident chunk's 4,096 win was a page-cache artifact;
+/// this one holds with the cache both cold and warm.
+pub const DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 4_096;
+/// The previously shipped SSD-paged chunk default. Load-time persistence moves
+/// this exact value to the current default, as it does for the resident
+/// chunk; any other persisted value is deliberate user intent and is kept.
+pub const LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS: u32 = 2_048;
+
+/// Pure: whether the persisted SSD-paged chunk should be (re)written to the
+/// current default — absent, or still the retired default.
+#[must_use]
+pub const fn should_materialize_ssd_streaming_chunk_default(
+    persisted_chunk_tokens: Option<u32>,
+) -> bool {
+    match persisted_chunk_tokens {
+        None => true,
+        Some(chunk_tokens) => {
+            chunk_tokens == LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS
+        }
+    }
+}
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
 /// Resident multi-token prefill keeps one lazy tape unless the user raises this.

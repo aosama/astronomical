@@ -181,10 +181,9 @@ fn persist_mandatory_chunking_fields(
             Some(crate::DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS);
         should_persist = true;
     }
-    if chunking
-        .fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-        .is_none()
-    {
+    if crate::should_materialize_ssd_streaming_chunk_default(
+        chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens,
+    ) {
         chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens =
             Some(crate::DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS);
         should_persist = true;

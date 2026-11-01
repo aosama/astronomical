@@ -62,7 +62,7 @@ fn should_create_minimal_v1_config_document_on_first_run() {
         ("/runtime/model_directories", serde_json::json!([])),
         (
             "/chunking/fixed_ssd_streaming_prompt_processing_chunk_size_tokens",
-            serde_json::json!(2_048),
+            serde_json::json!(4_096),
         ),
         (
             "/chunking/prefill_graph_submission_layer_interval",

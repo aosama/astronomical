@@ -208,9 +208,10 @@ fn should_persist_a_legacy_prefill_interval_onto_the_ssd_paging_field() {
         persisted_chunking["experimental_ssd_paging_prefill_graph_submission_layer_interval"],
         1
     );
+    // 2,048 is the retired SSD-paged default, so load carries it forward.
     assert_eq!(
         persisted_chunking["fixed_ssd_streaming_prompt_processing_chunk_size_tokens"],
-        2_048
+        4_096
     );
     assert_eq!(
         persisted_chunking["experimental_ssd_paging_generation_graph_submission_layer_interval"],
