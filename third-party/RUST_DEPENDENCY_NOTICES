@@ -2865,7 +2865,7 @@ Used by:
 Apache License 2.0
 
 Used by:
-- crc32fast 1.5.2
+- crc32fast 1.5.3
 - derive_builder 0.20.2
 - derive_builder_core 0.20.2
 - derive_builder_macro 0.20.2
@@ -5967,9 +5967,9 @@ Used by:
 - jni-macros 0.22.4
 - jni-sys-macros 0.4.1
 - jni 0.22.4
-- libc 0.2.190
+- libc 0.2.191
 - miniz_oxide 0.8.9
-- mlx-c-rust 0.32.4-alpha.2
+- mlx-c-rust 0.32.4-alpha.3
 - monostate-impl 0.1.18
 - monostate 0.1.18
 - num-conv 0.2.2
@@ -7569,7 +7569,7 @@ MIT License
 
 Used by:
 - tokio-util 0.7.20
-- tokio 1.53.3
+- tokio 1.54.1
 
 MIT License
 
