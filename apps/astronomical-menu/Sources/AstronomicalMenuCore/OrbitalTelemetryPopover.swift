@@ -73,7 +73,7 @@ struct OrbitalTelemetryPopover: View {
       }
       HStack(alignment: .top, spacing: 16) {
         summaryMetric("Size on disk", statusDocument.modelDiskSizeTitle)
-        summaryMetric("Residency", statusDocument.modelFootprintTitle)
+        residencySummary(statusDocument)
       }
       if statusDocument.status == "unavailable",
         let statusRefreshErrorMessage = telemetryStore.lastStatusRefreshErrorMessage
@@ -220,6 +220,22 @@ struct OrbitalTelemetryPopover: View {
     VStack(alignment: .leading, spacing: 2) {
       Text(metricLabel).font(.caption).foregroundStyle(.secondary)
       Text(metricText).font(PopoverTypography.monospacedBody).lineLimit(1)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private func residencySummary(_ statusDocument: DaemonStatusDocument) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text("Residency").font(.caption).foregroundStyle(.secondary)
+      Text(statusDocument.modelFootprintTitle)
+        .font(PopoverTypography.monospacedBody)
+        .fixedSize(horizontal: false, vertical: true)
+      if !statusDocument.replyReadTitle.isEmpty {
+        Text(statusDocument.replyReadTitle)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }

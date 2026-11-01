@@ -278,6 +278,7 @@ impl Qwen3_5Model {
                 PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
                 packed_manifest.payload_byte_count,
             );
+            self.record_avoided_source_bytes_for_paged_session(packed_manifest.payload_byte_count);
             return Ok(Some(self.forward_moe_paged_with_performance_attribution(
                 hidden_states,
                 mixture_of_experts_weights,
@@ -291,6 +292,14 @@ impl Qwen3_5Model {
             )?));
         }
         Ok(None)
+    }
+
+    /// Session counters stay always-on, including when attribution diagnostics
+    /// are off, so a retained full hit still records the source bytes it avoided.
+    fn record_avoided_source_bytes_for_paged_session(&self, payload_byte_count: u64) {
+        if let Some(expert_pager) = self.expert_pager.as_ref() {
+            expert_pager.record_session_avoided_source_bytes(payload_byte_count);
+        }
     }
 
     /// Materializes the routed expert ids on the host when the loaded-model

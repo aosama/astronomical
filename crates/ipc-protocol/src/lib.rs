@@ -18,6 +18,7 @@ mod daemon_transport_error;
 mod embeddings;
 #[cfg(test)]
 mod embeddings_tests;
+mod expert_layer_seating;
 mod image_generation;
 #[cfg(test)]
 mod image_generation_tests;
@@ -62,6 +63,7 @@ pub use daemon_transport_error::DaemonTransportError;
 pub use embeddings::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, EmbeddingsValidationError,
 };
+pub use expert_layer_seating::{EXPERT_LAYER_SEATING_LIMIT, ExpertLayerSeatingCounts};
 pub use image_generation::{
     GeneratedImage, ImageGenerationCapabilities, ImageGenerationCommand,
     ImageGenerationCompletionValidationError, ImageGenerationFailureReason, ImageGenerationPhase,
@@ -82,8 +84,9 @@ pub use persistent_prompt_cache_diagnostics::{
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, RequestId, WorkerCommand,
-    WorkerEvent, WorkerExpertResidencySnapshot, WorkerMemoryCeilingUtilizationSnapshot,
-    WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerEvent, WorkerExpertLayerTopology, WorkerExpertResidencySnapshot,
+    WorkerExpertStreamingStats, WorkerMemoryCeilingUtilizationSnapshot, WorkerMlxMemorySnapshot,
+    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;

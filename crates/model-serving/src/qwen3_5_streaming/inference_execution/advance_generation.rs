@@ -249,9 +249,7 @@ impl Qwen3_5EngineState {
                 )
             });
         Ok(GeneratedToken::GenerationPreparationStarted {
-            total_layer_count: expert_residency.total_layer_count,
-            resident_expert_count: expert_residency.resident_expert_count,
-            resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
+            expert_residency,
             mlx_memory_telemetry,
         })
     }

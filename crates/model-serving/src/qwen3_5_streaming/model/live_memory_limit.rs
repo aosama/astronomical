@@ -11,6 +11,7 @@ use crate::{
 };
 
 use super::Qwen3_5Model;
+use super::prefill_partial_layer_read::should_clear_prefill_completion_refusals;
 
 /// The live runtime facts one ceiling-change decision reads: limits currently
 /// installed, the ceiling they imply, the model's geometry-safe minimum, and
@@ -112,10 +113,29 @@ impl Qwen3_5Model {
                 policy_update_error,
             ));
         }
+        self.clear_prefill_completion_refusals_when_raise_sticks(
+            current_mlx_memory_ceiling_bytes,
+            requested_mlx_memory_ceiling_bytes,
+        );
         Ok((
             minimum_mlx_memory_ceiling_bytes,
             requested_mlx_memory_limits,
         ))
+    }
+
+    /// A higher ceiling can seat a layer the previous one refused. Clearing
+    /// only after the raise sticks lets the next prefill try completion once.
+    fn clear_prefill_completion_refusals_when_raise_sticks(
+        &mut self,
+        current_mlx_memory_ceiling_bytes: u64,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) {
+        if should_clear_prefill_completion_refusals(
+            current_mlx_memory_ceiling_bytes,
+            requested_mlx_memory_ceiling_bytes,
+        ) {
+            self.prefill_layer_completion_refused.borrow_mut().clear();
+        }
     }
 
     /// Everything the ceiling-change decision needs to observe about the live

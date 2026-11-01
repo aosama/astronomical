@@ -277,11 +277,11 @@ fn finalized_resident_generation_token() -> GeneratedToken {
         expert_memory_mode: Some(ExpertMemoryMode::Paged),
         mlx_memory_telemetry: None,
         first_decode_forward_elapsed_millis: None,
-        generation_finalization: Some(GenerationFinalization::new(
+        generation_finalization: Some(Box::new(GenerationFinalization::new(
             Some(ExpertMemoryMode::Resident),
             Some(final_mlx_memory_telemetry),
             None,
-        )),
+        ))),
     }
 }
 

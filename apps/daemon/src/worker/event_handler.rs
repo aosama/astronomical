@@ -10,8 +10,8 @@ use std::sync::{Arc, RwLock};
 use tokio::time::Instant;
 
 use crate::{
-    ChatGenerationStreamEvent, CompletionAttributionLog, ExpertResidencySnapshot,
-    GenerationPerformanceLog, WorkerActivity, WorkerControlError, WorkerHealthSnapshot,
+    ChatGenerationStreamEvent, CompletionAttributionLog, GenerationPerformanceLog, WorkerActivity,
+    WorkerControlError, WorkerHealthSnapshot,
     serving::chat_generation_executor::try_send_stream_event,
     worker::generation::completion_event::handle_worker_completion_event,
     worker::generation::output::{
@@ -22,9 +22,10 @@ use crate::{
     worker::generation::preparation::handle_generation_preparation_started,
     worker::health::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
-        publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
-        publish_mlx_memory_limit_changed, publish_mlx_memory_limit_rejection,
-        publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
+        publish_expert_memory_mode, publish_expert_streaming_stats, publish_health,
+        publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
+        publish_mlx_memory_limit_rejection, publish_persistent_prompt_cache_stats,
+        publish_worker_expert_residency,
     },
     worker::loop_types::{ActiveGeneration, ActiveWorkerRequest},
 };
@@ -112,8 +113,9 @@ pub(super) fn handle_worker_event(
         generation_failed_event @ WorkerEvent::Failed { .. } => {
             apply_generation_failed(generation_failed_event, health_snapshot, active_request)?;
         }
-        prompt_cache_stats_event @ WorkerEvent::PersistentPromptCacheStats { .. } => {
-            publish_persistent_prompt_cache_stats(health_snapshot, prompt_cache_stats_event);
+        observability_event @ (WorkerEvent::PersistentPromptCacheStats { .. }
+        | WorkerEvent::ExpertStreamingStats { .. }) => {
+            dispatch_observability_worker_event(observability_event, health_snapshot);
         }
         prompt_cache_cleared_event @ WorkerEvent::PromptCacheCleared { .. } => {
             return Err(outside_cache_clear_wait_violation(
@@ -142,6 +144,22 @@ pub(super) fn handle_worker_event(
         }
     }
     Ok(())
+}
+
+/// Publishes prompt-cache and expert-streaming snapshots that ride alongside
+/// generation. They are observations, so they stay out of the generation match
+/// and do not change request ownership.
+fn dispatch_observability_worker_event(
+    worker_event: WorkerEvent,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+) {
+    if matches!(worker_event, WorkerEvent::PersistentPromptCacheStats { .. }) {
+        publish_persistent_prompt_cache_stats(health_snapshot, worker_event);
+        return;
+    }
+    if matches!(worker_event, WorkerEvent::ExpertStreamingStats { .. }) {
+        publish_expert_streaming_stats(health_snapshot, worker_event);
+    }
 }
 
 /// Applies a runtime-feature acknowledgement: the acknowledged model must
@@ -446,9 +464,7 @@ fn apply_generation_preparation_started(
     // Routed from the dispatch match; total without a silent catch-all.
     let WorkerEvent::GenerationPreparationStarted {
         request_id,
-        total_layer_count,
-        resident_expert_count,
-        resident_expert_payload_bytes,
+        expert_residency,
         mlx_memory_snapshot,
     } = preparation_started_event
     else {
@@ -459,11 +475,7 @@ fn apply_generation_preparation_started(
     }
     handle_generation_preparation_started(
         request_id,
-        ExpertResidencySnapshot {
-            total_layer_count,
-            resident_expert_count,
-            resident_expert_payload_bytes,
-        },
+        expert_residency.into(),
         health_snapshot,
         active_chat_request_mut(active_request)?,
     )

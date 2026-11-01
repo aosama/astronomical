@@ -48,3 +48,4 @@
 - Pins and patches are under "<repo-root>/third-party".
 - Supported models are under "<repo-root>/registry".
 - Performance measurements tests are under "<repo-root>/verification".
+- There is no requirements for phone browsing for the web user interface, this is a macos desktop only codebase.

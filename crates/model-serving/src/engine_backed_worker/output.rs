@@ -123,20 +123,45 @@ where
         if !generation_finalization.has_reportable_state() {
             return Ok(());
         }
+        self.write_generation_finalization_events(
+            active_generation,
+            generation_finalization,
+            event_writer,
+        )
+        .await
+    }
+
+    /// Writes the final residency event and, when the engine measured a
+    /// streaming session, the expert-streaming stats for this request.
+    /// Token totals are request-scoped here; the daemon accumulates them
+    /// across events so the worker session counters stay purely expert-routing
+    /// facts.
+    async fn write_generation_finalization_events<WriteTransport>(
+        &self,
+        active_generation: &mut ActiveEngineGeneration<
+            Processor::RequestOutput,
+            Processor::InferenceRequest,
+        >,
+        generation_finalization: GenerationFinalization,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
         let expert_memory_mode = generation_finalization.expert_memory_mode();
-        let mlx_memory_snapshot =
-            generation_finalization
-                .mlx_memory_telemetry()
-                .map(|mlx_memory_telemetry| {
-                    worker_memory_snapshot(MlxMemorySnapshotSource::Finalized, mlx_memory_telemetry)
-                });
+        let mlx_memory_snapshot = generation_finalization
+            .mlx_memory_telemetry()
+            .map(finalized_worker_memory_snapshot);
         let expert_residency = generation_finalization
             .expert_residency_telemetry()
             .map(worker_expert_residency_snapshot);
+        let logged_active_memory_bytes = mlx_memory_snapshot
+            .as_ref()
+            .map(active_memory_bytes_of_worker_snapshot);
         tracing::info!(
             request_id = active_generation.request_id.value(),
             expert_memory_mode = ?expert_memory_mode,
-            mlx_active_memory_bytes = ?mlx_memory_snapshot.as_ref().map(|snapshot| snapshot.active_memory_bytes),
+            mlx_active_memory_bytes = ?logged_active_memory_bytes,
             "emitting final generation residency and MLX memory telemetry"
         );
         event_writer
@@ -148,6 +173,19 @@ where
             })
             .await?;
         active_generation.last_reported_expert_memory_mode = expert_memory_mode;
+        if let Some(expert_streaming_stats) = generation_finalization.expert_streaming_stats() {
+            let mut worker_expert_streaming_stats =
+                worker_expert_streaming_stats(expert_streaming_stats);
+            worker_expert_streaming_stats.prompt_token_count =
+                u64::from(active_generation.prompt_token_count);
+            worker_expert_streaming_stats.generated_token_count =
+                u64::from(active_generation.generated_token_count);
+            event_writer
+                .send_event(&WorkerEvent::ExpertStreamingStats {
+                    stats: worker_expert_streaming_stats,
+                })
+                .await?;
+        }
         Ok(())
     }
 
@@ -449,6 +487,16 @@ fn worker_memory_observation(
     )
 }
 
+fn finalized_worker_memory_snapshot(
+    mlx_memory_telemetry: MlxMemoryTelemetry,
+) -> WorkerMlxMemorySnapshot {
+    worker_memory_snapshot(MlxMemorySnapshotSource::Finalized, mlx_memory_telemetry)
+}
+
+fn active_memory_bytes_of_worker_snapshot(snapshot: &WorkerMlxMemorySnapshot) -> u64 {
+    snapshot.active_memory_bytes
+}
+
 /// Converts engine-owned residency telemetry into the public worker snapshot.
 pub(super) fn worker_expert_residency_snapshot(
     expert_residency: crate::inference_engine::contract::ExpertResidencyTelemetry,
@@ -457,6 +505,67 @@ pub(super) fn worker_expert_residency_snapshot(
         total_layer_count: expert_residency.total_layer_count,
         resident_expert_count: expert_residency.resident_expert_count,
         resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
+        complete_expert_payload_byte_count: expert_residency.complete_expert_payload_byte_count,
+        expert_capacity: expert_residency.expert_capacity,
+        layer_seating: expert_residency.layer_seating,
+    }
+}
+
+/// Converts the engine-contract session stats into the IPC event payload.
+/// Pure field mapping: no derived values, so the daemon receives exactly what
+/// the worker measured.
+pub(super) fn worker_expert_streaming_stats(
+    expert_streaming_stats: &crate::inference_engine::contract::ExpertStreamingStats,
+) -> astronomical_ipc_protocol::WorkerExpertStreamingStats {
+    astronomical_ipc_protocol::WorkerExpertStreamingStats {
+        model_id: expert_streaming_stats.model_id.clone(),
+        expert_memory_mode: expert_streaming_stats.expert_memory_mode,
+        expert_residency: astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+            total_layer_count: expert_streaming_stats.total_layer_count,
+            resident_expert_count: expert_streaming_stats.resident_expert_count,
+            resident_expert_payload_bytes: expert_streaming_stats.resident_expert_payload_bytes,
+            complete_expert_payload_byte_count: expert_streaming_stats
+                .complete_expert_payload_byte_count,
+            expert_capacity: expert_streaming_stats.expert_capacity,
+            // Session totals stay end-of-reply. The live layer map rides the
+            // residency sample, which already carries the seating counts.
+            layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+        },
+        layer_topology: expert_streaming_stats
+            .layer_topology
+            .iter()
+            .map(worker_expert_layer_topology)
+            .collect(),
+        retained_route_assignment_count: expert_streaming_stats.retained_route_assignment_count,
+        storage_route_assignment_count: expert_streaming_stats.storage_route_assignment_count,
+        hot_route_fully_covered_token_count: expert_streaming_stats
+            .hot_route_fully_covered_token_count,
+        hot_route_partially_covered_token_count: expert_streaming_stats
+            .hot_route_partially_covered_token_count,
+        hot_route_missed_token_count: expert_streaming_stats.hot_route_missed_token_count,
+        expert_source_read_call_count: expert_streaming_stats.expert_source_read_call_count,
+        expert_source_read_byte_count: expert_streaming_stats.expert_source_read_byte_count,
+        expert_source_read_elapsed_nanoseconds: expert_streaming_stats
+            .expert_source_read_elapsed_nanoseconds,
+        avoided_complete_layer_source_bytes: expert_streaming_stats
+            .avoided_complete_layer_source_bytes,
+        mandatory_prefill_source_bytes: expert_streaming_stats.mandatory_prefill_source_bytes,
+        mandatory_decode_source_bytes: expert_streaming_stats.mandatory_decode_source_bytes,
+        prompt_token_count: expert_streaming_stats.prompt_token_count,
+        generated_token_count: expert_streaming_stats.generated_token_count,
+    }
+}
+
+/// Converts one layer's topology row into the IPC payload.
+fn worker_expert_layer_topology(
+    layer_topology: &crate::inference_engine::contract::ExpertLayerTopology,
+) -> astronomical_ipc_protocol::WorkerExpertLayerTopology {
+    astronomical_ipc_protocol::WorkerExpertLayerTopology {
+        layer_index: layer_topology.layer_index,
+        retained_expert_ids: layer_topology.retained_expert_ids.clone(),
+        retained_payload_bytes: layer_topology.retained_payload_bytes,
+        is_complete_layer: layer_topology.is_complete_layer,
+        covered_demand: layer_topology.covered_demand,
     }
 }
 

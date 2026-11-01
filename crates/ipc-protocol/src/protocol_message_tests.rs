@@ -105,9 +105,14 @@ async fn should_round_trip_expert_memory_mode_change_event() {
 async fn should_round_trip_generation_preparation_topology() {
     let worker_event = WorkerEvent::GenerationPreparationStarted {
         request_id: RequestId::new(72),
-        total_layer_count: 40,
-        resident_expert_count: 32,
-        resident_expert_payload_bytes: 21_969_764_352,
+        expert_residency: WorkerExpertResidencySnapshot {
+            total_layer_count: 40,
+            resident_expert_count: 32,
+            resident_expert_payload_bytes: 21_969_764_352,
+            complete_expert_payload_byte_count: 40_000_000_000,
+            expert_capacity: 256,
+            layer_seating: crate::ExpertLayerSeatingCounts::default(),
+        },
         mlx_memory_snapshot: None,
     };
     let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
@@ -189,6 +194,9 @@ async fn should_round_trip_changed_and_rejected_memory_limit_events() {
                 total_layer_count: 24,
                 resident_expert_count: 2,
                 resident_expert_payload_bytes: 4_000,
+                complete_expert_payload_byte_count: 8_000,
+                expert_capacity: 8,
+                layer_seating: crate::ExpertLayerSeatingCounts::default(),
             }),
         },
         WorkerEvent::MlxMemoryLimitRejected {

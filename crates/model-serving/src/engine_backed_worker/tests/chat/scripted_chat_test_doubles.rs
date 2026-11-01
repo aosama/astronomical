@@ -443,7 +443,7 @@ impl InferenceEngine for ScriptedChatEngine {
     ) -> Result<GenerationFinalization, InferenceEngineError> {
         self.cancellation_count.fetch_add(1, Ordering::SeqCst);
         self.is_active = false;
-        Ok(self.cancelled_generation_finalization)
+        Ok(self.cancelled_generation_finalization.clone())
     }
 
     async fn update_mlx_memory_limit(
@@ -469,6 +469,9 @@ impl InferenceEngine for ScriptedChatEngine {
             total_layer_count: 2,
             resident_expert_count: 2,
             resident_expert_payload_bytes: 8_000,
+            complete_expert_payload_byte_count: 8_000,
+            expert_capacity: 2,
+            layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
         }))
     }
 

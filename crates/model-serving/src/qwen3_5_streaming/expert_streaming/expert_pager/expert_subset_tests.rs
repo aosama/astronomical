@@ -120,6 +120,93 @@ fn should_reject_slots_outside_the_page_and_empty_selections() {
     assert!(empty.to_string().contains("at least one page slot"));
 }
 
+#[test]
+#[serial]
+fn should_concatenate_retained_experts_ahead_of_the_appended_page() {
+    let runtime = test_runtime();
+    let page = packed_codebook_page(&runtime);
+    let retained = page
+        .select_experts(&runtime, &[0, 1])
+        .expect("the retained half should select");
+    let appended = page
+        .select_experts(&runtime, &[2, 3])
+        .expect("the appended half should select");
+    let assembled = retained
+        .concatenate_expert_pages(&runtime, &appended)
+        .expect("pages that share a representation should concatenate");
+    assert_eq!(assembled.down_projection.expert_count(), PAGE_EXPERT_COUNT);
+    assert_eq!(
+        packed_words_of(&assembled.down_projection).0,
+        packed_words_of(&page.down_projection).0,
+        "retained experts occupy the first slots and the appended page follows them"
+    );
+    assert_eq!(
+        assembled.resident_payload_byte_count(),
+        page.resident_payload_byte_count()
+    );
+}
+
+#[test]
+#[serial]
+fn should_concatenate_a_single_retained_expert_with_a_single_miss() {
+    let runtime = test_runtime();
+    let page = packed_codebook_page(&runtime);
+    let retained = page
+        .select_experts(&runtime, &[0])
+        .expect("one retained expert should select");
+    let appended = page
+        .select_experts(&runtime, &[3])
+        .expect("one missing expert should select");
+    let assembled = retained
+        .concatenate_expert_pages(&runtime, &appended)
+        .expect("one expert on each side should concatenate");
+    let assembled_words = packed_words_of(&assembled.gate_projection).0;
+    let page_words = packed_words_of(&page.gate_projection).0;
+    let expert_word_count = OUTPUT_ROWS * WORDS_PER_ROW;
+    assert_eq!(assembled.gate_projection.expert_count(), 2);
+    assert_eq!(
+        &assembled_words[..expert_word_count],
+        &page_words[..expert_word_count]
+    );
+    assert_eq!(
+        &assembled_words[expert_word_count..],
+        &page_words[3 * expert_word_count..4 * expert_word_count]
+    );
+}
+
+#[test]
+#[serial]
+fn should_reject_concatenated_pages_that_do_not_share_rotations_or_codebook_width() {
+    let runtime = test_runtime();
+    let retained = packed_codebook_page(&runtime);
+    let mut rotated_differently = packed_codebook_page(&runtime);
+    rotated_differently.gate_activation_rotation =
+        astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation;
+    let rotation_refusal = retained
+        .concatenate_expert_pages(&runtime, &rotated_differently)
+        .expect_err("different activation rotations cannot share one forward");
+    assert!(
+        rotation_refusal
+            .to_string()
+            .contains("activation rotations")
+    );
+    let mut narrower_codebook = packed_codebook_page(&runtime);
+    match &mut narrower_codebook.gate_projection {
+        Qwen3_5AffineWeights::Jangtq2Codebook {
+            codebook_bit_width, ..
+        } => *codebook_bit_width = 3,
+        _ => panic!("the test page is a codebook projection"),
+    }
+    let width_refusal = retained
+        .concatenate_expert_pages(&runtime, &narrower_codebook)
+        .expect_err("different codebook widths cannot share one expert axis");
+    assert!(
+        width_refusal
+            .to_string()
+            .contains("quantization representation")
+    );
+}
+
 /// One packed codebook projection whose every word encodes its own expert
 /// and row, tagged so the gate, up, and down pages of a test page carry
 /// distinct, predictable values.

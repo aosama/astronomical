@@ -395,6 +395,7 @@ fn core_api_routes() -> Router<ApplicationState> {
         .route("/ready", get(readiness_check))
         .route("/v1/status", get(status_check))
         .route("/v1/cache/stats", get(cache_stats))
+        .route("/v1/experts/stats", get(crate::rest::experts::expert_stats))
         .route("/v1/models", get(list_models))
         .route("/v1/models/{*model}", get(retrieve_model))
         .route(

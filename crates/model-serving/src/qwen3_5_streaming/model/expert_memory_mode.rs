@@ -17,15 +17,44 @@ impl Qwen3_5StreamingModel {
         &self,
         mlx_memory_breakdown: &MlxActiveMemoryBreakdown,
     ) -> ExpertResidencyTelemetry {
-        let total_layer_count = self
-            .expert_pager
-            .as_ref()
-            .map_or(0, |expert_pager| expert_pager.layer_count());
+        self.reconciled_expert_residency_telemetry(mlx_memory_breakdown)
+    }
+
+    fn reconciled_expert_residency_telemetry(
+        &self,
+        mlx_memory_breakdown: &MlxActiveMemoryBreakdown,
+    ) -> ExpertResidencyTelemetry {
         let expert_statistics = self.expert_weight_memory_cache_statistics();
+        let (total_layer_count, complete_expert_payload_byte_count, expert_capacity) =
+            match self.expert_pager.as_ref() {
+                Some(expert_pager) => {
+                    let total_layer_count = expert_pager.layer_count();
+                    let (complete_expert_payload_byte_count, expert_capacity) =
+                        super::expert_streaming_stats::expert_library_facts(expert_pager);
+                    (
+                        total_layer_count,
+                        complete_expert_payload_byte_count,
+                        expert_capacity,
+                    )
+                }
+                None => (0, 0, 0),
+            };
+        let layer_seating = match self.retained_experts.as_ref() {
+            Some(retained_experts) => {
+                let retained_expert_counts = retained_experts.borrow().retained_expert_counts();
+                astronomical_ipc_protocol::ExpertLayerSeatingCounts::from_retained_counts(
+                    &retained_expert_counts,
+                )
+            }
+            None => astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+        };
         ExpertResidencyTelemetry {
             total_layer_count: u32::try_from(total_layer_count).unwrap_or(u32::MAX),
             resident_expert_count: u32::try_from(expert_statistics.entry_count).unwrap_or(u32::MAX),
             resident_expert_payload_bytes: mlx_memory_breakdown.expert_payload_bytes,
+            complete_expert_payload_byte_count,
+            expert_capacity,
+            layer_seating,
         }
     }
 

@@ -180,6 +180,7 @@ struct DaemonStatusDocument: Codable, Equatable {
   let progress: Progress?
   let expertMemoryMode: String?
   let expertResidency: ExpertResidencySnapshot?
+  let expertPlacement: ExpertPlacementCopy?
   // True only when the current worker has emitted its runtime configuration event; configuration
   // intent alone is insufficient because a replacement worker can still fail before applying it.
   let workerRuntimeFeatureConfigurationApplied: Bool
@@ -199,12 +200,23 @@ struct DaemonStatusDocument: Codable, Equatable {
   let mlxMemoryLimitError: String?
   let servingSession: ServingSession
 
+  struct ExpertPlacementCopy: Codable, Equatable {
+    let stockSentence: String?
+    let replySentence: String?
+
+    enum CodingKeys: String, CodingKey {
+      case stockSentence = "stock_sentence"
+      case replySentence = "reply_sentence"
+    }
+  }
+
   enum CodingKeys: String, CodingKey {
     case application, status, activity, progress, configuration
     case readyModelIdentifier = "ready_model_id"
     case readyModelSizeBytes = "ready_model_size_bytes"
     case expertMemoryMode = "expert_memory_mode"
     case expertResidency = "expert_residency"
+    case expertPlacement = "expert_placement"
     case workerRuntimeFeatureConfigurationApplied = "worker_runtime_feature_configuration_applied"
     case workerRuntimeFeatureConfiguration = "worker_runtime_feature_configuration"
     case mlxMemorySnapshot = "mlx_memory_snapshot"
@@ -233,6 +245,8 @@ struct DaemonStatusDocument: Codable, Equatable {
     expertMemoryMode = try container.decodeIfPresent(String.self, forKey: .expertMemoryMode)
     expertResidency = try container.decodeIfPresent(
       ExpertResidencySnapshot.self, forKey: .expertResidency)
+    expertPlacement = try container.decodeIfPresent(
+      ExpertPlacementCopy.self, forKey: .expertPlacement)
     let decodedWorkerRuntimeFeatureConfigurationApplied = try container.decodeIfPresent(
       Bool.self, forKey: .workerRuntimeFeatureConfigurationApplied)
     if let decodedWorkerRuntimeFeatureConfigurationApplied {
@@ -290,6 +304,7 @@ struct DaemonStatusDocument: Codable, Equatable {
     progress: Progress?,
     expertMemoryMode: String?,
     expertResidency: ExpertResidencySnapshot? = nil,
+    expertPlacement: ExpertPlacementCopy? = nil,
     workerRuntimeFeatureConfigurationApplied: Bool = false,
     workerRuntimeFeatureConfiguration: WorkerRuntimeFeatureConfiguration? = nil,
     mlxMemorySnapshot: MlxMemorySnapshot? = nil,
@@ -311,6 +326,7 @@ struct DaemonStatusDocument: Codable, Equatable {
     self.progress = progress
     self.expertMemoryMode = expertMemoryMode
     self.expertResidency = expertResidency
+    self.expertPlacement = expertPlacement
     self.workerRuntimeFeatureConfigurationApplied = workerRuntimeFeatureConfigurationApplied
     self.workerRuntimeFeatureConfiguration = workerRuntimeFeatureConfiguration
     self.mlxMemorySnapshot = mlxMemorySnapshot

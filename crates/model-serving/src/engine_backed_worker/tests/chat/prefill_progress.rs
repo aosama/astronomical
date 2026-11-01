@@ -29,6 +29,10 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                         total_layer_count: 40,
                         resident_expert_count: 40,
                         resident_expert_payload_bytes: 3_375_366_144,
+                        complete_expert_payload_byte_count: 21_000_000_000,
+                        expert_capacity: 256,
+                        layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(
+                        ),
                     }),
                     mlx_memory_telemetry: Some(MlxMemoryTelemetry::new(
                         11_000,
@@ -146,6 +150,9 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     total_layer_count: 40,
                     resident_expert_count: 40,
                     resident_expert_payload_bytes: 3_375_366_144,
+                    complete_expert_payload_byte_count: 21_000_000_000,
+                    expert_capacity: 256,
+                    layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
                 })
             );
             assert_eq!(
