@@ -17,28 +17,34 @@ use axum::{
 use serde_json::{Value, json};
 
 /// Pure counterfactual: nanoseconds storage reads would have added if the
-/// assignments served from retained RAM had missed instead.
+/// decode assignments served from retained RAM had missed instead.
 ///
-/// The estimate divides the measured storage-read elapsed time by the storage
-/// assignment count — "if RAM hits had gone to storage at this machine's
-/// actual measured storage speed" — so it is calibrated per machine and uses
-/// no synthetic benchmark. Zero storage misses yields zero: without a
-/// measured miss there is no honest speed to extrapolate from.
+/// Decode-only on both sides (issue #1715): decode read seconds ÷ decode
+/// storage assignments × decode retained assignments. Prefill read time
+/// never enters the estimate — a long prompt's wide reads say nothing about
+/// this machine's per-assignment decode storage speed. `None` means unknown:
+/// without a measured decode miss there is no honest speed to extrapolate
+/// from, and zero would be a fabricated answer.
 #[must_use]
 pub(crate) fn estimate_storage_time_saved_nanoseconds(
-    retained_route_assignment_count: u64,
-    storage_route_assignment_count: u64,
-    expert_source_read_elapsed_nanoseconds: u64,
-) -> u64 {
-    if storage_route_assignment_count == 0 || retained_route_assignment_count == 0 {
-        return 0;
+    retained_decode_assignment_count: u64,
+    storage_decode_assignment_count: u64,
+    decode_read_elapsed_nanoseconds: u64,
+) -> Option<u64> {
+    if storage_decode_assignment_count == 0 || retained_decode_assignment_count == 0 {
+        return None;
     }
-    let average_storage_assignment_nanoseconds =
-        expert_source_read_elapsed_nanoseconds / storage_route_assignment_count;
-    average_storage_assignment_nanoseconds.saturating_mul(retained_route_assignment_count)
+    let average_decode_storage_assignment_nanoseconds =
+        decode_read_elapsed_nanoseconds / storage_decode_assignment_count;
+    Some(
+        average_decode_storage_assignment_nanoseconds
+            .saturating_mul(retained_decode_assignment_count),
+    )
 }
 
-/// Pure: share of routed assignments served from retained RAM (0.0–1.0).
+/// Pure: share of routed decode assignments served from retained RAM
+/// (0.0–1.0). Fully resident layers count as hits: the session counters
+/// already include their decode layer-tokens (issue #1715).
 #[must_use]
 pub(crate) fn resident_route_hit_rate(
     retained_route_assignment_count: u64,
@@ -89,7 +95,7 @@ pub(crate) fn expert_stats_document(
     let storage_time_saved_estimate_nanoseconds = estimate_storage_time_saved_nanoseconds(
         latest_stats.retained_route_assignment_count,
         latest_stats.storage_route_assignment_count,
-        latest_stats.expert_source_read_elapsed_nanoseconds,
+        latest_stats.decode_source_read_elapsed_nanoseconds,
     );
     json!({
         "available": true,
@@ -112,42 +118,61 @@ pub(crate) fn expert_stats_document(
                 latest_stats.expert_residency.resident_expert_payload_bytes,
             ),
         },
-        "value": {
-            "retained_route_assignment_count": latest_stats.retained_route_assignment_count,
-            "storage_route_assignment_count": latest_stats.storage_route_assignment_count,
-            "resident_route_hit_rate": resident_route_hit_rate(
-                latest_stats.retained_route_assignment_count,
-                latest_stats.storage_route_assignment_count,
-            ),
-            "storage_time_saved_estimate_nanoseconds":
-                storage_time_saved_estimate_nanoseconds,
-            "storage_time_saved_estimate_seconds":
-                storage_time_saved_estimate_nanoseconds / 1_000_000_000,
-            "avoided_complete_layer_source_bytes":
-                latest_stats.avoided_complete_layer_source_bytes,
-            "mandatory_prefill_source_bytes": latest_stats.mandatory_prefill_source_bytes,
-            "mandatory_decode_source_bytes": latest_stats.mandatory_decode_source_bytes,
-            "expert_source_read_byte_count": latest_stats.expert_source_read_byte_count,
-            "expert_source_read_call_count": latest_stats.expert_source_read_call_count,
-            "expert_source_read_elapsed_nanoseconds":
-                latest_stats.expert_source_read_elapsed_nanoseconds,
-            "measured_storage_read_bytes_per_second": measured_storage_read_bytes_per_second(
-                latest_stats.expert_source_read_byte_count,
-                latest_stats.expert_source_read_elapsed_nanoseconds,
-            ),
-            "hot_route_fully_covered_token_count":
-                latest_stats.hot_route_fully_covered_token_count,
-            "hot_route_partially_covered_token_count":
-                latest_stats.hot_route_partially_covered_token_count,
-            "hot_route_missed_token_count": latest_stats.hot_route_missed_token_count,
-            "session_prompt_token_count":
-                expert_streaming_observatory.accumulated_prompt_token_count,
-            "session_generated_token_count":
-                expert_streaming_observatory.accumulated_generated_token_count,
-        },
+        "value": expert_value_section(latest_stats, &storage_time_saved_estimate_nanoseconds,
+            expert_streaming_observatory),
         "layer_topology": layer_topology_entries(latest_stats),
         "mode_transitions": mode_transition_entries(expert_streaming_observatory),
         "updated_at_unix_millis": expert_streaming_observatory.updated_at_unix_millis,
+    })
+}
+
+/// Pure: the observatory value panel's counters. Physical disk bytes and the
+/// time-saved estimate are optional evidence — `null` reads as "not measured
+/// yet" rather than a fabricated zero (issue #1715).
+fn expert_value_section(
+    latest_stats: &astronomical_ipc_protocol::WorkerExpertStreamingStats,
+    storage_time_saved_estimate_nanoseconds: &Option<u64>,
+    expert_streaming_observatory: &ExpertStreamingObservatory,
+) -> Value {
+    json!({
+        "retained_route_assignment_count": latest_stats.retained_route_assignment_count,
+        "storage_route_assignment_count": latest_stats.storage_route_assignment_count,
+        "resident_route_hit_rate": resident_route_hit_rate(
+            latest_stats.retained_route_assignment_count,
+            latest_stats.storage_route_assignment_count,
+        ),
+        "storage_time_saved_estimate_nanoseconds":
+            storage_time_saved_estimate_nanoseconds,
+        "storage_time_saved_estimate_seconds": storage_time_saved_estimate_nanoseconds
+            .map(|estimate_nanoseconds| estimate_nanoseconds / 1_000_000_000),
+        "avoided_complete_layer_source_bytes":
+            latest_stats.avoided_complete_layer_source_bytes,
+        "mandatory_prefill_source_bytes": latest_stats.mandatory_prefill_source_bytes,
+        "mandatory_decode_source_bytes": latest_stats.mandatory_decode_source_bytes,
+        "expert_source_read_byte_count": latest_stats.expert_source_read_byte_count,
+        "expert_source_physical_disk_read_bytes":
+            latest_stats.expert_source_physical_disk_read_bytes,
+        "expert_source_read_call_count": latest_stats.expert_source_read_call_count,
+        "expert_source_read_elapsed_nanoseconds":
+            latest_stats.expert_source_read_elapsed_nanoseconds,
+        "prefill_source_read_elapsed_nanoseconds":
+            latest_stats.prefill_source_read_elapsed_nanoseconds,
+        "decode_source_read_elapsed_nanoseconds":
+            latest_stats.decode_source_read_elapsed_nanoseconds,
+        "measured_storage_read_bytes_per_second": measured_storage_read_bytes_per_second(
+            latest_stats.expert_source_read_byte_count,
+            latest_stats.expert_source_read_elapsed_nanoseconds,
+        ),
+        "hot_route_fully_covered_layer_token_count":
+            latest_stats.hot_route_fully_covered_layer_token_count,
+        "hot_route_partially_covered_layer_token_count":
+            latest_stats.hot_route_partially_covered_layer_token_count,
+        "hot_route_missed_layer_token_count":
+            latest_stats.hot_route_missed_layer_token_count,
+        "session_prompt_token_count":
+            expert_streaming_observatory.accumulated_prompt_token_count,
+        "session_generated_token_count":
+            expert_streaming_observatory.accumulated_generated_token_count,
     })
 }
 

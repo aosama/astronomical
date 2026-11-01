@@ -179,10 +179,10 @@ function renderExpertSession(statusDocument, statsDocument, headlineFacts) {
     if (sessionGrid) {
         sessionGrid.hidden = !hasSession;
     }
-    const openSentence = expertSessionOpenSentence(statusDocument.activity);
+    const openSentence = expertSessionScopeSentence(statusDocument.activity);
     const openNote = document.getElementById("experts-session-open");
     if (openNote) {
-        openNote.hidden = openSentence.length === 0;
+        openNote.hidden = false;
         openNote.textContent = openSentence;
     }
     if (!hasSession) {
@@ -195,6 +195,12 @@ function renderExpertSession(statusDocument, statsDocument, headlineFacts) {
     );
     setExpertText("experts-session-prompt", formatExpertGigabytes(piles.promptBytes));
     setExpertText("experts-session-generation", formatExpertGigabytes(piles.generationBytes));
+    setExpertText(
+        "experts-session-physical",
+        piles.physicalDiskReadBytes === null
+            ? "Not measured yet"
+            : formatExpertGigabytes(piles.physicalDiskReadBytes)
+    );
     setExpertText(
         "experts-session-avoided",
         formatExpertGigabytes(piles.avoidedCompleteLayerBytes)
@@ -347,7 +353,7 @@ function findExpertLayerRow(layerRows, layerIndex) {
 function renderExpertGeneration(statsDocument) {
     const sentence = statsDocument && statsDocument.available
         ? expertGenerationSentence(statsDocument.value)
-        : "Generation totals appear when the first reply finishes.";
+        : "Decode layer-token totals appear when the first reply finishes.";
     setExpertText("experts-generation-sentence", sentence);
 }
 

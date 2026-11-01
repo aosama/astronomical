@@ -66,6 +66,10 @@ impl Qwen3_5Model {
         let session_counters = expert_pager.session_counter_snapshot();
         let (read_call_count, read_byte_count, read_elapsed_nanoseconds) =
             expert_pager.session_read_totals();
+        let (prefill_read_elapsed_nanoseconds, decode_read_elapsed_nanoseconds) =
+            expert_pager.session_streaming_phase_read_totals();
+        let expert_source_physical_disk_read_bytes =
+            expert_pager.session_physical_disk_read_bytes();
         // The first layer plan carries the uniform expert capacity every
         // layer shares, the same source the decode warm handoff trusts.
         let (complete_expert_payload_byte_count, expert_capacity) =
@@ -100,14 +104,17 @@ impl Qwen3_5Model {
             layer_topology,
             retained_route_assignment_count: session_counters.retained_route_assignment_count,
             storage_route_assignment_count: session_counters.storage_route_assignment_count,
-            hot_route_fully_covered_token_count: session_counters
-                .hot_route_fully_covered_token_count,
-            hot_route_partially_covered_token_count: session_counters
-                .hot_route_partially_covered_token_count,
-            hot_route_missed_token_count: session_counters.hot_route_missed_token_count,
+            hot_route_fully_covered_layer_token_count: session_counters
+                .hot_route_fully_covered_layer_token_count,
+            hot_route_partially_covered_layer_token_count: session_counters
+                .hot_route_partially_covered_layer_token_count,
+            hot_route_missed_layer_token_count: session_counters.hot_route_missed_layer_token_count,
             expert_source_read_call_count: read_call_count,
             expert_source_read_byte_count: read_byte_count,
             expert_source_read_elapsed_nanoseconds: read_elapsed_nanoseconds,
+            prefill_source_read_elapsed_nanoseconds: prefill_read_elapsed_nanoseconds,
+            decode_source_read_elapsed_nanoseconds: decode_read_elapsed_nanoseconds,
+            expert_source_physical_disk_read_bytes,
             avoided_complete_layer_source_bytes: session_counters
                 .avoided_complete_layer_source_bytes,
             mandatory_prefill_source_bytes: session_counters.mandatory_prefill_source_bytes,

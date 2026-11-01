@@ -111,17 +111,29 @@ pub struct WorkerExpertStreamingStats {
     pub retained_route_assignment_count: u64,
     /// Routed assignments read from storage this session.
     pub storage_route_assignment_count: u64,
-    /// Decode tokens whose routed experts were all warm.
-    pub hot_route_fully_covered_token_count: u64,
-    /// Decode tokens with some warm and some cold routed experts.
-    pub hot_route_partially_covered_token_count: u64,
-    /// Decode tokens with no warm routed experts.
-    pub hot_route_missed_token_count: u64,
+    /// Decode layer-tokens whose routed experts were all warm. Classified once
+    /// per layer per token, so these count layer-tokens, not tokens (issue
+    /// #1715).
+    pub hot_route_fully_covered_layer_token_count: u64,
+    /// Decode layer-tokens with some warm and some cold routed experts.
+    pub hot_route_partially_covered_layer_token_count: u64,
+    /// Decode layer-tokens with no warm routed experts.
+    pub hot_route_missed_layer_token_count: u64,
     /// Logical positional reads issued for expert payloads this session.
     pub expert_source_read_call_count: u64,
     pub expert_source_read_byte_count: u64,
     pub expert_source_read_elapsed_nanoseconds: u64,
-    /// Complete-layer payload bytes streaming avoided reading from storage.
+    /// Positional-read time attributable to prefill page streams.
+    pub prefill_source_read_elapsed_nanoseconds: u64,
+    /// Positional-read time attributable to decode page streams; the only
+    /// seconds the decode time-saved estimate may divide by decode misses.
+    pub decode_source_read_elapsed_nanoseconds: u64,
+    /// Physical disk bytes the process read since expert streaming began,
+    /// or `None` when the platform cannot sample process I/O. Wider than
+    /// expert paging: process-attributed, so other worker reads count too.
+    pub expert_source_physical_disk_read_bytes: Option<u64>,
+    /// Storage bytes a no-cache server would have read for the routes that
+    /// seated complete layers served from RAM instead (issue #1715).
     pub avoided_complete_layer_source_bytes: u64,
     /// Expert payload bytes prefill had to stream from storage.
     pub mandatory_prefill_source_bytes: u64,

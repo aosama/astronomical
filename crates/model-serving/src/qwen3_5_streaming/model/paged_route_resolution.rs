@@ -84,7 +84,7 @@ impl Qwen3_5Model {
         drop(completion_roots);
         drop(deferred_expert_demand);
         drop(pending_route_observation);
-        self.record_deferred_expert_demand();
+        self.record_deferred_expert_demand(performance_attribution);
         if eval_elapsed > std::time::Duration::from_millis(500) {
             tracing::info!(
                 eval_elapsed_millis = eval_elapsed.as_millis(),

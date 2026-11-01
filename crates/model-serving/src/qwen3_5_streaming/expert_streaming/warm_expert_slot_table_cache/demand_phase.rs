@@ -22,6 +22,16 @@ pub(super) enum ExpertDemandPhase {
 }
 
 impl WarmExpertSlotTableCache {
+    /// The serving phase demand evidence is currently recorded for. This is
+    /// engine state, exposed so the storage boundary files each expert read
+    /// under the phase the engine is actually in (issue #1715).
+    pub(crate) fn current_serving_phase(&self) -> crate::memory::SessionStreamingPhase {
+        match self.demand_phase {
+            ExpertDemandPhase::Prefill => crate::memory::SessionStreamingPhase::Prefill,
+            ExpertDemandPhase::Decode => crate::memory::SessionStreamingPhase::Decode,
+        }
+    }
+
     /// Opens one request's prefill demand window.
     ///
     /// The previous request's prefill evidence is spent: it served its

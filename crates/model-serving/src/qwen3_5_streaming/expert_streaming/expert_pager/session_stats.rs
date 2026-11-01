@@ -12,8 +12,7 @@ use astronomical_runtime_integration::PositionalFileReadMetrics;
 
 use crate::inference_engine::contract::ExpertLayerTopology;
 use crate::memory::{
-    ExpertStreamingSessionCounters, RouteCoverageClass, SessionStreamingPhase,
-    expert_layer_topology_from_residency,
+    ExpertStreamingSessionCounters, RouteCoverageClass, expert_layer_topology_from_residency,
 };
 
 use super::Qwen3_5ExpertPager;
@@ -41,15 +40,33 @@ impl Qwen3_5ExpertPager {
             .record_avoided_complete_layer_source_bytes(payload_bytes);
     }
 
-    /// Records payload bytes one phase genuinely streamed from storage.
-    pub(crate) fn record_session_mandatory_source_bytes(
-        &self,
-        phase: SessionStreamingPhase,
-        payload_bytes: u64,
-    ) {
-        self.session_counters
-            .borrow_mut()
-            .record_mandatory_source_bytes(phase, payload_bytes);
+    /// Samples the process I/O baseline once, before the first expert read of
+    /// this engine load. The session's physical-read figure is the delta from
+    /// this baseline, so model-artifact loading that precedes expert streaming
+    /// cannot inflate it.
+    pub(crate) fn ensure_session_process_io_baseline(&self) {
+        let mut session_process_io_baseline = self.session_process_io_baseline.borrow_mut();
+        if session_process_io_baseline.is_none() {
+            *session_process_io_baseline =
+                Some(crate::performance_attribution::macos_process_io::sample_current_process_io());
+        }
+    }
+
+    /// Pure: physical disk bytes the process read since expert streaming
+    /// began, or `None` when sampling is unsupported, failed, or no expert
+    /// read has happened yet. Process-attributed and therefore wider than
+    /// expert paging: other worker I/O in the same window contributes, which
+    /// is exactly the divergence the observatory page should show next to
+    /// the logical requested bytes (issue #1715).
+    pub(crate) fn session_physical_disk_read_bytes(&self) -> Option<u64> {
+        let baseline_sampling_result = self.session_process_io_baseline.borrow().clone()?;
+        let baseline_snapshot = baseline_sampling_result.ok()?;
+        let current_snapshot =
+            crate::performance_attribution::macos_process_io::sample_current_process_io().ok()?;
+        current_snapshot
+            .delta_since(baseline_snapshot)
+            .ok()
+            .map(|process_io_delta| process_io_delta.physical_disk_read_bytes())
     }
 
     /// Returns the always-on positional-read aggregate so expert-source
@@ -84,5 +101,14 @@ impl Qwen3_5ExpertPager {
             .iter()
             .map(expert_layer_topology_from_residency)
             .collect()
+    }
+
+    /// Pure: the session counters plus the phase-scoped read-time windows.
+    pub(crate) fn session_streaming_phase_read_totals(&self) -> (u64, u64) {
+        let session_counters = self.session_counters.borrow();
+        (
+            session_counters.prefill_source_read_elapsed_nanoseconds,
+            session_counters.decode_source_read_elapsed_nanoseconds,
+        )
     }
 }

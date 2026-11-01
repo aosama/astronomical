@@ -89,6 +89,7 @@ impl Qwen3_5ExpertPager {
             decode_tokens_multiply_packed_pages: std::cell::Cell::new(false),
             session_counters: RefCell::new(ExpertStreamingSessionCounters::default()),
             session_read_metrics: Arc::new(PositionalFileReadMetrics::default()),
+            session_process_io_baseline: RefCell::new(None),
         })
     }
 }

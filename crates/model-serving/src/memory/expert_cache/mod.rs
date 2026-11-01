@@ -20,13 +20,14 @@ mod page_materialization_tests;
 mod streaming_stats;
 #[cfg(test)]
 mod streaming_stats_tests;
-
+#[cfg(feature = "direct-mlx")]
+pub(crate) use crate::performance_attribution::StreamedPageSourcePlan;
 #[cfg(any(feature = "direct-mlx", test))]
 pub use page_materialization::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
 pub use page_materialization::source_expert_page_payload_bytes;
 #[cfg(any(feature = "direct-mlx", test))]
 pub(crate) use streaming_stats::{
-    ExpertStreamingSessionCounters, RouteCoverageClass, SessionStreamingPhase,
-    expert_layer_topology_from_residency,
+    ExpertStreamingSessionCounters, RouteCoverageClass, expert_layer_topology_from_residency,
+    no_cache_route_source_bytes, record_streamed_page_source_plan_in_both_ledgers,
 };

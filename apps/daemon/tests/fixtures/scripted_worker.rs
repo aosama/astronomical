@@ -43,6 +43,7 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut should_emit_unexpected_cancellation_event = false;
     let mut should_emit_cache_stats_before_cancellation_acknowledgement = false;
     let mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement = false;
+    let mut expert_streaming_session_request_count = 0_u64;
     let mut cancellation_mlx_telemetry = CancellationMlxTelemetry::None;
     let ready_model_id = std::env::var(READY_MODEL_ID_ENVIRONMENT_VARIABLE)
         .unwrap_or_else(|_| DEFAULT_READY_MODEL_ID.to_owned());
@@ -109,6 +110,8 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                             &mut should_emit_cache_stats_before_cancellation_acknowledgement,
                         should_emit_expert_streaming_stats_before_cancellation_acknowledgement:
                             &mut should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
+                        expert_streaming_session_request_count:
+                            &mut expert_streaming_session_request_count,
                     };
                     let should_exit_worker = dispatch_unstructured_chat(
                         generation_command,
@@ -219,6 +222,32 @@ struct CancellationFixtureState<'a> {
     should_emit_unexpected_cancellation_event: &'a mut bool,
     should_emit_cache_stats_before_cancellation_acknowledgement: &'a mut bool,
     should_emit_expert_streaming_stats_before_cancellation_acknowledgement: &'a mut bool,
+    expert_streaming_session_request_count: &'a mut u64,
+}
+
+/// Both fixtures answer with an accepted chat; the session fixture also
+/// publishes the engine-load counters accumulated through this request, so
+/// the daemon-side observatory must show session totals that keep growing
+/// across replies. Sharing one dispatch arm keeps the dispatcher's
+/// complexity flat.
+async fn send_accepted_or_expert_streaming_session_chat(
+    model_id: &str,
+    request_id: RequestId,
+    event_writer: &mut ProtocolWriter<impl tokio::io::AsyncWrite + Unpin>,
+    expert_streaming_session_request_count: &mut u64,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    if model_id != "astronomical/expert-streaming-session-fixture" {
+        scripted_worker_chat::send_accepted_chat(request_id, event_writer).await?;
+        return Ok(());
+    }
+    *expert_streaming_session_request_count += 1;
+    scripted_worker_chat::send_expert_streaming_session_chat(
+        request_id,
+        event_writer,
+        *expert_streaming_session_request_count,
+    )
+    .await?;
+    Ok(())
 }
 
 /// Dispatches the schema-free chat fixture arms, which mutate the shared
@@ -238,10 +267,17 @@ async fn dispatch_unstructured_chat(
         should_emit_unexpected_cancellation_event,
         should_emit_cache_stats_before_cancellation_acknowledgement,
         should_emit_expert_streaming_stats_before_cancellation_acknowledgement,
+        expert_streaming_session_request_count,
     } = cancellation_fixture_state;
     match generation_command.model.as_str() {
-        "astronomical/accepted-chat-fixture" => {
-            scripted_worker_chat::send_accepted_chat(request_id, event_writer).await?;
+        "astronomical/accepted-chat-fixture" | "astronomical/expert-streaming-session-fixture" => {
+            send_accepted_or_expert_streaming_session_chat(
+                generation_command.model.as_str(),
+                request_id,
+                event_writer,
+                expert_streaming_session_request_count,
+            )
+            .await?;
         }
         "astronomical/malformed-output-fixture" => {
             event_writer

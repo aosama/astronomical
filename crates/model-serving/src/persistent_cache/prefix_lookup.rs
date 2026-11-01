@@ -109,7 +109,7 @@ impl PersistentPromptCacheLookupDiagnostics {
     /// Test fixture: a diagnostics record with the fields the restore-support
     /// mapping consumes set explicitly, so the IPC contract can be tested
     /// without driving a full prefix lookup against a disk store.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "direct-mlx"))]
     pub(crate) fn for_tests(
         complete_prompt_block_count: usize,
         maximum_restorable_block_count: usize,

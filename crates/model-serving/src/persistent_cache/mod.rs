@@ -81,11 +81,16 @@ pub use disk_store_error::PersistentPromptCacheDiskStoreError;
 pub use disk_store_write::PersistentPromptCachePublicationOutcome;
 pub use model_contract::PersistentPromptCacheModelContract;
 pub use model_contract_error::PersistentPromptCacheModelContractError;
+// Only the direct-MLX engines consume the span type and resolver; a
+// default-features build has no consumer, and an ungated re-export there
+// is dead code the compiler must reject.
+#[cfg(feature = "direct-mlx")]
+pub use prefill_boundary::{ResolvedPrefillChunkSpan, resolve_prompt_prefill_chunk_span};
 pub use prefill_boundary::{
-    ResolvedPrefillChunkSpan, persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
+    persistent_prompt_cache_boundary_clamped_prefill_chunk_end,
     persistent_prompt_cache_boundary_completed_prefill_chunk_tokens,
     persistent_prompt_cache_clamped_prefill_chunk_end,
-    persistent_prompt_cache_partial_tail_capture_end, resolve_prompt_prefill_chunk_span,
+    persistent_prompt_cache_partial_tail_capture_end,
 };
 pub use prefix_lookup::{
     PersistentPromptCacheLookupDiagnostics, PersistentPromptCacheMissReason,

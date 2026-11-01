@@ -63,6 +63,7 @@ mod decode_seating_tests;
 #[cfg(feature = "direct-mlx")]
 mod dense_resident;
 mod expert_cache;
+pub(crate) mod serving_phase;
 pub(crate) mod telemetry;
 mod utilization;
 
@@ -134,9 +135,11 @@ pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
 pub(crate) use expert_cache::source_expert_page_payload_bytes;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_cache::{
-    ExpertStreamingSessionCounters, RouteCoverageClass, SessionStreamingPhase,
-    expert_layer_topology_from_residency,
+    ExpertStreamingSessionCounters, RouteCoverageClass, StreamedPageSourcePlan,
+    expert_layer_topology_from_residency, no_cache_route_source_bytes,
+    record_streamed_page_source_plan_in_both_ledgers,
 };
+pub use serving_phase::SessionStreamingPhase;
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays

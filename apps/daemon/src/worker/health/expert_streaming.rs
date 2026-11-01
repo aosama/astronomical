@@ -27,6 +27,13 @@ pub struct ExpertMemoryModeTransition {
 pub struct ExpertStreamingObservatory {
     /// The newest worker snapshot; `None` until the first stats event.
     pub latest_stats: Option<WorkerExpertStreamingStats>,
+    /// The mode the worker most recently reported, from a stats event or an
+    /// out-of-band mode change. Tracked independently of `latest_stats`
+    /// because a mode change can arrive before any generation finishes;
+    /// reading the previous mode off `latest_stats` left early transitions
+    /// labelled `previous_mode: None` even after the mode was known
+    /// (issue #1715).
+    current_expert_memory_mode: Option<ExpertMemoryMode>,
     /// Session totals accumulated across every stats event; the worker
     /// reports per-request counts by contract.
     pub accumulated_prompt_token_count: u64,
@@ -42,6 +49,7 @@ impl ExpertStreamingObservatory {
     pub(crate) const fn empty() -> Self {
         Self {
             latest_stats: None,
+            current_expert_memory_mode: None,
             accumulated_prompt_token_count: 0,
             accumulated_generated_token_count: 0,
             mode_transitions: Vec::new(),
@@ -72,11 +80,11 @@ impl ExpertStreamingObservatory {
             self.accumulated_prompt_token_count = 0;
             self.accumulated_generated_token_count = 0;
             self.latest_stats = None;
+            // A new engine load restarts its own mode story; the first stats
+            // event of the load opens it without a predecessor.
+            self.current_expert_memory_mode = None;
         }
-        let previous_mode = self
-            .latest_stats
-            .as_ref()
-            .map(|latest_stats| latest_stats.expert_memory_mode);
+        let previous_mode = self.current_expert_memory_mode;
         if previous_mode != Some(worker_expert_streaming_stats.expert_memory_mode) {
             self.push_mode_transition(ExpertMemoryModeTransition {
                 observed_at_unix_millis,
@@ -84,6 +92,7 @@ impl ExpertStreamingObservatory {
                 next_mode: worker_expert_streaming_stats.expert_memory_mode,
             });
         }
+        self.current_expert_memory_mode = Some(worker_expert_streaming_stats.expert_memory_mode);
         self.accumulated_prompt_token_count = self
             .accumulated_prompt_token_count
             .saturating_add(worker_expert_streaming_stats.prompt_token_count);
@@ -101,10 +110,7 @@ impl ExpertStreamingObservatory {
         next_mode: ExpertMemoryMode,
         observed_at_unix_millis: u64,
     ) {
-        let previous_mode = self
-            .latest_stats
-            .as_ref()
-            .map(|latest_stats| latest_stats.expert_memory_mode);
+        let previous_mode = self.current_expert_memory_mode;
         if previous_mode == Some(next_mode) {
             return;
         }
@@ -113,6 +119,9 @@ impl ExpertStreamingObservatory {
             previous_mode,
             next_mode,
         });
+        // The tracked mode moves even without a snapshot, so a later
+        // transition before any stats event still knows its predecessor.
+        self.current_expert_memory_mode = Some(next_mode);
         if let Some(latest_stats) = self.latest_stats.as_mut() {
             latest_stats.expert_memory_mode = next_mode;
         }

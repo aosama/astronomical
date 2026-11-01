@@ -4,6 +4,7 @@ mod cached_suffix_streaming_prefill_rest_journey;
 mod complete_expert_residency_rest_journey;
 mod decode_expert_retention_rest_journey;
 mod decode_full_fit_residency_rest_journey;
+mod expert_stats_storage_bytes_rest_journey;
 mod follow_up_admission_paged_moe_rest_journey;
 mod large_sparse_moe_streaming_paging_memory_shape_rest_journey;
 mod leftover_complete_layer_seating_rest_journey;

@@ -90,3 +90,30 @@ fn should_keep_the_retained_route_alive_after_the_caller_drops_its_array() {
         vec![42, 43]
     );
 }
+
+#[test]
+#[serial]
+fn should_queue_a_resident_route_once_with_its_avoided_read_baseline() {
+    let _runtime = initialize_test_runtime();
+    let mut collector = DeferredExpertDemandCollector::default();
+    collector.retain_resident_layer_route(6, EXPERT_CAPACITY, &route_of(&[3, 3, 9]), 855_638_016);
+    assert_eq!(collector.pending_layer_count(), 1);
+    let pending_layer_routes = collector.take_pending_layer_routes();
+    assert_eq!(
+        pending_layer_routes[0].resident_layer_payload_byte_count,
+        Some(855_638_016)
+    );
+}
+
+#[test]
+#[serial]
+fn should_owe_no_avoided_read_for_a_plain_demand_route() {
+    let _runtime = initialize_test_runtime();
+    let mut collector = DeferredExpertDemandCollector::default();
+    collector.retain_layer_route(6, EXPERT_CAPACITY, &route_of(&[3, 9]));
+    let pending_layer_routes = collector.take_pending_layer_routes();
+    assert_eq!(
+        pending_layer_routes[0].resident_layer_payload_byte_count,
+        None
+    );
+}

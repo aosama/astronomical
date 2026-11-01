@@ -124,6 +124,14 @@ pub enum MacosProcessIoError {
     UnsupportedPlatform,
 }
 
+/// One cumulative sampling attempt: the snapshot on success, the reason the
+/// evidence is unavailable on failure. Consumers keep the `Err` rather than
+/// substituting zero, so "unknown" stays distinguishable from "no traffic".
+/// Only the direct-MLX streaming pager carries a sampling baseline, so the
+/// alias is gated with it and a default build sees no dead alias.
+#[cfg(feature = "direct-mlx")]
+pub type MacosProcessIoSamplingOutcome = Result<MacosProcessIoSnapshot, MacosProcessIoError>;
+
 /// Samples cumulative physical disk input/output attributed to this process.
 ///
 /// This function performs no file I/O itself. The disabled performance path
