@@ -8,10 +8,10 @@ use astronomical_ipc_protocol::{
 use tokio::time::timeout;
 
 use crate::serving::chat_generation_executor;
+use crate::worker::event_handler::dispatch_observability_worker_event;
 use crate::worker::health::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
     publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
-    publish_persistent_prompt_cache_stats,
 };
 use crate::worker::loop_types::ActiveWorkerRequest;
 use crate::{
@@ -350,10 +350,13 @@ fn react_to_cancellation_event(
             );
             Ok(CancellationEventReaction::KeepDraining)
         }
-        WorkerEvent::PersistentPromptCacheStats { .. } => {
-            // Cache publication can finish after the client drops the
-            // stream. Keep the worker reusable and record the telemetry.
-            publish_persistent_prompt_cache_stats(health_snapshot, worker_event);
+        telemetry_event @ (WorkerEvent::PersistentPromptCacheStats { .. }
+        | WorkerEvent::ExpertStreamingStats { .. }) => {
+            // Cache write-out and the per-generation expert-streaming report
+            // can land after the client drops the stream. Record them and
+            // keep the healthy worker; the serving path's dispatcher stays
+            // the one place that publishes them.
+            dispatch_observability_worker_event(telemetry_event, health_snapshot);
             Ok(CancellationEventReaction::KeepDraining)
         }
         WorkerEvent::MlxMemorySample {

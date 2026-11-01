@@ -171,6 +171,54 @@ async fn should_keep_worker_ready_when_cancellation_publishes_prompt_cache_stats
 }
 
 #[tokio::test]
+async fn should_keep_worker_ready_when_cancellation_publishes_expert_streaming_stats() {
+    let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
+        .expect("Cargo should provide the test worker path");
+    let worker_executor = launch_test_executor(worker_executable_path)
+        .await
+        .expect("the worker should launch");
+    wait_for_health(&worker_executor, WorkerHealthStatus::Ready).await;
+    let stream_receiver = worker_executor
+        .start_chat_generation(command_for_model(
+            "astronomical/expert-streaming-stats-during-cancellation-fixture",
+        ))
+        .await
+        .expect("the fixture should start the cancellable request");
+
+    drop(stream_receiver);
+    sleep(Duration::from_millis(200)).await;
+
+    assert_expert_streaming_stats_recorded(&worker_executor);
+    assert_worker_accepts_followup_request(&worker_executor).await;
+
+    worker_executor
+        .shutdown()
+        .await
+        .expect("shutdown should succeed");
+}
+
+/// Proves the drain recorded the expert-streaming telemetry instead of
+/// failing containment: the worker stayed ready and the health observatory
+/// kept the newest published snapshot.
+fn assert_expert_streaming_stats_recorded(worker_executor: &astronomical_daemon::WorkerHandle) {
+    let health_snapshot = worker_executor.worker_health_snapshot();
+    assert_eq!(
+        health_snapshot.status,
+        WorkerHealthStatus::Ready,
+        "expert-streaming stats during cancellation must not disable the worker"
+    );
+    let published_expert_streaming_stats = health_snapshot
+        .expert_streaming_observatory
+        .latest_stats
+        .as_ref()
+        .expect("expert-streaming stats published during the drain should reach worker health");
+    assert_eq!(
+        published_expert_streaming_stats.retained_route_assignment_count, 9,
+        "the drained telemetry event's payload must reach the observatory"
+    );
+}
+
+#[tokio::test]
 async fn should_keep_worker_ready_when_cancellation_publishes_mlx_memory() {
     let worker_executable_path = std::env::var("CARGO_BIN_EXE_astronomical-daemon-test-worker")
         .expect("Cargo should provide the test worker path");
