@@ -19,6 +19,9 @@ mod check_architecture_tests;
 mod classify_scope;
 #[cfg(test)]
 mod classify_scope_tests;
+mod commit_identity;
+#[cfg(test)]
+mod commit_identity_tests;
 mod coverage_floor;
 #[cfg(test)]
 mod coverage_floor_tests;
@@ -55,26 +58,7 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let mut arguments: Vec<String> = std::env::args().skip(1).collect();
-    // The repository root is resolved lazily, after any caller-supplied
-    // --repository-root and the disposable journey's exported root are
-    // honored: subcommands invoked from outside a workspace checkout (the
-    // disposable-target journeys run from temporary sandboxes) must not
-    // depend on walking up from the working directory.
-    let mut repository_root_override: Option<std::path::PathBuf> = None;
-    if let Some(root_position) = arguments
-        .iter()
-        .position(|argument| argument == "--repository-root")
-        && let Some(root_path) = arguments.get(root_position + 1)
-    {
-        repository_root_override = Some(std::path::PathBuf::from(root_path));
-        arguments.drain(root_position..=root_position + 1);
-    }
-    if repository_root_override.is_none()
-        && let Ok(journey_root) = std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV)
-        && !journey_root.is_empty()
-    {
-        repository_root_override = Some(std::path::PathBuf::from(journey_root));
-    }
+    let repository_root_override = take_repository_root_override(&mut arguments);
     let resolve_root = move || repository_root_override.unwrap_or_else(resolve_repository_root);
     match arguments.first().map(String::as_str) {
         Some("test-run") => test_run::run(&resolve_root(), &arguments[1..]),
@@ -100,6 +84,7 @@ fn main() -> ExitCode {
         Some("native-fingerprint") => {
             run_command(native_fingerprint::run(&resolve_root(), &arguments[1..]))
         }
+        Some("commit-identity") => run_command(commit_identity::run(&arguments[1..])),
         Some("classify-scope") => run_command(classify_scope::run(&resolve_root())),
         Some("check-architecture") => run_command(check_architecture::run(&resolve_root())),
         Some("audit-test-declarations") => {
@@ -116,10 +101,40 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
+    }
+}
+
+/// The repository root a caller pinned, removing `--repository-root PATH`
+/// from `arguments` so subcommands never see it.
+///
+/// The root is honored before any working-directory walk: subcommands invoked
+/// from outside a workspace checkout (the disposable-target journeys run from
+/// temporary sandboxes) must not depend on walking up from the working
+/// directory. The explicit flag wins over the journey's exported root.
+fn take_repository_root_override(arguments: &mut Vec<String>) -> Option<std::path::PathBuf> {
+    let mut root_flag_position = None;
+    for (argument_position, argument) in arguments.iter().enumerate() {
+        if argument == "--repository-root" {
+            root_flag_position = Some(argument_position);
+            break;
+        }
+    }
+    if let Some(root_position) = root_flag_position
+        && let Some(root_path) = arguments.get(root_position + 1)
+    {
+        let repository_root = std::path::PathBuf::from(root_path);
+        arguments.drain(root_position..=root_position + 1);
+        return Some(repository_root);
+    }
+    match std::env::var(disposable_target::DISPOSABLE_REPOSITORY_ROOT_ENV) {
+        Ok(journey_root) if !journey_root.is_empty() => {
+            Some(std::path::PathBuf::from(journey_root))
+        }
+        _ => None,
     }
 }
 

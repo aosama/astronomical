@@ -7,6 +7,16 @@ REPOSITORY_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
     exit 1
 }
 
+# Identity first: it is instant, and a commit carrying a personal email is
+# public forever once pushed, so it must not wait behind slower checks.
+printf '%s\n' "[pre-commit] status=start check=commit-identity root=${REPOSITORY_ROOT}"
+if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- commit-identity --staged; then
+    printf '%s\n' "[pre-commit] status=success check=commit-identity"
+else
+    printf '%s\n' "[pre-commit] status=failed check=commit-identity" >&2
+    exit 1
+fi
+
 printf '%s\n' "[pre-commit] status=start check=staged-source-size root=${REPOSITORY_ROOT}"
 started_epoch_seconds="$(date +%s)"
 # The manifest path pins the build to this checkout's xtask while the
