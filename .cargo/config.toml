@@ -126,8 +126,17 @@ check-mlx-memory-contract = "check -p astronomical-runtime-integration --feature
 
 # The whole real-model acceptance package, one selected case per process;
 # append --configuration PATH for explicit model/evidence inputs and
-# --filter NAME to narrow the journeys.
-test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance-measurement,performance_throughput,mlx,mlx-memory-contract-probe --tests --release --ignored"
+# --filter NAME to narrow the journeys. Performance measurements are left out
+# on purpose (no performance-measurement feature): they compare strategies on
+# demand and only record numbers, so they belong in `cargo measure-paged-prefill`,
+# not in every regression pass.
+test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,serving-acceptance,expert-paging,performance_throughput,mlx,mlx-memory-contract-probe --tests --release --ignored"
+
+# On-demand paged-prefill performance measurements (prefill chunk size and
+# back-to-back residency churn on the large sparse model; issues #1716 and
+# #1717). Each case loads the real model, so run them only when comparing
+# strategies; append --filter NAME to pick cases.
+measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
 # Prism-Hadamard lanes: real-pack contracts and upstream greedy parity,
 # performance tiers, serving throughput, and real-worker chat; append
