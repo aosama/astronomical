@@ -34,12 +34,15 @@ fn stats_snapshot(
         }],
         retained_route_assignment_count: 10,
         storage_route_assignment_count: 4,
-        hot_route_fully_covered_token_count: 5,
-        hot_route_partially_covered_token_count: 2,
-        hot_route_missed_token_count: 1,
+        hot_route_fully_covered_layer_token_count: 5,
+        hot_route_partially_covered_layer_token_count: 2,
+        hot_route_missed_layer_token_count: 1,
         expert_source_read_call_count: 8,
         expert_source_read_byte_count: 900_000,
         expert_source_read_elapsed_nanoseconds: 400_000_000,
+        prefill_source_read_elapsed_nanoseconds: 380_000_000,
+        decode_source_read_elapsed_nanoseconds: 20_000_000,
+        expert_source_physical_disk_read_bytes: Some(700_000),
         avoided_complete_layer_source_bytes: 50_000_000,
         mandatory_prefill_source_bytes: 30_000_000,
         mandatory_decode_source_bytes: 4_000_000,
@@ -91,6 +94,53 @@ fn should_reconcile_out_of_band_mode_changes_into_the_latest_snapshot() {
         .expect("latest stats must survive a mode change");
     assert_eq!(latest_stats.expert_memory_mode, ExpertMemoryMode::Resident);
     assert_eq!(observatory.mode_transitions.len(), 2);
+}
+
+#[test]
+fn should_record_the_previous_mode_in_a_mode_transition() {
+    // Issue #1715: the previous mode was read from `latest_stats`, which
+    // stays `None` until the first generation finishes, so early transitions
+    // never knew their predecessor. The observatory tracks the current mode
+    // independently of any stats event.
+    let mut observatory = ExpertStreamingObservatory::empty();
+    observatory.record_mode_change(ExpertMemoryMode::Paged, 1_000);
+    assert_eq!(observatory.mode_transitions.len(), 1);
+    assert_eq!(observatory.mode_transitions[0].previous_mode, None);
+    assert_eq!(
+        observatory.mode_transitions[0].next_mode,
+        ExpertMemoryMode::Paged
+    );
+
+    // A second transition before any stats event must still chain from the
+    // first: `previous_mode` is the tracked mode, not the absent snapshot.
+    observatory.record_mode_change(ExpertMemoryMode::Hybrid, 1_200);
+    assert_eq!(observatory.mode_transitions.len(), 2);
+    assert_eq!(
+        observatory.mode_transitions[1].previous_mode,
+        Some(ExpertMemoryMode::Paged),
+        "a transition before the first stats event must know its previous mode"
+    );
+    assert_eq!(
+        observatory.mode_transitions[1].next_mode,
+        ExpertMemoryMode::Hybrid
+    );
+
+    // The first stats event after out-of-band changes must not re-emit a
+    // transition for a mode it already shares with the tracked state.
+    observatory.record_stats(stats_snapshot(ExpertMemoryMode::Hybrid, 10), 1_500);
+    assert_eq!(
+        observatory.mode_transitions.len(),
+        2,
+        "a stats event matching the tracked mode is not a transition"
+    );
+    // Negative: a stats event carrying a different mode still transitions
+    // with the tracked mode as its predecessor.
+    observatory.record_stats(stats_snapshot(ExpertMemoryMode::Resident, 10), 2_000);
+    assert_eq!(observatory.mode_transitions.len(), 3);
+    assert_eq!(
+        observatory.mode_transitions[2].previous_mode,
+        Some(ExpertMemoryMode::Hybrid)
+    );
 }
 
 #[test]

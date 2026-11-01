@@ -41,12 +41,15 @@ fn populated_stats_snapshot() -> WorkerExpertStreamingStats {
         ],
         retained_route_assignment_count: 3_000,
         storage_route_assignment_count: 1_000,
-        hot_route_fully_covered_token_count: 700,
-        hot_route_partially_covered_token_count: 200,
-        hot_route_missed_token_count: 100,
+        hot_route_fully_covered_layer_token_count: 700,
+        hot_route_partially_covered_layer_token_count: 200,
+        hot_route_missed_layer_token_count: 100,
         expert_source_read_call_count: 2_400,
         expert_source_read_byte_count: 96_000_000_000,
         expert_source_read_elapsed_nanoseconds: 8_000_000_000,
+        prefill_source_read_elapsed_nanoseconds: 7_000_000_000,
+        decode_source_read_elapsed_nanoseconds: 1_000_000_000,
+        expert_source_physical_disk_read_bytes: Some(64_000_000_000),
         avoided_complete_layer_source_bytes: 120_000_000_000,
         mandatory_prefill_source_bytes: 80_000_000_000,
         mandatory_decode_source_bytes: 9_000_000_000,
@@ -82,11 +85,20 @@ fn should_assemble_the_full_document_from_one_snapshot() {
         document["value"]["resident_route_hit_rate"],
         serde_json::json!(0.75)
     );
-    // 8 s of reads across 1 000 storage assignments is 8 ms per assignment;
-    // 3 000 retained hits then saved 24 s.
+    // Decode-only estimate: 1 s of decode reads across 1 000 decode storage
+    // assignments is 1 ms per assignment; 3 000 retained decode hits then
+    // saved 3 s — the 7 s of prefill read time must not enter the estimate.
     assert_eq!(
         document["value"]["storage_time_saved_estimate_seconds"],
-        serde_json::json!(24)
+        serde_json::json!(3)
+    );
+    assert_eq!(
+        document["value"]["expert_source_physical_disk_read_bytes"],
+        serde_json::json!(64_000_000_000u64)
+    );
+    assert_eq!(
+        document["value"]["hot_route_fully_covered_layer_token_count"],
+        serde_json::json!(700)
     );
     // 96 GB in 8 s is 12 GB/s of measured read throughput.
     assert_eq!(
@@ -143,19 +155,46 @@ fn should_include_the_mode_transition_feed_oldest_first() {
 }
 
 #[test]
-fn should_estimate_zero_saved_time_without_measured_storage_misses() {
+fn should_exclude_prefill_read_time_from_the_decode_time_saved_estimate() {
+    // Decode-only on both sides: 2 s of decode reads ÷ 500 decode storage
+    // assignments × 2 000 decode retained assignments = 8 s saved. The 90 s
+    // of prefill read time never enters the division (issue #1715).
+    assert_eq!(
+        estimate_storage_time_saved_nanoseconds(2_000, 500, 2_000_000_000),
+        Some(8_000_000_000)
+    );
+    // Zero decode misses means the estimate is unknown, not zero: without a
+    // measured decode miss there is no honest speed to extrapolate from.
     assert_eq!(
         estimate_storage_time_saved_nanoseconds(1_000, 0, 5_000_000_000),
-        0,
-        "no storage miss means no measured speed to extrapolate from"
+        None,
+        "no measured decode miss must publish unknown, not zero"
+    );
+    // Edge: measured decode misses but nothing retained saves nothing known
+    // to compare against — also unknown.
+    assert_eq!(
+        estimate_storage_time_saved_nanoseconds(0, 500, 5_000_000_000),
+        None
+    );
+    // Boundary: one miss and one hit still extrapolates honestly.
+    assert_eq!(
+        estimate_storage_time_saved_nanoseconds(1, 1, 4_000_000_000),
+        Some(4_000_000_000)
     );
 }
 
 #[test]
-fn should_estimate_zero_saved_time_without_retained_hits() {
+fn should_report_an_unknown_estimate_as_null_in_the_document() {
+    let mut quiet_snapshot = populated_stats_snapshot();
+    quiet_snapshot.storage_route_assignment_count = 0;
+    quiet_snapshot.decode_source_read_elapsed_nanoseconds = 0;
+    let mut observatory = ExpertStreamingObservatory::empty();
+    observatory.record_stats(quiet_snapshot, 1_000);
+    let document = expert_stats_document(&observatory);
     assert_eq!(
-        estimate_storage_time_saved_nanoseconds(0, 500, 5_000_000_000),
-        0
+        document["value"]["storage_time_saved_estimate_nanoseconds"],
+        serde_json::json!(null),
+        "an unmeasured estimate must serialize as null for the console"
     );
 }
 
@@ -163,13 +202,20 @@ fn should_estimate_zero_saved_time_without_retained_hits() {
 fn should_saturate_the_saved_time_estimate_for_extreme_hit_counts() {
     assert_eq!(
         estimate_storage_time_saved_nanoseconds(u64::MAX, 1, 1),
-        u64::MAX
+        Some(u64::MAX)
     );
 }
 
 #[test]
-fn should_return_a_zero_hit_rate_for_an_empty_session() {
+fn should_include_resident_layers_in_the_decode_hit_rate() {
+    // All decode assignments served from retained RAM — every layer
+    // resident — is a perfect 1.0 hit rate.
+    assert_eq!(resident_route_hit_rate(4_000, 0), 1.0);
+    // None served from RAM is a zero hit rate.
+    assert_eq!(resident_route_hit_rate(0, 4_000), 0.0);
+    // Empty session carries no claim either way.
     assert_eq!(resident_route_hit_rate(0, 0), 0.0);
+    assert_eq!(resident_route_hit_rate(3_000, 1_000), 0.75);
 }
 
 #[test]

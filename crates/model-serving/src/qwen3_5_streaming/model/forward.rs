@@ -269,16 +269,18 @@ impl Qwen3_5Model {
                 decode_tokens_multiply_packed_pages,
             )
         {
-            self.defer_expert_demand(layer_index, expert_capacity, selected_indices);
             performance_attribution.record_counter(
                 PerformanceCounter::RetainedRouteAssignmentHitCount,
                 u64::try_from(selected_indices.element_count()).unwrap_or(u64::MAX),
             );
-            performance_attribution.record_counter(
-                PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
+            self.account_resident_packed_full_hit(
+                layer_index,
+                expert_capacity,
+                token_count,
+                selected_indices,
                 packed_manifest.payload_byte_count,
+                performance_attribution,
             );
-            self.record_avoided_source_bytes_for_paged_session(packed_manifest.payload_byte_count);
             return Ok(Some(self.forward_moe_paged_with_performance_attribution(
                 hidden_states,
                 mixture_of_experts_weights,
@@ -292,14 +294,6 @@ impl Qwen3_5Model {
             )?));
         }
         Ok(None)
-    }
-
-    /// Session counters stay always-on, including when attribution diagnostics
-    /// are off, so a retained full hit still records the source bytes it avoided.
-    fn record_avoided_source_bytes_for_paged_session(&self, payload_byte_count: u64) {
-        if let Some(expert_pager) = self.expert_pager.as_ref() {
-            expert_pager.record_session_avoided_source_bytes(payload_byte_count);
-        }
     }
 
     /// Materializes the routed expert ids on the host when the loaded-model
@@ -423,6 +417,12 @@ impl Qwen3_5Model {
                 .ok_or(Qwen3_5ExecutionError::InvalidInput {
                     description: "cache hit reported a page that vanished",
                 })?;
+            self.account_resident_subset_hit(
+                token_count,
+                routed_expert_ids.len(),
+                subset_manifest.payload_byte_count,
+                performance_attribution,
+            );
             return self.forward_moe_paged_with_performance_attribution(
                 hidden_states,
                 mixture_of_experts_weights,
@@ -441,6 +441,12 @@ impl Qwen3_5Model {
             .ok_or(Qwen3_5ExecutionError::InvalidInput {
                 description: "cache hit reported a page that vanished",
             })?;
+        self.record_resident_layer_decode_hit(
+            routed_expert_ids.len(),
+            packed_manifest.payload_byte_count,
+            expert_capacity,
+            performance_attribution,
+        );
         self.forward_moe_paged_with_performance_attribution(
             hidden_states,
             mixture_of_experts_weights,

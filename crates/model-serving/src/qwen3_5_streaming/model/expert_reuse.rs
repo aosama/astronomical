@@ -583,12 +583,14 @@ impl Qwen3_5Model {
             return Ok(None);
         };
         // Partial-table hits already reported this attribution counter. The
-        // session tile stays with the complete-layer hit path, which charges
-        // a seated layer's full payload; adding the subset here would count
-        // the same RAM serve a second way.
-        performance_attribution.record_counter(
-            PerformanceCounter::AvoidedCompleteLayerExpertSourcePayloadBytes,
+        // subset page holds exactly the routed union, so its payload is the
+        // no-cache baseline; recording it through the shared recorder keeps
+        // the attribution counter and the session counter equal, where the
+        // session side previously missed these covered routes entirely
+        // (issue #1715).
+        self.record_avoided_resident_page(
             subset_page.1.payload_byte_count,
+            performance_attribution,
         );
         Ok(Some(subset_page))
     }

@@ -9,9 +9,13 @@
 //! engine-specific extraction, measurement, and publication plumbing.
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
+// Block-key parents exist only for the direct-MLX engines' capture helper
+// below, so the imports ride its feature gate.
+#[cfg(feature = "direct-mlx")]
 use crate::persistent_cache::block_key::{
     PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError,
 };
+#[cfg(feature = "direct-mlx")]
 use crate::persistent_cache::model_contract::PersistentPromptCacheModelContract;
 
 /// Comfort margin below the active-memory ceiling at which block publication
@@ -134,6 +138,9 @@ pub(crate) fn select_block_causal_input(
 
 /// Builds the identity key of one captured block: the root key for the first
 /// captured block, chained from the restored parent for every later one.
+/// Only the direct-MLX streaming engine drives block capture, so the helper
+/// is gated with it.
+#[cfg(feature = "direct-mlx")]
 pub(crate) fn block_key_for_captured_block(
     parent_persistent_prompt_cache_block_key: Option<&PersistentPromptCacheBlockKey>,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,

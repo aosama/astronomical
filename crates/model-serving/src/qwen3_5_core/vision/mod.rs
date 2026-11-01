@@ -2,7 +2,7 @@ pub(crate) mod image_processor;
 #[cfg(feature = "direct-mlx")]
 mod vision_attention;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "direct-mlx"))]
 #[path = "vision_attention_tests.rs"]
 mod vision_attention_tests;
 mod vision_config;

@@ -190,36 +190,92 @@ test("should_keep_session_piles_in_bytes_and_separate_complete_layer_hits", () =
         mandatory_prefill_source_bytes: 80,
         mandatory_decode_source_bytes: 9,
         avoided_complete_layer_source_bytes: 120,
-        retained_route_assignment_count: 3000
+        retained_route_assignment_count: 3000,
+        expert_source_physical_disk_read_bytes: 64
     });
     assert.equal(piles.promptBytes, 80);
     assert.equal(piles.generationBytes, 9);
     assert.equal(piles.avoidedCompleteLayerBytes, 120);
+    assert.equal(piles.physicalDiskReadBytes, 64);
     const emptyPiles = context.expertSessionPiles(null);
     assert.equal(emptyPiles.promptBytes, 0);
     assert.equal(emptyPiles.generationBytes, 0);
     assert.equal(emptyPiles.avoidedCompleteLayerBytes, 0);
+    assert.equal(emptyPiles.physicalDiskReadBytes, null);
+});
+
+test("should_label_session_totals_as_since_model_load", () => {
+    const context = createExpertsRenderContext();
+    // The totals accumulate from the moment the model loaded; they never
+    // "close" when a reply finishes, running or idle (issue #1715).
+    assert.equal(
+        context.expertSessionScopeSentence("idle"),
+        "These totals accumulate since the model loaded."
+    );
+    assert.equal(
+        context.expertSessionScopeSentence("generating"),
+        "These totals accumulate since the model loaded, including this running reply."
+    );
+    assert.equal(
+        context.expertSessionScopeSentence("prompt_processing"),
+        "These totals accumulate since the model loaded, including this running reply."
+    );
+    assert.equal(context.expertReplyIsOpen("generating"), true);
+    assert.equal(context.expertReplyIsOpen("idle"), false);
+});
+
+test("should_show_requested_and_physical_bytes_separately", () => {
+    const context = createExpertsRenderContext();
+    // Requested bytes are the logical positional reads the code issued;
+    // physical bytes are what the disk actually served. Both labels must
+    // name their own number so neither can pose as the other (issue #1715).
+    const measuredSentence = context.expertPhysicalReadSentence({
+        expert_source_physical_disk_read_bytes: 2 * EXPERT_GIGABYTE_BYTES
+    });
+    assert.match(measuredSentence, /^Read from the SSD:/);
+    assert.match(measuredSentence, /2\.00 GB/);
+    assert.equal(
+        context.expertPhysicalReadSentence({ expert_source_physical_disk_read_bytes: null }),
+        "Read from the SSD: not measured yet"
+    );
+    assert.equal(
+        context.expertPhysicalReadSentence({}),
+        "Read from the SSD: not measured yet"
+    );
+    assert.equal(context.expertPhysicalReadSentence(null), "Read from the SSD: not measured yet");
+    const piles = context.expertSessionPiles({
+        mandatory_prefill_source_bytes: EXPERT_GIGABYTE_BYTES,
+        mandatory_decode_source_bytes: EXPERT_GIGABYTE_BYTES / 2,
+        expert_source_physical_disk_read_bytes: EXPERT_GIGABYTE_BYTES / 4
+    });
+    assert.equal(piles.promptBytes, EXPERT_GIGABYTE_BYTES);
+    assert.equal(piles.generationBytes, EXPERT_GIGABYTE_BYTES / 2);
+    assert.equal(piles.physicalDiskReadBytes, EXPERT_GIGABYTE_BYTES / 4);
+    assert.notEqual(piles.physicalDiskReadBytes, piles.promptBytes + piles.generationBytes);
 });
 
 test("should_describe_generation_warmth_and_mixed_routes", () => {
     const context = createExpertsRenderContext();
     assert.equal(
         context.expertGenerationSentence(null),
-        "No generated tokens have been classified yet."
+        "No decode layer-tokens have been classified yet."
     );
     assert.match(
         context.expertGenerationSentence({
-            hot_route_fully_covered_token_count: 700,
-            hot_route_partially_covered_token_count: 200,
-            hot_route_missed_token_count: 100
+            hot_route_fully_covered_layer_token_count: 700,
+            hot_route_partially_covered_layer_token_count: 200,
+            hot_route_missed_layer_token_count: 100
         }),
-        /700 generated tokens had every routed expert already warm\. 300 still touched the SSD\./
+        /700 decode layer-tokens had every routed expert already warm\. 300 still touched the SSD\./
     );
     assert.match(
-        context.expertMixedRouteSentence({ hot_route_partially_covered_token_count: 200 }),
-        /200 of those tokens were mixed/
+        context.expertMixedRouteSentence({ hot_route_partially_covered_layer_token_count: 200 }),
+        /200 of those layer-tokens were mixed/
     );
-    assert.equal(context.expertMixedRouteSentence({ hot_route_partially_covered_token_count: 0 }), "");
+    assert.equal(
+        context.expertMixedRouteSentence({ hot_route_partially_covered_layer_token_count: 0 }),
+        ""
+    );
 });
 
 test("should_render_mode_transitions_in_product_phrases", () => {
@@ -239,27 +295,37 @@ test("should_render_mode_transitions_in_product_phrases", () => {
     assert.equal(context.modeTransitionLine(null), "");
 });
 
-test("should_explain_the_estimate_from_nanoseconds", () => {
+test("should_explain_the_estimate_from_decode_nanoseconds", () => {
     const context = createExpertsRenderContext();
     const liveLine = context.expertMethodLiveLine({
         storage_route_assignment_count: 100,
-        expert_source_read_elapsed_nanoseconds: 20_000_000_000,
+        decode_source_read_elapsed_nanoseconds: 20_000_000_000,
         retained_route_assignment_count: 1000,
         storage_time_saved_estimate_nanoseconds: 1_500_000_000
     });
-    assert.match(liveLine, /200\.0 ms/);
+    assert.match(liveLine, /200\.0 ms of decode read time/);
     assert.match(liveLine, /1,000/);
     assert.match(liveLine, /1\.5s/);
+    // Zero decode misses leaves the estimate unknown, phrased as not measured
+    // yet — never as a zero saving (issue #1715).
     assert.equal(
         context.expertMethodLiveLine({
             storage_route_assignment_count: 0,
-            expert_source_read_elapsed_nanoseconds: 0
+            decode_source_read_elapsed_nanoseconds: 0,
+            storage_time_saved_estimate_nanoseconds: null
         }),
-        "No storage assignment has been timed yet, so no estimate is published."
+        "No decode storage assignment has been timed yet, so the estimate is not measured yet."
+    );
+    assert.equal(
+        context.expertMethodLiveLine({
+            storage_route_assignment_count: 100,
+            decode_source_read_elapsed_nanoseconds: 0
+        }),
+        "No decode storage assignment has been timed yet, so the estimate is not measured yet."
     );
     assert.equal(
         context.expertMethodLiveLine(null),
-        "No storage assignment has been timed yet, so no estimate is published."
+        "No decode storage assignment has been timed yet, so the estimate is not measured yet."
     );
 });
 
@@ -349,20 +415,18 @@ test("should_move_layer_columns_from_live_counts_and_wait_for_identities", () =>
 test("should_hold_session_totals_open_only_while_a_reply_is_running", () => {
     const context = createExpertsRenderContext();
     assert.equal(
-        context.expertSessionOpenSentence("generating"),
-        "These totals close when this reply finishes."
+        context.expertReplyIsOpen("generating"),
+        true
     );
     assert.equal(
-        context.expertSessionOpenSentence("prompt_processing"),
-        "These totals close when this reply finishes."
+        context.expertReplyIsOpen("prompt_processing"),
+        true
     );
     assert.equal(
-        context.expertSessionOpenSentence("generation_preparation"),
-        "These totals close when this reply finishes."
+        context.expertReplyIsOpen("generation_preparation"),
+        true
     );
-    assert.equal(context.expertSessionOpenSentence("idle"), "");
-    assert.equal(context.expertSessionOpenSentence("image_generation"), "");
-    assert.equal(context.expertSessionOpenSentence(""), "");
-    assert.equal(context.expertReplyIsOpen("generating"), true);
     assert.equal(context.expertReplyIsOpen("idle"), false);
+    assert.equal(context.expertReplyIsOpen("image_generation"), false);
+    assert.equal(context.expertReplyIsOpen(""), false);
 });

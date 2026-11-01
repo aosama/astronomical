@@ -77,6 +77,12 @@ impl Qwen3_5Model {
         )
     }
 
+    /// Records storage bytes a RAM serve avoided, in the opt-in attribution
+    /// counter and the always-on session counter at once, so the two ledgers
+    /// can never disagree about the same forward (issue #1715). Callers pass
+    /// either a routed-union page's measured payload or the value derived by
+    /// `no_cache_route_source_bytes` — never a whole layer payload for a
+    /// smaller route.
     pub(super) fn record_avoided_resident_page(
         &self,
         payload_byte_count: u64,

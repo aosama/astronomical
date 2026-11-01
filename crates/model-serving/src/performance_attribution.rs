@@ -26,6 +26,8 @@ use std::sync::Arc;
 
 pub use catalog::PerformanceOperation;
 pub use counter_catalog::PerformanceCounter;
+#[cfg(any(feature = "direct-mlx", test))]
+pub use expert_streaming_source::StreamedPageSourcePlan;
 pub use log::PerformanceAttributionLog;
 pub use measurement_catalog::PerformanceOperationMeasurement;
 pub use report::{

@@ -538,15 +538,22 @@ pub(super) fn worker_expert_streaming_stats(
             .collect(),
         retained_route_assignment_count: expert_streaming_stats.retained_route_assignment_count,
         storage_route_assignment_count: expert_streaming_stats.storage_route_assignment_count,
-        hot_route_fully_covered_token_count: expert_streaming_stats
-            .hot_route_fully_covered_token_count,
-        hot_route_partially_covered_token_count: expert_streaming_stats
-            .hot_route_partially_covered_token_count,
-        hot_route_missed_token_count: expert_streaming_stats.hot_route_missed_token_count,
+        hot_route_fully_covered_layer_token_count: expert_streaming_stats
+            .hot_route_fully_covered_layer_token_count,
+        hot_route_partially_covered_layer_token_count: expert_streaming_stats
+            .hot_route_partially_covered_layer_token_count,
+        hot_route_missed_layer_token_count: expert_streaming_stats
+            .hot_route_missed_layer_token_count,
         expert_source_read_call_count: expert_streaming_stats.expert_source_read_call_count,
         expert_source_read_byte_count: expert_streaming_stats.expert_source_read_byte_count,
         expert_source_read_elapsed_nanoseconds: expert_streaming_stats
             .expert_source_read_elapsed_nanoseconds,
+        prefill_source_read_elapsed_nanoseconds: expert_streaming_stats
+            .prefill_source_read_elapsed_nanoseconds,
+        decode_source_read_elapsed_nanoseconds: expert_streaming_stats
+            .decode_source_read_elapsed_nanoseconds,
+        expert_source_physical_disk_read_bytes: expert_streaming_stats
+            .expert_source_physical_disk_read_bytes,
         avoided_complete_layer_source_bytes: expert_streaming_stats
             .avoided_complete_layer_source_bytes,
         mandatory_prefill_source_bytes: expert_streaming_stats.mandatory_prefill_source_bytes,

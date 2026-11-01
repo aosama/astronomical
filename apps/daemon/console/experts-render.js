@@ -195,7 +195,8 @@ function expertSessionPiles(valueSection) {
     return {
         promptBytes: value.mandatory_prefill_source_bytes || 0,
         generationBytes: value.mandatory_decode_source_bytes || 0,
-        avoidedCompleteLayerBytes: value.avoided_complete_layer_source_bytes || 0
+        avoidedCompleteLayerBytes: value.avoided_complete_layer_source_bytes || 0,
+        physicalDiskReadBytes: value.expert_source_physical_disk_read_bytes || null
     };
 }
 
@@ -205,11 +206,27 @@ function expertReplyIsOpen(activity) {
         || activity === "generating";
 }
 
-function expertSessionOpenSentence(activity) {
+// Session totals accumulate from the moment the model loaded — they do not
+// close when a reply finishes. Saying so made the panel disagree with its own
+// numbers mid-session (issue #1715).
+function expertSessionScopeSentence(activity) {
     if (expertReplyIsOpen(activity)) {
-        return "These totals close when this reply finishes.";
+        return "These totals accumulate since the model loaded, including this running reply.";
     }
-    return "";
+    return "These totals accumulate since the model loaded.";
+}
+
+// Requested bytes are what the code asked storage for; physical bytes are what
+// the operating system actually served from the disk. The file cache can
+// satisfy requests from RAM, so the two numbers are honestly different and
+// both belong on the page (issue #1715).
+function expertPhysicalReadSentence(valueSection) {
+    const value = valueSection || {};
+    const physicalBytes = value.expert_source_physical_disk_read_bytes;
+    if (!Number.isFinite(physicalBytes) || physicalBytes === null || physicalBytes === undefined) {
+        return "Read from the SSD: not measured yet";
+    }
+    return "Read from the SSD: " + formatExpertGigabytes(physicalBytes);
 }
 
 function expertLayerRows(layerTopology, totalLayerCount, expertCapacity) {
@@ -497,29 +514,31 @@ function expertSlotStates(retainedExpertIds, expertCapacity) {
 
 function expertGenerationSentence(valueSection) {
     const value = valueSection || {};
-    const warmTokenCount = value.hot_route_fully_covered_token_count || 0;
-    const mixedTokenCount = value.hot_route_partially_covered_token_count || 0;
-    const missedTokenCount = value.hot_route_missed_token_count || 0;
-    const classifiedTokenCount = warmTokenCount + mixedTokenCount + missedTokenCount;
-    if (classifiedTokenCount <= 0) {
-        return "No generated tokens have been classified yet.";
+    const warmLayerTokenCount = value.hot_route_fully_covered_layer_token_count || 0;
+    const mixedLayerTokenCount = value.hot_route_partially_covered_layer_token_count || 0;
+    const missedLayerTokenCount = value.hot_route_missed_layer_token_count || 0;
+    const classifiedLayerTokenCount = warmLayerTokenCount + mixedLayerTokenCount + missedLayerTokenCount;
+    if (classifiedLayerTokenCount <= 0) {
+        return "No decode layer-tokens have been classified yet.";
     }
-    const touchedStorageCount = mixedTokenCount + missedTokenCount;
-    return formatExpertCount(warmTokenCount)
-        + " generated tokens had every routed expert already warm. "
+    const touchedStorageCount = mixedLayerTokenCount + missedLayerTokenCount;
+    // Coverage is classified once per layer per decode token, so the honest
+    // unit is the layer-token, not the token (issue #1715).
+    return formatExpertCount(warmLayerTokenCount)
+        + " decode layer-tokens had every routed expert already warm. "
         + formatExpertCount(touchedStorageCount)
         + " still touched the SSD.";
 }
 
 function expertMixedRouteSentence(valueSection) {
-    const mixedTokenCount = valueSection
-        ? valueSection.hot_route_partially_covered_token_count || 0
+    const mixedLayerTokenCount = valueSection
+        ? valueSection.hot_route_partially_covered_layer_token_count || 0
         : 0;
-    if (mixedTokenCount <= 0) {
+    if (mixedLayerTokenCount <= 0) {
         return "";
     }
-    return formatExpertCount(mixedTokenCount)
-        + " of those tokens were mixed: a partial hit still reads the missing experts.";
+    return formatExpertCount(mixedLayerTokenCount)
+        + " of those layer-tokens were mixed: a partial hit still reads the missing experts.";
 }
 
 function modeTransitionLine(modeTransition) {
@@ -540,18 +559,24 @@ function modeTransitionLine(modeTransition) {
 
 function expertMethodLiveLine(valueSection) {
     if (!valueSection) {
-        return "No storage assignment has been timed yet, so no estimate is published.";
+        return "No decode storage assignment has been timed yet, so the estimate is not measured yet.";
     }
     const storageAssignments = valueSection.storage_route_assignment_count || 0;
-    const readElapsedNanoseconds = valueSection.expert_source_read_elapsed_nanoseconds || 0;
-    if (storageAssignments === 0 || readElapsedNanoseconds === 0) {
-        return "No storage assignment has been timed yet, so no estimate is published.";
+    const decodeReadElapsedNanoseconds = valueSection.decode_source_read_elapsed_nanoseconds || 0;
+    const savedNanoseconds = valueSection.storage_time_saved_estimate_nanoseconds;
+    // Zero decode misses means no measured decode storage speed exists: the
+    // estimate is unknown — shown as not measured yet — never zero (issue #1715).
+    if (storageAssignments === 0
+        || decodeReadElapsedNanoseconds === 0
+        || savedNanoseconds === null
+        || savedNanoseconds === undefined) {
+        return "No decode storage assignment has been timed yet, so the estimate is not measured yet.";
     }
-    const averageMillis = readElapsedNanoseconds / 1_000_000 / storageAssignments;
-    const savedSeconds = (valueSection.storage_time_saved_estimate_nanoseconds || 0) / 1_000_000_000;
+    const averageMillis = decodeReadElapsedNanoseconds / 1_000_000 / storageAssignments;
+    const savedSeconds = savedNanoseconds / 1_000_000_000;
     return "Average measured storage assignment: "
         + averageMillis.toFixed(1)
-        + " ms. Retained hits: "
+        + " ms of decode read time. Retained decode hits: "
         + formatExpertCount(valueSection.retained_route_assignment_count || 0)
         + ". Estimated time saved: "
         + formatExpertDuration(savedSeconds)

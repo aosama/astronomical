@@ -222,19 +222,20 @@
                             </div>
                         </section>
                         <section id="experts-session-panel" class="panel" aria-labelledby="experts-session-title">
-                            <h3 id="experts-session-title">This session</h3>
+                            <h3 id="experts-session-title">Since the model loaded</h3>
                             <p id="experts-session-empty" class="experts-session-note">Session totals appear when the first generation finishes. The bars above update while a request is running.</p>
                             <p id="experts-session-open" class="experts-session-note" hidden></p>
                             <dl id="experts-session-grid" class="experts-session-grid" hidden>
-                                <div class="experts-session-cell"><dt>Prompt from the SSD</dt><dd id="experts-session-prompt">0 GB</dd></div>
-                                <div class="experts-session-cell"><dt>Generation from the SSD</dt><dd id="experts-session-generation">0 GB</dd></div>
-                                <div class="experts-session-cell"><dt>Reads skipped, layer already in RAM</dt><dd id="experts-session-avoided">0 GB</dd></div>
+                                <div class="experts-session-cell"><dt>Prompt requested from storage</dt><dd id="experts-session-prompt">0 GB</dd></div>
+                                <div class="experts-session-cell"><dt>Generation requested from storage</dt><dd id="experts-session-generation">0 GB</dd></div>
+                                <div class="experts-session-cell"><dt>Read from the SSD</dt><dd id="experts-session-physical">Not measured yet</dd></div>
+                                <div class="experts-session-cell"><dt>Reads avoided by RAM-resident routes</dt><dd id="experts-session-avoided">0 GB</dd></div>
                                 <div class="experts-session-cell"><dt>Left on the SSD</dt><dd id="experts-session-left">Not measured</dd></div>
                             </dl>
                         </section>
                         <section class="panel" aria-labelledby="experts-generation-title">
                             <h3 id="experts-generation-title">Generation</h3>
-                            <p id="experts-generation-sentence" class="experts-session-note">Generation totals appear when the first reply finishes.</p>
+                            <p id="experts-generation-sentence" class="experts-session-note">Decode layer-token totals appear when the first reply finishes.</p>
                         </section>
                         <section class="panel" aria-labelledby="experts-feed-title">
                             <h3 id="experts-feed-title">Residency changes</h3>
@@ -243,7 +244,7 @@
                         <section class="panel experts-method">
                             <details>
                                 <summary>How this is measured</summary>
-                                <p>Time saved is an estimate: retained hits multiplied by this machine's measured average storage-assignment read time. With no measured storage miss there is no speed to extrapolate from, so the estimate stays zero. Read bytes are logical reads; macOS may satisfy some from the file cache.</p>
+                                <p>Time saved is an estimate: decode retained hits multiplied by this machine's measured average decode storage-assignment read time. Prefill read seconds never enter it, and with no measured decode miss there is no speed to extrapolate from, so the estimate stays "not measured yet". Requested bytes are logical reads; the "Read from the SSD" figure is process-attributed physical disk input, which other worker reads can widen.</p>
                                 <p id="experts-method-mixed"></p>
                                 <p id="experts-method-live" class="experts-method-live"></p>
                             </details>

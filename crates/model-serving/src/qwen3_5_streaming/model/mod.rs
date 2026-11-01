@@ -45,6 +45,8 @@ pub(super) mod phase_aware_expert_residency;
 #[cfg(feature = "direct-mlx")]
 mod read_through_residency;
 #[cfg(feature = "direct-mlx")]
+mod resident_layer_accounting;
+#[cfg(feature = "direct-mlx")]
 mod route_id_materialization;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod route_observation;

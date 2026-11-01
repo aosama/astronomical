@@ -100,6 +100,14 @@ pub struct Qwen3_5ExpertPager {
     /// expert-source reader of this engine load, even when diagnostics
     /// attribution (which owns a private per-request aggregate) is disabled.
     pub(super) session_read_metrics: Arc<PositionalFileReadMetrics>,
+    /// Process-attributed physical disk I/O sampled once before the first
+    /// expert read of this engine load, so the session physical-read figure
+    /// measures the expert-streaming era only. `Err` keeps a failed sample as
+    /// explicit "unknown" evidence instead of a fake zero. A `RefCell` because
+    /// the sampling error type is not `Copy`, and `Cell` requires `Copy`.
+    pub(super) session_process_io_baseline: RefCell<
+        Option<crate::performance_attribution::macos_process_io::MacosProcessIoSamplingOutcome>,
+    >,
 }
 
 /// Exact compact or complete expert arrays loaded by Rust for one layer use.

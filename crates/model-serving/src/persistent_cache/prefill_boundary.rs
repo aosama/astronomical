@@ -4,7 +4,7 @@
 //! captured decoder state and token slice at the same exact point, and ensures a
 //! required synchronous publication succeeds before processing can advance.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "direct-mlx"))]
 mod tests;
 
 /// Returns local completed-token counts for every persistent prompt-cache
@@ -148,7 +148,11 @@ pub fn persistent_prompt_cache_boundary_clamped_prefill_chunk_end(
 /// silently discarded once by an innocent refactor, so the whole span
 /// resolution — availability, permission, and clamp — lives in this one
 /// tested pure function.
+///
+/// Only the direct-MLX Qwen3.5 engines consume the resolved span, so the
+/// resolver and its span stay feature-gated with them.
 #[must_use]
+#[cfg(feature = "direct-mlx")]
 pub fn resolve_prompt_prefill_chunk_span(
     prefill_cursor: usize,
     prompt_token_count: usize,
@@ -182,6 +186,7 @@ pub fn resolve_prompt_prefill_chunk_span(
 /// One resolved prompt-prefill chunk: its inclusive start, its (possibly
 /// cache-clamped) exclusive end, and the token count the engines log and
 /// admit against.
+#[cfg(feature = "direct-mlx")]
 pub struct ResolvedPrefillChunkSpan {
     pub prefill_start: usize,
     pub requested_prefill_chunk_end: usize,
