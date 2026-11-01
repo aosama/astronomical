@@ -155,6 +155,39 @@ final class MenuControlStateTests: XCTestCase {
   }
 
   @MainActor
+  func test_should_dismiss_the_applied_sentence_when_the_engine_clamps_the_request() async throws {
+    let feedbackDismissalGate = FeedbackDismissalGate()
+    let telemetryStore = contractTelemetryStore(
+      daemonClient: ClampedMaximumMlxMemoryUpdateDaemonClient(),
+      feedbackDismissalGate: feedbackDismissalGate
+    )
+
+    await telemetryStore.performMaximumMlxMemoryLimitUpdate(37)
+
+    XCTAssertEqual(
+      telemetryStore.controlActionFeedback,
+      .success("MLX memory setting persisted and applied")
+    )
+    feedbackDismissalGate.release()
+    try await waitForControlActionFeedbackToDismiss(from: telemetryStore)
+  }
+
+  @MainActor
+  func test_should_keep_the_applied_sentence_while_the_live_ceiling_is_still_the_boot_ceiling() async throws {
+    let telemetryStore = contractTelemetryStore(
+      daemonClient: UnappliedMaximumMlxMemoryUpdateDaemonClient()
+    )
+
+    await telemetryStore.performMaximumMlxMemoryLimitUpdate(37)
+    try await Task.sleep(for: .milliseconds(200))
+
+    XCTAssertEqual(
+      telemetryStore.controlActionFeedback,
+      .success("MLX memory setting persisted and applied")
+    )
+  }
+
+  @MainActor
   func test_should_not_let_memory_success_dismiss_newer_server_feedback() async throws {
     let telemetryStore = contractTelemetryStore(
       daemonClient: SuccessfulMaximumMlxMemoryUpdateDaemonClient()
@@ -484,11 +517,60 @@ private struct DelayedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
   func healthIsAvailable() async -> Bool { true }
 }
 
+private struct ClampedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument {
+    maximumMlxMemoryStatusDocument(
+      effectiveMlxMemoryCeilingBytes: 39_195_874_112,
+      wiredResidencyBudgetBytes: 40_200_896_512,
+      machineMlxMemoryCeilingBytes: 42_949_672_960,
+      configuredMaximumMlxMemoryGigabytes: 37
+    )
+  }
+
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded")
+  }
+
+  func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
+    "MLX memory setting persisted and applied"
+  }
+
+  func requestShutdown() async throws {}
+
+  func healthIsAvailable() async -> Bool { true }
+}
+
+private struct UnappliedMaximumMlxMemoryUpdateDaemonClient: DaemonClient {
+  func fetchStatus() async throws -> DaemonStatusDocument {
+    maximumMlxMemoryStatusDocument(
+      effectiveMlxMemoryCeilingBytes: 22_548_578_304,
+      wiredResidencyBudgetBytes: 40_200_896_512,
+      machineMlxMemoryCeilingBytes: 42_949_672_960,
+      configuredMaximumMlxMemoryGigabytes: 37
+    )
+  }
+
+  func reloadConfiguration() async throws -> ConfigurationReloadResult {
+    ConfigurationReloadResult(message: "Config reloaded")
+  }
+
+  func updateMaximumMlxMemoryGigabytes(_ maximumMlxMemoryGigabytes: UInt64?) async throws -> String {
+    "MLX memory setting persisted and applied"
+  }
+
+  func requestShutdown() async throws {}
+
+  func healthIsAvailable() async -> Bool { true }
+}
+
 private func maximumMlxMemoryStatusDocument(
   effectiveMlxMemoryCeilingBytes: UInt64,
   pendingMlxMemoryCeilingBytes: UInt64? = nil,
   activity: String = "idle",
-  mlxMemoryLimitError: String? = nil
+  mlxMemoryLimitError: String? = nil,
+  wiredResidencyBudgetBytes: UInt64? = nil,
+  machineMlxMemoryCeilingBytes: UInt64 = 40_000_000_000,
+  configuredMaximumMlxMemoryGigabytes: UInt64? = 32
 ) -> DaemonStatusDocument {
   DaemonStatusDocument(
     status: "ready",
@@ -497,9 +579,10 @@ private func maximumMlxMemoryStatusDocument(
     progress: nil,
     expertMemoryMode: nil,
     mlxMemoryCeilingBytes: effectiveMlxMemoryCeilingBytes,
-    machineMlxMemoryCeilingBytes: 40_000_000_000,
+    machineMlxMemoryCeilingBytes: machineMlxMemoryCeilingBytes,
+    wiredResidencyBudgetBytes: wiredResidencyBudgetBytes,
     minimumMlxMemoryCeilingBytes: 1_000_000_000,
-    configuredMaximumMlxMemoryGigabytes: 32,
+    configuredMaximumMlxMemoryGigabytes: configuredMaximumMlxMemoryGigabytes,
     pendingMlxMemoryCeilingBytes: pendingMlxMemoryCeilingBytes,
     mlxMemoryLimitError: mlxMemoryLimitError,
     servingSession: .empty

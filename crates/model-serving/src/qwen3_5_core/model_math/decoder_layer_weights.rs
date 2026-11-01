@@ -130,6 +130,83 @@ impl Qwen3_5AffineWeights {
         })
     }
 
+    /// Stacks `appended` after this projection on the expert axis.
+    ///
+    /// A refused prefill completion already holds the missing experts in memory.
+    /// Concatenating them with the retained rows builds one page the existing
+    /// single-page forward can multiply, so the chunk does not open the file
+    /// again for experts that are already in RAM. The two sides must share a
+    /// representation; a mixed quantization would not gather as one expert axis.
+    pub(crate) fn concatenate_experts(
+        &self,
+        runtime: &astronomical_runtime_integration::MlxRuntime,
+        appended: &Self,
+    ) -> Result<Self, MlxRuntimeError> {
+        const CONCATENATE_EXPERT_PROJECTIONS: &str = "concatenate Qwen3.5 expert projections";
+        match (self, appended) {
+            (Self::NativeBfloat16 { weight }, Self::NativeBfloat16 { weight: appended_weight }) => {
+                Ok(Self::NativeBfloat16 {
+                    weight: runtime.concatenate_axis(&[weight, appended_weight], 0)?,
+                })
+            }
+            (
+                Self::Quantized {
+                    packed_weight,
+                    quantization_scales,
+                    quantization_biases,
+                    quantization_bits,
+                    quantization_group_size,
+                },
+                Self::Quantized {
+                    packed_weight: appended_packed_weight,
+                    quantization_scales: appended_quantization_scales,
+                    quantization_biases: appended_quantization_biases,
+                    quantization_bits: appended_quantization_bits,
+                    quantization_group_size: appended_quantization_group_size,
+                },
+            ) if *quantization_bits == *appended_quantization_bits
+                && *quantization_group_size == *appended_quantization_group_size =>
+            {
+                Ok(Self::Quantized {
+                    packed_weight: runtime
+                        .concatenate_axis(&[packed_weight, appended_packed_weight], 0)?,
+                    quantization_scales: runtime.concatenate_axis(
+                        &[quantization_scales, appended_quantization_scales],
+                        0,
+                    )?,
+                    quantization_biases: runtime.concatenate_axis(
+                        &[quantization_biases, appended_quantization_biases],
+                        0,
+                    )?,
+                    quantization_bits: *quantization_bits,
+                    quantization_group_size: *quantization_group_size,
+                })
+            }
+            (
+                Self::Jangtq2Codebook {
+                    packed_code_words,
+                    row_scales,
+                    codebook_bit_width,
+                },
+                Self::Jangtq2Codebook {
+                    packed_code_words: appended_packed_code_words,
+                    row_scales: appended_row_scales,
+                    codebook_bit_width: appended_codebook_bit_width,
+                },
+            ) if codebook_bit_width == appended_codebook_bit_width => Ok(Self::Jangtq2Codebook {
+                packed_code_words: runtime
+                    .concatenate_axis(&[packed_code_words, appended_packed_code_words], 0)?,
+                row_scales: runtime.concatenate_axis(&[row_scales, appended_row_scales], 0)?,
+                codebook_bit_width: *codebook_bit_width,
+            }),
+            _ => Err(MlxRuntimeError::RuntimeOperation {
+                operation: CONCATENATE_EXPERT_PROJECTIONS,
+                description: "expert pages must share one quantization representation to be multiplied as one page"
+                    .to_owned(),
+            }),
+        }
+    }
+
     pub(crate) fn append_array_references<'weights>(
         &'weights self,
         arrays: &mut Vec<&'weights MlxArray>,

@@ -234,9 +234,14 @@ impl Qwen3_5EngineState {
         };
         let (mlx_memory_telemetry, expert_residency_telemetry) = mlx_memory_telemetry;
         self.persist_expert_usage_history();
-        GenerationFinalization::new(
+        model.attach_expert_streaming_stats(
+            GenerationFinalization::new(
+                expert_memory_mode,
+                mlx_memory_telemetry,
+                expert_residency_telemetry,
+            ),
+            self.model_id.as_deref(),
             expert_memory_mode,
-            mlx_memory_telemetry,
             expert_residency_telemetry,
         )
     }

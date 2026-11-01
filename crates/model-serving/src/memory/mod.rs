@@ -132,6 +132,11 @@ pub use astronomical_memory_policy::residency::seated_complete_layer_count;
 pub(crate) use expert_cache::expert_page_peak_allocation_bytes;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use expert_cache::source_expert_page_payload_bytes;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use expert_cache::{
+    ExpertStreamingSessionCounters, RouteCoverageClass, SessionStreamingPhase,
+    expert_layer_topology_from_residency,
+};
 // The direct-MLX streaming planner (qwen3_5_streaming's gated
 // phase_aware_expert_residency) imports residency by module path
 // (`crate::memory::residency::ExpertLayerGeometry`), so the module stays

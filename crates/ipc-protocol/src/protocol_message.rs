@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::expert_layer_seating::ExpertLayerSeatingCounts;
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
     ChatGenerationOutput, EmbeddingsCommand, EmbeddingsFailureReason, GeneratedImage,
@@ -61,6 +62,76 @@ pub struct WorkerExpertResidencySnapshot {
     pub total_layer_count: u32,
     pub resident_expert_count: u32,
     pub resident_expert_payload_bytes: u64,
+    /// Expert-library bytes if every sparse expert were resident. Zero means
+    /// the worker could not measure the library, and Observatory must not
+    /// invent a remainder from the model file size.
+    pub complete_expert_payload_byte_count: u64,
+    /// Experts in one sparse layer. The streaming engine uses one capacity
+    /// for every layer; zero means the layer strip has nothing to draw.
+    pub expert_capacity: u32,
+    /// Retained counts for the layer map. Older workers omit the field;
+    /// the zero seating means Observatory waits for the end-of-reply topology.
+    #[serde(default)]
+    pub layer_seating: ExpertLayerSeatingCounts,
+}
+
+/// One decoder layer's retained sparse-expert identities at a snapshot instant.
+///
+/// The identities come from the warm slot-table cache, so a layer with no
+/// warm table simply does not appear in the snapshot; absence means "every
+/// routed expert of this layer still streams from storage".
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerExpertLayerTopology {
+    pub layer_index: u32,
+    /// Expert ids currently retained in RAM by this layer, sorted ascending.
+    pub retained_expert_ids: Vec<u32>,
+    /// Retained payload bytes the warm table accounts for this layer.
+    pub retained_payload_bytes: u64,
+    /// True when the layer's table holds every expert of the layer.
+    pub is_complete_layer: bool,
+    /// Prefill-plus-decode demand the retained experts cover, the same
+    /// coverage score the residency planner arbitrates with.
+    pub covered_demand: u64,
+}
+
+/// Session-scoped expert-streaming measurements exposed to the daemon.
+///
+/// Counters accumulate from the worker's per-request performance-attribution
+/// reports across every generation of the current engine load, so the values
+/// describe the whole serving session rather than one request. The topology
+/// is the warm-cache truth at the instant of the snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerExpertStreamingStats {
+    pub model_id: Option<String>,
+    pub expert_memory_mode: ExpertMemoryMode,
+    pub expert_residency: WorkerExpertResidencySnapshot,
+    /// Layers with a warm expert table right now.
+    pub layer_topology: Vec<WorkerExpertLayerTopology>,
+    /// Routed assignments served from retained RAM this session.
+    pub retained_route_assignment_count: u64,
+    /// Routed assignments read from storage this session.
+    pub storage_route_assignment_count: u64,
+    /// Decode tokens whose routed experts were all warm.
+    pub hot_route_fully_covered_token_count: u64,
+    /// Decode tokens with some warm and some cold routed experts.
+    pub hot_route_partially_covered_token_count: u64,
+    /// Decode tokens with no warm routed experts.
+    pub hot_route_missed_token_count: u64,
+    /// Logical positional reads issued for expert payloads this session.
+    pub expert_source_read_call_count: u64,
+    pub expert_source_read_byte_count: u64,
+    pub expert_source_read_elapsed_nanoseconds: u64,
+    /// Complete-layer payload bytes streaming avoided reading from storage.
+    pub avoided_complete_layer_source_bytes: u64,
+    /// Expert payload bytes prefill had to stream from storage.
+    pub mandatory_prefill_source_bytes: u64,
+    /// Expert payload bytes decode had to stream from storage.
+    pub mandatory_decode_source_bytes: u64,
+    /// Session totals of expert routing and streaming behind this snapshot.
+    /// Prompt and generated tokens are the finalized request's own counts:
+    /// the daemon accumulates them across events for session totals.
+    pub prompt_token_count: u64,
+    pub generated_token_count: u64,
 }
 
 /// Model currently processing the active prompt phase.
@@ -254,6 +325,13 @@ pub enum WorkerEvent {
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
         expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
+    /// Reports session-scoped expert-streaming statistics after each
+    /// generation finalizes.
+    ///
+    /// Emitted by the worker whenever a streaming engine completes a
+    /// generation, so the daemon can expose expert-cache benefits through
+    /// `GET /v1/experts/stats` without touching worker-owned state itself.
+    ExpertStreamingStats { stats: WorkerExpertStreamingStats },
     /// Reports image-generation phase and denoising-step progress.
     ImageGenerationProgress {
         request_id: RequestId,
@@ -337,9 +415,10 @@ pub enum WorkerEvent {
     /// Reports the explicit barrier between final prompt processing and first decode.
     GenerationPreparationStarted {
         request_id: RequestId,
-        total_layer_count: u32,
-        resident_expert_count: u32,
-        resident_expert_payload_bytes: u64,
+        /// Full residency at the preparation barrier, including the expert
+        /// library size. Flattening a subset here dropped those fields from
+        /// the live status bar at the moment generation began.
+        expert_residency: WorkerExpertResidencySnapshot,
         /// Memory observation captured at the same owner-thread instant as the residency.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },

@@ -15,10 +15,16 @@ pub(crate) mod expert_reuse;
 mod expert_reuse_union_offer;
 #[cfg(feature = "direct-mlx")]
 mod expert_storage_streaming;
+mod expert_streaming_stats;
 // Reads the next streamed layer while the graphics processor computes.
 pub(crate) mod prefill_complete_layer_prefetch;
 #[cfg(test)]
 mod prefill_complete_layer_prefetch_tests;
+mod prefill_partial_layer_read;
+#[cfg(test)]
+mod prefill_partial_layer_read_tests;
+#[cfg(feature = "direct-mlx")]
+mod prefill_partial_page;
 #[cfg(feature = "direct-mlx")]
 mod request_expert_storage_read_tally;
 #[cfg(feature = "direct-mlx")]

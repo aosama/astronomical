@@ -30,6 +30,9 @@ async fn should_round_trip_prefill_progress_event() {
             total_layer_count: 40,
             resident_expert_count: 40,
             resident_expert_payload_bytes: 3_375_366_144,
+            complete_expert_payload_byte_count: 21_000_000_000,
+            expert_capacity: 256,
+            layer_seating: crate::ExpertLayerSeatingCounts::default(),
         }),
     };
 

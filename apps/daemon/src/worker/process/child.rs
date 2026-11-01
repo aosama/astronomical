@@ -15,6 +15,7 @@ use tokio::{
     time::timeout,
 };
 
+use crate::worker::process::relaunch_memory::startup_configuration_carrying_applied_memory_ceiling;
 use crate::{WorkerControlError, worker::process::stderr_tail::WorkerStderrTail};
 
 const WORKER_STDERR_READ_BYTES: usize = 1_024;
@@ -215,6 +216,11 @@ impl WorkerProcess {
     }
 
     /// Starts a clean process from this worker's exact portable launch inputs.
+    ///
+    /// The launch snapshot includes a memory ceiling adopted after a live apply.
+    /// A cancellation failure reaches this path with the process already dead,
+    /// so the ceiling has to live on the launch snapshot rather than in the old
+    /// process.
     pub(crate) async fn relaunch_after_termination(&mut self) -> Result<(), WorkerControlError> {
         let replacement_worker = Self::launch_with_timeouts_and_startup_configuration(
             &self.launch_executable_path,
@@ -225,6 +231,24 @@ impl WorkerProcess {
         .await?;
         *self = replacement_worker;
         Ok(())
+    }
+
+    /// Remembers a ceiling the live worker already adopted so the next relaunch
+    /// boots at that configured ceiling.
+    ///
+    /// Startup applies the wired-memory margin again, so this stores the
+    /// requested configured ceiling. Storing the already-clamped engine ceiling
+    /// would shrink the budget a second time.
+    pub(crate) fn record_applied_memory_ceiling_for_relaunch(
+        &mut self,
+        configured_maximum_mlx_memory_bytes: u64,
+        configuration_generation: &str,
+    ) {
+        self.launch_startup_configuration = startup_configuration_carrying_applied_memory_ceiling(
+            self.launch_startup_configuration.take(),
+            configured_maximum_mlx_memory_bytes,
+            configuration_generation,
+        );
     }
 
     pub(crate) fn expected_configuration_generation(&self) -> Option<&str> {

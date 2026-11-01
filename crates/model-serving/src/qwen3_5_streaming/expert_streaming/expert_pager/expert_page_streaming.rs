@@ -96,14 +96,16 @@ impl Qwen3_5ExpertPager {
                 },
             )?;
         }
+        let expert_read_metrics =
+            self.expert_read_metrics_for_streamed_page(performance_attribution);
         let mut loaded_tensors = performance_attribution
             .measure_operation(
                 PerformanceOperation::RustExpertStreamingLayerPreparation,
-                |performance_attribution| {
+                |_performance_attribution| {
                     load_quantized_expert_page(
                         runtime,
                         &page_manifest,
-                        performance_attribution.positional_file_read_metrics(),
+                        Some(std::sync::Arc::clone(&expert_read_metrics)),
                     )
                 },
             )
@@ -122,6 +124,10 @@ impl Qwen3_5ExpertPager {
             page_manifest.source_manifests.len(),
             page_manifest.payload_byte_count,
         );
+        self.record_streamed_page_phase_source_bytes(
+            request_shape.route_token_count,
+            page_manifest.payload_byte_count,
+        );
         // This counter is logical selected payload. Positional-read counters and
         // process-attributed physical I/O answer different questions and remain
         // separate in performance reports.
@@ -130,5 +136,39 @@ impl Qwen3_5ExpertPager {
             page_manifest.payload_byte_count,
         );
         Ok((streamed_weights, page_manifest))
+    }
+
+    /// Prefer the attribution's private per-request aggregate so diagnostics
+    /// report deltas stay exact, and install the session aggregate as its
+    /// mirror peer so the always-on observatory totals see the same reads.
+    /// When diagnostics are off the session aggregate feeds the readers directly.
+    fn expert_read_metrics_for_streamed_page(
+        &self,
+        performance_attribution: &PerformanceAttribution,
+    ) -> std::sync::Arc<astronomical_runtime_integration::PositionalFileReadMetrics> {
+        match performance_attribution.positional_file_read_metrics() {
+            Some(attribution_read_metrics) => {
+                attribution_read_metrics
+                    .install_peer_read_metrics(self.session_expert_read_metrics());
+                attribution_read_metrics
+            }
+            None => self.session_expert_read_metrics(),
+        }
+    }
+
+    /// Observatory session counters are always-on. A multi-token route is
+    /// prefill breadth and a single-token route is decode depth, matching
+    /// the attribution catalog.
+    fn record_streamed_page_phase_source_bytes(
+        &self,
+        route_token_count: i32,
+        payload_byte_count: u64,
+    ) {
+        let session_streaming_phase = if route_token_count > 1 {
+            crate::memory::SessionStreamingPhase::Prefill
+        } else {
+            crate::memory::SessionStreamingPhase::Decode
+        };
+        self.record_session_mandatory_source_bytes(session_streaming_phase, payload_byte_count);
     }
 }

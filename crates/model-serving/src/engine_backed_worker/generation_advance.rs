@@ -238,16 +238,12 @@ where
                 Ok(Some(active_generation))
             }
             GeneratedToken::GenerationPreparationStarted {
-                total_layer_count,
-                resident_expert_count,
-                resident_expert_payload_bytes,
+                expert_residency,
                 mlx_memory_telemetry,
             } => {
                 super::generation_advance_prefill::emit_generation_preparation_started(
                     &active_generation,
-                    total_layer_count,
-                    resident_expert_count,
-                    resident_expert_payload_bytes,
+                    expert_residency,
                     mlx_memory_telemetry,
                     event_writer,
                 )
@@ -330,7 +326,7 @@ where
         expert_memory_mode: Option<ExpertMemoryMode>,
         mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
         first_decode_forward_elapsed_millis: Option<u64>,
-        generation_finalization: Option<crate::GenerationFinalization>,
+        generation_finalization: Option<Box<crate::GenerationFinalization>>,
         request_id: RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
@@ -420,7 +416,7 @@ where
             Processor::InferenceRequest,
         >,
         first_decode_forward_elapsed_millis: Option<u64>,
-        generation_finalization: Option<crate::GenerationFinalization>,
+        generation_finalization: Option<Box<crate::GenerationFinalization>>,
         expert_memory_mode: Option<ExpertMemoryMode>,
         request_id: RequestId,
         event_writer: &mut ProtocolWriter<WriteTransport>,
@@ -437,6 +433,7 @@ where
                 .await?;
         }
         if let Some(generation_finalization) = generation_finalization {
+            let generation_finalization = *generation_finalization;
             active_generation.engine_has_finalized_generation = true;
             self.emit_generation_finalization(
                 active_generation,

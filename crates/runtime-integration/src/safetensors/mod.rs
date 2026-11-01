@@ -58,3 +58,5 @@ pub mod lazy_map;
 pub mod memory_writer;
 pub mod name_maps;
 pub mod read_metrics;
+#[cfg(test)]
+mod read_metrics_tests;

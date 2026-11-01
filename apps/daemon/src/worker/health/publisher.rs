@@ -14,10 +14,45 @@ use super::{
 
 pub(crate) fn publish_health(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
-    worker_health_snapshot: WorkerHealthSnapshot,
+    mut worker_health_snapshot: WorkerHealthSnapshot,
 ) {
     if let Ok(mut health_snapshot) = health_snapshot.write() {
+        preserve_expert_streaming_observatory_across_health_replacement(
+            &mut worker_health_snapshot,
+            &health_snapshot,
+        );
         *health_snapshot = worker_health_snapshot;
+    }
+}
+
+/// Wholesale replacements (idle, ready, and load transitions) rebuild every
+/// field from fresh worker events. The expert-streaming observatory is
+/// daemon-accumulated state, so it survives every replacement except a
+/// genuine model swap: only a replacement that claims a different ready model
+/// than the snapshot already holds starts a fresh engine-load session.
+/// Re-ready events during a load (existing claim not yet published) must not
+/// reset the feed — that path was clearing `previous_mode` on the live daemon.
+fn preserve_expert_streaming_observatory_across_health_replacement(
+    replacement_snapshot: &mut WorkerHealthSnapshot,
+    installed_snapshot: &WorkerHealthSnapshot,
+) {
+    let replacement_claims_different_model = match (
+        replacement_snapshot.ready_model_id.as_ref(),
+        installed_snapshot.ready_model_id.as_ref(),
+    ) {
+        (Some(replacement_model_id), Some(ready_model_id)) => {
+            replacement_model_id != ready_model_id
+        }
+        _ => false,
+    };
+    if !replacement_claims_different_model
+        && replacement_snapshot
+            .expert_streaming_observatory
+            .latest_stats
+            .is_none()
+    {
+        replacement_snapshot.expert_streaming_observatory =
+            installed_snapshot.expert_streaming_observatory.clone();
     }
 }
 
@@ -51,7 +86,18 @@ pub(crate) fn publish_expert_memory_mode(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.expert_memory_mode = Some(expert_memory_mode);
+        worker_health_snapshot
+            .expert_streaming_observatory
+            .record_mode_change(expert_memory_mode, unix_millis_now());
     }
+}
+
+/// Current wall-clock in Unix milliseconds; the zero fallback only occurs
+/// before the epoch, which no serving host exhibits.
+fn unix_millis_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |since_unix_epoch| since_unix_epoch.as_millis() as u64)
 }
 
 pub(crate) fn publish_expert_residency(
@@ -80,6 +126,33 @@ pub(crate) fn publish_persistent_prompt_cache_stats(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.persistent_prompt_cache_stats = Some(persistent_prompt_cache_stats);
+    }
+}
+
+pub(crate) fn publish_expert_streaming_stats(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    expert_streaming_stats_event: WorkerEvent,
+) {
+    let Some(worker_expert_streaming_stats) =
+        super::expert_streaming::expert_streaming_stats_from_event(&expert_streaming_stats_event)
+    else {
+        return;
+    };
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        tracing::info!(
+            had_latest_stats = worker_health_snapshot
+                .expert_streaming_observatory
+                .latest_stats
+                .is_some(),
+            accumulated_prompt_tokens = worker_health_snapshot
+                .expert_streaming_observatory
+                .accumulated_prompt_token_count,
+            snapshot_ptr = Arc::as_ptr(health_snapshot) as usize,
+            "expert streaming stats recording"
+        );
+        worker_health_snapshot
+            .expert_streaming_observatory
+            .record_stats(worker_expert_streaming_stats, unix_millis_now());
     }
 }
 

@@ -299,14 +299,3 @@
     margin-top: 10px;
     flex-wrap: wrap;
 }
-
-/* Responsive */
-@media (max-width: 760px) {
-    .library-catalog-list { grid-template-columns: 1fr; }
-    .library-model-card { padding: 20px 18px; }
-    .library-model-card:nth-child(odd) { border-right: 0; }
-    .library-model-card-expanded { grid-column: auto; }
-    .library-model-heading { gap: 12px; }
-    .library-filter-bar { padding: 14px 18px; }
-    .library-hero-summary { padding: 18px; }
-}

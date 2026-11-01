@@ -145,15 +145,9 @@ fn attach_worker_memory_and_session_facts(
             .expert_memory_mode
             .map(expert_memory_mode_label)
     );
-    status_json["expert_residency"] =
-        serde_json::json!(
-        worker_health_snapshot.expert_residency.map(|expert_residency| {
-            serde_json::json!({
-                "total_layer_count": expert_residency.total_layer_count,
-                "resident_expert_count": expert_residency.resident_expert_count,
-                "resident_expert_payload_bytes": expert_residency.resident_expert_payload_bytes,
-            })
-        })
+    super::expert_placement::attach_expert_placement_and_residency(
+        status_json,
+        worker_health_snapshot,
     );
     status_json["mlx_memory_snapshot"] =
         serde_json::json!(worker_health_snapshot.latest_mlx_memory_snapshot);

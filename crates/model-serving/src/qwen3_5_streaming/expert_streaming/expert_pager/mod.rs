@@ -2,6 +2,7 @@
 
 mod complete_page_multiplication;
 mod expert_page_streaming;
+mod session_stats;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod complete_page_multiplication_tests;
@@ -11,17 +12,19 @@ mod expert_subset_tests;
 pub(crate) use complete_page_multiplication::codebook_page_multiplies_without_transient_decode;
 pub(crate) use expert_page_streaming::Qwen3_5ExpertStreamingRequestShape;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fs::File;
 use std::mem::size_of;
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use astronomical_runtime_integration::MlxRuntimeError;
+use astronomical_runtime_integration::{MlxRuntimeError, PositionalFileReadMetrics};
 use thiserror::Error;
 
 use crate::expert_paging::{
     ExpertManifestError, ExpertWeightPage, QuantizedExpertLayerPlan, SafetensorsHeaderError,
 };
+use crate::memory::ExpertStreamingSessionCounters;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::{MlxAllocationAdmission, MlxAllocationAdmissionError};
 use mlx_c_rust::MlxArray;
@@ -89,6 +92,14 @@ pub struct Qwen3_5ExpertPager {
     /// Multi-token pages still decode a transient bfloat16 copy and keep the
     /// full decode peak. The model sets this after the capability verdict.
     pub(super) decode_tokens_multiply_packed_pages: Cell<bool>,
+    /// Always-on observatory counters for this engine load. Distinct from
+    /// the opt-in diagnostics attribution: plain saturating increments, no
+    /// clocks, so the expert page never depends on diagnostics being enabled.
+    pub(super) session_counters: RefCell<ExpertStreamingSessionCounters>,
+    /// Always-on lock-free positional-read aggregate attached to every
+    /// expert-source reader of this engine load, even when diagnostics
+    /// attribution (which owns a private per-request aggregate) is disabled.
+    pub(super) session_read_metrics: Arc<PositionalFileReadMetrics>,
 }
 
 /// Exact compact or complete expert arrays loaded by Rust for one layer use.
@@ -167,6 +178,39 @@ impl Qwen3_5PagedExpertWeights {
             gate_projection: select(&self.gate_projection)?,
             up_projection: select(&self.up_projection)?,
             down_projection: select(&self.down_projection)?,
+            gate_activation_rotation: self.gate_activation_rotation,
+            up_activation_rotation: self.up_activation_rotation,
+            down_activation_rotation: self.down_activation_rotation,
+        })
+    }
+
+    /// Stacks `appended` after this page on the expert axis.
+    ///
+    /// Rotations have to match because the forward applies one rotation to the
+    /// whole page. A retained half and a streamed half from the same layer do.
+    pub(crate) fn concatenate_expert_pages(
+        &self,
+        runtime: &astronomical_runtime_integration::MlxRuntime,
+        appended: &Self,
+    ) -> Result<Self, ExpertPagingError> {
+        if self.gate_activation_rotation != appended.gate_activation_rotation
+            || self.up_activation_rotation != appended.up_activation_rotation
+            || self.down_activation_rotation != appended.down_activation_rotation
+        {
+            return Err(ExpertPagingError::InvalidPagingPlan {
+                description: "concatenated expert pages must share activation rotations".to_owned(),
+            });
+        }
+        Ok(Self {
+            gate_projection: self
+                .gate_projection
+                .concatenate_experts(runtime, &appended.gate_projection)?,
+            up_projection: self
+                .up_projection
+                .concatenate_experts(runtime, &appended.up_projection)?,
+            down_projection: self
+                .down_projection
+                .concatenate_experts(runtime, &appended.down_projection)?,
             gate_activation_rotation: self.gate_activation_rotation,
             up_activation_rotation: self.up_activation_rotation,
             down_activation_rotation: self.down_activation_rotation,

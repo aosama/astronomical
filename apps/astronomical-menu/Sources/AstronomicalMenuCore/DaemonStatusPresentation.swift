@@ -91,12 +91,20 @@ extension DaemonStatusDocument {
   }
 
   var modelFootprintTitle: String {
-    if expertMemoryMode == "resident" {
-      return "Fully in memory"
+    // The daemon owns this sentence so the menu and Observatory cannot drift.
+    // An older daemon omits expert_placement. A loaded model then stays fully
+    // in memory, and an unloaded one names the empty library.
+    if let stockSentence = expertPlacement?.stockSentence, !stockSentence.isEmpty {
+      return stockSentence
     }
-    if readyModelIdentifier != nil && expertMemoryMode == nil { return "Fully in memory" }
-    return expertMemoryMode == "paged" || expertMemoryMode == "hybrid"
-      ? "RAM + SSD streaming" : "Not loaded"
+    if readyModelIdentifier == nil {
+      return "No expert library is loaded."
+    }
+    return "Fully in memory"
+  }
+
+  var replyReadTitle: String {
+    expertPlacement?.replySentence ?? ""
   }
 
   var modelDiskSizeTitle: String {

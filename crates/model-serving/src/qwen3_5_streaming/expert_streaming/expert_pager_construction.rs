@@ -1,16 +1,19 @@
 //! Startup construction of validated expert layer plans and memory admission.
 
+use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use astronomical_runtime_integration::MlxRuntime;
+use astronomical_runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use crate::MlxAllocationAdmission;
 use crate::expert_paging::QuantizedExpertLayerPlan;
 use crate::expert_paging::safetensors_header::SafetensorsHeader;
+use crate::memory::ExpertStreamingSessionCounters;
 use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 
@@ -84,6 +87,8 @@ impl Qwen3_5ExpertPager {
             // Conservative until the model proves the fused kernel: every
             // page prices its decode peak.
             decode_tokens_multiply_packed_pages: std::cell::Cell::new(false),
+            session_counters: RefCell::new(ExpertStreamingSessionCounters::default()),
+            session_read_metrics: Arc::new(PositionalFileReadMetrics::default()),
         })
     }
 }
