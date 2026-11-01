@@ -236,9 +236,18 @@ fn should_return_zero_activation_headroom_when_the_model_fills_the_ceiling() {
     );
 }
 
+/// A geometry whose experts cannot all be seated under the 8 GB test
+/// ceiling, so prefill keeps streaming at least one complete layer.
+fn streaming_geometry() -> MlxRamBudgetModelGeometry {
+    MlxRamBudgetModelGeometry {
+        complete_expert_payload_bytes: 9_000_000_000,
+        ..geometry_with_sequence_state(0)
+    }
+}
+
 #[test]
 fn should_keep_the_declared_prefill_stream_slot_at_least_one_packed_complete_layer() {
-    let mut mlx_ram_budget = budget_with_geometry(geometry_with_sequence_state(0));
+    let mut mlx_ram_budget = budget_with_geometry(streaming_geometry());
     mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(10);
 
     let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 1_024, 2_048, 0);
@@ -253,6 +262,18 @@ fn should_keep_the_declared_prefill_stream_slot_at_least_one_packed_complete_lay
         planned_budget.complete_layer_stream_slot_bytes, 250_000_000,
         "a declared slot above one packed complete layer is kept"
     );
+}
+
+#[test]
+fn should_reserve_no_prefill_stream_slot_when_every_expert_fits() {
+    // 4 GB of experts beside a 1 GB core fit the 8 GB ceiling with the
+    // activation floor, so prefill streams nothing and needs no slot.
+    let mut mlx_ram_budget = budget_with_geometry(geometry_with_sequence_state(0));
+    mlx_ram_budget.set_prefill_complete_layer_stream_slot_bytes(250_000_000);
+
+    let planned_budget = mlx_ram_budget.plan(MemoryPhase::Prefill, 1_024, 2_048, 0);
+    assert_eq!(planned_budget.complete_layer_stream_slot_bytes, 0);
+    assert!(planned_budget.retained_expert_budget_bytes >= 4_000_000_000);
 }
 
 #[test]

@@ -11,6 +11,7 @@
 
 pub mod adaptive_growth;
 pub mod adaptive_growth_projection;
+pub(crate) mod prefill_stream_slot;
 pub mod ram;
 pub mod ram_activation;
 pub mod ram_geometry;

@@ -42,6 +42,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::budget::prefill_stream_slot::prefill_stream_slot_bytes_after_full_fit;
 use crate::phase::MemoryPhase;
 
 /// Bootstrap context-window reserve before any live measurement exists
@@ -410,7 +411,16 @@ impl MlxRamBudget {
         let activation_headroom_bytes =
             self.activation_headroom_bytes(phase, operation_token_count);
         let complete_layer_stream_slot_bytes = match phase {
-            MemoryPhase::Prefill => self.prefill_complete_layer_stream_slot_bytes(),
+            MemoryPhase::Prefill => prefill_stream_slot_bytes_after_full_fit(
+                self.mlx_active_memory_ceiling_bytes(),
+                self.model_geometry
+                    .model_core_payload_bytes
+                    .saturating_add(context_window_reserve_bytes)
+                    .saturating_add(activation_headroom_bytes)
+                    .saturating_add(other_fixed_bytes),
+                self.model_geometry.complete_expert_payload_bytes,
+                self.prefill_complete_layer_stream_slot_bytes(),
+            ),
             // GenerationPreparation budgets like decode (see phase.rs): token
             // writing needs the routed-page slot, not a complete-layer slot.
             MemoryPhase::GenerationPreparation | MemoryPhase::Decode => {
