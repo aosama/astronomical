@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::config_document::{Qwen3_5ConfigDocument, Qwen3_5TextConfig};
 use super::config_validation;
 use super::config_validation::{QWEN_CHAT_EOS_TOKEN_ID, Qwen3_5ConfigError};
-use super::quantizations::optiq::OptiQQuantizationProfile;
+use super::quantizations::mlx_quantization::ModuleQuantizationProfile;
 use astronomical_jangtq2_qwen35::configuration::Jangtq2RmsNormConvention;
 
 #[cfg(test)]
@@ -37,7 +37,7 @@ pub enum Qwen3_5FeedForwardArchitecture {
 pub struct Qwen3_5Config {
     pub(super) eos_token_ids: Vec<u32>,
     pub(super) has_tied_embeddings: bool,
-    pub(super) quantized_module_profiles: BTreeMap<String, OptiQQuantizationProfile>,
+    pub(super) quantized_module_profiles: BTreeMap<String, ModuleQuantizationProfile>,
     pub(super) model_weight_storage: ModelWeightStorage,
     pub(super) default_quantization_bits: u32,
     pub(super) default_quantization_group_size: u32,
@@ -165,7 +165,7 @@ fn resolved_eos_token_ids(
 /// whole-model weight storage encoding, and the default bits and group size
 /// quantized modules fall back to.
 struct ResolvedQuantization {
-    quantized_module_profiles: BTreeMap<String, OptiQQuantizationProfile>,
+    quantized_module_profiles: BTreeMap<String, ModuleQuantizationProfile>,
     model_weight_storage: ModelWeightStorage,
     default_quantization_bits: u32,
     default_quantization_group_size: u32,

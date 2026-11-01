@@ -15,7 +15,7 @@ pub(crate) use super::configuration::{
     Qwen3_5Config, Qwen3_5ConfigError, Qwen3_5FeedForwardArchitecture,
 };
 pub(crate) use super::quantizations;
-pub(crate) use super::quantizations::optiq::{OptiQMetadata, OptiQMetadataError};
+pub(crate) use super::quantizations::producers::optiq::{OptiQMetadata, OptiQMetadataError};
 pub(crate) use super::vision::{Qwen3_5VisionConfig, vision_tensor_spec};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::expert_paging::{

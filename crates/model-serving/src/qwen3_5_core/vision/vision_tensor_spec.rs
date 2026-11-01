@@ -13,7 +13,9 @@ mod tests;
 
 use crate::qwen3_5_core::artifacts::Qwen3_5ArtifactError;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantizationProfile};
+use crate::qwen3_5_core::quantizations::mlx_quantization::{
+    ModuleQuantizationProfile, ModuleWeightCodec,
+};
 use crate::{TensorDtype, TensorProfile};
 
 use super::Qwen3_5VisionConfig;
@@ -152,7 +154,7 @@ fn append_positional_embedding_tensor_profile(
 // position.
 fn append_transformer_block_tensor_profiles(
     tensor_profiles: &mut Vec<TensorProfile>,
-    vision_quantization_profiles: Option<&HashMap<String, OptiQQuantizationProfile>>,
+    vision_quantization_profiles: Option<&HashMap<String, ModuleQuantizationProfile>>,
     geometry: &VisionGeometry,
 ) -> Result<(), Qwen3_5ArtifactError> {
     for block_index in 0..geometry.depth {
@@ -238,7 +240,7 @@ fn append_transformer_block_tensor_profiles(
 // model's out_hidden_size.
 fn append_merger_tensor_profiles(
     tensor_profiles: &mut Vec<TensorProfile>,
-    vision_quantization_profiles: Option<&HashMap<String, OptiQQuantizationProfile>>,
+    vision_quantization_profiles: Option<&HashMap<String, ModuleQuantizationProfile>>,
     geometry: &VisionGeometry,
 ) -> Result<(), Qwen3_5ArtifactError> {
     tensor_profiles.push(tensor_profile(
@@ -279,7 +281,7 @@ fn append_linear_module_tensor_profiles(
     module_name: &str,
     output_width: usize,
     input_width: usize,
-    quantization_profile: Option<OptiQQuantizationProfile>,
+    quantization_profile: Option<ModuleQuantizationProfile>,
 ) -> Result<(), Qwen3_5ArtifactError> {
     if let Some(module_quantization_profile) = quantization_profile {
         if let ModuleWeightCodec::Jangtq2CodebookQuantized { .. } =
@@ -325,7 +327,7 @@ fn append_linear_module_tensor_profiles(
 pub(crate) fn qwen3_5_vision_linear_quantization_profiles(
     vision_config: &Qwen3_5VisionConfig,
     qwen3_5_config: &Qwen3_5Config,
-) -> HashMap<String, OptiQQuantizationProfile> {
+) -> HashMap<String, ModuleQuantizationProfile> {
     let mut module_quantization_profiles =
         HashMap::with_capacity(vision_config.depth() as usize * 4 + 2);
     for block_index in 0..vision_config.depth() {
@@ -351,9 +353,9 @@ pub(crate) fn qwen3_5_vision_linear_quantization_profiles(
 }
 
 fn vision_module_quantization_profile(
-    module_quantization_profiles: Option<&HashMap<String, OptiQQuantizationProfile>>,
+    module_quantization_profiles: Option<&HashMap<String, ModuleQuantizationProfile>>,
     module_name: &str,
-) -> Option<OptiQQuantizationProfile> {
+) -> Option<ModuleQuantizationProfile> {
     module_quantization_profiles
         .and_then(|profile_by_module_name| profile_by_module_name.get(module_name))
         .copied()

@@ -5,8 +5,8 @@ use thiserror::Error;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 
-use super::config::{
-    OptiQQuantizationProfile, is_mlx_affine_quantization_bit_width_supported,
+use crate::qwen3_5_core::quantizations::mlx_quantization::document::{
+    ModuleQuantizationProfile, is_mlx_affine_quantization_bit_width_supported,
     is_mlx_affine_quantization_group_size_supported,
 };
 
@@ -14,7 +14,7 @@ const MAXIMUM_OPTIQ_METADATA_BYTES: usize = 128 * 1024;
 /// Strict metadata for the measured portion of the pinned OptiQ bit map.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OptiQMetadata {
-    measured_module_profiles: BTreeMap<String, OptiQQuantizationProfile>,
+    measured_module_profiles: BTreeMap<String, ModuleQuantizationProfile>,
 }
 
 impl OptiQMetadata {
@@ -57,7 +57,7 @@ impl OptiQMetadata {
                         module_name,
                         // Measured metadata describes affine OptiQ runs;
                         // codebook storage never carries measured metadata.
-                        OptiQQuantizationProfile::affine(
+                        ModuleQuantizationProfile::affine(
                             quantization_override.bits,
                             quantization_override.group_size,
                         ),
@@ -114,7 +114,7 @@ impl OptiQMetadata {
         &self,
         qwen3_5_config: &Qwen3_5Config,
     ) -> Result<(), OptiQMetadataError> {
-        let expected_measured_module_profiles: BTreeMap<String, OptiQQuantizationProfile> =
+        let expected_measured_module_profiles: BTreeMap<String, ModuleQuantizationProfile> =
             qwen3_5_config
                 .quantized_module_profiles()
                 .iter()

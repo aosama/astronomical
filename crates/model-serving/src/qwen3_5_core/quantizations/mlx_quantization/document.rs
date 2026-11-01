@@ -27,7 +27,7 @@ pub(crate) const fn is_mlx_affine_quantization_group_size_supported(group_size: 
 /// jangtq2 family needs; every rule about that format lives in the family
 /// folder, and consumers branch on this enum exactly once, at the point
 /// where storage becomes tensor shapes or decode work — via
-/// [`OptiQQuantizationProfile::is_jangtq2_codebook`] plus delegation to the
+/// [`ModuleQuantizationProfile::is_jangtq2_codebook`] plus delegation to the
 /// family, never by matching the variant inside consumer logic.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ModuleWeightCodec {
@@ -46,7 +46,7 @@ pub enum ModuleWeightCodec {
 /// Per-module quantization profile carrying both bit width and group size.
 ///
 /// Each quantized module in a Qwen3.5 model can have its own bit width
-/// and group size. The OptiQ mixed-precision format uses sparse overrides:
+/// and group size. Mixed-precision MLX artifacts use sparse overrides:
 /// modules not listed in the config use the default `(bits, group_size)`.
 ///
 /// A profile with `bits = 0` indicates an unquantized module stored as
@@ -55,13 +55,13 @@ pub enum ModuleWeightCodec {
 /// A profile with the codebook codec carries the jangtq2 bit width and
 /// rotation with `group_size = 0` — codebook storage has no group concept.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct OptiQQuantizationProfile {
+pub struct ModuleQuantizationProfile {
     pub bits: u32,
     pub group_size: u32,
     pub weight_codec: ModuleWeightCodec,
 }
 
-impl OptiQQuantizationProfile {
+impl ModuleQuantizationProfile {
     /// Returns true when the module is stored as plain bfloat16 (no quantization).
     ///
     /// Unquantized modules have `bits = 0` and no `.scales`/`.biases` tensors
@@ -124,9 +124,13 @@ pub trait QuantizationConfigSource {
 
 /// The two identical quantization documents embedded in the Qwen3.5 config.
 ///
-/// Supports both the original OptiQ-4bit format (explicit overrides for every
-/// module) and the newer mixed-precision format (sparse overrides where modules
-/// not listed use the default `bits` and `group_size`).
+/// The producer-neutral MLX `quantization` block. Every quantizer that emits
+/// an MLX artifact (stock mlx-lm, OptiQ, oQ) writes this same document, so the
+/// loader's decisions depend only on this storage format, never on the producer.
+///
+/// Supports both the uniform layout (explicit overrides for every module) and
+/// the sparse layout (overrides only where a module differs from the default
+/// `bits` and `group_size`).
 ///
 /// Per-module override entries parse through the jangtq2 family's entry
 /// type, which owns the three wire shapes that coexist in quantized bundles:
@@ -137,7 +141,7 @@ pub trait QuantizationConfigSource {
 /// (tensor inventory shapes and, once its serving integration lands, the
 /// per-expert decode).
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct OptiQQuantizationConfig {
+pub struct MlxQuantizationDocument {
     group_size: u32,
     bits: u32,
     mode: String,
@@ -145,7 +149,7 @@ pub struct OptiQQuantizationConfig {
     module_overrides: BTreeMap<String, Jangtq2WeightOverrideEntry>,
 }
 
-impl OptiQQuantizationConfig {
+impl MlxQuantizationDocument {
     /// Returns the default quantization group size declared by the artifact.
     ///
     /// This is the group size used for modules not listed in the overrides.
@@ -166,13 +170,13 @@ impl OptiQQuantizationConfig {
     /// module name to quantization profile (bits + group_size).
     ///
     /// For modules not listed in overrides, the default `(bits, group_size)`
-    /// is used. Supports OptiQ-4bit (explicit all-module overrides with bits=4),
-    /// and mixed-precision formats (sparse overrides with default bits=6).
+    /// is used. Supports explicit all-module overrides with bits=4
+    /// and sparse overrides with default bits=6.
     pub fn validate(
         &self,
         config_source: &impl QuantizationConfigSource,
         feed_forward_architecture: Qwen3_5FeedForwardArchitecture,
-    ) -> Result<BTreeMap<String, OptiQQuantizationProfile>, Qwen3_5ConfigError> {
+    ) -> Result<BTreeMap<String, ModuleQuantizationProfile>, Qwen3_5ConfigError> {
         validate_exact_value("quantization.mode", &self.mode, EXPECTED_QUANTIZATION_MODE)?;
 
         if !is_mlx_affine_quantization_bit_width_supported(self.bits) {
@@ -225,12 +229,12 @@ impl OptiQQuantizationConfig {
         }
 
         // Build the fully resolved module profile map.
-        // For OptiQ-4bit (bits=4): all modules are explicit overrides.
-        // For mixed-precision (bits=6): overrides specify modules that differ from default.
-        let default_profile = OptiQQuantizationProfile::affine(self.bits, self.group_size);
+        // Uniform layout (bits=4): all modules are explicit overrides.
+        // Sparse layout (bits=6): overrides specify modules that differ from default.
+        let default_profile = ModuleQuantizationProfile::affine(self.bits, self.group_size);
         let mut all_module_names =
             expected_quantized_module_names(config_source, feed_forward_architecture);
-        // The OptiQ map may also carry explicitly quantized vision modules.
+        // The override map may also carry explicitly quantized vision modules.
         // Their geometry belongs to the vision configuration, but their codec
         // descriptors still need to survive text-config parsing for the vision
         // tensor contract and weight loader.
@@ -241,12 +245,12 @@ impl OptiQQuantizationConfig {
         for module_name in all_module_names {
             let module_profile = match self.module_overrides.get(&module_name) {
                 Some(Jangtq2WeightOverrideEntry::Affine { bits, group_size }) => {
-                    OptiQQuantizationProfile::affine(*bits, *group_size)
+                    ModuleQuantizationProfile::affine(*bits, *group_size)
                 }
                 // A `false` flag marks native floating-point storage — the
                 // same bits=0 convention the shard-index resolver produces.
                 Some(Jangtq2WeightOverrideEntry::LoaderFlag(false)) => {
-                    OptiQQuantizationProfile::unquantized()
+                    ModuleQuantizationProfile::unquantized()
                 }
                 // A `true` flag defers to the document defaults, exactly
                 // like an unlisted module.
@@ -255,7 +259,7 @@ impl OptiQQuantizationConfig {
                 // format's tensor shapes and decode rules belong to the
                 // jangtq2 family, reached through the profile's codec.
                 Some(Jangtq2WeightOverrideEntry::Codebook { bits, rotation, .. }) => {
-                    OptiQQuantizationProfile::jangtq2_codebook(*bits, *rotation)
+                    ModuleQuantizationProfile::jangtq2_codebook(*bits, *rotation)
                 }
             };
             quantized_module_profiles.insert(module_name, module_profile);

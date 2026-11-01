@@ -6,7 +6,7 @@ use super::{
         Qwen3_5ConfigError, deserialize_f32_bits, deserialize_optional_eos_token_ids,
         deserialize_optional_f32_bits, validate_exact_boolean, validate_exact_value,
     },
-    quantizations::optiq::{OptiQQuantizationConfig, QuantizationConfigSource},
+    quantizations::mlx_quantization::{MlxQuantizationDocument, QuantizationConfigSource},
 };
 const EXPECTED_MOE_TEXT_MODEL_TYPE: &str = "qwen3_5_moe_text";
 const EXPECTED_DENSE_TEXT_MODEL_TYPE: &str = "qwen3_5_text";
@@ -22,9 +22,9 @@ pub(super) struct Qwen3_5ConfigDocument {
     #[serde(default)]
     pub(super) pad_token_id: Option<u32>,
     #[serde(default)]
-    pub(super) quantization: Option<OptiQQuantizationConfig>,
+    pub(super) quantization: Option<MlxQuantizationDocument>,
     #[serde(default)]
-    pub(super) quantization_config: Option<OptiQQuantizationConfig>,
+    pub(super) quantization_config: Option<MlxQuantizationDocument>,
     #[serde(default)]
     pub(super) norm_convention: Option<String>,
     pub(super) text_config: Qwen3_5TextConfig,

@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
-use crate::qwen3_5_core::quantizations::optiq::{ModuleWeightCodec, OptiQQuantizationProfile};
+use crate::qwen3_5_core::quantizations::mlx_quantization::{
+    ModuleQuantizationProfile, ModuleWeightCodec,
+};
 use crate::{TensorDtype, TensorProfile};
 
 use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
@@ -35,7 +37,7 @@ pub struct EmbeddedVisionTensorLocation {
 #[derive(Debug)]
 pub struct Qwen3_5VisionWeights {
     bound_tensors: HashMap<String, MlxArray>,
-    quantization_profiles: HashMap<String, OptiQQuantizationProfile>,
+    quantization_profiles: HashMap<String, ModuleQuantizationProfile>,
     /// The safetensors sources that own the memory-mapped data backing the
     /// bound tensors. Empty for embedded-vision models where the model shards
     /// in `Qwen3_5Weights` keep the data alive.
@@ -229,7 +231,7 @@ impl Qwen3_5VisionWeights {
     pub(crate) fn quantization_profile_for_module(
         &self,
         module_name: &str,
-    ) -> Option<OptiQQuantizationProfile> {
+    ) -> Option<ModuleQuantizationProfile> {
         self.quantization_profiles.get(module_name).copied()
     }
 

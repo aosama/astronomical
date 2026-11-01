@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use crate::qwen3_5_core::dense::tensor_spec;
 use crate::{TensorDtype, TensorProfile};
 
-use super::quantizations::optiq::OptiQQuantizationProfile;
+use super::quantizations::mlx_quantization::ModuleQuantizationProfile;
 use super::{Qwen3_5ArtifactError, Qwen3_5Config, Qwen3_5FeedForwardArchitecture};
 
 #[cfg(test)]
@@ -368,7 +368,7 @@ pub(crate) fn append_qwen3_5_quantized_affine_tensor_profiles(
     tensor_prefix: &str,
     leading_dimensions: &[usize],
     input_dimension: usize,
-    quantization_profile: OptiQQuantizationProfile,
+    quantization_profile: ModuleQuantizationProfile,
 ) -> Result<(), Qwen3_5ArtifactError> {
     if quantization_profile.is_jangtq2_codebook() {
         return append_jangtq2_codebook_tensor_profiles(
@@ -425,7 +425,7 @@ fn append_jangtq2_codebook_tensor_profiles(
     tensor_prefix: &str,
     leading_dimensions: &[usize],
     input_dimension: usize,
-    quantization_profile: OptiQQuantizationProfile,
+    quantization_profile: ModuleQuantizationProfile,
 ) -> Result<(), Qwen3_5ArtifactError> {
     let (codebook_expert_count, codebook_output_dimension) = match leading_dimensions {
         [expert_count, output_dimension] => (*expert_count as u32, *output_dimension as u32),
@@ -441,7 +441,7 @@ fn append_jangtq2_codebook_tensor_profiles(
             });
         }
     };
-    let crate::qwen3_5_core::quantizations::optiq::ModuleWeightCodec::Jangtq2CodebookQuantized {
+    let crate::qwen3_5_core::quantizations::mlx_quantization::ModuleWeightCodec::Jangtq2CodebookQuantized {
         rotation,
     } = quantization_profile.weight_codec
     else {

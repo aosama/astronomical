@@ -11,7 +11,7 @@ use crate::qwen3_5_core::frozen_config_test_support::{
     frozen_optiq_metadata_bytes, frozen_ornith_1_0_config_bytes,
     frozen_ornith_1_0_optiq_config_bytes,
 };
-use crate::qwen3_5_core::quantizations::optiq::{OptiQMetadata, OptiQMetadataError};
+use crate::qwen3_5_core::quantizations::producers::optiq::{OptiQMetadata, OptiQMetadataError};
 
 use super::{ModelWeightStorage, Qwen3_5Config};
 use crate::qwen3_5_core::configuration::Qwen3_5ConfigError;
