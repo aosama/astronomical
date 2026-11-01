@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wireObservatoryNavigation();
     wireLibraryCatalog();
     wireConnectMaterial();
+    wireExpertObservatory();
     pollStatus();
     pollCacheStats();
     pollModels();

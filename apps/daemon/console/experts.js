@@ -13,10 +13,12 @@ let selectedExpertLayerIndex = null;
 let renderedExpertLayerSignature = "";
 let renderedExpertSlotSignature = "";
 
-document.addEventListener("DOMContentLoaded", function onExpertsReady() {
+// The Observatory shell boots once from console.js; this view starts from
+// that single DOMContentLoaded handler like Library and Connect do.
+function wireExpertObservatory() {
     pollExpertObservatory();
     setInterval(pollExpertObservatory, EXPERTS_POLL_INTERVAL_MILLIS);
-});
+}
 
 async function pollExpertObservatory() {
     await Promise.all([pollExpertStatus(), pollExpertStats()]);
