@@ -4,36 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.85</title>
-            <pubDate>Sat, 31 Oct 2026 18:32:32 -0400</pubDate>
-            <sparkle:version>1857</sparkle:version>
-            <sparkle:shortVersionString>0.2.85</sparkle:shortVersionString>
+            <title>0.2.86</title>
+            <pubDate>Sun, 01 Nov 2026 15:35:31 -0500</pubDate>
+            <sparkle:version>1882</sparkle:version>
+            <sparkle:shortVersionString>0.2.86</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.85
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.86
 
-### Expert warmth that survives restarts
+Run bigger local mixture-of-experts models on Apple Silicon. This patch release improves how Astronomical balances sparse-expert weights across RAM and SSD, and makes that balance visible and trustworthy in the native Observatory menu.
 
-For sparse-MoE models served from storage, the per-model expert usage history now keeps phase-separated prefill and decode evidence, ages old evidence with a one-generation half-life, and uses decode evidence alone to pre-warm tables. A model you use regularly starts measurably warmer with every launch instead of remembering only the last request. The history file beside streamed MoE artifacts upgrades to format 2; the first launch after upgrading starts that model cold once, and warmth accumulates from then on.
+## What is new
 
-### Lighter, faster builds; ring crypto for downloads
+- **New Observatory Experts view.** A single console handler now boots the Experts view, reporting the resident versus SSD-streamed expert split directly in the native menu.
+- **Honest expert-streaming statistics.** Expert demand statistics are now split by serving phase, and accumulated usage is persisted across sessions so the streamed figures reflect actual serving behavior.
+- **Self-healing residency.** When the complete sparse payload fits the configured ceiling, Astronomical measures prefill residency churn and drops the SSD stream slot, returning the model to fully resident memory.
+- **Continuity across worker replacement.** The raised MLX memory ceiling is kept across worker hot-swaps, and the worker survives expert-streaming statistics that arrive during a cancellation.
 
-The Amazon `aws-lc` crypto dependency is gone: model downloads run over rustls with the ring provider installed at the transport layer, and builds no longer compile AWS libcrypto — removing the single largest build unit. Third-party notices no longer carry aws-lc entries.
+## Compatibility
 
-### Serving measurements you can trust
-
-Durable throughput records now carry the completion's ordinal within its worker, so first-touch rates and warmed rates can never be silently compared as one series, and the streaming prefill floor reflects the current fresh-session calibration.
-
-### Under the hood
-
-Code-shape enforcement (complexity ratchet, function-length budget) moved entirely to pre-commit; SwiftPM cache self-eviction fixed and the sccache budget raised; a workspace-wide function-length and readability paydown; acceptance-battery defect fixes; and a nightly notices freshness lane.
-
-Compatibility: configuration format unchanged; existing model directories, catalogs, and instance state are preserved. No REST/IPC surface changes.
+- Backward-compatible patch. The Stable and Development configurations and their loopback endpoints are unchanged.
+- Requires macOS 14 (Sonoma) or later on Apple silicon.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.85/Astronomical-0.2.85-macOS-arm64.dmg" length="17939435" type="application/octet-stream" sparkle:edSignature="45DyxOhLCC/0SACS1qbDIT4h22jHNyf1O9+TJ7dI+2+XPWTgkk0GmZEe8FcKvcP/k492ULvnz7j+g84+Mq6mDw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.86/Astronomical-0.2.86-macOS-arm64.dmg" length="18034606" type="application/octet-stream" sparkle:edSignature="yjYRI+QgLZByfS8WtlcoMrx/45o/tkAz7bVMd8UXtkAazA/p5C9FJeR8557mrtMMa2PWoNTnme6tBtGYVddvDg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: G63xmcW20B7MOaIY1thBnMPUBLsIU0mFSj/37eBI3+GVhqAdgixAgRs8rTUnOBC0k+4qCInjiQ6YayUab6GaBg==
-length: 2891
+edSignature: 9lHdrJbaa1oSDF1X7tGLfUjGFgKBRqqs9r0kYaHFBO8/JiRLxAhn81CwwrE0GLpXRMP4Kmc7crd/3ZK4tXRmCw==
+length: 2484
 -->
