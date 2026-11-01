@@ -4,32 +4,32 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.86</title>
-            <pubDate>Sun, 01 Nov 2026 15:35:31 -0500</pubDate>
-            <sparkle:version>1882</sparkle:version>
-            <sparkle:shortVersionString>0.2.86</sparkle:shortVersionString>
+            <title>0.2.87</title>
+            <pubDate>Sun, 01 Nov 2026 18:45:48 -0500</pubDate>
+            <sparkle:version>1902</sparkle:version>
+            <sparkle:shortVersionString>0.2.87</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.86
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.87
 
-Run bigger local mixture-of-experts models on Apple Silicon. This patch release improves how Astronomical balances sparse-expert weights across RAM and SSD, and makes that balance visible and trustworthy in the native Observatory menu.
+## What changed
 
-## What is new
-
-- **New Observatory Experts view.** A single console handler now boots the Experts view, reporting the resident versus SSD-streamed expert split directly in the native menu.
-- **Honest expert-streaming statistics.** Expert demand statistics are now split by serving phase, and accumulated usage is persisted across sessions so the streamed figures reflect actual serving behavior.
-- **Self-healing residency.** When the complete sparse payload fits the configured ceiling, Astronomical measures prefill residency churn and drops the SSD stream slot, returning the model to fully resident memory.
-- **Continuity across worker replacement.** The raised MLX memory ceiling is kept across worker hot-swaps, and the worker survives expert-streaming statistics that arrive during a cancellation.
+- **Faster long-prompt prefill for SSD-streamed models.** The default prefill chunk is now 4,096 tokens (was 2,048). A paired A/B on the largest sparse model measured 13–21% faster prefill in 12 of 12 pairings. A configuration that still holds the old default is migrated; values you set explicitly are kept.
+- **Back-to-back long requests no longer fail near the memory ceiling.** A second long request on the largest sparse model could be rejected with "configured prefill chunk exceeded the MLX active-memory limit". Memory recovery now keeps expert residency released until decode, so the retry streams and succeeds at the same chunk size.
+- **OptiQ and oQ models are told apart.** OptiQ's per-layer metadata is validated against the model configuration at load, oQ/oQe models are recognized on their own, and the Library labels an oQ model as oQ.
 
 ## Compatibility
 
-- Backward-compatible patch. The Stable and Development configurations and their loopback endpoints are unchanged.
-- Requires macOS 14 (Sonoma) or later on Apple silicon.
+There are no REST or configuration-format changes. Your models, settings, and caches are preserved.
+
+## Distribution
+
+This release is signed with a Developer ID certificate, notarized by Apple, and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.86/Astronomical-0.2.86-macOS-arm64.dmg" length="18034606" type="application/octet-stream" sparkle:edSignature="yjYRI+QgLZByfS8WtlcoMrx/45o/tkAz7bVMd8UXtkAazA/p5C9FJeR8557mrtMMa2PWoNTnme6tBtGYVddvDg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.87/Astronomical-0.2.87-macOS-arm64.dmg" length="18045059" type="application/octet-stream" sparkle:edSignature="jpRKyPRYTfZgxJ0Ua31hDVXg4ERHbxdwXM3u8MKi6gbh9+nKrGFZnP9QOj1jeLTQnXFj2TWzXefdyI+mMLAsAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: 9lHdrJbaa1oSDF1X7tGLfUjGFgKBRqqs9r0kYaHFBO8/JiRLxAhn81CwwrE0GLpXRMP4Kmc7crd/3ZK4tXRmCw==
-length: 2484
+edSignature: vjmk3Df+ioadwWhW14ChoWQ8HNVfPfJYoJ48F8fA170IxaYphrv6987XP5hWugCMRFd14x9x6a5tCakdr9gzDg==
+length: 2389
 -->
