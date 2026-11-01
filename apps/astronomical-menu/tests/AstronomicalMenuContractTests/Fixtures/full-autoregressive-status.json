@@ -112,6 +112,10 @@
   "configured_maximum_mlx_memory_gb": null,
   "effective_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "expert_memory_mode": null,
+  "expert_placement": {
+    "reply_sentence": "",
+    "stock_sentence": "Fully in memory."
+  },
   "expert_residency": null,
   "machine_mlx_memory_ceiling_bytes": 0,
   "wired_residency_budget_bytes": null,
