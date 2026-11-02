@@ -1,0 +1,52 @@
+name: 'Assert pinned Xcode toolchain'
+description: 'Resolves the pinned Xcode version to an installed Xcode on the macOS runner image, exports DEVELOPER_DIR for every later step of the calling job, and fails loudly with the installed inventory when the image no longer ships the pin.'
+
+# One definition for every macOS job: the native-build and SwiftPM cache
+# identities hash toolchain outputs, so every job that compiles against the
+# SDK must resolve the pin identically, which per-job copies of this script
+# cannot guarantee once one copy is edited. The caller must check out the
+# repository first because a local action is read from the workspace.
+
+inputs:
+  xcode-version:
+    description: 'Bare Xcode version to resolve, e.g. 26.6; callers pass the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve and export the pinned Xcode
+      shell: bash
+      # The version reaches the script through the environment, never through
+      # ${{ }} interpolation into the script body, so an input value cannot
+      # inject shell syntax.
+      env:
+        ASTRONOMICAL_PINNED_XCODE_VERSION: ${{ inputs.xcode-version }}
+      run: |
+        set -euo pipefail
+        pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
+        resolved_developer_dir=""
+        # The image readme's primary layout and its alias layout have drifted
+        # apart before (see the workflow-level pin comment), so both are probed.
+        for xcode_bundle_candidate in \
+          "/Applications/Xcode_${pinned_xcode_version}.app" \
+          "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
+          if [ -x "$xcode_bundle_candidate/Contents/Developer/usr/bin/xcodebuild" ]; then
+            resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer"
+            break
+          fi
+        done
+        if [ -z "$resolved_developer_dir" ]; then
+          printf '%s\n' "Error: this runner image ships no Xcode matching the pinned version ${pinned_xcode_version}." >&2
+          printf '%s\n' 'Error: installed Xcode applications on this image:' >&2
+          ls -d /Applications/Xcode*.app >&2 || true
+          printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
+          exit 1
+        fi
+        export DEVELOPER_DIR="$resolved_developer_dir"
+        printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
+        printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
+          "$resolved_developer_dir" "$pinned_xcode_version"
+        xcodebuild -version
+        pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+        printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"

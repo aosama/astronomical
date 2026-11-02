@@ -41,6 +41,10 @@ pub(crate) fn composite_action_contract() -> Value {
     parse_yaml_file(&repository_root().join(".github/actions/astronomical-cache/action.yml"))
 }
 
+pub(crate) fn pinned_xcode_action_contract() -> Value {
+    parse_yaml_file(&repository_root().join(".github/actions/assert-pinned-xcode/action.yml"))
+}
+
 /// `on:` parses as a boolean key under YAML 1.1 schemas and as the string
 /// "on" under YAML 1.2; accept either so the contract survives a parser swap.
 pub(crate) fn triggers_of(workflow: &Value) -> &Value {
