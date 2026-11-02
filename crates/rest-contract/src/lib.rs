@@ -13,6 +13,7 @@
 mod anthropic_messages_content;
 mod anthropic_messages_request;
 mod anthropic_messages_response;
+mod anthropic_model_listing;
 mod image_input;
 mod json_nesting_depth;
 mod openai_chat_completion_request;
@@ -49,6 +50,7 @@ pub use anthropic_messages_response::{
     AnthropicMessage, AnthropicMessageDeltaBody, AnthropicMessageStreamEvent,
     AnthropicOutputContentBlock, AnthropicStopReason, AnthropicUsage,
 };
+pub use anthropic_model_listing::{AnthropicModelIdentity, AnthropicModelListPage};
 pub use image_input::DecodedImageInput;
 pub use openai_chat_completion_request::{
     DEFAULT_OPENAI_OUTPUT_TOKENS, OpenAiChatCompletionRequest, OpenAiChatCompletionRequestParts,
