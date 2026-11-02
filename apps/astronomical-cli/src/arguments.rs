@@ -17,6 +17,7 @@ const HELP_TEXT: &str = concat!(
     "Usage: astronomical launch [tool]\n",
     "       astronomical launch opencode [--model MODEL_ID]\n",
     "       astronomical launch codex [--model MODEL_ID]\n",
+    "       astronomical launch claude [--model MODEL_ID] [-- CLAUDE_ARGUMENT...]\n",
     "       astronomical respond PROMPT [--text TEXT] [--image PATH]... [--model MODEL_ID]\n",
     "                                   [--instructions TEXT] [--thinking-budget N] [--schema FILE]\n",
     "                                   [--no-stream]\n",
@@ -39,7 +40,8 @@ const HELP_TEXT: &str = concat!(
     "the model library through the daemon, or run ephemeral in-process\n",
     "utilities against the instance configuration.\n\n",
     "Commands:\n",
-    "  launch [tool]    Start a supported harness (OpenCode or Codex in this release)\n",
+    "  launch [tool]    Start a supported harness (OpenCode, Codex, or Claude Code in\n",
+    "                   this release); arguments after -- go to the harness unchanged\n",
     "  respond PROMPT   One-shot chat answer; add --image PATH to send a raster\n",
     "                   image with the prompt; add --schema FILE to force one\n",
     "                   JSON object reply; the daemon loads or downloads the\n",
@@ -96,6 +98,9 @@ pub enum CliCommand {
 pub struct LaunchArguments {
     pub tool_slug: Option<String>,
     pub model_id: Option<String>,
+    /// Everything after `--`, passed to the harness unchanged, so a launch can
+    /// carry harness flags such as Claude Code's `-p` for a headless turn.
+    pub harness_arguments: Vec<OsString>,
 }
 
 pub fn help_text() -> &'static str {
@@ -106,22 +111,14 @@ pub fn parse_command(
     process_arguments: impl IntoIterator<Item = OsString>,
 ) -> Result<CliCommand, UsageError> {
     let supplied_arguments = process_arguments.into_iter().skip(1).collect::<Vec<_>>();
-    if supplied_arguments
-        .iter()
-        .any(|argument| argument == "--help" || argument == "-h")
-    {
+    let (launcher_arguments, _) = split_harness_arguments(&supplied_arguments);
+    if contains_any_argument(launcher_arguments, &["--help", "-h"]) {
         return Ok(CliCommand::Help);
     }
-    if supplied_arguments
-        .iter()
-        .any(|argument| argument == "--version")
-    {
+    if contains_any_argument(launcher_arguments, &["--version"]) {
         return Ok(CliCommand::Version);
     }
-    let remaining_arguments = supplied_arguments
-        .into_iter()
-        .filter(|argument| argument != "--verbose" && argument != "-v")
-        .collect::<Vec<_>>();
+    let remaining_arguments = without_global_verbose_flags(&supplied_arguments);
     if remaining_arguments.is_empty() {
         return Err(UsageError::MissingCommand);
     }
@@ -283,7 +280,61 @@ fn flag_value(
     Ok(raw_value.to_owned())
 }
 
-fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArguments, UsageError> {
+/// Pure: whether the launcher's own arguments ask for verbose tracing. A
+/// `-v` after `--` belongs to the harness, so it does not turn on the CLI's
+/// own debug output.
+pub fn is_verbose_requested(process_arguments: &[OsString]) -> bool {
+    let supplied_arguments = process_arguments.get(1..).unwrap_or_default();
+    let (launcher_arguments, _) = split_harness_arguments(supplied_arguments);
+    contains_any_argument(launcher_arguments, &["--verbose", "-v"])
+}
+
+/// Pure: whether any argument equals one of `flag_spellings`.
+fn contains_any_argument(arguments: &[OsString], flag_spellings: &[&str]) -> bool {
+    for argument in arguments {
+        for flag_spelling in flag_spellings {
+            if argument == flag_spelling {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Pure: drops the global `-v`/`--verbose` flag from the launcher's own
+/// arguments only. Arguments after the first `--` belong to a harness, where
+/// `-v` can mean something else, so they pass through untouched.
+fn without_global_verbose_flags(supplied_arguments: &[OsString]) -> Vec<OsString> {
+    let (launcher_arguments, harness_arguments) = split_harness_arguments(supplied_arguments);
+    let mut remaining_arguments = Vec::with_capacity(supplied_arguments.len());
+    for launcher_argument in launcher_arguments {
+        if launcher_argument != "--verbose" && launcher_argument != "-v" {
+            remaining_arguments.push(launcher_argument.clone());
+        }
+    }
+    if launcher_arguments.len() < supplied_arguments.len() {
+        remaining_arguments.push(OsString::from("--"));
+        remaining_arguments.extend(harness_arguments);
+    }
+    remaining_arguments
+}
+
+/// Pure: splits launch arguments at the first `--`. The launcher parses only
+/// the part before it; the harness receives the part after it unchanged.
+fn split_harness_arguments(remaining_arguments: &[OsString]) -> (&[OsString], Vec<OsString>) {
+    for (argument_index, argument) in remaining_arguments.iter().enumerate() {
+        if argument == "--" {
+            return (
+                &remaining_arguments[..argument_index],
+                remaining_arguments[argument_index + 1..].to_vec(),
+            );
+        }
+    }
+    (remaining_arguments, Vec::new())
+}
+
+fn parse_launch_arguments(all_arguments: &[OsString]) -> Result<LaunchArguments, UsageError> {
+    let (remaining_arguments, harness_arguments) = split_harness_arguments(all_arguments);
     let mut tool_slug = None;
     let mut model_id = None;
     let mut argument_index = 0;
@@ -319,6 +370,7 @@ fn parse_launch_arguments(remaining_arguments: &[OsString]) -> Result<LaunchArgu
     Ok(LaunchArguments {
         tool_slug,
         model_id,
+        harness_arguments,
     })
 }
 

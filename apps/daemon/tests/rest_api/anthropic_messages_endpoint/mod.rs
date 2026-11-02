@@ -14,6 +14,7 @@ use tower::ServiceExt;
 
 use super::scripted_chat_executor::{SCRIPTED_CHAT_MODEL_ID as MODEL_ID, ScriptedChatExecutor};
 
+mod claude_code_turns;
 mod count_tokens;
 mod generation_failures;
 mod request_rejection;

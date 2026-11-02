@@ -111,3 +111,20 @@ fn should_serialize_the_count_as_input_tokens() {
 
     assert_eq!(count_document, json!({"input_tokens": 0}));
 }
+
+#[test]
+fn should_count_a_tool_defined_mid_conversation_like_a_declared_tool() {
+    let mut request_document = minimal_count_request();
+    request_document["messages"] = json!([
+        {"role": "user", "content": "Read the play."},
+        {"role": "system", "content": [
+            {"type": "tool_addition", "tool": {"type": "tool_definition", "definition": {
+                "name": "search_folio", "input_schema": {"type": "object"}
+            }}}
+        ]}
+    ]);
+
+    let request_parts = parts_of(request_document);
+
+    assert_eq!(request_parts.tools[0].name, "search_folio");
+}

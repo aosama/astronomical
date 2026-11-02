@@ -40,7 +40,7 @@ pub use anthropic_count_tokens::{AnthropicCountTokensRequest, AnthropicTokenCoun
 pub use anthropic_messages_content::{
     AnthropicImageSource, AnthropicInputContentBlock, AnthropicInputMessage,
     AnthropicMessageContent, AnthropicMessageParts, AnthropicSystemBlock, AnthropicSystemPrompt,
-    AnthropicToolAdditionReference, AnthropicToolUseParts, AnthropicUserSegmentParts,
+    AnthropicToolAddition, AnthropicToolUseParts, AnthropicUserSegmentParts,
 };
 pub use anthropic_messages_request::{
     AnthropicMessagesRequest, AnthropicMessagesRequestParts, AnthropicMessagesValidationError,

@@ -49,6 +49,7 @@ fn prepare_session(
         LaunchArguments {
             tool_slug: tool_slug.map(str::to_owned),
             model_id: model_id.map(str::to_owned),
+            harness_arguments: Vec::new(),
         },
         LaunchDependencies {
             candidate_bind_addresses: vec![bind_address],
@@ -107,7 +108,7 @@ fn should_reject_an_unsupported_tool_name() {
     assert!(matches!(error, LaunchError::UnknownTool { .. }));
     assert_eq!(
         error.to_string(),
-        "Unknown tool copilot. Supported tools: opencode, codex"
+        "Unknown tool copilot. Supported tools: opencode, codex, claude"
     );
 }
 

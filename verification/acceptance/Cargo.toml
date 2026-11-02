@@ -110,6 +110,7 @@ all = { level = "allow", priority = -1 }
 too_many_lines = "deny"
 
 [dev-dependencies]
+astronomical-cli = { path = "../../apps/astronomical-cli" }
 astronomical-config = { path = "../../crates/config" }
 astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }

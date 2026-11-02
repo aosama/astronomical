@@ -12,6 +12,7 @@ use std::{
 use thiserror::Error;
 
 mod chat_models;
+pub mod claude_code_config;
 pub mod codex_config;
 mod installed_tools;
 pub mod opencode_config;
@@ -21,6 +22,7 @@ use crate::{arguments::LaunchArguments, transport::loopback_http::get_loopback_j
 
 use self::{
     chat_models::chat_models_from_models_document,
+    claude_code_config::claude_code_environment,
     codex_config::{CODEX_HOME_VARIABLE, codex_process_home},
     installed_tools::{LaunchToolKind, resolve_launch_tool},
     opencode_config::{OPENCODE_CONFIG_CONTENT_VARIABLE, opencode_config_content},
@@ -47,6 +49,8 @@ pub struct LaunchDependencies<'a> {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedLaunch {
     pub program: PathBuf,
+    /// Arguments passed to the harness unchanged (`astronomical launch TOOL -- ...`).
+    pub arguments: Vec<OsString>,
     pub extra_environment: Vec<(String, String)>,
 }
 
@@ -81,28 +85,50 @@ pub fn prepare_launch(
         &selected_chat_model,
         launch_dependencies.stderr,
     );
-    let extra_environment = match resolved_launch_tool.kind {
+    let extra_environment = session_environment(
+        resolved_launch_tool.kind,
+        chosen_bind_address,
+        &selected_chat_model,
+    )?;
+    Ok(PreparedLaunch {
+        program: resolved_launch_tool.program,
+        arguments: launch_arguments.harness_arguments,
+        extra_environment,
+    })
+}
+
+/// The process-scoped configuration each harness reads, pointing it at the
+/// chosen instance and model without writing the user's harness files.
+fn session_environment(
+    launch_tool_kind: LaunchToolKind,
+    chosen_bind_address: SocketAddr,
+    selected_chat_model: &chat_models::LibraryChatModel,
+) -> Result<Vec<(String, String)>, LaunchError> {
+    match launch_tool_kind {
         LaunchToolKind::OpenCode => {
-            let config_content = opencode_config_content(chosen_bind_address, &selected_chat_model)
+            let config_content = opencode_config_content(chosen_bind_address, selected_chat_model)
                 .map_err(|serialize_error| {
                     tracing::debug!(error = %serialize_error, "OpenCode config could not be serialized");
                     LaunchError::OpenCodeConfigFailed
                 })?;
-            vec![(OPENCODE_CONFIG_CONTENT_VARIABLE.to_owned(), config_content)]
+            Ok(vec![(
+                OPENCODE_CONFIG_CONTENT_VARIABLE.to_owned(),
+                config_content,
+            )])
         }
         LaunchToolKind::Codex => {
-            let codex_home = codex_process_home(chosen_bind_address, &selected_chat_model)
+            let codex_home = codex_process_home(chosen_bind_address, selected_chat_model)
                 .map_err(|codex_home_error| {
                     tracing::debug!(error = %codex_home_error, "Codex CODEX_HOME could not be created");
                     LaunchError::CodexConfigFailed
                 })?;
-            vec![(CODEX_HOME_VARIABLE.to_owned(), codex_home)]
+            Ok(vec![(CODEX_HOME_VARIABLE.to_owned(), codex_home)])
         }
-    };
-    Ok(PreparedLaunch {
-        program: resolved_launch_tool.program,
-        extra_environment,
-    })
+        LaunchToolKind::ClaudeCode => Ok(claude_code_environment(
+            chosen_bind_address,
+            selected_chat_model,
+        )),
+    }
 }
 
 /// Returns the own-channel candidate whose `/v1/status` looks like Astronomical.
@@ -146,7 +172,9 @@ pub enum LaunchError {
     OpenCodeMissing,
     #[error("Install Codex CLI: npm install -g @openai/codex")]
     CodexMissing,
-    #[error("Unknown tool {requested_tool}. Supported tools: opencode, codex")]
+    #[error("Install Claude Code: curl -fsSL https://claude.ai/install.sh | bash")]
+    ClaudeCodeMissing,
+    #[error("Unknown tool {requested_tool}. Supported tools: opencode, codex, claude")]
     UnknownTool { requested_tool: String },
     #[error("Choose a model with --model; several chat models are in the Library.")]
     ModelPickerRequired,
