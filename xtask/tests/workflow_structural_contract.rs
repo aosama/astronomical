@@ -13,8 +13,9 @@ mod contract_support;
 use contract_support::{
     EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP, EXPECTED_OBSERVATORY_COMMAND,
     EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id, find_step_by_name,
-    notices_freshness_workflow_contract, required_bool, required_field, required_job,
-    required_text, required_u64, run_text_of, steps_of, triggers_of, workflow_contract,
+    is_pinned_action_reference, notices_freshness_workflow_contract, required_bool, required_field,
+    required_job, required_text, required_u64, run_text_of, steps_of, triggers_of,
+    workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -571,4 +572,82 @@ fn macos_jobs_publish_the_timing_summary_even_when_failing() {
             );
         }
     }
+}
+
+const SWIFT_MTIME_ACTION: &str = "chetan/git-restore-mtime-action";
+const SWIFT_MTIME_STEP_NAME: &str = "Restore Swift input mtimes from their last commits";
+const SWIFT_PACKAGE_INPUT_PATHS: [&str; 7] = [
+    "apps/astronomical-menu/Sources",
+    "apps/astronomical-menu/tests",
+    "apps/astronomical-menu/Package.swift",
+    "apps/astronomical-menu/Package.resolved",
+    "apps/thin-talk/Sources",
+    "apps/thin-talk/Tests",
+    "apps/thin-talk/Package.swift",
+];
+
+/// Position of the first step whose run text or uses reference contains the
+/// marker, so ordering contracts can compare step indices.
+fn first_step_index_mentioning(job_steps: &[&Value], marker: &str) -> Option<usize> {
+    for (step_index, step) in job_steps.iter().enumerate() {
+        let run_text = step.get("run").and_then(Value::as_str).unwrap_or_default();
+        let uses_text = step.get("uses").and_then(Value::as_str).unwrap_or_default();
+        if run_text.contains(marker) || uses_text.contains(marker) {
+            return Some(step_index);
+        }
+    }
+    None
+}
+
+// The SwiftPM build database rebuilds any input whose mtime differs from the
+// recorded one, so a restored .build is only a no-op when unchanged Swift
+// inputs present the same mtime on every commit. Per-file last-commit times
+// need full history (a shallow clone stamps every file with the one fetched
+// commit) and must be applied before the first Swift build; a dropped input
+// path silently brings back the full recompile on every new commit.
+#[test]
+fn should_restore_swift_input_mtimes_from_full_history_before_any_swift_build() {
+    let workflow = workflow_contract();
+    let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
+    let checkout_step = find_step_by_name(&swift_steps, "Check out source");
+    let checkout_inputs = required_field(checkout_step, "with", "swift-node checkout");
+    assert_eq!(
+        required_u64(checkout_inputs, "fetch-depth", "swift-node checkout"),
+        0,
+        "the swift-node checkout must fetch full history for per-file commit times"
+    );
+    let mtime_step = find_step_by_name(&swift_steps, SWIFT_MTIME_STEP_NAME);
+    let uses_text = required_text(mtime_step, "uses", "swift mtime restore");
+    assert!(
+        is_pinned_action_reference(uses_text, SWIFT_MTIME_ACTION),
+        "the Swift mtime restore must use a SHA-pinned {SWIFT_MTIME_ACTION}, got {uses_text}"
+    );
+    let mtime_inputs = required_field(mtime_step, "with", "swift mtime restore");
+    let mtime_arguments = required_text(mtime_inputs, "args", "swift mtime restore");
+    for swift_input_path in SWIFT_PACKAGE_INPUT_PATHS {
+        assert!(
+            mtime_arguments.contains(swift_input_path),
+            "the Swift mtime restore no longer covers {swift_input_path}"
+        );
+    }
+    let mtime_step_index = first_step_index_mentioning(&swift_steps, SWIFT_MTIME_ACTION)
+        .expect("the Swift mtime restore step should exist");
+    let first_swift_build_index =
+        first_step_index_mentioning(&swift_steps, "test-macos-menu-contracts.sh")
+            .expect("the menu contracts step should exist");
+    assert!(
+        mtime_step_index < first_swift_build_index,
+        "the Swift mtime restore must run before the first Swift build"
+    );
+}
+
+#[test]
+fn should_find_no_step_for_an_unmentioned_marker() {
+    let workflow = workflow_contract();
+    let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
+    assert_eq!(
+        first_step_index_mentioning(&swift_steps, "marker-that-no-step-mentions"),
+        None
+    );
+    assert_eq!(first_step_index_mentioning(&[], SWIFT_MTIME_ACTION), None);
 }

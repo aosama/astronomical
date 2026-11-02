@@ -292,8 +292,17 @@ jobs:
           # binary does not exist yet.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
           cargo run --quiet -p xtask -- install-verification-tools
+      # install-action ships the SHA-256 of every nextest release inside the
+      # pinned action commit and verifies the download against it, so the
+      # digest is pinned by the action SHA
+      # instead of a hand-maintained composite. fallback: none forbids a
+      # silent cargo-binstall or source build if the pinned release is absent.
+      # Every lane below uses the identical reference and tool pin.
       - name: Provision pinned cargo-nextest
-        uses: ./.github/actions/provision-cargo-nextest
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-nextest@0.9.149
+          fallback: none
       # The retired "Refresh Rust dependency notices" step lived here: it
       # regenerated third-party/RUST_DEPENDENCY_NOTICES into this runner's
       # ephemeral working tree "so the bundle never ships stale notices" —
@@ -573,41 +582,33 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          # Full history: the mtime restore below reads each Swift input's
+          # last-modifying commit, which a shallow clone cannot answer.
+          fetch-depth: 0
           persist-credentials: false
-      - name: Pin Swift input mtimes to the commit timestamp
-        run: |
-          set -euo pipefail
-          started_at_seconds="$(date +%s)"
-          printf '[swiftpm-mtimes] status=start\n'
-          # SwiftPM's build database records each input file's mtime at build
-          # time and rebuilds any input whose on-disk mtime differs. A fresh
-          # checkout stamps every source with "now", which never matches the
-          # recorded value inside a restored .build — so on 2026-10-31 the
-          # menu lane rebuilt 68 compilation units despite an exact-key
-          # cache hit, cascading through the ThinTalk* path dependencies
-          # into AstronomicalMenuCore. Pinning every Swift input to the HEAD
-          # commit's timestamp makes the recorded value reproducible: the
-          # same commit always presents the same mtimes (restore is a true
-          # no-op), and a different commit always presents different ones
-          # (genuine changes still rebuild, correctly).
-          commit_epoch_seconds="$(git log -1 --format=%ct)"
-          touch_stamp="$(date -r "$commit_epoch_seconds" +%Y%m%d%H%M.%S)"
-          for swift_input_path in \
-            apps/astronomical-menu/Sources \
-            apps/astronomical-menu/tests \
-            apps/astronomical-menu/Package.swift \
-            apps/astronomical-menu/Package.resolved \
-            apps/thin-talk/Sources \
-            apps/thin-talk/Tests \
-            apps/thin-talk/Package.swift \
-            apps/thin-talk/Package.resolved; do
-            if [ -e "$swift_input_path" ]; then
-              find "$swift_input_path" -exec touch -t "$touch_stamp" {} +
-            fi
-          done
-          printf '[swiftpm-mtimes] status=success stamp=%s elapsed_seconds=%s\n' \
-            "$touch_stamp" "$(( $(date +%s) - started_at_seconds ))"
+      # SwiftPM's build database records each input file's mtime at build time
+      # and rebuilds any input whose on-disk mtime differs. A fresh checkout
+      # stamps every source with "now", so a restored .build never matches.
+      # The earlier fix stamped every input with the HEAD commit time, which
+      # only matched on a re-run of the same commit: any new commit restamped
+      # all inputs and the lane recompiled the menu and ThinTalk packages
+      # despite an exact-key cache hit. Stamping each file with the time of
+      # the last commit that changed it presents the same mtime for an
+      # unchanged file on every commit (restore is a true no-op), while a
+      # genuinely edited file gets a new commit time and rebuilds correctly.
+      - name: Restore Swift input mtimes from their last commits
+        uses: chetan/git-restore-mtime-action@d186aca54f8760da4dec55313195e51ed3ebb0b3 # v2.3
+        with:
+          args: >-
+            --commit-time
+            apps/astronomical-menu/Sources
+            apps/astronomical-menu/tests
+            apps/astronomical-menu/Package.swift
+            apps/astronomical-menu/Package.resolved
+            apps/thin-talk/Sources
+            apps/thin-talk/Tests
+            apps/thin-talk/Package.swift
+            apps/thin-talk/Package.resolved
       - name: Assert pinned Xcode toolchain
         run: |
           set -euo pipefail
@@ -715,16 +716,20 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 20
+          # Caches npm's download store (not node_modules) keyed on the
+          # lockfile, so `npm ci` below installs offline from the cache
+          # instead of depending on registry latency: a cold install
+          # exceeded a 4-minute budget twice on unchanged web assets.
+          cache: npm
+          cache-dependency-path: apps/thin-talk/web/package-lock.json
       - name: Build Thin Talk web assets
         run: |
           set -euo pipefail
           trap 'scripts/ci/ci-step-timing.sh end thin-talk-web-assets' EXIT
           scripts/ci/ci-step-timing.sh begin thin-talk-web-assets
           (cd apps/thin-talk/web && npm ci && npm run build)
-        # The step always pays a cold `npm ci` (setup-node carries no npm
-        # cache here), so its duration is network-bound; 4 minutes was
-        # exceeded twice in a row on unchanged web assets. 10 minutes keeps
-        # a slow registry mirror from failing the whole macOS contract job.
+        # The budget stays generous for the lockfile-change runs that miss
+        # the npm cache and fall back to a network-bound install.
         timeout-minutes: 10
       # The web client tests run in the same job that just built the bundle:
       # they boot the real index.html shell per journey test, which is exactly
@@ -919,7 +924,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: ./.github/actions/provision-cargo-nextest
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-nextest@0.9.149
+          fallback: none
       - name: Download integration test archive
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -961,7 +969,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: ./.github/actions/provision-cargo-nextest
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-nextest@0.9.149
+          fallback: none
       - name: Download integration test archive
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -985,7 +996,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: ./.github/actions/provision-cargo-nextest
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-nextest@0.9.149
+          fallback: none
       - name: Download REST test archive
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -1014,7 +1028,10 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Provision pinned cargo-nextest
-        uses: ./.github/actions/provision-cargo-nextest
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: cargo-nextest@0.9.149
+          fallback: none
       - name: Download E2E test archive
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
