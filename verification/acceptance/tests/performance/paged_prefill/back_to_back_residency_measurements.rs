@@ -31,6 +31,12 @@
 //! transient, the reserve fell to one layer, and the planner seated layers
 //! the per-chunk guard then had to evict, so the static three-layer floor is
 //! load-bearing there.
+//!
+//! Re-streaming cold layers costs no measured prefill time on this cell: at
+//! 20 GB (about five cold layers, 12.18 GB streamed per request) prefill took
+//! 3.34-3.43 s, while the same requests fully resident at 26 GB took
+//! 3.68-3.86 s with nothing streamed (issue #1717). Reduce prefill time
+//! elsewhere before reducing re-streamed bytes.
 
 use std::{collections::BTreeSet, fs, path::Path};
 
