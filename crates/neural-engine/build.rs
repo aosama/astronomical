@@ -1,0 +1,34 @@
+//! Compiles the Objective-C Core ML bridge and links the Apple frameworks it
+//! needs.
+//!
+//! The bridge is Objective-C rather than Swift because Core ML's full
+//! Objective-C surface (compute plans, IOSurface-backed multi-arrays,
+//! prediction options) is reachable from plain `clang` through the `cc`
+//! crate, so the crate builds with Cargo alone: no Swift package, no Xcode
+//! project, no extra toolchain step.
+
+fn main() {
+    println!("cargo:rerun-if-changed=native/core_ml_bridge.m");
+    cc::Build::new()
+        .file("native/core_ml_bridge.m")
+        .flag("-fobjc-arc")
+        .flag("-fmodules")
+        .flag("-mmacosx-version-min=14.4")
+        .warnings_into_errors(true)
+        .compile("astronomical_core_ml_bridge");
+    println!("cargo:rerun-if-changed=native/process_memory.c");
+    cc::Build::new()
+        .file("native/process_memory.c")
+        .flag("-mmacosx-version-min=14.4")
+        .warnings_into_errors(true)
+        .compile("astronomical_process_memory");
+    for framework in [
+        "CoreML",
+        "Foundation",
+        "CoreVideo",
+        "IOSurface",
+        "Accelerate",
+    ] {
+        println!("cargo:rustc-link-lib=framework={framework}");
+    }
+}

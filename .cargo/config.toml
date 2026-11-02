@@ -162,6 +162,28 @@ test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-
 test-jangtq2-direct-mlx = "test --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"
 test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter jangtq2 --ignored"
 
+# Neural Engine research (issue #161), crates/neural-engine. "Hello, Neural
+# Engine": the qwen3_5 MoE mixer output projection (2,048 tokens, 4,096 →
+# 2,048 channels, 34.4 GFLOP) written as a Core ML model from Rust, then run
+# with CPU+Neural Engine, CPU-only (negative control), and CPU+GPU compute
+# units, plus MLX on the GPU (fp16, bf16, and the artifact's 8-bit affine
+# format) as the baseline. Each journey prints MLComputePlan's placement, the
+# error against an Accelerate fp32 reference, and median/p90 timing. The
+# shape sweep repeats that for every candidate prefill projection, and the
+# split journeys run one projection's output channels on the Neural Engine
+# and the GPU at the same time (narrow with a trailing name filter, e.g.
+# `cargo test-neural-engine-hello deltanet`). The compressed-weight journeys
+# write the projection as an ML Program package instead: `compressed_weight`
+# runs the probe matrix (shift-scale and lookup-table weights, 4 and 8 bits,
+# block shapes) with placement, speed, and fidelity to the 4-bit checkpoint,
+# and `footprint_of_mlp_gate_and_up_as_<form>` measures one 100-million-weight
+# load's process-footprint growth; run each footprint form alone (e.g.
+# `cargo test-neural-engine-hello footprint_of_mlp_gate_and_up_as_ml_program_eight_bit_lookup`)
+# so earlier loads in the process do not blur its numbers. Real hardware,
+# optimized build, serial; about three minutes in all. The crate's pure unit
+# tests run with `cargo test -p astronomical-neural-engine --lib`.
+test-neural-engine-hello = "test --release --no-fail-fast -p astronomical-neural-engine --features mlx-baseline --test neural_engine_hello -- --ignored --nocapture --test-threads=1"
+
 # Engine-versus-memory-ceiling isolation on the resident 35B sparse-MoE
 # model; narrow with --filter, add --configuration PATH with
 # {"diagnostics": true} for performance attribution.
