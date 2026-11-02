@@ -70,8 +70,9 @@ async fn run_follow_up_admission_journey() {
     // A ceiling below the validated artifact payload forces the paged regime.
     let ceiling_bytes =
         (artifact_payload_bytes.saturating_mul(87) / 100).min(MAXIMUM_MODEL_TEST_MEMORY_BYTES);
-    let ceiling_gb = ceiling_bytes / 1_000_000_000;
-    let ceiling_bytes = ceiling_gb * 1_000_000_000;
+    let ceiling_gb = crate::support::marketed_gigabytes::marketed_gigabytes_at_most(ceiling_bytes);
+    let ceiling_bytes =
+        ceiling_gb * crate::support::marketed_gigabytes::BYTES_PER_MARKETED_GIGABYTE;
     assert!(
         ceiling_bytes > 0
             && ceiling_bytes < artifact_payload_bytes

@@ -270,7 +270,7 @@ fn write_acceptance_config(isolated_worker_home: &Path, model_directory: &Path) 
         .expect("the complete-residency configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
-        "maximum_mlx_memory_gb": MAXIMUM_MLX_MEMORY_BYTES / 1_000_000_000,
+        "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_most(MAXIMUM_MLX_MEMORY_BYTES),
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": 50,

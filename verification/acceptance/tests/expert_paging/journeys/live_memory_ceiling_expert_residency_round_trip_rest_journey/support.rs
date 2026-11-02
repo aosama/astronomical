@@ -17,11 +17,7 @@ use super::{LOG_MARKER, MAXIMUM_OUTPUT_TOKEN_COUNT};
 const STATUS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const STATUS_LOG_INTERVAL: Duration = Duration::from_secs(1);
 
-/// The daemon converts whole-GB user inputs — the config
-/// `maximum_mlx_memory_gb` field and the REST ceiling endpoint — at 2^30
-/// bytes per marketed gigabyte. Config writers and byte expectations must
-/// round-trip through the same unit or equality checks go stale.
-pub(super) const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
+pub(super) use crate::support::marketed_gigabytes::BYTES_PER_MARKETED_GIGABYTE;
 
 pub(super) fn write_round_trip_config(
     isolated_worker_home: &Path,

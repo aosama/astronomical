@@ -363,10 +363,12 @@ async fn should_restore_cached_prefix_after_an_invisible_resident_to_streaming_r
             "cache-seed",
         )
         .await;
-        let streaming_retry_memory_ceiling_gb = residency_geometry
-            .complete_residency_with_headroom_bytes
-            .saturating_sub(1)
-            / 1_000_000_000;
+        let streaming_retry_memory_ceiling_gb =
+            crate::support::marketed_gigabytes::marketed_gigabytes_at_most(
+                residency_geometry
+                    .complete_residency_with_headroom_bytes
+                    .saturating_sub(1),
+            );
         let lowered_memory_ceiling_document = put_json_endpoint(
             server_address,
             "/v1/config/maximum-mlx-memory",
@@ -517,7 +519,7 @@ fn write_acceptance_config(
         "schema_version": 1,
         "runtime": {
             "model_directories": [acceptance_model_scan_root(model_directory)],
-            "maximum_mlx_memory_gb": mlx_memory_ceiling_bytes.div_ceil(1_000_000_000),
+            "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_least(mlx_memory_ceiling_bytes),
         },
         "prompt_cache": {
             "enabled": persistent_prompt_cache_enabled,

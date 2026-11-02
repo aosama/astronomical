@@ -122,6 +122,13 @@ fn validate_current_residency(
     Ok(())
 }
 
+/// One decode token's routed page for a layer: experts-per-token experts.
+///
+/// Sized from experts-per-token rather than a multi-token routed union on
+/// purpose: its only consumer funds generation (decode) promotions, where every
+/// forward is one token. Multi-token prefill forwards reserve their routed
+/// union bound at forward admission instead (issue #1422), so this floor never
+/// stands in for a prefill page.
 pub(super) fn routed_floor_payload_bytes(
     geometry: &ExpertLayerGeometry,
 ) -> Result<u64, ExpertResidencyPlanError> {
