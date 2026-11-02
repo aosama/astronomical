@@ -1,5 +1,7 @@
-//! `POST /v1/messages`: the Anthropic-compatible Messages endpoint. It shares
-//! model resolution, queue admission, and the worker generation path with
+//! `POST /v1/messages`: the Anthropic-compatible Messages endpoint, and the
+//! Messages-surface admission (model resolution, translation, and queue
+//! admission) that `POST /v1/messages/count_tokens` reuses with
+//! `ChatWork::CountPromptTokens`. It shares the worker generation path with
 //! the OpenAI surfaces and differs only in the wire protocol at both ends.
 
 use astronomical_config::ModelCapabilities;
@@ -30,6 +32,7 @@ use crate::application::ApplicationState;
 use crate::config::request_generation_defaults::{
     RequestGenerationSettingsPresence, apply_generation_defaults,
 };
+use crate::serving::chat_generation_executor::ChatWork;
 use crate::{ChatGenerationStreamErrorCode, ChatGenerationStreamEvent, GenerationStartError};
 
 pub(crate) async fn create_message(
@@ -46,7 +49,7 @@ pub(crate) async fn create_message(
         &application_state,
         request_parts,
         request_body_bytes.len(),
-        MessagesWork::Generate,
+        ChatWork::Generate,
     )
     .await
     {
@@ -69,14 +72,6 @@ pub(crate) async fn create_message(
         AnthropicMessageCollector::new(message_id, model_id, is_thinking_display_omitted),
     )
     .await
-}
-
-/// What an admitted Messages-surface request asks the worker for: a
-/// generation, or only the prompt token count `count_tokens` answers with.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum MessagesWork {
-    Generate,
-    CountTokens,
 }
 
 /// A request the queue admitted: the identity its answer is stamped with and
@@ -119,7 +114,7 @@ pub(super) async fn admit_message_generation(
     application_state: &ApplicationState,
     request_parts: AnthropicMessagesRequestParts,
     request_body_bytes: usize,
-    messages_work: MessagesWork,
+    messages_work: ChatWork,
 ) -> Result<AdmittedMessageGeneration, Response> {
     let configuration_transition_guard =
         application_state.configuration_transition_lock.lock().await;
@@ -202,14 +197,14 @@ async fn start_generation(
     application_state: &ApplicationState,
     chat_generation_command: ChatGenerationCommand,
     configuration_transition_guard: tokio::sync::MutexGuard<'_, ()>,
-    messages_work: MessagesWork,
+    messages_work: ChatWork,
 ) -> Result<Receiver<ChatGenerationStreamEvent>, Response> {
     let (admission_sender, mut admission_receiver) = tokio::sync::oneshot::channel();
     let generation_executor = &application_state.generation_executor;
     let mut generation_start_future = match messages_work {
-        MessagesWork::Generate => generation_executor
+        ChatWork::Generate => generation_executor
             .start_chat_generation_with_admission_signal(chat_generation_command, admission_sender),
-        MessagesWork::CountTokens => generation_executor
+        ChatWork::CountPromptTokens => generation_executor
             .start_chat_token_count_with_admission_signal(
                 chat_generation_command,
                 admission_sender,
@@ -301,7 +296,7 @@ fn log_accepted_request(
     chat_generation_command: &ChatGenerationCommand,
     should_stream_response: bool,
     request_body_bytes: usize,
-    messages_work: MessagesWork,
+    messages_work: ChatWork,
 ) {
     tracing::info!(
         ?messages_work,

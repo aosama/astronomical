@@ -32,18 +32,38 @@ fn local_api_page() -> String {
 /// Every versioned endpoint path the page names, wherever it names it: the
 /// documented list, a command, or guidance about an identifier.
 fn published_endpoint_paths(page: &str) -> BTreeSet<String> {
-    page.match_indices(ENDPOINT_PATH_PREFIX)
-        .map(|(path_start, path_prefix)| {
-            let after_prefix = &page[path_start + path_prefix.len()..];
-            let path_segment: String = after_prefix
-                .chars()
-                .take_while(|character| character.is_ascii_lowercase() || *character == '/')
-                .collect();
-            (path_prefix, path_segment)
-        })
-        .filter(|(_, path_segment)| !path_segment.is_empty())
-        .map(|(path_prefix, path_segment)| format!("{path_prefix}{path_segment}"))
-        .collect()
+    endpoint_paths_after_prefix(page, ENDPOINT_PATH_PREFIX)
+}
+
+/// Pure: every distinct path in `published_text` that starts with
+/// `path_prefix` and continues with at least one path character.
+fn endpoint_paths_after_prefix(published_text: &str, path_prefix: &str) -> BTreeSet<String> {
+    let mut endpoint_paths = BTreeSet::new();
+    for (path_start, _) in published_text.match_indices(path_prefix) {
+        let path_segment = leading_path_segment(&published_text[path_start + path_prefix.len()..]);
+        if !path_segment.is_empty() {
+            endpoint_paths.insert(format!("{path_prefix}{path_segment}"));
+        }
+    }
+    endpoint_paths
+}
+
+/// Pure: the run of endpoint path characters `text` starts with.
+fn leading_path_segment(text: &str) -> String {
+    let mut path_segment = String::new();
+    for path_character in text.chars() {
+        if !is_endpoint_path_character(path_character) {
+            break;
+        }
+        path_segment.push(path_character);
+    }
+    path_segment
+}
+
+/// Lowercase letters, `/`, and `_`: every character the served paths use,
+/// including `/v1/messages/count_tokens`.
+fn is_endpoint_path_character(path_character: char) -> bool {
+    path_character.is_ascii_lowercase() || path_character == '/' || path_character == '_'
 }
 
 fn first_loopback_origin(published_text: &str) -> Option<String> {

@@ -77,7 +77,7 @@ pub fn chat_models_json(model_entries: &[(&str, u32)]) -> String {
         .iter()
         .map(|(model_id, context_window)| {
             format!(
-                r#"{{"id":"{model_id}","object":"model","owned_by":"astronomical","supported_endpoints":["/v1/chat/completions"],"output_modalities":["text"],"context_window":{context_window}}}"#
+                r#"{{"id":"{model_id}","object":"model","owned_by":"astronomical","supported_endpoints":["/v1/chat/completions","/v1/responses","/v1/messages"],"output_modalities":["text"],"context_window":{context_window}}}"#
             )
         })
         .collect::<Vec<_>>()
@@ -97,10 +97,18 @@ pub fn embedding_model_json(model_id: &str) -> String {
     )
 }
 
+/// A chat model that serves only Chat Completions: launchable for OpenCode,
+/// not for a harness that speaks Responses or Messages.
+pub fn chat_completions_only_model_json(model_id: &str) -> String {
+    format!(
+        r#"{{"object":"list","data":[{{"id":"{model_id}","object":"model","owned_by":"astronomical","supported_endpoints":["/v1/chat/completions"],"output_modalities":["text"],"context_window":131072}}]}}"#
+    )
+}
+
 pub fn mixed_library_json() -> String {
     r#"{"object":"list","data":[
         {"id":"library-image-model","object":"model","owned_by":"astronomical","supported_endpoints":["/v1/images/generations"],"output_modalities":["image"]},
-        {"id":"library-chat-model","object":"model","owned_by":"astronomical","supported_endpoints":["/v1/chat/completions"],"output_modalities":["text"],"context_window":131072},
+        {"id":"library-chat-model","object":"model","owned_by":"astronomical","supported_endpoints":["/v1/chat/completions","/v1/responses","/v1/messages"],"output_modalities":["text"],"context_window":131072},
         {"id":"library-embedding-model","object":"model","owned_by":"astronomical","supported_endpoints":["/v1/embeddings"],"output_modalities":["text"]}
     ]}"#
     .to_owned()

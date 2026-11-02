@@ -46,14 +46,9 @@ pub(in crate::worker) struct WorkerLoopRuntime {
     pub image_generation_timeouts: crate::ImageGenerationTimeouts,
 }
 
-/// What a queued chat request asks the worker to do with its command. A
-/// prompt-token count shares the chat queue, model swap, and completion
-/// path, and differs only in the worker command it dispatches.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ChatWork {
-    Generate,
-    CountPromptTokens,
-}
+/// The work kind is defined beside the executor contract it belongs to; the
+/// worker loop carries it from admission to dispatch.
+pub(crate) use crate::serving::chat_generation_executor::ChatWork;
 
 /// One chat command together with the work it asks for.
 pub(crate) struct QueuedChatRequest {

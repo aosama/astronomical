@@ -17,8 +17,28 @@ use astronomical_cli::{
 use tempfile::TempDir;
 
 use crate::integration::support::stub_loopback_http::{
-    StubAstronomical, chat_models_json, mixed_library_json, ready_status_json,
+    StubAstronomical, chat_completions_only_model_json, chat_models_json, mixed_library_json,
+    ready_status_json,
 };
+
+#[test]
+fn should_not_offer_a_model_that_cannot_serve_the_messages_protocol() {
+    let temporary_directory = TempDir::new().expect("temp dir");
+    install_fake_claude_code(temporary_directory.path());
+    let stub_server = StubAstronomical::spawn(
+        ready_status_json(),
+        &chat_completions_only_model_json("chat-completions-only-model"),
+    );
+
+    let launch_error = prepare_claude_session(
+        stub_server.bind_address,
+        temporary_directory.path().as_os_str().to_os_string(),
+        Vec::new(),
+    )
+    .expect_err("a Chat Completions-only model cannot drive Claude Code");
+
+    assert!(matches!(launch_error, LaunchError::NoChatModels));
+}
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(2);
 
