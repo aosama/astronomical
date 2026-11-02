@@ -13,7 +13,6 @@ use crate::verbs::quantize::{
 };
 use crate::verbs::quantize::{QuantizeDependencies, run_quantize_convert};
 
-#[cfg(not(feature = "quantize-convert"))]
 #[test]
 fn should_refuse_convert_in_a_default_build_and_name_the_feature() {
     let mut stdout = Vec::new();

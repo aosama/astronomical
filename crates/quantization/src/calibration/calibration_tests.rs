@@ -3,6 +3,7 @@
 //! chunking contracts, per the repository's test-input rule.
 
 use super::*;
+use crate::error::QuantizationError;
 use crate::progress::SilentProgressReporter;
 
 /// Splits on whitespace and hashes each word to a stable id.

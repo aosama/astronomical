@@ -137,22 +137,3 @@ pub fn exact_zero_fraction(values: &[f32]) -> f64 {
     let _ = values;
     todo!("count values equal to 0.0 divided by the length; zero for empty")
 }
-
-/// KL(reference ‖ probe) over row-major logits of `[positions, vocabulary]`,
-/// averaged over positions, in float32 arithmetic: the CPU pin for the
-/// formula every probe model must implement on device.
-///
-/// Work to port (OptiQ's `_kl_from_ref`): per position, `log_softmax` both
-/// rows via `logits - logsumexp(logits)`, `p_ref = softmax(reference)`, and
-/// sum `p_ref * (log p_ref - log p_probe)`; then mean over positions.
-#[must_use]
-pub fn kl_divergence_reference_vs_probe(
-    reference_logits: &[f32],
-    probe_logits: &[f32],
-    vocabulary_size: usize,
-) -> f64 {
-    let _ = (reference_logits, probe_logits, vocabulary_size);
-    todo!(
-        "log-softmax both, weight the log-ratio by the reference probabilities, average over positions"
-    )
-}
