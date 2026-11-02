@@ -1,3 +1,4 @@
+mod anthropic_messages_endpoint;
 mod application;
 mod cache_clear;
 mod cache_stats;

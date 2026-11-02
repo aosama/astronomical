@@ -52,9 +52,19 @@ pub(crate) fn decode_image_url(
     let (image_mime_type, _encoding) = metadata
         .split_once(';')
         .ok_or(OpenAiChatCompletionValidationError::MalformedDataUri)?;
-    let decoded_image_bytes = BASE64_STANDARD
-        .decode(base64_payload)
-        .map_err(|_| OpenAiChatCompletionValidationError::InvalidBase64)?;
+    decode_base64_image_payload(image_mime_type, base64_payload)
+}
+
+/// Decodes one base64 image payload under the per-image byte bound. Shared by
+/// the OpenAI data-URI form and the Anthropic `base64` image source, which
+/// carry the same MIME type and payload in different envelopes.
+pub(crate) fn decode_base64_image_payload(
+    image_mime_type: &str,
+    base64_payload: &str,
+) -> Result<OpenAiImageInput, OpenAiChatCompletionValidationError> {
+    let Ok(decoded_image_bytes) = BASE64_STANDARD.decode(base64_payload) else {
+        return Err(OpenAiChatCompletionValidationError::InvalidBase64);
+    };
     if decoded_image_bytes.len() > MAX_OPENAI_IMAGE_DECODED_BYTES {
         return Err(OpenAiChatCompletionValidationError::ImageTooLarge {
             actual_bytes: decoded_image_bytes.len(),

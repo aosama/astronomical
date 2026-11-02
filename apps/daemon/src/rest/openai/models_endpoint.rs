@@ -25,6 +25,7 @@ const OPENAI_CHAT_REASONING_FORMAT: &str =
 const OPENAI_FUNCTION_CALL_FORMAT: &str = "openai_function_call";
 const CHAT_COMPLETIONS_ENDPOINT_PATH: &str = "/v1/chat/completions";
 const RESPONSES_ENDPOINT_PATH: &str = "/v1/responses";
+const ANTHROPIC_MESSAGES_ENDPOINT_PATH: &str = "/v1/messages";
 const IMAGE_GENERATIONS_ENDPOINT_PATH: &str = "/v1/images/generations";
 
 /// Lists every model the daemon can currently advertise safely.
@@ -241,6 +242,7 @@ fn supported_generation_endpoint_paths() -> Vec<String> {
     vec![
         CHAT_COMPLETIONS_ENDPOINT_PATH.to_owned(),
         RESPONSES_ENDPOINT_PATH.to_owned(),
+        ANTHROPIC_MESSAGES_ENDPOINT_PATH.to_owned(),
     ]
 }
 

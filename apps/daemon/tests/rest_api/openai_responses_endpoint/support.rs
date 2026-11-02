@@ -115,7 +115,9 @@ impl ParsedResponsesSseStream {
     }
 }
 
-pub(super) struct ScriptedResponsesExecutor {
+/// Shared with the Anthropic Messages journeys, which drive the same
+/// generation path through a different wire protocol.
+pub(crate) struct ScriptedResponsesExecutor {
     stream_events: Vec<ChatGenerationStreamEvent>,
     start_error: Option<GenerationStartError>,
     expected_model_id: Option<&'static str>,
@@ -123,7 +125,7 @@ pub(super) struct ScriptedResponsesExecutor {
 }
 
 impl ScriptedResponsesExecutor {
-    pub(super) fn new(stream_events: Vec<ChatGenerationStreamEvent>) -> Self {
+    pub(crate) fn new(stream_events: Vec<ChatGenerationStreamEvent>) -> Self {
         Self {
             stream_events,
             start_error: None,
@@ -132,7 +134,7 @@ impl ScriptedResponsesExecutor {
         }
     }
 
-    pub(super) fn with_start_error(start_error: GenerationStartError) -> Self {
+    pub(crate) fn with_start_error(start_error: GenerationStartError) -> Self {
         Self {
             stream_events: Vec::new(),
             start_error: Some(start_error),
@@ -141,7 +143,7 @@ impl ScriptedResponsesExecutor {
         }
     }
 
-    pub(super) fn idle_with_expected_model(expected_model_id: &'static str) -> Self {
+    pub(crate) fn idle_with_expected_model(expected_model_id: &'static str) -> Self {
         Self {
             stream_events: Vec::new(),
             start_error: Some(GenerationStartError::CapacityUnavailable),
