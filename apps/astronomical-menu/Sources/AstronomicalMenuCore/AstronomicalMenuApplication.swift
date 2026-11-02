@@ -23,6 +23,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
+  private var latestMenuBarGlyphState = MenuBarGlyphState.idle
   private var daemonMaintenanceTask: Task<Void, Never>?
 
   public nonisolated func applicationWillFinishLaunching(_ notification: Notification) {
@@ -34,10 +35,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     let menuBarStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     menuBarStatusItem.button?.target = self
     menuBarStatusItem.button?.action = #selector(toggleTelemetryPopover)
-    menuBarStatusItem.button?.image = NSImage(
-      systemSymbolName: "sparkles", accessibilityDescription: "Astronomical")
-    menuBarStatusItem.button?.image?.size = NSSize(width: 18, height: 18)
-    menuBarStatusItem.button?.image?.isTemplate = true
+    menuBarStatusItem.button?.image = makeMenuBarGlyphImage(state: latestMenuBarGlyphState)
     menuBarStatusItem.button?.setAccessibilityLabel(
       "Astronomical \(applicationIdentity.channel.displayName) telemetry")
     menuBarStatusItem.button?.toolTip = applicationIdentity.buildTitle
@@ -118,6 +116,9 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         popoverIsShown: telemetryPopover?.isShown == true
       )
     }
+    telemetryStore.onMenuBarGlyphStateChanged = { [weak self] menuBarGlyphState in
+      self?.showMenuBarGlyph(menuBarGlyphState)
+    }
     daemonMaintenanceTask = Task { [weak self] in
       guard let self else { return }
       await maintainDaemonForApplication(
@@ -144,6 +145,14 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     daemonMaintenanceTask = nil
     telemetryStore.stopPolling()
     daemonLifecycleController.stopChannelDaemonOnApplicationQuit()
+  }
+
+  // Status polls arrive every few seconds; redrawing only on a state change
+  // keeps the status item from re-laying out while the title text updates.
+  private func showMenuBarGlyph(_ menuBarGlyphState: MenuBarGlyphState) {
+    guard menuBarGlyphState != latestMenuBarGlyphState else { return }
+    latestMenuBarGlyphState = menuBarGlyphState
+    statusItem?.button?.image = makeMenuBarGlyphImage(state: menuBarGlyphState)
   }
 
   @objc private func toggleTelemetryPopover() {

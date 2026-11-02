@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 
-// Renders the clean Stable identity and a restrained channel-marked Development variant.
+// Renders the Darkroom mark for Stable and a hatched-disc Development variant.
 
 import AppKit
 import Foundation
@@ -129,112 +129,10 @@ private func renderIcon(
     throw IconRenderError.graphicsContextCreationFailed(pixelSize)
   }
 
-  let canvasSize = CGFloat(pixelSize)
   NSGraphicsContext.saveGraphicsState()
   NSGraphicsContext.current = graphicsContext
   graphicsContext.imageInterpolation = .high
-  NSColor.clear.setFill()
-  NSRect(x: 0, y: 0, width: canvasSize, height: canvasSize).fill()
-
-  // A generous inset lets macOS present the artwork as a native app tile
-  // without clipping the orbital ring or its soft outer shadow.
-  let tileInset = canvasSize * 0.035
-  let tileRectangle = NSRect(
-    x: tileInset,
-    y: tileInset,
-    width: canvasSize - (tileInset * 2),
-    height: canvasSize - (tileInset * 2)
-  )
-  let tilePath = NSBezierPath(
-    roundedRect: tileRectangle,
-    xRadius: canvasSize * 0.22,
-    yRadius: canvasSize * 0.22
-  )
-  let tileShadow = NSShadow()
-  tileShadow.shadowColor = NSColor.black.withAlphaComponent(0.42)
-  tileShadow.shadowBlurRadius = canvasSize * 0.045
-  tileShadow.shadowOffset = NSSize(width: 0, height: -canvasSize * 0.018)
-  tileShadow.set()
-  NSColor(calibratedRed: 0.063, green: 0.071, blue: 0.059, alpha: 1).setFill()
-  tilePath.fill()
-  NSGraphicsContext.restoreGraphicsState()
-
-  NSGraphicsContext.saveGraphicsState()
-  NSGraphicsContext.current = graphicsContext
-  tilePath.addClip()
-
-  // Sparse stars add depth while keeping the silhouette clean at small sizes.
-  let starCoordinates: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
-    (0.19, 0.76, 0.010, 0.55),
-    (0.77, 0.72, 0.008, 0.44),
-    (0.27, 0.48, 0.007, 0.34),
-    (0.70, 0.42, 0.006, 0.30),
-    (0.84, 0.55, 0.009, 0.48),
-  ]
-  for (horizontalPosition, verticalPosition, radiusScale, opacity) in starCoordinates {
-    NSColor(calibratedWhite: 0.96, alpha: opacity).setFill()
-    NSBezierPath(
-      ovalIn: NSRect(
-        x: canvasSize * horizontalPosition,
-        y: canvasSize * verticalPosition,
-        width: canvasSize * radiusScale * 2,
-        height: canvasSize * radiusScale * 2
-      )
-    ).fill()
-  }
-
-  let orbitalCenter = NSPoint(x: canvasSize * 0.50, y: canvasSize * 0.62)
-  let orbitalRectangle = NSRect(
-    x: orbitalCenter.x - canvasSize * 0.34,
-    y: orbitalCenter.y - canvasSize * 0.145,
-    width: canvasSize * 0.68,
-    height: canvasSize * 0.29
-  )
-  NSGraphicsContext.saveGraphicsState()
-  let orbitalTransform = NSAffineTransform()
-  orbitalTransform.translateX(by: orbitalCenter.x, yBy: orbitalCenter.y)
-  orbitalTransform.rotate(byDegrees: -24)
-  orbitalTransform.translateX(by: -orbitalCenter.x, yBy: -orbitalCenter.y)
-  orbitalTransform.concat()
-  let orbitalPath = NSBezierPath(ovalIn: orbitalRectangle)
-  orbitalPath.lineWidth = max(1, canvasSize * 0.038)
-  NSColor(calibratedRed: 0.957, green: 0.941, blue: 0.902, alpha: 0.96).setStroke()
-  orbitalPath.stroke()
-  NSGraphicsContext.restoreGraphicsState()
-
-  let coreRadius = canvasSize * 0.115
-  let coreRectangle = NSRect(
-    x: orbitalCenter.x - coreRadius,
-    y: orbitalCenter.y - coreRadius,
-    width: coreRadius * 2,
-    height: coreRadius * 2
-  )
-  let corePath = NSBezierPath(ovalIn: coreRectangle)
-  NSGraphicsContext.saveGraphicsState()
-  let coreShadow = NSShadow()
-  coreShadow.shadowColor = NSColor(calibratedRed: 0.847, green: 1, blue: 0.243, alpha: 0.50)
-  coreShadow.shadowBlurRadius = canvasSize * 0.075
-  coreShadow.shadowOffset = .zero
-  coreShadow.set()
-  NSColor(calibratedRed: 0.847, green: 1, blue: 0.243, alpha: 1).setFill()
-  corePath.fill()
-  NSGraphicsContext.restoreGraphicsState()
-
-  let satelliteRadius = canvasSize * 0.043
-  let satelliteCenter = NSPoint(x: canvasSize * 0.79, y: canvasSize * 0.73)
-  NSColor(calibratedRed: 1, green: 0.420, blue: 0.208, alpha: 1).setFill()
-  NSBezierPath(
-    ovalIn: NSRect(
-      x: satelliteCenter.x - satelliteRadius,
-      y: satelliteCenter.y - satelliteRadius,
-      width: satelliteRadius * 2,
-      height: satelliteRadius * 2
-    )
-  ).fill()
-
-  if applicationChannel == .development {
-    drawDevelopmentBadge(canvasSize: canvasSize)
-  }
+  drawAstronomicalMark(canvasSize: CGFloat(pixelSize), applicationChannel: applicationChannel)
   NSGraphicsContext.restoreGraphicsState()
 
   guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
@@ -243,39 +141,130 @@ private func renderIcon(
   return pngData
 }
 
-private func drawDevelopmentBadge(canvasSize: CGFloat) {
-  let badgeRectangle = NSRect(
-    x: canvasSize * 0.14,
-    y: canvasSize * 0.105,
-    width: canvasSize * 0.72,
-    height: canvasSize * 0.25
-  )
-  let badgePath = NSBezierPath(
-    roundedRect: badgeRectangle,
-    xRadius: canvasSize * 0.065,
-    yRadius: canvasSize * 0.065
-  )
-  NSColor(calibratedRed: 0.957, green: 0.941, blue: 0.902, alpha: 0.97).setFill()
-  badgePath.fill()
+// Darkroom palette, shared with site/styles.css so the Dock, the menu bar
+// and the public site show one identity: a safelight plate and silver marks.
+private let safelightRed = NSColor(srgbRed: 0xA8 / 255, green: 0x32 / 255, blue: 0x1F / 255, alpha: 1)
+private let printSilver = NSColor(srgbRed: 0xE4 / 255, green: 0xE0 / 255, blue: 0xD6 / 255, alpha: 1)
 
-  // Small variants keep the badge silhouette because channel text would not be legible.
-  guard canvasSize >= 32 else { return }
+// The mark is specified on a 64-unit plate with a top-left origin, matching
+// site/assets/mark.svg, so its coordinates can be checked against the SVG.
+private struct MarkPlate {
+  let tileRectangle: NSRect
 
-  let centeredParagraph = NSMutableParagraphStyle()
-  centeredParagraph.alignment = .center
-  let channelFontSize = max(5, canvasSize * 0.105)
-  let channelAttributes: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: channelFontSize, weight: .heavy),
-    .foregroundColor: NSColor(calibratedRed: 0.063, green: 0.071, blue: 0.059, alpha: 1),
-    .paragraphStyle: centeredParagraph,
+  var unitLength: CGFloat { tileRectangle.width / 64 }
+
+  func point(markX: CGFloat, markY: CGFloat) -> NSPoint {
+    NSPoint(
+      x: tileRectangle.minX + markX * unitLength,
+      y: tileRectangle.maxY - markY * unitLength
+    )
+  }
+
+  func circle(markX: CGFloat, markY: CGFloat, markRadius: CGFloat) -> NSBezierPath {
+    let center = point(markX: markX, markY: markY)
+    let radius = markRadius * unitLength
+    return NSBezierPath(
+      ovalIn: NSRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+    )
+  }
+}
+
+private func drawAstronomicalMark(canvasSize: CGFloat, applicationChannel: ApplicationChannel) {
+  NSColor.clear.setFill()
+  NSRect(x: 0, y: 0, width: canvasSize, height: canvasSize).fill()
+
+  // The inset and soft shadow follow the macOS app-tile grid so the Dock
+  // presents the plate at the same visual weight as system icons.
+  let tileInset = canvasSize * 0.035
+  let markPlate = MarkPlate(
+    tileRectangle: NSRect(
+      x: tileInset, y: tileInset,
+      width: canvasSize - tileInset * 2, height: canvasSize - tileInset * 2))
+  let tilePath = NSBezierPath(
+    roundedRect: markPlate.tileRectangle, xRadius: canvasSize * 0.22, yRadius: canvasSize * 0.22)
+
+  NSGraphicsContext.saveGraphicsState()
+  let tileShadow = NSShadow()
+  tileShadow.shadowColor = NSColor.black.withAlphaComponent(0.42)
+  tileShadow.shadowBlurRadius = canvasSize * 0.045
+  tileShadow.shadowOffset = NSSize(width: 0, height: -canvasSize * 0.018)
+  tileShadow.set()
+  safelightRed.setFill()
+  tilePath.fill()
+  NSGraphicsContext.restoreGraphicsState()
+
+  NSGraphicsContext.saveGraphicsState()
+  tilePath.addClip()
+  drawRisingDisc(markPlate: markPlate, applicationChannel: applicationChannel)
+  drawReticle(markPlate: markPlate, canvasSize: canvasSize)
+  NSGraphicsContext.restoreGraphicsState()
+}
+
+// The disc is centred off the plate so only its limb shows: a body larger
+// than the frame that holds it, which is the product's promise of models
+// larger than memory.
+private func drawRisingDisc(markPlate: MarkPlate, applicationChannel: ApplicationChannel) {
+  let discPath = markPlate.circle(markX: 8, markY: 92, markRadius: 62)
+  switch applicationChannel {
+  case .stable:
+    printSilver.setFill()
+    discPath.fill()
+  case .development:
+    // Development borrows the product's "streaming" texture instead of a text
+    // badge: hatching survives at 16 px where letters do not, and it keeps the
+    // silhouette identical so the two channels read as one product.
+    drawHatching(inside: discPath, markPlate: markPlate)
+    printSilver.setStroke()
+    discPath.lineWidth = max(1, markPlate.unitLength * 2.4)
+    discPath.stroke()
+  }
+}
+
+private func drawHatching(inside discPath: NSBezierPath, markPlate: MarkPlate) {
+  NSGraphicsContext.saveGraphicsState()
+  discPath.addClip()
+  // A floor of three pixels per stripe period keeps stripes from merging into
+  // a flat grey at the 16 and 32 px sizes.
+  let stripePeriod = max(3, markPlate.unitLength * 5)
+  let stripeWidth = stripePeriod * 0.45
+  let tileRectangle = markPlate.tileRectangle
+  let stripePath = NSBezierPath()
+  stripePath.lineWidth = stripeWidth
+  var stripeOffset = -tileRectangle.height
+  while stripeOffset < tileRectangle.width {
+    stripePath.move(to: NSPoint(x: tileRectangle.minX + stripeOffset, y: tileRectangle.minY))
+    stripePath.line(
+      to: NSPoint(
+        x: tileRectangle.minX + stripeOffset + tileRectangle.height, y: tileRectangle.maxY))
+    stripeOffset += stripePeriod
+  }
+  printSilver.setStroke()
+  stripePath.stroke()
+  NSGraphicsContext.restoreGraphicsState()
+}
+
+private func drawReticle(markPlate: MarkPlate, canvasSize: CGFloat) {
+  // Below 64 px the reticle arms fall under one pixel, so the small cut drops
+  // them and enlarges the reticle dot, matching site/assets/favicon.svg.
+  guard canvasSize >= 64 else {
+    printSilver.setFill()
+    markPlate.circle(markX: 44, markY: 20, markRadius: 7).fill()
+    return
+  }
+  let armSegments: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [
+    (44, 11, 44, 17), (44, 23, 44, 29), (35, 20, 41, 20), (47, 20, 53, 20),
   ]
-  let channelRectangle = NSRect(
-    x: badgeRectangle.minX,
-    y: badgeRectangle.minY + badgeRectangle.height * 0.20,
-    width: badgeRectangle.width,
-    height: badgeRectangle.height * 0.62
-  )
-  ("DEV" as NSString).draw(in: channelRectangle, withAttributes: channelAttributes)
+  let armPath = NSBezierPath()
+  armPath.lineWidth = markPlate.unitLength * 2.4
+  armPath.lineCapStyle = .round
+  for (startX, startY, endX, endY) in armSegments {
+    armPath.move(to: markPlate.point(markX: startX, markY: startY))
+    armPath.line(to: markPlate.point(markX: endX, markY: endY))
+  }
+  printSilver.setStroke()
+  armPath.stroke()
+  printSilver.setFill()
+  markPlate.circle(markX: 44, markY: 20, markRadius: 2.8).fill()
 }
 
 private func renderIconFamily(arguments: IconRenderArguments) throws {
