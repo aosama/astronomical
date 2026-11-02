@@ -65047,17 +65047,80 @@
     },
     {
       "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
-      "function": "estimate_kv_cache_bytes",
-      "line": 41,
-      "cyclomatic": 1.0,
+      "function": "average_bits",
+      "line": 86,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "function": "estimate_kv_cache_bytes",
+      "line": 59,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "function": "is_better_upgrade",
+      "line": 147,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "function": "most_efficient_upgrade",
+      "line": 100,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "function": "next_rung",
+      "line": 138,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
       "function": "optimize_kv_cache",
-      "line": 23,
+      "line": 27,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_allocator.rs",
+      "function": "upgrade_efficiency",
+      "line": 122,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "function": "LayerProbe::mean_kl_divergence",
+      "line": 129,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "function": "layer_result",
+      "line": 154,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65066,7 +65129,52 @@
     {
       "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
       "function": "measure_kv_cache_sensitivity",
-      "line": 60,
+      "line": 69,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "function": "probe_failure",
+      "line": 192,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/cache_sensitivity.rs",
+      "function": "require_engaged_measurement",
+      "line": 175,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "function": "ScriptedCacheProbe::cached_layers",
+      "line": 127,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "function": "ScriptedCacheProbe::forward_with_cache_bit_widths",
+      "line": 140,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "function": "ScriptedCacheProbe::kl_divergence",
+      "line": 154,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65091,6 +65199,15 @@
       "crate": "astronomical-quantization"
     },
     {
+      "file": "crates/quantization/src/kv_cache/kv_cache_tests.rs",
+      "function": "two_samples",
+      "line": 163,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
       "file": "crates/quantization/src/latency/calibrated_model.rs",
       "function": "CalibratedLatencyModel::calibrate",
       "line": 18,
@@ -65102,10 +65219,10 @@
     {
       "file": "crates/quantization/src/latency/calibrated_model.rs",
       "function": "CalibratedLatencyModel::predict_tokens_per_second",
-      "line": 24,
-      "cyclomatic": 1.0,
+      "line": 27,
+      "cyclomatic": 2.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 6.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -65120,10 +65237,10 @@
     {
       "file": "crates/quantization/src/latency/hardware_profile.rs",
       "function": "HardwareProfile::from_device_name",
-      "line": 29,
-      "cyclomatic": 1.0,
+      "line": 31,
+      "cyclomatic": 8.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 72.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -65136,9 +65253,27 @@
       "crate": "astronomical-quantization"
     },
     {
+      "file": "crates/quantization/src/latency/latency_tests.rs",
+      "function": "up_projection_estimate",
+      "line": 146,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
       "file": "crates/quantization/src/latency/roofline.rs",
       "function": "LatencyModelParameters::optiq_defaults",
       "line": 35,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/latency/roofline.rs",
+      "function": "config_integer",
+      "line": 203,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65156,16 +65291,16 @@
     {
       "file": "crates/quantization/src/latency/roofline.rs",
       "function": "estimate_module_latency",
-      "line": 88,
-      "cyclomatic": 1.0,
+      "line": 92,
+      "cyclomatic": 2.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 6.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/latency/roofline.rs",
       "function": "estimate_module_operations",
-      "line": 66,
+      "line": 72,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65174,10 +65309,28 @@
     {
       "file": "crates/quantization/src/latency/roofline.rs",
       "function": "infer_module_dimensions",
-      "line": 117,
-      "cyclomatic": 1.0,
+      "line": 165,
+      "cyclomatic": 10.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 110.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/latency/roofline.rs",
+      "function": "kernel_efficiency",
+      "line": 151,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/latency/roofline.rs",
+      "function": "unpacking_slowdown",
+      "line": 141,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
       "crate": "astronomical-quantization"
     },
     {

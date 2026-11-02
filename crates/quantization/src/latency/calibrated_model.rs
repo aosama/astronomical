@@ -16,13 +16,20 @@ pub struct CalibratedLatencyModel {
 impl CalibratedLatencyModel {
     /// `overhead = max(1e6 / measured_tokens_per_second - linear_microseconds, 0)`.
     pub fn calibrate(&mut self, linear_module_microseconds: f64, measured_tokens_per_second: f64) {
-        let _ = (linear_module_microseconds, measured_tokens_per_second);
-        todo!("learn the constant offset and mark calibrated")
+        let measured_microseconds_per_token = 1e6 / measured_tokens_per_second;
+        self.overhead_microseconds_per_token =
+            (measured_microseconds_per_token - linear_module_microseconds).max(0.0);
+        self.is_calibrated = true;
     }
 
+    /// `1e6 / (linear + overhead)`, zero when the sum is not positive.
     #[must_use]
     pub fn predict_tokens_per_second(&self, linear_module_microseconds: f64) -> f64 {
-        let _ = linear_module_microseconds;
-        todo!("1e6 / (linear + overhead), zero when the sum is not positive")
+        let total_microseconds = linear_module_microseconds + self.overhead_microseconds_per_token;
+        if total_microseconds > 0.0 {
+            1e6 / total_microseconds
+        } else {
+            0.0
+        }
     }
 }
