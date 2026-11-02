@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::image_input;
 use crate::{
-    MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH, OpenAiChatCompletionValidationError, OpenAiImageInput,
+    DecodedImageInput, MAX_TOOL_SCHEMA_NESTING_DEPTH, OpenAiChatCompletionValidationError,
 };
 
 /// A chat history message supported by the initial local text-only endpoint.
@@ -146,7 +146,7 @@ pub enum OpenAiChatMessageParts {
     User {
         content: String,
         /// Decoded data-URI image payloads in document order. Empty for text-only users.
-        images: Vec<OpenAiImageInput>,
+        images: Vec<DecodedImageInput>,
     },
     /// A prior assistant answer, reasoning, and function calls.
     Assistant {
@@ -210,7 +210,7 @@ impl OpenAiMessageContent {
     /// Decodes user message content into concatenated text and ordered image inputs.
     fn into_user_content(
         self,
-    ) -> Result<(String, Vec<OpenAiImageInput>), OpenAiChatCompletionValidationError> {
+    ) -> Result<(String, Vec<DecodedImageInput>), OpenAiChatCompletionValidationError> {
         self.validate()?;
         match self {
             Self::Text(content) => Ok((content, Vec::new())),
@@ -305,11 +305,11 @@ impl OpenAiToolDefinition {
             return Ok(0);
         };
         let schema_nesting_depth = json_nesting_depth(parameters);
-        if schema_nesting_depth > MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH {
+        if schema_nesting_depth > MAX_TOOL_SCHEMA_NESTING_DEPTH {
             return Err(
                 OpenAiChatCompletionValidationError::ToolSchemaNestingTooDeep {
                     actual_schema_nesting_depth: schema_nesting_depth,
-                    maximum_schema_nesting_depth: MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH,
+                    maximum_schema_nesting_depth: MAX_TOOL_SCHEMA_NESTING_DEPTH,
                 },
             );
         }

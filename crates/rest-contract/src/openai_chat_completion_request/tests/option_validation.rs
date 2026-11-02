@@ -8,7 +8,7 @@ fn should_reject_an_output_budget_above_the_worker_representation_limit() {
             "messages": [{{"role": "user", "content": "write a function"}}],
             "max_tokens": {}
         }}"#,
-        MAX_OPENAI_OUTPUT_TOKENS + 1
+        MAX_OUTPUT_TOKENS + 1
     );
     let chat_completion_request =
         serde_json::from_str::<OpenAiChatCompletionRequest>(&request_json)
@@ -21,8 +21,8 @@ fn should_reject_an_output_budget_above_the_worker_representation_limit() {
     assert_eq!(
         validation_error,
         OpenAiChatCompletionValidationError::OutputTokenCountOutOfRange {
-            actual_output_tokens: MAX_OPENAI_OUTPUT_TOKENS + 1,
-            maximum_output_tokens: MAX_OPENAI_OUTPUT_TOKENS,
+            actual_output_tokens: MAX_OUTPUT_TOKENS + 1,
+            maximum_output_tokens: MAX_OUTPUT_TOKENS,
         }
     );
 }

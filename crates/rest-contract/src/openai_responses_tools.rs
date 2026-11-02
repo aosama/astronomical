@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use crate::json_nesting_depth::json_nesting_depth;
 use crate::tool_name_rule::is_valid_function_name;
-use crate::{MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH, OpenAiResponsesValidationError};
+use crate::{MAX_TOOL_SCHEMA_NESTING_DEPTH, OpenAiResponsesValidationError};
 
 /// One Responses-native tool declaration accepted by the local model.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -49,10 +49,10 @@ impl OpenAiResponseToolDefinition {
         validate_function_name(&name)?;
         if let Some(parameters) = &self.parameters {
             let schema_nesting_depth = json_nesting_depth(parameters);
-            if schema_nesting_depth > MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH {
+            if schema_nesting_depth > MAX_TOOL_SCHEMA_NESTING_DEPTH {
                 return Err(OpenAiResponsesValidationError::ToolSchemaNestingTooDeep {
                     actual_schema_nesting_depth: schema_nesting_depth,
-                    maximum_schema_nesting_depth: MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH,
+                    maximum_schema_nesting_depth: MAX_TOOL_SCHEMA_NESTING_DEPTH,
                 });
             }
         }

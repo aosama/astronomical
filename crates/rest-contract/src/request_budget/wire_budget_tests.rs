@@ -1,8 +1,7 @@
 use crate::{
-    MAX_OPENAI_IMAGE_DECODED_BYTES, MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
-    MAX_OPENAI_INLINE_MEDIA_BYTES, MAX_OPENAI_REQUEST_BODY_BYTES, OpenAiChatCompletionRequest,
-    OpenAiChatCompletionValidationError, OpenAiChatMessageParts, OpenAiResponsesRequest,
-    OpenAiResponsesValidationError,
+    MAX_IMAGE_DECODED_BYTES, MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES,
+    MAX_REQUEST_BODY_BYTES, OpenAiChatCompletionRequest, OpenAiChatCompletionValidationError,
+    OpenAiChatMessageParts, OpenAiResponsesRequest, OpenAiResponsesValidationError,
 };
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -56,18 +55,18 @@ fn responses_request_with_image_data_uris(image_data_uris: &[String]) -> OpenAiR
 #[test]
 fn should_pin_the_budget_values_to_their_documented_mainstream_figures() {
     // Guard against accidental drift: each value is documented with its source
-    // and retrieval date in the openai_request_budget module. Retrieved
+    // and retrieval date in the request_budget module. Retrieved
     // 2026-10-22 from the vendor pages cited there.
-    assert_eq!(MAX_OPENAI_REQUEST_BODY_BYTES, 32_000_000);
-    assert_eq!(MAX_OPENAI_IMAGE_DECODED_BYTES, 7 * 1024 * 1024);
-    assert_eq!(MAX_OPENAI_INLINE_MEDIA_BYTES, 20 * 1024 * 1024);
-    assert_eq!(MAX_OPENAI_IMAGE_PARTS_PER_REQUEST, 100);
+    assert_eq!(MAX_REQUEST_BODY_BYTES, 32_000_000);
+    assert_eq!(MAX_IMAGE_DECODED_BYTES, 7 * 1024 * 1024);
+    assert_eq!(MAX_INLINE_MEDIA_BYTES, 20 * 1024 * 1024);
+    assert_eq!(MAX_IMAGE_PARTS_PER_REQUEST, 100);
 }
 
 #[test]
 fn should_accept_a_chat_image_at_exactly_the_per_image_budget() {
     let chat_completion_request =
-        chat_request_with_image_data_uris(&[image_data_uri(MAX_OPENAI_IMAGE_DECODED_BYTES)]);
+        chat_request_with_image_data_uris(&[image_data_uri(MAX_IMAGE_DECODED_BYTES)]);
 
     chat_completion_request
         .validate()
@@ -80,7 +79,7 @@ fn should_accept_a_chat_image_at_exactly_the_per_image_budget() {
 #[test]
 fn should_reject_a_chat_image_one_byte_over_the_per_image_budget() {
     let chat_completion_request =
-        chat_request_with_image_data_uris(&[image_data_uri(MAX_OPENAI_IMAGE_DECODED_BYTES + 1)]);
+        chat_request_with_image_data_uris(&[image_data_uri(MAX_IMAGE_DECODED_BYTES + 1)]);
 
     chat_completion_request
         .validate()
@@ -92,8 +91,8 @@ fn should_reject_a_chat_image_one_byte_over_the_per_image_budget() {
     assert_eq!(
         validation_error,
         OpenAiChatCompletionValidationError::ImageTooLarge {
-            actual_bytes: MAX_OPENAI_IMAGE_DECODED_BYTES + 1,
-            maximum_bytes: MAX_OPENAI_IMAGE_DECODED_BYTES,
+            actual_bytes: MAX_IMAGE_DECODED_BYTES + 1,
+            maximum_bytes: MAX_IMAGE_DECODED_BYTES,
             excess_bytes: 1,
         }
     );
@@ -105,10 +104,10 @@ fn should_reject_a_chat_image_one_byte_over_the_per_image_budget() {
 
 #[test]
 fn should_accept_a_chat_request_at_exactly_the_inline_media_budget() {
-    let first_image_decoded_bytes = MAX_OPENAI_IMAGE_DECODED_BYTES;
-    let second_image_decoded_bytes = MAX_OPENAI_IMAGE_DECODED_BYTES;
+    let first_image_decoded_bytes = MAX_IMAGE_DECODED_BYTES;
+    let second_image_decoded_bytes = MAX_IMAGE_DECODED_BYTES;
     let third_image_decoded_bytes =
-        MAX_OPENAI_INLINE_MEDIA_BYTES - first_image_decoded_bytes - second_image_decoded_bytes;
+        MAX_INLINE_MEDIA_BYTES - first_image_decoded_bytes - second_image_decoded_bytes;
     let chat_completion_request = chat_request_with_image_data_uris(&[
         image_data_uri(first_image_decoded_bytes),
         image_data_uri(second_image_decoded_bytes),
@@ -130,15 +129,15 @@ fn should_accept_a_chat_request_at_exactly_the_inline_media_budget() {
             _ => 0,
         })
         .sum::<usize>();
-    assert_eq!(total_decoded_media_bytes, MAX_OPENAI_INLINE_MEDIA_BYTES);
+    assert_eq!(total_decoded_media_bytes, MAX_INLINE_MEDIA_BYTES);
 }
 
 #[test]
 fn should_reject_a_chat_request_one_byte_over_the_inline_media_budget() {
-    let first_image_decoded_bytes = MAX_OPENAI_IMAGE_DECODED_BYTES;
-    let second_image_decoded_bytes = MAX_OPENAI_IMAGE_DECODED_BYTES;
+    let first_image_decoded_bytes = MAX_IMAGE_DECODED_BYTES;
+    let second_image_decoded_bytes = MAX_IMAGE_DECODED_BYTES;
     let third_image_decoded_bytes =
-        MAX_OPENAI_INLINE_MEDIA_BYTES - first_image_decoded_bytes - second_image_decoded_bytes + 1;
+        MAX_INLINE_MEDIA_BYTES - first_image_decoded_bytes - second_image_decoded_bytes + 1;
     let chat_completion_request = chat_request_with_image_data_uris(&[
         image_data_uri(first_image_decoded_bytes),
         image_data_uri(second_image_decoded_bytes),
@@ -152,7 +151,7 @@ fn should_reject_a_chat_request_one_byte_over_the_inline_media_budget() {
     assert!(matches!(
         validation_error,
         OpenAiChatCompletionValidationError::InlineMediaExceedsBudget {
-            maximum_inline_media_bytes: MAX_OPENAI_INLINE_MEDIA_BYTES,
+            maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
             excess_inline_media_bytes: 1,
             ..
         }
@@ -163,7 +162,7 @@ fn should_reject_a_chat_request_one_byte_over_the_inline_media_budget() {
 
 #[test]
 fn should_accept_a_chat_request_with_exactly_the_image_count_budget() {
-    let image_data_uris = (0..MAX_OPENAI_IMAGE_PARTS_PER_REQUEST)
+    let image_data_uris = (0..MAX_IMAGE_PARTS_PER_REQUEST)
         .map(|_| image_data_uri(1))
         .collect::<Vec<_>>();
     let chat_completion_request = chat_request_with_image_data_uris(&image_data_uris);
@@ -175,7 +174,7 @@ fn should_accept_a_chat_request_with_exactly_the_image_count_budget() {
 
 #[test]
 fn should_reject_a_chat_request_one_image_over_the_image_count_budget() {
-    let image_data_uris = (0..=MAX_OPENAI_IMAGE_PARTS_PER_REQUEST)
+    let image_data_uris = (0..=MAX_IMAGE_PARTS_PER_REQUEST)
         .map(|_| image_data_uri(1))
         .collect::<Vec<_>>();
     let chat_completion_request = chat_request_with_image_data_uris(&image_data_uris);
@@ -188,7 +187,7 @@ fn should_reject_a_chat_request_one_image_over_the_image_count_budget() {
         validation_error,
         OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget {
             actual_image_part_count: 101,
-            maximum_image_part_count: MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+            maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
             excess_image_part_count: 1,
         }
     ));
@@ -201,8 +200,8 @@ fn should_reject_the_image_count_before_decoding_any_oversized_image() {
     // Every image individually busts the per-image budget, so any decode would
     // report ImageTooLarge; the image-count rejection proves the count guard
     // runs ahead of all base64 decode work.
-    let image_data_uris = (0..=MAX_OPENAI_IMAGE_PARTS_PER_REQUEST)
-        .map(|_| image_data_uri(MAX_OPENAI_IMAGE_DECODED_BYTES + 1))
+    let image_data_uris = (0..=MAX_IMAGE_PARTS_PER_REQUEST)
+        .map(|_| image_data_uri(MAX_IMAGE_DECODED_BYTES + 1))
         .collect::<Vec<_>>();
     let chat_completion_request = chat_request_with_image_data_uris(&image_data_uris);
 
@@ -230,10 +229,10 @@ fn should_accept_a_responses_request_within_both_image_budgets() {
 fn should_reject_a_responses_request_one_byte_over_the_inline_media_budget() {
     // Each image individually stays inside the per-image budget so the
     // rejection proves the cross-image inline-media accumulation fires.
-    let first_image_decoded_bytes = MAX_OPENAI_IMAGE_DECODED_BYTES;
-    let second_image_decoded_bytes = MAX_OPENAI_IMAGE_DECODED_BYTES;
+    let first_image_decoded_bytes = MAX_IMAGE_DECODED_BYTES;
+    let second_image_decoded_bytes = MAX_IMAGE_DECODED_BYTES;
     let third_image_decoded_bytes =
-        MAX_OPENAI_INLINE_MEDIA_BYTES - first_image_decoded_bytes - second_image_decoded_bytes + 1;
+        MAX_INLINE_MEDIA_BYTES - first_image_decoded_bytes - second_image_decoded_bytes + 1;
     let responses_request = responses_request_with_image_data_uris(&[
         image_data_uri(first_image_decoded_bytes),
         image_data_uri(second_image_decoded_bytes),
@@ -247,7 +246,7 @@ fn should_reject_a_responses_request_one_byte_over_the_inline_media_budget() {
     assert!(matches!(
         validation_error,
         OpenAiResponsesValidationError::InlineMediaExceedsBudget {
-            maximum_inline_media_bytes: MAX_OPENAI_INLINE_MEDIA_BYTES,
+            maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
             excess_inline_media_bytes: 1,
             ..
         }
@@ -257,7 +256,7 @@ fn should_reject_a_responses_request_one_byte_over_the_inline_media_budget() {
 
 #[test]
 fn should_accept_a_responses_request_at_the_image_count_budget() {
-    let image_data_uris = (0..MAX_OPENAI_IMAGE_PARTS_PER_REQUEST)
+    let image_data_uris = (0..MAX_IMAGE_PARTS_PER_REQUEST)
         .map(|_| image_data_uri(1))
         .collect::<Vec<_>>();
     let responses_request = responses_request_with_image_data_uris(&image_data_uris);
@@ -269,7 +268,7 @@ fn should_accept_a_responses_request_at_the_image_count_budget() {
 
 #[test]
 fn should_reject_a_responses_request_one_image_over_the_image_count_budget() {
-    let image_data_uris = (0..=MAX_OPENAI_IMAGE_PARTS_PER_REQUEST)
+    let image_data_uris = (0..=MAX_IMAGE_PARTS_PER_REQUEST)
         .map(|_| image_data_uri(1))
         .collect::<Vec<_>>();
     let responses_request = responses_request_with_image_data_uris(&image_data_uris);

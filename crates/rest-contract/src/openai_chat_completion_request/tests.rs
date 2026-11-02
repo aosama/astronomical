@@ -5,7 +5,7 @@
 //! crosses no process, socket, filesystem, or model boundary.
 
 use crate::{
-    MAX_OPENAI_OUTPUT_TOKENS, OpenAiChatCompletionRequest, OpenAiChatCompletionValidationError,
+    MAX_OUTPUT_TOKENS, OpenAiChatCompletionRequest, OpenAiChatCompletionValidationError,
     OpenAiChatMessageParts, OpenAiToolChoiceMode,
 };
 use serde_json::json;

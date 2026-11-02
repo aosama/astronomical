@@ -1,12 +1,11 @@
 use std::collections::BTreeMap;
 
+use crate::MAX_OUTPUT_TOKENS;
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::openai_request_budget::{
-    MAX_OPENAI_IMAGE_PARTS_PER_REQUEST, MAX_OPENAI_INLINE_MEDIA_BYTES,
-};
+use crate::request_budget::{MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES};
 use crate::{
     ChatTemplateKwargsRequestObject, EnforcedStructuredGeneration, OpenAiChatMessage,
     OpenAiChatMessageParts, OpenAiResponseFormat, OpenAiStopSequences, OpenAiStreamOptions,
@@ -16,12 +15,8 @@ use crate::{
     ThinkingControlsError, ThinkingControlsInputs, enforced_generation_from_extra_body,
 };
 
-/// The maximum accepted nesting depth of a function JSON Schema.
-pub const MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH: usize = 32;
-/// Maximum generated-token budget representable by the current worker protocol.
-/// The model-serving layer still validates prompt plus output against model context.
-pub const MAX_OPENAI_OUTPUT_TOKENS: u32 = u16::MAX as u32;
-/// The fallback generated-token budget when a client does not send one.
+/// The fallback generated-token budget when an OpenAI client does not send
+/// one. The Anthropic surface has no fallback: `max_tokens` is required.
 pub const DEFAULT_OPENAI_OUTPUT_TOKENS: u32 = 1_024;
 
 /// One bounded OpenAI-compatible Chat Completions request.
@@ -270,11 +265,11 @@ impl OpenAiChatCompletionRequest {
         }
 
         let actual_output_tokens = self.maximum_output_tokens();
-        if actual_output_tokens == 0 || actual_output_tokens > MAX_OPENAI_OUTPUT_TOKENS {
+        if actual_output_tokens == 0 || actual_output_tokens > MAX_OUTPUT_TOKENS {
             return Err(
                 OpenAiChatCompletionValidationError::OutputTokenCountOutOfRange {
                     actual_output_tokens,
-                    maximum_output_tokens: MAX_OPENAI_OUTPUT_TOKENS,
+                    maximum_output_tokens: MAX_OUTPUT_TOKENS,
                 },
             );
         }
@@ -526,12 +521,12 @@ fn validate_non_empty_string(
 fn validate_image_part_count(
     image_part_count: usize,
 ) -> Result<(), OpenAiChatCompletionValidationError> {
-    if image_part_count > MAX_OPENAI_IMAGE_PARTS_PER_REQUEST {
+    if image_part_count > MAX_IMAGE_PARTS_PER_REQUEST {
         return Err(
             OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget {
                 actual_image_part_count: image_part_count,
-                maximum_image_part_count: MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
-                excess_image_part_count: image_part_count - MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+                maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
+                excess_image_part_count: image_part_count - MAX_IMAGE_PARTS_PER_REQUEST,
             },
         );
     }
@@ -541,13 +536,12 @@ fn validate_image_part_count(
 fn validate_inline_media_total(
     decoded_inline_media_bytes: usize,
 ) -> Result<(), OpenAiChatCompletionValidationError> {
-    if decoded_inline_media_bytes > MAX_OPENAI_INLINE_MEDIA_BYTES {
+    if decoded_inline_media_bytes > MAX_INLINE_MEDIA_BYTES {
         return Err(
             OpenAiChatCompletionValidationError::InlineMediaExceedsBudget {
                 actual_inline_media_bytes: decoded_inline_media_bytes,
-                maximum_inline_media_bytes: MAX_OPENAI_INLINE_MEDIA_BYTES,
-                excess_inline_media_bytes: decoded_inline_media_bytes
-                    - MAX_OPENAI_INLINE_MEDIA_BYTES,
+                maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
+                excess_inline_media_bytes: decoded_inline_media_bytes - MAX_INLINE_MEDIA_BYTES,
             },
         );
     }

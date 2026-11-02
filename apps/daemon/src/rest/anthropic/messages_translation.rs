@@ -10,7 +10,7 @@ use astronomical_ipc_protocol::{
 use astronomical_rest_contract::{
     AnthropicMessageParts, AnthropicMessagesRequestParts, AnthropicToolChoiceParts,
     AnthropicToolDefinitionParts, AnthropicToolUseParts, AnthropicUserSegmentParts,
-    OpenAiImageInput,
+    DecodedImageInput,
 };
 use thiserror::Error;
 
@@ -206,7 +206,7 @@ fn tool_result_content(text: String, is_error: bool) -> String {
     }
 }
 
-fn chat_image_input(image: &OpenAiImageInput) -> ChatImageInput {
+fn chat_image_input(image: &DecodedImageInput) -> ChatImageInput {
     ChatImageInput {
         mime_type: image.mime_type().to_owned(),
         decoded_bytes: image.decoded_bytes().to_vec(),

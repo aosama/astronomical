@@ -7,7 +7,7 @@ use serde_json::Value;
 use thiserror::Error;
 
 /// One request stays well inside the portable IPC frame budget (see the
-/// `openai_request_budget` module) after JSON expansion, so a single embeddings
+/// `request_budget` module) after JSON expansion, so a single embeddings
 /// command can never overflow the wire.
 const MAXIMUM_EMBEDDING_INPUT_COUNT: usize = 256;
 const MAXIMUM_EMBEDDING_INPUT_BYTES: usize = 8_192;

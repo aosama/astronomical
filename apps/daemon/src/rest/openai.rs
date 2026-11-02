@@ -9,7 +9,6 @@ pub(crate) mod chat_translation;
 pub(crate) mod embeddings_endpoint;
 pub(crate) mod image_generation_endpoint;
 pub(crate) mod models_endpoint;
-pub(crate) mod request_body_budget;
 pub(crate) mod responses_assembly;
 pub(crate) mod responses_endpoint;
 pub(crate) mod responses_stream;
