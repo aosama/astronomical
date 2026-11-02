@@ -31,7 +31,7 @@ fn should_serialize_complete_ready_model_capability_metadata_without_losing_open
 
     assert_eq!(
         serde_json::to_string(&model_list).expect("the OpenAI model list should serialize"),
-        r#"{"object":"list","data":[{"id":"astronomical/fake-mixture-of-experts","object":"model","created":1784231803,"owned_by":"astronomical","context_window":262144,"max_input_tokens":241664,"max_output_tokens":20480,"input_modalities":["text","image"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":true,"reasoning_format":"openai_chat_reasoning_content_and_responses_reasoning_summary_text","supports_tool_calls":true,"tool_call_format":"openai_function_call","supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"logits_mask"}]}"#
+        r#"{"object":"list","data":[{"id":"astronomical/fake-mixture-of-experts","object":"model","created":1784231803,"owned_by":"astronomical","context_window":262144,"max_input_tokens":241664,"max_output_tokens":20480,"input_modalities":["text","image"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":true,"reasoning_format":"openai_chat_reasoning_content_and_responses_reasoning_summary_text","supports_tool_calls":true,"tool_call_format":"openai_function_call","supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"logits_mask","type":"model","display_name":"astronomical/fake-mixture-of-experts","created_at":"2026-07-16T19:56:43Z"}],"has_more":false,"first_id":"astronomical/fake-mixture-of-experts","last_id":"astronomical/fake-mixture-of-experts"}"#
     );
 }
 
@@ -62,7 +62,7 @@ fn should_omit_reasoning_and_tool_formats_when_model_does_not_support_them() {
 
     assert_eq!(
         serde_json::to_string(&model_list).expect("the OpenAI model list should serialize"),
-        r#"{"object":"list","data":[{"id":"mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit","object":"model","created":1784231803,"owned_by":"astronomical","context_window":131072,"max_input_tokens":110592,"max_output_tokens":20480,"input_modalities":["text"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":false,"supports_tool_calls":false,"supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"logits_mask"}]}"#
+        r#"{"object":"list","data":[{"id":"mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit","object":"model","created":1784231803,"owned_by":"astronomical","context_window":131072,"max_input_tokens":110592,"max_output_tokens":20480,"input_modalities":["text"],"output_modalities":["text"],"supports_streaming":true,"supports_reasoning":false,"supports_tool_calls":false,"supported_endpoints":["/v1/chat/completions","/v1/responses"],"supports_structured_outputs":true,"structured_output_enforcement":"logits_mask","type":"model","display_name":"mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit","created_at":"2026-07-16T19:56:43Z"}],"has_more":false,"first_id":"mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit","last_id":"mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit"}"#
     );
 }
 
@@ -178,7 +178,7 @@ fn should_advertise_an_image_output_model_without_fake_token_limits() {
 
     assert_eq!(
         serde_json::to_string(&model_list).expect("the image model metadata should serialize"),
-        r#"{"object":"list","data":[{"id":"black-forest-labs/FLUX.2-klein-4B","object":"model","created":1787010400,"owned_by":"astronomical","input_modalities":["text"],"output_modalities":["image"],"supports_streaming":false,"supports_reasoning":false,"supports_tool_calls":false,"supported_endpoints":["/v1/images/generations"],"supports_structured_outputs":false}]}"#
+        r#"{"object":"list","data":[{"id":"black-forest-labs/FLUX.2-klein-4B","object":"model","created":1787010400,"owned_by":"astronomical","input_modalities":["text"],"output_modalities":["image"],"supports_streaming":false,"supports_reasoning":false,"supports_tool_calls":false,"supported_endpoints":["/v1/images/generations"],"supports_structured_outputs":false,"type":"model","display_name":"black-forest-labs/FLUX.2-klein-4B","created_at":"2026-08-17T23:46:40Z"}],"has_more":false,"first_id":"black-forest-labs/FLUX.2-klein-4B","last_id":"black-forest-labs/FLUX.2-klein-4B"}"#
     );
 }
 
@@ -188,7 +188,10 @@ fn should_omit_capability_fields_when_no_worker_is_ready() {
 
     let serialized_model_list =
         serde_json::to_string(&model_list).expect("the OpenAI model list should serialize");
-    assert_eq!(serialized_model_list, r#"{"object":"list","data":[]}"#);
+    assert_eq!(
+        serialized_model_list,
+        r#"{"object":"list","data":[],"has_more":false,"first_id":null,"last_id":null}"#
+    );
     assert!(!serialized_model_list.contains("context_window"));
     assert!(!serialized_model_list.contains("max_input_tokens"));
     assert!(!serialized_model_list.contains("max_output_tokens"));
@@ -208,7 +211,7 @@ fn should_serialize_an_empty_openai_model_list_when_no_worker_is_ready() {
 
     assert_eq!(
         serde_json::to_string(&model_list).expect("the OpenAI model list should serialize"),
-        r#"{"object":"list","data":[]}"#
+        r#"{"object":"list","data":[],"has_more":false,"first_id":null,"last_id":null}"#
     );
 }
 

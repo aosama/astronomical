@@ -329,7 +329,10 @@ async fn should_not_advertise_stale_model_metadata_when_the_worker_is_unavailabl
     let models_body = to_bytes(models_response.into_body(), 8 * 1024)
         .await
         .expect("the model-list body should be readable");
-    assert_eq!(models_body.as_ref(), br#"{"object":"list","data":[]}"#);
+    assert_eq!(
+        models_body.as_ref(),
+        br#"{"object":"list","data":[],"has_more":false,"first_id":null,"last_id":null}"#
+    );
 }
 
 #[tokio::test]
@@ -362,6 +365,71 @@ async fn should_fail_closed_when_discovered_model_capabilities_are_invalid() {
         models_body.as_ref(),
         br#"{"error":{"message":"model capability metadata is unavailable","type":"server_error","code":"model_metadata_unavailable"}}"#
     );
+}
+
+async fn get_json_document(application: axum::Router, request_path: &str) -> serde_json::Value {
+    let http_response = application
+        .oneshot(
+            Request::builder()
+                .uri(request_path)
+                .body(Body::empty())
+                .expect("the model request should be valid"),
+        )
+        .await
+        .expect("the application should answer the model request");
+    assert_eq!(http_response.status(), StatusCode::OK);
+    let response_body = to_bytes(http_response.into_body(), 16 * 1024)
+        .await
+        .expect("the model response body should be readable");
+    serde_json::from_slice(&response_body).expect("the model response should be JSON")
+}
+
+#[tokio::test]
+async fn should_list_models_with_anthropic_pagination_beside_the_openai_fields() {
+    let application = astronomical_daemon::build_application_with_discovered_models(
+        ScriptedExecutor::ready(Vec::new()),
+        vec![
+            discovered_model_with_vision_support(true),
+            discovered_image_model(),
+        ],
+    );
+
+    let model_list = get_json_document(application, "/v1/models").await;
+
+    assert_eq!(model_list["object"], "list");
+    assert_eq!(model_list["has_more"], false);
+    let listed_models = model_list["data"]
+        .as_array()
+        .expect("the listing should carry a data array");
+    assert_eq!(model_list["first_id"], listed_models[0]["id"]);
+    assert_eq!(
+        model_list["last_id"],
+        listed_models[listed_models.len() - 1]["id"]
+    );
+}
+
+#[tokio::test]
+async fn should_describe_one_model_in_both_the_openai_and_anthropic_shapes() {
+    let application = astronomical_daemon::build_application_with_discovered_models(
+        ScriptedExecutor::ready(Vec::new()),
+        vec![discovered_model_with_vision_support(true)],
+    );
+
+    let advertised_model = get_json_document(
+        application,
+        &format!("/v1/models/{DISCOVERED_VISION_MODEL_ID}"),
+    )
+    .await;
+
+    assert_eq!(advertised_model["object"], "model");
+    assert!(advertised_model["created"].is_u64());
+    assert_eq!(advertised_model["type"], "model");
+    assert_eq!(advertised_model["display_name"], DISCOVERED_VISION_MODEL_ID);
+    let created_at = advertised_model["created_at"]
+        .as_str()
+        .expect("created_at should be an RFC 3339 string");
+    assert_eq!(created_at.len(), "2026-01-01T00:00:00Z".len());
+    assert!(created_at.ends_with('Z'));
 }
 
 fn discovered_model_with_vision_support(has_vision: bool) -> DiscoveredModel {

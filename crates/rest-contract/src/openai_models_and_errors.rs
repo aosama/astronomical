@@ -1,3 +1,4 @@
+use crate::anthropic_model_listing::{AnthropicModelIdentity, AnthropicModelListPage};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -162,43 +163,53 @@ pub enum OpenAiModelValidationError {
     StructuredOutputEnforcementMustMatchSupport,
 }
 
-/// A standard OpenAI-compatible list of the exact models ready in the local worker.
+/// The `/v1/models` listing of the exact models ready in the local worker,
+/// readable by OpenAI-protocol and Anthropic-protocol clients alike: the
+/// OpenAI fields and the Anthropic pagination fields share one document.
+/// Models keep discovery order rather than Anthropic's newest-first order,
+/// because a local listing has no release history to sort by.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct OpenAiModelList {
     #[serde(rename = "object")]
     object_kind: &'static str,
     data: Vec<OpenAiModel>,
+    /// Anthropic pagination fields, so Anthropic-protocol clients read the
+    /// same listing.
+    #[serde(flatten)]
+    anthropic_page: AnthropicModelListPage,
 }
 
 impl OpenAiModelList {
     /// Builds an empty response while no local worker can safely advertise a model.
     #[must_use]
     pub fn empty() -> Self {
-        Self {
-            object_kind: "list",
-            data: Vec::new(),
-        }
+        Self::from_models(Vec::new())
     }
 
     /// Builds a one-model response from validated model capabilities.
     pub fn single_model(model_parts: OpenAiModelParts) -> Result<Self, OpenAiModelValidationError> {
-        Ok(Self {
-            object_kind: "list",
-            data: vec![OpenAiModel::from_parts(model_parts)?],
-        })
+        Ok(Self::from_models(vec![OpenAiModel::from_parts(
+            model_parts,
+        )?]))
     }
 
     /// Builds a multi-model response listing all discovered models.
     #[must_use]
     pub fn from_models(models: Vec<OpenAiModel>) -> Self {
+        let anthropic_page = AnthropicModelListPage::for_model_ids(
+            models.first().map(OpenAiModel::id),
+            models.last().map(OpenAiModel::id),
+        );
         Self {
             object_kind: "list",
             data: models,
+            anthropic_page,
         }
     }
 }
 
-/// One model visible through the standard OpenAI models endpoint.
+/// One model of the `/v1/models` listing, carrying the OpenAI model fields
+/// and the Anthropic model fields side by side.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct OpenAiModel {
     id: String,
@@ -245,6 +256,10 @@ pub struct OpenAiModel {
     /// How structured output is enforced (`none` until sample-time grammar exists).
     #[serde(skip_serializing_if = "Option::is_none")]
     structured_output_enforcement: Option<String>,
+    /// Anthropic model fields, so Anthropic-protocol clients read the same
+    /// model object.
+    #[serde(flatten)]
+    anthropic_identity: AnthropicModelIdentity,
 }
 
 impl OpenAiModel {
@@ -257,6 +272,8 @@ impl OpenAiModel {
     /// Builds one model entry from validated advertised model capabilities.
     pub fn from_parts(model_parts: OpenAiModelParts) -> Result<Self, OpenAiModelValidationError> {
         model_parts.validate()?;
+        let anthropic_identity =
+            AnthropicModelIdentity::for_model(&model_parts.model_id, model_parts.created);
         Ok(Self {
             id: model_parts.model_id,
             object_kind: "model",
@@ -275,6 +292,7 @@ impl OpenAiModel {
             supported_endpoints: Some(model_parts.supported_endpoints),
             supports_structured_outputs: Some(model_parts.supports_structured_outputs),
             structured_output_enforcement: model_parts.structured_output_enforcement,
+            anthropic_identity,
         })
     }
 
@@ -300,6 +318,10 @@ impl OpenAiModel {
             return Err(OpenAiModelValidationError::SupportedEndpointsMustNotBeEmpty);
         }
 
+        let anthropic_identity = AnthropicModelIdentity::for_model(
+            &image_model_parts.model_id,
+            image_model_parts.created,
+        );
         Ok(Self {
             id: image_model_parts.model_id,
             object_kind: "model",
@@ -318,6 +340,7 @@ impl OpenAiModel {
             supported_endpoints: Some(image_model_parts.supported_endpoints),
             supports_structured_outputs: Some(false),
             structured_output_enforcement: None,
+            anthropic_identity,
         })
     }
 
@@ -332,6 +355,10 @@ impl OpenAiModel {
             return Err(OpenAiModelValidationError::EmbeddingInputBudgetMustBePositive);
         }
 
+        let anthropic_identity = AnthropicModelIdentity::for_model(
+            &embedding_model_parts.model_id,
+            embedding_model_parts.created,
+        );
         Ok(Self {
             id: embedding_model_parts.model_id,
             object_kind: "model",
@@ -350,6 +377,7 @@ impl OpenAiModel {
             supported_endpoints: Some(vec!["/v1/embeddings".to_owned()]),
             supports_structured_outputs: Some(false),
             structured_output_enforcement: None,
+            anthropic_identity,
         })
     }
 }
