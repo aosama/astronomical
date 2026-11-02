@@ -63,7 +63,10 @@ test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astro
 # Quantization lanes (the OptiQ port in crates/quantization).
 
 # The GPU encoder against the pure reference encoder and the shard-wise
-# requantizer on a synthetic two-shard source; seconds, no model artifacts.
+# requantizer on synthetic sources (two bf16 shards, packed, fused, stacked,
+# FP8); seconds, no model artifacts. Contracts are #[parallel] except the
+# peak-memory one, which is #[serial] because MLX peak memory is
+# process-global.
 test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization --features direct-mlx --test direct_mlx"
 
 # Real-model conversion, parity, and throughput journeys; append

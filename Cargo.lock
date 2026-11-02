@@ -303,6 +303,7 @@ dependencies = [
  "safetensors",
  "serde",
  "serde_json",
+ "serial_test",
  "tempfile",
  "thiserror",
  "tokenizers",

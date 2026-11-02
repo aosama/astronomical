@@ -34,6 +34,8 @@ pub mod tensor_plan;
 
 #[cfg(feature = "direct-mlx")]
 pub mod driver;
+#[cfg(feature = "direct-mlx")]
+pub mod source_tensor_reader;
 
 pub use bit_policy::{BitPolicy, TensorEncodingDecision, policy_from_predicate};
 pub use copied_source_files::DEFAULT_COPY_PATTERNS;

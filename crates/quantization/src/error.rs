@@ -119,3 +119,28 @@ pub enum QuantizationError {
     )]
     OutputDirectoryExists { output_directory: PathBuf },
 }
+
+/// MLX-C already names the operation that failed, so the conversion keeps it
+/// verbatim; this lets every GPU stage use `?` on binding calls directly.
+#[cfg(feature = "direct-mlx")]
+impl From<mlx_c_rust::MlxCError> for QuantizationError {
+    fn from(binding_error: mlx_c_rust::MlxCError) -> Self {
+        Self::MlxRuntimeFailure {
+            operation: binding_error.operation,
+            description: binding_error.description,
+        }
+    }
+}
+
+/// Runtime-policy failures (allocator cache, memory snapshots, safetensors
+/// engines) carry their context in the message rather than a separate
+/// operation field.
+#[cfg(feature = "direct-mlx")]
+impl From<astronomical_runtime_integration::MlxRuntimeError> for QuantizationError {
+    fn from(runtime_error: astronomical_runtime_integration::MlxRuntimeError) -> Self {
+        Self::MlxRuntimeFailure {
+            operation: "the MLX runtime policy",
+            description: runtime_error.to_string(),
+        }
+    }
+}
