@@ -14,6 +14,9 @@ use crate::error::QuantizationError;
 #[path = "shard_writer_tests.rs"]
 mod shard_writer_tests;
 
+/// Target shard size: OptiQ's 4e9 bytes.
+pub const DEFAULT_SHARD_BYTES: u64 = 4_000_000_000;
+
 /// Writes one shard's buffered tensors to `shard_path` with metadata
 /// `format = "mlx"`, returning the bytes written.
 pub trait ShardFlush<Tensor> {

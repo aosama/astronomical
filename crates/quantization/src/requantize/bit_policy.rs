@@ -113,3 +113,9 @@ pub fn is_router_tensor_key(tensor_key: &str) -> bool {
     let _ = tensor_key;
     todo!("ends_with .gate.weight or .gate, contains .ffn.gate. or expert_bias or .router.")
 }
+
+/// The policy the final conversion uses: the allocation's predicate.
+#[must_use]
+pub fn policy_from_predicate(predicate: QuantizationPredicate) -> BitPolicy {
+    BitPolicy::FromPredicate(predicate)
+}

@@ -10,10 +10,10 @@
 //! 167 GB DeepSeek-V4 source on a 36 GB Mac.
 //!
 //! The requantizer serves two callers: the final mixed-precision conversion
-//! (its policy is the [`QuantizationPredicate`] from an allocation) and the
+//! (its policy is the [`crate::allocation::QuantizationPredicate`] from an allocation) and the
 //! uniform-4-bit baseline build for the streaming sensitivity reference (its
 //! policy is "4 bits everywhere quantizable"). A third, measurement-free
-//! policy, [`bit_policy::structural_mixture_of_experts_policy`], encodes the
+//! policy, [`bit_policy::StructuralMixtureOfExpertsPolicy`], encodes the
 //! structural rule that works for every large sparse model: routed experts
 //! hold almost all the parameters and tolerate the least precision per byte,
 //! attention and the shared expert hold few and tolerate almost none.
@@ -27,47 +27,16 @@
 //! Python tool on the same source.
 
 pub mod bit_policy;
+pub mod copied_source_files;
+pub mod requantize_outcome;
 pub mod shard_writer;
 pub mod tensor_plan;
 
 #[cfg(feature = "direct-mlx")]
 pub mod driver;
 
-pub use bit_policy::{BitPolicy, TensorEncodingDecision};
+pub use bit_policy::{BitPolicy, TensorEncodingDecision, policy_from_predicate};
+pub use copied_source_files::DEFAULT_COPY_PATTERNS;
+pub use requantize_outcome::RequantizeOutcome;
+pub use shard_writer::DEFAULT_SHARD_BYTES;
 pub use tensor_plan::{RequantizeTensorPlan, TensorPlanEntry};
-
-use crate::allocation::QuantizationPredicate;
-
-/// The files copied verbatim from source to output beside the shards.
-pub const DEFAULT_COPY_PATTERNS: &[&str] = &[
-    "tokenizer*",
-    "*.jinja",
-    "generation_config.json",
-    "chat_template*",
-    "preprocessor_config.json",
-    "special_tokens_map.json",
-];
-
-/// Target shard size: OptiQ's 4e9 bytes.
-pub const DEFAULT_SHARD_BYTES: u64 = 4_000_000_000;
-
-/// What the requantizer produced, for the pipeline's summary and metadata.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct RequantizeOutcome {
-    pub shard_count: usize,
-    pub total_output_bytes: u64,
-    pub quantized_tensor_count: usize,
-    pub passed_through_tensor_count: usize,
-    /// Per-module `(bits, group_size)` as actually written, which can differ
-    /// from the plan: a module whose last dimension does not divide its
-    /// planned group size falls back to 32, and a router is never quantized.
-    /// The artifact metadata must describe what was written, not the plan.
-    pub written_quantization_by_module: std::collections::BTreeMap<String, (u32, u32)>,
-    pub peak_mlx_memory_bytes: u64,
-}
-
-/// The policy the final conversion uses: the allocation's predicate.
-#[must_use]
-pub fn policy_from_predicate(predicate: QuantizationPredicate) -> BitPolicy {
-    BitPolicy::FromPredicate(predicate)
-}

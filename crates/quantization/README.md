@@ -2,7 +2,7 @@
 
 Sensitivity-driven mixed-precision affine quantization for MLX artifacts: a Rust port of the quantization core of [OptiQ](https://mlx-optiq.com) (the `mlx-optiq` Python package, MIT License, Copyright (c) 2026 Thin Signal). The full attribution, including the oMLX lineage of the range-search encoder, is in `third-party/THIRD_PARTY_NOTICES`; the vendored calibration mix carries its license beside it in `calibration/LICENSE-OPTIQ`.
 
-This document is the design record for the port. The crate currently holds the typed design, method stubs, and the complete test plan; every algorithm body is a `todo!()` whose message and preceding comment describe the work to port, and every test is `#[ignore]`d naming the pending function. Implementation proceeds module by module by removing the ignores.
+This document is the design record for the port. The crate holds the typed design and the complete test plan. The taxonomy, bit widths, progress reporting, and the allocator are ported and tested; every other algorithm body is a `todo!()` whose message and preceding comment describe the work to port, and its tests are `#[ignore]`d naming the pending function. Implementation proceeds module by module by removing the ignores.
 
 ## Why port rather than call Python
 
@@ -12,21 +12,38 @@ This document is the design record for the port. The crate currently holds the t
 
 ## Pipeline and module map
 
-| Stage | Module | OptiQ source | Needs MLX |
-| --- | --- | --- | --- |
-| List quantizable modules from safetensors headers | `module_inventory` | `sensitivity._index_bf16_layers`, `_quantizable_linears` | no |
-| Classify modules by name | `module_taxonomy` | `optimizer._identify_*`, `shardwise.is_expert`, `is_router` | no |
-| Build calibration sequences | `calibration` | `calibration/datasets.py` | no |
-| Measure per-module KL sensitivity | `sensitivity::exact_sweep` through `SensitivityProbeModel` | `sensitivity.analyze_sensitivity_exact` | engine-side only |
-| Score structurally without measurement | `sensitivity::static_scorer` | `sensitivity.analyze_sensitivity_static` | no |
-| Allocate bits under a target | `allocation` | `optimizer.optimize_mixed_precision` | no |
-| Encode with the range search | `encoder` | `lowbit.quantize_best` | `direct-mlx` (pure reference beside it) |
-| Requantize tensor by tensor | `requantize` | `shardwise.requantize_shardwise` | `direct-mlx` |
-| Write the artifact documents | `artifact` | `artifacts.py`, `mlx_backend` metadata | no |
-| Roofline throughput model | `latency` | `latency.py` | no |
-| Key-value cache allocation | `kv_cache` | `kv_cache.py` | engine-side only |
-| Orchestrate | `pipeline` | `models/llm.run_llm_pipeline` | `direct-mlx` for the full path |
-| Progress and ETA | `progress` | the per-layer ETA prints | no |
+Every `mod.rs` holds only module declarations and re-exports; each concern lives in a named file. OptiQ paths are relative to the `optiq` package of `mlx-optiq` 0.7.9.
+
+| Stage | Module | OptiQ source | Needs MLX | Status |
+| --- | --- | --- | --- | --- |
+| List quantizable modules from safetensors headers | `module_inventory` | `core/sensitivity.py` `_index_bf16_layers`, `_quantizable_linears` | no | stub |
+| Classify modules by name | `module_taxonomy` | `core/optimizer.py` `_identify_*`, `core/shardwise.py` `is_expert`, `is_router` | no | ported |
+| Bit widths and group sizes | `bit_width` | the integer ladders throughout `core/` | no | ported |
+| Build calibration sequences | `calibration::{sample, tokenizer, mix}` | `calibration/datasets.py` | no | stub |
+| Measure per-module KL sensitivity | `sensitivity::exact_sweep` through `sensitivity::probe::SensitivityProbeModel` | `core/sensitivity.py` `analyze_sensitivity_exact` | engine-side only | stub |
+| The KL formula probes implement | `sensitivity::kl_divergence` | `core/sensitivity.py` `_kl_from_ref` | no | stub |
+| The sweep output | `sensitivity::sensitivity_table` | `core/sensitivity.py` `SensitivityResult` | no | ported |
+| Resume an interrupted sweep | `sensitivity::checkpoint` | `core/sensitivity.py` `_save_checkpoint` | no | stub |
+| Score structurally without measurement | `sensitivity::static_scorer` | `core/sensitivity.py` `analyze_sensitivity_static` | no | stub |
+| Allocate bits under a target | `allocation::optimizer` with `knapsack`, `block_floor`, `block_run_guard`, `protected_modules`, `bits_per_weight`, `predicate` | `core/optimizer.py` | no | ported |
+| Encode with the range search | `encoder::range_search_policy`, `encoder::reference`, `encoder::mlx` | `core/lowbit.py` | `direct-mlx` (pure reference beside it) | stub |
+| Requantize tensor by tensor | `requantize::{tensor_plan, bit_policy, shard_writer, driver}` | `core/shardwise.py` | `direct-mlx` | stub |
+| Write the artifact documents | `artifact::{layout, quantization_config, metadata, sensitivity_document}` | `artifacts.py`, `backends/mlx_backend.py` metadata | no | stub (layout ported) |
+| Roofline throughput model | `latency::{hardware_profile, roofline, calibrated_model}` | `core/latency.py` | no | stub |
+| Key-value cache allocation | `kv_cache::{cache_sensitivity, cache_allocator, cache_config_document}` | `core/kv_cache.py` | engine-side only | stub |
+| Orchestrate | `pipeline` | `models/llm.py` `run_llm_pipeline` | `direct-mlx` for the full path | stub |
+| Progress and ETA | `progress` | the per-layer ETA prints | no | ported |
+
+### Not yet represented in the crate
+
+These parts of OptiQ 0.7.9's quantization path have no module here yet:
+
+- Sources that are already quantized or stored as FP8: `core/sensitivity.py` `_dequant_fp8` and `_load_bf16_weight`, and the dequantize step of `core/shardwise.py`.
+- The quantized-baseline reference sweep's layer mutation: `core/sensitivity.py` `_exact_with_quantized_baseline`, `_capture_quantized_layer_state`, `_restore_quantized_layer_state`, `_mutate_quantized_layer_to_bits`. The `ReferenceMode` enum names the mode, but no stage implements it.
+- Multi-token-prediction head preservation at convert time: `runtime/mtp_convert.py`.
+- Sidecar placement for vision towers and the MTP head: `sidecar_layout.py`.
+- The post-conversion KL evaluation of a finished artifact against a reference: `eval/kl.py`.
+- Expert pruning for MoE models (the `prune-experts` command): `mep/profiler.py`, `mep/prune.py`.
 
 ## Dependency direction
 
@@ -67,7 +84,7 @@ CLI journeys (`cargo test -p astronomical-cli --test integration_tests quantize`
 1. `module_taxonomy`, `bit_width`, `progress`: small, pure, and everything else uses them.
 2. `allocation`: drive it green against `tests/integration/allocation_parity.rs`; this is the first point where the port can be used, through `astronomical quantize plan` on a Python-produced `optiq/sensitivity.json`.
 3. `artifact`, then the model-serving round-trip test.
-4. `encoder::reference`, driven by `tests/integration/encoder_reference_parity.rs`; then `encoder::mlx` against the direct-MLX contracts.
+4. `encoder::reference` and `sensitivity::kl_divergence`, driven by `tests/integration/encoder_reference_parity.rs` and `tests/integration/kl_divergence_parity.rs`; then `encoder::mlx` against the direct-MLX contracts.
 5. `module_inventory` and `requantize`, driven by the integration journeys and then the direct-MLX requantizer contract. At this point `convert --method static` works end to end.
 6. `calibration`, `sensitivity::exact_sweep`, and the Qwen3.5 probe in model-serving, driven by the scripted-probe unit tests and then the acceptance sweep journey.
 7. `latency` and `kv_cache`, which have no consumer on the critical path.

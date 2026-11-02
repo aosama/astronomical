@@ -1,6 +1,8 @@
 //! Unit tests for the key-value cache allocator.
 
 use super::*;
+use crate::bit_width::{BitWidth, CandidateBitWidths, GroupSize};
+use std::collections::BTreeMap;
 
 fn bits(value: u32) -> BitWidth {
     BitWidth::new(value).expect("valid")

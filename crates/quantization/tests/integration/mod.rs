@@ -9,7 +9,9 @@
 //! - `static_scorer_parity`: structural priorities match to float rounding.
 //! - `encoder_reference_parity`: the pure reference encoder reproduces the
 //!   Python range search's packed codes exactly and its scales and biases
-//!   within float rounding, and the KL formula matches on a logits pair.
+//!   within float rounding.
+//! - `kl_divergence_parity`: the float32 KL reference matches the Python
+//!   formula on a logits pair.
 //! - `calibration_mix`: the bundled mix loads end to end with a fake
 //!   tokenizer.
 //! - `module_inventory_journeys`: inventory against real safetensors files
@@ -25,6 +27,7 @@ mod artifact_round_trip;
 mod calibration_mix;
 mod encoder_reference_parity;
 mod fixtures;
+mod kl_divergence_parity;
 mod module_inventory_journeys;
 mod requantize_plan;
 mod static_scorer_parity;

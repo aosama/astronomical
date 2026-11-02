@@ -242,5 +242,7 @@ pub fn parse_candidate_bits(value: &str) -> Result<Vec<u32>, UsageError> {
     )
 }
 
-#[cfg(test)]
+// The only unit test pins the default build's refusal of `convert`, so the
+// module exists only where that refusal is compiled in.
+#[cfg(all(test, not(feature = "quantize-convert")))]
 mod quantize_tests;

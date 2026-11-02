@@ -92,22 +92,3 @@ fn should_pack_codes_identically_to_mlx_for_every_fixture_width() {
         );
     }
 }
-
-#[test]
-#[ignore = "pending implementation of a float32 KL helper in the reference module"]
-fn should_reproduce_the_python_kl_divergence_on_the_fixture_logits() {
-    // The GPU KL lives in the probe implementation; a CPU float32 reference
-    // belongs beside the encoder reference so the formula is pinned here:
-    // KL(reference ‖ probe) = mean over positions of
-    // sum(softmax(ref) * (log_softmax(ref) - log_softmax(probe))).
-    let fixture = fixtures::encoder_parity();
-    let kl_fixture = &fixture.kl_divergence;
-
-    let kl = astronomical_quantization::encoder::reference::kl_divergence_reference_vs_probe(
-        &kl_fixture.reference_logits,
-        &kl_fixture.probe_logits,
-        kl_fixture.shape[2],
-    );
-
-    assert!((kl - kl_fixture.kl_reference_vs_probe).abs() < 1e-6);
-}

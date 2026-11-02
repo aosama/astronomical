@@ -5,6 +5,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
+use crate::allocation::{QuantizationPredicate, predicate};
 use crate::sensitivity::{SensitivityMethod, SensitivityResult, SensitivityTable};
 
 fn bits(value: u32) -> BitWidth {

@@ -1,6 +1,7 @@
 //! Unit tests for the roofline arithmetic.
 
 use super::*;
+use crate::bit_width::{BitWidth, GroupSize};
 
 fn bits(value: u32) -> BitWidth {
     BitWidth::new(value).expect("valid")
