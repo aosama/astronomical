@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::serving::{ChatGenerationStartFuture, GenerationOutcomeStartFuture};
-use crate::worker::loop_types::WorkerLoopCommand;
+use crate::worker::loop_types::{ChatWork, QueuedChatRequest, WorkerLoopCommand};
 use crate::{
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
     ImageGenerationExecutionError, ImageGenerationOutput, WorkerHandle,
@@ -24,6 +24,7 @@ impl WorkerHandle {
     pub(in crate::worker) fn start_chat_generation_with_queue_admission(
         &self,
         chat_generation_command: ChatGenerationCommand,
+        chat_work: ChatWork,
         admission_sender: Option<oneshot::Sender<()>>,
     ) -> ChatGenerationStartFuture<'_> {
         Box::pin(async move {
@@ -52,7 +53,10 @@ impl WorkerHandle {
             command_sender
                 .send(WorkerLoopCommand::Generate {
                     active_generation_permit,
-                    generation_command: chat_generation_command,
+                    queued_chat_request: QueuedChatRequest {
+                        generation_command: chat_generation_command,
+                        chat_work,
+                    },
                     start_sender,
                     stream_event_sender,
                 })

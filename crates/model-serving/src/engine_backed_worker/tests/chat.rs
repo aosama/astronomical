@@ -1,6 +1,7 @@
 //! Engine-backed chat worker journeys driven over the real IPC framing with
 //! scripted engines, factories, and processors.
 
+mod count_chat_tokens;
 mod expert_memory_mode;
 mod generation_lifecycle;
 mod live_memory_limit_wired_budget;

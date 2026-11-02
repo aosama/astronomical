@@ -181,7 +181,7 @@ impl AnthropicMessagesRequest {
     }
 }
 
-fn tool_definition_parts(
+pub(crate) fn tool_definition_parts(
     tool_definitions: Vec<AnthropicToolDefinition>,
 ) -> Result<Vec<AnthropicToolDefinitionParts>, AnthropicMessagesValidationError> {
     let mut tools = Vec::with_capacity(tool_definitions.len());
@@ -193,7 +193,7 @@ fn tool_definition_parts(
 
 /// Validates every turn against one shared image budget, because the
 /// image-count and inline-media bounds apply to the request as a whole.
-fn message_parts(
+pub(crate) fn message_parts(
     input_messages: Vec<AnthropicInputMessage>,
 ) -> Result<Vec<AnthropicMessageParts>, AnthropicMessagesValidationError> {
     let mut image_budget = AnthropicImageBudget::default();
@@ -259,7 +259,7 @@ fn validate_sampling_parameter(
 /// the budget through the same level table the OpenAI surfaces use, so the
 /// effort a Claude Code user selects is the effort the local model spends;
 /// with no effort either, the model's own default stays in force.
-fn resolve_thinking_budget(
+pub(crate) fn resolve_thinking_budget(
     thinking: Option<&AnthropicThinkingConfiguration>,
     output_config: Option<&AnthropicOutputConfiguration>,
 ) -> Result<Option<u32>, AnthropicMessagesValidationError> {
@@ -297,7 +297,7 @@ fn resolve_effort_budget(
     Ok(thinking_controls.budget)
 }
 
-fn resolve_thinking_display(
+pub(crate) fn resolve_thinking_display(
     thinking: Option<&AnthropicThinkingConfiguration>,
 ) -> Result<bool, AnthropicMessagesValidationError> {
     let Some(thinking) = thinking else {
@@ -313,7 +313,7 @@ fn resolve_thinking_display(
 }
 
 /// Every system-turn tool reference must name a declared tool.
-fn validate_tool_references(
+pub(crate) fn validate_tool_references(
     messages: &[AnthropicMessageParts],
     tools: &[AnthropicToolDefinitionParts],
 ) -> Result<(), AnthropicMessagesValidationError> {
@@ -345,7 +345,7 @@ fn is_declared_tool(tool_name: &str, tools: &[AnthropicToolDefinitionParts]) -> 
     false
 }
 
-fn resolve_tool_choice(
+pub(crate) fn resolve_tool_choice(
     tool_choice: Option<&AnthropicToolChoice>,
 ) -> Result<AnthropicToolChoiceParts, AnthropicMessagesValidationError> {
     let Some(tool_choice) = tool_choice else {

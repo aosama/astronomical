@@ -42,13 +42,17 @@ pub(crate) async fn create_message(
     };
     let should_stream_response = request_parts.stream;
     let is_thinking_display_omitted = request_parts.is_thinking_display_omitted;
-    let admitted_generation =
-        match admit_message_generation(&application_state, request_parts, request_body_bytes.len())
-            .await
-        {
-            Ok(admitted_generation) => admitted_generation,
-            Err(rejection_response) => return rejection_response,
-        };
+    let admitted_generation = match admit_message_generation(
+        &application_state,
+        request_parts,
+        request_body_bytes.len(),
+        MessagesWork::Generate,
+    )
+    .await
+    {
+        Ok(admitted_generation) => admitted_generation,
+        Err(rejection_response) => return rejection_response,
+    };
     let AdmittedMessageGeneration {
         message_id,
         model_id,
@@ -67,12 +71,20 @@ pub(crate) async fn create_message(
     .await
 }
 
+/// What an admitted Messages-surface request asks the worker for: a
+/// generation, or only the prompt token count `count_tokens` answers with.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum MessagesWork {
+    Generate,
+    CountTokens,
+}
+
 /// A request the queue admitted: the identity its answer is stamped with and
 /// the worker event stream that answer is built from.
-struct AdmittedMessageGeneration {
-    message_id: String,
-    model_id: String,
-    stream_event_receiver: Receiver<ChatGenerationStreamEvent>,
+pub(super) struct AdmittedMessageGeneration {
+    pub(super) message_id: String,
+    pub(super) model_id: String,
+    pub(super) stream_event_receiver: Receiver<ChatGenerationStreamEvent>,
 }
 
 /// Parses and validates the body, rejecting before any daemon state is touched.
@@ -103,10 +115,11 @@ fn parse_messages_request(
 // The Err variant carries the fully built axum response; it is large but
 // constructed once and moved once, so boxing it would only add indirection.
 #[allow(clippy::result_large_err)]
-async fn admit_message_generation(
+pub(super) async fn admit_message_generation(
     application_state: &ApplicationState,
     request_parts: AnthropicMessagesRequestParts,
     request_body_bytes: usize,
+    messages_work: MessagesWork,
 ) -> Result<AdmittedMessageGeneration, Response> {
     let configuration_transition_guard =
         application_state.configuration_transition_lock.lock().await;
@@ -123,23 +136,30 @@ async fn admit_message_generation(
         &chat_generation_command,
         should_stream_response,
         request_body_bytes,
+        messages_work,
     );
     let model_id = chat_generation_command.model.clone();
     let stream_event_receiver = start_generation(
         application_state,
         chat_generation_command,
         configuration_transition_guard,
+        messages_work,
     )
     .await?;
-    let message_id = format!(
-        "msg_{}-{request_id}",
-        application_state.completion_id_namespace
-    );
     Ok(AdmittedMessageGeneration {
-        message_id,
+        message_id: message_identifier(application_state, request_id),
         model_id,
         stream_event_receiver,
     })
+}
+
+/// Message identifiers share the chat completion namespace, so a message and
+/// a chat completion from one daemon never collide.
+fn message_identifier(application_state: &ApplicationState, request_id: u64) -> String {
+    format!(
+        "msg_{}-{request_id}",
+        application_state.completion_id_namespace
+    )
 }
 
 /// Translates the request onto the worker command, pins the resolved model,
@@ -182,11 +202,19 @@ async fn start_generation(
     application_state: &ApplicationState,
     chat_generation_command: ChatGenerationCommand,
     configuration_transition_guard: tokio::sync::MutexGuard<'_, ()>,
+    messages_work: MessagesWork,
 ) -> Result<Receiver<ChatGenerationStreamEvent>, Response> {
     let (admission_sender, mut admission_receiver) = tokio::sync::oneshot::channel();
-    let mut generation_start_future = application_state
-        .generation_executor
-        .start_chat_generation_with_admission_signal(chat_generation_command, admission_sender);
+    let generation_executor = &application_state.generation_executor;
+    let mut generation_start_future = match messages_work {
+        MessagesWork::Generate => generation_executor
+            .start_chat_generation_with_admission_signal(chat_generation_command, admission_sender),
+        MessagesWork::CountTokens => generation_executor
+            .start_chat_token_count_with_admission_signal(
+                chat_generation_command,
+                admission_sender,
+            ),
+    };
     let generation_start_outcome = tokio::select! {
         admission_result = &mut admission_receiver => {
             drop(configuration_transition_guard);
@@ -273,8 +301,10 @@ fn log_accepted_request(
     chat_generation_command: &ChatGenerationCommand,
     should_stream_response: bool,
     request_body_bytes: usize,
+    messages_work: MessagesWork,
 ) {
     tracing::info!(
+        ?messages_work,
         request_id = chat_generation_command.request_id.value(),
         model = %chat_generation_command.model,
         message_count = chat_generation_command.messages.len(),

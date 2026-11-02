@@ -84,6 +84,22 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                     })
                     .await?;
             }
+            WorkerCommand::CountChatTokens(count_command) => {
+                // Seven tokens per message: distinct from every `Generate`
+                // reply, so a journey can prove the daemon sent a count.
+                let message_count = u32::try_from(count_command.messages.len()).unwrap_or(u32::MAX);
+                event_writer
+                    .send_event(&WorkerEvent::Completed {
+                        request_id: count_command.request_id,
+                        prompt_token_count: message_count.saturating_mul(7),
+                        generated_token_count: 0,
+                        reasoning_token_count: 0,
+                        cached_token_count: 0,
+                        persistent_prompt_cache_diagnostics: None,
+                        reason: ChatGenerationCompletionReason::EndOfSequence,
+                    })
+                    .await?;
+            }
             WorkerCommand::GenerateImage(generation_command) => {
                 let request_id = generation_command.request_id;
                 if let ScriptedImageCommandOutcome::CancellationPending { should_acknowledge } =

@@ -48,6 +48,10 @@ where
                     .await?;
                 Ok(None)
             }
+            WorkerCommand::CountChatTokens(count_command) => {
+                self.count_chat_tokens(count_command, event_writer).await?;
+                Ok(None)
+            }
             WorkerCommand::Cancel { .. } => Ok(None),
             WorkerCommand::SampleMlxMemory => {
                 self.emit_mlx_memory_sample(MlxMemorySnapshotSource::IdlePoll, event_writer)
@@ -70,30 +74,8 @@ where
                 model_directory,
                 model_configuration,
             } => {
-                if let Err(swap_error) = self
-                    .swap_model(&model_directory, model_configuration, event_writer)
-                    .await
-                {
-                    let loaded_model_remains_ready = self.loaded_runtime.is_some();
-                    let model_load_failure_reason = match &swap_error {
-                        WorkerRuntimeError::ModelSwapFailed {
-                            model_load_failure_reason,
-                        } => model_load_failure_reason.clone(),
-                        _ => "model initialization failed".to_owned(),
-                    };
-                    tracing::error!(
-                        model_directory,
-                        error = %swap_error,
-                        loaded_model_remains_ready,
-                        "model swap failed"
-                    );
-                    event_writer
-                        .send_event(&WorkerEvent::ModelSwapFailed {
-                            loaded_model_remains_ready,
-                            model_load_failure_reason,
-                        })
-                        .await?;
-                }
+                self.serve_swap_model_command(&model_directory, model_configuration, event_writer)
+                    .await?;
                 Ok(None)
             }
             WorkerCommand::ClearPromptCache { model_id } => {
@@ -101,6 +83,45 @@ where
                 Ok(None)
             }
         }
+    }
+
+    /// Swaps the loaded model, answering a failed swap with `ModelSwapFailed`
+    /// that says whether the previously loaded model is still serving.
+    async fn serve_swap_model_command<WriteTransport>(
+        &mut self,
+        model_directory: &str,
+        model_configuration: astronomical_ipc_protocol::WorkerModelConfiguration,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        let Err(swap_error) = self
+            .swap_model(model_directory, model_configuration, event_writer)
+            .await
+        else {
+            return Ok(());
+        };
+        let loaded_model_remains_ready = self.loaded_runtime.is_some();
+        let model_load_failure_reason = match &swap_error {
+            WorkerRuntimeError::ModelSwapFailed {
+                model_load_failure_reason,
+            } => model_load_failure_reason.clone(),
+            _ => "model initialization failed".to_owned(),
+        };
+        tracing::error!(
+            model_directory,
+            error = %swap_error,
+            loaded_model_remains_ready,
+            "model swap failed"
+        );
+        event_writer
+            .send_event(&WorkerEvent::ModelSwapFailed {
+                loaded_model_remains_ready,
+                model_load_failure_reason,
+            })
+            .await?;
+        Ok(())
     }
 
     /// Clears the persistent prompt-cache footprint for a scoped or global model identity.

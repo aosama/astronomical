@@ -110,6 +110,19 @@ pub trait ChatGenerationExecutor: Send + Sync + 'static {
         })
     }
 
+    /// Counts the prompt tokens `count_command` would prefill, answered as one
+    /// `Completed` stream event with zero generated tokens. It shares the
+    /// chat admission queue. Executors without a worker cannot count, so the
+    /// default refuses rather than estimating.
+    fn start_chat_token_count_with_admission_signal(
+        &self,
+        _count_command: ChatGenerationCommand,
+        admission_sender: tokio::sync::oneshot::Sender<()>,
+    ) -> ChatGenerationStartFuture<'_> {
+        let _admission_signal_result = admission_sender.send(());
+        Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
+    }
+
     fn worker_health_snapshot(&self) -> WorkerHealthSnapshot;
 }
 

@@ -212,6 +212,12 @@ pub enum WorkerCommand {
     InitializeWorker(WorkerStartupConfiguration),
     /// Starts one bounded structured-chat generation.
     Generate(ChatGenerationCommand),
+    /// Counts the prompt tokens one structured-chat request would prefill,
+    /// through the same template, tokenizer, and image-token expansion as
+    /// `Generate`, without running the model. The worker answers with one
+    /// `Completed` event carrying the count and zero generated tokens, or
+    /// with `Failed` when preparation rejects the request.
+    CountChatTokens(ChatGenerationCommand),
     /// Starts one bounded text-to-image generation.
     GenerateImage(ImageGenerationCommand),
     /// Starts one bounded text-embedding request.

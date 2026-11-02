@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+mod anthropic_count_tokens;
 mod anthropic_messages_content;
 mod anthropic_messages_request;
 mod anthropic_messages_response;
@@ -35,6 +36,7 @@ mod request_budget;
 mod thinking_controls;
 mod tool_name_rule;
 
+pub use anthropic_count_tokens::{AnthropicCountTokensRequest, AnthropicTokenCount};
 pub use anthropic_messages_content::{
     AnthropicImageSource, AnthropicInputContentBlock, AnthropicInputMessage,
     AnthropicMessageContent, AnthropicMessageParts, AnthropicSystemBlock, AnthropicSystemPrompt,

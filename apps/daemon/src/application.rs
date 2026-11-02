@@ -419,6 +419,14 @@ fn core_api_routes() -> Router<ApplicationState> {
                 .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
                 .layer(axum::middleware::from_fn(enforce_request_body_budget)),
         )
+        // A count carries the same conversation payload as a Messages
+        // request, so it takes the same body budget.
+        .route(
+            "/v1/messages/count_tokens",
+            post(crate::rest::anthropic::count_tokens_endpoint::count_message_tokens)
+                .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+                .layer(axum::middleware::from_fn(enforce_request_body_budget)),
+        )
 }
 
 /// The image-generation and embeddings endpoints, each under the same

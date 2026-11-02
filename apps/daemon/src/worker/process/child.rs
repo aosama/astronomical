@@ -273,6 +273,16 @@ impl WorkerProcess {
             .await
     }
 
+    /// Asks the worker for the prompt token count of one chat command,
+    /// measured through the same preparation `start_generation` runs.
+    pub async fn count_chat_tokens(
+        &mut self,
+        count_command: ChatGenerationCommand,
+    ) -> Result<(), WorkerControlError> {
+        self.send_command_with_timeout(&WorkerCommand::CountChatTokens(count_command))
+            .await
+    }
+
     pub async fn start_image_generation(
         &mut self,
         generation_command: ImageGenerationCommand,

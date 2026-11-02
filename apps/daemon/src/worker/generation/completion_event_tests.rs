@@ -9,9 +9,21 @@ use tokio::sync::{Semaphore, mpsc};
 
 use crate::worker::generation::completion_event::{
     CompletionMeasurements, completion_reason_label, measure_completion_timings,
-    validate_chat_completion_event,
+    should_record_completion_performance, validate_chat_completion_event,
 };
-use crate::worker::loop_types::ActiveGeneration;
+use crate::worker::loop_types::{ActiveGeneration, ChatWork};
+
+#[test]
+fn should_record_performance_for_a_generation() {
+    assert!(should_record_completion_performance(ChatWork::Generate));
+}
+
+#[test]
+fn should_keep_a_prompt_token_count_out_of_the_performance_log() {
+    assert!(!should_record_completion_performance(
+        ChatWork::CountPromptTokens
+    ));
+}
 
 fn completion_measurements(
     request_id: RequestId,
@@ -60,6 +72,7 @@ fn active_chat_request(
         last_mlx_active_memory_bytes: None,
         request_id,
         stream_event_sender,
+        chat_work: ChatWork::Generate,
     }
 }
 
@@ -315,6 +328,7 @@ fn timed_out_chat_request(
         last_mlx_active_memory_bytes: None,
         request_id: RequestId::new(1),
         stream_event_sender,
+        chat_work: ChatWork::Generate,
     };
     (measurements, completed_request)
 }

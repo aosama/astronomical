@@ -20,7 +20,7 @@ use crate::{
     serving::chat_generation_executor::try_send_stream_event,
     worker::event_handler::protocol_violation,
     worker::health::{clear_active_request_progress, publish_activity, record_serving_session},
-    worker::loop_types::{ActiveGeneration, ActiveWorkerRequest},
+    worker::loop_types::{ActiveGeneration, ActiveWorkerRequest, ChatWork},
 };
 
 /// Worker-reported completion scalars from one worker completion event,
@@ -101,8 +101,7 @@ pub(in crate::worker) fn handle_worker_completion_event(
         completion_timings: &completion_timings,
         model_id: read_ready_model_id(health_snapshot),
     };
-    log_completed_generation(&completion_observation);
-    record_completion_performance_and_attribution(
+    record_completion(
         &completion_observation,
         persistent_prompt_cache_diagnostics,
         performance_log,
@@ -206,6 +205,46 @@ fn read_ready_model_id(health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>) -> S
         .ok()
         .flatten()
         .unwrap_or_default()
+}
+
+/// Pure: a prompt-token count completes through the generation path but is
+/// not a generation, so recording it would add zero-output rows that skew the
+/// per-request prefill and throughput figures the performance analyses read.
+pub(super) fn should_record_completion_performance(chat_work: ChatWork) -> bool {
+    match chat_work {
+        ChatWork::Generate => true,
+        ChatWork::CountPromptTokens => false,
+    }
+}
+
+/// Logs and records a completed generation; a completed count gets only its
+/// own trace line.
+fn record_completion(
+    completion_observation: &CompletionObservation<'_>,
+    persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+    performance_log: &mut GenerationPerformanceLog,
+    completion_log: &mut CompletionAttributionLog,
+) {
+    if !should_record_completion_performance(completion_observation.completed_request.chat_work) {
+        tracing::info!(
+            request_id = completion_observation
+                .completion_measurements
+                .request_id
+                .value(),
+            prompt_token_count = completion_observation
+                .completion_measurements
+                .prompt_token_count,
+            "worker prompt token count completed"
+        );
+        return;
+    }
+    log_completed_generation(completion_observation);
+    record_completion_performance_and_attribution(
+        completion_observation,
+        persistent_prompt_cache_diagnostics,
+        performance_log,
+        completion_log,
+    );
 }
 
 /// Logs the daemon-visible completion summary.

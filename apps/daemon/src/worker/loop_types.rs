@@ -46,10 +46,25 @@ pub(in crate::worker) struct WorkerLoopRuntime {
     pub image_generation_timeouts: crate::ImageGenerationTimeouts,
 }
 
+/// What a queued chat request asks the worker to do with its command. A
+/// prompt-token count shares the chat queue, model swap, and completion
+/// path, and differs only in the worker command it dispatches.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ChatWork {
+    Generate,
+    CountPromptTokens,
+}
+
+/// One chat command together with the work it asks for.
+pub(crate) struct QueuedChatRequest {
+    pub(crate) generation_command: ChatGenerationCommand,
+    pub(crate) chat_work: ChatWork,
+}
+
 pub(crate) enum WorkerLoopCommand {
     Generate {
         active_generation_permit: OwnedSemaphorePermit,
-        generation_command: ChatGenerationCommand,
+        queued_chat_request: QueuedChatRequest,
         start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
         stream_event_sender: mpsc::Sender<ChatGenerationStreamEvent>,
     },
@@ -238,6 +253,10 @@ pub(crate) struct ActiveGeneration {
     pub(crate) last_mlx_active_memory_bytes: Option<u64>,
     pub(crate) request_id: RequestId,
     pub(crate) stream_event_sender: mpsc::Sender<ChatGenerationStreamEvent>,
+    /// Whether this request generates or only counts its prompt tokens; a
+    /// count completes through the same path but stays out of the
+    /// performance and attribution logs.
+    pub(crate) chat_work: ChatWork,
 }
 
 impl ActiveGeneration {

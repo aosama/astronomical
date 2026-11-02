@@ -41,12 +41,14 @@ enum GenerationStartOutcome {
 pub(in crate::worker) async fn handle_generate_command(
     worker_loop_state: &mut WorkerLoopState<'_>,
     active_generation_permit: tokio::sync::OwnedSemaphorePermit,
-    generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    queued_chat_request: crate::worker::loop_types::QueuedChatRequest,
     start_sender: tokio::sync::oneshot::Sender<Result<(), GenerationStartError>>,
     stream_event_sender: tokio::sync::mpsc::Sender<crate::ChatGenerationStreamEvent>,
     model_policy_catalog: &Arc<HashMap<String, RuntimeModelPolicy>>,
     cancellation_acknowledgement_timeout: Duration,
 ) -> Result<(), WorkerControlError> {
+    let chat_work = queued_chat_request.chat_work;
+    let generation_command = queued_chat_request.generation_command;
     // The handle reserves this request's permit before sending the command, so
     // permit availability cannot reveal whether the loop owns an earlier request.
     if worker_loop_state.active_request.is_some() {
@@ -94,13 +96,13 @@ pub(in crate::worker) async fn handle_generate_command(
     }
     let request_id = generation_command.request_id;
     let request_max_output_tokens = generation_command.settings.max_output_tokens;
-    tracing::info!(
-        request_id = request_id.value(),
-        max_output_tokens = request_max_output_tokens,
-        "starting worker generation"
-    );
-    match start_worker_generation_or_reject(worker_loop_state, request_id, generation_command)
-        .await?
+    match start_worker_generation_or_reject(
+        worker_loop_state,
+        request_id,
+        generation_command,
+        chat_work,
+    )
+    .await?
     {
         GenerationStartOutcome::Started => {}
         GenerationStartOutcome::Rejected(start_failure) => {
@@ -125,6 +127,7 @@ pub(in crate::worker) async fn handle_generate_command(
         request_id,
         request_max_output_tokens,
         stream_event_sender,
+        chat_work,
     ));
     clear_active_request_progress(worker_loop_state.health_snapshot);
     publish_activity(
@@ -261,16 +264,21 @@ async fn start_worker_generation_or_reject(
     worker_loop_state: &mut WorkerLoopState<'_>,
     request_id: astronomical_ipc_protocol::RequestId,
     generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    chat_work: crate::worker::loop_types::ChatWork,
 ) -> Result<GenerationStartOutcome, WorkerControlError> {
     tracing::info!(
         request_id = request_id.value(),
+        max_output_tokens = generation_command.settings.max_output_tokens,
+        ?chat_work,
         "starting worker generation"
     );
-    match worker_loop_state
-        .worker_process
-        .start_generation(generation_command)
-        .await
-    {
+    let worker_dispatch_outcome = dispatch_chat_work(
+        worker_loop_state.worker_process,
+        generation_command,
+        chat_work,
+    )
+    .await;
+    match worker_dispatch_outcome {
         Ok(()) => Ok(GenerationStartOutcome::Started),
         Err(WorkerControlError::Protocol(ProtocolError::OutgoingMessageTooLarge {
             actual_message_bytes: actual_ipc_message_bytes,
@@ -293,6 +301,23 @@ async fn start_worker_generation_or_reject(
     }
 }
 
+/// Sends the worker command the queued chat work asks for: a generation, or
+/// a prompt-token count that runs only the generation preparation.
+async fn dispatch_chat_work(
+    worker_process: &mut crate::WorkerProcess,
+    generation_command: astronomical_ipc_protocol::ChatGenerationCommand,
+    chat_work: crate::worker::loop_types::ChatWork,
+) -> Result<(), WorkerControlError> {
+    match chat_work {
+        crate::worker::loop_types::ChatWork::Generate => {
+            worker_process.start_generation(generation_command).await
+        }
+        crate::worker::loop_types::ChatWork::CountPromptTokens => {
+            worker_process.count_chat_tokens(generation_command).await
+        }
+    }
+}
+
 /// Pure: assembles the active-request state a running chat generation owns
 /// for its whole lifetime.
 fn assemble_active_chat_generation(
@@ -300,6 +325,7 @@ fn assemble_active_chat_generation(
     request_id: astronomical_ipc_protocol::RequestId,
     request_max_output_tokens: u16,
     stream_event_sender: tokio::sync::mpsc::Sender<crate::ChatGenerationStreamEvent>,
+    chat_work: crate::worker::loop_types::ChatWork,
 ) -> ActiveWorkerRequest {
     ActiveWorkerRequest::Chat(ActiveGeneration {
         _active_generation_permit: active_generation_permit,
@@ -322,5 +348,6 @@ fn assemble_active_chat_generation(
         last_mlx_active_memory_bytes: None,
         request_id,
         stream_event_sender,
+        chat_work,
     })
 }

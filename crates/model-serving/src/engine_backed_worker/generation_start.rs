@@ -138,7 +138,7 @@ where
     /// Validates the command, proves the loaded runtime is autoregressive,
     /// and prepares the generation. `Ok(None)` means the request was already
     /// rejected to the client with its failure event.
-    async fn prepare_validated_chat_generation<WriteTransport>(
+    pub(super) async fn prepare_validated_chat_generation<WriteTransport>(
         &self,
         generation_command: &astronomical_ipc_protocol::ChatGenerationCommand,
         request_id: astronomical_ipc_protocol::RequestId,
@@ -381,7 +381,9 @@ where
 
 /// Pure: the wire protocol carries the prompt length as u32; a longer prompt
 /// is an engine-generation failure, not a silent truncation.
-fn protocol_prompt_token_count(prompt_token_count: usize) -> Result<u32, WorkerRuntimeError> {
+pub(super) fn protocol_prompt_token_count(
+    prompt_token_count: usize,
+) -> Result<u32, WorkerRuntimeError> {
     u32::try_from(prompt_token_count).map_err(|_| {
         WorkerRuntimeError::InferenceEngineGenerationFailed {
             reason: "chat prompt token count exceeds the protocol range".to_owned(),

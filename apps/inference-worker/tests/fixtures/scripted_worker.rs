@@ -28,7 +28,8 @@ async fn main() {
     while let Ok(Some(worker_command)) = command_reader.next_command().await {
         let (request_id, reason) = match worker_command {
             WorkerCommand::InitializeWorker(_) => continue,
-            WorkerCommand::Generate(generation_command) => (
+            WorkerCommand::Generate(generation_command)
+            | WorkerCommand::CountChatTokens(generation_command) => (
                 generation_command.request_id,
                 ChatGenerationCompletionReason::EndOfSequence,
             ),
