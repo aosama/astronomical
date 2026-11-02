@@ -8,7 +8,7 @@
 #
 # Keep each pin an exact `=X.Y.Z` requirement: the installer and the notices
 # check read it as the one version to install and require, and Dependabot's
-# `increase` strategy rewrites it in place.
+# Cargo `auto` strategy rewrites it in place to the next exact version.
 
 [package]
 name = "astronomical-tool-pins"
