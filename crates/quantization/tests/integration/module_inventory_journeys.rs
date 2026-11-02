@@ -496,3 +496,36 @@ fn should_pass_a_packed_weight_through_with_its_scales_when_it_becomes_no_module
         ]
     );
 }
+
+#[test]
+fn should_pass_vision_tower_linears_through_unquantized() {
+    let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+    write_typed_source(
+        directory.path(),
+        &[
+            (
+                "vision_tower.blocks.0.attn.qkv.weight",
+                safetensors::Dtype::BF16,
+                &[192, 64],
+            ),
+            (
+                "language_model.model.layers.0.mlp.up_proj.weight",
+                safetensors::Dtype::BF16,
+                &[128, 64],
+            ),
+        ],
+        r#"{"model_type": "qwen3_5"}"#,
+    );
+
+    let inventory = ModuleInventory::from_source_directory(
+        directory.path(),
+        GroupSize::new(64).expect("valid"),
+    )
+    .expect("the inventory should build");
+
+    assert_eq!(inventory.module_count(), 1);
+    assert_eq!(
+        inventory.pass_through_tensor_names(),
+        vec!["vision_tower.blocks.0.attn.qkv.weight".to_owned()]
+    );
+}

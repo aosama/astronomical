@@ -152,3 +152,30 @@ fn should_return_no_boundary_modules_for_a_zero_count() {
 
     assert!(boundary_block_modules(&module_names, 0).is_empty());
 }
+
+#[test]
+fn should_recognize_vision_and_audio_tower_tensors_by_their_root_segment() {
+    assert!(is_non_language_tower_tensor(
+        "vision_tower.blocks.0.attn.qkv.weight"
+    ));
+    assert!(is_non_language_tower_tensor(
+        "vision_tower.pos_embed.weight"
+    ));
+    assert!(is_non_language_tower_tensor(
+        "model.visual.merger.mlp.0.weight"
+    ));
+    assert!(is_non_language_tower_tensor(
+        "audio_tower.layers.3.fc1.weight"
+    ));
+}
+
+#[test]
+fn should_not_mistake_language_tensors_that_mention_a_tower_word() {
+    assert!(!is_non_language_tower_tensor(
+        "language_model.model.layers.0.mlp.up_proj.weight"
+    ));
+    assert!(!is_non_language_tower_tensor(
+        "model.layers.0.visual_gate.weight"
+    ));
+    assert!(!is_non_language_tower_tensor(""));
+}

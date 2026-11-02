@@ -54,3 +54,21 @@ pub(crate) fn fresh_output_directory(journey_name: &str) -> PathBuf {
     std::fs::create_dir_all(&directory).expect("the output directory should be creatable");
     directory
 }
+
+/// Progress lines on standard error, so a long journey shows its ETA.
+pub(crate) struct StandardErrorProgress;
+
+impl astronomical_quantization::progress::ProgressReporter for StandardErrorProgress {
+    fn report(&mut self, progress: &astronomical_quantization::progress::StageProgress) {
+        eprintln!(
+            "[{}] {}/{} ({:.0}%) elapsed {}s {:?} {}",
+            progress.stage_name,
+            progress.completed_work_units,
+            progress.total_work_units,
+            progress.percent_complete(),
+            progress.elapsed.as_secs(),
+            progress.estimate,
+            progress.detail
+        );
+    }
+}
