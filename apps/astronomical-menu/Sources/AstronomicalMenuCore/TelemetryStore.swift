@@ -35,6 +35,7 @@ final class TelemetryStore: ObservableObject {
   @Published private(set) var hasDiscoveredModels = false
   @Published var editableMaximumMlxMemoryGigabytes: UInt64 = 0
   var onMenuBarTitleChanged: ((String) -> Void)?
+  var onMenuBarGlyphStateChanged: ((MenuBarGlyphState) -> Void)?
 
   /// Suspends the feedback-dismissal task for its delay. Production sleeps the
   /// real duration; tests inject a gate they release explicitly so assertions
@@ -285,6 +286,7 @@ final class TelemetryStore: ObservableObject {
         for: nextStatusDocument)
     }
     onMenuBarTitleChanged?(nextStatusDocument.menuBarTitle)
+    onMenuBarGlyphStateChanged?(nextStatusDocument.menuBarGlyphState)
     resolveMaximumMlxMemoryFeedbackIfReady()
   }
 

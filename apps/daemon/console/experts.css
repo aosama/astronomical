@@ -1,6 +1,7 @@
-/* Experts view. Observatory Night tokens only. The expert blue matches
-   .mlx-segment-experts on Overview so both bars are the same object.
-   Brass is reserved for the expert weight that stayed on the SSD. */
+/* Experts view. Darkroom tokens only. Experts in memory are solid grain,
+   matching .mlx-segment-experts on Overview so both bars are the same
+   object; expert weight that stayed on the SSD is hatched grain, the same
+   texture the site and menu bar use for streaming. */
 
 .experts-lede {
     margin: 8px 0 0;
@@ -50,12 +51,12 @@
     min-width: 0;
 }
 
-.experts-bar-experts { background: #0a84ff; }
-.experts-bar-model-core { background: #56b4e9; }
-.experts-bar-context { background: #f0e442; }
-.experts-bar-runtime { background: #a78bfa; }
-.experts-bar-available { background: rgba(155, 157, 168, 0.25); }
-.experts-bar-ssd { background: var(--accent-star); }
+.experts-bar-experts { background: var(--resident); }
+.experts-bar-model-core { background: var(--silver); }
+.experts-bar-context { background: rgba(157, 152, 142, 0.28); }
+.experts-bar-runtime { background: rgba(207, 202, 192, 0.55); }
+.experts-bar-available { background: rgba(228, 224, 214, 0.07); }
+.experts-bar-ssd { background: var(--streaming); }
 
 .experts-caption {
     margin: 0;
@@ -125,8 +126,8 @@
     border-radius: 2px;
 }
 
-.experts-swatch-ram { background: #0a84ff; }
-.experts-swatch-ssd { background: var(--accent-star); }
+.experts-swatch-ram { background: var(--resident); }
+.experts-swatch-ssd { background: var(--streaming); box-shadow: inset 0 0 0 1px var(--grain); }
 
 .experts-layer-map {
     display: flex;
@@ -151,7 +152,8 @@
     height: 72px;
     overflow: hidden;
     border-radius: 4px;
-    background: var(--accent-star);
+    background: var(--streaming);
+    box-shadow: inset 0 0 0 1px var(--grain);
 }
 
 .experts-layer-column[aria-pressed="true"] .experts-layer-column-track {
@@ -161,7 +163,7 @@
 
 .experts-layer-column-fill {
     width: 100%;
-    background: #0a84ff;
+    background: var(--resident);
 }
 
 .experts-layer-axis {
@@ -185,11 +187,12 @@
     width: 10px;
     height: 10px;
     border-radius: 2px;
-    background: var(--accent-star);
+    background: var(--streaming);
+    box-shadow: inset 0 0 0 1px var(--grain);
 }
 
 .experts-slot[data-warm="true"] {
-    background: #0a84ff;
+    background: var(--resident);
 }
 
 .experts-mode-feed {

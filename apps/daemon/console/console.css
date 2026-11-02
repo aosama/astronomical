@@ -1,33 +1,47 @@
-/* Astronomical Observatory console styling — Observatory Night identity:
-   deep indigo space surfaces, periwinkle starlight interaction accents, and
-   warm brass reserved for the brand mark and editorial highlights. The layout
-   is one macOS desktop window: an icon sidebar beside an inset rounded
-   workspace, and per-view panels. Chat is redirected to Thin Talk through
-   the astronomical:// entry point. Behavior hooks (element IDs and state
-   classes) are contract with console.js and must not be renamed here. */
+/* Astronomical Observatory console styling — Darkroom identity, shared with
+   site/styles.css: a graphite ground, silver-print type, and safelight red
+   for the brand and accent text only. Telemetry stays achromatic so red is
+   never read as a warning: experts in memory are solid grain, experts
+   streaming from the SSD are the same grain hatched, and generation is said
+   in words beside a filled marker rather than flagged in colour. Errors are
+   likewise carried by their wording. The layout is one macOS desktop window:
+   an icon sidebar beside an inset rounded workspace, and per-view panels.
+   Chat is redirected to Thin Talk through the astronomical:// entry point.
+   Behavior hooks (element IDs and state classes) are contract with
+   console.js and must not be renamed here. */
 
 :root {
-    /* Observatory Night identity: deep indigo space surfaces instead of dead
-       gray, periwinkle starlight for interaction, warm brass reserved for the
-       brand and editorial highlights. Borders are indigo-tinted so surfaces
-       separate perceptibly, not by 1px whispers. */
-    --bg: #0a0e1a;
-    --sidebar: #0c1120;
-    --panel: #141a32;
-    --panel-2: #1b2340;
-    --panel-raised: #10152a;
-    --text: #eceef8;
-    --text-dim: #a7aec7;
-    --accent: #8fa8ff;
-    --accent-cool: #8fa8ff;
-    --accent-star: #ffc76b;
-    --ok: #6fd694;
-    --warn: #e0a552;
-    --bad: #f0757b;
-    --border: rgba(151, 170, 255, 0.14);
-    --border-strong: rgba(151, 170, 255, 0.26);
-    --hover: rgba(151, 170, 255, 0.08);
-    --active: rgba(151, 170, 255, 0.13);
+    /* Site tokens (site/styles.css). The console adds only the surface steps
+       a dense desktop window needs around ground and raised. */
+    --ground: #141517;
+    --ground-raised: #1d1e21;
+    --ember: #2a1714;
+    --safelight: #a8321f;
+    --safelight-bright: #e0634c;
+    --grain: #b9b4a9;
+    --silver: #e4e0d6;
+    --silver-dim: #cfcac0;
+    --mist: #9d988e;
+    --bg: var(--ground);
+    --sidebar: #101113;
+    --panel: var(--ground-raised);
+    --panel-2: #26272b;
+    --panel-raised: var(--ground);
+    --text: var(--silver);
+    --text-dim: var(--mist);
+    --accent: var(--safelight-bright);
+    --accent-cool: var(--silver-dim);
+    /* Health states are muted and never red, because red is the brand; the
+       words beside them ("Ready", "Critical", the error text) carry meaning. */
+    --ok: #a7c3a2;
+    --warn: #d8bd7e;
+    --bad: var(--silver);
+    --resident: var(--grain);
+    --streaming: repeating-linear-gradient(45deg, var(--grain) 0 2px, transparent 2px 5px);
+    --border: rgba(228, 224, 214, 0.14);
+    --border-strong: rgba(228, 224, 214, 0.28);
+    --hover: rgba(228, 224, 214, 0.06);
+    --active: rgba(228, 224, 214, 0.11);
     --radius: 16px;
     --radius-small: 10px;
     /* Type scale: six steps govern every size. Body text is 15px; anything
@@ -89,26 +103,17 @@ button, summary, label { -webkit-tap-highlight-color: transparent; }
 .application-build-identity { color: var(--text-dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
 body[data-application-channel="development"] #application-channel,
 body[data-application-channel="development"] .application-build-identity { color: var(--warn); }
+/* The sidebar mark is site/assets/mark.svg inlined, so the console keeps its
+   no-filesystem asset contract (console_assets.rs embeds each file). */
 .brand-mark {
-    position: relative;
     flex: 0 0 auto;
     width: 30px;
     height: 30px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #ffd98a, #e8a54f);
-    box-shadow: 0 0 14px rgba(255, 199, 107, 0.35);
+    border-radius: 7px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3CclipPath id='p'%3E%3Crect width='64' height='64' rx='7'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23p)'%3E%3Crect width='64' height='64' fill='%23a8321f'/%3E%3Ccircle cx='8' cy='92' r='62' fill='%23e4e0d6'/%3E%3C/g%3E%3Cpath d='M44 11v6M44 23v6M35 20h6M47 20h6' stroke='%23e4e0d6' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='20' r='2.8' fill='%23e4e0d6'/%3E%3C/svg%3E") center / cover no-repeat;
+    box-shadow: inset 0 0 0 1px var(--border);
 }
-.brand-mark::before, .brand-mark span { display: none; }
-.brand-mark::after {
-    content: "";
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    top: 10px;
-    left: 10px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.9);
-}
+.brand-mark span { display: none; }
 
 .eyebrow {
     margin: 0 0 4px;
@@ -164,17 +169,14 @@ body[data-application-channel="development"] .application-build-identity { color
     border-bottom: 1px solid var(--border);
 }
 .status-primary { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.status-star { flex: 0 0 auto; width: 12px; height: 12px; color: #4a4d57; transition: color 200ms ease; }
+.status-star { flex: 0 0 auto; width: 12px; height: 12px; color: rgba(157, 152, 142, 0.45); transition: color 200ms ease; }
 .status-header.loading .status-star {
     color: var(--accent);
     opacity: 0.55;
     animation: star-pulse 1.8s ease-in-out infinite;
 }
-.status-header.ready .status-star {
-    color: var(--accent);
-    filter: drop-shadow(0 0 8px rgba(143, 168, 255, 0.6));
-}
-.status-header.active .status-star { animation: star-flicker 1s ease-in-out infinite; }
+.status-header.ready .status-star { color: var(--grain); }
+.status-header.active .status-star { color: var(--silver); animation: star-flicker 1s ease-in-out infinite; }
 .status-text { display: flex; flex: 1 1 auto; min-width: 0; align-items: baseline; gap: 10px; }
 .status-word { font-size: var(--text-lg); font-weight: var(--weight-strong); line-height: 1.2; }
 .status-model-id {
@@ -245,9 +247,9 @@ body[data-application-channel="development"] .application-build-identity { color
     background: var(--panel-2);
 }
 .phase-fill, .reuse-fill { width: 0; height: 100%; border-radius: inherit; transition: width 250ms ease; }
-.phase-fill { background: var(--accent); }
-.phase-fill.generating { background: var(--ok); }
-.reuse-fill { background: var(--accent); }
+.phase-fill { background: var(--grain); }
+.phase-fill.generating { background: var(--silver); }
+.reuse-fill { background: var(--grain); }
 .phase-stats { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .phase-stat-value, .metric-value {
     color: var(--text);
@@ -276,11 +278,13 @@ body[data-application-channel="development"] .application-build-identity { color
 .control-feedback { padding: 10px 14px; border-radius: var(--radius-small); font-size: var(--text-lg); overflow-wrap: anywhere; }
 
 .mlx-segment { height: 100%; transition: width 300ms ease; }
-.mlx-segment-experts { background: #0a84ff; }
-.mlx-segment-model-core { background: #56b4e9; }
-.mlx-segment-context-state { background: #f0e442; }
-.mlx-segment-runtime-work { background: #a78bfa; }
-.mlx-segment-available { background: rgba(155, 157, 168, 0.25); }
+/* Segments are achromatic and separate by lightness; experts keep the
+   resident grain used everywhere else. */
+.mlx-segment-experts { background: var(--resident); }
+.mlx-segment-model-core { background: var(--silver); }
+.mlx-segment-context-state { background: rgba(157, 152, 142, 0.28); }
+.mlx-segment-runtime-work { background: rgba(207, 202, 192, 0.55); }
+.mlx-segment-available { background: rgba(228, 224, 214, 0.07); }
 
 .compact-memory-total { font-size: var(--text-lg); font-weight: var(--weight-label); }
 .compact-memory-bar { display: flex; height: 10px; overflow: hidden; border-radius: 999px; background: var(--panel-2); }
@@ -301,7 +305,7 @@ body[data-application-channel="development"] .application-build-identity { color
 .compact-cache-sparkline { flex: 0 0 auto; opacity: 0.8; }
 .compact-cache-stat { color: var(--text); font-family: var(--font-mono); font-size: var(--text-md); font-variant-numeric: tabular-nums; }
 .compact-cache-disk-bar { position: relative; height: 30px; margin-top: auto; padding: 0 12px; overflow: hidden; display: flex; align-items: center; border-radius: var(--radius-small); background: var(--panel-2); }
-.compact-cache-disk-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--accent), rgba(143, 168, 255, 0.6)); opacity: 0.6; transition: width 300ms ease; }
+.compact-cache-disk-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--grain), rgba(185, 180, 169, 0.6)); opacity: 0.6; transition: width 300ms ease; }
 .compact-cache-disk-label { position: relative; z-index: 1; font-family: var(--font-mono); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 
 .about-stat-label { color: var(--text-dim); font-size: var(--text-xs); letter-spacing: 0.07em; text-transform: uppercase; }
@@ -320,16 +324,16 @@ body[data-application-channel="development"] .application-build-identity { color
 .mlx-memory-control-status { min-height: 1.5em; font-size: var(--text-md); overflow-wrap: anywhere; }
 .button { min-height: 40px; padding: 8px 16px; border: 1px solid transparent; border-radius: 999px; cursor: pointer; font-size: var(--text-lg); font-weight: var(--weight-label); transition: opacity 150ms ease, background-color 150ms ease; }
 .button:disabled { opacity: 0.4; cursor: not-allowed; }
-.button-primary { background: #eceef8; color: #10152a; }
+.button-primary { background: var(--silver); color: var(--ground); }
 .button-primary:not(:disabled):hover { background: #ffffff; }
 .button-secondary { border-color: var(--border-strong); background: transparent; color: var(--text); }
 .button-secondary:not(:disabled):hover { background: var(--hover); }
-.button-danger { border-color: var(--bad); background: rgba(229, 114, 111, 0.12); color: var(--bad); }
-.button-danger:not(:disabled):hover { background: rgba(229, 114, 111, 0.22); }
+.button-danger { border-color: var(--border-strong); background: transparent; color: var(--bad); }
+.button-danger:not(:disabled):hover { background: var(--hover); }
 .button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.control-feedback.feedback-success { border: 1px solid var(--ok); background: rgba(108, 201, 127, 0.12); color: var(--ok); }
-.control-feedback.feedback-progress { border: 1px solid var(--warn); background: rgba(224, 165, 82, 0.12); color: var(--warn); }
-.control-feedback.feedback-error { border: 1px solid var(--bad); background: rgba(229, 114, 111, 0.12); color: var(--bad); }
+.control-feedback.feedback-success { border: 1px solid var(--ok); background: rgba(167, 195, 162, 0.10); color: var(--ok); }
+.control-feedback.feedback-progress { border: 1px solid var(--warn); background: rgba(216, 189, 126, 0.10); color: var(--warn); }
+.control-feedback.feedback-error { border: 1.5px solid var(--safelight); background: var(--ember); color: var(--bad); }
 .controls-note { margin: auto 0 0; color: var(--text-dim); font-size: var(--text-md); }
 
 .connect-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
