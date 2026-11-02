@@ -1,0 +1,51 @@
+[package]
+name = "astronomical-neural-engine"
+build = "build.rs"
+description = "Research crate: invoke prefill math on the Apple Neural Engine through public Core ML and prove placement, numerics, and speed (issue #161)."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[features]
+default = []
+# Adds the MLX graphics-processor baseline to the hardware measurement. Off by
+# default because it links the pinned native MLX build, which the pure
+# Neural Engine path does not need.
+mlx-baseline = ["dep:astronomical-runtime-integration", "dep:mlx-c-rust"]
+
+[lints.rust]
+# This crate exists to contain the Core ML, Accelerate, and IOSurface foreign
+# surface for the Neural Engine research; every unsafe block carries a SAFETY
+# argument and every native handle has exactly one RAII owner.
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+# The MLX baseline dependencies are consumed only by the feature-gated
+# hardware test target; Cargo cannot express an optional dev-dependency, so
+# the manifest lint stays allowed here as it is in runtime-integration.
+[lints.cargo]
+unused_dependencies = "allow"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+too_many_lines = "deny"
+
+[dependencies]
+astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
+mlx-c-rust = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+serial_test.workspace = true
+tempfile = "=3.27.0"
+
+# Real-hardware journeys: Neural Engine placement, numerics, and timing.
+# `#[ignore]`d and serial; run through `cargo test-neural-engine-hello`.
+[[test]]
+name = "neural_engine_hello"

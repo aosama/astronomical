@@ -282,6 +282,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-neural-engine"
+version = "0.2.88"
+dependencies = [
+ "astronomical-runtime-integration",
+ "cc",
+ "mlx-c-rust",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "astronomical-quantization"
 version = "0.2.88"
 dependencies = [

@@ -12,6 +12,7 @@ members = [
     "crates/native-build-orchestration",
     "crates/native-build-tool",
     "crates/native-identity",
+    "crates/neural-engine",
     "crates/quantization",
     "crates/rest-contract",
     "crates/test-harness",
