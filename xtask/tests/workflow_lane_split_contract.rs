@@ -207,9 +207,8 @@ fn assert_unit_lane_ships_the_native_metallib(
 fn every_tier_lane_applies_its_kind_and_archive_filters() {
     let workflow = workflow_contract();
     // Tier-specific filters: unit tests take the lib kind plus the harness
-    // fixtures archive, integration tests take the test kind, REST keeps
-    // its library subset and exact-name wire contract, and E2E runs the
-    // whole archive.
+    // fixtures archive, integration tests take the test kind, and REST and
+    // E2E run their whole archives.
     let unit_steps = steps_of(required_job(&workflow, "unit-tests"), "unit-tests");
     let unit_text = run_text_of(
         find_step_by_name(&unit_steps, "Run Unit tests from the build archive"),
@@ -241,13 +240,28 @@ fn every_tier_lane_applies_its_kind_and_archive_filters() {
         find_step_by_name(&rest_steps, "Run REST contracts from the build archive"),
         "rest",
     );
+    // The REST lane runs its whole archive (issue #1728): a filtered subset
+    // skipped 157 of 172 contracts and let fixture drift pass CI.
     assert!(
-        rest_text.contains(" library"),
-        "the REST lane lost its library-subset filter"
+        rest_text.contains("rest-api.tar.zst") && rest_text.contains("--no-fail-fast"),
+        "the REST lane is not running its whole archive with --no-fail-fast"
+    );
+    // Only the command line is inspected: the step's comment explains the
+    // filter it replaced and would trip a whole-text search.
+    let mut rest_command_lines = Vec::new();
+    for line in rest_text.lines() {
+        if line.trim_start().starts_with("cargo-nextest") {
+            rest_command_lines.push(line);
+        }
+    }
+    assert_eq!(
+        rest_command_lines.len(),
+        1,
+        "the REST lane should run exactly one cargo-nextest command"
     );
     assert!(
-        rest_text.contains("-E 'test(=rest_api::application::image_status::"),
-        "the REST lane lost its exact-name wire-contract filter"
+        !rest_command_lines[0].contains(" -E ") && !rest_command_lines[0].contains(" library"),
+        "the REST lane filters its archive again instead of running every contract"
     );
     let e2e_steps = steps_of(required_job(&workflow, "e2e-journeys"), "e2e-journeys");
     let e2e_text = run_text_of(

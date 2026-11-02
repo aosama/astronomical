@@ -115,15 +115,15 @@ main() {
         "${misleading_generated_marker_root}/src" \
         "${missing_final_newline_root}/src"
     write_rust_source_file "${warning_root}/src/warning.rs" 601
-    write_rust_source_file "${failing_root}/src/failing.rs" 651
+    write_rust_source_file "${failing_root}/src/failing.rs" 701
     write_rust_source_file "${generated_root}/src/generated.rs" 600 '// @generated deterministic binding'
     write_rust_source_file \
         "${misleading_generated_marker_root}/src/hand_written.rs" \
-        651 \
+        701 \
         '// This hand-written source mentions @generated but is not generated.'
     write_rust_source_file_without_final_newline \
         "${missing_final_newline_root}/src/failing_without_final_newline.rs" \
-        651
+        701
 
     printf '%s\n' "[source-size-test] status=progress scenarios=0/12 scenario=warning expected=success ETA_seconds=10"
     warning_scenario_output="$(run_source_size "${warning_root}")"
@@ -151,12 +151,12 @@ main() {
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=3/12 scenario=failing expected=failure ETA_seconds=7"
     if run_source_size "${failing_root}"; then
-        printf '%s\n' '[source-size-test] status=failed reason=651-lines-was-accepted' >&2
+        printf '%s\n' '[source-size-test] status=failed reason=701-lines-was-accepted' >&2
         exit 1
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=4/12 scenario=missing-final-newline expected=failure ETA_seconds=6"
     if run_source_size "${missing_final_newline_root}"; then
-        printf '%s\n' '[source-size-test] status=failed reason=651-lines-without-final-newline-was-accepted' >&2
+        printf '%s\n' '[source-size-test] status=failed reason=701-lines-without-final-newline-was-accepted' >&2
         exit 1
     fi
     printf '%s\n' "[source-size-test] status=progress scenarios=5/12 scenario=staged-rust-boundary expected=success ETA_seconds=5"

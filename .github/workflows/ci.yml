@@ -995,11 +995,12 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p "$RUNNER_TEMP/nextest-extract"
-          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/rest-api.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite library
-          # An exact-name filter under nextest fails the step when it matches
-          # no test (exit code 4), so renaming this contract breaks the check
-          # loudly; cargo test --exact passed silently with zero tests run.
-          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/rest-api.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'test(=rest_api::application::image_status::should_expose_image_generation_progress_with_completed_and_total_steps_when_active)'
+          # The whole archived suite runs (172 contracts, about 2 seconds).
+          # The lane used to select only the library contracts plus one
+          # image-progress contract, which skipped 157 contracts, so menu-status
+          # fixture drift passed CI and surfaced only in a local release run
+          # (issue #1728). --no-fail-fast reports every broken contract at once.
+          cargo-nextest nextest run --no-fail-fast --archive-file "$RUNNER_TEMP/nextest-archive/rest-api.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite
 
   e2e-journeys:
     name: End-to-end journeys

@@ -7,9 +7,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
-const MAXIMUM_SOURCE_LINES: usize = 650;
+/// One limit for the staged pre-commit scan and the workspace scan. They were
+/// 700 and 650, so every commit could land a file the workspace scan then
+/// failed: seven files settled in the 650-700 band and kept the workspace
+/// check red on main (issue #1720). The warning still flags files from 601.
+const MAXIMUM_SOURCE_LINES: usize = 700;
 const WARNING_SOURCE_LINES: usize = 600;
-const MAXIMUM_STAGED_SOURCE_LINES: usize = 700;
 const MAXIMUM_ELAPSED_SECONDS: u64 = 120;
 const PROGRESS_INTERVAL_FILES: usize = 100;
 
@@ -244,10 +247,10 @@ fn run_staged_mode() -> Result<(), String> {
         let source_text = String::from_utf8_lossy(&staged_blob.stdout).into_owned();
         if !is_deterministically_generated_binding(&source_text) {
             let line_count = count_source_lines(&source_text);
-            if line_count > MAXIMUM_STAGED_SOURCE_LINES {
+            if line_count > MAXIMUM_SOURCE_LINES {
                 failing_count += 1;
                 println!(
-                    "[source-size] status=failed lines={line_count} limit={MAXIMUM_STAGED_SOURCE_LINES} path={staged_path}"
+                    "[source-size] status=failed lines={line_count} limit={MAXIMUM_SOURCE_LINES} path={staged_path}"
                 );
             }
         }
