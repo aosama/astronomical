@@ -651,3 +651,44 @@ fn should_find_no_step_for_an_unmentioned_marker() {
     );
     assert_eq!(first_step_index_mentioning(&[], SWIFT_MTIME_ACTION), None);
 }
+
+/// True when a step's run text rewrites mtimes inside a SwiftPM build
+/// directory, which marks every recorded output stale.
+fn touches_swiftpm_build_directory(run_text: &str) -> bool {
+    for run_line in run_text.lines() {
+        if run_line.contains("touch") && run_line.contains(".build") {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn should_detect_only_touches_aimed_at_a_build_directory() {
+    assert!(touches_swiftpm_build_directory(
+        "find apps/astronomical-menu/.build -type f -exec touch -c {} +"
+    ));
+    assert!(!touches_swiftpm_build_directory(
+        "touch \"$RUNNER_TEMP/marker\""
+    ));
+    assert!(!touches_swiftpm_build_directory("ls apps/thin-talk/.build"));
+    assert!(!touches_swiftpm_build_directory(""));
+}
+
+// The build database records output mtimes, so touching a restored .build
+// re-runs copy tasks whose products cascade into recompiling every
+// Sparkle-dependent target. Per-file commit mtimes make the touch
+// unnecessary; this keeps it from coming back.
+#[test]
+fn should_leave_restored_swiftpm_build_directories_untouched() {
+    let workflow = workflow_contract();
+    let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
+    for step in &swift_steps {
+        let step_name = step.get("name").and_then(Value::as_str).unwrap_or_default();
+        let run_text = step.get("run").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            !touches_swiftpm_build_directory(run_text),
+            "swift-node step {step_name:?} touches a restored SwiftPM build directory"
+        );
+    }
+}

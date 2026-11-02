@@ -675,14 +675,14 @@ jobs:
           key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
           restore-keys: |
             astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-
-      - name: Keep restored SwiftPM artifacts newer than checkout
-        if: ${{ steps.swiftpm-cache.outputs.cache-hit == 'true' }}
-        run: |
-          set -euo pipefail
-          started_at_seconds="$(date +%s)"
-          printf '[swiftpm-timestamps] status=start\n'
-          find apps/astronomical-menu/.build -type f -exec touch -c {} +
-          printf '[swiftpm-timestamps] status=success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
+      # Restored .build directories are deliberately left untouched. The build
+      # database records output mtimes as well as input mtimes, and an output
+      # whose mtime moved is treated as stale: touching every cached file
+      # re-ran the resource and Sparkle.framework copy tasks, and the copied
+      # framework recompiled the Sparkle controller, the menu app, and the
+      # whole contract-test target (29 compilations on a warm cache, 0 when
+      # untouched). Per-file commit mtimes already keep sources older than
+      # the cached outputs, which is the ordering the touch used to force.
       # Thin Talk has its own package build directory and its own `swift test`
       # run. It is a path dependency of astronomical-menu, so the menu build
       # already compiles it, but into apps/astronomical-menu/.build — a
@@ -710,14 +710,6 @@ jobs:
           key: astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/Tests/**/*.swift') }}
           restore-keys: |
             astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-
-      - name: Keep restored Thin Talk artifacts newer than checkout
-        if: ${{ steps.thin-talk-cache.outputs.cache-hit == 'true' }}
-        run: |
-          set -euo pipefail
-          started_at_seconds="$(date +%s)"
-          printf '[swiftpm-timestamps] status=thin-talk-start\n'
-          find apps/thin-talk/.build -type f -exec touch -c {} +
-          printf '[swiftpm-timestamps] status=thin-talk-success elapsed_seconds=%s\n' "$(( $(date +%s) - started_at_seconds ))"
       - name: Prepare durable test-log directory
         run: mkdir -p "$RUNNER_TEMP/test-logs"
       - name: Set up Node for Thin Talk web assets
