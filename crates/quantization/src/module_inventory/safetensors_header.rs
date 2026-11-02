@@ -27,13 +27,17 @@ pub struct HeaderTensor {
     /// The safetensors dtype spelling, for example `BF16`, `F8_E4M3`, `U32`.
     pub dtype: String,
     pub shape: Vec<usize>,
+    /// Bytes the tensor occupies in the shard, from its `data_offsets`.
+    pub data_byte_count: u64,
 }
 
-/// The fields of a header entry the inventory needs; offsets are ignored.
+/// The fields of a header entry the inventory and the footprint estimate
+/// need.
 #[derive(Deserialize)]
 struct HeaderEntry {
     dtype: String,
     shape: Vec<usize>,
+    data_offsets: [u64; 2],
 }
 
 /// Reads every tensor entry of one shard, skipping `__metadata__`, in the
@@ -62,6 +66,7 @@ pub fn read_header_tensors(shard_path: &Path) -> Result<Vec<HeaderTensor>, Quant
             tensor_name,
             dtype: entry.dtype,
             shape: entry.shape,
+            data_byte_count: entry.data_offsets[1].saturating_sub(entry.data_offsets[0]),
         });
     }
     Ok(header_tensors)
