@@ -1,15 +1,17 @@
 //! `cargo xtask install-verification-tools` — installs the pinned cargo-about
 //! and sccache prebuilt archives from GitHub Releases. Hosted CI once spent
 //! minutes compiling cargo-about from crates.io and brewing sccache; both
-//! publishers already ship SHA-256-verified binaries. The pure policy (pin
-//! reading, host mapping, archive naming, sidecar digest parsing) is
-//! unit-tested beside this source; `curl` and the platform `tar` stay thin
-//! edges (issue #1250).
+//! publishers already ship SHA-256-verified binaries. The versions come from
+//! the tool-pin manifest through `tool_pins`. The pure policy (host mapping,
+//! archive naming, sidecar digest parsing) is unit-tested beside this
+//! source; `curl` and the platform `tar` stay thin edges (issue #1250).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use astronomical_native_identity::digest_bytes;
+
+use crate::tool_pins::read_tool_pin;
 
 const CARGO_ABOUT_RELEASE_URL_ROOT: &str =
     "https://github.com/EmbarkStudios/cargo-about/releases/download";
@@ -32,20 +34,6 @@ pub fn host_rust_target(kernel: &str, machine: &str) -> Result<&'static str, Str
         (kernel, machine) => Err(format!(
             "no prebuilt verification-tool archive mapping for {kernel} {machine}"
         )),
-    }
-}
-
-/// A pin file must carry exactly one dotted version.
-pub fn read_dotted_version_pin(pin_text: &str) -> Result<String, String> {
-    let pinned_version = pin_text.trim();
-    let is_dotted_version = !pinned_version.is_empty()
-        && pinned_version
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'.'));
-    if is_dotted_version {
-        Ok(pinned_version.to_owned())
-    } else {
-        Err("pin must be a dotted version".to_owned())
     }
 }
 
@@ -109,26 +97,8 @@ fn uname_value(uname_argument: &str) -> Result<String, String> {
 }
 
 fn tool_plans(repository_root: &Path) -> Result<[ToolPlan; 2], String> {
-    let cargo_about_pin_path = repository_root.join("third-party/cargo-about-version");
-    let sccache_pin_path = repository_root.join("third-party/sccache-version");
-    let cargo_about_version = read_dotted_version_pin(
-        &std::fs::read_to_string(&cargo_about_pin_path).map_err(|error| {
-            format!(
-                "missing cargo-about pin file {}: {error}",
-                cargo_about_pin_path.display()
-            )
-        })?,
-    )
-    .map_err(|error| format!("cargo-about {error}"))?;
-    let sccache_version = read_dotted_version_pin(
-        &std::fs::read_to_string(&sccache_pin_path).map_err(|error| {
-            format!(
-                "missing sccache pin file {}: {error}",
-                sccache_pin_path.display()
-            )
-        })?,
-    )
-    .map_err(|error| format!("sccache {error}"))?;
+    let cargo_about_version = read_tool_pin(repository_root, "cargo-about")?;
+    let sccache_version = read_tool_pin(repository_root, "sccache")?;
     let kernel = uname_value("-s")?;
     let machine = uname_value("-m")?;
     let target = host_rust_target(&kernel, &machine)?;

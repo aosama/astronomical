@@ -25,6 +25,28 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+  # Verification-tool pins (sccache, cargo-about) live as exact `=X.Y.Z`
+  # dependencies of a never-built crate so this entry can bump them; the
+  # installer and the notices check read those exact versions. `increase`
+  # keeps the requirement exact; without it, Dependabot treats a crate with
+  # no lockfile as a library and widens the pin into a range. The cooldown
+  # gives a fresh release a week before it is
+  # proposed, as supply-chain protection for binaries CI executes. A
+  # cargo-about bump can change the generated license notices; the nightly
+  # notices-freshness lane flags that within a day.
+  - package-ecosystem: cargo
+    directory: /third-party/tool-pins
+    schedule:
+      interval: weekly
+    versioning-strategy: increase
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    groups:
+      verification-tools:
+        applies-to: version-updates
+        patterns:
+          - "*"
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -262,11 +262,17 @@ jobs:
           # product cache owns that identity, and embedding it here would
           # discard the whole compiler cache on every pin or patch change even
           # though sccache itself is content-addressed and never serves a
-          # stale object.
-          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+          # stale object. The tool-pin manifest joins the toolchain hash
+          # because sccache releases change its internal cache version (0.19
+          # moved Rust entries from 6 to 7): without it a bump would keep
+          # restoring the old, now-useless entry on its unchanged primary key,
+          # skip the save, and compile cold on every run until Cargo.lock
+          # moved. The same hash also rotates on a cargo-about bump, a rare
+          # one-run cost accepted to keep a single pin manifest.
+          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}-
-            astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
+            astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}-
+            astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
       - name: Run the app-builder packaging journey
         run: |
           trap 'scripts/ci/ci-step-timing.sh end app-builder-journey' EXIT
@@ -503,7 +509,7 @@ jobs:
         if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo run --quiet -p xtask -- save-sccache "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}"
+        run: cargo run --quiet -p xtask -- save-sccache "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}"
         timeout-minutes: 2
       - name: Save sccache-cache
         id: sccache-cache-save
@@ -521,7 +527,7 @@ jobs:
           operation: save
           owner: sccache
           path: ~/Library/Caches/Astronomical/sccache
-          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
       - name: Prune surplus CI caches
         # Multiple sccache generations exceed the 10 GB repository cache limit,
         # which makes GitHub evict the small native-build cache and forces the
@@ -715,7 +721,11 @@ jobs:
       - name: Set up Node for Thin Talk web assets
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 20
+          # The repository-root .node-version is the one Node pin shared with
+          # local development (nodenv and fnm read it directly). It names
+          # the Active LTS major so security releases arrive without a bump;
+          # Node 20 reached end of life on 2026-04-30.
+          node-version-file: .node-version
           # Caches npm's download store (not node_modules) keyed on the
           # lockfile, so `npm ci` below installs offline from the cache
           # instead of depending on registry latency: a cold install

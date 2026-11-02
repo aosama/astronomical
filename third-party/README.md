@@ -36,9 +36,11 @@ recorded here for review:
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
 - fmt `12.1.0`: `https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz` — SHA-256 `ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea`
 
-Tooling pins (not part of the native runtime image): `sccache-version` pins
-`sccache 0.17.0` and `cargo-about-version` pins `cargo-about 0.9.2` for the
-license-notice pipeline driven by `about.toml`. `RUST_DEPENDENCY_NOTICES` and
+Tooling pins (not part of the native runtime image): `tool-pins/Cargo.toml`
+pins `sccache 0.19.0` and `cargo-about 0.9.3`, the latter for the
+license-notice pipeline driven by `about.toml`. The pins are exact `=X.Y.Z`
+dependencies of a crate that is never built, so Dependabot opens weekly bump
+pull requests for them. `RUST_DEPENDENCY_NOTICES` and
 `THIRD_PARTY_NOTICES` are its generated outputs.
 
 ## Upstream tracking and offsets

@@ -1,7 +1,6 @@
 use crate::install_verification_tools::{
     cargo_about_archive_name, cargo_about_release_url, expected_version_line, host_rust_target,
-    published_digest_from_sidecar, read_dotted_version_pin, sccache_archive_name,
-    sccache_release_url,
+    published_digest_from_sidecar, sccache_archive_name, sccache_release_url,
 };
 
 #[test]
@@ -24,15 +23,6 @@ fn host_mapping_covers_both_runner_platforms_and_fails_closed() {
     );
     assert!(host_rust_target("Windows", "x86_64").is_err());
     assert!(host_rust_target("SunOS", "sparc").is_err());
-}
-
-#[test]
-fn pin_reading_accepts_only_dotted_versions() {
-    assert_eq!(read_dotted_version_pin("0.9.2\n"), Ok("0.9.2".to_owned()));
-    assert_eq!(read_dotted_version_pin("1.2"), Ok("1.2".to_owned()));
-    assert!(read_dotted_version_pin("").is_err());
-    assert!(read_dotted_version_pin("latest\n").is_err());
-    assert!(read_dotted_version_pin("0.9.2-beta").is_err());
 }
 
 #[test]

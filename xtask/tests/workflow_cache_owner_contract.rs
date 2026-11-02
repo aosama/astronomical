@@ -447,3 +447,66 @@ fn shared_cache_action_is_pinned_and_reported() {
         "shared cache action must surface cache hits to callers"
     );
 }
+
+const SCCACHE_KEY_PREFIX: &str = "astronomical-v2-sccache-";
+const TOOL_PINS_MANIFEST: &str = "third-party/tool-pins/Cargo.toml";
+
+/// Every line of `step_text` that names an sccache cache key but does not
+/// hash the tool-pin manifest into it.
+fn sccache_key_lines_missing_tool_pins(step_text: &str) -> Vec<String> {
+    let mut uncoupled_key_lines = Vec::new();
+    for step_line in step_text.lines() {
+        if step_line.contains(SCCACHE_KEY_PREFIX) && !step_line.contains(TOOL_PINS_MANIFEST) {
+            uncoupled_key_lines.push(step_line.trim().to_owned());
+        }
+    }
+    uncoupled_key_lines
+}
+
+#[test]
+fn should_flag_only_sccache_key_lines_without_the_tool_pin_hash() {
+    let coupled_key = "key: astronomical-v2-sccache-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}";
+    assert!(sccache_key_lines_missing_tool_pins(coupled_key).is_empty());
+    let uncoupled_key = "key: astronomical-v2-sccache-${{ hashFiles('rust-toolchain.toml') }}";
+    assert_eq!(sccache_key_lines_missing_tool_pins(uncoupled_key).len(), 1);
+    let other_family_key =
+        "key: astronomical-v2-cargo-downloads-${{ hashFiles('rust-toolchain.toml') }}";
+    assert!(sccache_key_lines_missing_tool_pins(other_family_key).is_empty());
+    assert!(sccache_key_lines_missing_tool_pins("").is_empty());
+}
+
+// sccache releases change its internal cache version, so an sccache bump
+// must rotate every sccache key: restore, fallbacks, budget decision, and
+// save. A key that missed the rotation would keep restoring the old,
+// unusable entry on an unchanged primary key and skip the save forever.
+#[test]
+fn should_rotate_every_sccache_key_with_the_tool_pin_manifest() {
+    let workflow = workflow_contract();
+    let build_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    let mut inspected_key_line_count = 0;
+    for step in &build_steps {
+        let mut step_texts: Vec<&str> = Vec::new();
+        if let Some(run_text) = step.get("run").and_then(Value::as_str) {
+            step_texts.push(run_text);
+        }
+        if let Some(step_inputs) = step.get("with") {
+            for input_name in ["key", "restore-keys"] {
+                if let Some(input_text) = step_inputs.get(input_name).and_then(Value::as_str) {
+                    step_texts.push(input_text);
+                }
+            }
+        }
+        for step_text in step_texts {
+            inspected_key_line_count += step_text.matches(SCCACHE_KEY_PREFIX).count();
+            let uncoupled_key_lines = sccache_key_lines_missing_tool_pins(step_text);
+            assert!(
+                uncoupled_key_lines.is_empty(),
+                "sccache keys do not hash the tool-pin manifest: {uncoupled_key_lines:?}"
+            );
+        }
+    }
+    assert_eq!(
+        inspected_key_line_count, 5,
+        "expected the restore key, two fallbacks, the budget key, and the save key"
+    );
+}
