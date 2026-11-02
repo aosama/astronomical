@@ -18,6 +18,8 @@
 //!   factors is embarrassingly parallel per group and could be one fused
 //!   Metal kernel instead of seven array passes; measure before fusing, and
 //!   keep the reference encoder as the correctness oracle for any kernel.
+//!
+//! Ported from OptiQ's `quantize_best`, `_search_affine`, and `_pack_affine_codes` (`optiq/core/lowbit.py`).
 
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype};

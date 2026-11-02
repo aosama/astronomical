@@ -1,6 +1,8 @@
 //! The stage sequence of [`super::run_quantization_pipeline`], OptiQ's
 //! `run_llm_pipeline`: inventory, score or sweep, allocate, plan,
 //! requantize, write the documents, copy the tokenizer.
+//!
+//! Ported from OptiQ's `run_llm_pipeline` (`optiq/models/llm.py`).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

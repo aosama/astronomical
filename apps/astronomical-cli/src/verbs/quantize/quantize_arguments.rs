@@ -13,6 +13,8 @@
 //!
 //! Flag names spell every word out, per the repository's naming rule:
 //! `--target-bits-per-weight`, never `--target-bpw`.
+//!
+//! The defaults are OptiQ's command-line defaults (`optiq/cli.py`).
 
 use std::ffi::OsString;
 use std::path::PathBuf;

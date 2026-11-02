@@ -1,4 +1,6 @@
 //! Per-layer cache sensitivity: the probe seam and the KL sweep over it.
+//!
+//! Ported from OptiQ's `measure_kv_sensitivity` and `_assert_measured` (`optiq/core/kv_cache.py`).
 
 use std::collections::BTreeMap;
 

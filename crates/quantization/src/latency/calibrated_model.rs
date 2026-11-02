@@ -1,5 +1,7 @@
 //! The throughput predictor calibrated from one real measurement, which
 //! absorbs the per-token cost the per-module roofline does not model.
+//!
+//! Ported from OptiQ's `CalibratedLatencyModel` (`optiq/core/latency.py`).
 
 use super::hardware_profile::HardwareProfile;
 

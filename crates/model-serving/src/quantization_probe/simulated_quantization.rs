@@ -6,6 +6,8 @@
 //! uniform-baseline path re-encodes the module from its streamed bf16
 //! source at the probed width and swaps in real packed weights, because
 //! the loaded model is itself quantized.
+//!
+//! The quantize-dequantize swap and the KL are ported from OptiQ's `_exact_with_bf16_reference` and `_kl_from_ref` (`optiq/core/sensitivity.py`).
 
 use astronomical_quantization::bit_width::{BitWidth, GroupSize};
 use astronomical_quantization::error::QuantizationError;

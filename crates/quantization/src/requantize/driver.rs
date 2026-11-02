@@ -1,4 +1,6 @@
 //! The MLX-backed walk over the tensor plan.
+//!
+//! Ported from OptiQ's `requantize_shardwise` and `ShardWriter.flush` (`optiq/core/shardwise.py`).
 
 use std::collections::BTreeMap;
 use std::fs::File;

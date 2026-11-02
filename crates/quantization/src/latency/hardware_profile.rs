@@ -1,5 +1,7 @@
 //! Apple Silicon GPU characteristics the roofline model reads: memory
 //! bandwidth and peak arithmetic throughput per device family.
+//!
+//! Ported from OptiQ's `HardwareProfile` and the profile match in `detect_hardware` (`optiq/core/latency.py`).
 
 /// Apple Silicon GPU characteristics.
 #[derive(Clone, Debug, PartialEq)]

@@ -7,6 +7,8 @@
 //! Every array handed back is lazy: a shard is opened through a retained
 //! descriptor and MLX reads only the byte range of the tensor being
 //! evaluated, so a 300B source is never resident at once.
+//!
+//! Ported from OptiQ's `_load_bf16_weight` and `_dequant_fp8` (`optiq/core/sensitivity.py`) and the dequantize step of `requantize_shardwise` (`optiq/core/shardwise.py`).
 
 use std::collections::BTreeMap;
 use std::fs::File;

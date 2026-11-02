@@ -1,6 +1,8 @@
 //! The pipeline's last stage: the documents beside the written shards and
 //! the files copied verbatim from the source. Pure file work, so it runs
 //! and is tested on any host.
+//!
+//! Ported from OptiQ's `_describe_artifact` and `_persist_sensitivity` (`optiq/models/llm.py`) and the copy step of `requantize_shardwise` (`optiq/core/shardwise.py`).
 
 use std::collections::BTreeMap;
 use std::path::Path;

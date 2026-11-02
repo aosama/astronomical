@@ -1,4 +1,6 @@
 //! The Qwen3.5 probe: one resident model whose modules can be swapped.
+//!
+//! The swap-forward-restore cycle is ported from OptiQ's `_exact_with_bf16_reference` (`optiq/core/sensitivity.py`); the model side is Astronomical's own Qwen3.5 engine.
 
 use std::collections::BTreeMap;
 use std::fs::File;
