@@ -6,11 +6,10 @@ use thiserror::Error;
 
 use crate::{
     ChatTemplateKwargsRequestObject, DEFAULT_OPENAI_OUTPUT_TOKENS, EnforcedStructuredGeneration,
-    MAX_OPENAI_OUTPUT_TOKENS, OpenAiResponseFormat, OpenAiResponseFunctionTool,
-    OpenAiResponseInput, OpenAiResponseInputParts, OpenAiResponseRequestConfiguration,
-    OpenAiResponseToolChoice, OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition,
-    OpenAiResponseToolDefinitionParts, OpenAiStructuredOutput,
-    OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
+    MAX_OUTPUT_TOKENS, OpenAiResponseFormat, OpenAiResponseFunctionTool, OpenAiResponseInput,
+    OpenAiResponseInputParts, OpenAiResponseRequestConfiguration, OpenAiResponseToolChoice,
+    OpenAiResponseToolChoiceParts, OpenAiResponseToolDefinition, OpenAiResponseToolDefinitionParts,
+    OpenAiStructuredOutput, OpenAiStructuredOutputValidationError, OpenAiStructuredOutputs,
     OpenAiStructuredOutputsValidationError, ReasoningRequestObject, ThinkingControls,
     ThinkingControlsError, ThinkingControlsInputs, enforced_generation_from_extra_body,
     merge_structured_output_requests, structured_output_from_responses_text_format,
@@ -143,10 +142,10 @@ impl OpenAiResponsesRequest {
             .max_output_tokens
             .unwrap_or(DEFAULT_OPENAI_OUTPUT_TOKENS);
         let requested_maximum_output_tokens = self.max_output_tokens;
-        if maximum_output_tokens == 0 || maximum_output_tokens > MAX_OPENAI_OUTPUT_TOKENS {
+        if maximum_output_tokens == 0 || maximum_output_tokens > MAX_OUTPUT_TOKENS {
             return Err(OpenAiResponsesValidationError::OutputTokenCountOutOfRange {
                 actual_output_tokens: maximum_output_tokens,
-                maximum_output_tokens: MAX_OPENAI_OUTPUT_TOKENS,
+                maximum_output_tokens: MAX_OUTPUT_TOKENS,
             });
         }
         validate_sampling_parameter("temperature", self.temperature, 0.0, 2.0)?;

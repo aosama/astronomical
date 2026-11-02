@@ -19,9 +19,9 @@ use crate::anthropic_messages_content::AnthropicImageBudget;
 use crate::json_nesting_depth::json_nesting_depth;
 use crate::tool_name_rule::is_valid_function_name;
 use crate::{
-    AnthropicInputMessage, AnthropicMessageParts, AnthropicSystemPrompt, MAX_OPENAI_OUTPUT_TOKENS,
-    MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH, OpenAiChatCompletionValidationError,
-    ThinkingControlsError, ThinkingControlsInputs,
+    AnthropicInputMessage, AnthropicMessageParts, AnthropicSystemPrompt, MAX_OUTPUT_TOKENS,
+    MAX_TOOL_SCHEMA_NESTING_DEPTH, OpenAiChatCompletionValidationError, ThinkingControlsError,
+    ThinkingControlsInputs,
 };
 
 /// One bounded request to the local Anthropic-compatible Messages endpoint.
@@ -213,11 +213,11 @@ fn validate_request_scalars(
     if request.messages.is_empty() {
         return Err(AnthropicMessagesValidationError::EmptyMessages);
     }
-    if request.max_tokens == 0 || request.max_tokens > MAX_OPENAI_OUTPUT_TOKENS {
+    if request.max_tokens == 0 || request.max_tokens > MAX_OUTPUT_TOKENS {
         return Err(
             AnthropicMessagesValidationError::OutputTokenCountOutOfRange {
                 actual_output_tokens: request.max_tokens,
-                maximum_output_tokens: MAX_OPENAI_OUTPUT_TOKENS,
+                maximum_output_tokens: MAX_OUTPUT_TOKENS,
             },
         );
     }
@@ -379,10 +379,10 @@ impl AnthropicToolDefinition {
         }
         let input_schema = self.input_schema.unwrap_or_else(default_tool_input_schema);
         let schema_nesting_depth = json_nesting_depth(&input_schema);
-        if schema_nesting_depth > MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH {
+        if schema_nesting_depth > MAX_TOOL_SCHEMA_NESTING_DEPTH {
             return Err(AnthropicMessagesValidationError::ToolSchemaNestingTooDeep {
                 actual_schema_nesting_depth: schema_nesting_depth,
-                maximum_schema_nesting_depth: MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH,
+                maximum_schema_nesting_depth: MAX_TOOL_SCHEMA_NESTING_DEPTH,
             });
         }
         Ok(AnthropicToolDefinitionParts {

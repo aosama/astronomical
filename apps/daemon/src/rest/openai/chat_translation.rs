@@ -184,7 +184,7 @@ fn append_escaped_chronological_system_update(
 }
 
 fn translate_images(
-    images: Vec<astronomical_rest_contract::OpenAiImageInput>,
+    images: Vec<astronomical_rest_contract::DecodedImageInput>,
 ) -> Vec<ChatImageInput> {
     images
         .into_iter()

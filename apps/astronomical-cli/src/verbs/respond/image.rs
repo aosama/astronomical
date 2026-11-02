@@ -14,7 +14,7 @@ use crate::verbs::respond::RespondError;
 ///
 /// This leaves headroom for the roughly thirty-three percent base64 inflation
 /// and framing the daemon's IPC frame then carries (the portable body budget,
-/// see the rest-contract `openai_request_budget` module), so a request that
+/// see the rest-contract `request_budget` module), so a request that
 /// passes this check cannot itself exceed the daemon's IPC frame limit.
 pub const MAX_TOTAL_IMAGE_DECODED_BYTES: usize = 16 * 1024 * 1024;
 

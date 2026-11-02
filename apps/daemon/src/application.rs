@@ -12,7 +12,7 @@ use crate::{
     system_telemetry::system_telemetry_routes,
 };
 use astronomical_config::DiscoveredModel;
-use astronomical_rest_contract::MAX_OPENAI_REQUEST_BODY_BYTES;
+use astronomical_rest_contract::MAX_REQUEST_BODY_BYTES;
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},
@@ -31,7 +31,7 @@ use std::{
 use tokio::sync::Mutex as AsyncMutex;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-use crate::rest::openai::request_body_budget::enforce_openai_request_body_budget;
+use crate::rest::request_body_budget::enforce_request_body_budget;
 // Request counters restart with each Router. A process/time/instance namespace
 // prevents an OpenCode conversation from confusing tool-call IDs after either
 // a daemon restart or multiple in-process Router constructions in tests.
@@ -402,28 +402,22 @@ fn core_api_routes() -> Router<ApplicationState> {
         .route(
             "/v1/chat/completions",
             post(chat_endpoint::create_chat_completion)
-                .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
-                .layer(axum::middleware::from_fn(
-                    enforce_openai_request_body_budget,
-                )),
+                .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+                .layer(axum::middleware::from_fn(enforce_request_body_budget)),
         )
         .route(
             "/v1/responses",
             post(responses_endpoint::create_response)
-                .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
-                .layer(axum::middleware::from_fn(
-                    enforce_openai_request_body_budget,
-                )),
+                .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+                .layer(axum::middleware::from_fn(enforce_request_body_budget)),
         )
         // Anthropic-protocol agents send the same conversation payloads, so
         // the Messages endpoint takes the same portable body budget.
         .route(
             "/v1/messages",
             post(crate::rest::anthropic::messages_endpoint::create_message)
-                .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
-                .layer(axum::middleware::from_fn(
-                    enforce_openai_request_body_budget,
-                )),
+                .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+                .layer(axum::middleware::from_fn(enforce_request_body_budget)),
         )
 }
 
@@ -433,18 +427,14 @@ fn openai_generation_routes(router: Router<ApplicationState>) -> Router<Applicat
     let router = router.route(
         "/v1/images/generations",
         post(crate::rest::openai::image_generation_endpoint::create_image_generation)
-            .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
-            .layer(axum::middleware::from_fn(
-                enforce_openai_request_body_budget,
-            )),
+            .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+            .layer(axum::middleware::from_fn(enforce_request_body_budget)),
     );
     router.route(
         "/v1/embeddings",
         post(crate::rest::openai::embeddings_endpoint::create_embeddings)
-            .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
-            .layer(axum::middleware::from_fn(
-                enforce_openai_request_body_budget,
-            )),
+            .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
+            .layer(axum::middleware::from_fn(enforce_request_body_budget)),
     )
 }
 

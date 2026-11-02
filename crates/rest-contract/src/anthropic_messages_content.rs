@@ -11,10 +11,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::image_input::decode_base64_image_payload;
-use crate::openai_request_budget::{
-    MAX_OPENAI_IMAGE_PARTS_PER_REQUEST, MAX_OPENAI_INLINE_MEDIA_BYTES,
-};
-use crate::{AnthropicMessagesValidationError, OpenAiImageInput};
+use crate::request_budget::{MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES};
+use crate::{AnthropicMessagesValidationError, DecodedImageInput};
 
 /// One conversation turn as an Anthropic client sends it.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -132,11 +130,11 @@ pub enum AnthropicMessageParts {
 #[derive(Clone, Debug, PartialEq)]
 pub enum AnthropicUserSegmentParts {
     Text(String),
-    Image(OpenAiImageInput),
+    Image(DecodedImageInput),
     ToolResult {
         tool_use_id: String,
         text: String,
-        images: Vec<OpenAiImageInput>,
+        images: Vec<DecodedImageInput>,
         is_error: bool,
     },
 }
@@ -332,7 +330,7 @@ impl AnthropicImageBudget {
     fn admit(
         &mut self,
         image_source: AnthropicImageSource,
-    ) -> Result<OpenAiImageInput, AnthropicMessagesValidationError> {
+    ) -> Result<DecodedImageInput, AnthropicMessagesValidationError> {
         let (Some(media_type), Some(base64_payload)) = (image_source.media_type, image_source.data)
         else {
             return Err(AnthropicMessagesValidationError::UnsupportedImageSource {
@@ -345,19 +343,19 @@ impl AnthropicImageBudget {
             });
         }
         self.image_part_count += 1;
-        if self.image_part_count > MAX_OPENAI_IMAGE_PARTS_PER_REQUEST {
+        if self.image_part_count > MAX_IMAGE_PARTS_PER_REQUEST {
             return Err(
                 AnthropicMessagesValidationError::ImagePartCountExceedsBudget {
-                    maximum_image_part_count: MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+                    maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
                 },
             );
         }
         let decoded_image = decode_base64_image_payload(&media_type, &base64_payload)
             .map_err(AnthropicMessagesValidationError::ImageInput)?;
         self.inline_media_bytes += decoded_image.decoded_bytes().len();
-        if self.inline_media_bytes > MAX_OPENAI_INLINE_MEDIA_BYTES {
+        if self.inline_media_bytes > MAX_INLINE_MEDIA_BYTES {
             return Err(AnthropicMessagesValidationError::InlineMediaExceedsBudget {
-                maximum_inline_media_bytes: MAX_OPENAI_INLINE_MEDIA_BYTES,
+                maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
             });
         }
         Ok(decoded_image)

@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
-use crate::MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH;
+use crate::MAX_TOOL_SCHEMA_NESTING_DEPTH;
 
 /// Maximum serialized JSON Schema accepted on `response_format`.
 pub const MAX_STRUCTURED_OUTPUT_SCHEMA_BYTES: usize = 65_536;
@@ -217,11 +217,11 @@ fn structured_output_from_type_and_schema(
                 return Err(OpenAiStructuredOutputValidationError::JsonSchemaMustBeObject);
             }
             let schema_nesting_depth = json_nesting_depth(&schema);
-            if schema_nesting_depth > MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH {
+            if schema_nesting_depth > MAX_TOOL_SCHEMA_NESTING_DEPTH {
                 return Err(
                     OpenAiStructuredOutputValidationError::JsonSchemaNestingTooDeep {
                         actual_schema_nesting_depth: schema_nesting_depth,
-                        maximum_schema_nesting_depth: MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH,
+                        maximum_schema_nesting_depth: MAX_TOOL_SCHEMA_NESTING_DEPTH,
                     },
                 );
             }

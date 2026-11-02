@@ -1,6 +1,7 @@
-//! Data-URI image input decoding for the OpenAI-compatible chat endpoint.
+//! Inline image decoding shared by every generation surface.
 //!
-//! Only `data:image/<type>;base64,<payload>` URIs are accepted. HTTP(S) and
+//! On the OpenAI-compatible surfaces only `data:image/<type>;base64,<payload>`
+//! URIs are accepted, and the Anthropic surface accepts only `base64` sources. HTTP(S) and
 //! `file://` schemes are rejected to preserve the single-laptop privacy model
 //! and avoid local-path attack surface.
 
@@ -8,18 +9,18 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 
 use crate::OpenAiChatCompletionValidationError;
-use crate::openai_request_budget::MAX_OPENAI_IMAGE_DECODED_BYTES;
+use crate::request_budget::MAX_IMAGE_DECODED_BYTES;
 
 /// One decoded image carried in a user chat message.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct OpenAiImageInput {
+pub struct DecodedImageInput {
     /// The MIME type parsed from the data URI, e.g. `image/png`.
     image_mime_type: String,
     /// The raw decoded image file bytes (PNG/JPEG/WebP payload before pixel decoding).
     decoded_image_bytes: Vec<u8>,
 }
 
-impl OpenAiImageInput {
+impl DecodedImageInput {
     /// Returns the MIME type parsed from the data URI.
     #[must_use]
     pub fn mime_type(&self) -> &str {
@@ -40,7 +41,7 @@ impl OpenAiImageInput {
 /// the base64 payload, and enforces the byte size bound.
 pub(crate) fn decode_image_url(
     image_url: &str,
-) -> Result<OpenAiImageInput, OpenAiChatCompletionValidationError> {
+) -> Result<DecodedImageInput, OpenAiChatCompletionValidationError> {
     let data_uri_body = image_url
         .strip_prefix("data:")
         .ok_or(OpenAiChatCompletionValidationError::UnsupportedImageUrlScheme)?;
@@ -61,18 +62,18 @@ pub(crate) fn decode_image_url(
 pub(crate) fn decode_base64_image_payload(
     image_mime_type: &str,
     base64_payload: &str,
-) -> Result<OpenAiImageInput, OpenAiChatCompletionValidationError> {
+) -> Result<DecodedImageInput, OpenAiChatCompletionValidationError> {
     let Ok(decoded_image_bytes) = BASE64_STANDARD.decode(base64_payload) else {
         return Err(OpenAiChatCompletionValidationError::InvalidBase64);
     };
-    if decoded_image_bytes.len() > MAX_OPENAI_IMAGE_DECODED_BYTES {
+    if decoded_image_bytes.len() > MAX_IMAGE_DECODED_BYTES {
         return Err(OpenAiChatCompletionValidationError::ImageTooLarge {
             actual_bytes: decoded_image_bytes.len(),
-            maximum_bytes: MAX_OPENAI_IMAGE_DECODED_BYTES,
-            excess_bytes: decoded_image_bytes.len() - MAX_OPENAI_IMAGE_DECODED_BYTES,
+            maximum_bytes: MAX_IMAGE_DECODED_BYTES,
+            excess_bytes: decoded_image_bytes.len() - MAX_IMAGE_DECODED_BYTES,
         });
     }
-    Ok(OpenAiImageInput {
+    Ok(DecodedImageInput {
         image_mime_type: image_mime_type.to_owned(),
         decoded_image_bytes,
     })

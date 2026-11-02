@@ -5,7 +5,7 @@ use astronomical_daemon::{
     build_application,
 };
 use astronomical_ipc_protocol::ChatGenerationCommand;
-use astronomical_rest_contract::MAX_OPENAI_REQUEST_BODY_BYTES;
+use astronomical_rest_contract::MAX_REQUEST_BODY_BYTES;
 use axum::{
     Router,
     body::{Body, to_bytes},
@@ -17,7 +17,7 @@ use tokio::sync::mpsc;
 use tower::ServiceExt;
 
 fn oversized_body_byte_count() -> usize {
-    MAX_OPENAI_REQUEST_BODY_BYTES + 1
+    MAX_REQUEST_BODY_BYTES + 1
 }
 
 async fn post_chat_body(
@@ -89,8 +89,7 @@ async fn should_accept_a_chat_body_at_exactly_the_request_budget() {
     let application = build_application(PanicOnGenerationStartExecutor);
     // A body at exactly the budget passes the transport layer; the endpoint
     // then rejects the payload on its JSON merits, not its size.
-    let http_response =
-        post_chat_body(application, vec![b'x'; MAX_OPENAI_REQUEST_BODY_BYTES], None).await;
+    let http_response = post_chat_body(application, vec![b'x'; MAX_REQUEST_BODY_BYTES], None).await;
 
     assert_eq!(http_response.status(), StatusCode::BAD_REQUEST);
     let error_json = response_error_json(http_response).await;
@@ -121,17 +120,60 @@ async fn should_return_openai_shaped_413_when_an_embeddings_body_exceeds_the_req
     assert_eq!(error_json["error"]["code"], "request_too_large");
 }
 
+async fn post_messages_body(
+    application: Router,
+    body_bytes: Vec<u8>,
+    content_length: Option<&str>,
+) -> Response {
+    let mut messages_request = Request::builder()
+        .method("POST")
+        .uri("/v1/messages")
+        .header(header::CONTENT_TYPE, "application/json");
+    if let Some(content_length) = content_length {
+        messages_request = messages_request.header(header::CONTENT_LENGTH, content_length);
+    }
+    application
+        .oneshot(
+            messages_request
+                .body(Body::from(body_bytes))
+                .expect("the Messages request should be well formed"),
+        )
+        .await
+        .expect("the in-process application should return a Messages response")
+}
+
+#[tokio::test]
+async fn should_reject_a_messages_body_declared_over_the_shared_budget() {
+    let application = build_application(PanicOnGenerationStartExecutor);
+    let oversized_content_length = oversized_body_byte_count().to_string();
+
+    let http_response =
+        post_messages_body(application, b"{}".to_vec(), Some(&oversized_content_length)).await;
+
+    assert_eq!(http_response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn should_pass_a_messages_body_at_exactly_the_shared_budget_to_the_endpoint() {
+    let application = build_application(PanicOnGenerationStartExecutor);
+    // At exactly the budget the body reaches the Messages endpoint, which
+    // rejects it on its JSON merits in its own Anthropic error shape.
+    let http_response =
+        post_messages_body(application, vec![b'x'; MAX_REQUEST_BODY_BYTES], None).await;
+
+    assert_eq!(http_response.status(), StatusCode::BAD_REQUEST);
+    let error_json = response_error_json(http_response).await;
+    assert_eq!(error_json["type"], "error");
+    assert_eq!(error_json["error"]["type"], "invalid_request_error");
+}
+
 #[tokio::test]
 async fn should_return_413_without_exact_overshoot_when_a_chat_body_streams_far_past_the_budget() {
     let application = build_application(PanicOnGenerationStartExecutor);
     // No Content-Length header: the bounded buffer stops one byte past the
     // budget, so a body well beyond it takes the no-exact-overshoot rejection.
-    let http_response = post_chat_body(
-        application,
-        vec![b'x'; MAX_OPENAI_REQUEST_BODY_BYTES + 1000],
-        None,
-    )
-    .await;
+    let http_response =
+        post_chat_body(application, vec![b'x'; MAX_REQUEST_BODY_BYTES + 1000], None).await;
 
     assert_eq!(http_response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     let error_json = response_error_json(http_response).await;

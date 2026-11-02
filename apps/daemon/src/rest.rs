@@ -20,6 +20,7 @@ pub(crate) mod config_reveal;
 pub(crate) mod expert_placement;
 pub(crate) mod experts;
 pub(crate) mod maximum_mlx_memory;
+pub(crate) mod request_body_budget;
 pub(crate) mod status;
 
 #[cfg(test)]

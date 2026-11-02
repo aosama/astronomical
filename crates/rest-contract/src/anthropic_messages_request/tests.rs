@@ -3,7 +3,7 @@ use serde_json::json;
 use crate::{
     AnthropicMessageParts, AnthropicMessagesRequest, AnthropicMessagesRequestParts,
     AnthropicMessagesValidationError, AnthropicToolChoiceParts, AnthropicUserSegmentParts,
-    MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+    MAX_IMAGE_PARTS_PER_REQUEST,
 };
 
 // A one-pixel PNG, small enough to inline and real enough to decode.
@@ -298,7 +298,7 @@ fn should_reject_more_images_than_the_portable_budget_as_too_large() {
     let mut request_document = minimal_request();
     request_document["messages"] = json!([{
         "role": "user",
-        "content": vec![image_block; MAX_OPENAI_IMAGE_PARTS_PER_REQUEST + 1]
+        "content": vec![image_block; MAX_IMAGE_PARTS_PER_REQUEST + 1]
     }]);
 
     let validation_error = rejection_of(request_document);
@@ -482,7 +482,7 @@ fn should_reject_an_invalid_tool_name_and_an_overly_deep_schema() {
     ));
 
     let mut deep_schema = json!({"type": "object"});
-    for _ in 0..crate::MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH {
+    for _ in 0..crate::MAX_TOOL_SCHEMA_NESTING_DEPTH {
         deep_schema = json!({"properties": deep_schema});
     }
     request_document["tools"] = json!([{"name": "read_play", "input_schema": deep_schema}]);
@@ -564,7 +564,7 @@ fn should_accept_the_lowest_boundaries_of_max_tokens_and_temperature() {
 fn should_reject_decoded_images_beyond_the_inline_media_budget_as_too_large() {
     // Four images just under the per-image cap together exceed the
     // request-wide inline-media budget.
-    let near_cap_image_bytes = vec![0_u8; crate::MAX_OPENAI_IMAGE_DECODED_BYTES - 1];
+    let near_cap_image_bytes = vec![0_u8; crate::MAX_IMAGE_DECODED_BYTES - 1];
     let near_cap_image_base64 = base64::Engine::encode(
         &base64::engine::general_purpose::STANDARD,
         &near_cap_image_bytes,

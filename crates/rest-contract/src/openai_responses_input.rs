@@ -2,10 +2,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::image_input;
-use crate::openai_request_budget::{
-    MAX_OPENAI_IMAGE_PARTS_PER_REQUEST, MAX_OPENAI_INLINE_MEDIA_BYTES,
-};
-use crate::{OpenAiImageInput, OpenAiResponsesValidationError};
+use crate::request_budget::{MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES};
+use crate::{DecodedImageInput, OpenAiResponsesValidationError};
 
 /// Stateless input accepted by the local Responses endpoint.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -192,7 +190,7 @@ pub enum OpenAiResponseInputItemParts {
     },
     UserMessage {
         content: String,
-        images: Vec<OpenAiImageInput>,
+        images: Vec<DecodedImageInput>,
     },
     AssistantMessage {
         content: String,
@@ -267,12 +265,12 @@ impl OpenAiResponseInput {
 fn validate_image_part_count(
     image_part_count: usize,
 ) -> Result<(), OpenAiResponsesValidationError> {
-    if image_part_count > MAX_OPENAI_IMAGE_PARTS_PER_REQUEST {
+    if image_part_count > MAX_IMAGE_PARTS_PER_REQUEST {
         return Err(
             OpenAiResponsesValidationError::ImagePartCountExceedsBudget {
                 actual_image_part_count: image_part_count,
-                maximum_image_part_count: MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
-                excess_image_part_count: image_part_count - MAX_OPENAI_IMAGE_PARTS_PER_REQUEST,
+                maximum_image_part_count: MAX_IMAGE_PARTS_PER_REQUEST,
+                excess_image_part_count: image_part_count - MAX_IMAGE_PARTS_PER_REQUEST,
             },
         );
     }
@@ -282,11 +280,11 @@ fn validate_image_part_count(
 fn validate_inline_media_total(
     decoded_inline_media_bytes: usize,
 ) -> Result<(), OpenAiResponsesValidationError> {
-    if decoded_inline_media_bytes > MAX_OPENAI_INLINE_MEDIA_BYTES {
+    if decoded_inline_media_bytes > MAX_INLINE_MEDIA_BYTES {
         return Err(OpenAiResponsesValidationError::InlineMediaExceedsBudget {
             actual_inline_media_bytes: decoded_inline_media_bytes,
-            maximum_inline_media_bytes: MAX_OPENAI_INLINE_MEDIA_BYTES,
-            excess_inline_media_bytes: decoded_inline_media_bytes - MAX_OPENAI_INLINE_MEDIA_BYTES,
+            maximum_inline_media_bytes: MAX_INLINE_MEDIA_BYTES,
+            excess_inline_media_bytes: decoded_inline_media_bytes - MAX_INLINE_MEDIA_BYTES,
         });
     }
     Ok(())
@@ -392,7 +390,7 @@ impl OpenAiResponseMessageContent {
 
     fn into_user_content(
         self,
-    ) -> Result<(String, Vec<OpenAiImageInput>), OpenAiResponsesValidationError> {
+    ) -> Result<(String, Vec<DecodedImageInput>), OpenAiResponsesValidationError> {
         match self {
             Self::Text(content) => Ok((content, Vec::new())),
             Self::Parts(content_parts) => {
