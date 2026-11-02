@@ -1,16 +1,20 @@
 /* Typography shared by the site's document pages.
    Page-specific rules stay inline in the page that needs them; a page must not
    restate these or the three document pages drift apart. */
-.doc { padding-block: 96px; }
+.doc { padding-block: 72px 112px; }
 .doc-body { max-width: 720px; margin-inline: auto; }
-.doc-body h1 { font-size: 2.0625rem; margin: 0 0 8px; }
-.doc-body h2 { font-size: 1.5125rem; margin-block: 32px 8px; }
-.doc-body h3 { font-size: 1.3125rem; margin-block: 26px 6px; color: var(--paper); }
-.doc-body p, .doc-body li { color: var(--paper-muted); font-size: 1.1875rem; line-height: 1.65; }
+.doc-body h1,
+.doc-body h2 { font-family: var(--display); font-weight: 400; letter-spacing: -0.02em; font-variation-settings: "opsz" 72; }
+.doc-body h1 { font-size: clamp(2.5rem, 5vw, 3.5rem); line-height: 1.05; margin: 0 0 16px; }
+.doc-body h2 { font-size: 2rem; line-height: 1.15; margin-block: 48px 10px; }
+.doc-body h3 { font-size: 1.1875rem; font-weight: 600; margin-block: 28px 6px; color: var(--silver); }
+.doc-body p, .doc-body li { color: var(--silver-dim); font-size: 1.0625rem; line-height: 1.65; }
 .doc-body ul, .doc-body ol { padding-left: 20px; }
-.doc-body strong { color: var(--paper); }
-.doc-body code { color: var(--paper); }
-.doc-meta { color: var(--paper-muted); font-size: 1.1875rem; }
+.doc-body strong { color: var(--silver); }
+.doc-body code { color: var(--silver); }
+.doc-body a:not(.button) { color: var(--safelight-bright); }
+.doc-body a:not(.button):hover { color: var(--silver); }
+.doc-meta { color: var(--mist); font-size: 1rem; }
 
 /* A snippet is one selectable block that a reader copies wholesale, so it keeps
    its own scroll area instead of wrapping and silently changing what is copied. */
@@ -19,13 +23,13 @@
   padding: 16px 18px;
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(244, 240, 230, 0.03);
+  border-radius: 10px;
+  background: var(--ground-raised);
 }
-.doc-snippet:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; }
+.doc-snippet:focus-visible { outline: 2px solid var(--safelight-bright); outline-offset: 2px; }
 .doc-snippet code {
   font-family: var(--mono);
-  font-size: 1.0125rem;
+  font-size: 0.9375rem;
   line-height: 1.6;
   white-space: pre;
 }

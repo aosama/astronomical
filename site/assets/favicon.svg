@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Small-size cut of mark.svg: at 16-32 px the reticle arms fall under one
+       pixel, so they are dropped and the reticle dot is enlarged instead. -->
+  <defs>
+    <clipPath id="plate"><rect width="64" height="64" rx="10"/></clipPath>
+  </defs>
+  <g clip-path="url(#plate)">
+    <rect width="64" height="64" fill="#a8321f"/>
+    <circle cx="8" cy="92" r="62" fill="#e4e0d6"/>
+  </g>
+  <circle cx="44" cy="20" r="7" fill="#e4e0d6"/>
+</svg>

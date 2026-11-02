@@ -3,16 +3,18 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Astronomical | Local models without the memory wall</title>
+    <title>Astronomical | Models larger than your memory, on your Mac</title>
     <meta name="description" content="Set one memory ceiling. Astronomical runs language, vision, image, and embedding models on this Mac — sparse experts stream from SSD when they do not fit, without hidden quantization — and serves them to coding agents over an OpenAI- and Anthropic-compatible loopback API.">
-    <meta name="theme-color" content="#10120f">
+    <meta name="theme-color" content="#141517">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Astronomical | Local models without the memory wall">
+    <meta property="og:title" content="Astronomical | Models larger than your memory, on your Mac">
     <meta property="og:description" content="Set one memory ceiling. Sparse experts stream from SSD when they do not fit. Declared precision is preserved. Nothing leaves the laptop.">
     <meta property="og:url" content="https://aosama.github.io/astronomical/">
     <meta property="og:image" content="https://raw.githubusercontent.com/aosama/astronomical/main/.github/assets/astronomical-social-preview.png">
     <meta name="twitter:card" content="summary_large_image">
-    <link rel="icon" href="./assets/mark.svg" type="image/svg+xml">
+    <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+    <link rel="preload" href="./assets/fonts/newsreader-roman.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="./styles.css">
     <link rel="stylesheet" href="./home.css">
   </head>
@@ -20,12 +22,12 @@
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <a class="brand" href="./index.html" aria-label="Astronomical home">
-        <img src="./assets/mark.svg" alt="" width="36" height="36">
-        <span>Astronomical</span>
+        <img src="./assets/mark.svg" alt="" width="32" height="32">
+        <span>astronomical</span>
       </a>
       <nav class="site-nav" aria-label="Primary navigation">
         <a href="#capabilities">Capabilities</a>
-        <a href="#reports">Reports</a>
+        <a href="#reports">Field notes</a>
         <a href="./local-api.html">Local API</a>
         <a href="./privacy.html">Privacy</a>
         <a href="./support.html">Support</a>
@@ -34,211 +36,158 @@
     </header>
 
     <main id="main">
-      <section class="hero shell">
-        <div class="hero-copy">
-          <p class="eyebrow"><span class="signal-dot"></span> One memory ceiling / Apple silicon &middot; Stable <a id="home-stable-version" class="home-version" href="https://github.com/aosama/astronomical/releases/latest">on GitHub Releases</a></p>
-          <h1>Run the model.<br><em>Not the memory bill.</em></h1>
-          <p class="hero-deck">You set one memory ceiling. Astronomical is a local model runner for language, vision, image, and embedding models: sparse experts move between memory and solid-state storage when they do not fit. Every request stays on this Mac.</p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/aosama/astronomical/releases/latest">Get the Mac app</a>
-            <a class="button button-secondary" href="#capabilities">See what it can do</a>
-          </div>
-        </div>
-
-        <div class="orbit-stage" aria-label="Diagram showing model experts orbiting an active graphics processor core">
-          <div class="orbit-grid"></div>
-          <div class="orbit orbit-outer"><span class="satellite satellite-orange"></span></div>
-          <div class="orbit orbit-inner"><span class="satellite satellite-paper"></span></div>
-          <div class="core">
-            <span class="core-label">ACTIVE</span>
-            <strong>GPU</strong>
-            <span class="core-detail">selected experts</span>
-          </div>
-          <p class="orbit-note orbit-note-top">SSD / cold experts</p>
-          <p class="orbit-note orbit-note-bottom">MLX / unified memory</p>
-        </div>
-      </section>
-
-      <section class="fact-strip" aria-label="Product facts">
-        <div class="fact-strip-label">Product facts<br><span>not benchmark claims</span></div>
-        <div class="fact"><strong>1</strong><span>user memory ceiling</span></div>
-        <div class="fact"><strong>4</strong><span>chat, vision, images, embeddings</span></div>
-        <div class="fact"><strong>0</strong><span>cloud accounts</span></div>
-        <div class="fact"><strong>Loopback</strong><span>OpenAI- and Anthropic-compatible API</span></div>
-      </section>
-
-      <section class="use shell" id="use" aria-labelledby="use-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-index">01 / On this Mac</p>
-            <h2 id="use-title">Install. Open Library. Launch your coding agent.</h2>
-          </div>
-          <p>Astronomical is a local model runner for one user on Apple silicon. You set one memory ceiling; sparse experts stream between unified memory and solid-state storage when the full payload does not fit. The native menu and Observatory console show that state. Stable requires macOS 14 (Sonoma) or later, declared best-effort across the M-series spectrum.</p>
-          <p class="home-note" id="home-stable-note"><strong>Stable</strong> on GitHub Releases — open it and the local runner goes live on this Mac; Observatory is the local console for the Library, status, and interim chat.</p>
-        </div>
-        <div class="use-grid">
-          <article class="use-card">
-            <span>Menu</span>
-            <strong>See the ceiling while you work</strong>
-            <p>The menu reports effective memory, expert residency, graphics-processor use, prompt progress, and prompt reuse.</p>
-          </article>
-          <article class="use-card">
-            <span>Observatory</span>
-            <strong>The local console</strong>
-            <p>Observatory lives on the same loopback address. Open Library, watch status, and send a chat without a separate monitoring stack.</p>
-          </article>
-          <article class="use-card">
-            <span>Local API</span>
-            <strong>Use the tools you already have</strong>
-            <p>OpenAI-compatible Chat Completions, Responses, embeddings, and image generation, plus Anthropic-compatible Messages, over loopback only. <code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> starts the agent already pointed at this Mac, and the requested model loads on demand.</p>
-            <a class="text-link" href="./local-api.html">Connect a coding agent <span aria-hidden="true">→</span></a>
-          </article>
-        </div>
-      </section>
-
-      <section class="capabilities shell" id="capabilities" aria-labelledby="capabilities-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-index">02 / Capabilities</p>
-            <h2 id="capabilities-title">What the app can do today.</h2>
-          </div>
-          <p>These are shipped product surfaces. Speed still depends on the model, context, storage, and the memory you leave for the rest of the Mac.</p>
-        </div>
-        <div class="capability-grid">
-          <article class="capability-card">
-            <span>01</span>
-            <strong>Chat locally</strong>
-            <p>Send a conversation through Observatory or any local OpenAI- or Anthropic-compatible client. Tool calls, Responses, and Messages share that same loopback server.</p>
-          </article>
-          <article class="capability-card">
-            <span>02</span>
-            <strong>Vision in the same chat</strong>
-            <p>Attach an image to a request. A vision-capable model sees it on this Mac. The image does not leave the laptop.</p>
-          </article>
-          <article class="capability-card">
-            <span>03</span>
-            <strong>Generate an image</strong>
-            <p>A text prompt becomes one lossless PNG through the local image endpoint. Text and image models share the app, not a second service.</p>
-          </article>
-          <article class="capability-card">
-            <span>04</span>
-            <strong>Install from Library</strong>
-            <p>Observatory can download a curated public model onto this Mac. Astronomical verifies the payload before the model becomes discoverable.</p>
-          </article>
-          <article class="capability-card">
-            <span>05</span>
-            <strong>One memory ceiling</strong>
-            <p>Set the model RAM your laptop can spare. Astronomical keeps complete experts resident when they fit and streams selected experts from storage when the request needs room.</p>
-          </article>
-          <article class="capability-card">
-            <span>06</span>
-            <strong>No hidden quantization</strong>
-            <p>A tighter ceiling does not silently downgrade the model. Paging keeps the artifact's declared types. Unsupported files fail validation instead of being guessed from a name.</p>
-          </article>
-          <article class="capability-card">
-            <span>07</span>
-            <strong>Launch a coding agent</strong>
-            <p><code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> starts the agent on a local model for one session, with the model's real context window declared, without touching the agent's own settings.</p>
-          </article>
-          <article class="capability-card">
-            <span>08</span>
-            <strong>Embed text</strong>
-            <p>An embedding model turns text into vectors through the local embeddings endpoint or <code>astronomical embed</code>, for search and retrieval that stay on this Mac.</p>
-          </article>
-          <article class="capability-card">
-            <span>09</span>
-            <strong>Drive it from the terminal</strong>
-            <p><code>astronomical respond</code> answers one prompt, <code>models</code> lists and downloads, <code>status</code> shows the worker and resident model, and <code>doctor</code> checks which instance the command line talks to.</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="residency shell" aria-labelledby="residency-title">
-        <div class="residency-intro">
-          <p class="section-index">03 / Automatic expert residency</p>
-          <h2 id="residency-title">Fully in memory when it fits.<br><em>Paged when the request needs room.</em></h2>
-        </div>
-        <div class="residency-flow" aria-label="Automatic transition from resident expert layers to paged experts">
-          <article class="residency-state residency-state-resident">
-            <span>When capacity allows</span>
-            <strong>Fully in memory</strong>
-            <p>Complete sparse-expert layers stay resident for the lowest-latency path.</p>
-          </article>
-          <div class="residency-arrow" aria-hidden="true">→</div>
-          <article class="residency-state residency-state-paged">
-            <span>When the request needs room</span>
-            <strong>RAM + SSD streaming</strong>
-            <p>Complete layers make room and Astronomical pages only router-selected experts from solid-state storage.</p>
-          </article>
-        </div>
-        <p class="residency-note"><strong>One memory ceiling. No manual mode switch.</strong> The same loaded model adapts to live context and runtime memory needs, then restores complete expert layers when capacity returns.</p>
-      </section>
-
-      <section class="reports shell" id="reports" aria-labelledby="reports-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-index">04 / Field reports</p>
-            <h2 id="reports-title">Claims need receipts.</h2>
-          </div>
-          <p>Each report labels architecture facts, acceptance evidence, and unresolved questions separately.</p>
-        </div>
-
-        <div class="report-grid">
-          <article class="report-card report-card-acid">
-            <div class="report-card-top">
-              <span>R–001</span>
-              <span class="verdict verdict-verified"><i></i> Verified</span>
+      <section class="hero">
+        <div class="hero-grid shell">
+          <div class="hero-copy">
+            <p class="hero-release"><span class="signal-dot signal-dot-release" aria-hidden="true"></span>Stable <a id="home-stable-version" class="home-version" href="https://github.com/aosama/astronomical/releases/latest">on GitHub Releases</a> · Apple silicon · macOS 14 and later</p>
+            <h1>Models larger than your memory, <em>on your Mac.</em></h1>
+            <p class="hero-deck">Set one memory ceiling. When a mixture-of-experts model does not fit, Astronomical streams the experts the router selects from your SSD, keeps the precision the model declares, and answers every request on this Mac.</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="https://github.com/aosama/astronomical/releases/latest">Download for Mac</a>
+              <a class="text-link" href="#reports">Read the field notes →</a>
             </div>
-            <p class="report-kicker">Prompt reuse / Persistent state</p>
-            <h3>A repeated prefix skipped 2,048 prompt tokens.</h3>
-            <p>The first request populated one state block. The identical second request restored it while preserving generated-token parity.</p>
-            <a class="text-link" href="./reports/persistent-prompt-reuse/">Read report R–001 <span aria-hidden="true">→</span></a>
-          </article>
+          </div>
 
-          <article class="report-card report-card-dark">
-            <div class="report-card-top">
-              <span>NEXT</span>
-              <span class="verdict verdict-planned"><i></i> Planned</span>
+          <figure class="hero-figure">
+            <div class="figure-plate">
+              <svg viewBox="0 0 420 292" role="img" aria-label="Sixty experts. Thirty above the memory ceiling are resident in memory; thirty below wait on the SSD, and four of those are streaming in for the current token.">
+                <defs>
+                  <pattern id="hero-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2.6" height="6" fill="#b9b4a9"/></pattern>
+                  <g id="expert-row"><circle cx="30" cy="30" r="11"/><circle cx="70" cy="30" r="11"/><circle cx="110" cy="30" r="11"/><circle cx="150" cy="30" r="11"/><circle cx="190" cy="30" r="11"/><circle cx="230" cy="30" r="11"/><circle cx="270" cy="30" r="11"/><circle cx="310" cy="30" r="11"/><circle cx="350" cy="30" r="11"/><circle cx="390" cy="30" r="11"/></g>
+                </defs>
+                <g fill="#b9b4a9"><use href="#expert-row"/><use href="#expert-row" y="40"/><use href="#expert-row" y="80"/></g>
+                <g fill="none" stroke="#b9b4a9" stroke-opacity="0.45" stroke-width="1.5"><use href="#expert-row" y="142"/><use href="#expert-row" y="182"/><use href="#expert-row" y="222"/></g>
+                <g fill="url(#hero-hatch)" stroke="#b9b4a9" stroke-width="1.5"><circle cx="110" cy="172" r="11"/><circle cx="270" cy="212" r="11"/><circle cx="350" cy="172" r="11"/><circle cx="190" cy="252" r="11"/></g>
+                <path d="M8 143H412" stroke="#e4e0d6" stroke-width="1.5" stroke-dasharray="5 4"/>
+                <text x="412" y="137" text-anchor="end" font-family="ui-monospace, SF Mono, monospace" font-size="11" fill="#e4e0d6">your memory ceiling</text>
+              </svg>
             </div>
-            <p class="report-kicker">Representative measurement</p>
-            <h3>Ten thousand in. Five hundred out.</h3>
-            <p>The next public comparison will use a coding-agent-sized prompt, report memory alongside speed, and retain failed hypotheses.</p>
-            <a class="text-link" href="#method">See the evidence standard <span aria-hidden="true">↓</span></a>
-          </article>
+            <figcaption>Fig. 1. Solid experts are in memory. Below the ceiling they wait on the SSD; hatched ones are streaming in for this token.</figcaption>
+          </figure>
+        </div>
+        <div class="hero-limb" aria-hidden="true"></div>
+      </section>
+
+      <section class="fact-band" aria-label="One captured run">
+        <div class="shell fact-grid">
+          <div class="fact"><strong>11 GB</strong><span>the ceiling that was set</span></div>
+          <div class="fact"><strong>21.61 GB</strong><span>the model on disk, still generating</span></div>
+          <div class="fact"><strong>0</strong><span>cloud accounts</span></div>
+          <p class="fact-note">One captured development run of Qwen3.6-35B-A3B-oQ4e-mtp. It demonstrates the operating mode; it is not a throughput claim. Results vary by model, context, storage, and Mac.</p>
         </div>
       </section>
 
-      <section class="method shell" id="method" aria-labelledby="method-title">
-        <div class="method-intro">
-          <p class="section-index">05 / Evidence standard</p>
-          <h2 id="method-title">Fast is a measurement,<br>not an adjective.</h2>
+      <section class="split shell" id="use" aria-labelledby="use-title">
+        <div class="split-head">
+          <p class="section-index">On this Mac</p>
+          <h2 id="use-title">Install it. Open the Library. <em>Launch your coding agent.</em></h2>
         </div>
-        <ol class="method-list">
-          <li><span>01</span><div><strong>Representative work</strong><p>Performance claims use at least 10,000 input tokens and about 500 output tokens, the shape of a coding-agent turn, after a small warmup run, on an optimized build, with the exact workload disclosed.</p></div></li>
-          <li><span>02</span><div><strong>Memory beside speed</strong><p>Throughput is reported with model precision, effective memory ceiling, and peak Machine Learning framework memory.</p></div></li>
-          <li><span>03</span><div><strong>Cold and warm separated</strong><p>Operating-system file reuse is not presented as physical solid-state-drive performance, and throughput runs disable the persistent prompt cache so a cache hit never passes for speed.</p></div></li>
-          <li><span>04</span><div><strong>Failed ideas stay visible</strong><p>A smaller command count or prettier trace does not become a win unless end-to-end behavior improves.</p></div></li>
+        <div class="split-body">
+          <p>Astronomical is a local model runner for one person on Apple silicon. Open the app and the runner goes live on this Mac; three surfaces show and use it.</p>
+          <dl class="term-list">
+            <div><dt>The menu</dt><dd>Effective memory, expert residency, graphics-processor use, prompt progress, and prompt reuse, while you work.</dd></div>
+            <div><dt>Observatory</dt><dd>The local console on the same loopback address: install from the Library, watch status, and send a chat without a separate monitoring stack.</dd></div>
+            <div><dt>The local API</dt><dd>OpenAI-compatible Chat Completions, Responses, embeddings, and image generation, plus Anthropic-compatible Messages, over loopback only. <code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> starts the agent already pointed at this Mac. <a class="text-link" href="./local-api.html">Connect a coding agent →</a></dd></div>
+          </dl>
+          <p class="home-note" id="home-stable-note"><strong>Stable</strong> is on GitHub Releases — open it and the local runner goes live on this Mac; Observatory is the local console for the Library, status, and interim chat.</p>
+        </div>
+      </section>
+
+      <section class="split shell" id="capabilities" aria-labelledby="capabilities-title">
+        <div class="split-head">
+          <p class="section-index">Capabilities</p>
+          <h2 id="capabilities-title">What the app does <em>today.</em></h2>
+          <p class="split-aside">Shipped product surfaces. Speed still depends on the model, context, storage, and the memory you leave for the rest of the Mac.</p>
+        </div>
+        <dl class="term-list term-list-ruled">
+          <div><dt>Chat locally</dt><dd>Observatory or any local OpenAI- or Anthropic-compatible client. Tool calls, Responses, and Messages share the same loopback server.</dd></div>
+          <div><dt>Vision in the same chat</dt><dd>Attach an image; a vision-capable model sees it on this Mac and the image does not leave the laptop.</dd></div>
+          <div><dt>Generate an image</dt><dd>A text prompt becomes one lossless PNG through the local image endpoint, served by the same app.</dd></div>
+          <div><dt>Install from the Library</dt><dd>Download a curated public model; Astronomical verifies the payload before the model becomes discoverable.</dd></div>
+          <div><dt>One memory ceiling</dt><dd>Set the model RAM your laptop can spare. Complete experts stay resident when they fit; selected experts stream from storage when the request needs room.</dd></div>
+          <div><dt>No hidden quantization</dt><dd>A tighter ceiling never silently downgrades the model. Paging keeps the artifact's declared types; unsupported files fail validation instead of being guessed from a name.</dd></div>
+          <div><dt>Launch a coding agent</dt><dd><code>astronomical launch claude</code>, <code>codex</code>, or <code>opencode</code> runs the agent on a local model for one session, with the model's real context window declared, without touching the agent's own settings.</dd></div>
+          <div><dt>Embed text</dt><dd>The embeddings endpoint or <code>astronomical embed</code> turns text into vectors for search and retrieval that stay on this Mac.</dd></div>
+          <div><dt>Drive it from the terminal</dt><dd><code>astronomical respond</code> answers one prompt, <code>models</code> lists and downloads, <code>status</code> shows the worker and resident model, and <code>doctor</code> checks which instance the command line talks to.</dd></div>
+        </dl>
+      </section>
+
+      <section class="split shell" aria-labelledby="residency-title">
+        <div class="split-head">
+          <p class="section-index">How it decides</p>
+          <h2 id="residency-title">Fully in memory when it fits. <em>Streamed when it does not.</em></h2>
+        </div>
+        <div class="split-body">
+          <p>You never pick a mode. The runner projects what the next request needs, keeps every expert resident when the whole sparse payload fits, and pages router-selected experts from the SSD when live context needs the room. When the room comes back, the complete expert layers do too.</p>
+          <figure class="memory-figure">
+            <svg viewBox="0 0 600 46" role="img" aria-label="Memory under the ceiling: model core, experts in memory, experts streaming, live context, then headroom.">
+              <defs><pattern id="bar-hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="7" fill="#b9b4a9"/></pattern></defs>
+              <rect x="0.5" y="6.5" width="560" height="34" rx="3" fill="#1d1e21" stroke="rgba(228,224,214,0.3)"/>
+              <rect x="1" y="7" width="110" height="33" fill="#e4e0d6"/>
+              <rect x="111" y="7" width="190" height="33" fill="#b9b4a9"/>
+              <rect x="301" y="7" width="120" height="33" fill="url(#bar-hatch)"/>
+              <rect x="421" y="7" width="70" height="33" fill="#9d988e" fill-opacity="0.28"/>
+              <path d="M561 0v46" stroke="#e4e0d6" stroke-width="2"/>
+            </svg>
+            <figcaption class="legend"><span><i class="swatch swatch-core"></i>Model core</span><span><i class="swatch swatch-resident"></i>Experts in memory</span><span><i class="swatch swatch-streaming"></i>Experts streaming</span><span><i class="swatch swatch-context"></i>Live context</span><span><i class="swatch swatch-ceiling"></i>Your ceiling</span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="notes shell" id="reports" aria-labelledby="reports-title">
+        <div class="notes-head">
+          <h2 id="reports-title">Claims need <em>receipts.</em></h2>
+          <p>Each field note separates architecture facts, acceptance evidence, and open questions. Failed ideas stay on the record.</p>
+        </div>
+        <ol class="note-list">
+          <li>
+            <a href="./reports/persistent-prompt-reuse/">
+              <span class="note-id">R-001</span>
+              <span class="note-title">A repeated prefix skipped 2,048 prompt tokens.</span>
+              <span class="note-meta">Prompt reuse · <strong>Verified</strong></span>
+            </a>
+          </li>
+          <li>
+            <a href="#method">
+              <span class="note-id">Next</span>
+              <span class="note-title note-title-planned">Ten thousand tokens in, five hundred out, memory beside speed.</span>
+              <span class="note-meta">Measurement · Planned</span>
+            </a>
+          </li>
         </ol>
       </section>
 
-      <section class="closing shell">
-        <p class="eyebrow">Built in the open</p>
-        <h2>The laptop is the deployment target.</h2>
-        <p>No cloud account. No model upload. No hidden precision downgrade.</p>
-        <div class="hero-actions closing-actions">
-          <a class="button button-primary" href="https://github.com/aosama/astronomical/releases/latest">Get the Mac app</a>
-          <a class="button button-secondary" href="https://github.com/aosama/astronomical">Follow the work on GitHub <span aria-hidden="true">↗</span></a>
+      <section class="split shell" id="method" aria-labelledby="method-title">
+        <div class="split-head">
+          <p class="section-index">Evidence standard</p>
+          <h2 id="method-title">Fast is a measurement, <em>not an adjective.</em></h2>
+        </div>
+        <ol class="method-list">
+          <li><strong>Representative work.</strong> Performance claims use at least 10,000 input tokens and about 500 output tokens, the shape of a coding-agent turn, after a small warmup, on an optimized build, with the exact workload disclosed.</li>
+          <li><strong>Memory beside speed.</strong> Throughput is reported with model precision, effective memory ceiling, and peak MLX memory.</li>
+          <li><strong>Cold and warm separated.</strong> Operating-system file reuse is not presented as SSD performance, and throughput runs disable the persistent prompt cache so a cache hit never passes for speed.</li>
+          <li><strong>Failed ideas stay visible.</strong> A smaller command count or a prettier trace is not a win unless end-to-end behavior improves.</li>
+        </ol>
+      </section>
+
+      <section class="closing">
+        <div class="shell closing-grid">
+          <h2>The laptop is the deployment target.</h2>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/aosama/astronomical/releases/latest">Download for Mac</a>
+            <a class="text-link" href="https://github.com/aosama/astronomical">Follow the work on GitHub ↗</a>
+          </div>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
       <a class="brand" href="./index.html">
-        <img src="./assets/mark.svg" alt="" width="30" height="30">
-        <span>Astronomical</span>
+        <img src="./assets/mark.svg" alt="" width="26" height="26">
+        <span>astronomical</span>
       </a>
       <p>Local language, vision, and image models for Apple silicon.</p>
-      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="#capabilities">Capabilities</a><a href="./local-api.html">Local API</a><a href="#reports">Reports</a><a href="https://discord.gg/dc4E6r4WD">Discord</a></div>
+      <div><a href="https://github.com/aosama/astronomical">GitHub</a><a href="./local-api.html">Local API</a><a href="#reports">Field notes</a><a href="https://discord.gg/dc4E6r4WD">Discord</a></div>
     </footer>
 
     <script src="./assets/release-feed.js"></script>
