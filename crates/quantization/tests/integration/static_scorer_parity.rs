@@ -5,7 +5,6 @@ use astronomical_quantization::sensitivity::static_scorer::structural_priority;
 use super::fixtures;
 
 #[test]
-#[ignore = "pending implementation of structural_priority"]
 fn should_reproduce_the_python_structural_priorities() {
     let fixture = fixtures::static_scorer_parity();
 
