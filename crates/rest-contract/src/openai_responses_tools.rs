@@ -111,11 +111,7 @@ impl OpenAiResponseToolChoice {
 }
 
 fn validate_function_name(function_name: &str) -> Result<(), OpenAiResponsesValidationError> {
-    if !function_name.is_empty()
-        && function_name
-            .bytes()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, b'_' | b'-'))
-    {
+    if is_valid_function_name(function_name) {
         return Ok(());
     }
     Err(OpenAiResponsesValidationError::InvalidToolName {
@@ -123,7 +119,17 @@ fn validate_function_name(function_name: &str) -> Result<(), OpenAiResponsesVali
     })
 }
 
-fn json_nesting_depth(json_value: &Value) -> usize {
+/// The function-name alphabet both tool surfaces accept: ASCII letters,
+/// digits, `_`, and `-`, matching the Anthropic `^[a-zA-Z0-9_-]` tool-name rule
+/// and the name characters the worker's tool-call parser round-trips.
+pub(crate) fn is_valid_function_name(function_name: &str) -> bool {
+    !function_name.is_empty()
+        && function_name
+            .bytes()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, b'_' | b'-'))
+}
+
+pub(crate) fn json_nesting_depth(json_value: &Value) -> usize {
     match json_value {
         Value::Array(array_values) => {
             1 + array_values

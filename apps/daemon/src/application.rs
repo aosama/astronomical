@@ -382,8 +382,9 @@ pub(crate) fn application_router(application_state: ApplicationState) -> Router 
 }
 
 /// The always-present routes: console/catalog/telemetry merges plus the
-/// health, readiness, status, cache-stats, model listing, and the two
-/// body-budgeted OpenAI text endpoints (chat completions and responses).
+/// health, readiness, status, cache-stats, model listing, and the three
+/// body-budgeted text endpoints (OpenAI chat completions and responses, and
+/// Anthropic messages).
 fn core_api_routes() -> Router<ApplicationState> {
     Router::new()
         .merge(console_routes())
@@ -409,6 +410,16 @@ fn core_api_routes() -> Router<ApplicationState> {
         .route(
             "/v1/responses",
             post(responses_endpoint::create_response)
+                .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
+                .layer(axum::middleware::from_fn(
+                    enforce_openai_request_body_budget,
+                )),
+        )
+        // Anthropic-protocol agents send the same conversation payloads, so
+        // the Messages endpoint takes the same portable body budget.
+        .route(
+            "/v1/messages",
+            post(crate::rest::anthropic::messages_endpoint::create_message)
                 .layer(DefaultBodyLimit::max(MAX_OPENAI_REQUEST_BODY_BYTES))
                 .layer(axum::middleware::from_fn(
                     enforce_openai_request_body_budget,

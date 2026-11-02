@@ -194,7 +194,12 @@ fn take_non_empty_string(string_content: &mut String) -> Option<String> {
     }
 }
 
-fn append_instruction(chat_messages: &mut Vec<ChatMessage>, instruction_content: &str) {
+/// Places one mid-conversation instruction chronologically: as the system
+/// prompt when nothing precedes it, otherwise inside an escaped
+/// `<system-update>` tag on the latest user message. Shared with the
+/// Anthropic Messages surface, whose clients also send mid-conversation
+/// system turns.
+pub(crate) fn append_instruction(chat_messages: &mut Vec<ChatMessage>, instruction_content: &str) {
     if chat_messages.is_empty() {
         chat_messages.push(ChatMessage::System {
             content: instruction_content.to_owned(),

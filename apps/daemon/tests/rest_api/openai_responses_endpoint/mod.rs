@@ -17,11 +17,11 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 use tower::ServiceExt;
 
-const MODEL_ID: &str = "astronomical/responses-endpoint-test-model";
+pub(crate) const MODEL_ID: &str = "astronomical/responses-endpoint-test-model";
 
 mod request_rejection;
 mod streaming;
 mod success;
-mod support;
+pub(crate) mod support;
 
 use support::*;

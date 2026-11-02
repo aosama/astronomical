@@ -119,7 +119,7 @@ async fn should_list_complete_capabilities_for_a_ready_worker_model() {
     assert_eq!(advertised_model["tool_call_format"], "openai_function_call");
     assert_eq!(
         advertised_model["supported_endpoints"],
-        serde_json::json!(["/v1/chat/completions", "/v1/responses"])
+        serde_json::json!(["/v1/chat/completions", "/v1/responses", "/v1/messages"])
     );
     assert_eq!(advertised_model["supports_structured_outputs"], true);
     assert_eq!(
@@ -164,7 +164,7 @@ async fn should_get_a_discovered_model_by_provider_prefixed_id() {
     );
     assert_eq!(
         advertised_model["supported_endpoints"],
-        serde_json::json!(["/v1/chat/completions", "/v1/responses"])
+        serde_json::json!(["/v1/chat/completions", "/v1/responses", "/v1/messages"])
     );
 }
 

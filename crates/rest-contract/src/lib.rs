@@ -1,17 +1,21 @@
-//! Typed OpenAI-compatible request/response contracts for Astronomical's
-//! loopback REST surface.
+//! Typed OpenAI-compatible and Anthropic-compatible request/response
+//! contracts for Astronomical's loopback REST surface.
 //!
 //! # Test tiers
 //!
-//! All 141 tests in this crate are unit tests and live beside the types
+//! All 161 tests in this crate are unit tests and live beside the types
 //! they exercise, in `#[cfg(test)]` submodules of `src/` (issue #1610):
-//! 137 moved in from the retired `tests/rest_api` integration lane, plus
-//! the request-budget module's four. The crate has no integration lane;
+//! 137 moved in from the retired `tests/rest_api` integration lane, the
+//! request-budget module's four, and the Anthropic Messages request's
+//! twenty (issue #890). The crate has no integration lane;
 //! the `rest_api_tests` target CI selects resolves from the daemon crate,
 //! which drives the full application stack.
 
 #![forbid(unsafe_code)]
 
+mod anthropic_messages_content;
+mod anthropic_messages_request;
+mod anthropic_messages_response;
 mod image_input;
 mod openai_chat_completion_request;
 mod openai_chat_completion_response;
@@ -31,6 +35,21 @@ mod openai_responses_tools;
 mod openai_structured_outputs;
 mod thinking_controls;
 
+pub use anthropic_messages_content::{
+    AnthropicImageSource, AnthropicInputContentBlock, AnthropicInputMessage,
+    AnthropicMessageContent, AnthropicMessageParts, AnthropicSystemBlock, AnthropicSystemPrompt,
+    AnthropicToolAdditionReference, AnthropicToolUseParts, AnthropicUserSegmentParts,
+};
+pub use anthropic_messages_request::{
+    AnthropicMessagesRequest, AnthropicMessagesRequestParts, AnthropicMessagesValidationError,
+    AnthropicOutputConfiguration, AnthropicThinkingConfiguration, AnthropicToolChoice,
+    AnthropicToolChoiceParts, AnthropicToolDefinition, AnthropicToolDefinitionParts,
+};
+pub use anthropic_messages_response::{
+    AnthropicContentBlockDelta, AnthropicError, AnthropicErrorResponse, AnthropicMessage,
+    AnthropicMessageDeltaBody, AnthropicMessageStreamEvent, AnthropicOutputContentBlock,
+    AnthropicStopReason, AnthropicUsage,
+};
 pub use image_input::OpenAiImageInput;
 pub use openai_chat_completion_request::{
     DEFAULT_OPENAI_OUTPUT_TOKENS, MAX_OPENAI_OUTPUT_TOKENS, MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH,
