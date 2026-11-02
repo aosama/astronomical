@@ -158,12 +158,12 @@ impl AnthropicMessagesRequest {
             resolve_thinking_budget(self.thinking.as_ref(), self.output_config.as_ref())?;
         let is_thinking_display_omitted = resolve_thinking_display(self.thinking.as_ref())?;
         let tool_choice = resolve_tool_choice(self.tool_choice.as_ref())?;
-        let tools = tool_definition_parts(self.tools)?;
         let system = self
             .system
             .map(AnthropicSystemPrompt::into_text)
             .transpose()?;
         let messages = message_parts(self.messages)?;
+        let tools = with_added_tools(tool_definition_parts(self.tools)?, &messages);
         validate_tool_references(&messages, &tools)?;
         Ok(AnthropicMessagesRequestParts {
             model: self.model,
@@ -312,6 +312,26 @@ pub(crate) fn resolve_thinking_display(
     }
 }
 
+/// Pure: appends the tool definitions system turns added mid-conversation
+/// to the declared tools, skipping any name already declared, because the
+/// worker takes one flat tool list and a duplicate name would be ambiguous.
+pub(crate) fn with_added_tools(
+    mut declared_tools: Vec<AnthropicToolDefinitionParts>,
+    messages: &[AnthropicMessageParts],
+) -> Vec<AnthropicToolDefinitionParts> {
+    for message_parts in messages {
+        let AnthropicMessageParts::System { added_tools, .. } = message_parts else {
+            continue;
+        };
+        for added_tool in added_tools {
+            if !is_declared_tool(&added_tool.name, &declared_tools) {
+                declared_tools.push(added_tool.clone());
+            }
+        }
+    }
+    declared_tools
+}
+
 /// Every system-turn tool reference must name a declared tool.
 pub(crate) fn validate_tool_references(
     messages: &[AnthropicMessageParts],
@@ -366,7 +386,11 @@ pub(crate) fn resolve_tool_choice(
 }
 
 impl AnthropicToolDefinition {
-    fn into_parts(self) -> Result<AnthropicToolDefinitionParts, AnthropicMessagesValidationError> {
+    /// Shared by top-level tools and the tool definitions Claude Code adds
+    /// mid-conversation, so both pass the same name and schema rules.
+    pub(crate) fn into_parts(
+        self,
+    ) -> Result<AnthropicToolDefinitionParts, AnthropicMessagesValidationError> {
         if !matches!(self.tool_type.as_deref(), None | Some("custom")) {
             return Err(AnthropicMessagesValidationError::UnsupportedToolType {
                 tool_type: self.tool_type.unwrap_or_default(),

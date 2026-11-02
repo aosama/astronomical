@@ -373,6 +373,72 @@ fn should_keep_system_turn_text_and_its_declared_tool_references() {
         AnthropicMessageParts::System {
             text: "The working directory changed.".to_owned(),
             referenced_tool_names: vec!["read_play".to_owned()],
+            added_tools: Vec::new(),
+        }
+    );
+}
+
+/// The second-turn shape Claude Code sends once it loads a deferred tool:
+/// a `tool_definition` addition carrying the whole tool.
+fn tool_definition_addition_request(added_tool_name: &str) -> serde_json::Value {
+    let mut request_document = minimal_request();
+    request_document["tools"] = json!([{"name": "read_play"}]);
+    request_document["messages"] = json!([
+        {"role": "user", "content": "Read the play."},
+        {"role": "system", "content": [
+            {"type": "tool_addition", "tool": {"type": "tool_definition", "definition": {
+                "name": added_tool_name,
+                "description": "Searches the folio",
+                "input_schema": {"type": "object", "properties": {"line": {"type": "string"}}}
+            }}},
+            {"type": "tool_addition", "tool": {"type": "tool_reference", "name": added_tool_name}}
+        ]}
+    ]);
+    request_document
+}
+
+#[test]
+fn should_add_a_tool_defined_mid_conversation_to_the_declared_tools() {
+    let request_parts = parts_of(tool_definition_addition_request("search_folio"));
+
+    let mut tool_names = Vec::new();
+    for tool_definition in &request_parts.tools {
+        tool_names.push(tool_definition.name.as_str());
+    }
+    assert_eq!(tool_names, vec!["read_play", "search_folio"]);
+}
+
+#[test]
+fn should_not_duplicate_a_tool_that_is_defined_again_mid_conversation() {
+    let request_parts = parts_of(tool_definition_addition_request("read_play"));
+
+    assert_eq!(request_parts.tools.len(), 1);
+}
+
+#[test]
+fn should_validate_a_mid_conversation_tool_definition_like_a_declared_tool() {
+    assert_eq!(
+        rejection_of(tool_definition_addition_request("search folio")),
+        AnthropicMessagesValidationError::InvalidToolName {
+            tool_name: "search folio".to_owned()
+        }
+    );
+}
+
+#[test]
+fn should_reject_a_tool_definition_addition_without_its_definition() {
+    let mut request_document = minimal_request();
+    request_document["messages"] = json!([
+        {"role": "user", "content": "Read the play."},
+        {"role": "system", "content": [
+            {"type": "tool_addition", "tool": {"type": "tool_definition"}}
+        ]}
+    ]);
+
+    assert_eq!(
+        rejection_of(request_document),
+        AnthropicMessagesValidationError::UnsupportedContentBlock {
+            location: "system message"
         }
     );
 }

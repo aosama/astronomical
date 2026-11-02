@@ -11,7 +11,7 @@ use serde_json::Value;
 
 use crate::anthropic_messages_request::{
     message_parts, resolve_thinking_budget, resolve_thinking_display, resolve_tool_choice,
-    tool_definition_parts, validate_tool_references,
+    tool_definition_parts, validate_tool_references, with_added_tools,
 };
 use crate::{
     AnthropicInputMessage, AnthropicMessagesRequestParts, AnthropicMessagesValidationError,
@@ -67,12 +67,12 @@ impl AnthropicCountTokensRequest {
             resolve_thinking_budget(self.thinking.as_ref(), self.output_config.as_ref())?;
         let is_thinking_display_omitted = resolve_thinking_display(self.thinking.as_ref())?;
         let tool_choice = resolve_tool_choice(self.tool_choice.as_ref())?;
-        let tools = tool_definition_parts(self.tools)?;
         let system = self
             .system
             .map(AnthropicSystemPrompt::into_text)
             .transpose()?;
         let messages = message_parts(self.messages)?;
+        let tools = with_added_tools(tool_definition_parts(self.tools)?, &messages);
         validate_tool_references(&messages, &tools)?;
         Ok(AnthropicMessagesRequestParts {
             model: self.model,

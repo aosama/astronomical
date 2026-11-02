@@ -17,13 +17,14 @@ use astronomical_config::AstronomicalRuntimeInstance;
 use std::os::unix::process::CommandExt;
 
 fn main() -> ExitCode {
-    if env::args_os().any(|argument| argument == "--verbose" || argument == "-v") {
+    let process_arguments = env::args_os().collect::<Vec<_>>();
+    if astronomical_cli::arguments::is_verbose_requested(&process_arguments) {
         let _ = tracing_subscriber::fmt()
             .with_writer(io::stderr)
             .with_max_level(tracing::Level::DEBUG)
             .try_init();
     }
-    match parse_command(env::args_os()) {
+    match parse_command(process_arguments) {
         Ok(CliCommand::Help) => {
             print!("{}", help_text());
             ExitCode::SUCCESS
@@ -151,6 +152,7 @@ fn run_launch(launch_arguments: astronomical_cli::LaunchArguments) -> ExitCode {
     };
 
     let mut command = Command::new(&prepared_launch.program);
+    command.args(&prepared_launch.arguments);
     for (environment_name, environment_value) in prepared_launch.extra_environment {
         command.env(environment_name, environment_value);
     }

@@ -12,7 +12,57 @@ mod validate_config_tests;
 use std::ffi::OsString;
 
 use crate::arguments::UsageError;
-use crate::arguments::{CliCommand, help_text, parse_command};
+use crate::arguments::{CliCommand, help_text, is_verbose_requested, parse_command};
+
+fn process_arguments(arguments: &[&str]) -> Vec<OsString> {
+    let mut process_arguments = vec![OsString::from("astronomical")];
+    for argument in arguments {
+        process_arguments.push(OsString::from(argument));
+    }
+    process_arguments
+}
+
+#[test]
+fn should_request_verbose_tracing_from_a_launcher_flag() {
+    assert!(is_verbose_requested(&process_arguments(&["-v", "launch"])));
+    assert!(is_verbose_requested(&process_arguments(&[
+        "launch",
+        "--verbose"
+    ])));
+}
+
+#[test]
+fn should_not_request_verbose_tracing_from_a_harness_flag() {
+    assert!(!is_verbose_requested(&process_arguments(&[
+        "launch",
+        "claude",
+        "--",
+        "-p",
+        "hi",
+        "--verbose"
+    ])));
+}
+
+#[test]
+fn should_not_request_verbose_tracing_without_arguments() {
+    assert!(!is_verbose_requested(&process_arguments(&[])));
+    assert!(!is_verbose_requested(&[]));
+}
+
+#[test]
+fn should_strip_the_launcher_verbose_flag_but_keep_the_harness_one() {
+    assert!(is_verbose_requested(&process_arguments(&[
+        "launch", "-v", "claude", "--", "-v"
+    ])));
+    assert_eq!(
+        parse(&["launch", "-v", "claude", "--", "-v"]).expect("both verbose flags"),
+        CliCommand::Launch(crate::arguments::LaunchArguments {
+            tool_slug: Some("claude".to_owned()),
+            model_id: None,
+            harness_arguments: vec!["-v".into()],
+        })
+    );
+}
 
 /// Parses arguments as the CLI would see them after the binary name.
 fn parse(arguments: &[&str]) -> Result<CliCommand, UsageError> {
@@ -39,6 +89,7 @@ fn should_ignore_verbose_as_a_global_flag() {
         CliCommand::Launch(crate::arguments::LaunchArguments {
             tool_slug: Some("opencode".to_owned()),
             model_id: None,
+            harness_arguments: Vec::new(),
         })
     );
     assert_eq!(
@@ -46,7 +97,29 @@ fn should_ignore_verbose_as_a_global_flag() {
         CliCommand::Launch(crate::arguments::LaunchArguments {
             tool_slug: Some("opencode".to_owned()),
             model_id: None,
+            harness_arguments: Vec::new(),
         })
+    );
+}
+
+#[test]
+fn should_leave_help_version_and_verbose_after_a_double_dash_to_the_harness() {
+    assert_eq!(
+        parse(&["launch", "claude", "--", "--help", "--version", "-v"])
+            .expect("harness flags pass through"),
+        CliCommand::Launch(crate::arguments::LaunchArguments {
+            tool_slug: Some("claude".to_owned()),
+            model_id: None,
+            harness_arguments: vec!["--help".into(), "--version".into(), "-v".into()],
+        })
+    );
+}
+
+#[test]
+fn should_still_honor_help_before_a_double_dash() {
+    assert_eq!(
+        parse(&["launch", "--help", "--", "-p"]).expect("launcher help"),
+        CliCommand::Help
     );
 }
 

@@ -1,3 +1,4 @@
+mod claude_code_launch;
 mod client_thinking_budget_field_rest;
 mod embeddings_rest;
 mod follow_up_turn_admission_rest;

@@ -147,6 +147,11 @@ test-prism-hadamard-performance = "run -p xtask -- test-run --package astronomic
 test-prism-hadamard-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter folded_ternary --ignored"
 test-prism-hadamard-serving = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter should_serve_greedy_and_sampled_chat_completions_from_the_folded_pack --ignored"
 
+# `astronomical launch claude` end to end (issue #891): a real daemon on the
+# configured small dense model, the launch verb's preparation, and a headless
+# Claude Code turn. Needs Claude Code on PATH; prints per-stage [timing].
+test-claude-code-launch = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --release --ignored --filter should_complete_a_claude_code_turn_on_the_local_model_through_the_launch_verb"
+
 # JANGH2 lanes: plan contracts against real bundles, GPU decode-throughput
 # (memory-traffic bound, so the optimized build is part of the alias; serial
 # by rule), correctness contracts, and serving throughput over the daemon

@@ -12,7 +12,10 @@ use serde_json::Value;
 
 use crate::image_input::decode_base64_image_payload;
 use crate::request_budget::{MAX_IMAGE_PARTS_PER_REQUEST, MAX_INLINE_MEDIA_BYTES};
-use crate::{AnthropicMessagesValidationError, DecodedImageInput};
+use crate::{
+    AnthropicMessagesValidationError, AnthropicToolDefinition, AnthropicToolDefinitionParts,
+    DecodedImageInput,
+};
 
 /// One conversation turn as an Anthropic client sends it.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -74,7 +77,7 @@ pub enum AnthropicInputContentBlock {
     /// Claude Code announces deferred tools mid-conversation with system-role
     /// `tool_addition` blocks.
     ToolAddition {
-        tool: AnthropicToolAdditionReference,
+        tool: AnthropicToolAddition,
     },
     RedactedThinking {},
     /// Documents, server-tool results, search results, and future block types.
@@ -82,16 +85,20 @@ pub enum AnthropicInputContentBlock {
     Unsupported,
 }
 
-/// The tool a `tool_addition` block makes available. Only `tool_reference`
-/// is served: it names a tool already declared in the top-level `tools`, and
-/// every declared tool is already visible to the local model, so dropping the
-/// reference changes nothing the model sees.
+/// The tool a `tool_addition` block makes available, in one of two forms:
+/// a `tool_reference` naming a tool already declared in the top-level
+/// `tools`, or a `tool_definition` carrying a deferred tool Claude Code loads
+/// mid-conversation. The worker's tool list is flat, so a definition joins
+/// the declared tools for the whole request; the model calls it only after
+/// the turn that introduced it, so nothing it sees changes earlier turns.
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct AnthropicToolAdditionReference {
+pub struct AnthropicToolAddition {
     #[serde(rename = "type")]
-    reference_type: String,
+    addition_type: String,
     #[serde(default)]
     name: String,
+    #[serde(default)]
+    definition: Option<AnthropicToolDefinition>,
 }
 
 /// An image block's source; only inline `base64` sources are served locally.
@@ -117,12 +124,13 @@ pub enum AnthropicMessageParts {
         tool_uses: Vec<AnthropicToolUseParts>,
     },
     /// A mid-conversation instruction; `text` is empty when the turn held
-    /// only tool references. The referenced names are checked against the
-    /// declared tools, so a reference to an undeclared tool fails loudly
-    /// instead of being dropped.
+    /// only tool additions. Added definitions join the declared tools, and
+    /// referenced names are then checked against them, so a reference to an
+    /// undeclared tool fails loudly instead of being dropped.
     System {
         text: String,
         referenced_tool_names: Vec<String>,
+        added_tools: Vec<AnthropicToolDefinitionParts>,
     },
 }
 
@@ -202,13 +210,12 @@ fn system_message_parts(
 ) -> Result<AnthropicMessageParts, AnthropicMessagesValidationError> {
     let mut system_texts = Vec::new();
     let mut referenced_tool_names = Vec::new();
+    let mut added_tools = Vec::new();
     for content_block in content_blocks {
         match content_block {
             AnthropicInputContentBlock::Text { text } => system_texts.push(text),
-            AnthropicInputContentBlock::ToolAddition { tool }
-                if tool.reference_type == "tool_reference" =>
-            {
-                referenced_tool_names.push(tool.name);
+            AnthropicInputContentBlock::ToolAddition { tool } => {
+                admit_tool_addition(tool, &mut referenced_tool_names, &mut added_tools)?;
             }
             _ => {
                 return Err(AnthropicMessagesValidationError::UnsupportedContentBlock {
@@ -220,7 +227,33 @@ fn system_message_parts(
     Ok(AnthropicMessageParts::System {
         text: system_texts.join("\n\n"),
         referenced_tool_names,
+        added_tools,
     })
+}
+
+/// Records a `tool_reference` by name, or validates a `tool_definition` with
+/// the same rules as a top-level tool; any other addition is rejected.
+fn admit_tool_addition(
+    tool_addition: AnthropicToolAddition,
+    referenced_tool_names: &mut Vec<String>,
+    added_tools: &mut Vec<AnthropicToolDefinitionParts>,
+) -> Result<(), AnthropicMessagesValidationError> {
+    match (
+        tool_addition.addition_type.as_str(),
+        tool_addition.definition,
+    ) {
+        ("tool_reference", _) => {
+            referenced_tool_names.push(tool_addition.name);
+            Ok(())
+        }
+        ("tool_definition", Some(tool_definition)) => {
+            added_tools.push(tool_definition.into_parts()?);
+            Ok(())
+        }
+        _ => Err(AnthropicMessagesValidationError::UnsupportedContentBlock {
+            location: "system message",
+        }),
+    }
 }
 
 fn user_message_parts(
