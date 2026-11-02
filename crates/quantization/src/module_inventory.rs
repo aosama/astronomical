@@ -91,6 +91,19 @@ pub struct QuantizableModuleDescriptor {
     pub weight_source: ModuleWeightSource,
     pub role: ModuleRole,
     pub transformer_block_index: Option<usize>,
+    /// `(bits, group_size)` an already-quantized source was written with,
+    /// resolved per module from the source config's overrides; `None` for a
+    /// float source.
+    pub source_quantization: Option<(u32, u32)>,
+}
+
+/// A tensor the requantizer copies unencoded, with where it lives so the
+/// plan and the driver need no second header walk.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PassThroughTensor {
+    pub shard_file_name: String,
+    pub tensor_name: String,
+    pub shape: Vec<usize>,
 }
 
 /// The complete inventory of one source directory.
@@ -105,7 +118,7 @@ pub struct ModuleInventory {
     /// routers, anything whose last dimension does not divide the group size)
     /// and pass through the requantizer untouched. Kept so the requantizer's
     /// tensor plan is complete without a second header walk.
-    pass_through_tensor_names: Vec<String>,
+    pass_through_tensors: Vec<PassThroughTensor>,
     /// Aliases from the alternate spellings mlx-lm uses for the same module
     /// (`model.` stripped, `model.language_model.` reordered or flattened) to
     /// the canonical name, so a probe model's own module names resolve.
@@ -137,7 +150,7 @@ impl ModuleInventory {
             source_directory: source_directory.to_path_buf(),
             group_size,
             modules: contents.modules,
-            pass_through_tensor_names: contents.pass_through_tensor_names,
+            pass_through_tensors: contents.pass_through_tensors,
             aliases: contents.aliases,
         })
     }
@@ -158,7 +171,7 @@ impl ModuleInventory {
             source_directory,
             group_size,
             modules,
-            pass_through_tensor_names: Vec::new(),
+            pass_through_tensors: Vec::new(),
             aliases: BTreeMap::new(),
         }
     }
@@ -183,8 +196,17 @@ impl ModuleInventory {
     }
 
     #[must_use]
-    pub fn pass_through_tensor_names(&self) -> &[String] {
-        &self.pass_through_tensor_names
+    pub fn pass_through_tensor_names(&self) -> Vec<String> {
+        let mut tensor_names = Vec::with_capacity(self.pass_through_tensors.len());
+        for pass_through_tensor in &self.pass_through_tensors {
+            tensor_names.push(pass_through_tensor.tensor_name.clone());
+        }
+        tensor_names
+    }
+
+    #[must_use]
+    pub fn pass_through_tensors(&self) -> &[PassThroughTensor] {
+        &self.pass_through_tensors
     }
 
     /// Resolves a canonical name or any registered alias.

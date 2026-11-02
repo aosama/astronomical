@@ -13,7 +13,6 @@ use astronomical_quantization::sensitivity::{
 };
 
 #[test]
-#[ignore = "pending implementation of the artifact writers"]
 fn should_write_config_metadata_and_sensitivity_where_optiq_and_astronomical_read_them() {
     let source = tempfile::tempdir().expect("a temporary directory should be creatable");
     let output = tempfile::tempdir().expect("a temporary directory should be creatable");
@@ -41,18 +40,11 @@ fn should_write_config_metadata_and_sensitivity_where_optiq_and_astronomical_rea
             &output.path().join("config.json"),
         )
         .expect("the config should be written");
-    let mut metadata = OptiQArtifactMetadata {
-        method: "optiq_mixed_precision".to_owned(),
-        base_model: "example/base".to_owned(),
-        reference: "bf16".to_owned(),
-        target_bits_per_weight: 4.5,
-        achieved_bits_per_weight: 8.0,
-        module_count_at_highest_width: 1,
-        module_count_at_lowest_width: 0,
-        threshold: 0.0,
-        per_layer: BTreeMap::new(),
-        producer: "astronomical-quantization".to_owned(),
-    };
+    let mut metadata = OptiQArtifactMetadata::for_method(
+        SensitivityMethod::ExactBfloat16Reference,
+        "example/base",
+        64,
+    );
     metadata.describe_written_artifact(&written);
     metadata
         .write(output.path())

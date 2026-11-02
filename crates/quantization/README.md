@@ -2,7 +2,7 @@
 
 Sensitivity-driven mixed-precision affine quantization for MLX artifacts: a Rust port of the quantization core of [OptiQ](https://mlx-optiq.com) (the `mlx-optiq` Python package, MIT License, Copyright (c) 2026 Thin Signal). The full attribution, including the oMLX lineage of the range-search encoder, is in `third-party/THIRD_PARTY_NOTICES`; the vendored calibration mix carries its license beside it in `calibration/LICENSE-OPTIQ`.
 
-This document is the design record for the port. The crate holds the typed design and the complete test plan. The taxonomy, bit widths, progress reporting, the allocator, the module inventory, the structural scorer, the KL formula, the pure reference encoder, and the requantizer's bit policy are ported and tested; every other algorithm body is a `todo!()` whose message and preceding comment describe the work to port, and its tests are `#[ignore]`d naming the pending function. Implementation proceeds module by module by removing the ignores.
+This document is the design record for the port. The crate holds the typed design and the complete test plan. The taxonomy, bit widths, progress reporting, the allocator, the module inventory, the structural scorer, the KL formula, the pure reference encoder, the artifact writers, and the requantizer's plan, bit policy, and shard writer are ported and tested; every other algorithm body is a `todo!()` whose message and preceding comment describe the work to port, and its tests are `#[ignore]`d naming the pending function. Implementation proceeds module by module by removing the ignores.
 
 ## Why port rather than call Python
 
@@ -27,8 +27,8 @@ Every `mod.rs` holds only module declarations and re-exports; each concern lives
 | Score structurally without measurement | `sensitivity::static_scorer` | `core/sensitivity.py` `analyze_sensitivity_static` | no | ported |
 | Allocate bits under a target | `allocation::optimizer` with `knapsack`, `block_floor`, `block_run_guard`, `protected_modules`, `bits_per_weight`, `predicate` | `core/optimizer.py` | no | ported |
 | Encode with the range search | `encoder::range_search_policy`, `encoder::reference`, `encoder::mlx` | `core/lowbit.py` | `direct-mlx` (pure reference beside it) | reference ported, MLX stub |
-| Requantize tensor by tensor | `requantize::{tensor_plan, bit_policy, shard_writer, driver}` | `core/shardwise.py` | `direct-mlx` | bit policy ported, rest stub |
-| Write the artifact documents | `artifact::{layout, quantization_config, metadata, sensitivity_document}` | `artifacts.py`, `backends/mlx_backend.py` metadata | no | stub (layout ported) |
+| Requantize tensor by tensor | `requantize::{tensor_plan, bit_policy, shard_writer, driver}` | `core/shardwise.py` | `direct-mlx` | plan, bit policy, and shard writer ported; MLX driver stub |
+| Write the artifact documents | `artifact::{layout, quantization_config, metadata, sensitivity_document}` | `artifacts.py`, `backends/mlx_backend.py` metadata | no | ported |
 | Roofline throughput model | `latency::{hardware_profile, roofline, calibrated_model}` | `core/latency.py` | no | stub |
 | Key-value cache allocation | `kv_cache::{cache_sensitivity, cache_allocator, cache_config_document}` | `core/kv_cache.py` | engine-side only | stub |
 | Orchestrate | `pipeline` | `models/llm.py` `run_llm_pipeline` | `direct-mlx` for the full path | stub |
@@ -53,7 +53,7 @@ The CLI's `astronomical quantize` verb has three sub-verbs. `plan` (allocate fro
 
 ## Output format
 
-The output is OptiQ's artifact layout, which three independent readers accept: stock mlx-lm (`config.json`'s `quantization` document with global defaults plus per-module `{bits, group_size, mode}` entries), OptiQ's own tools (`optiq/metadata.json` with the `per_layer` bit map and `optiq/sensitivity.json` with the measured sweep), and Astronomical's model-serving crate, whose strict `MlxQuantizationDocument` and `OptiQMetadata` readers validate the two documents against each other at load. The model-serving integration test `artifacts::optiq_artifact_round_trip` feeds this crate's writers straight into those readers.
+The output is OptiQ's artifact layout, which three independent readers accept: stock mlx-lm (`config.json`'s `quantization` document with global defaults plus per-module `{bits, group_size, mode}` entries), OptiQ's own tools (`optiq/metadata.json` with the `per_layer` bit map, in the published `optiq_mixed_precision` layout for measured conversions and the static allocator's layout for structural ones, listing only quantized modules; and `optiq/sensitivity.json` with the measured sweep), and Astronomical's model-serving crate, whose strict `MlxQuantizationDocument` and `OptiQMetadata` readers validate the two documents against each other at load. The model-serving integration test `artifacts::optiq_artifact_round_trip` feeds this crate's writers straight into those readers.
 
 Two rules from the field are encoded, not left to discipline: the metadata describes the weights that were written (a router passed through, a module dropped to group size 32), never the plan; and the sensitivity document ships with every quant so a re-target is a knapsack re-run, not a repeated ten-hour sweep.
 

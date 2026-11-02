@@ -7,7 +7,6 @@ use crate::bit_width::BitWidth;
 use crate::sensitivity::SensitivityMethod;
 
 #[test]
-#[ignore = "pending implementation of from_table and to_table"]
 fn should_round_trip_a_table_through_the_optiq_document_shape() {
     let table = SensitivityTable {
         method: SensitivityMethod::ExactBfloat16Reference,
@@ -38,7 +37,6 @@ fn should_round_trip_a_table_through_the_optiq_document_shape() {
 }
 
 #[test]
-#[ignore = "pending implementation of to_table"]
 fn should_reject_a_document_with_an_unsupported_bit_key() {
     let document = OptiQSensitivityDocument {
         base_model: "example/base".to_owned(),
@@ -56,4 +54,51 @@ fn should_reject_a_document_with_an_unsupported_bit_key() {
         document.to_table(),
         Err(QuantizationError::UnsupportedBitWidth { bits: 7 })
     ));
+}
+
+#[test]
+fn should_reject_a_bit_key_that_is_not_a_number() {
+    let document = OptiQSensitivityDocument {
+        base_model: "example/base".to_owned(),
+        candidate_bits: vec![4],
+        group_size: 64,
+        metric: "kl_divergence_vs_reference".to_owned(),
+        layers: vec![SensitivityLayerEntry {
+            layer_name: "m".to_owned(),
+            sensitivities: BTreeMap::from([("four".to_owned(), 0.1)]),
+            logical_parameter_count: 1,
+        }],
+    };
+
+    assert!(matches!(
+        document.to_table(),
+        Err(QuantizationError::UnsupportedBitWidth { .. })
+    ));
+}
+
+#[test]
+fn should_report_a_missing_sensitivity_document_as_unreadable() {
+    let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+
+    let read_outcome = OptiQSensitivityDocument::read(&directory.path().join("sensitivity.json"));
+
+    assert!(matches!(
+        read_outcome,
+        Err(QuantizationError::SensitivityDocumentUnreadable { .. })
+    ));
+}
+
+#[test]
+fn should_translate_an_empty_document_to_an_empty_table() {
+    let document = OptiQSensitivityDocument {
+        base_model: "example/base".to_owned(),
+        candidate_bits: vec![4, 8],
+        group_size: 64,
+        metric: "kl_divergence_vs_reference".to_owned(),
+        layers: Vec::new(),
+    };
+
+    let table = document.to_table().expect("an empty document translates");
+
+    assert!(table.results.is_empty());
 }

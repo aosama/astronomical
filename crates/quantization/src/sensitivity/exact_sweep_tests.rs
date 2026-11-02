@@ -117,6 +117,7 @@ fn dense_module(module_name: &str) -> QuantizableModuleDescriptor {
         },
         role: ModuleRole::DenseFeedForward,
         transformer_block_index: crate::module_taxonomy::transformer_block_index(module_name),
+        source_quantization: None,
     }
 }
 

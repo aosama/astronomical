@@ -3,7 +3,7 @@
 //! tensors. A module is kept only when its logical last dimension divides
 //! the target group size.
 
-use super::super::{ModuleWeightSource, SourceTensorDtype};
+use super::super::{ModuleWeightSource, PassThroughTensor, SourceTensorDtype};
 use super::{InventoryWalk, LocatedTensor, PerExpertTensor, descriptor_for};
 
 impl InventoryWalk {
@@ -154,8 +154,11 @@ impl InventoryWalk {
                 && have_one_shape(&per_expert_tensors, &first_shape);
             if !is_stackable {
                 for per_expert_tensor in per_expert_tensors {
-                    self.pass_through_tensor_names
-                        .push(per_expert_tensor.tensor_name);
+                    self.pass_through_tensors.push(PassThroughTensor {
+                        shard_file_name: per_expert_tensor.shard_file_name,
+                        tensor_name: per_expert_tensor.tensor_name,
+                        shape: per_expert_tensor.shape,
+                    });
                 }
                 continue;
             }
@@ -202,7 +205,9 @@ impl InventoryWalk {
         let scales_shape = self
             .shape_by_tensor_name
             .get(&format!("{module_base}.scales"))?;
-        let source_group_size = self.source_group_sizes.group_size_for(module_base)? as usize;
+        let source_group_size = self
+            .source_quantization_parameters
+            .group_size_for(module_base)? as usize;
         let mut logical_shape = header_shape;
         let last_index = logical_shape.len().checked_sub(1)?;
         logical_shape[last_index] = scales_shape.last()? * source_group_size;
@@ -226,11 +231,18 @@ impl InventoryWalk {
         source_dtype: SourceTensorDtype,
         weight_source: ModuleWeightSource,
     ) {
+        let source_quantization = if source_dtype == SourceTensorDtype::MlxAffinePacked {
+            self.source_quantization_parameters
+                .parameters_for(&module_name)
+        } else {
+            None
+        };
         let descriptor = descriptor_for(
             module_name.clone(),
             logical_shape,
             source_dtype,
             weight_source,
+            source_quantization,
         );
         self.modules.insert(module_name, descriptor);
     }

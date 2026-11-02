@@ -63,7 +63,7 @@ fn should_inventory_two_dimensional_linears_and_skip_norms() {
 
     assert_eq!(inventory.module_count(), 3);
     assert_eq!(
-        inventory.pass_through_tensor_names(),
+        inventory.pass_through_tensor_names().as_slice(),
         &["model.layers.0.input_layernorm.weight".to_owned()]
     );
     let head = inventory
@@ -149,7 +149,7 @@ fn should_stack_unfused_per_expert_tensors_in_expert_order() {
 }
 
 /// Writes one shard of tensors with explicit dtypes and the given config.
-fn write_typed_source(
+pub fn write_typed_source(
     directory: &Path,
     tensors: &[(&str, safetensors::Dtype, &[usize])],
     config_json: &str,
@@ -248,7 +248,7 @@ fn should_pass_a_packed_source_through_when_its_group_size_is_undeclared() {
 
     assert_eq!(inventory.module_count(), 0);
     assert_eq!(
-        inventory.pass_through_tensor_names(),
+        inventory.pass_through_tensor_names().as_slice(),
         &["model.layers.0.mlp.up_proj.weight".to_owned()]
     );
 }
@@ -293,7 +293,7 @@ fn should_accept_a_block_scaled_fp8_weight_and_consume_its_scale() {
     );
     // An FP8 tensor with no block scale cannot be dequantized, so it passes.
     assert_eq!(
-        inventory.pass_through_tensor_names(),
+        inventory.pass_through_tensor_names().as_slice(),
         &["model.layers.0.self_attn.k_proj.weight".to_owned()]
     );
 }
@@ -335,7 +335,7 @@ fn should_pass_the_router_through_and_rename_nemotron_expert_projections() {
     assert_eq!(first_feed_forward.logical_shape, vec![2, 256, 128]);
     assert_eq!(first_feed_forward.role, ModuleRole::RoutedExpert);
     assert_eq!(
-        inventory.pass_through_tensor_names(),
+        inventory.pass_through_tensor_names().as_slice(),
         &["backbone.layers.1.mixer.gate.weight".to_owned()]
     );
 }

@@ -20,6 +20,7 @@ fn descriptor(
         },
         role,
         transformer_block_index: crate::module_taxonomy::transformer_block_index(module_name),
+        source_quantization: None,
     }
 }
 
