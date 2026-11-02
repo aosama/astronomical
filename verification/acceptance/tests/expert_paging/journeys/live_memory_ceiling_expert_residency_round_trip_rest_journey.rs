@@ -64,7 +64,7 @@ async fn should_serve_one_conversation_across_streaming_resident_and_streaming_m
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "raises the worker ceiling during a long cached streaming conversation and asserts residency reporting consistency (issue #337); the settle-fully-resident step is known-red until idle re-promotion lands (issue #1316)"]
+#[ignore = "raises the worker ceiling during a long cached streaming conversation and asserts residency reporting consistency (issue #337); its idle settle-fully-resident step pins a behavior the product does not build: a demoted worker returns to the resident engine before its next request (#1535), not while idle (issue #1316)"]
 #[serial]
 async fn should_settle_fully_resident_after_raising_the_memory_ceiling_mid_streaming_conversation()
 {
