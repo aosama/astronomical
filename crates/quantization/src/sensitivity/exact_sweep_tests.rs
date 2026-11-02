@@ -133,7 +133,6 @@ fn two_samples() -> Vec<CalibrationForwardSample> {
 }
 
 #[test]
-#[ignore = "pending implementation of run_exact_sweep"]
 fn should_probe_every_module_at_every_width_and_restore_between_probes() {
     let mut probe_model = ScriptedProbeModel {
         modules: vec![dense_module("model.layers.0.mlp.up_proj")],
@@ -198,7 +197,6 @@ fn should_probe_every_module_at_every_width_and_restore_between_probes() {
 }
 
 #[test]
-#[ignore = "pending implementation of run_exact_sweep"]
 fn should_record_zero_without_forwards_for_the_width_the_baseline_already_holds() {
     // Uniform-4-bit reference: probing 4 bits re-encodes the module to what
     // it already is, so the driver records 0 and spends no forwards.
@@ -242,7 +240,6 @@ fn should_record_zero_without_forwards_for_the_width_the_baseline_already_holds(
 }
 
 #[test]
-#[ignore = "pending implementation of run_exact_sweep"]
 fn should_refuse_the_keep_bfloat16_tier_against_a_uniform_reference() {
     let mut probe_model = ScriptedProbeModel {
         modules: vec![dense_module("model.layers.0.mlp.up_proj")],
@@ -278,7 +275,6 @@ fn should_refuse_the_keep_bfloat16_tier_against_a_uniform_reference() {
 }
 
 #[test]
-#[ignore = "pending implementation of require_measured_majority"]
 fn should_refuse_a_sweep_that_skipped_most_modules_by_count() {
     // muse_glimmer scored 1 of 417 modules and still shipped a quant.
     let guard_outcome = require_measured_majority(416, 417, 0, 1);
@@ -290,7 +286,6 @@ fn should_refuse_a_sweep_that_skipped_most_modules_by_count() {
 }
 
 #[test]
-#[ignore = "pending implementation of require_measured_majority"]
 fn should_refuse_a_sweep_that_skipped_most_parameters_by_mass() {
     // Nemotron-H skipped 46 of 164 modules (28%, under the count rule) but
     // they held most of the parameters.
@@ -303,14 +298,150 @@ fn should_refuse_a_sweep_that_skipped_most_parameters_by_mass() {
 }
 
 #[test]
-#[ignore = "pending implementation of require_measured_majority"]
 fn should_accept_a_sweep_with_a_few_unmatched_modules() {
     assert!(require_measured_majority(3, 417, 1_000_000, 9_000_000_000).is_ok());
 }
 
 #[test]
-#[ignore = "pending implementation of mean_kl_divergence"]
 fn should_average_per_sample_divergences() {
-    assert_eq!(mean_kl_divergence(&[0.2, 0.4]), 0.3);
+    // 0.2 + 0.4 is not exactly 0.6 in binary floating point, in Rust or in
+    // Python, so the mean is compared within rounding.
+    assert!((mean_kl_divergence(&[0.2, 0.4]) - 0.3).abs() < 1e-12);
     assert_eq!(mean_kl_divergence(&[]), 0.0);
+}
+
+fn probe_with(
+    modules: Vec<QuantizableModuleDescriptor>,
+    unresolvable: &[&str],
+) -> ScriptedProbeModel {
+    let mut unresolvable_modules = Vec::new();
+    for module_name in unresolvable {
+        unresolvable_modules.push((*module_name).to_owned());
+    }
+    ScriptedProbeModel {
+        modules,
+        current_bit_widths: BTreeMap::new(),
+        simulated: None,
+        unresolvable_modules,
+        calls: Vec::new(),
+    }
+}
+
+#[test]
+fn should_resume_from_a_checkpoint_without_reprobing_complete_modules() {
+    let checkpoint_directory =
+        tempfile::tempdir().expect("a temporary directory should be creatable");
+    let checkpoint_path = checkpoint_directory
+        .path()
+        .join("sensitivity_checkpoint.json");
+    let finished = sensitivity_result(
+        "model.layers.0.mlp.up_proj",
+        4096,
+        BTreeMap::from([
+            (BitWidth::new(4).expect("valid"), 0.5),
+            (BitWidth::new(8).expect("valid"), 0.1),
+        ]),
+    );
+    crate::sensitivity::checkpoint::merge_and_save_checkpoint(&checkpoint_path, &[finished])
+        .expect("the checkpoint should be written");
+    let mut probe_model = probe_with(
+        vec![
+            dense_module("model.layers.0.mlp.up_proj"),
+            dense_module("model.layers.1.mlp.up_proj"),
+        ],
+        &[],
+    );
+    let samples = two_samples();
+    let candidate_bit_widths = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
+    let mut silent_reporter = SilentProgressReporter;
+
+    let table = run_exact_sweep(
+        &mut probe_model,
+        ExactSweepRequest {
+            calibration_samples: &samples,
+            candidate_bit_widths: &candidate_bit_widths,
+            group_size: GroupSize::new(64).expect("valid"),
+            method: SensitivityMethod::ExactBfloat16Reference,
+            checkpoint_path: Some(&checkpoint_path),
+            progress_reporter: &mut silent_reporter,
+        },
+    )
+    .expect("the resumed sweep should succeed");
+
+    assert_eq!(table.results.len(), 2);
+    assert_eq!(
+        table.results[0].kl_divergence_at(BitWidth::new(4).expect("valid")),
+        Some(0.5)
+    );
+    for call in &probe_model.calls {
+        assert_ne!(
+            call,
+            &ProbeCall::Restore {
+                module_name: "model.layers.0.mlp.up_proj".to_owned()
+            }
+        );
+    }
+    let reloaded = crate::sensitivity::checkpoint::load_checkpoint(&checkpoint_path);
+    assert_eq!(reloaded.len(), 2);
+}
+
+#[test]
+fn should_skip_an_unresolvable_module_and_refuse_when_most_were_skipped() {
+    let mut probe_model = probe_with(
+        vec![
+            dense_module("model.layers.0.mlp.up_proj"),
+            dense_module("model.layers.1.mlp.up_proj"),
+        ],
+        &["model.layers.0.mlp.up_proj", "model.layers.1.mlp.up_proj"],
+    );
+    let samples = two_samples();
+    let candidate_bit_widths = CandidateBitWidths::new(&[4, 8]).expect("valid ladder");
+    let mut silent_reporter = SilentProgressReporter;
+
+    let sweep_outcome = run_exact_sweep(
+        &mut probe_model,
+        ExactSweepRequest {
+            calibration_samples: &samples,
+            candidate_bit_widths: &candidate_bit_widths,
+            group_size: GroupSize::new(64).expect("valid"),
+            method: SensitivityMethod::ExactBfloat16Reference,
+            checkpoint_path: None,
+            progress_reporter: &mut silent_reporter,
+        },
+    );
+
+    assert!(matches!(
+        sweep_outcome,
+        Err(QuantizationError::SensitivitySweepMeasuredTooLittle {
+            measured_module_count: 0,
+            total_module_count: 2,
+            ..
+        })
+    ));
+}
+
+#[test]
+fn should_record_zero_for_the_keep_bfloat16_tier_against_a_bfloat16_reference() {
+    let mut probe_model = probe_with(vec![dense_module("model.layers.0.mlp.up_proj")], &[]);
+    let samples = two_samples();
+    let candidate_bit_widths = CandidateBitWidths::new(&[4, 16]).expect("valid ladder");
+    let mut silent_reporter = SilentProgressReporter;
+
+    let table = run_exact_sweep(
+        &mut probe_model,
+        ExactSweepRequest {
+            calibration_samples: &samples,
+            candidate_bit_widths: &candidate_bit_widths,
+            group_size: GroupSize::new(64).expect("valid"),
+            method: SensitivityMethod::ExactBfloat16Reference,
+            checkpoint_path: None,
+            progress_reporter: &mut silent_reporter,
+        },
+    )
+    .expect("the sweep should succeed");
+
+    assert_eq!(
+        table.results[0].kl_divergence_at(BitWidth::new(16).expect("valid")),
+        Some(0.0)
+    );
 }

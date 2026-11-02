@@ -28,7 +28,6 @@ impl ProgressReporter for CountingReporter {
 }
 
 #[test]
-#[ignore = "pending implementation of CalibrationMix::bundled"]
 fn should_load_the_bundled_mix_into_the_requested_number_of_sequences() {
     let mut reporter = CountingReporter::default();
 
