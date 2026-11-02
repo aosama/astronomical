@@ -1,8 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title description">
   <title id="title">Astronomical</title>
-  <desc id="description">An orbital ring crossing a bright core</desc>
-  <rect width="64" height="64" rx="16" fill="#10120f"/>
-  <circle cx="32" cy="32" r="9" fill="#d8ff3e"/>
-  <ellipse cx="32" cy="32" rx="24" ry="11" fill="none" stroke="#f4f0e6" stroke-width="3" transform="rotate(-24 32 32)"/>
-  <circle cx="52" cy="22" r="3" fill="#ff6b35"/>
+  <desc id="description">The limb of a body larger than its plate, with an eyepiece reticle</desc>
+  <defs>
+    <clipPath id="plate"><rect width="64" height="64" rx="7"/></clipPath>
+  </defs>
+  <g clip-path="url(#plate)">
+    <rect width="64" height="64" fill="#a8321f"/>
+    <circle cx="8" cy="92" r="62" fill="#e4e0d6"/>
+  </g>
+  <path d="M44 11v6M44 23v6M35 20h6M47 20h6" stroke="#e4e0d6" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="44" cy="20" r="2.8" fill="#e4e0d6"/>
 </svg>
