@@ -2,7 +2,7 @@
 
 Sensitivity-driven mixed-precision affine quantization for MLX artifacts: a Rust port of the quantization core of [OptiQ](https://mlx-optiq.com) (the `mlx-optiq` Python package, MIT License, Copyright (c) 2026 Thin Signal). The full attribution, including the oMLX lineage of the range-search encoder, is in `third-party/THIRD_PARTY_NOTICES`; the vendored calibration mix carries its license beside it in `calibration/LICENSE-OPTIQ`.
 
-This document is the design record for the port. The crate holds the typed design and the complete test plan. The taxonomy, bit widths, progress reporting, the allocator, the module inventory, the structural scorer, the KL formula, the pure reference encoder, the artifact writers, the Metal range-search encoder, the requantizer (plan, bit policy, shard writer, and the MLX driver with its source reader for fused, stacked, FP8, and packed layouts), calibration loading, the sweep driver with its checkpoint and report, and the pipeline orchestration are ported and tested; every other algorithm body is a `todo!()` whose message and preceding comment describe the work to port, and its tests are `#[ignore]`d naming the pending function. Implementation proceeds module by module by removing the ignores.
+This document is the design record for the port. The crate holds the typed design and the complete test plan. The taxonomy, bit widths, progress reporting, the allocator, the module inventory, the structural scorer, the KL formula, the pure reference encoder, the artifact writers, the Metal range-search encoder, the requantizer (plan, bit policy, shard writer, and the MLX driver with its source reader for fused, stacked, FP8, and packed layouts), calibration loading, the sweep driver with its checkpoint and report, the pipeline orchestration, the roofline latency model, and the key-value cache sweep and allocator are ported and tested. No algorithm body in the crate is a stub; what remains engine-side is the Qwen3.5 probe in model-serving.
 
 ## Why port rather than call Python
 
@@ -29,8 +29,8 @@ Every `mod.rs` holds only module declarations and re-exports; each concern lives
 | Encode with the range search | `encoder::range_search_policy`, `encoder::reference`, `encoder::mlx` | `core/lowbit.py` | `direct-mlx` (pure reference beside it) | ported |
 | Requantize tensor by tensor | `requantize::{tensor_plan, bit_policy, shard_writer, driver}` | `core/shardwise.py` | `direct-mlx` | ported |
 | Write the artifact documents | `artifact::{layout, quantization_config, metadata, sensitivity_document}` | `artifacts.py`, `backends/mlx_backend.py` metadata | no | ported |
-| Roofline throughput model | `latency::{hardware_profile, roofline, calibrated_model}` | `core/latency.py` | no | stub |
-| Key-value cache allocation | `kv_cache::{cache_sensitivity, cache_allocator, cache_config_document}` | `core/kv_cache.py` | engine-side only | stub |
+| Roofline throughput model | `latency::{hardware_profile, roofline, calibrated_model}` | `core/latency.py` | no | ported |
+| Key-value cache allocation | `kv_cache::{cache_sensitivity, cache_allocator, cache_config_document}` | `core/kv_cache.py` | engine-side only | sweep driver and allocator ported; an engine probe is not yet written |
 | Orchestrate | `pipeline` with `artifact_files` and `conversion` | `models/llm.py` `run_llm_pipeline` | `direct-mlx` for the full path | ported |
 | Progress and ETA | `progress` | the per-layer ETA prints | no | ported |
 
