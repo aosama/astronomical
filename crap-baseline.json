@@ -64254,9 +64254,18 @@
       "crate": "astronomical-quantization"
     },
     {
+      "file": "crates/quantization/src/calibration/calibration_tests.rs",
+      "function": "prose_sample",
+      "line": 134,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
       "file": "crates/quantization/src/calibration/mix.rs",
       "function": "CalibrationMix::bundled",
-      "line": 49,
+      "line": 48,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -64265,34 +64274,34 @@
     {
       "file": "crates/quantization/src/calibration/mix.rs",
       "function": "CalibrationMix::from_jsonl_file",
-      "line": 68,
-      "cyclomatic": 1.0,
+      "line": 67,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 20.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/calibration/mix.rs",
       "function": "CalibrationMix::from_pretokenized",
-      "line": 126,
-      "cyclomatic": 1.0,
+      "line": 141,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/calibration/mix.rs",
       "function": "CalibrationMix::from_samples",
-      "line": 102,
-      "cyclomatic": 1.0,
+      "line": 106,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 20.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/calibration/mix.rs",
       "function": "CalibrationMix::parse_jsonl",
-      "line": 41,
+      "line": 43,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64301,7 +64310,7 @@
     {
       "file": "crates/quantization/src/calibration/mix.rs",
       "function": "CalibrationMix::samples",
-      "line": 137,
+      "line": 155,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64310,16 +64319,97 @@
     {
       "file": "crates/quantization/src/calibration/mix.rs",
       "function": "CalibrationMix::summary",
-      "line": 142,
+      "line": 160,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
       "crate": "astronomical-quantization"
     },
     {
+      "file": "crates/quantization/src/calibration/mix.rs",
+      "function": "parse_jsonl_from",
+      "line": 173,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/mix.rs",
+      "function": "sequence_offsets",
+      "line": 229,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/mix.rs",
+      "function": "tokenize_samples",
+      "line": 197,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
       "file": "crates/quantization/src/calibration/sample.rs",
       "function": "CalibrationSample::render_text",
-      "line": 31,
+      "line": 33,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/seeded_shuffle.rs",
+      "function": "MersenneTwister19937::from_seed",
+      "line": 35,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/seeded_shuffle.rs",
+      "function": "MersenneTwister19937::next_in_interval",
+      "line": 65,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/seeded_shuffle.rs",
+      "function": "MersenneTwister19937::next_u32",
+      "line": 51,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/seeded_shuffle.rs",
+      "function": "MersenneTwister19937::regenerate_state",
+      "line": 81,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/seeded_shuffle.rs",
+      "function": "shuffle_like_numpy_random_state",
+      "line": 99,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/calibration/seeded_shuffle_tests.rs",
+      "function": "shuffled_range",
+      "line": 6,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64328,19 +64418,19 @@
     {
       "file": "crates/quantization/src/calibration/tokenizer.rs",
       "function": "HuggingFaceCalibrationTokenizer::encode",
-      "line": 27,
-      "cyclomatic": 1.0,
+      "line": 31,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/calibration/tokenizer.rs",
       "function": "HuggingFaceCalibrationTokenizer::from_tokenizer_file",
       "line": 20,
-      "cyclomatic": 1.0,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -65686,29 +65776,101 @@
     },
     {
       "file": "crates/quantization/src/sensitivity/checkpoint.rs",
-      "function": "complete_entries_for",
-      "line": 52,
+      "function": "bare_literal_at",
+      "line": 256,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "checkpoint_unwritable",
+      "line": 219,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "complete_entries_for",
+      "line": 86,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "entry_from_result",
+      "line": 163,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "kl_divergence_of",
+      "line": 149,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/sensitivity/checkpoint.rs",
       "function": "load_checkpoint",
-      "line": 28,
-      "cyclomatic": 1.0,
+      "line": 32,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 20.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/sensitivity/checkpoint.rs",
       "function": "merge_and_save_checkpoint",
-      "line": 41,
-      "cyclomatic": 1.0,
+      "line": 62,
+      "cyclomatic": 5.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "quote_bare_non_finite_literals",
+      "line": 228,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "read_checkpoint_entries",
+      "line": 120,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "result_from_entry",
+      "line": 135,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/checkpoint.rs",
+      "function": "write_entries_atomically",
+      "line": 188,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -65722,26 +65884,89 @@
     },
     {
       "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
-      "function": "mean_kl_divergence",
-      "line": 97,
-      "cyclomatic": 1.0,
+      "function": "completed_results_by_name",
+      "line": 189,
+      "cyclomatic": 2.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
+      "function": "count_completed",
+      "line": 203,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
+      "function": "describe_module_result",
+      "line": 298,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
+      "function": "mean_kl_divergence",
+      "line": 157,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
+      "function": "measure_against_reference",
+      "line": 269,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
+      "function": "probe_one_width",
+      "line": 251,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
+      "function": "record_skip",
+      "line": 285,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
       "function": "require_measured_majority",
-      "line": 80,
-      "cyclomatic": 1.0,
+      "line": 127,
+      "cyclomatic": 6.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 42.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
       "function": "run_exact_sweep",
-      "line": 71,
+      "line": 69,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
+      "function": "sensitivity_result",
+      "line": 311,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65749,11 +65974,11 @@
     },
     {
       "file": "crates/quantization/src/sensitivity/exact_sweep.rs",
-      "function": "sensitivity_result",
-      "line": 104,
-      "cyclomatic": 1.0,
+      "function": "sweep_one_module",
+      "line": 218,
+      "cyclomatic": 7.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 56.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -65821,6 +66046,15 @@
     },
     {
       "file": "crates/quantization/src/sensitivity/exact_sweep_tests.rs",
+      "function": "probe_with",
+      "line": 313,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/exact_sweep_tests.rs",
       "function": "two_samples",
       "line": 124,
       "cyclomatic": 1.0,
@@ -65866,11 +66100,38 @@
     },
     {
       "file": "crates/quantization/src/sensitivity/report.rs",
-      "function": "render_sensitivity_report",
-      "line": 18,
-      "cyclomatic": 2.0,
+      "function": "compare_by_descending_divergence",
+      "line": 50,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 6.0,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/report.rs",
+      "function": "grouped_thousands",
+      "line": 79,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/report.rs",
+      "function": "python_scientific",
+      "line": 59,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/sensitivity/report.rs",
+      "function": "render_sensitivity_report",
+      "line": 16,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -66129,6 +66390,15 @@
       "file": "crates/quantization/tests/integration/module_inventory_journeys.rs",
       "function": "write_typed_source",
       "line": 152,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/integration/requantize_plan.rs",
+      "function": "planned_entry",
+      "line": 109,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,

@@ -18,14 +18,22 @@ pub struct HuggingFaceCalibrationTokenizer {
 
 impl HuggingFaceCalibrationTokenizer {
     pub fn from_tokenizer_file(tokenizer_path: &Path) -> Result<Self, QuantizationError> {
-        let _ = tokenizer_path;
-        todo!("tokenizers::Tokenizer::from_file, mapped to TokenizerFailure")
+        match tokenizers::Tokenizer::from_file(tokenizer_path) {
+            Ok(tokenizer) => Ok(Self { tokenizer }),
+            Err(load_error) => Err(QuantizationError::TokenizerFailure {
+                description: format!("could not load {}: {load_error}", tokenizer_path.display()),
+            }),
+        }
     }
 }
 
 impl CalibrationTokenizer for HuggingFaceCalibrationTokenizer {
     fn encode(&self, text: &str) -> Result<Vec<u32>, QuantizationError> {
-        let _ = (&self.tokenizer, text);
-        todo!("self.tokenizer.encode(text, false) and collect get_ids()")
+        match self.tokenizer.encode(text, false) {
+            Ok(encoding) => Ok(encoding.get_ids().to_vec()),
+            Err(encode_error) => Err(QuantizationError::TokenizerFailure {
+                description: encode_error.to_string(),
+            }),
+        }
     }
 }

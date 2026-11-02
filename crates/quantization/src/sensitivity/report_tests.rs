@@ -19,7 +19,6 @@ fn should_say_so_when_there_are_no_modules_to_report() {
 }
 
 #[test]
-#[ignore = "pending implementation of render_sensitivity_report"]
 fn should_rank_modules_by_descending_divergence_per_width_and_cut_at_top_n() {
     let table = SensitivityTable {
         method: SensitivityMethod::ExactBfloat16Reference,
@@ -48,4 +47,15 @@ fn should_rank_modules_by_descending_divergence_per_width_and_cut_at_top_n() {
     assert!(report.contains("most-sensitive modules at 4-bit"));
     assert!(report.contains("model.layers.1.mlp.up_proj"));
     assert!(!report.contains("model.layers.0.mlp.up_proj"));
+}
+
+#[test]
+fn should_format_numbers_the_way_python_prints_them() {
+    assert_eq!(python_scientific(0.001234), "1.234e-03");
+    assert_eq!(python_scientific(12345.0), "1.234e+04");
+    assert_eq!(python_scientific(0.0), "0.000e+00");
+    assert_eq!(python_scientific(f64::NAN), "nan");
+    assert_eq!(grouped_thousands(1_234_567), "1,234,567");
+    assert_eq!(grouped_thousands(999), "999");
+    assert_eq!(grouped_thousands(0), "0");
 }

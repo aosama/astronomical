@@ -25,10 +25,19 @@ pub struct CalibrationSample {
 }
 
 impl CalibrationSample {
-    /// The text to encode: `text` as-is, or the role-prefixed rendering of
-    /// `messages`. Samples with neither are skipped.
+    /// The text to encode: the role-prefixed rendering of `messages`
+    /// (`[role]: content` joined by blank lines), else `text` as-is. Messages
+    /// win when a sample carries both, as in OptiQ. Samples with neither are
+    /// skipped.
     #[must_use]
     pub fn render_text(&self) -> Option<String> {
-        todo!("return text, else join messages as \"[role]: content\" separated by blank lines")
+        if let Some(messages) = &self.messages {
+            let mut rendered_turns = Vec::with_capacity(messages.len());
+            for message in messages {
+                rendered_turns.push(format!("[{}]: {}", message.role, message.content));
+            }
+            return Some(rendered_turns.join("\n\n"));
+        }
+        self.text.clone()
     }
 }

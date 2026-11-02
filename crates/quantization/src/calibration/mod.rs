@@ -27,6 +27,7 @@
 
 pub mod mix;
 pub mod sample;
+pub mod seeded_shuffle;
 pub mod tokenizer;
 
 pub use mix::{
