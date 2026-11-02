@@ -28,7 +28,7 @@
         <div class="doc-body">
           <p class="eyebrow">Privacy policy</p>
           <h1>Privacy Policy</h1>
-          <p class="doc-meta">Effective: September 2, 2026 · Applies to the Astronomical macOS application.</p>
+          <p class="doc-meta">Effective: November 2, 2026 · Applies to the Astronomical macOS application.</p>
 
           <h2>The short version</h2>
           <p>Astronomical runs language, vision, and image models entirely on your Mac. Your prompts, conversations, documents, and images are processed on your device and are never sent to us — we operate no servers that receive them. The app has no accounts, no sign-in, no advertising, and no in-app analytics.</p>
@@ -47,6 +47,9 @@
             <li><strong>Update checks.</strong> Builds distributed outside the Mac App Store check a signed update feed to tell you when a new version exists. The feed operator sees standard web requests for the update description. App Store builds receive updates exclusively through the App Store and make no such request.</li>
             <li><strong>Local API.</strong> The app serves a local interface on this Mac only, at a loopback address. Requests to it never leave your machine.</li>
           </ul>
+
+          <h2>Coding agents you launch</h2>
+          <p><code>astronomical launch</code> starts a coding agent you installed yourself, such as Claude Code, Codex, or OpenCode, and points its model requests at the local API above, so the prompts and code it sends to the model are answered on this Mac. The agent remains its own program: anything it does over the network beyond those model requests, such as checking for its own updates or sending its maker's telemetry, is governed by that agent's settings and its maker's privacy policy, not by Astronomical. The launcher itself only asks the local app, over loopback, which models it serves; it sends nothing off this Mac and changes none of the agent's saved settings.</p>
 
           <h2>Diagnostics and crash reports</h2>
           <p>The app itself contains no crash reporting and no usage analytics.</p>
@@ -73,7 +76,7 @@
 
           <h2>Contact</h2>
           <p>Questions about this policy: <a href="./support.html">Support</a>.</p>
-          <p class="doc-meta">Privacy policy for the Astronomical macOS application, distributed on the Mac App Store and directly. Last updated: September 2, 2026.</p>
+          <p class="doc-meta">Privacy policy for the Astronomical macOS application, distributed on the Mac App Store and directly. Last updated: November 2, 2026.</p>
         </div>
       </section>
     </main>

@@ -6,7 +6,7 @@
 //! names are a configuration value, so that half of the contract lives with the
 //! configuration crate that owns them.
 
-use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf, process::Command};
+use std::{collections::BTreeSet, net::SocketAddr, path::PathBuf};
 
 use astronomical_daemon::ChatGenerationStreamEvent;
 use astronomical_ipc_protocol::ChatGenerationCompletionReason;
@@ -139,11 +139,68 @@ async fn should_serve_every_endpoint_path_the_local_api_page_documents() {
 
 #[tokio::test]
 async fn should_answer_the_verification_command_the_local_api_page_publishes() {
-    let published_command = published_snippet_blocks(&local_api_page())
-        .into_iter()
-        .find(|block| block.contains("curl ") && block.contains("/chat/completions"))
-        .expect("the local API page should publish a chat completion command");
+    let published_command = published_command_for_path("/chat/completions");
 
+    let completion = run_published_command(&published_command).await;
+
+    assert_eq!(completion["object"], "chat.completion");
+    assert_eq!(completion["choices"][0]["message"]["content"], "done");
+}
+
+#[tokio::test]
+async fn should_answer_the_messages_verification_command_the_local_api_page_publishes() {
+    let published_command = published_command_for_path("/v1/messages \\");
+
+    let message = run_published_command(&published_command).await;
+
+    assert_eq!(message["type"], "message");
+    assert_eq!(message["content"][0]["text"], "done");
+    assert_eq!(message["stop_reason"], "end_turn");
+}
+
+/// The first published `curl` command that targets `path_fragment`.
+fn published_command_for_path(path_fragment: &str) -> String {
+    for published_block in published_snippet_blocks(&local_api_page()) {
+        if published_block.contains("curl ") && published_block.contains(path_fragment) {
+            return published_block;
+        }
+    }
+    panic!("the local API page should publish a curl command for {path_fragment}");
+}
+
+/// Runs a published command the way a reader does: their own identifier
+/// pasted in, against the port the page names (here, a scripted app bound to
+/// a free loopback port), and returns the JSON it prints.
+async fn run_published_command(published_command: &str) -> serde_json::Value {
+    let bound_origin = serve_scripted_application().await;
+    let published_origin = first_loopback_origin(published_command)
+        .expect("the published command should name a loopback address");
+    let live_command = published_command
+        .replace(&published_origin, &bound_origin)
+        .replace(MODEL_IDENTIFIER_PLACEHOLDER, MODEL_ID);
+    let command_output = tokio::process::Command::new("bash")
+        .arg("-c")
+        .arg(&live_command)
+        .output()
+        .await
+        .expect("bash should execute the published command");
+    assert!(
+        command_output.status.success(),
+        "the published command should succeed, stderr was: {}",
+        String::from_utf8_lossy(&command_output.stderr)
+    );
+    match serde_json::from_slice(&command_output.stdout) {
+        Ok(printed_document) => printed_document,
+        Err(json_error) => panic!(
+            "the published command should print JSON, it printed {:?} ({json_error})",
+            String::from_utf8_lossy(&command_output.stdout)
+        ),
+    }
+}
+
+/// A scripted app that answers one generation with "done", served on a free
+/// loopback port; returns its origin.
+async fn serve_scripted_application() -> String {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(vec![
         ChatGenerationStreamEvent::TextFragment("done".to_owned()),
         ChatGenerationStreamEvent::Completed {
@@ -166,36 +223,7 @@ async fn should_answer_the_verification_command_the_local_api_page_publishes() {
     tokio::spawn(async move {
         let _ = axum::serve(listener, application).await;
     });
-
-    // A reader pastes their own identifier into the command and runs it against
-    // the port the page names, so the test performs exactly those two substitutions.
-    let published_origin = first_loopback_origin(&published_command)
-        .expect("the published command should name a loopback address");
-    let live_command = published_command
-        .replace(&published_origin, &bound_origin)
-        .replace(MODEL_IDENTIFIER_PLACEHOLDER, MODEL_ID);
-
-    let command_output = tokio::task::spawn_blocking(move || {
-        Command::new("bash").arg("-c").arg(&live_command).output()
-    })
-    .await
-    .expect("the published command should run")
-    .expect("bash should execute the published command");
-
-    assert!(
-        command_output.status.success(),
-        "the published command should succeed, stderr was: {}",
-        String::from_utf8_lossy(&command_output.stderr)
-    );
-    let completion: serde_json::Value = serde_json::from_slice(&command_output.stdout)
-        .unwrap_or_else(|source| {
-            panic!(
-                "the published command should print a JSON completion, it printed {:?} ({source})",
-                String::from_utf8_lossy(&command_output.stdout)
-            )
-        });
-    assert_eq!(completion["object"], "chat.completion");
-    assert_eq!(completion["choices"][0]["message"]["content"], "done");
+    bound_origin
 }
 
 #[test]
