@@ -241,8 +241,11 @@ pub(crate) fn write_cache_pressure_worker_config(
         },
     });
     if let Some(maximum_mlx_memory_bytes) = maximum_mlx_memory_bytes {
-        configuration_document["maximum_mlx_memory_gb"] =
-            json!(maximum_mlx_memory_bytes / 1_000_000_000);
+        configuration_document["maximum_mlx_memory_gb"] = json!(
+            crate::support::marketed_gigabytes::marketed_gigabytes_at_most(
+                maximum_mlx_memory_bytes
+            )
+        );
     }
     fs::write(
         configuration_directory.join("config.json"),
