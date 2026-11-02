@@ -39,7 +39,9 @@ async fn main() {
             WorkerCommand::GenerateEmbeddings(_) => {
                 panic!("the chat-only fixture must not receive embeddings generation")
             }
-            WorkerCommand::Generate(generation_command) => {
+            // A count is answered like a generation: one Completed event.
+            WorkerCommand::Generate(generation_command)
+            | WorkerCommand::CountChatTokens(generation_command) => {
                 let _send_outcome = event_writer
                     .send_event(&WorkerEvent::Completed {
                         request_id: generation_command.request_id,

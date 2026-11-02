@@ -58,6 +58,7 @@ mod promotion;
 mod protocol;
 mod retry;
 mod support;
+mod token_count;
 
 pub use support::{ModelFactory, ModelFactoryRuntime, WorkerRuntimeError};
 

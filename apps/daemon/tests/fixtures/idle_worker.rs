@@ -236,7 +236,9 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 )
                 .await?;
             }
-            WorkerCommand::Generate(generation_command) => {
+            // A count is answered like a generation: one Completed event.
+            WorkerCommand::Generate(generation_command)
+            | WorkerCommand::CountChatTokens(generation_command) => {
                 if loaded_model_id.as_deref() == Some(DELAYED_COMPLETION_MODEL_ID) {
                     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
                 }

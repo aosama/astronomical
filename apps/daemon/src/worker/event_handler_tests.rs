@@ -58,6 +58,7 @@ fn active_chat_request(
         last_mlx_active_memory_bytes: None,
         request_id: RequestId::new(1),
         stream_event_sender,
+        chat_work: crate::worker::loop_types::ChatWork::Generate,
     })
 }
 

@@ -7,6 +7,7 @@ use astronomical_ipc_protocol::ChatGenerationCommand;
 use tokio::sync::oneshot;
 
 use crate::serving::ChatGenerationStartFuture;
+use crate::worker::loop_types::ChatWork;
 use crate::{ChatGenerationExecutor, WorkerHandle, WorkerHealthSnapshot, WorkerHealthStatus};
 
 impl ChatGenerationExecutor for WorkerHandle {
@@ -14,7 +15,11 @@ impl ChatGenerationExecutor for WorkerHandle {
         &self,
         chat_generation_command: ChatGenerationCommand,
     ) -> ChatGenerationStartFuture<'_> {
-        self.start_chat_generation_with_queue_admission(chat_generation_command, None)
+        self.start_chat_generation_with_queue_admission(
+            chat_generation_command,
+            ChatWork::Generate,
+            None,
+        )
     }
 
     fn start_chat_generation_with_admission_signal(
@@ -24,6 +29,19 @@ impl ChatGenerationExecutor for WorkerHandle {
     ) -> ChatGenerationStartFuture<'_> {
         self.start_chat_generation_with_queue_admission(
             chat_generation_command,
+            ChatWork::Generate,
+            Some(admission_sender),
+        )
+    }
+
+    fn start_chat_token_count_with_admission_signal(
+        &self,
+        count_command: ChatGenerationCommand,
+        admission_sender: oneshot::Sender<()>,
+    ) -> ChatGenerationStartFuture<'_> {
+        self.start_chat_generation_with_queue_admission(
+            count_command,
+            ChatWork::CountPromptTokens,
             Some(admission_sender),
         )
     }

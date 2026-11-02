@@ -287,7 +287,7 @@ where
                         Ok(None)
                     }
                     WorkerCommand::Cancel { .. } => Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation))),
-                    WorkerCommand::Generate(generation_command) => {
+                    WorkerCommand::Generate(generation_command) | WorkerCommand::CountChatTokens(generation_command) => {
                         event_writer.send_event(&WorkerEvent::Failed { request_id: generation_command.request_id, reason: ChatGenerationFailureReason::EngineBusy }).await?;
                         Ok(Some(ActiveWorkerRequest::Autoregressive(current_generation)))
                     }
@@ -369,7 +369,7 @@ where
                         self.cancel_image_generation(current_generation, event_writer).await?;
                         Ok(None)
                     }
-                    WorkerCommand::Generate(generation_command) => {
+                    WorkerCommand::Generate(generation_command) | WorkerCommand::CountChatTokens(generation_command) => {
                         event_writer.send_event(&WorkerEvent::Failed { request_id: generation_command.request_id, reason: ChatGenerationFailureReason::EngineBusy }).await?;
                         Ok(Some(ActiveWorkerRequest::Image(current_generation)))
                     }

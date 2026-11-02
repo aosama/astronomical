@@ -254,7 +254,7 @@ async fn admit_chat_generation_command(
     // keeps that contract total without a catch-all arm.
     let WorkerLoopCommand::Generate {
         active_generation_permit,
-        generation_command,
+        queued_chat_request,
         start_sender,
         stream_event_sender,
     } = routed_command
@@ -294,7 +294,7 @@ async fn admit_chat_generation_command(
     if let Err(control_error) = handle_generate_command(
         &mut worker_loop_state,
         active_generation_permit,
-        generation_command,
+        queued_chat_request,
         start_sender,
         stream_event_sender,
         &runtime.model_policy_catalog,
