@@ -1069,10 +1069,10 @@ jobs:
   # restores none of the build job's caches: the shared registry archive
   # (~95 MB, ~4 s to restore) holds the whole workspace's downloads, and the
   # shared sccache archive (~186 MB) is almost entirely objects this crate
-  # never compiles. Its own small sccache
-  # directory, under its own prune family, also caches the cc-compiled
-  # Objective-C and C, because cc routes the compiler through an sccache
-  # RUSTC_WRAPPER.
+  # never compiles. Its own small sccache directory, under its own prune
+  # family, holds the crate's Rust graph and the cc-compiled C file (cc routes
+  # the compiler through an sccache RUSTC_WRAPPER); the Objective-C bridge
+  # always recompiles because sccache refuses -fmodules, a sub-second cost.
   neural-engine:
     name: Neural Engine crate
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
@@ -1088,7 +1088,7 @@ jobs:
           {
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/neural-engine-sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
-            # The crate's whole compiled graph measures far under this cap;
+            # The crate's whole compiled graph is ~8 MiB, far under this cap;
             # it exists only so a dependency surge cannot grow the entry
             # without bound, since this family carries no prune size ceiling.
             printf 'SCCACHE_CACHE_SIZE=%s\n' "150M"
