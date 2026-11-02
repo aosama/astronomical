@@ -14,8 +14,9 @@ env:
   # Pin the macOS toolchain VERSION so the native-build and Swift toolchain
   # identities stop moving whenever GitHub rolls the runner image: xcodebuild,
   # xcrun (the sdk and clang probes), and swift all honor DEVELOPER_DIR, and
-  # the assert step resolves this version to an installed Xcode and exports
-  # DEVELOPER_DIR for every later step of both macOS jobs. The resolution
+  # the shared assert-pinned-xcode action resolves this version to an
+  # installed Xcode and exports DEVELOPER_DIR for every later step of each
+  # macOS job that calls it. The resolution
   # accepts the readme's primary and alias layout (Xcode_<v>.app and
   # Xcode_<v>.0.app) because the deployed alias layout has drifted from the
   # readme's primary column (live in the 0.2.70-era rollout); the identity
@@ -23,7 +24,7 @@ env:
   # identity and the mixed fleet converges on one cache key. Bump procedure:
   # pick a version from the current image readme's Xcode table, update this
   # one value, and expect exactly one deliberate native and SwiftPM cache
-  # rebuild; the assert step fails the job loudly — printing the image's
+  # rebuild; the assert action fails the job loudly — printing the image's
   # installed Xcode inventory — once the image no longer ships the pinned
   # version, forcing that bump to be intentional instead of a surprise
   # five-minute native rebuild. Linux jobs inherit the variable and simply
@@ -121,32 +122,9 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Assert pinned Xcode toolchain
-        run: |
-          set -euo pipefail
-          pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
-          resolved_developer_dir=""
-          for xcode_bundle_candidate in \
-            "/Applications/Xcode_${pinned_xcode_version}.app" \
-            "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
-            if [ -x "$xcode_bundle_candidate/Contents/Developer/usr/bin/xcodebuild" ]; then
-              resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer"
-              break
-            fi
-          done
-          if [ -z "$resolved_developer_dir" ]; then
-            printf '%s\n' "Error: this runner image ships no Xcode matching the pinned version ${pinned_xcode_version}." >&2
-            printf '%s\n' 'Error: installed Xcode applications on this image:' >&2
-            ls -d /Applications/Xcode*.app >&2 || true
-            printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
-            exit 1
-          fi
-          export DEVELOPER_DIR="$resolved_developer_dir"
-          printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
-          printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
-            "$resolved_developer_dir" "$pinned_xcode_version"
-          xcodebuild -version
-          pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
-          printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
+        uses: ./.github/actions/assert-pinned-xcode
+        with:
+          xcode-version: ${{ env.ASTRONOMICAL_PINNED_XCODE_VERSION }}
       # The Swift toolchain identity is resolved in swift-node instead: this
       # job no longer compiles Swift, and GitHub Actions does not share
       # GITHUB_ENV across jobs.
@@ -616,32 +594,9 @@ jobs:
             apps/thin-talk/Package.swift
             apps/thin-talk/Package.resolved
       - name: Assert pinned Xcode toolchain
-        run: |
-          set -euo pipefail
-          pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
-          resolved_developer_dir=""
-          for xcode_bundle_candidate in \
-            "/Applications/Xcode_${pinned_xcode_version}.app" \
-            "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
-            if [ -x "$xcode_bundle_candidate/Contents/Developer/usr/bin/xcodebuild" ]; then
-              resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer"
-              break
-            fi
-          done
-          if [ -z "$resolved_developer_dir" ]; then
-            printf '%s\n' "Error: this runner image ships no Xcode matching the pinned version ${pinned_xcode_version}." >&2
-            printf '%s\n' 'Error: installed Xcode applications on this image:' >&2
-            ls -d /Applications/Xcode*.app >&2 || true
-            printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
-            exit 1
-          fi
-          export DEVELOPER_DIR="$resolved_developer_dir"
-          printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
-          printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
-            "$resolved_developer_dir" "$pinned_xcode_version"
-          xcodebuild -version
-          pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
-          printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
+        uses: ./.github/actions/assert-pinned-xcode
+        with:
+          xcode-version: ${{ env.ASTRONOMICAL_PINNED_XCODE_VERSION }}
       - name: Resolve Swift toolchain identity
         id: swift-toolchain-identity
         shell: bash
@@ -891,6 +846,7 @@ jobs:
           cargo test --locked -p xtask --test workflow_verdict_contract
           cargo test --locked -p xtask --test workflow_lane_split_contract
           cargo test --locked -p xtask --test workflow_cache_owner_contract
+          cargo test --locked -p xtask --test workflow_xcode_pin_contract
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
       # The tier-pyramid contract below tests the local tool's behavior on a
@@ -1108,32 +1064,9 @@ jobs:
       # The bridge compiles against the macOS SDK through clang, so it must
       # see the same pinned Xcode as the build job.
       - name: Assert pinned Xcode toolchain
-        run: |
-          set -euo pipefail
-          pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
-          resolved_developer_dir=""
-          for xcode_bundle_candidate in \
-            "/Applications/Xcode_${pinned_xcode_version}.app" \
-            "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
-            if [ -x "$xcode_bundle_candidate/Contents/Developer/usr/bin/xcodebuild" ]; then
-              resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer"
-              break
-            fi
-          done
-          if [ -z "$resolved_developer_dir" ]; then
-            printf '%s\n' "Error: this runner image ships no Xcode matching the pinned version ${pinned_xcode_version}." >&2
-            printf '%s\n' 'Error: installed Xcode applications on this image:' >&2
-            ls -d /Applications/Xcode*.app >&2 || true
-            printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
-            exit 1
-          fi
-          export DEVELOPER_DIR="$resolved_developer_dir"
-          printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
-          printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
-            "$resolved_developer_dir" "$pinned_xcode_version"
-          xcodebuild -version
-          pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
-          printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
+        uses: ./.github/actions/assert-pinned-xcode
+        with:
+          xcode-version: ${{ env.ASTRONOMICAL_PINNED_XCODE_VERSION }}
       # The prebuilt, digest-verified release through the same pinned action
       # the lanes use for nextest: `cargo xtask install-verification-tools`
       # would first compile xtask cold, which costs more than this whole lane
