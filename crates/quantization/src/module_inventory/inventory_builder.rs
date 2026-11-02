@@ -82,6 +82,7 @@ pub fn build_inventory_contents(
         walk.visit(located_tensor);
     }
     walk.stack_unfused_experts();
+    walk.keep_siblings_of_passed_through_weights(&located_tensors);
     let aliases = aliases_for(&walk.modules);
     Ok(InventoryContents {
         modules: walk.modules,
@@ -227,6 +228,28 @@ impl InventoryWalk {
         {
             Some(renamed_projection) => (*renamed_projection).to_owned(),
             None => projection,
+        }
+    }
+
+    /// A packed or FP8 weight that became no module (its last dimension does
+    /// not divide the group size) is copied as stored, so its `.scales`,
+    /// `.biases`, or `_scale_inv`, skipped by the walk as a module's
+    /// siblings, must be copied beside it or the written weight is
+    /// undecodable.
+    fn keep_siblings_of_passed_through_weights(&mut self, located_tensors: &[LocatedTensor]) {
+        let mut sibling_names = BTreeSet::new();
+        for pass_through_tensor in &self.pass_through_tensors {
+            let tensor_name = pass_through_tensor.tensor_name.as_str();
+            if let Some(module_base) = tensor_name.strip_suffix(".weight") {
+                sibling_names.insert(format!("{module_base}.scales"));
+                sibling_names.insert(format!("{module_base}.biases"));
+            }
+            sibling_names.insert(format!("{tensor_name}_scale_inv"));
+        }
+        for located_tensor in located_tensors {
+            if sibling_names.contains(&located_tensor.header_tensor.tensor_name) {
+                self.pass_through(located_tensor);
+            }
         }
     }
 

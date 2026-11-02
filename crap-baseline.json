@@ -64435,17 +64435,116 @@
     },
     {
       "file": "crates/quantization/src/encoder/mlx.rs",
-      "function": "pack_affine_codes_mlx",
-      "line": 89,
+      "function": "anchored_scale_and_bias",
+      "line": 237,
+      "cyclomatic": 12.0,
+      "coverage": null,
+      "crap": 156.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "clipped_codes",
+      "line": 412,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "concatenate_encoded_slices",
+      "line": 382,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "expand_codes_to_bits",
+      "line": 456,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "finish_search",
+      "line": 306,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "keep_better_candidate",
+      "line": 267,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "levels_of",
+      "line": 469,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "pack_affine_codes_mlx",
+      "line": 135,
+      "cyclomatic": 13.0,
+      "coverage": null,
+      "crap": 182.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "power_of_two_multipliers",
+      "line": 442,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/encoder/mlx.rs",
       "function": "quantize_best",
-      "line": 49,
+      "line": 50,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "search_affine_in_leading_axis_slices",
+      "line": 349,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "search_affine_whole",
+      "line": 84,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "search_anchors",
+      "line": 219,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64453,11 +64552,29 @@
     },
     {
       "file": "crates/quantization/src/encoder/mlx.rs",
-      "function": "search_affine_whole",
-      "line": 72,
-      "cyclomatic": 1.0,
+      "function": "seed_from_plain_min_max",
+      "line": 189,
+      "cyclomatic": 9.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 90.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "squared_error_per_group",
+      "line": 428,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/encoder/mlx.rs",
+      "function": "validate_encodable",
+      "line": 476,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -64635,6 +64752,24 @@
       "file": "crates/quantization/src/encoder/reference_tests.rs",
       "function": "bits",
       "line": 6,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/error.rs",
+      "function": "QuantizationError::from",
+      "line": 127,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/error.rs",
+      "function": "QuantizationError::from",
+      "line": 140,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64967,7 +65102,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "InventoryWalk::has_packed_scales",
-      "line": 213,
+      "line": 214,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -64976,7 +65111,16 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "InventoryWalk::is_consumed_sibling",
-      "line": 175,
+      "line": 176,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
+      "function": "InventoryWalk::keep_siblings_of_passed_through_weights",
+      "line": 239,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -64985,7 +65129,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "InventoryWalk::pass_through",
-      "line": 233,
+      "line": 256,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64994,7 +65138,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "InventoryWalk::renamed_projection",
-      "line": 222,
+      "line": 223,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65003,7 +65147,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "InventoryWalk::source_dtype_of",
-      "line": 192,
+      "line": 193,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
@@ -65012,7 +65156,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "InventoryWalk::visit",
-      "line": 140,
+      "line": 141,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -65021,7 +65165,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "aliases_for",
-      "line": 287,
+      "line": 310,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -65039,7 +65183,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "descriptor_for",
-      "line": 314,
+      "line": 337,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65048,7 +65192,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "is_ascii_digits",
-      "line": 270,
+      "line": 293,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -65057,7 +65201,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "list_shard_paths",
-      "line": 96,
+      "line": 97,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -65066,7 +65210,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "parse_unfused_expert",
-      "line": 246,
+      "line": 269,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
@@ -65075,7 +65219,7 @@
     {
       "file": "crates/quantization/src/module_inventory/inventory_builder.rs",
       "function": "read_every_header",
-      "line": 119,
+      "line": 120,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -65543,16 +65687,70 @@
     {
       "file": "crates/quantization/src/requantize/driver.rs",
       "function": "MlxShardFlush::flush_shard",
-      "line": 23,
-      "cyclomatic": 1.0,
+      "line": 31,
+      "cyclomatic": 9.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 90.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/driver.rs",
+      "function": "RequantizeWalk::add_tensor",
+      "line": 201,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/driver.rs",
+      "function": "RequantizeWalk::enter_shard",
+      "line": 214,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/driver.rs",
+      "function": "RequantizeWalk::finish",
+      "line": 225,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/driver.rs",
+      "function": "RequantizeWalk::pass_through",
+      "line": 179,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/driver.rs",
+      "function": "RequantizeWalk::visit",
+      "line": 136,
+      "cyclomatic": 13.0,
+      "coverage": null,
+      "crap": 182.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/src/requantize/driver.rs",
       "function": "run_requantize",
-      "line": 54,
+      "line": 74,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/driver.rs",
+      "function": "shard_write_failure",
+      "line": 240,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65691,6 +65889,87 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "SourceShardMaps::new",
+      "line": 33,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "SourceShardMaps::retain_only",
+      "line": 43,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "SourceShardMaps::tensor",
+      "line": 53,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "dequantize_block_scaled_fp8",
+      "line": 192,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "fused_half",
+      "line": 174,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "missing_source_quantization",
+      "line": 232,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "read_float_tensor",
+      "line": 132,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "read_module_weight",
+      "line": 80,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/requantize/source_tensor_reader.rs",
+      "function": "stacked_experts",
+      "line": 106,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
       "crate": "astronomical-quantization"
     },
     {
@@ -66254,16 +66533,16 @@
     {
       "file": "crates/quantization/tests/direct_mlx/encoder_contracts.rs",
       "function": "squared_error_against",
-      "line": 170,
-      "cyclomatic": 1.0,
+      "line": 303,
+      "cyclomatic": 2.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 6.0,
       "crate": "astronomical-quantization"
     },
     {
       "file": "crates/quantization/tests/direct_mlx/encoder_contracts.rs",
       "function": "to_f32",
-      "line": 159,
+      "line": 292,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66271,8 +66550,143 @@
     },
     {
       "file": "crates/quantization/tests/direct_mlx/requantize_contracts.rs",
+      "function": "bfloat16_bytes",
+      "line": 97,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_contracts.rs",
+      "function": "bfloat16_rounded",
+      "line": 109,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_contracts.rs",
+      "function": "largest_float32_bytes",
+      "line": 219,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_contracts.rs",
+      "function": "uniform_plan",
+      "line": 119,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_contracts.rs",
+      "function": "write_bfloat16_shard",
+      "line": 76,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_contracts.rs",
       "function": "write_two_shard_source",
-      "line": 19,
+      "line": 30,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "RecordingProgressReporter::report",
+      "line": 232,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "bfloat16_weight",
+      "line": 238,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "block_scaled_on_host",
+      "line": 355,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "four_bit_plan",
+      "line": 268,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "fused_half_module_name",
+      "line": 327,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "only_module_name",
+      "line": 341,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "requantize_at_four_bits",
+      "line": 283,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "save_source",
+      "line": 253,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "stock_four_bit_words",
+      "line": 319,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/requantize_layout_contracts.rs",
+      "function": "written_words",
+      "line": 301,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,

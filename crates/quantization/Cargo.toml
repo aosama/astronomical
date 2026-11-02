@@ -41,6 +41,9 @@ tracing.workspace = true
 [dev-dependencies]
 astronomical-test-harness = { path = "../test-harness" }
 tempfile = "=3.27.0"
+# Peak MLX memory is process-global; the requantizer's bounded-memory
+# contract runs serially against the other direct-MLX contracts.
+serial_test.workspace = true
 
 [[test]]
 name = "integration_tests"

@@ -5,4 +5,5 @@
 
 mod encoder_contracts;
 mod requantize_contracts;
+mod requantize_layout_contracts;
 mod support;

@@ -246,10 +246,15 @@ fn should_pass_a_packed_source_through_when_its_group_size_is_undeclared() {
     )
     .expect("the inventory should build");
 
+    // The scales travel with the weight: without them the copied words are
+    // undecodable.
     assert_eq!(inventory.module_count(), 0);
     assert_eq!(
         inventory.pass_through_tensor_names().as_slice(),
-        &["model.layers.0.mlp.up_proj.weight".to_owned()]
+        &[
+            "model.layers.0.mlp.up_proj.weight".to_owned(),
+            "model.layers.0.mlp.up_proj.scales".to_owned()
+        ]
     );
 }
 
@@ -443,4 +448,51 @@ fn should_pass_unfused_experts_through_when_their_shapes_disagree() {
 
     assert_eq!(inventory.module_count(), 0);
     assert_eq!(inventory.pass_through_tensor_names().len(), 2);
+}
+
+#[test]
+fn should_pass_a_packed_weight_through_with_its_scales_when_it_becomes_no_module() {
+    // A 4-bit packed [8, 12] word array with [8, 3] scales at group 32 has a
+    // logical width of 96, which does not divide group 64: the weight passes
+    // through as stored, and its scales and biases must ride with it.
+    let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+    write_typed_source(
+        directory.path(),
+        &[
+            (
+                "model.layers.0.mlp.up_proj.weight",
+                safetensors::Dtype::U32,
+                &[8, 12],
+            ),
+            (
+                "model.layers.0.mlp.up_proj.scales",
+                safetensors::Dtype::BF16,
+                &[8, 3],
+            ),
+            (
+                "model.layers.0.mlp.up_proj.biases",
+                safetensors::Dtype::BF16,
+                &[8, 3],
+            ),
+        ],
+        r#"{"model_type": "qwen3", "quantization": {"bits": 4, "group_size": 32}}"#,
+    );
+
+    let inventory = ModuleInventory::from_source_directory(
+        directory.path(),
+        GroupSize::new(64).expect("valid"),
+    )
+    .expect("the inventory should build");
+
+    assert_eq!(inventory.module_count(), 0);
+    let mut pass_through_names = inventory.pass_through_tensor_names();
+    pass_through_names.sort();
+    assert_eq!(
+        pass_through_names,
+        vec![
+            "model.layers.0.mlp.up_proj.biases".to_owned(),
+            "model.layers.0.mlp.up_proj.scales".to_owned(),
+            "model.layers.0.mlp.up_proj.weight".to_owned(),
+        ]
+    );
 }
