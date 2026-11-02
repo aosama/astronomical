@@ -8,8 +8,8 @@ mod contract_support;
 
 use contract_support::{
     composite_action_contract, find_step_by_id, find_step_by_name, is_pinned_action_reference,
-    path_lines, required_field, required_job, required_text, required_u64, run_text_of, steps_of,
-    workflow_contract,
+    path_lines, repository_root, required_field, required_job, required_text, required_u64,
+    run_text_of, steps_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -166,6 +166,7 @@ fn cache_owners_are_disjoint_composite_users() {
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
     let swift_steps = steps_of(required_job(&workflow, "swift-node"), "swift-node");
+    let neural_engine_steps = steps_of(required_job(&workflow, "neural-engine"), "neural-engine");
 
     let mut restored_paths: Vec<String> = Vec::new();
     assert_composite_cache_owner(
@@ -202,6 +203,12 @@ fn cache_owners_are_disjoint_composite_users() {
         &swift_steps,
         "thin-talk-cache",
         &["apps/thin-talk/.build"],
+        &mut restored_paths,
+    );
+    assert_composite_cache_owner(
+        &neural_engine_steps,
+        "neural-engine-sccache-cache",
+        &["~/Library/Caches/Astronomical/neural-engine-sccache"],
         &mut restored_paths,
     );
     let mut deduplicated_paths = restored_paths.clone();
@@ -508,5 +515,129 @@ fn should_rotate_every_sccache_key_with_the_tool_pin_manifest() {
     assert_eq!(
         inspected_key_line_count, 5,
         "expected the restore key, two fallbacks, the budget key, and the save key"
+    );
+}
+
+const NEURAL_ENGINE_SCCACHE_KEY_PREFIX: &str = "astronomical-v2-neural-engine-sccache-";
+const SCCACHE_TOOL_NAME: &str = "sccache";
+
+/// The exact version a tool-pin manifest line pins, e.g. `0.19.0` from
+/// `sccache = { version = "=0.19.0", ... }`; `None` when the manifest pins
+/// no such tool. The name must match the whole key so `sccache-dist` never
+/// answers for `sccache`.
+fn pinned_tool_version(manifest_text: &str, tool_name: &str) -> Option<String> {
+    for manifest_line in manifest_text.lines() {
+        let Some((line_key, line_value)) = manifest_line.split_once('=') else {
+            continue;
+        };
+        if line_key.trim() != tool_name {
+            continue;
+        }
+        let Some((_, after_version_marker)) = line_value.split_once("version = \"=") else {
+            continue;
+        };
+        let Some((pinned_version, _)) = after_version_marker.split_once('"') else {
+            continue;
+        };
+        return Some(pinned_version.to_owned());
+    }
+    None
+}
+
+#[test]
+fn should_read_the_exact_pinned_tool_version() {
+    let manifest_text = "sccache = { version = \"=0.19.0\", default-features = false }";
+    assert_eq!(
+        pinned_tool_version(manifest_text, SCCACHE_TOOL_NAME),
+        Some("0.19.0".to_owned())
+    );
+}
+
+#[test]
+fn should_not_answer_for_a_tool_the_manifest_does_not_pin() {
+    let manifest_text = "cargo-about = { version = \"=0.8.0\" }";
+    assert_eq!(pinned_tool_version(manifest_text, SCCACHE_TOOL_NAME), None);
+    assert_eq!(pinned_tool_version("", SCCACHE_TOOL_NAME), None);
+}
+
+#[test]
+fn should_not_answer_for_a_version_range_that_is_not_an_exact_pin() {
+    let manifest_text = "sccache = { version = \"0.19\" }";
+    assert_eq!(pinned_tool_version(manifest_text, SCCACHE_TOOL_NAME), None);
+}
+
+#[test]
+fn should_not_match_a_tool_whose_name_only_starts_with_the_requested_name() {
+    let manifest_text =
+        "sccache-dist = { version = \"=9.9.9\" }\nsccache = { version = \"=0.19.0\" }";
+    assert_eq!(
+        pinned_tool_version(manifest_text, SCCACHE_TOOL_NAME),
+        Some("0.19.0".to_owned())
+    );
+}
+
+// The neural-engine lane's compiler cache must stay its own bounded family:
+// a key under the build job's `astronomical-v2-sccache-` prefix would be
+// restored by the build job's fallbacks and pruned as a build-job generation;
+// a pull-request save would duplicate the default-branch entry; and an
+// sccache binary off the tool pin would write a cache format the key does not
+// rotate on.
+#[test]
+fn should_keep_the_neural_engine_compiler_cache_in_its_own_default_branch_family() {
+    let workflow = workflow_contract();
+    let neural_engine_steps = steps_of(required_job(&workflow, "neural-engine"), "neural-engine");
+    let restore_configuration = required_field(
+        find_step_by_id(&neural_engine_steps, "neural-engine-sccache-cache"),
+        "with",
+        "neural-engine-sccache-cache restore",
+    );
+    let restore_key = required_text(
+        restore_configuration,
+        "key",
+        "neural-engine-sccache-cache restore",
+    );
+    assert!(
+        restore_key.starts_with(NEURAL_ENGINE_SCCACHE_KEY_PREFIX),
+        "neural-engine compiler cache left its own prune family: {restore_key}"
+    );
+    assert!(
+        !restore_key.starts_with(SCCACHE_KEY_PREFIX),
+        "neural-engine compiler cache shares the build job's sccache family"
+    );
+    assert!(
+        restore_key.contains(TOOL_PINS_MANIFEST) && restore_key.contains("Cargo.lock"),
+        "neural-engine compiler cache key does not rotate with the tool pins and dependency graph"
+    );
+    let save_condition = required_text(
+        find_step_by_id(&neural_engine_steps, "neural-engine-sccache-cache-save"),
+        "if",
+        "neural-engine-sccache-cache save",
+    );
+    assert!(
+        save_condition.contains("github.event.repository.default_branch"),
+        "neural-engine compiler cache saves outside the default branch"
+    );
+    let manifest_text = std::fs::read_to_string(repository_root().join(TOOL_PINS_MANIFEST))
+        .expect("the tool-pin manifest should be readable");
+    let pinned_sccache_version = pinned_tool_version(&manifest_text, SCCACHE_TOOL_NAME)
+        .expect("the tool-pin manifest pins sccache");
+    let provision_step = find_step_by_name(&neural_engine_steps, "Provision pinned sccache");
+    assert!(
+        is_pinned_action_reference(
+            required_text(provision_step, "uses", "Provision pinned sccache"),
+            "taiki-e/install-action"
+        ),
+        "neural-engine sccache is not provisioned through the SHA-pinned install action"
+    );
+    let provision_inputs = required_field(provision_step, "with", "Provision pinned sccache");
+    assert_eq!(
+        required_text(provision_inputs, "tool", "Provision pinned sccache"),
+        format!("{SCCACHE_TOOL_NAME}@{pinned_sccache_version}"),
+        "neural-engine sccache drifted from the tool pin"
+    );
+    assert_eq!(
+        required_text(provision_inputs, "fallback", "Provision pinned sccache"),
+        "none",
+        "neural-engine sccache may silently build from source"
     );
 }

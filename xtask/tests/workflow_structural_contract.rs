@@ -133,26 +133,22 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
         "macOS build",
         "the build job name changed"
     );
-    assert_eq!(
-        required_u64(verification_job, "timeout-minutes", "job rust-core"),
-        15,
-        "required check exceeded its hard cap"
-    );
-    assert_eq!(
-        required_u64(swift_node_job, "timeout-minutes", "job swift-node"),
-        12,
-        "swift-node exceeded its hard cap"
-    );
-    assert_eq!(
-        required_text(verification_job, "if", "job rust-core"),
-        EXPECTED_MACOS_AUTHORITY,
-        "macOS authority does not fail closed"
-    );
-    assert_eq!(
-        required_text(swift_node_job, "if", "job swift-node"),
-        EXPECTED_MACOS_AUTHORITY,
-        "swift-node authority does not fail closed"
-    );
+    for (macos_job_id, hard_cap_minutes) in
+        [("rust-core", 15), ("swift-node", 12), ("neural-engine", 6)]
+    {
+        let job_context = format!("job {macos_job_id}");
+        let macos_job = required_job(&workflow, macos_job_id);
+        assert_eq!(
+            required_u64(macos_job, "timeout-minutes", &job_context),
+            hard_cap_minutes,
+            "{macos_job_id} exceeded its hard cap"
+        );
+        assert_eq!(
+            required_text(macos_job, "if", &job_context),
+            EXPECTED_MACOS_AUTHORITY,
+            "{macos_job_id} authority does not fail closed"
+        );
+    }
     let verification_concurrency = required_field(verification_job, "concurrency", "job rust-core");
     assert_eq!(
         required_text(verification_concurrency, "group", "rust-core concurrency"),
@@ -180,6 +176,12 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
             "swift-node concurrency"
         ),
         "swift-node must not cancel in-flight runs"
+    );
+    let neural_engine_job = required_job(&workflow, "neural-engine");
+    assert_eq!(
+        required_text(neural_engine_job, "name", "job neural-engine"),
+        "Neural Engine crate",
+        "the neural-engine lane name changed"
     );
     assert!(
         required_text(static_job, "if", "job static").contains("needs.detect-changes.result =="),
@@ -459,6 +461,7 @@ fn every_timed_step_pairs_its_begin_and_end_calls() {
     for (job_id, job) in [
         ("rust-core", required_job(&workflow, "rust-core")),
         ("swift-node", required_job(&workflow, "swift-node")),
+        ("neural-engine", required_job(&workflow, "neural-engine")),
         ("static", required_job(&workflow, "static")),
         (
             "config-contracts",
@@ -503,7 +506,7 @@ fn macos_toolchain_identity_is_pinned_to_a_versioned_xcode() {
         workflow_env.get("DEVELOPER_DIR").is_none(),
         "DEVELOPER_DIR must be resolved per job from the version pin, not frozen as a workflow path"
     );
-    for job_id in ["rust-core", "swift-node"] {
+    for job_id in ["rust-core", "swift-node", "neural-engine"] {
         let job_steps = steps_of(required_job(&workflow, job_id), job_id);
         let assert_step = find_step_by_name(&job_steps, "Assert pinned Xcode toolchain");
         let assert_text = run_text_of(assert_step, "pinned-xcode");
@@ -548,7 +551,7 @@ fn macos_toolchain_identity_is_pinned_to_a_versioned_xcode() {
 #[test]
 fn macos_jobs_publish_the_timing_summary_even_when_failing() {
     let workflow = workflow_contract();
-    for job_id in ["rust-core", "swift-node"] {
+    for job_id in ["rust-core", "swift-node", "neural-engine"] {
         let job = required_job(&workflow, job_id);
         let job_name = required_text(job, "name", &format!("job {job_id}"));
         let publish_steps: Vec<&Value> = steps_of(job, job_id)
