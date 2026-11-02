@@ -657,6 +657,14 @@ jobs:
           printf 'SWIFT_TOOLCHAIN_IDENTITY=%s\n' "$swift_toolchain_identity" >> "$GITHUB_ENV"
           printf '[swift-toolchain-identity] status=complete identity=%s elapsed_seconds=%s\n' \
             "$swift_toolchain_identity" "$(( $(date +%s) - started_at_seconds ))"
+      # The `commit-mtime` segment marks build databases recorded under the
+      # per-file last-commit mtimes above. Entries saved under the retired
+      # HEAD-commit stamp can never match those mtimes, and a primary-key hit
+      # skips the save, so without a new key the stale database would be
+      # restored and fully recompiled until the Swift sources next changed.
+      # The segment sits after the platform so the prune family (the key
+      # prefix before `-macOS`) is unchanged and the old entries age out
+      # through the normal keep-newest policy.
       - name: Restore swiftpm-cache
         id: swiftpm-cache
         uses: ./.github/actions/astronomical-cache
@@ -664,9 +672,9 @@ jobs:
           operation: restore
           owner: swiftpm
           path: apps/astronomical-menu/.build
-          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
           restore-keys: |
-            astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-
+            astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-
       - name: Keep restored SwiftPM artifacts newer than checkout
         if: ${{ steps.swiftpm-cache.outputs.cache-hit == 'true' }}
         run: |
@@ -699,9 +707,9 @@ jobs:
           operation: restore
           owner: thin-talk
           path: apps/thin-talk/.build
-          key: astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/Tests/**/*.swift') }}
+          key: astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/Tests/**/*.swift') }}
           restore-keys: |
-            astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-
+            astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-
       - name: Keep restored Thin Talk artifacts newer than checkout
         if: ${{ steps.thin-talk-cache.outputs.cache-hit == 'true' }}
         run: |
@@ -803,7 +811,7 @@ jobs:
           operation: save
           owner: swiftpm
           path: apps/astronomical-menu/.build
-          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
+          key: astronomical-v2-swiftpm-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/astronomical-menu/Package.swift', 'apps/astronomical-menu/Package.resolved') }}-${{ hashFiles('apps/astronomical-menu/Sources/**/*.swift', 'apps/astronomical-menu/tests/**/*.swift') }}
       - name: Save thin-talk swiftpm-cache
         id: thin-talk-cache-save
         if: ${{ !cancelled() && steps.thin-talk-cache.outputs.cache-hit != 'true' }}
@@ -812,7 +820,7 @@ jobs:
           operation: save
           owner: thin-talk
           path: apps/thin-talk/.build
-          key: astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/Tests/**/*.swift') }}
+          key: astronomical-v2-swiftpm-thin-talk-${{ runner.os }}-${{ runner.arch }}-commit-mtime-${{ env.SWIFT_TOOLCHAIN_IDENTITY }}-${{ hashFiles('apps/thin-talk/Package.swift', 'apps/thin-talk/Package.resolved') }}-${{ hashFiles('apps/thin-talk/Sources/**/*.swift', 'apps/thin-talk/Tests/**/*.swift') }}
       - name: Publish step timing summary
         if: always()
         run: scripts/ci/publish-ci-timing-summary.sh
