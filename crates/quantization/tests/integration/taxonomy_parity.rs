@@ -94,7 +94,6 @@ fn should_agree_with_optiq_on_boundary_modules() {
 }
 
 #[test]
-#[ignore = "pending implementation of is_router_tensor_key"]
 fn should_agree_with_the_shardwise_router_predicate() {
     let fixture = fixtures::taxonomy_parity();
 

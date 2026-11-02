@@ -4,7 +4,6 @@
 use super::fixtures;
 
 #[test]
-#[ignore = "pending implementation of kl_divergence_reference_vs_probe"]
 fn should_reproduce_the_python_kl_divergence_on_the_fixture_logits() {
     let fixture = fixtures::encoder_parity();
     let kl_fixture = &fixture.kl_divergence;

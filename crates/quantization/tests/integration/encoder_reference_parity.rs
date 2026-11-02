@@ -14,7 +14,6 @@ use super::fixtures;
 const SCALE_TOLERANCE: f32 = 1e-6;
 
 #[test]
-#[ignore = "pending implementation of encode_slab"]
 fn should_reproduce_the_python_range_search_at_two_and_three_bits() {
     let fixture = fixtures::encoder_parity();
 
@@ -44,7 +43,6 @@ fn should_reproduce_the_python_range_search_at_two_and_three_bits() {
 }
 
 #[test]
-#[ignore = "pending implementation of encode_slab"]
 fn should_reproduce_stock_min_max_at_four_and_eight_bits_when_the_search_is_off() {
     let fixture = fixtures::encoder_parity();
 
@@ -68,7 +66,6 @@ fn should_reproduce_stock_min_max_at_four_and_eight_bits_when_the_search_is_off(
 }
 
 #[test]
-#[ignore = "pending implementation of pack_affine_codes"]
 fn should_pack_codes_identically_to_mlx_for_every_fixture_width() {
     // Unpack the Python words, repack, and expect the same words: pins the
     // packing rule independently of the search.

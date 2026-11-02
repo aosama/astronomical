@@ -11,7 +11,6 @@ fn group(value: u32) -> GroupSize {
 }
 
 #[test]
-#[ignore = "pending implementation of BitPolicy::decide"]
 fn should_never_quantize_the_router_under_any_policy() {
     let structural = BitPolicy::Structural(StructuralMixtureOfExpertsPolicy::optiq_defaults());
     let uniform = BitPolicy::Uniform {
@@ -30,7 +29,6 @@ fn should_never_quantize_the_router_under_any_policy() {
 }
 
 #[test]
-#[ignore = "pending implementation of BitPolicy::decide"]
 fn should_put_routed_experts_at_two_bits_and_attention_at_six_under_the_structural_policy() {
     let structural = BitPolicy::Structural(StructuralMixtureOfExpertsPolicy::optiq_defaults());
 
@@ -58,7 +56,6 @@ fn should_put_routed_experts_at_two_bits_and_attention_at_six_under_the_structur
 }
 
 #[test]
-#[ignore = "pending implementation of BitPolicy::adjust_for_shape"]
 fn should_fall_back_to_group_size_32_when_the_planned_group_does_not_divide() {
     let planned = TensorEncodingDecision::Encode {
         bit_width: bits(4),
@@ -83,7 +80,6 @@ fn should_fall_back_to_group_size_32_when_the_planned_group_does_not_divide() {
 }
 
 #[test]
-#[ignore = "pending implementation of is_router_tensor_key"]
 fn should_recognize_every_router_spelling() {
     assert!(is_router_tensor_key("model.layers.1.mlp.gate.weight"));
     assert!(is_router_tensor_key("model.layers.1.ffn.gate.weight"));
@@ -92,4 +88,61 @@ fn should_recognize_every_router_spelling() {
         "model.layers.1.mlp.router.proj.weight"
     ));
     assert!(!is_router_tensor_key("model.layers.1.mlp.gate_proj.weight"));
+}
+
+#[test]
+fn should_apply_the_one_width_under_the_uniform_policy() {
+    let uniform = BitPolicy::Uniform {
+        bit_width: bits(4),
+        group_size: group(64),
+    };
+
+    assert_eq!(
+        uniform.decide("model.layers.3.mlp.up_proj.weight"),
+        TensorEncodingDecision::Encode {
+            bit_width: bits(4),
+            group_size: group(64),
+        }
+    );
+}
+
+#[test]
+fn should_pass_a_keep_bfloat16_module_through_under_the_predicate_policy() {
+    let decision = decision_from_predicate(QuantizationDecisionForModule::KeepBfloat16);
+
+    assert_eq!(decision, TensorEncodingDecision::PassThrough);
+}
+
+#[test]
+fn should_leave_a_pass_through_decision_alone_and_accept_three_dimensional_experts() {
+    let planned = TensorEncodingDecision::Encode {
+        bit_width: bits(2),
+        group_size: group(128),
+    };
+
+    assert_eq!(
+        BitPolicy::adjust_for_shape(TensorEncodingDecision::PassThrough, &[64, 128]),
+        TensorEncodingDecision::PassThrough
+    );
+    assert_eq!(
+        BitPolicy::adjust_for_shape(planned, &[8, 256, 512]),
+        planned
+    );
+    assert_eq!(
+        BitPolicy::adjust_for_shape(planned, &[2, 8, 256, 512]),
+        TensorEncodingDecision::PassThrough
+    );
+}
+
+#[test]
+fn should_exclude_the_shared_expert_from_routed_experts() {
+    assert!(is_routed_expert_tensor_key(
+        "model.layers.1.mlp.experts.gate_up_proj"
+    ));
+    assert!(is_routed_expert_tensor_key(
+        "model.layers.1.mlp.switch_mlp.up_proj.weight"
+    ));
+    assert!(!is_routed_expert_tensor_key(
+        "model.layers.1.mlp.shared_experts.up_proj.weight"
+    ));
 }

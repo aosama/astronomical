@@ -24,7 +24,6 @@ fn descriptor(
 }
 
 #[test]
-#[ignore = "pending implementation of total_logical_parameter_count and transformer_block_count"]
 fn should_sum_logical_parameters_and_count_blocks_from_descriptors() {
     let inventory = ModuleInventory::from_descriptors(
         PathBuf::from("unused"),
@@ -52,7 +51,6 @@ fn should_sum_logical_parameters_and_count_blocks_from_descriptors() {
 }
 
 #[test]
-#[ignore = "pending implementation of resolve"]
 fn should_resolve_the_model_prefix_stripped_alias() {
     // mlx-lm sometimes drops the leading `model.`; the probe model may name
     // the module either way and both must land on the same descriptor.
@@ -76,7 +74,6 @@ fn should_resolve_the_model_prefix_stripped_alias() {
 }
 
 #[test]
-#[ignore = "pending implementation of from_source_directory"]
 fn should_report_a_missing_shard_directory_as_no_safetensors_shards() {
     let empty_directory = tempfile::tempdir().expect("a temporary directory should be creatable");
 

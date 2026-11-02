@@ -19,6 +19,10 @@ use crate::bit_width::GroupSize;
 use crate::error::QuantizationError;
 use crate::module_taxonomy::ModuleRole;
 
+mod expert_naming;
+mod inventory_builder;
+mod safetensors_header;
+
 #[cfg(test)]
 #[path = "module_inventory_tests.rs"]
 mod module_inventory_tests;
@@ -110,45 +114,32 @@ pub struct ModuleInventory {
 
 impl ModuleInventory {
     /// Builds the inventory from the safetensors headers under
-    /// `source_directory` and its `config.json`.
-    ///
-    /// Work to port (from OptiQ's `_index_bf16_layers` and `_quantizable_linears`):
-    /// 1. Read `config.json`; from `architectures[0]` and the top-level and
-    ///    `text_config.model_type` decide the expert wrapper name
-    ///    (`switch_mlp` for Qwen3/Qwen4/LFM2/Nemotron-H/Laguna/DeepSeek/Xing4,
-    ///    `switch_glu` otherwise), whether the `experts` segment is dropped
-    ///    (Qwen), whether fused experts map 1:1 (DiffusionGemma), and any
-    ///    projection renames (Nemotron-H `up_proj`→`fc1`, `down_proj`→`fc2`).
-    ///    Read the nested text config as well as the top level: MiniCPM-V 4.7
-    ///    is `minicpmv4_7` on top of a Qwen3.5-MoE, and reading only the top
-    ///    level named every expert bank wrong.
-    /// 2. Parse every `*.safetensors` header (the `safetensors` crate's
-    ///    metadata reader; never load tensor data). Record `.weight_scale_inv`
-    ///    siblings first so FP8 tensors can be recognized in a second pass.
-    /// 3. For each tensor: skip `.scales`/`.biases`; a `.weight` with a
-    ///    `.scales` sibling is `MlxAffinePacked` and its logical shape comes
-    ///    from the scales; a 2-D float tensor whose last dim divides the group
-    ///    size is a `Whole` module; 3-D tensors follow the fused-expert rules
-    ///    (`.experts.gate_up_proj` splits into two halves, `.experts.down_proj`
-    ///    maps whole, `.switch_mlp.fc1/fc2.weight` map 1:1); unfused
-    ///    `(mlp|feed_forward|mixer).experts.N.(gate_proj|up_proj|down_proj|w1|w2|w3).weight`
-    ///    are collected and stacked after the walk with the Llama-style
-    ///    `w1→gate_proj`, `w2→down_proj`, `w3→up_proj` rename.
-    /// 4. Register aliases: `model.` stripped; `model.language_model.` to
-    ///    `language_model.model.`; and the flattened `model.language_model.`
-    ///    to `model.` form (an adapter that flattens the tower left
-    ///    muse_glimmer with 1 of 417 modules matched).
-    /// 5. Classify every module through the taxonomy and record its block index.
+    /// `source_directory` and its `config.json`, OptiQ's `_index_bf16_layers`
+    /// and `_quantizable_linears` in one header walk:
+    /// 1. `config.json` decides how routed experts are named in the mlx-lm
+    ///    module tree (the wrapper segment, whether `experts` is dropped,
+    ///    projection renames), reading the text tower's `model_type` as well
+    ///    as the top level, and the group sizes of an already-quantized source.
+    /// 2. Every top-level `*.safetensors` header is read; no tensor data is.
+    /// 3. 2-D `.weight` tensors are linears; 3-D tensors follow the fused
+    ///    expert layouts (`experts.gate_up_proj` splits into two halves);
+    ///    unfused `experts.N.*` tensors are stacked in expert order. Routers,
+    ///    norms, integer buffers, and anything whose last dimension does not
+    ///    divide the group size pass through.
+    /// 4. Each module gets its taxonomy role and block index, and the
+    ///    alternate mlx-lm spellings of its name are registered as aliases.
     pub fn from_source_directory(
         source_directory: &Path,
         group_size: GroupSize,
     ) -> Result<Self, QuantizationError> {
-        let _ = (source_directory, group_size);
-        // Header parsing goes through the `safetensors` crate's metadata
-        // reader so no tensor data is ever mapped; the dtype enum is the
-        // source of `SourceTensorDtype`.
-        let _: Option<safetensors::Dtype> = None;
-        todo!("walk config.json and every safetensors header as documented above")
+        let contents = inventory_builder::build_inventory_contents(source_directory, group_size)?;
+        Ok(Self {
+            source_directory: source_directory.to_path_buf(),
+            group_size,
+            modules: contents.modules,
+            pass_through_tensor_names: contents.pass_through_tensor_names,
+            aliases: contents.aliases,
+        })
     }
 
     /// Builds an inventory from descriptors already in hand (tests, the probe
@@ -159,10 +150,10 @@ impl ModuleInventory {
         group_size: GroupSize,
         descriptors: Vec<QuantizableModuleDescriptor>,
     ) -> Self {
-        let modules = descriptors
-            .into_iter()
-            .map(|descriptor| (descriptor.module_name.clone(), descriptor))
-            .collect();
+        let mut modules = BTreeMap::new();
+        for descriptor in descriptors {
+            modules.insert(descriptor.module_name.clone(), descriptor);
+        }
         Self {
             source_directory,
             group_size,
@@ -199,23 +190,34 @@ impl ModuleInventory {
     /// Resolves a canonical name or any registered alias.
     #[must_use]
     pub fn resolve(&self, module_name_or_alias: &str) -> Option<&QuantizableModuleDescriptor> {
-        let _ = module_name_or_alias;
-        todo!("look up the canonical map first, then the alias map")
+        if let Some(descriptor) = self.modules.get(module_name_or_alias) {
+            return Some(descriptor);
+        }
+        let canonical_name = self.aliases.get(module_name_or_alias)?;
+        self.modules.get(canonical_name)
     }
 
     /// Sum of logical parameter counts across every quantizable module; the
     /// denominator of every bits-per-weight figure.
     #[must_use]
     pub fn total_logical_parameter_count(&self) -> u64 {
-        todo!("sum logical_parameter_count over modules")
+        let mut total_logical_parameter_count = 0_u64;
+        for descriptor in self.modules.values() {
+            total_logical_parameter_count += descriptor.logical_parameter_count;
+        }
+        total_logical_parameter_count
     }
 
     /// The highest block index plus one, which the static scorer needs to
     /// know where the network's edges are.
     #[must_use]
     pub fn transformer_block_count(&self) -> usize {
-        todo!(
-            "max of transformer_block_index over modules, plus one; one when no module is inside a block"
-        )
+        let mut transformer_block_count = 1_usize;
+        for descriptor in self.modules.values() {
+            if let Some(block_index) = descriptor.transformer_block_index {
+                transformer_block_count = transformer_block_count.max(block_index + 1);
+            }
+        }
+        transformer_block_count
     }
 }
