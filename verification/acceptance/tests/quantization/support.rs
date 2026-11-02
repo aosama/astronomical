@@ -72,3 +72,73 @@ impl astronomical_quantization::progress::ProgressReporter for StandardErrorProg
         );
     }
 }
+
+/// A bf16 copy of `source` under `destination`: the source itself when it
+/// is already unquantized, otherwise every module dequantized through the
+/// requantizer with each decision forced to pass-through, the quantization
+/// keys dropped from `config.json`, and the tokenizer copied. The installed
+/// small Qwen3.5 checkpoints are 4-bit, and the exact sweep's bf16 reference
+/// path needs a bf16 model.
+pub(crate) fn bfloat16_copy_of(
+    runtime: &MlxRuntime,
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) -> PathBuf {
+    let config_text =
+        std::fs::read_to_string(source.join("config.json")).expect("the source config is readable");
+    let mut config: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(&config_text).expect("the source config parses");
+    if config.remove("quantization").is_none() {
+        return source.to_path_buf();
+    }
+    config.remove("quantization_config");
+    let inventory =
+        astronomical_quantization::module_inventory::ModuleInventory::from_source_directory(
+            source,
+            astronomical_quantization::bit_width::GroupSize::new(64).expect("valid"),
+        )
+        .expect("the source inventories");
+    let mut plan = astronomical_quantization::requantize::RequantizeTensorPlan::from_inventory(
+        &inventory,
+        &astronomical_quantization::requantize::BitPolicy::Uniform {
+            bit_width: astronomical_quantization::bit_width::BitWidth::new(4).expect("valid"),
+            group_size: astronomical_quantization::bit_width::GroupSize::new(64).expect("valid"),
+        },
+    );
+    for entry in &mut plan.entries {
+        entry.decision =
+            astronomical_quantization::requantize::bit_policy::TensorEncodingDecision::PassThrough;
+    }
+    astronomical_quantization::requantize::driver::run_requantize(
+        runtime,
+        source,
+        destination,
+        &plan,
+        astronomical_quantization::encoder::RangeSearchPolicy::default_policy(),
+        astronomical_quantization::requantize::DEFAULT_SHARD_BYTES,
+        &mut StandardErrorProgress,
+    )
+    .expect("the bf16 copy should be written");
+    std::fs::write(
+        destination.join("config.json"),
+        serde_json::to_string_pretty(&config).expect("the config serializes"),
+    )
+    .expect("the bf16 config is writable");
+    astronomical_quantization::pipeline::artifact_files::copy_source_files(
+        source,
+        destination,
+        astronomical_quantization::requantize::DEFAULT_COPY_PATTERNS,
+    )
+    .expect("the tokenizer copies");
+    destination.to_path_buf()
+}
+
+/// The journey's memory limits, for a probe loaded beside the journey's own
+/// runtime (the runtime is process-global; both must agree).
+pub(crate) fn journey_memory_limits() -> MlxMemoryLimits {
+    MlxMemoryLimits::new(
+        JOURNEY_ACTIVE_MEMORY_LIMIT_BYTES,
+        JOURNEY_ACTIVE_MEMORY_LIMIT_BYTES,
+    )
+    .expect("the journey memory limits are valid")
+}
