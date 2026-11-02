@@ -33,7 +33,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 OMLX
-Source: https://github.com/ml-explore/omlx
+Source: https://github.com/jundot/omlx
 Used as the upstream source of Qwen 3.5 Metal kernels that Astronomical
 incorporates. The Metal sources under crates/runtime-integration/native were
 adapted from the oMLX project's Qwen 3.5 prefill kernels
@@ -338,25 +338,34 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 OptiQ (mlx-optiq)
-Source: https://github.com/thin-signal/optiq (PyPI package mlx-optiq;
-documentation at https://mlx-optiq.com)
+Source: the mlx-optiq package on PyPI (https://pypi.org/project/mlx-optiq/),
+documentation at https://mlx-optiq.com. The port was translated from the
+sources distributed in that package.
 Used as the upstream source of the mixed-precision quantization algorithms
 that Astronomical ports to Rust in crates/quantization. The port
-incorporates, as source translations from mlx-optiq 0.6.5: the per-module
-KL-divergence sensitivity sweep and its structural fallback
-(optiq/core/sensitivity.py), the greedy knapsack allocator with the
-block-aware floor and block-run guard (optiq/core/optimizer.py), the
-per-group range-search affine encoder (optiq/core/lowbit.py), the
-tensor-at-a-time shard-wise requantizer (optiq/core/shardwise.py), the
-roofline latency model (optiq/core/latency.py), the mixed-precision
-key-value cache allocator (optiq/core/kv_cache.py), the calibration mix
-loader (optiq/calibration/datasets.py), and the artifact layout
-(optiq/artifacts.py). The bundled calibration mix
-(crates/quantization/calibration/optiq.jsonl) is vendored verbatim with this
-license beside it as crates/quantization/calibration/LICENSE-OPTIQ. The
-range-search encoder was itself adapted by OptiQ from the oQ quantizer in
-oMLX (Apache-2.0), attributed above under OMLX. Inline comments in the
-ported modules preserve the provenance of every translated rule.
+incorporates, as source translations from mlx-optiq 0.6.5 and 0.7.9:
+- The per-module KL-divergence sensitivity sweep with its measured-majority
+  guard, the structural fallback, the bf16 layer index (module inventory),
+  the KL formula, the sensitivity checkpoint, and the sensitivity report
+  (optiq/core/sensitivity.py).
+- The greedy knapsack allocator with the block-aware floor and block-run
+  guard, and the quantization predicate (optiq/core/optimizer.py).
+- The per-group range-search affine encoder and its code packing
+  (optiq/core/lowbit.py).
+- The tensor-at-a-time shard-wise requantizer, its MoE bit policy, router
+  and expert predicates, and shard writer (optiq/core/shardwise.py).
+- The roofline latency model (optiq/core/latency.py) and the mixed-precision
+  key-value cache allocator (optiq/core/kv_cache.py).
+- The calibration mix loader (optiq/calibration/datasets.py).
+- The artifact layout and its metadata and sensitivity documents
+  (optiq/artifacts.py, optiq/models/llm.py), and the conversion pipeline
+  (optiq/models/llm.py).
+The bundled calibration mix (crates/quantization/calibration/optiq.jsonl) is
+vendored verbatim with this license beside it as
+crates/quantization/calibration/LICENSE-OPTIQ. The range-search encoder was
+itself adapted by OptiQ from the oQ quantizer in oMLX (Apache-2.0),
+attributed above under OMLX. Inline comments in the ported modules preserve
+the provenance of every translated rule.
 
 MIT License
 
@@ -379,6 +388,78 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Mersenne Twister MT19937 and NumPy's legacy RandomState stream
+Source: https://github.com/numpy/numpy (numpy/random/src/mt19937 and
+numpy/random/src/legacy)
+Used as the reference for crates/quantization/src/calibration/seeded_shuffle.rs,
+which reproduces np.random.RandomState(seed).shuffle bit for bit so a Rust
+sensitivity sweep calibrates on the same sequences as OptiQ's Python sweep.
+The Rust source translates the MT19937 generator with init_genrand seeding
+(Makoto Matsumoto and Takuji Nishimura) and the masked-rejection interval
+draw (Richard J. Wagner's implementation, optimised by Magnus Jonsson, as
+carried in NumPy's randomkit by Jean-Sebastien Roy). The component license
+NumPy distributes with this code follows.
+
+Copyright (c) 2003-2005, Jean-Sebastien Roy (js@jeannot.org)
+
+The rk_random and rk_seed functions algorithms and the original design of
+the Mersenne Twister RNG:
+
+  Copyright (C) 1997 - 2002, Makoto Matsumoto and Takuji Nishimura,
+  All rights reserved.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions
+  are met:
+
+  1. Redistributions of source code must retain the above copyright
+  notice, this list of conditions and the following disclaimer.
+
+  2. Redistributions in binary form must reproduce the above copyright
+  notice, this list of conditions and the following disclaimer in the
+  documentation and/or other materials provided with the distribution.
+
+  3. The names of its contributors may not be used to endorse or promote
+  products derived from this software without specific prior written
+  permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER
+OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Original algorithm for the implementation of rk_interval function from
+Richard J. Wagner's implementation of the Mersenne Twister RNG, optimised by
+Magnus Jonsson.
+
+Constants used in the rk_double implementation by Isaku Wada.
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be included
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 mermaid
 Source: https://github.com/mermaid-js/mermaid

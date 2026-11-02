@@ -94,3 +94,23 @@ CLI journeys (`cargo test -p astronomical-cli --test integration_tests quantize`
 - Measured on Qwen3.5 0.8B with a bf16 reference: the forward is bit-reproducible and a restore is exact, but every probe at 4 bits and above lands on a floor of about 1e-3 KL that is not monotone in width (one `up_proj`: 8-bit 1.3e-3, 6-bit 1.7e-3, 5-bit 3.1e-3, 4-bit 2.0e-3, 3-bit 4.5e-2, 2-bit 1.0e-1). The floor is the bf16-activation network's response to any weight perturbation; OptiQ's mlx-lm sweep runs bf16 activations too and shares it. On a small base the default 4/8 ladder therefore ranks modules mostly on noise; a ladder whose low rung clears the floor, more calibration sequences, or a Float32-activation probe forward would sharpen it.
 - Resolved: the calibration shuffle reproduces numpy's `RandomState(seed).shuffle` exactly (MT19937 with `init_genrand` and the legacy masked-rejection interval), so a Rust sweep and a Python sweep of the same mix and tokenizer calibrate on the same sequences. Chat samples still render by role-prefixed concatenation rather than the tokenizer's chat template, so sequences match the Python tool only for models without one, or with pre-tokenized samples.
 - The CLI's `quantize-convert` feature links the model-serving engine into the CLI binary. If that proves too heavy for the release bundle, the `convert` sub-verb can move to a separate `astronomical-quantize` binary under `apps/` with no change to this crate.
+
+## Attribution
+
+This crate is a translation, and its algorithms belong to the people who designed them:
+
+- **OptiQ** (`mlx-optiq`, MIT License, Copyright (c) 2026 Thin Signal; [mlx-optiq.com](https://mlx-optiq.com), [PyPI](https://pypi.org/project/mlx-optiq/)) designed the following, which this crate ports:
+  - the sensitivity sweep and the structural scorer
+  - the knapsack allocator with its block rules
+  - the range-search encoder
+  - the shard-wise requantizer
+  - the calibration mix and loader
+  - the latency and key-value cache models
+  - the artifact layout
+- **oMLX** ([github.com/jundot/omlx](https://github.com/jundot/omlx), Apache-2.0) is where OptiQ's range-search encoder comes from: OptiQ adapted it from oMLX's oQ quantizer.
+- **NumPy's legacy random stream** is reproduced by the calibration shuffle. It builds on:
+  - MT19937, by Makoto Matsumoto and Takuji Nishimura
+  - the interval draw, by Richard J. Wagner and Magnus Jonsson
+  - Jean-Sebastien Roy's randomkit, which carries both into NumPy
+
+The full license texts are in `third-party/THIRD_PARTY_NOTICES`. Each ported module names the OptiQ function it translates.

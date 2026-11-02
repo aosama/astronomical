@@ -1,5 +1,6 @@
 //! The sweep output: one KL divergence per module per candidate bit width,
-//! and the method that produced it.
+//! and the method that produced it. Ported from OptiQ's `SensitivityResult`
+//! (`optiq/core/sensitivity.py`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
