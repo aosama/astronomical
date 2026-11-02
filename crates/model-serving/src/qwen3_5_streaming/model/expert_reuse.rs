@@ -4,6 +4,7 @@ use super::prefill_partial_layer_read::{
     prefill_read_expert_ids, prefill_storage_read_scope, should_remember_prefill_completion_refusal,
 };
 use crate::expert_paging::{ExpertWeightPage, QuantizedExpertPageManifest};
+use crate::memory::SessionStreamingPhase;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::expert_streaming::RoutedExpertCoverage;
 use crate::qwen3_5_streaming::expert_streaming::expert_pager::{
@@ -215,11 +216,12 @@ impl Qwen3_5Model {
         expert_capacity: usize,
         routed_expert_count: usize,
         production_default_paging: bool,
+        serving_phase: SessionStreamingPhase,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), Qwen3_5ExecutionError>
     {
         let complete_expert_ids: Vec<usize> = (0..expert_capacity).collect();
-        let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage(
+        let (streamed_weights, streamed_manifest) = self.stream_expert_page_from_storage_in_phase(
             expert_pager,
             layer_index,
             &complete_expert_ids,
@@ -227,6 +229,7 @@ impl Qwen3_5Model {
                 route_token_count,
                 routed_expert_count,
             },
+            serving_phase,
             performance_attribution,
         )?;
         if let Some(retained_experts) = self.retained_experts.as_ref() {

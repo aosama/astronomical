@@ -3,6 +3,7 @@
 //! Selected complete layers are retained in the expert page cache before the
 //! first decode token; remaining routes continue to use the pager.
 
+use crate::memory::SessionStreamingPhase;
 use crate::memory::decode_seating::{DecodeExpertSeating, seat_and_materialize_complete_layers};
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
@@ -82,6 +83,9 @@ impl DecodeExpertSeating for ModelDecodeExpertSeating<'_> {
             expert_capacity,
             expert_capacity,
             true,
+            // Seating serves decode; the phase state still reads prefill
+            // until the first decode forward.
+            SessionStreamingPhase::Decode,
             self.performance_attribution,
         )?;
         self.performance_attribution.record_counter(

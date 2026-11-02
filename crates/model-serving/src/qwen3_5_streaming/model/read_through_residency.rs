@@ -48,6 +48,7 @@ impl Qwen3_5Model {
                     expert_capacity,
                     sorted_unique_expert_ids.len(),
                     paged_execution_mode == Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+                    self.current_serving_phase(route_token_count),
                     performance_attribution,
                 )?
             } else {
