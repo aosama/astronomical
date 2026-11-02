@@ -13,7 +13,7 @@ function libraryFamilyLabel(family) {
 // Editorial "start here" list: the two models the Observatory recommends for
 // everyday use. Matched on the stable requestable id when the catalog ships
 // one, falling back to the display name so the 35B 4-bit (which ships no backend
-// id) still matches. Exact-match sets keep the REAP / static / MLX variants out.
+// id) still matches. Exact-match sets keep the static / MLX variants out.
 const LIBRARY_EVERYDAY_MODEL_IDS = new Set([
     "Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
     "Ornith 1.5 35B A3B OptiQ 4bit",
