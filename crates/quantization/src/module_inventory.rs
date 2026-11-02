@@ -20,8 +20,8 @@ use crate::error::QuantizationError;
 use crate::module_taxonomy::ModuleRole;
 
 mod expert_naming;
-mod inventory_builder;
-mod safetensors_header;
+pub(crate) mod inventory_builder;
+pub(crate) mod safetensors_header;
 
 #[cfg(test)]
 #[path = "module_inventory_tests.rs"]

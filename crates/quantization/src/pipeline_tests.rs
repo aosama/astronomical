@@ -3,7 +3,6 @@
 use super::*;
 
 #[test]
-#[ignore = "pending implementation of resolve_reference_mode"]
 fn should_pick_bfloat16_when_the_weights_fit_in_seventy_percent_of_available_memory() {
     let resolved = resolve_reference_mode(
         ReferenceMode::Auto,
@@ -15,7 +14,6 @@ fn should_pick_bfloat16_when_the_weights_fit_in_seventy_percent_of_available_mem
 }
 
 #[test]
-#[ignore = "pending implementation of resolve_reference_mode"]
 fn should_fall_back_to_the_uniform_baseline_when_bfloat16_does_not_fit() {
     let resolved = resolve_reference_mode(
         ReferenceMode::Auto,
@@ -27,7 +25,6 @@ fn should_fall_back_to_the_uniform_baseline_when_bfloat16_does_not_fit() {
 }
 
 #[test]
-#[ignore = "pending implementation of resolve_reference_mode"]
 fn should_pass_an_explicit_reference_mode_through_unchanged() {
     let resolved = resolve_reference_mode(ReferenceMode::Bfloat16, u64::MAX, 1);
 
@@ -35,7 +32,6 @@ fn should_pass_an_explicit_reference_mode_through_unchanged() {
 }
 
 #[test]
-#[ignore = "pending implementation of estimate_bfloat16_weight_bytes"]
 fn should_count_fp8_tensors_twice_when_estimating_the_bfloat16_footprint() {
     // A shard whose header declares one F8_E4M3 tensor of 1024 bytes: the
     // estimate is the file size plus 1024.
@@ -52,4 +48,23 @@ fn should_count_fp8_tensors_twice_when_estimating_the_bfloat16_footprint() {
         estimate_bfloat16_weight_bytes(directory.path()).expect("the estimate should succeed");
 
     assert_eq!(estimate, shard_bytes.len() as u64 + 1024);
+}
+
+#[test]
+fn should_pick_bfloat16_at_exactly_seventy_percent_of_available_memory() {
+    let resolved = resolve_reference_mode(ReferenceMode::Auto, 70, 100);
+
+    assert_eq!(resolved, ReferenceMode::Bfloat16);
+}
+
+#[test]
+fn should_report_a_source_without_shards_when_estimating_the_footprint() {
+    let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+
+    let refusal = estimate_bfloat16_weight_bytes(directory.path());
+
+    assert!(matches!(
+        refusal,
+        Err(QuantizationError::NoSafetensorsShards { .. })
+    ));
 }

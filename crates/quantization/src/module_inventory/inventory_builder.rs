@@ -94,7 +94,7 @@ pub fn build_inventory_contents(
 /// Every `*.safetensors` directly under the directory, sorted by name. The
 /// walk does not descend: OptiQ's private sidecars live under `optiq/` and
 /// are not part of the model's weights.
-fn list_shard_paths(source_directory: &Path) -> Result<Vec<PathBuf>, QuantizationError> {
+pub(crate) fn list_shard_paths(source_directory: &Path) -> Result<Vec<PathBuf>, QuantizationError> {
     let no_shards = QuantizationError::NoSafetensorsShards {
         source_directory: source_directory.to_path_buf(),
     };

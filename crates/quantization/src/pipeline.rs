@@ -16,6 +16,10 @@ use crate::encoder::RangeSearchPolicy;
 use crate::error::QuantizationError;
 use crate::sensitivity::{SensitivityMethod, SensitivityTable};
 
+pub mod artifact_files;
+#[cfg(feature = "direct-mlx")]
+mod conversion;
+
 #[cfg(test)]
 #[path = "pipeline_tests.rs"]
 mod pipeline_tests;
@@ -82,34 +86,55 @@ pub struct QuantizationPipelineOutcome {
     pub sensitivity_document_written: bool,
 }
 
-/// Resolves `Auto` from the source's bf16 footprint and available memory.
-///
-/// Work to port (OptiQ's `_resolve_reference_mode` and
-/// `_estimate_bf16_size_bytes`): sum the shard sizes, adding the byte count
-/// of every `F8_*` tensor again (an FP8 byte becomes two in bf16; sizing
-/// from the files alone picked a bf16 reference for a 186 GB FP8 release
-/// that needed 350 GB). bf16 fits when that total is at most 70% of
-/// `available_memory_bytes`. Available memory is injected by the caller so
-/// the decision is testable and never reads the host from inside the
-/// library.
+/// Resolves `Auto` from the source's bf16 footprint and available memory,
+/// OptiQ's `_resolve_reference_mode`: bf16 fits when the footprint is at
+/// most [`BFLOAT16_MEMORY_FIT_FRACTION`] of available memory. Available
+/// memory is injected by the caller so the decision is testable and the
+/// library never reads the host. An explicit mode passes through.
 #[must_use]
 pub fn resolve_reference_mode(
     requested: ReferenceMode,
     estimated_bfloat16_weight_bytes: u64,
     available_memory_bytes: u64,
 ) -> ReferenceMode {
-    let _ = (
-        requested,
-        estimated_bfloat16_weight_bytes,
-        available_memory_bytes,
-    );
-    todo!("Auto → Bfloat16 when bytes <= 0.70 * available, else Uniform4Bit; others pass through")
+    if requested != ReferenceMode::Auto {
+        return requested;
+    }
+    let bfloat16_budget_bytes = BFLOAT16_MEMORY_FIT_FRACTION * available_memory_bytes as f64;
+    if estimated_bfloat16_weight_bytes as f64 <= bfloat16_budget_bytes {
+        ReferenceMode::Bfloat16
+    } else {
+        ReferenceMode::Uniform4Bit
+    }
 }
 
-/// Sums shard bytes with FP8 tensors counted twice.
+/// Sums shard bytes with FP8 tensors counted twice, OptiQ's
+/// `_estimate_bf16_size_bytes`. An FP8 byte becomes two in bf16; sizing
+/// from the files alone picked a bf16 reference for a 186 GB FP8 release
+/// that needed 350 GB.
 pub fn estimate_bfloat16_weight_bytes(source_directory: &Path) -> Result<u64, QuantizationError> {
-    let _ = source_directory;
-    todo!("file sizes plus the data_offsets span of every F8_* header entry")
+    let mut estimated_bytes = 0_u64;
+    for shard_path in
+        crate::module_inventory::inventory_builder::list_shard_paths(source_directory)?
+    {
+        estimated_bytes += match std::fs::metadata(&shard_path) {
+            Ok(shard_metadata) => shard_metadata.len(),
+            Err(metadata_error) => {
+                return Err(QuantizationError::SafetensorsHeaderUnreadable {
+                    shard_path,
+                    description: metadata_error.to_string(),
+                });
+            }
+        };
+        let header_tensors =
+            crate::module_inventory::safetensors_header::read_header_tensors(&shard_path)?;
+        for header_tensor in header_tensors {
+            if header_tensor.dtype.starts_with("F8_") {
+                estimated_bytes += header_tensor.data_byte_count;
+            }
+        }
+    }
+    Ok(estimated_bytes)
 }
 
 /// Builds the allocation constraints from a request.
@@ -148,10 +173,10 @@ pub fn plan_from_sensitivity_table(
     crate::allocation::optimize_mixed_precision(table, constraints)
 }
 
-/// The full GPU path.
-///
-/// Work to port (OptiQ's `run_llm_pipeline`), stage by stage:
-/// 1. Refuse an existing output directory unless `overwrite_output`.
+/// The full GPU path, OptiQ's `run_llm_pipeline`, stage by stage:
+/// 1. Refuse an existing artifact directory unless `overwrite_output`. The
+///    output directory itself may exist: it holds the sweep checkpoint and
+///    the uniform baseline that a rerun resumes from.
 /// 2. Inventory the source.
 /// 3. `StaticStructural`: score the inventory, allocate, requantize with the
 ///    allocation's predicate, write the artifact files, done. No baselines.
@@ -167,7 +192,7 @@ pub fn plan_from_sensitivity_table(
 ///    delete the baseline directory.
 /// 5. Allocate; print the summary and the overshoot note.
 /// 6. Requantize the source with the predicate into `<output>/optiq_mixed/`
-///    (or `static_mixed/`). Every tensor passes through the requantizer, so
+///    (or `static_mixed/`), which is the artifact directory. Every tensor passes through the requantizer, so
 ///    multi-token-prediction heads and vision towers ride along in place;
 ///    the sidecar-reattachment step OptiQ needs after mlx-lm's convert does
 ///    not exist here.
@@ -180,6 +205,7 @@ pub fn plan_from_sensitivity_table(
 /// copy; for the requantizer, one tensor plus its working copy.
 #[cfg(feature = "direct-mlx")]
 pub fn run_quantization_pipeline<ProbeModelLoader>(
+    runtime: &astronomical_runtime_integration::MlxRuntime,
     request: &QuantizationPipelineRequest,
     available_memory_bytes: u64,
     probe_model_loader: ProbeModelLoader,
@@ -189,13 +215,13 @@ where
     ProbeModelLoader:
         FnOnce(&Path, Option<&Path>) -> Result<Box<dyn ProbeModelHandle>, QuantizationError>,
 {
-    let _ = (
+    conversion::run_conversion(
+        runtime,
         request,
         available_memory_bytes,
         probe_model_loader,
         progress_reporter,
-    );
-    todo!("sequence the stages documented above")
+    )
 }
 
 /// Type-erased probe model so the pipeline can be generic over engines
