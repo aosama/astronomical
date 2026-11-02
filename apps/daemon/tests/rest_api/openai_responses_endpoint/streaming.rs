@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn should_return_semantic_sse_events_without_a_done_sentinel() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::TextFragment("Done.".to_owned()),
         ChatGenerationStreamEvent::Completed {
             prompt_token_count: 10,
@@ -30,7 +30,7 @@ async fn should_return_semantic_sse_events_without_a_done_sentinel() {
 
 #[tokio::test]
 async fn should_stream_responses_visible_text_separately_from_reasoning_for_opencode() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
         ChatGenerationStreamEvent::TextFragment("Visible answer".to_owned()),
         ChatGenerationStreamEvent::Completed {
@@ -93,7 +93,7 @@ async fn should_stream_responses_visible_text_separately_from_reasoning_for_open
 
 #[tokio::test]
 async fn should_stream_responses_parallel_function_call_lifecycle_for_opencode() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::ToolCall {
             tool_call_index: 0,
             function_name: "read".to_owned(),
@@ -167,7 +167,7 @@ async fn should_stream_responses_parallel_function_call_lifecycle_for_opencode()
 
 #[tokio::test]
 async fn should_stream_the_context_overflow_signal_without_assistant_output() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::ContextLengthExceeded {
                 actual_total_context_tokens: 262_145,
@@ -193,7 +193,7 @@ async fn should_stream_the_context_overflow_signal_without_assistant_output() {
 
 #[tokio::test]
 async fn should_end_a_partially_emitted_stream_with_an_error_if_the_worker_closes() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::TextFragment("Partial".to_owned()),
     ]));
 

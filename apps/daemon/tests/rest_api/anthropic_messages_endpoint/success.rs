@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn should_return_a_whole_message_with_thinking_text_and_split_usage() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::ReasoningFragment("A sonnet opens softly.".to_owned()),
         ChatGenerationStreamEvent::TextFragment("Thou art more lovely".to_owned()),
         completed_event(ChatGenerationCompletionReason::EndOfSequence),
@@ -35,7 +35,7 @@ async fn should_return_a_whole_message_with_thinking_text_and_split_usage() {
 
 #[tokio::test]
 async fn should_return_tool_use_blocks_with_parsed_input() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::ToolCall {
             tool_call_index: 0,
             function_name: "read_sonnet".to_owned(),
@@ -66,7 +66,7 @@ async fn should_return_tool_use_blocks_with_parsed_input() {
 
 #[tokio::test]
 async fn should_report_max_tokens_when_the_output_budget_runs_out() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::TextFragment("Rough winds do shake".to_owned()),
         completed_event(ChatGenerationCompletionReason::MaximumOutputTokens),
     ]));

@@ -11,9 +11,9 @@ use axum::{
 use serde_json::Value;
 use tower::ServiceExt;
 
-use super::openai_responses_endpoint::MODEL_ID;
-use super::openai_responses_endpoint::support::ScriptedResponsesExecutor;
+use super::scripted_chat_executor::{SCRIPTED_CHAT_MODEL_ID as MODEL_ID, ScriptedChatExecutor};
 
+mod generation_failures;
 mod request_rejection;
 mod streaming;
 mod success;

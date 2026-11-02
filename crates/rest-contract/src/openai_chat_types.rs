@@ -1,3 +1,4 @@
+use crate::json_nesting_depth::json_nesting_depth;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -521,24 +522,4 @@ fn validate_non_empty_string(
         return Err(OpenAiChatCompletionValidationError::EmptyString { field_name });
     }
     Ok(())
-}
-
-fn json_nesting_depth(json_value: &Value) -> usize {
-    match json_value {
-        Value::Array(array_values) => {
-            1 + array_values
-                .iter()
-                .map(json_nesting_depth)
-                .max()
-                .unwrap_or(0)
-        }
-        Value::Object(object_values) => {
-            1 + object_values
-                .values()
-                .map(json_nesting_depth)
-                .max()
-                .unwrap_or(0)
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => 0,
-    }
 }

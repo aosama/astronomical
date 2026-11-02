@@ -350,24 +350,39 @@ fn should_reject_an_unknown_effort_level_and_other_output_controls() {
     );
 }
 
-#[test]
-fn should_keep_system_turn_text_and_drop_tool_references() {
+fn system_turn_request(referenced_tool_name: &str) -> serde_json::Value {
     let mut request_document = minimal_request();
+    request_document["tools"] = json!([{"name": "read_play"}]);
     request_document["messages"] = json!([
         {"role": "user", "content": "Read the play."},
         {"role": "system", "content": [
             {"type": "text", "text": "The working directory changed."},
-            {"type": "tool_addition", "tool": {"type": "tool_reference", "name": "read_play"},
+            {"type": "tool_addition", "tool": {"type": "tool_reference", "name": referenced_tool_name},
              "cache_control": {"type": "ephemeral"}}
         ]}
     ]);
+    request_document
+}
 
-    let request_parts = parts_of(request_document);
+#[test]
+fn should_keep_system_turn_text_and_its_declared_tool_references() {
+    let request_parts = parts_of(system_turn_request("read_play"));
 
     assert_eq!(
         request_parts.messages[1],
         AnthropicMessageParts::System {
-            text: "The working directory changed.".to_owned()
+            text: "The working directory changed.".to_owned(),
+            referenced_tool_names: vec!["read_play".to_owned()],
+        }
+    );
+}
+
+#[test]
+fn should_reject_a_tool_reference_to_an_undeclared_tool() {
+    assert_eq!(
+        rejection_of(system_turn_request("burn_the_globe")),
+        AnthropicMessagesValidationError::UndeclaredToolReference {
+            tool_name: "burn_the_globe".to_owned()
         }
     );
 }
@@ -388,4 +403,183 @@ fn should_reject_a_tool_addition_that_carries_more_than_a_reference() {
             location: "system message"
         }
     );
+}
+
+#[test]
+fn should_honor_each_thinking_display_value() {
+    for (display_value, expected_omitted) in [("summarized", false), ("omitted", true)] {
+        let mut request_document = minimal_request();
+        request_document["thinking"] = json!({"type": "adaptive", "display": display_value});
+
+        assert_eq!(
+            parts_of(request_document).is_thinking_display_omitted,
+            expected_omitted
+        );
+    }
+    assert!(!parts_of(minimal_request()).is_thinking_display_omitted);
+}
+
+#[test]
+fn should_reject_an_unknown_thinking_display() {
+    let mut request_document = minimal_request();
+    request_document["thinking"] = json!({"type": "adaptive", "display": "interpretive_dance"});
+
+    assert_eq!(
+        rejection_of(request_document),
+        AnthropicMessagesValidationError::UnsupportedOption {
+            option_name: "thinking.display"
+        }
+    );
+}
+
+#[test]
+fn should_require_a_positive_budget_for_enabled_thinking() {
+    for thinking_object in [
+        json!({"type": "enabled"}),
+        json!({"type": "enabled", "budget_tokens": 0}),
+    ] {
+        let mut request_document = minimal_request();
+        request_document["thinking"] = thinking_object;
+
+        assert_eq!(
+            rejection_of(request_document),
+            AnthropicMessagesValidationError::ThinkingBudgetRequired
+        );
+    }
+}
+
+#[test]
+fn should_reject_disabling_parallel_tool_use() {
+    let mut request_document = minimal_request();
+    request_document["tool_choice"] = json!({"type": "auto", "disable_parallel_tool_use": true});
+
+    assert_eq!(
+        rejection_of(request_document),
+        AnthropicMessagesValidationError::UnsupportedOption {
+            option_name: "tool_choice.disable_parallel_tool_use"
+        }
+    );
+}
+
+#[test]
+fn should_accept_tool_choice_none() {
+    let mut request_document = minimal_request();
+    request_document["tool_choice"] = json!({"type": "none"});
+
+    assert_eq!(
+        parts_of(request_document).tool_choice,
+        AnthropicToolChoiceParts::None
+    );
+}
+
+#[test]
+fn should_reject_an_invalid_tool_name_and_an_overly_deep_schema() {
+    let mut request_document = minimal_request();
+    request_document["tools"] = json!([{"name": "read play"}]);
+    assert!(matches!(
+        rejection_of(request_document.clone()),
+        AnthropicMessagesValidationError::InvalidToolName { .. }
+    ));
+
+    let mut deep_schema = json!({"type": "object"});
+    for _ in 0..crate::MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH {
+        deep_schema = json!({"properties": deep_schema});
+    }
+    request_document["tools"] = json!([{"name": "read_play", "input_schema": deep_schema}]);
+    assert!(matches!(
+        rejection_of(request_document),
+        AnthropicMessagesValidationError::ToolSchemaNestingTooDeep { .. }
+    ));
+}
+
+#[test]
+fn should_reject_content_blocks_outside_their_roles() {
+    let image_block = json!({"type": "image", "source": {
+        "type": "base64", "media_type": "image/png", "data": ONE_PIXEL_PNG_BASE64
+    }});
+    let mut request_document = minimal_request();
+    request_document["messages"] = json!([
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": [image_block]}
+    ]);
+    assert_eq!(
+        rejection_of(request_document.clone()),
+        AnthropicMessagesValidationError::UnsupportedContentBlock {
+            location: "assistant message"
+        }
+    );
+
+    request_document["messages"] = json!([{"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": "toolu_1", "content": [
+            {"type": "tool_use", "id": "toolu_2", "name": "read_play", "input": {}}
+        ]}
+    ]}]);
+    assert_eq!(
+        rejection_of(request_document.clone()),
+        AnthropicMessagesValidationError::UnsupportedContentBlock {
+            location: "tool_result content"
+        }
+    );
+
+    request_document["system"] = json!([{"type": "image", "text": ""}]);
+    request_document["messages"] = json!([{"role": "user", "content": "hello"}]);
+    assert_eq!(
+        rejection_of(request_document),
+        AnthropicMessagesValidationError::UnsupportedContentBlock { location: "system" }
+    );
+}
+
+#[test]
+fn should_reject_an_empty_model_and_top_p_out_of_range() {
+    let mut request_document = minimal_request();
+    request_document["model"] = json!("");
+    assert_eq!(
+        rejection_of(request_document),
+        AnthropicMessagesValidationError::EmptyModel
+    );
+
+    let mut request_document = minimal_request();
+    request_document["top_p"] = json!(1.01);
+    assert_eq!(
+        rejection_of(request_document),
+        AnthropicMessagesValidationError::SamplingParameterOutOfRange {
+            parameter_name: "top_p"
+        }
+    );
+}
+
+#[test]
+fn should_accept_the_lowest_boundaries_of_max_tokens_and_temperature() {
+    let mut request_document = minimal_request();
+    request_document["max_tokens"] = json!(1);
+    request_document["temperature"] = json!(0.0);
+
+    let request_parts = parts_of(request_document);
+
+    assert_eq!(request_parts.maximum_output_tokens, 1);
+    assert_eq!(request_parts.temperature, Some(0.0));
+}
+
+#[test]
+fn should_reject_decoded_images_beyond_the_inline_media_budget_as_too_large() {
+    // Four images just under the per-image cap together exceed the
+    // request-wide inline-media budget.
+    let near_cap_image_bytes = vec![0_u8; crate::MAX_OPENAI_IMAGE_DECODED_BYTES - 1];
+    let near_cap_image_base64 = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        &near_cap_image_bytes,
+    );
+    let image_block = json!({"type": "image", "source": {
+        "type": "base64", "media_type": "image/png", "data": near_cap_image_base64
+    }});
+    let mut request_document = minimal_request();
+    request_document["messages"] = json!([{"role": "user", "content": vec![image_block; 4]}]);
+
+    let validation_error = rejection_of(request_document);
+
+    assert!(matches!(
+        validation_error,
+        AnthropicMessagesValidationError::InlineMediaExceedsBudget { .. }
+    ));
+    assert!(validation_error.is_request_too_large());
 }

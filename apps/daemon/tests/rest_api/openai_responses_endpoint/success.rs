@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn should_return_a_non_streaming_response_from_the_public_endpoint() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::TextFragment("Done.".to_owned()),
         ChatGenerationStreamEvent::Completed {
             prompt_token_count: 10,
@@ -46,7 +46,7 @@ async fn should_return_a_non_streaming_response_from_the_public_endpoint() {
 
 #[tokio::test]
 async fn should_echo_validated_request_configuration_in_the_response() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::Completed {
             prompt_token_count: 4,
             generated_token_count: 1,
@@ -96,7 +96,7 @@ async fn should_echo_validated_request_configuration_in_the_response() {
 
 #[tokio::test]
 async fn should_return_non_streaming_responses_reasoning_without_visible_output_text() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::ReasoningFragment("internal thought".to_owned()),
         ChatGenerationStreamEvent::Completed {
             prompt_token_count: 10,
@@ -133,7 +133,7 @@ async fn should_return_non_streaming_responses_reasoning_without_visible_output_
 
 #[tokio::test]
 async fn should_return_extracted_json_and_a_warning_for_text_format_json_schema() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::TextFragment(
             "```json\n{\"speaker\":\"Juliet\",\"play\":\"Romeo and Juliet\"}\n```".to_owned(),
         ),

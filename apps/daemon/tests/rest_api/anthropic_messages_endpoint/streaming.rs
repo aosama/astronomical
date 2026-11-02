@@ -1,7 +1,7 @@
 use super::*;
 
 async fn thinking_then_text_stream() -> Vec<ParsedMessagesSseEvent> {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::ReasoningFragment("Consider the summer.".to_owned()),
         ChatGenerationStreamEvent::TextFragment("Thou art ".to_owned()),
         ChatGenerationStreamEvent::TextFragment("more temperate".to_owned()),
@@ -61,7 +61,7 @@ async fn should_stream_block_kinds_and_the_final_stop_reason_with_usage() {
 
 #[tokio::test]
 async fn should_stream_a_tool_use_block_with_its_whole_input_json() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::ToolCall {
             tool_call_index: 0,
             function_name: "read_sonnet".to_owned(),
@@ -95,7 +95,7 @@ async fn should_stream_a_tool_use_block_with_its_whole_input_json() {
 
 #[tokio::test]
 async fn should_end_an_interrupted_stream_with_an_error_event() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::TextFragment("Partial".to_owned()),
     ]));
 
@@ -106,13 +106,16 @@ async fn should_end_an_interrupted_stream_with_an_error_event() {
         .last()
         .expect("the stream should carry events");
     assert_eq!(final_event.event_type, "error");
-    assert_eq!(final_event.json_payload["error"]["type"], "api_error");
+    assert_eq!(
+        final_event.json_payload["error"]["type"],
+        "overloaded_error"
+    );
     assert!(!event_types(&parsed_events).contains(&"message_stop"));
 }
 
 #[tokio::test]
 async fn should_stream_context_overflow_as_prompt_too_long() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::ContextLengthExceeded {
                 actual_total_context_tokens: 262_145,

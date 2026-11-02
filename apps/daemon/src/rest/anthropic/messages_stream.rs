@@ -13,8 +13,9 @@ use astronomical_rest_contract::{
 };
 
 use super::messages_assembly::{
-    WorkerTokenCounts, anthropic_stop_reason, failure_error, parse_tool_input, tool_use_id,
+    WorkerTokenCounts, anthropic_stop_reason, parse_tool_input, tool_use_id,
 };
+use super::messages_errors::{failure_error, worker_unavailable_error};
 use crate::{ChatGenerationStreamErrorCode, ChatGenerationStreamEvent};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,16 +35,22 @@ pub(crate) struct AnthropicMessagesStreamEncoder {
     model_id: String,
     next_block_index: usize,
     open_block: Option<OpenContentBlock>,
+    is_thinking_display_omitted: bool,
     is_terminal: bool,
 }
 
 impl AnthropicMessagesStreamEncoder {
-    pub(crate) fn new(message_id: String, model_id: String) -> Self {
+    pub(crate) fn new(
+        message_id: String,
+        model_id: String,
+        is_thinking_display_omitted: bool,
+    ) -> Self {
         Self {
             message_id,
             model_id,
             next_block_index: 0,
             open_block: None,
+            is_thinking_display_omitted,
             is_terminal: false,
         }
     }
@@ -106,9 +113,7 @@ impl AnthropicMessagesStreamEncoder {
                 self.error_event(failure_error(&reason))
             }
             ChatGenerationStreamEvent::Error(ChatGenerationStreamErrorCode::WorkerUnavailable) => {
-                self.error_event(AnthropicError::api_error(
-                    "the local worker became unavailable while generating the message",
-                ))
+                self.error_event(worker_unavailable_error())
             }
             // `encode` routes every non-terminal event before it gets here.
             ChatGenerationStreamEvent::ReasoningFragment(_)
@@ -140,10 +145,16 @@ impl AnthropicMessagesStreamEncoder {
                 block_index
             }
         };
-        stream_events.push_back(AnthropicMessageStreamEvent::ContentBlockDelta {
-            index: block_index,
-            delta,
-        });
+        // An omitted thinking display still opens and closes the thinking
+        // block, so the client sees that the model thought, but sends no text.
+        let is_withheld_thinking =
+            block_kind == OpenBlockKind::Thinking && self.is_thinking_display_omitted;
+        if !is_withheld_thinking {
+            stream_events.push_back(AnthropicMessageStreamEvent::ContentBlockDelta {
+                index: block_index,
+                delta,
+            });
+        }
         stream_events
     }
 

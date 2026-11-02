@@ -2,25 +2,27 @@
 //! model resolution, queue admission, and the worker generation path with
 //! the OpenAI surfaces and differs only in the wire protocol at both ends.
 
-use std::collections::VecDeque;
-
 use astronomical_config::ModelCapabilities;
 use astronomical_ipc_protocol::{ChatGenerationCommand, RequestId};
 use astronomical_rest_contract::{
-    AnthropicError, AnthropicMessageStreamEvent, AnthropicMessagesRequest,
-    AnthropicMessagesRequestParts, AnthropicMessagesValidationError,
+    AnthropicError, AnthropicMessagesRequest, AnthropicMessagesRequestParts,
 };
 use axum::{
     Json,
     body::Bytes,
     extract::State,
-    http::StatusCode,
-    response::{IntoResponse, Response, sse::Event, sse::Sse},
+    response::{IntoResponse, Response},
 };
-use futures_util::stream;
 use tokio::sync::mpsc::Receiver;
 
-use super::messages_assembly::{AnthropicMessageCollector, WorkerTokenCounts, failure_error};
+use super::messages_assembly::{AnthropicMessageCollector, WorkerTokenCounts};
+use super::messages_errors::{
+    anthropic_error_response, failure_error, generation_start_error, json_rejection_error,
+    model_capability_mismatch_error, request_identifier_exhausted_error,
+    translation_rejection_error, unknown_model_error, validation_rejection_error,
+    worker_unavailable_error,
+};
+use super::messages_sse_response::create_streaming_response;
 use super::messages_stream::AnthropicMessagesStreamEncoder;
 use super::messages_translation::translate_anthropic_messages_request_parts;
 use crate::application;
@@ -39,6 +41,7 @@ pub(crate) async fn create_message(
         Err(rejection_response) => return rejection_response,
     };
     let should_stream_response = request_parts.stream;
+    let is_thinking_display_omitted = request_parts.is_thinking_display_omitted;
     let admitted_generation =
         match admit_message_generation(&application_state, request_parts, request_body_bytes.len())
             .await
@@ -54,12 +57,12 @@ pub(crate) async fn create_message(
     if should_stream_response {
         return create_streaming_response(
             stream_event_receiver,
-            AnthropicMessagesStreamEncoder::new(message_id, model_id),
+            AnthropicMessagesStreamEncoder::new(message_id, model_id, is_thinking_display_omitted),
         );
     }
     create_non_streaming_response(
         stream_event_receiver,
-        AnthropicMessageCollector::new(message_id, model_id),
+        AnthropicMessageCollector::new(message_id, model_id, is_thinking_display_omitted),
     )
     .await
 }
@@ -79,11 +82,19 @@ struct AdmittedMessageGeneration {
 fn parse_messages_request(
     request_body_bytes: &[u8],
 ) -> Result<AnthropicMessagesRequestParts, Response> {
-    let messages_request = serde_json::from_slice::<AnthropicMessagesRequest>(request_body_bytes)
-        .map_err(json_rejection_response)?;
-    messages_request
-        .into_parts()
-        .map_err(validation_rejection_response)
+    let messages_request =
+        match serde_json::from_slice::<AnthropicMessagesRequest>(request_body_bytes) {
+            Ok(messages_request) => messages_request,
+            Err(json_error) => {
+                return Err(anthropic_error_response(json_rejection_error(&json_error)));
+            }
+        };
+    match messages_request.into_parts() {
+        Ok(request_parts) => Ok(request_parts),
+        Err(validation_error) => Err(anthropic_error_response(validation_rejection_error(
+            &validation_error,
+        ))),
+    }
 }
 
 /// Resolves the model, translates the request, and starts generation, holding
@@ -145,8 +156,15 @@ fn prepare_generation_command(
 ) -> Result<ChatGenerationCommand, Response> {
     let settings_presence = messages_request_generation_settings_presence(&request_parts);
     let mut chat_generation_command =
-        translate_anthropic_messages_request_parts(RequestId::new(request_id), request_parts)
-            .map_err(translation_rejection_response)?;
+        match translate_anthropic_messages_request_parts(RequestId::new(request_id), request_parts)
+        {
+            Ok(chat_generation_command) => chat_generation_command,
+            Err(translation_error) => {
+                return Err(anthropic_error_response(translation_rejection_error(
+                    &translation_error,
+                )));
+            }
+        };
     chat_generation_command.model = resolved_model_id;
     apply_generation_defaults(
         application_state.reloadable_config.as_ref(),
@@ -182,7 +200,12 @@ async fn start_generation(
             generation_start_outcome
         }
     };
-    generation_start_outcome.map_err(generation_start_rejection_response)
+    match generation_start_outcome {
+        Ok(stream_event_receiver) => Ok(stream_event_receiver),
+        Err(start_error) => Err(anthropic_error_response(generation_start_error(
+            start_error,
+        ))),
+    }
 }
 
 /// Resolves the target model against worker readiness, the alias table, and
@@ -198,27 +221,21 @@ fn resolve_messages_target_model(
         .generation_executor
         .worker_health_snapshot();
     if !worker_health_snapshot.status.is_ready() {
-        return Err(worker_unavailable_response());
+        return Err(anthropic_error_response(worker_unavailable_error()));
     }
     let Some(resolved_model_id) = application_state.resolve_available_generation_model_id(
         requested_model,
         worker_health_snapshot.ready_model_id.as_deref(),
     ) else {
-        return Err(anthropic_error_response(
-            StatusCode::NOT_FOUND,
-            AnthropicError::not_found(format!("model: {requested_model}")),
-        ));
+        return Err(anthropic_error_response(unknown_model_error(
+            requested_model,
+        )));
     };
     for discovered_model in application_state.discovered_models_snapshot().iter() {
         if discovered_model.model_id == resolved_model_id
             && !matches!(discovered_model.capabilities, ModelCapabilities::Chat(_))
         {
-            return Err(anthropic_error_response(
-                StatusCode::BAD_REQUEST,
-                AnthropicError::invalid_request(
-                    "the requested model does not support Messages generation",
-                ),
-            ));
+            return Err(anthropic_error_response(model_capability_mismatch_error()));
         }
     }
     Ok(resolved_model_id)
@@ -244,8 +261,12 @@ fn messages_request_generation_settings_presence(
 fn allocate_messages_request_identifier(
     application_state: &ApplicationState,
 ) -> Result<u64, Response> {
-    application::allocate_chat_request_id(&application_state.next_chat_request_id)
-        .ok_or_else(request_identifier_exhausted_response)
+    match application::allocate_chat_request_id(&application_state.next_chat_request_id) {
+        Some(request_id) => Ok(request_id),
+        None => Err(anthropic_error_response(
+            request_identifier_exhausted_error(),
+        )),
+    }
 }
 
 fn log_accepted_request(
@@ -285,169 +306,27 @@ async fn create_non_streaming_response(
                 };
                 return match message_collector.into_message(worker_token_counts, reason) {
                     Ok(message) => Json(message).into_response(),
-                    Err(assembly_error) => api_error_response(assembly_error.to_string()),
+                    Err(assembly_error) => assembly_failure_response(&assembly_error),
                 };
             }
             ChatGenerationStreamEvent::Failed { reason } => {
-                return failure_response(&failure_error(&reason));
+                return anthropic_error_response(failure_error(&reason));
             }
             ChatGenerationStreamEvent::Error(ChatGenerationStreamErrorCode::WorkerUnavailable) => {
-                return worker_unavailable_response();
+                return anthropic_error_response(worker_unavailable_error());
             }
             non_terminal_event => {
                 if let Err(assembly_error) = message_collector.ingest_event(non_terminal_event) {
-                    return api_error_response(assembly_error.to_string());
+                    return assembly_failure_response(&assembly_error);
                 }
             }
         }
     }
-    worker_unavailable_response()
+    anthropic_error_response(worker_unavailable_error())
 }
 
-fn create_streaming_response(
-    stream_event_receiver: Receiver<ChatGenerationStreamEvent>,
-    stream_encoder: AnthropicMessagesStreamEncoder,
+fn assembly_failure_response(
+    assembly_error: &super::messages_assembly::AnthropicMessagesAssemblyError,
 ) -> Response {
-    let initial_events = stream_encoder.initial_events();
-    let message_event_stream = stream::unfold(
-        (stream_event_receiver, stream_encoder, initial_events),
-        next_serialized_stream_event,
-    );
-    Sse::new(message_event_stream).into_response()
-}
-
-type MessageStreamState = (
-    Receiver<ChatGenerationStreamEvent>,
-    AnthropicMessagesStreamEncoder,
-    VecDeque<AnthropicMessageStreamEvent>,
-);
-
-/// Drains pending encoded events before reading the next worker event, and
-/// ends the stream once the encoder has emitted its terminal event. A closed
-/// worker channel becomes a worker-unavailable error event so a client never
-/// sees a stream that stops without `message_stop` or `error`.
-async fn next_serialized_stream_event(
-    (mut stream_event_receiver, mut stream_encoder, mut pending_events): MessageStreamState,
-) -> Option<(Result<Event, axum::Error>, MessageStreamState)> {
-    loop {
-        if let Some(message_stream_event) = pending_events.pop_front() {
-            let serialized_event = serialize_stream_event(&message_stream_event);
-            return Some((
-                serialized_event,
-                (stream_event_receiver, stream_encoder, pending_events),
-            ));
-        }
-        if stream_encoder.is_terminal() {
-            return None;
-        }
-        let stream_event = match stream_event_receiver.recv().await {
-            Some(stream_event) => stream_event,
-            None => {
-                ChatGenerationStreamEvent::Error(ChatGenerationStreamErrorCode::WorkerUnavailable)
-            }
-        };
-        pending_events.extend(stream_encoder.encode(stream_event));
-    }
-}
-
-fn serialize_stream_event(
-    message_stream_event: &AnthropicMessageStreamEvent,
-) -> Result<Event, axum::Error> {
-    let serialized_payload =
-        serde_json::to_string(message_stream_event).map_err(axum::Error::new)?;
-    Ok(Event::default()
-        .event(message_stream_event.event_type())
-        .data(serialized_payload))
-}
-
-fn anthropic_error_response(status_code: StatusCode, error: AnthropicError) -> Response {
-    (status_code, Json(error.into_response_body())).into_response()
-}
-
-fn json_rejection_response(json_error: serde_json::Error) -> Response {
-    anthropic_error_response(
-        StatusCode::BAD_REQUEST,
-        AnthropicError::invalid_request(format!(
-            "request body is not a valid Messages request: {json_error}"
-        )),
-    )
-}
-
-fn validation_rejection_response(validation_error: AnthropicMessagesValidationError) -> Response {
-    if validation_error.is_request_too_large() {
-        return anthropic_error_response(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            AnthropicError::request_too_large(validation_error.to_string()),
-        );
-    }
-    anthropic_error_response(
-        StatusCode::BAD_REQUEST,
-        AnthropicError::invalid_request(validation_error.to_string()),
-    )
-}
-
-fn translation_rejection_response(
-    translation_error: super::messages_translation::AnthropicMessagesTranslationError,
-) -> Response {
-    anthropic_error_response(
-        StatusCode::BAD_REQUEST,
-        AnthropicError::invalid_request(translation_error.to_string()),
-    )
-}
-
-fn generation_start_rejection_response(generation_start_error: GenerationStartError) -> Response {
-    match generation_start_error {
-        GenerationStartError::CapacityUnavailable => anthropic_error_response(
-            StatusCode::TOO_MANY_REQUESTS,
-            AnthropicError::rate_limit("the generation queue is full"),
-        ),
-        GenerationStartError::ModelLoadFailed {
-            model_load_failure_reason,
-        } => anthropic_error_response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            AnthropicError::api_error(format!(
-                "the model failed to load: {model_load_failure_reason}"
-            )),
-        ),
-        GenerationStartError::RequestTooLarge {
-            actual_ipc_message_bytes,
-            maximum_ipc_message_bytes,
-        } => anthropic_error_response(
-            StatusCode::PAYLOAD_TOO_LARGE,
-            AnthropicError::request_too_large(format!(
-                "the request expands to {actual_ipc_message_bytes} bytes for local processing, exceeding the {maximum_ipc_message_bytes}-byte limit; reduce image sizes or conversation history"
-            )),
-        ),
-        GenerationStartError::WorkerUnavailable => worker_unavailable_response(),
-    }
-}
-
-fn failure_response(error: &AnthropicError) -> Response {
-    let status_code = match error.error_type {
-        "invalid_request_error" => StatusCode::BAD_REQUEST,
-        "overloaded_error" => StatusCode::SERVICE_UNAVAILABLE,
-        _ => StatusCode::INTERNAL_SERVER_ERROR,
-    };
-    anthropic_error_response(status_code, error.clone())
-}
-
-fn worker_unavailable_response() -> Response {
-    anthropic_error_response(
-        StatusCode::SERVICE_UNAVAILABLE,
-        AnthropicError::api_error("the local worker is unavailable"),
-    )
-}
-
-fn api_error_response(message: String) -> Response {
-    anthropic_error_response(
-        StatusCode::SERVICE_UNAVAILABLE,
-        AnthropicError::api_error(message),
-    )
-}
-
-fn request_identifier_exhausted_response() -> Response {
-    anthropic_error_response(
-        StatusCode::SERVICE_UNAVAILABLE,
-        AnthropicError::api_error("the local request identifier space is exhausted"),
-    )
+    anthropic_error_response(AnthropicError::api_error(assembly_error.to_string()))
 }

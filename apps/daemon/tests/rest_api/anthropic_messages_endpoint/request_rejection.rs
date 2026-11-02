@@ -14,7 +14,7 @@ async fn assert_anthropic_error(
 
 #[tokio::test]
 async fn should_reject_malformed_json_with_an_invalid_request_error() {
-    let application = build_application(ScriptedResponsesExecutor::new(Vec::new()));
+    let application = build_application(ScriptedChatExecutor::new(Vec::new()));
 
     let http_response = post_messages_body(application, "{not json").await;
 
@@ -28,7 +28,7 @@ async fn should_reject_malformed_json_with_an_invalid_request_error() {
 
 #[tokio::test]
 async fn should_reject_a_request_without_max_tokens() {
-    let application = build_application(ScriptedResponsesExecutor::new(Vec::new()));
+    let application = build_application(ScriptedChatExecutor::new(Vec::new()));
     let request_body =
         format!(r#"{{"model":"{MODEL_ID}","messages":[{{"role":"user","content":"hello"}}]}}"#);
 
@@ -44,7 +44,7 @@ async fn should_reject_a_request_without_max_tokens() {
 
 #[tokio::test]
 async fn should_reject_stop_sequences_the_worker_cannot_apply() {
-    let application = build_application(ScriptedResponsesExecutor::new(Vec::new()));
+    let application = build_application(ScriptedChatExecutor::new(Vec::new()));
     let request_body = format!(
         r#"{{"model":"{MODEL_ID}","max_tokens":64,"stop_sequences":["THE END"],"messages":[{{"role":"user","content":"hello"}}]}}"#
     );
@@ -67,7 +67,7 @@ async fn should_reject_stop_sequences_the_worker_cannot_apply() {
 
 #[tokio::test]
 async fn should_answer_an_unknown_model_with_not_found() {
-    let application = build_application(ScriptedResponsesExecutor::new(Vec::new()));
+    let application = build_application(ScriptedChatExecutor::new(Vec::new()));
     let request_body = r#"{"model":"no-such-model","max_tokens":64,"messages":[{"role":"user","content":"hello"}]}"#;
 
     let http_response = post_messages_body(application, request_body).await;
@@ -77,7 +77,7 @@ async fn should_answer_an_unknown_model_with_not_found() {
 
 #[tokio::test]
 async fn should_answer_a_full_queue_with_a_rate_limit_error() {
-    let application = build_application(ScriptedResponsesExecutor::with_start_error(
+    let application = build_application(ScriptedChatExecutor::with_start_error(
         GenerationStartError::CapacityUnavailable,
     ));
 
@@ -93,7 +93,7 @@ async fn should_answer_a_full_queue_with_a_rate_limit_error() {
 
 #[tokio::test]
 async fn should_answer_non_streaming_context_overflow_as_prompt_too_long() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::ContextLengthExceeded {
                 actual_total_context_tokens: 262_145,

@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn should_reject_invalid_json_before_worker_admission() {
-    let application = build_application(ScriptedResponsesExecutor::new(Vec::new()));
+    let application = build_application(ScriptedChatExecutor::new(Vec::new()));
 
     let http_response = post_response_body(application, r#"{"model":"broken""#).await;
 
@@ -12,7 +12,7 @@ async fn should_reject_invalid_json_before_worker_admission() {
 
 #[tokio::test]
 async fn should_reject_a_model_that_is_not_loaded() {
-    let application = build_application(ScriptedResponsesExecutor::new(Vec::new()));
+    let application = build_application(ScriptedChatExecutor::new(Vec::new()));
 
     let http_response =
         post_response_body(application, r#"{"model":"another/model","input":"hello"}"#).await;
@@ -23,7 +23,7 @@ async fn should_reject_a_model_that_is_not_loaded() {
 
 #[tokio::test]
 async fn should_reject_stateful_response_storage_before_worker_admission() {
-    let application = build_application(ScriptedResponsesExecutor::new(Vec::new()));
+    let application = build_application(ScriptedChatExecutor::new(Vec::new()));
 
     let http_response = post_response_body(
         application,
@@ -37,7 +37,7 @@ async fn should_reject_stateful_response_storage_before_worker_admission() {
 
 #[tokio::test]
 async fn should_return_too_many_requests_when_generation_capacity_is_active() {
-    let application = build_application(ScriptedResponsesExecutor::with_start_error(
+    let application = build_application(ScriptedChatExecutor::with_start_error(
         GenerationStartError::CapacityUnavailable,
     ));
 
@@ -49,7 +49,7 @@ async fn should_return_too_many_requests_when_generation_capacity_is_active() {
 
 #[tokio::test]
 async fn should_return_payload_too_large_when_a_responses_request_exceeds_the_ipc_frame() {
-    let application = build_application(ScriptedResponsesExecutor::with_start_error(
+    let application = build_application(ScriptedChatExecutor::with_start_error(
         GenerationStartError::RequestTooLarge {
             actual_ipc_message_bytes: MAX_IPC_FRAME_BYTES + 1,
             maximum_ipc_message_bytes: MAX_IPC_FRAME_BYTES,
@@ -64,7 +64,7 @@ async fn should_return_payload_too_large_when_a_responses_request_exceeds_the_ip
 
 #[tokio::test]
 async fn should_explain_why_the_requested_responses_model_could_not_be_loaded() {
-    let application = build_application(ScriptedResponsesExecutor::with_start_error(
+    let application = build_application(ScriptedChatExecutor::with_start_error(
         GenerationStartError::ModelLoadFailed {
             model_load_failure_reason: "OptiQ metadata uses unsupported 2-bit quantization"
                 .to_owned(),
@@ -88,7 +88,7 @@ async fn should_explain_why_the_requested_responses_model_could_not_be_loaded() 
 #[tokio::test]
 async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
     let application = build_application_with_discovered_models(
-        ScriptedResponsesExecutor::idle_with_expected_model("requested-model"),
+        ScriptedChatExecutor::idle_with_expected_model("requested-model"),
         vec![DiscoveredModel {
             model_id: "requested-model".to_owned(),
             provider_model_id: None,
@@ -122,7 +122,7 @@ async fn should_canonicalize_a_provider_prefixed_model_for_an_idle_worker() {
 
 #[tokio::test]
 async fn should_return_context_length_exceeded_for_a_non_streaming_response() {
-    let application = build_application(ScriptedResponsesExecutor::new(vec![
+    let application = build_application(ScriptedChatExecutor::new(vec![
         ChatGenerationStreamEvent::Failed {
             reason: ChatGenerationFailureReason::ContextLengthExceeded {
                 actual_total_context_tokens: 262_145,

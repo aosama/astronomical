@@ -15,3 +15,4 @@ mod openai_image_generation;
 mod openai_models_endpoint;
 mod openai_request_body_budget;
 mod openai_responses_endpoint;
+mod scripted_chat_executor;
