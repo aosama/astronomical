@@ -9,8 +9,8 @@ use astronomical_model_serving::{
 use astronomical_quantization::bit_width::GroupSize;
 use astronomical_quantization::error::QuantizationError;
 use astronomical_quantization::pipeline::{
-    PipelineMethod, ProbeModelHandle, ProbeModelLoader, QuantizationPipelineRequest,
-    ReferenceMode, run_quantization_pipeline,
+    PipelineMethod, ProbeModelHandle, ProbeModelLoader, QuantizationPipelineRequest, ReferenceMode,
+    run_quantization_pipeline,
 };
 use serial_test::serial;
 
@@ -167,7 +167,10 @@ fn decode_text(artifact_directory: &Path, token_ids: &[u32]) -> String {
 /// The opening of the play in the chat shape the daemon serves.
 fn romeo_and_juliet_prompt() -> String {
     let mut prompt_words = Vec::with_capacity(PROMPT_WORD_COUNT);
-    for word in ROMEO_AND_JULIET_SOURCE.split_whitespace().take(PROMPT_WORD_COUNT) {
+    for word in ROMEO_AND_JULIET_SOURCE
+        .split_whitespace()
+        .take(PROMPT_WORD_COUNT)
+    {
         prompt_words.push(word);
     }
     format!(
