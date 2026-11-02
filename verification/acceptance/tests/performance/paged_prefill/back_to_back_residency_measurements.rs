@@ -22,6 +22,15 @@
 //! faster (3.9 s against 4.0 s), because those layers are served from the
 //! file cache while compute runs; see issue #1716 before changing residency
 //! for speed.
+//!
+//! Prefer the smaller-model cell for timing comparisons: the 37 GiB cell can
+//! drive the operating system into swap on a machine of about 50 GB, while
+//! the 20 GiB cell measured no swap-outs. There, requests 2-4 stream 12.18 GB
+//! in about 3.35 s of prefill. The same activation-evidence change streamed
+//! 60 GB and was 50% slower in that cell: its forwards measured no
+//! transient, the reserve fell to one layer, and the planner seated layers
+//! the per-chunk guard then had to evict, so the static three-layer floor is
+//! load-bearing there.
 
 use std::{collections::BTreeSet, fs, path::Path};
 
@@ -49,17 +58,35 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 #[ignore = "loads the large sparse model at 37 GB and measures residency churn between back-to-back requests"]
 #[serial]
 async fn should_measure_layers_restreamed_between_back_to_back_requests() {
-    timeout(JOURNEY_BUDGET, run_back_to_back_journey(37))
-        .await
-        .expect("the back-to-back journey must finish inside the 120-second runner budget");
+    timeout(
+        JOURNEY_BUDGET,
+        run_back_to_back_journey(crate::support::large_sparse_moe_streaming_model_id(), 37),
+    )
+    .await
+    .expect("the back-to-back journey must finish inside the 120-second runner budget");
+}
+
+/// The same journey on the smaller 4-bit sparse model under a lowered ceiling.
+/// It forces several layers to stream while leaving most of the machine's RAM
+/// to the operating system, so prefill timings are not distorted by system
+/// swapping the way the 37 GiB cell on the 8-bit model can be.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "loads the 4-bit sparse model at 20 GB and measures residency churn between back-to-back requests"]
+#[serial]
+async fn should_measure_layers_restreamed_for_the_smaller_sparse_model_under_a_lowered_ceiling() {
+    timeout(
+        JOURNEY_BUDGET,
+        run_back_to_back_journey(crate::support::resident_sparse_moe_model_id(), 20),
+    )
+    .await
+    .expect("the back-to-back journey must finish inside the 120-second runner budget");
 }
 
 /// Runs identical requests back to back and returns, for each request after
 /// the first, how many layers complete before it were streamed again by its
 /// prefill. Several requests show the steady state a chat session reaches,
 /// not only the first hand-over from decode to prefill.
-async fn run_back_to_back_journey(ceiling_gibibytes: u64) -> Vec<usize> {
-    let model_id = crate::support::large_sparse_moe_streaming_model_id();
+async fn run_back_to_back_journey(model_id: &str, ceiling_gibibytes: u64) -> Vec<usize> {
     let model_directory = TestRunContext::current()
         .configuration
         .model_directory
