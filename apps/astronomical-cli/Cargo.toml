@@ -37,6 +37,7 @@ default = []
 quantize-convert = [
     "astronomical-quantization/direct-mlx",
     "dep:astronomical-model-serving",
+    "dep:astronomical-runtime-integration",
 ]
 
 [dependencies]
@@ -44,6 +45,8 @@ astronomical-config = { path = "../../crates/config" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"], optional = true }
 astronomical-quantization = { path = "../../crates/quantization" }
+astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"], optional = true }
+serde.workspace = true
 serde_json.workspace = true
 tempfile = "=3.27.0"
 thiserror.workspace = true

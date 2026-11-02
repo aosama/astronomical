@@ -12,7 +12,6 @@ use astronomical_cli::{QuantizeDependencies, run_quantize_inspect, run_quantize_
 use crate::integration::support::environment::fresh_test_directory;
 
 #[test]
-#[ignore = "pending implementation of run_quantize_plan"]
 fn should_allocate_from_a_sensitivity_document_and_print_the_bit_map() {
     let test_directory = fresh_test_directory("quantize", "plan");
     let sensitivity_path = test_directory.join("sensitivity.json");
@@ -51,7 +50,6 @@ fn should_allocate_from_a_sensitivity_document_and_print_the_bit_map() {
 }
 
 #[test]
-#[ignore = "pending implementation of run_quantize_inspect"]
 fn should_report_a_directory_without_metadata_as_not_an_optiq_artifact() {
     let test_directory = fresh_test_directory("quantize", "inspect-empty");
     let mut stdout = Vec::new();
@@ -71,5 +69,66 @@ fn should_report_a_directory_without_metadata_as_not_an_optiq_artifact() {
 
     let report = String::from_utf8(stdout).expect("the report is UTF-8");
     assert!(report.contains("not an OptiQ-format artifact"));
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+#[test]
+fn should_summarize_a_static_artifact_from_its_metadata() {
+    let test_directory = fresh_test_directory("quantize", "inspect-static");
+    std::fs::create_dir_all(test_directory.join("optiq")).expect("creatable");
+    std::fs::write(
+        test_directory.join("optiq/metadata.json"),
+        r#"{"method": "static_mixed_precision", "base_model": "example/base",
+            "reference": "structural_rules", "target_bpw": 5.0, "achieved_bpw": 5.25,
+            "n_high_bits": 1, "n_low_bits": 2, "threshold": 0.0,
+            "per_layer": {"a": {"bits": 4, "group_size": 64}, "b": {"bits": 4, "group_size": 64},
+                          "c": {"bits": 8, "group_size": 64}}}"#,
+    )
+    .expect("the fixture metadata should be writable");
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut dependencies = QuantizeDependencies {
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        progress_interval: Duration::from_secs(5),
+    };
+    let inspect_arguments = astronomical_cli::QuantizeInspectArguments {
+        artifact_directory: test_directory.clone(),
+        render_json: false,
+    };
+
+    run_quantize_inspect(&inspect_arguments, &mut dependencies).expect("inspect should succeed");
+
+    let report = String::from_utf8(stdout).expect("the report is UTF-8");
+    assert!(report.contains("Reference: structural_rules"));
+    assert!(report.contains("Achieved bits per weight: 5.25"));
+    assert!(report.contains("Modules at 4 bits: 2"));
+    assert!(report.contains("Modules at 8 bits: 1"));
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+#[test]
+fn should_fail_plan_when_the_sensitivity_document_is_missing() {
+    let test_directory = fresh_test_directory("quantize", "plan-missing");
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut dependencies = QuantizeDependencies {
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        progress_interval: Duration::from_secs(5),
+    };
+    let plan_arguments = astronomical_cli::QuantizePlanArguments {
+        sensitivity_document_path: test_directory.join("absent.json"),
+        target_bits_per_weight: 5.0,
+        candidate_bits: None,
+        floor_components_per_block: 0,
+        maximum_low_bit_block_run: 0,
+        render_json: true,
+    };
+
+    let failure = run_quantize_plan(&plan_arguments, &mut dependencies);
+
+    assert!(failure.is_err());
+    assert!(stdout.is_empty());
     let _ = std::fs::remove_dir_all(&test_directory);
 }

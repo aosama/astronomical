@@ -29,7 +29,7 @@ use super::artifact_files::{
     ArtifactDocumentsRequest, copy_source_files, write_artifact_documents,
 };
 use super::{
-    PipelineMethod, ProbeModelHandle, QuantizationPipelineOutcome, QuantizationPipelineRequest,
+    PipelineMethod, ProbeModelLoader, QuantizationPipelineOutcome, QuantizationPipelineRequest,
     ReferenceMode, allocation_constraints_for, estimate_bfloat16_weight_bytes,
     range_search_policy_for, resolve_reference_mode,
 };
@@ -47,17 +47,13 @@ const SENSITIVITY_CHECKPOINT_FILE_NAME: &str = "sensitivity_checkpoint.json";
 const MINIMUM_CALIBRATION_DRAW: usize = 16;
 
 /// Runs every stage; see [`super::run_quantization_pipeline`].
-pub fn run_conversion<ProbeModelLoader>(
+pub fn run_conversion(
     runtime: &MlxRuntime,
     request: &QuantizationPipelineRequest,
     available_memory_bytes: u64,
-    probe_model_loader: ProbeModelLoader,
+    probe_model_loader: &mut dyn ProbeModelLoader,
     progress_reporter: &mut dyn ProgressReporter,
-) -> Result<QuantizationPipelineOutcome, QuantizationError>
-where
-    ProbeModelLoader:
-        FnOnce(&Path, Option<&Path>) -> Result<Box<dyn ProbeModelHandle>, QuantizationError>,
-{
+) -> Result<QuantizationPipelineOutcome, QuantizationError> {
     let candidate_bit_widths = CandidateBitWidths::new(&request.candidate_bits)?;
     let artifact_directory = request
         .output_directory
@@ -137,18 +133,14 @@ fn prepare_artifact_directory(
 /// baseline when bf16 does not fit, load the calibration sequences and the
 /// probe model, sweep with a checkpoint, then release the model and the
 /// baseline.
-fn measure_exact_sensitivity<ProbeModelLoader>(
+fn measure_exact_sensitivity(
     runtime: &MlxRuntime,
     request: &QuantizationPipelineRequest,
     candidate_bit_widths: &CandidateBitWidths,
     available_memory_bytes: u64,
-    probe_model_loader: ProbeModelLoader,
+    probe_model_loader: &mut dyn ProbeModelLoader,
     progress_reporter: &mut dyn ProgressReporter,
-) -> Result<SensitivityTable, QuantizationError>
-where
-    ProbeModelLoader:
-        FnOnce(&Path, Option<&Path>) -> Result<Box<dyn ProbeModelHandle>, QuantizationError>,
-{
+) -> Result<SensitivityTable, QuantizationError> {
     let estimated_bytes = estimate_bfloat16_weight_bytes(&request.source_directory)?;
     let reference_mode = resolve_reference_mode(
         request.reference_mode,
@@ -173,7 +165,8 @@ where
             SensitivityMethod::ExactBfloat16Reference,
         )
     };
-    let mut probe_model = probe_model_loader(&probe_directory, streaming_source_directory)?;
+    let mut probe_model =
+        probe_model_loader.load_probe_model(&probe_directory, streaming_source_directory)?;
     let checkpoint_path = request
         .output_directory
         .join(SENSITIVITY_CHECKPOINT_FILE_NAME);

@@ -14,7 +14,29 @@
 use std::io::Write;
 use std::time::Duration;
 
+use astronomical_quantization::allocation::AllocationConstraints;
+use astronomical_quantization::artifact::json_file::read_json;
+use astronomical_quantization::artifact::{
+    OptiQArtifactMetadata, OptiQSensitivityDocument, resolve_metadata_path,
+};
+use astronomical_quantization::bit_width::{CandidateBitWidths, GroupSize};
+use astronomical_quantization::pipeline::plan_from_sensitivity_table;
 use astronomical_quantization::progress::{EtaEstimate, ProgressReporter, StageProgress};
+
+mod quantize_arguments;
+#[cfg(feature = "quantize-convert")]
+mod quantize_convert;
+mod quantize_reports;
+
+pub use quantize_arguments::{
+    DEFAULT_CALIBRATION_SEQUENCE_COUNT, DEFAULT_CANDIDATE_BITS, DEFAULT_FLOOR_COMPONENTS_PER_BLOCK,
+    DEFAULT_GROUP_SIZE, DEFAULT_MAXIMUM_LOW_BIT_BLOCK_RUN, DEFAULT_RANGE_SEARCH_MAXIMUM_BITS,
+    DEFAULT_TARGET_BITS_PER_WEIGHT, QuantizeCommand, QuantizeConvertArguments,
+    QuantizeInspectArguments, QuantizeMethodArgument, QuantizePlanArguments,
+    QuantizeReferenceArgument, parse_candidate_bits, parse_quantize_command,
+};
+#[cfg(feature = "quantize-convert")]
+pub use quantize_convert::run_quantize_convert;
 
 /// Failures of the quantize verb.
 #[derive(Debug, thiserror::Error)]
@@ -27,6 +49,13 @@ pub enum QuantizeError {
         "astronomical quantize convert is not compiled into this binary; build the CLI with the quantize-convert feature (cargo build -p astronomical-cli --features quantize-convert) to run conversions in-process"
     )]
     ConvertNotCompiledIn,
+    #[error("the artifact metadata at {metadata_path} could not be read: {description}")]
+    MetadataUnreadable {
+        metadata_path: std::path::PathBuf,
+        description: String,
+    },
+    #[error("the machine's physical memory size could not be read: {description}")]
+    PhysicalMemoryUnreadable { description: String },
 }
 
 /// Collaborators injected so the journeys can capture output.
@@ -63,56 +92,73 @@ impl ProgressReporter for StandardErrorProgressReporter<'_> {
 }
 
 /// `quantize plan`: read the sensitivity document, allocate, and print the
-/// per-module bit map plus the summary and any overshoot note.
-///
-/// Work to implement: `OptiQSensitivityDocument::read` → `to_table` →
-/// `AllocationConstraints` from the arguments → `plan_from_sensitivity_table`
-/// → render as a table (module, bits, parameters) sorted by module name,
-/// then `Target / Achieved bits per weight`, per-width counts, and the
-/// overshoot note; or as one JSON document with `--json`.
+/// per-module bit map plus the summary and any overshoot note, or one JSON
+/// allocation document with `--json`. The ladder comes from the arguments
+/// or, when absent, from the document.
 pub fn run_quantize_plan(
     plan_arguments: &QuantizePlanArguments,
     dependencies: &mut QuantizeDependencies<'_>,
 ) -> Result<(), QuantizeError> {
-    let _ = (plan_arguments, dependencies);
-    todo!("read, allocate, render")
+    let sensitivity_document =
+        OptiQSensitivityDocument::read(&plan_arguments.sensitivity_document_path)?;
+    let sensitivity_table = sensitivity_document.to_table()?;
+    let candidate_bits = match &plan_arguments.candidate_bits {
+        Some(candidate_bits) => candidate_bits.clone(),
+        None => sensitivity_document.candidate_bits.clone(),
+    };
+    let constraints = AllocationConstraints {
+        target_bits_per_weight: plan_arguments.target_bits_per_weight,
+        candidate_bit_widths: Some(CandidateBitWidths::new(&candidate_bits)?),
+        group_size: GroupSize::new(sensitivity_document.group_size)?,
+        protect_boundary_blocks: true,
+        boundary_block_count: 1,
+        floor_components_per_block: plan_arguments.floor_components_per_block,
+        maximum_low_bit_block_run: plan_arguments.maximum_low_bit_block_run,
+    };
+    let allocation = plan_from_sensitivity_table(&sensitivity_table, &constraints)?;
+    let render_outcome = if plan_arguments.render_json {
+        write_json_line(&allocation, dependencies.stdout)
+    } else {
+        quantize_reports::render_plan_text(
+            &allocation,
+            plan_arguments.floor_components_per_block,
+            dependencies.stdout,
+        )
+    };
+    render_outcome.map_err(QuantizeError::stdout_unwritable)
 }
 
-/// `quantize inspect`: print an artifact's quantization provenance.
-///
-/// Work to implement: resolve `optiq/metadata.json` (or the legacy root
-/// name), parse it as `OptiQArtifactMetadata`, and render method,
-/// reference, base model, target and achieved bits per weight, producer,
-/// and the per-width module counts from `per_layer`; a directory with no
-/// metadata reports "not an OptiQ-format artifact" and succeeds.
+/// `quantize inspect`: print an artifact's quantization provenance. A
+/// directory with no metadata is reported as "not an OptiQ-format
+/// artifact" and succeeds, because inspecting a plain model is a valid
+/// question with a clear answer.
 pub fn run_quantize_inspect(
     inspect_arguments: &QuantizeInspectArguments,
     dependencies: &mut QuantizeDependencies<'_>,
 ) -> Result<(), QuantizeError> {
-    let _ = (inspect_arguments, dependencies);
-    todo!("resolve, parse, render")
-}
-
-/// `quantize convert`: the full pipeline in-process.
-///
-/// Work to implement (feature `quantize-convert`): build a
-/// `QuantizationPipelineRequest` from the arguments; read available memory
-/// through the model-serving memory package (never a hardwired figure);
-/// construct the probe model loader from
-/// `astronomical_model_serving::quantization_probe::load_qwen3_5_probe_model`;
-/// run `run_quantization_pipeline` with a
-/// [`StandardErrorProgressReporter`]; print the outcome summary.
-#[cfg(feature = "quantize-convert")]
-pub fn run_quantize_convert(
-    convert_arguments: &QuantizeConvertArguments,
-    dependencies: &mut QuantizeDependencies<'_>,
-) -> Result<(), QuantizeError> {
-    let _ = (
-        convert_arguments,
-        dependencies,
-        astronomical_model_serving::quantization_probe::load_qwen3_5_probe_model,
-    );
-    todo!("build the request, load the probe model, run the pipeline, print the summary")
+    let Some(metadata_path) = resolve_metadata_path(&inspect_arguments.artifact_directory) else {
+        return writeln!(
+            dependencies.stdout,
+            "{} is not an OptiQ-format artifact (no optiq/metadata.json)",
+            inspect_arguments.artifact_directory.display()
+        )
+        .map_err(QuantizeError::stdout_unwritable);
+    };
+    let metadata: OptiQArtifactMetadata = match read_json(&metadata_path) {
+        Ok(metadata) => metadata,
+        Err(description) => {
+            return Err(QuantizeError::MetadataUnreadable {
+                metadata_path,
+                description,
+            });
+        }
+    };
+    let render_outcome = if inspect_arguments.render_json {
+        write_json_line(&metadata, dependencies.stdout)
+    } else {
+        quantize_reports::render_inspect_text(&metadata, dependencies.stdout)
+    };
+    render_outcome.map_err(QuantizeError::stdout_unwritable)
 }
 
 /// Without the feature the verb explains how to get a build that has it.
@@ -125,121 +171,22 @@ pub fn run_quantize_convert(
     Err(QuantizeError::ConvertNotCompiledIn)
 }
 
-// Arguments for `astronomical quantize`, an ephemeral in-process verb with
-// three sub-verbs.
-//
-// - `quantize plan --sensitivity FILE --target-bits-per-weight N [...]`:
-//   allocate from an existing `optiq/sensitivity.json` and print the bit
-//   map. Pure; runs on any host; the way to re-target an already-measured
-//   base without a sweep.
-// - `quantize inspect ARTIFACT_DIR`: print an artifact's quantization
-//   provenance (method, reference, target and achieved bits per weight,
-//   per-width module counts). Pure.
-// - `quantize convert SOURCE_DIR --output DIR [...]`: the full pipeline.
-//   Needs the `quantize-convert` build feature.
-//
-// Flag names spell every word out, per the repository's naming rule:
-// `--target-bits-per-weight`, never `--target-bpw`.
-
-use std::ffi::OsString;
-use std::path::PathBuf;
-
-use crate::arguments::UsageError;
-
-/// Which quantize sub-verb was requested.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum QuantizeCommand {
-    Plan(QuantizePlanArguments),
-    Inspect(QuantizeInspectArguments),
-    Convert(QuantizeConvertArguments),
+impl QuantizeError {
+    /// Named so `map_err` takes a function rather than a closure.
+    fn stdout_unwritable(write_error: std::io::Error) -> Self {
+        Self::StdoutUnwritable {
+            cause: write_error.to_string(),
+        }
+    }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct QuantizePlanArguments {
-    pub sensitivity_document_path: PathBuf,
-    pub target_bits_per_weight: f64,
-    /// `None` infers the ladder from the document.
-    pub candidate_bits: Option<Vec<u32>>,
-    pub floor_components_per_block: usize,
-    pub maximum_low_bit_block_run: usize,
-    pub render_json: bool,
-}
-
-impl Eq for QuantizePlanArguments {}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct QuantizeInspectArguments {
-    pub artifact_directory: PathBuf,
-    pub render_json: bool,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct QuantizeConvertArguments {
-    pub source_directory: PathBuf,
-    pub output_directory: PathBuf,
-    pub base_model_name: Option<String>,
-    /// `exact` (default) or `static`.
-    pub method: QuantizeMethodArgument,
-    /// `auto` (default), `bf16`, or `uniform-4-bit`.
-    pub reference: QuantizeReferenceArgument,
-    pub target_bits_per_weight: f64,
-    pub candidate_bits: Vec<u32>,
-    pub group_size: u32,
-    pub calibration_sequence_count: usize,
-    pub calibration_mix_path: Option<PathBuf>,
-    pub floor_components_per_block: usize,
-    pub range_search_enabled: bool,
-    pub range_search_maximum_bits: u32,
-    pub overwrite_output: bool,
-}
-
-impl Eq for QuantizeConvertArguments {}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QuantizeMethodArgument {
-    Exact,
-    Static,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum QuantizeReferenceArgument {
-    Auto,
-    Bfloat16,
-    Uniform4Bit,
-}
-
-/// OptiQ's command-line defaults, kept so a Rust conversion with no flags
-/// matches a Python conversion with no flags.
-pub const DEFAULT_TARGET_BITS_PER_WEIGHT: f64 = 5.0;
-pub const DEFAULT_CANDIDATE_BITS: [u32; 2] = [4, 8];
-pub const DEFAULT_GROUP_SIZE: u32 = 64;
-pub const DEFAULT_CALIBRATION_SEQUENCE_COUNT: usize = 24;
-pub const DEFAULT_FLOOR_COMPONENTS_PER_BLOCK: usize = 2;
-pub const DEFAULT_MAXIMUM_LOW_BIT_BLOCK_RUN: usize = 3;
-pub const DEFAULT_RANGE_SEARCH_MAXIMUM_BITS: u32 = 3;
-
-/// Parses everything after `astronomical quantize`.
-///
-/// Work to implement: dispatch on the first argument (`plan`, `inspect`,
-/// `convert`; missing → `MissingCommand`; other →
-/// `UnknownQuantizeTarget`), then parse the sub-verb's flags with the same
-/// repeated-flag and missing-value discipline as the other verbs. A
-/// `--candidate-bits` value is a comma-separated list of integers; a
-/// non-integer or an unsupported width is `InvalidQuantizeValue`. Floats
-/// for `--target-bits-per-weight` must be finite and positive.
-pub fn parse_quantize_command(
-    remaining_arguments: &[OsString],
-) -> Result<QuantizeCommand, UsageError> {
-    let _ = remaining_arguments;
-    todo!("dispatch on the sub-verb and parse its flags")
-}
-
-/// Parses a comma-separated bit-width list such as `2,4,8`.
-pub fn parse_candidate_bits(value: &str) -> Result<Vec<u32>, UsageError> {
-    let _ = value;
-    todo!(
-        "split on commas, parse each as u32, validate through astronomical_quantization::BitWidth"
-    )
+/// One pretty JSON document and a newline.
+fn write_json_line<Document: serde::Serialize>(
+    document: &Document,
+    output: &mut dyn Write,
+) -> std::io::Result<()> {
+    serde_json::to_writer_pretty(&mut *output, document)?;
+    writeln!(output)
 }
 
 // The only unit test pins the default build's refusal of `convert`, so the
