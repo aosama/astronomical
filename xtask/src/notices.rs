@@ -17,9 +17,10 @@ use std::time::Instant;
 
 use sha2::{Digest, Sha256};
 
+use crate::tool_pins::{TOOL_PINS_MANIFEST_RELATIVE_PATH, read_tool_pin};
+
 const NOTICES_RELATIVE_PATH: &str = "third-party/RUST_DEPENDENCY_NOTICES";
 const DIGEST_RELATIVE_PATH: &str = "third-party/RUST_DEPENDENCY_NOTICES.digest";
-const PIN_RELATIVE_PATH: &str = "third-party/cargo-about-version";
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
@@ -33,27 +34,10 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 fn read_pinned_cargo_about_version(repository_root: &Path) -> Result<String, String> {
-    let pin_path = repository_root.join(PIN_RELATIVE_PATH);
-    let pinned_version = fs::read_to_string(&pin_path)
-        .map_err(|_| {
-            format!(
-                "[rust-dependency-notices] missing cargo-about pin file: {}",
-                pin_path.display()
-            )
-        })?
-        .trim()
-        .to_owned();
-    if pinned_version.is_empty()
-        || pinned_version
-            .chars()
-            .any(|character| !(character.is_ascii_digit() || character == '.'))
-    {
-        return Err(format!(
-            "[rust-dependency-notices] cargo-about pin must be a dotted version: {}",
-            pin_path.display()
-        ));
+    match read_tool_pin(repository_root, "cargo-about") {
+        Ok(pinned_version) => Ok(pinned_version),
+        Err(pin_error) => Err(format!("[rust-dependency-notices] {pin_error}")),
     }
-    Ok(pinned_version)
 }
 
 fn require_pinned_cargo_about(required_version: &str) -> Result<(), String> {
@@ -82,7 +66,7 @@ fn is_notices_input_path(relative_path: &str) -> bool {
         "Cargo.toml",
         "third-party/about.toml",
         "third-party/rust-dependency-notices.hbs",
-        "third-party/cargo-about-version",
+        TOOL_PINS_MANIFEST_RELATIVE_PATH,
     ];
     if TOP_LEVEL_INPUTS.contains(&relative_path) {
         return true;
@@ -109,7 +93,7 @@ fn list_notices_input_paths(repository_root: &Path) -> Result<Vec<String>, Strin
             "Cargo.toml",
             "third-party/about.toml",
             "third-party/rust-dependency-notices.hbs",
-            "third-party/cargo-about-version",
+            TOOL_PINS_MANIFEST_RELATIVE_PATH,
             "apps",
             "crates",
             "experimental",

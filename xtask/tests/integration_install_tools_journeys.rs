@@ -171,11 +171,35 @@ impl Drop for InstallerSandbox {
     }
 }
 
-fn pinned_version(repository_root: &Path, pin_file_name: &str) -> String {
-    std::fs::read_to_string(repository_root.join("third-party").join(pin_file_name))
-        .expect("the pin file should exist")
-        .trim()
-        .to_owned()
+/// The exact version the installer will request for `crate_name`.
+/// Integration binaries cannot reach xtask's internal parser, and this journey
+/// only needs the committed value.
+fn pinned_version(repository_root: &Path, crate_name: &str) -> String {
+    let manifest_text =
+        std::fs::read_to_string(repository_root.join("third-party/tool-pins/Cargo.toml"))
+            .expect("the tool-pin manifest should exist");
+    exact_pin_in_manifest(&manifest_text, crate_name)
+        .expect("the tool-pin manifest pins every installed tool")
+}
+
+/// The `X.Y.Z` from the manifest line `crate_name = ... "=X.Y.Z" ...`.
+fn exact_pin_in_manifest(manifest_text: &str, crate_name: &str) -> Option<String> {
+    for manifest_line in manifest_text.lines() {
+        let Some(after_crate_name) = manifest_line.trim().strip_prefix(crate_name) else {
+            continue;
+        };
+        if after_crate_name.trim_start().starts_with('=') {
+            return quoted_exact_requirement(after_crate_name);
+        }
+    }
+    None
+}
+
+/// The version inside the first `"=..."` literal of `dependency_text`.
+fn quoted_exact_requirement(dependency_text: &str) -> Option<String> {
+    let after_requirement_start = &dependency_text[dependency_text.find("\"=")? + 2..];
+    let requirement_length = after_requirement_start.find('"')?;
+    Some(after_requirement_start[..requirement_length].to_owned())
 }
 
 fn host_target_triple() -> &'static str {
@@ -200,8 +224,8 @@ fn matching_prefix_skips_all_downloads() {
         .nth(1)
         .unwrap()
         .to_path_buf();
-    let cargo_about_version = pinned_version(&repository_root, "cargo-about-version");
-    let sccache_version = pinned_version(&repository_root, "sccache-version");
+    let cargo_about_version = pinned_version(&repository_root, "cargo-about");
+    let sccache_version = pinned_version(&repository_root, "sccache");
     sandbox.write_version_stub("cargo-about", &format!("cargo-about {cargo_about_version}"));
     sandbox.write_version_stub("sccache", &format!("sccache {sccache_version}"));
 
@@ -222,8 +246,8 @@ fn fresh_prefix_installs_both_pinned_prebuilts_from_their_release_urls() {
         .nth(1)
         .unwrap()
         .to_path_buf();
-    let cargo_about_version = pinned_version(&repository_root, "cargo-about-version");
-    let sccache_version = pinned_version(&repository_root, "sccache-version");
+    let cargo_about_version = pinned_version(&repository_root, "cargo-about");
+    let sccache_version = pinned_version(&repository_root, "sccache");
     let target = host_target_triple();
     sandbox.create_release_fixture(
         &format!("cargo-about-{cargo_about_version}-{target}.tar.gz"),

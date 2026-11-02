@@ -2,16 +2,16 @@
 //! shape of `.github/workflows/ci.yml` (issue #1553 phase 2b) — the macOS
 //! build job packs one nextest archive per tier, each per-tier lane checks
 //! out the source and runs its filters against its own archive without
-//! compiling, and cargo-nextest is provisioned through a shared composite
-//! action whose pin is verified. Companion binaries: the general structure
+//! compiling, and cargo-nextest is provisioned through one SHA-pinned,
+//! digest-verifying install action. Companion binaries: the general structure
 //! (`workflow_structural_contract`) and the merge-gate fan-in
 //! (`workflow_verdict_contract`).
 
 mod contract_support;
 
 use contract_support::{
-    find_step_by_name, required_job, required_text, required_u64, run_text_of, steps_of,
-    workflow_contract,
+    find_step_by_name, is_pinned_action_reference, required_field, required_job, required_text,
+    required_u64, run_text_of, steps_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -274,30 +274,47 @@ fn every_tier_lane_applies_its_kind_and_archive_filters() {
     );
 }
 
-// cargo-nextest is provisioned by a shared composite action so the build job
-// and every tier lane install the same pinned, digest-verified binary.
-#[test]
-fn cargo_nextest_is_provisioned_by_a_pinned_verified_composite_action() {
-    let action_text = std::fs::read_to_string(
-        contract_support::repository_root()
-            .join(".github/actions/provision-cargo-nextest/action.yml"),
-    )
-    .expect("the cargo-nextest composite action should exist");
-    assert!(
-        action_text.contains("default: \"0.9.149\""),
-        "the composite action lost its pinned nextest version"
-    );
-    assert!(
-        action_text.contains("47b9941765a9ff94e304a3fe5444ac1c7593da655525b8b69f8f2b31a9217507"),
-        "the composite action lost its pinned nextest digest"
-    );
-    for verification_marker in ["shasum -a 256", "$NEXTEST_SHA256", "exit 1", "$GITHUB_PATH"] {
-        assert!(
-            action_text.contains(verification_marker),
-            "the cargo-nextest composite action lost {verification_marker}"
-        );
+const NEXTEST_INSTALL_ACTION: &str = "taiki-e/install-action";
+const NEXTEST_TOOL_PREFIX: &str = "cargo-nextest@";
+
+/// `cargo-nextest@0.9.149` pins an exact dotted release; a bare tool name or
+/// a partial version would float to whatever the action manifest calls latest.
+fn is_exact_nextest_tool_pin(tool_text: &str) -> bool {
+    let Some(pinned_version) = tool_text.strip_prefix(NEXTEST_TOOL_PREFIX) else {
+        return false;
+    };
+    let version_components: Vec<&str> = pinned_version.split('.').collect();
+    let has_three_components = version_components.len() == 3;
+    let mut every_component_is_numeric = true;
+    for version_component in &version_components {
+        let is_numeric = !version_component.is_empty()
+            && version_component.bytes().all(|byte| byte.is_ascii_digit());
+        every_component_is_numeric = every_component_is_numeric && is_numeric;
     }
+    has_three_components && every_component_is_numeric
+}
+
+#[test]
+fn should_accept_only_exact_three_component_nextest_pins() {
+    assert!(is_exact_nextest_tool_pin("cargo-nextest@0.9.149"));
+    assert!(!is_exact_nextest_tool_pin("cargo-nextest"));
+    assert!(!is_exact_nextest_tool_pin("cargo-nextest@"));
+    assert!(!is_exact_nextest_tool_pin("cargo-nextest@0.9"));
+    assert!(!is_exact_nextest_tool_pin("cargo-nextest@0.9.x"));
+    assert!(!is_exact_nextest_tool_pin("cargo-nextest@0.9.149.1"));
+    assert!(!is_exact_nextest_tool_pin("sccache@0.9.149"));
+}
+
+// cargo-nextest is provisioned by install-action, which verifies the release
+// digest it carries inside the pinned action commit. The build job and every
+// tier lane must use the identical SHA-pinned reference and exact tool pin so
+// archives are produced and consumed by the same verified binary, and the
+// cargo-binstall fallback stays disabled so a missing release fails instead
+// of compiling or fetching an unverified binary.
+#[test]
+fn should_provision_cargo_nextest_through_one_sha_pinned_verified_install_action() {
     let workflow = workflow_contract();
+    let mut first_provision_reference: Option<(String, String)> = None;
     for job_id in [
         "rust-core",
         "unit-tests",
@@ -307,13 +324,46 @@ fn cargo_nextest_is_provisioned_by_a_pinned_verified_composite_action() {
     ] {
         let job_steps = steps_of(required_job(&workflow, job_id), job_id);
         let provision_step = find_step_by_name(&job_steps, "Provision pinned cargo-nextest");
-        assert_eq!(
-            required_text(provision_step, "uses", job_id),
-            "./.github/actions/provision-cargo-nextest",
-            "job {job_id} must provision cargo-nextest through the shared composite action"
-        );
+        let provision_reference = assert_verified_nextest_provisioning(provision_step, job_id);
+        match &first_provision_reference {
+            None => first_provision_reference = Some(provision_reference),
+            Some(expected_reference) => assert_eq!(
+                &provision_reference, expected_reference,
+                "job {job_id} provisions a different action or nextest release than rust-core"
+            ),
+        }
     }
-    // The per-test hang budget stays configured for archive runs.
+    assert_nextest_configuration_keeps_archive_budgets();
+}
+
+/// Returns the (action reference, tool pin) pair so the caller can require
+/// every job to agree on both.
+fn assert_verified_nextest_provisioning(provision_step: &Value, job_id: &str) -> (String, String) {
+    let uses_text = required_text(provision_step, "uses", job_id);
+    assert!(
+        is_pinned_action_reference(uses_text, NEXTEST_INSTALL_ACTION),
+        "job {job_id} must provision cargo-nextest through a SHA-pinned {NEXTEST_INSTALL_ACTION}, got {uses_text}"
+    );
+    let provision_inputs = required_field(provision_step, "with", job_id);
+    let tool_text = required_text(provision_inputs, "tool", job_id);
+    assert!(
+        is_exact_nextest_tool_pin(tool_text),
+        "job {job_id} must pin an exact cargo-nextest release, got {tool_text}"
+    );
+    assert_eq!(
+        required_text(provision_inputs, "fallback", job_id),
+        "none",
+        "job {job_id} must disable the unverified install fallback"
+    );
+    assert!(
+        provision_inputs.get("checksum").is_none(),
+        "job {job_id} must keep install-action checksum verification at its enabled default"
+    );
+    (uses_text.to_owned(), tool_text.to_owned())
+}
+
+// The per-test hang budget stays configured for archive runs.
+fn assert_nextest_configuration_keeps_archive_budgets() {
     let nextest_configuration =
         std::fs::read_to_string(contract_support::repository_root().join(".config/nextest.toml"))
             .expect("the nextest configuration should be readable");

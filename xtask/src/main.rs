@@ -48,6 +48,9 @@ mod sccache_save_tests;
 mod source_size;
 mod test_run;
 mod tier_pyramid;
+mod tool_pins;
+#[cfg(test)]
+mod tool_pins_tests;
 
 mod sccache_save;
 

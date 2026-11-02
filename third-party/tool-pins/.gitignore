@@ -1,0 +1,3 @@
+# Never built or locked: only the manifest pins matter (see Cargo.toml).
+Cargo.lock
+target/

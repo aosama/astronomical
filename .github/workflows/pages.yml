@@ -34,24 +34,16 @@ jobs:
           persist-credentials: false
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-      - name: Archive static site
-        run: |
-          echo "::group::Archive static site"
-          tar \
-            --dereference --hard-dereference \
-            --directory site \
-            -cvf "$RUNNER_TEMP/artifact.tar" \
-            --exclude=.git \
-            --exclude=.github \
-            .
-          echo "::endgroup::"
+      # v5 pins its nested upload-artifact to a full commit SHA, so it now
+      # satisfies the repository's SHA-pinning policy that forced the inline
+      # tar-and-upload copy of this action in earlier releases.
       - name: Upload static site artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          name: github-pages
-          path: ${{ runner.temp }}/artifact.tar
-          retention-days: 1
-          if-no-files-found: error
+          path: site
+          # v4+ drops dotfiles by default; keep site/.nojekyll so the
+          # published tree matches the committed one.
+          include-hidden-files: true
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -1,0 +1,28 @@
+# The single source of the verification-tool versions installed by
+# `cargo xtask install-verification-tools` and required by
+# `cargo xtask notices`. This crate is never built: it exists so Dependabot's
+# Cargo support sees sccache and cargo-about as dependencies and opens a
+# weekly bump pull request (see .github/dependabot.yml), which the plain-text
+# pin files it replaced could never receive. The crates.io versions track the
+# GitHub release archives the installer downloads.
+#
+# Keep each pin an exact `=X.Y.Z` requirement: the installer and the notices
+# check read it as the one version to install and require, and Dependabot's
+# Cargo `auto` strategy rewrites it in place to the next exact version.
+
+[package]
+name = "astronomical-tool-pins"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+# Its own workspace root, so the repository workspace never builds or
+# resolves these heavyweight tool crates.
+[workspace]
+
+[dependencies]
+cargo-about = { version = "=0.9.3", default-features = false }
+sccache = { version = "=0.19.0", default-features = false }
