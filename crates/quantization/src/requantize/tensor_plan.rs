@@ -4,7 +4,9 @@
 //! Planning up front (rather than deciding per tensor inside the walk, as
 //! the Python tool does) gives the progress reporter a true total, lets the
 //! CLI print the plan as a dry run, and lets the pipeline compute the
-//! expected output size before committing hours of GPU time.
+//! expected output size before committing hours of GPU time. The per-tensor
+//! decisions are OptiQ's `requantize_shardwise` rules
+//! (`optiq/core/shardwise.py`), moved ahead of the walk.
 
 use crate::module_inventory::{ModuleInventory, ModuleWeightSource, QuantizableModuleDescriptor};
 

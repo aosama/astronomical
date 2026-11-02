@@ -1,4 +1,6 @@
-//! The tokenizer seam the calibration loader encodes through.
+//! The tokenizer seam the calibration loader encodes through: OptiQ's
+//! `tokenizer.encode(text, add_special_tokens=False)` call in
+//! `optiq/calibration/datasets.py`.
 
 use std::path::Path;
 

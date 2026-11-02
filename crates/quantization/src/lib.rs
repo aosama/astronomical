@@ -3,6 +3,9 @@
 //! This crate is a Rust port of the quantization core of OptiQ (the
 //! `mlx-optiq` Python package, MIT License, Copyright (c) 2026 Thin Signal;
 //! see `third-party/THIRD_PARTY_NOTICES` and `calibration/LICENSE-OPTIQ`).
+//! OptiQ's range-search encoder descends from the oQ quantizer in oMLX
+//! (Apache-2.0), and the calibration shuffle reproduces NumPy's MT19937
+//! stream; both lineages are attributed in the same notices file.
 //! The port keeps OptiQ's algorithms and its on-disk artifact format, so an
 //! artifact produced here loads under stock mlx-lm, under OptiQ, and under
 //! Astronomical's own strict OptiQ readers in the model-serving crate. The

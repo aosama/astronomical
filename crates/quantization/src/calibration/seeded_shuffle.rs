@@ -12,6 +12,12 @@
 //! - The shuffle is Fisher–Yates from the last element down, drawing each
 //!   index with numpy's legacy `random_interval`: mask a 32-bit draw to the
 //!   smallest all-ones value covering the bound, and reject draws above it.
+//!
+//! Translated from NumPy's `numpy/random/src/mt19937` and legacy interval
+//! code: MT19937 by Makoto Matsumoto and Takuji Nishimura, the interval draw
+//! by Richard J. Wagner and Magnus Jonsson, as carried in Jean-Sebastien
+//! Roy's randomkit. Their license is reproduced in
+//! `third-party/THIRD_PARTY_NOTICES`.
 
 #[cfg(test)]
 #[path = "seeded_shuffle_tests.rs"]
