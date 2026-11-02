@@ -9,8 +9,7 @@ use astronomical_rest_contract::{
 };
 use thiserror::Error;
 
-const CHRONOLOGICAL_INSTRUCTION_OPENING_TAG: &str = "<system-update>\n";
-const CHRONOLOGICAL_INSTRUCTION_CLOSING_TAG: &str = "\n</system-update>";
+use crate::rest::chronological_instruction::append_instruction;
 
 /// Translates one validated Responses request into the existing worker command.
 pub fn translate_openai_responses_request(
@@ -192,48 +191,6 @@ fn take_non_empty_string(string_content: &mut String) -> Option<String> {
     } else {
         Some(std::mem::take(string_content))
     }
-}
-
-/// Places one mid-conversation instruction chronologically: as the system
-/// prompt when nothing precedes it, otherwise inside an escaped
-/// `<system-update>` tag on the latest user message. Shared with the
-/// Anthropic Messages surface, whose clients also send mid-conversation
-/// system turns.
-pub(crate) fn append_instruction(chat_messages: &mut Vec<ChatMessage>, instruction_content: &str) {
-    if chat_messages.is_empty() {
-        chat_messages.push(ChatMessage::System {
-            content: instruction_content.to_owned(),
-        });
-        return;
-    }
-    if let Some(ChatMessage::User {
-        content: prior_user_content,
-        ..
-    }) = chat_messages.last_mut()
-    {
-        prior_user_content.push('\n');
-        append_escaped_instruction(prior_user_content, instruction_content);
-        return;
-    }
-    let mut chronological_instruction = String::new();
-    append_escaped_instruction(&mut chronological_instruction, instruction_content);
-    chat_messages.push(ChatMessage::User {
-        content: chronological_instruction,
-        images: Vec::new(),
-    });
-}
-
-fn append_escaped_instruction(target_content: &mut String, instruction_content: &str) {
-    target_content.push_str(CHRONOLOGICAL_INSTRUCTION_OPENING_TAG);
-    for instruction_character in instruction_content.chars() {
-        match instruction_character {
-            '&' => target_content.push_str("&amp;"),
-            '<' => target_content.push_str("&lt;"),
-            '>' => target_content.push_str("&gt;"),
-            _ => target_content.push(instruction_character),
-        }
-    }
-    target_content.push_str(CHRONOLOGICAL_INSTRUCTION_CLOSING_TAG);
 }
 
 fn translate_thousandths(

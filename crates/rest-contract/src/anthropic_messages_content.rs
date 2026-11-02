@@ -79,8 +79,7 @@ pub enum AnthropicInputContentBlock {
         tool: AnthropicToolAdditionReference,
     },
     RedactedThinking {},
-    Document {},
-    /// Server-tool, search-result, and future block types.
+    /// Documents, server-tool results, search results, and future block types.
     #[serde(other)]
     Unsupported,
 }
@@ -93,6 +92,8 @@ pub enum AnthropicInputContentBlock {
 pub struct AnthropicToolAdditionReference {
     #[serde(rename = "type")]
     reference_type: String,
+    #[serde(default)]
+    name: String,
 }
 
 /// An image block's source; only inline `base64` sources are served locally.
@@ -117,9 +118,14 @@ pub enum AnthropicMessageParts {
         thinking: String,
         tool_uses: Vec<AnthropicToolUseParts>,
     },
-    /// A mid-conversation instruction; empty when the turn held only tool
-    /// references.
-    System { text: String },
+    /// A mid-conversation instruction; `text` is empty when the turn held
+    /// only tool references. The referenced names are checked against the
+    /// declared tools, so a reference to an undeclared tool fails loudly
+    /// instead of being dropped.
+    System {
+        text: String,
+        referenced_tool_names: Vec<String>,
+    },
 }
 
 /// One ordered piece of a user turn.
@@ -197,11 +203,15 @@ fn system_message_parts(
     content_blocks: Vec<AnthropicInputContentBlock>,
 ) -> Result<AnthropicMessageParts, AnthropicMessagesValidationError> {
     let mut system_texts = Vec::new();
+    let mut referenced_tool_names = Vec::new();
     for content_block in content_blocks {
         match content_block {
             AnthropicInputContentBlock::Text { text } => system_texts.push(text),
             AnthropicInputContentBlock::ToolAddition { tool }
-                if tool.reference_type == "tool_reference" => {}
+                if tool.reference_type == "tool_reference" =>
+            {
+                referenced_tool_names.push(tool.name);
+            }
             _ => {
                 return Err(AnthropicMessagesValidationError::UnsupportedContentBlock {
                     location: "system message",
@@ -211,6 +221,7 @@ fn system_message_parts(
     }
     Ok(AnthropicMessageParts::System {
         text: system_texts.join("\n\n"),
+        referenced_tool_names,
     })
 }
 

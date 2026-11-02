@@ -16,7 +16,8 @@ use serde_json::Value;
 use thiserror::Error;
 
 use crate::anthropic_messages_content::AnthropicImageBudget;
-use crate::openai_responses_tools::{is_valid_function_name, json_nesting_depth};
+use crate::json_nesting_depth::json_nesting_depth;
+use crate::tool_name_rule::is_valid_function_name;
 use crate::{
     AnthropicInputMessage, AnthropicMessageParts, AnthropicSystemPrompt, MAX_OPENAI_OUTPUT_TOKENS,
     MAX_OPENAI_TOOL_SCHEMA_NESTING_DEPTH, OpenAiChatCompletionValidationError,
@@ -89,6 +90,10 @@ pub struct AnthropicThinkingConfiguration {
     thinking_type: String,
     #[serde(default)]
     budget_tokens: Option<u32>,
+    /// `summarized` (the default) streams the thinking text; `omitted` keeps
+    /// the thinking blocks but leaves their text empty, as Anthropic does.
+    #[serde(default)]
+    display: Option<String>,
 }
 
 /// Output controls. `effort` sets how hard the model thinks; any other
@@ -116,6 +121,9 @@ pub struct AnthropicMessagesRequestParts {
     pub stream: bool,
     /// `Some(0)` disables thinking; `None` leaves the model default in force.
     pub thinking_budget: Option<u32>,
+    /// The model still thinks and the tokens still count in usage; only the
+    /// thinking text is withheld from the response.
+    pub is_thinking_display_omitted: bool,
 }
 
 /// One validated custom tool.
@@ -148,20 +156,15 @@ impl AnthropicMessagesRequest {
         validate_request_scalars(&self)?;
         let thinking_budget =
             resolve_thinking_budget(self.thinking.as_ref(), self.output_config.as_ref())?;
+        let is_thinking_display_omitted = resolve_thinking_display(self.thinking.as_ref())?;
         let tool_choice = resolve_tool_choice(self.tool_choice.as_ref())?;
-        let mut tools = Vec::with_capacity(self.tools.len());
-        for tool_definition in self.tools {
-            tools.push(tool_definition.into_parts()?);
-        }
+        let tools = tool_definition_parts(self.tools)?;
         let system = self
             .system
             .map(AnthropicSystemPrompt::into_text)
             .transpose()?;
-        let mut image_budget = AnthropicImageBudget::default();
-        let mut messages = Vec::with_capacity(self.messages.len());
-        for input_message in self.messages {
-            messages.push(input_message.into_parts(&mut image_budget)?);
-        }
+        let messages = message_parts(self.messages)?;
+        validate_tool_references(&messages, &tools)?;
         Ok(AnthropicMessagesRequestParts {
             model: self.model,
             system,
@@ -173,8 +176,32 @@ impl AnthropicMessagesRequest {
             top_p: self.top_p,
             stream: self.stream,
             thinking_budget,
+            is_thinking_display_omitted,
         })
     }
+}
+
+fn tool_definition_parts(
+    tool_definitions: Vec<AnthropicToolDefinition>,
+) -> Result<Vec<AnthropicToolDefinitionParts>, AnthropicMessagesValidationError> {
+    let mut tools = Vec::with_capacity(tool_definitions.len());
+    for tool_definition in tool_definitions {
+        tools.push(tool_definition.into_parts()?);
+    }
+    Ok(tools)
+}
+
+/// Validates every turn against one shared image budget, because the
+/// image-count and inline-media bounds apply to the request as a whole.
+fn message_parts(
+    input_messages: Vec<AnthropicInputMessage>,
+) -> Result<Vec<AnthropicMessageParts>, AnthropicMessagesValidationError> {
+    let mut image_budget = AnthropicImageBudget::default();
+    let mut messages = Vec::with_capacity(input_messages.len());
+    for input_message in input_messages {
+        messages.push(input_message.into_parts(&mut image_budget)?);
+    }
+    Ok(messages)
 }
 
 fn validate_request_scalars(
@@ -270,6 +297,54 @@ fn resolve_effort_budget(
     Ok(thinking_controls.budget)
 }
 
+fn resolve_thinking_display(
+    thinking: Option<&AnthropicThinkingConfiguration>,
+) -> Result<bool, AnthropicMessagesValidationError> {
+    let Some(thinking) = thinking else {
+        return Ok(false);
+    };
+    match thinking.display.as_deref() {
+        None | Some("summarized") => Ok(false),
+        Some("omitted") => Ok(true),
+        Some(_) => Err(AnthropicMessagesValidationError::UnsupportedOption {
+            option_name: "thinking.display",
+        }),
+    }
+}
+
+/// Every system-turn tool reference must name a declared tool.
+fn validate_tool_references(
+    messages: &[AnthropicMessageParts],
+    tools: &[AnthropicToolDefinitionParts],
+) -> Result<(), AnthropicMessagesValidationError> {
+    for message_parts in messages {
+        let AnthropicMessageParts::System {
+            referenced_tool_names,
+            ..
+        } = message_parts
+        else {
+            continue;
+        };
+        for referenced_tool_name in referenced_tool_names {
+            if !is_declared_tool(referenced_tool_name, tools) {
+                return Err(AnthropicMessagesValidationError::UndeclaredToolReference {
+                    tool_name: referenced_tool_name.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_declared_tool(tool_name: &str, tools: &[AnthropicToolDefinitionParts]) -> bool {
+    for tool_definition in tools {
+        if tool_definition.name == tool_name {
+            return true;
+        }
+    }
+    false
+}
+
 fn resolve_tool_choice(
     tool_choice: Option<&AnthropicToolChoice>,
 ) -> Result<AnthropicToolChoiceParts, AnthropicMessagesValidationError> {
@@ -351,6 +426,8 @@ pub enum AnthropicMessagesValidationError {
     UnsupportedToolType { tool_type: String },
     #[error("tool name '{tool_name}' is invalid")]
     InvalidToolName { tool_name: String },
+    #[error("tool_addition references '{tool_name}', which is not declared in tools")]
+    UndeclaredToolReference { tool_name: String },
     #[error(
         "tool schema nesting depth is {actual_schema_nesting_depth}, exceeding {maximum_schema_nesting_depth}"
     )]

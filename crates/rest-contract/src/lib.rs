@@ -3,13 +3,10 @@
 //!
 //! # Test tiers
 //!
-//! All 161 tests in this crate are unit tests and live beside the types
-//! they exercise, in `#[cfg(test)]` submodules of `src/` (issue #1610):
-//! 137 moved in from the retired `tests/rest_api` integration lane, the
-//! request-budget module's four, and the Anthropic Messages request's
-//! twenty (issue #890). The crate has no integration lane;
-//! the `rest_api_tests` target CI selects resolves from the daemon crate,
-//! which drives the full application stack.
+//! Every test in this crate is a unit test and lives beside the types it
+//! exercises, in `#[cfg(test)]` submodules of `src/` (issue #1610). The
+//! crate has no integration lane; the `rest_api_tests` target CI selects
+//! resolves from the daemon crate, which drives the full application stack.
 
 #![forbid(unsafe_code)]
 
@@ -17,6 +14,7 @@ mod anthropic_messages_content;
 mod anthropic_messages_request;
 mod anthropic_messages_response;
 mod image_input;
+mod json_nesting_depth;
 mod openai_chat_completion_request;
 mod openai_chat_completion_response;
 mod openai_chat_types;
@@ -34,6 +32,7 @@ mod openai_responses_stream;
 mod openai_responses_tools;
 mod openai_structured_outputs;
 mod thinking_controls;
+mod tool_name_rule;
 
 pub use anthropic_messages_content::{
     AnthropicImageSource, AnthropicInputContentBlock, AnthropicInputMessage,
@@ -46,9 +45,9 @@ pub use anthropic_messages_request::{
     AnthropicToolChoiceParts, AnthropicToolDefinition, AnthropicToolDefinitionParts,
 };
 pub use anthropic_messages_response::{
-    AnthropicContentBlockDelta, AnthropicError, AnthropicErrorResponse, AnthropicMessage,
-    AnthropicMessageDeltaBody, AnthropicMessageStreamEvent, AnthropicOutputContentBlock,
-    AnthropicStopReason, AnthropicUsage,
+    AnthropicContentBlockDelta, AnthropicError, AnthropicErrorResponse, AnthropicErrorType,
+    AnthropicMessage, AnthropicMessageDeltaBody, AnthropicMessageStreamEvent,
+    AnthropicOutputContentBlock, AnthropicStopReason, AnthropicUsage,
 };
 pub use image_input::OpenAiImageInput;
 pub use openai_chat_completion_request::{

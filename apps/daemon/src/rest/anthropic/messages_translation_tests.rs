@@ -162,6 +162,7 @@ fn should_drop_a_system_turn_that_held_only_tool_references() {
     let chat_messages = translated_messages(json!({
         "model": "local-model",
         "max_tokens": 64,
+        "tools": [{"name": "read_play"}],
         "messages": [
             {"role": "user", "content": "Read the play."},
             {"role": "system", "content": [
@@ -174,4 +175,96 @@ fn should_drop_a_system_turn_that_held_only_tool_references() {
         &chat_messages[..],
         [ChatMessage::User { content, .. }] if content == "Read the play."
     ));
+}
+
+#[test]
+fn should_move_tool_result_images_into_the_following_user_message() {
+    // A one-pixel PNG, small enough to inline and real enough to decode.
+    let one_pixel_png_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    let chat_messages = translated_messages(json!({
+        "model": "local-model",
+        "max_tokens": 64,
+        "tools": [{"name": "screenshot"}],
+        "messages": [
+            {"role": "user", "content": "Capture the stage."},
+            {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "toolu_1", "name": "screenshot", "input": {}}
+            ]},
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "toolu_1", "content": [
+                    {"type": "text", "text": "captured"},
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": one_pixel_png_base64}}
+                ]},
+                {"type": "text", "text": "Describe it."}
+            ]}
+        ]
+    }));
+
+    assert!(matches!(
+        &chat_messages[2],
+        ChatMessage::Tool { content, .. } if content == "captured"
+    ));
+    assert!(matches!(
+        &chat_messages[3],
+        ChatMessage::User { content, images } if content == "Describe it." && images.len() == 1
+    ));
+}
+
+#[test]
+fn should_join_consecutive_user_text_blocks_with_a_newline() {
+    let chat_messages = translated_messages(json!({
+        "model": "local-model",
+        "max_tokens": 64,
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": "Our revels now are ended."},
+            {"type": "text", "text": "These our actors were all spirits."}
+        ]}]
+    }));
+
+    assert_eq!(
+        chat_messages,
+        vec![ChatMessage::User {
+            content: "Our revels now are ended.\nThese our actors were all spirits.".to_owned(),
+            images: Vec::new()
+        }]
+    );
+}
+
+#[test]
+fn should_reject_a_thinking_budget_the_worker_cannot_represent() {
+    let translation_outcome = translate_anthropic_messages_request_parts(
+        RequestId::new(7),
+        request_parts_of(json!({
+            "model": "local-model",
+            "max_tokens": 64,
+            "thinking": {"type": "enabled", "budget_tokens": 65_536},
+            "messages": [{"role": "user", "content": "hello"}]
+        })),
+    );
+
+    assert!(matches!(
+        translation_outcome,
+        Err(AnthropicMessagesTranslationError::ThinkingBudgetTooLarge)
+    ));
+}
+
+#[test]
+fn should_fold_a_leading_system_turn_into_the_top_level_system_prompt() {
+    let chat_messages = translated_messages(json!({
+        "model": "local-model",
+        "max_tokens": 64,
+        "system": "Speak as Prospero.",
+        "messages": [
+            {"role": "system", "content": [{"type": "text", "text": "Answer in verse."}]},
+            {"role": "user", "content": "Speak."}
+        ]
+    }));
+
+    assert_eq!(
+        chat_messages[0],
+        ChatMessage::System {
+            content: "Speak as Prospero.\n\nAnswer in verse.".to_owned()
+        }
+    );
+    assert!(matches!(&chat_messages[1], ChatMessage::User { content, .. } if content == "Speak."));
 }

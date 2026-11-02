@@ -14,7 +14,7 @@ use astronomical_rest_contract::{
 };
 use thiserror::Error;
 
-use crate::rest::openai::responses_translation::append_instruction;
+use crate::rest::chronological_instruction::append_instruction;
 
 /// Anthropic flags a failed tool run with `is_error`; the chat template has
 /// no such field, so the flag reaches the model as this prefix instead.
@@ -132,7 +132,9 @@ fn append_chat_messages(
                 tool_calls,
             });
         }
-        AnthropicMessageParts::System { text } => {
+        // Tool references were checked against the declared tools by the
+        // contract; every declared tool is already visible to the model.
+        AnthropicMessageParts::System { text, .. } => {
             if !text.is_empty() {
                 append_instruction(chat_messages, &text);
             }

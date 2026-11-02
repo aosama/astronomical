@@ -1,6 +1,7 @@
 use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use astronomical_rest_contract::{
-    AnthropicContentBlockDelta, AnthropicMessageStreamEvent, AnthropicStopReason,
+    AnthropicContentBlockDelta, AnthropicErrorType, AnthropicMessageStreamEvent,
+    AnthropicOutputContentBlock, AnthropicStopReason,
 };
 
 use super::messages_stream::AnthropicMessagesStreamEncoder;
@@ -19,8 +20,18 @@ fn completed_event(reason: ChatGenerationCompletionReason) -> ChatGenerationStre
 fn encoded_stream(
     worker_events: Vec<ChatGenerationStreamEvent>,
 ) -> (Vec<AnthropicMessageStreamEvent>, bool) {
-    let mut stream_encoder =
-        AnthropicMessagesStreamEncoder::new("msg_test-1".to_owned(), "local-model".to_owned());
+    encoded_stream_with_display(worker_events, false)
+}
+
+fn encoded_stream_with_display(
+    worker_events: Vec<ChatGenerationStreamEvent>,
+    is_thinking_display_omitted: bool,
+) -> (Vec<AnthropicMessageStreamEvent>, bool) {
+    let mut stream_encoder = AnthropicMessagesStreamEncoder::new(
+        "msg_test-1".to_owned(),
+        "local-model".to_owned(),
+        is_thinking_display_omitted,
+    );
     let mut stream_events = Vec::from(stream_encoder.initial_events());
     for worker_event in worker_events {
         stream_events.extend(stream_encoder.encode(worker_event));
@@ -136,7 +147,7 @@ fn should_end_with_a_prompt_too_long_error_on_context_overflow() {
     assert!(matches!(
         &stream_events[1],
         AnthropicMessageStreamEvent::Error { error }
-            if error.error_type == "invalid_request_error"
+            if error.error_type == AnthropicErrorType::InvalidRequestError
                 && error.message == "prompt is too long: 262145 tokens > 262144 maximum"
     ));
 }
@@ -162,4 +173,71 @@ fn should_end_with_an_error_when_the_request_is_cancelled() {
 
     assert!(is_terminal);
     assert_eq!(event_types(&stream_events).last(), Some(&"error"));
+}
+
+#[test]
+fn should_keep_an_empty_thinking_block_when_the_display_is_omitted() {
+    let (stream_events, _) = encoded_stream_with_display(
+        vec![
+            ChatGenerationStreamEvent::ReasoningFragment("private reasoning".to_owned()),
+            ChatGenerationStreamEvent::TextFragment("To be".to_owned()),
+            completed_event(ChatGenerationCompletionReason::EndOfSequence),
+        ],
+        true,
+    );
+
+    assert_eq!(
+        event_types(&stream_events),
+        vec![
+            "message_start",
+            "content_block_start",
+            "content_block_stop",
+            "content_block_start",
+            "content_block_delta",
+            "content_block_stop",
+            "message_delta",
+            "message_stop",
+        ]
+    );
+    assert!(matches!(
+        &stream_events[1],
+        AnthropicMessageStreamEvent::ContentBlockStart {
+            content_block: AnthropicOutputContentBlock::Thinking { thinking, .. },
+            ..
+        } if thinking.is_empty()
+    ));
+}
+
+#[test]
+fn should_report_a_worker_lost_mid_stream_as_overloaded() {
+    let (stream_events, is_terminal) = encoded_stream(vec![ChatGenerationStreamEvent::Error(
+        crate::ChatGenerationStreamErrorCode::WorkerUnavailable,
+    )]);
+
+    assert!(is_terminal);
+    assert!(matches!(
+        &stream_events[1],
+        AnthropicMessageStreamEvent::Error { error }
+            if error.error_type == AnthropicErrorType::OverloadedError
+    ));
+}
+
+#[test]
+fn should_ignore_prefill_progress_between_content_events() {
+    let (stream_events, _) = encoded_stream(vec![
+        ChatGenerationStreamEvent::PrefillProgress {
+            processed_tokens: 512,
+            total_tokens: 1024,
+            elapsed_millis: 40,
+            forward_prefill_chunk_elapsed_millis: None,
+            completed_prefill_chunk_tokens: None,
+            mlx_active_memory_bytes: None,
+            mlx_allocator_cache_memory_bytes: None,
+            mlx_peak_memory_bytes: None,
+        },
+        ChatGenerationStreamEvent::TextFragment("Done.".to_owned()),
+        completed_event(ChatGenerationCompletionReason::EndOfSequence),
+    ]);
+
+    assert_eq!(event_types(&stream_events)[1], "content_block_start");
 }

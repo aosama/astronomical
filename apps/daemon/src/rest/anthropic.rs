@@ -5,9 +5,13 @@
 
 pub(crate) mod messages_assembly;
 pub(crate) mod messages_endpoint;
+pub(crate) mod messages_errors;
+pub(crate) mod messages_sse_response;
 pub(crate) mod messages_stream;
 pub(crate) mod messages_translation;
 
+#[cfg(test)]
+mod messages_errors_tests;
 #[cfg(test)]
 mod messages_stream_tests;
 #[cfg(test)]

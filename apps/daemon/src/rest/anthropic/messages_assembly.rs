@@ -1,11 +1,10 @@
 //! Collects ordered worker events into one non-streaming Anthropic message,
-//! plus the stop-reason, identifier, and failure mappings the stream encoder
-//! shares.
+//! plus the stop-reason, identifier, and tool-input mappings the stream
+//! encoder shares.
 
 use astronomical_ipc_protocol::{ChatGenerationCompletionReason, ChatGenerationFailureReason};
 use astronomical_rest_contract::{
-    AnthropicError, AnthropicMessage, AnthropicOutputContentBlock, AnthropicStopReason,
-    AnthropicUsage,
+    AnthropicMessage, AnthropicOutputContentBlock, AnthropicStopReason, AnthropicUsage,
 };
 use serde_json::Value;
 use thiserror::Error;
@@ -16,6 +15,8 @@ pub(crate) struct AnthropicMessageCollector {
     message_id: String,
     model_id: String,
     thinking_text: String,
+    has_thought: bool,
+    is_thinking_display_omitted: bool,
     output_text: String,
     tool_uses: Vec<CollectedToolUse>,
 }
@@ -45,11 +46,17 @@ impl WorkerTokenCounts {
 }
 
 impl AnthropicMessageCollector {
-    pub(crate) fn new(message_id: String, model_id: String) -> Self {
+    pub(crate) fn new(
+        message_id: String,
+        model_id: String,
+        is_thinking_display_omitted: bool,
+    ) -> Self {
         Self {
             message_id,
             model_id,
             thinking_text: String::new(),
+            has_thought: false,
+            is_thinking_display_omitted,
             output_text: String::new(),
             tool_uses: Vec::new(),
         }
@@ -63,7 +70,11 @@ impl AnthropicMessageCollector {
     ) -> Result<(), AnthropicMessagesAssemblyError> {
         match stream_event {
             ChatGenerationStreamEvent::ReasoningFragment(thinking_text) => {
-                self.thinking_text.push_str(&thinking_text);
+                self.has_thought = true;
+                // An omitted display keeps the thinking block but not its text.
+                if !self.is_thinking_display_omitted {
+                    self.thinking_text.push_str(&thinking_text);
+                }
             }
             ChatGenerationStreamEvent::TextFragment(output_text) => {
                 self.output_text.push_str(&output_text);
@@ -99,7 +110,7 @@ impl AnthropicMessageCollector {
     ) -> Result<AnthropicMessage, AnthropicMessagesAssemblyError> {
         let stop_reason = anthropic_stop_reason(completion_reason)?;
         let mut content_blocks = Vec::new();
-        if !self.thinking_text.is_empty() {
+        if self.has_thought {
             content_blocks.push(AnthropicOutputContentBlock::Thinking {
                 thinking: self.thinking_text,
                 signature: String::new(),
@@ -150,29 +161,6 @@ pub(crate) fn parse_tool_input(
 ) -> Result<Value, AnthropicMessagesAssemblyError> {
     serde_json::from_str(arguments_json)
         .map_err(AnthropicMessagesAssemblyError::MalformedToolArguments)
-}
-
-/// Maps a worker failure onto an Anthropic error. Context overflow uses
-/// Anthropic's own "prompt is too long" wording because Anthropic clients
-/// match that text to trigger conversation compaction.
-pub(crate) fn failure_error(failure_reason: &ChatGenerationFailureReason) -> AnthropicError {
-    match failure_reason {
-        ChatGenerationFailureReason::ContextLengthExceeded {
-            actual_total_context_tokens,
-            maximum_context_tokens,
-        } => AnthropicError::invalid_request(format!(
-            "prompt is too long: {actual_total_context_tokens} tokens > {maximum_context_tokens} maximum"
-        )),
-        ChatGenerationFailureReason::InvalidRequest { reason } => {
-            AnthropicError::invalid_request(reason.clone())
-        }
-        ChatGenerationFailureReason::EngineBusy => {
-            AnthropicError::overloaded("the local worker is busy with another request")
-        }
-        other_failure_reason => AnthropicError::api_error(format!(
-            "the local worker could not generate the message: {other_failure_reason:?}"
-        )),
-    }
 }
 
 #[derive(Debug, Error)]

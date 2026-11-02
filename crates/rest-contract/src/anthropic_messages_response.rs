@@ -145,10 +145,12 @@ pub enum AnthropicContentBlockDelta {
 }
 
 /// The top-level message fields that change once generation stops.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+/// `stop_sequence` has the same type as on [`AnthropicMessage`]; this server
+/// matches no stop sequences, so it is always `None`.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct AnthropicMessageDeltaBody {
     pub stop_reason: AnthropicStopReason,
-    pub stop_sequence: Option<&'static str>,
+    pub stop_sequence: Option<String>,
 }
 
 /// The `{"type":"error","error":{...}}` envelope of a rejected request.
@@ -159,50 +161,86 @@ pub struct AnthropicErrorResponse {
     pub error: AnthropicError,
 }
 
-/// One Anthropic error; `error_type` uses Anthropic's fixed error-type names.
+/// Anthropic's fixed error types. Each owns both its wire name and its HTTP
+/// status, so a response can never pair a type with the wrong status.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AnthropicErrorType {
+    InvalidRequestError,
+    NotFoundError,
+    RequestTooLarge,
+    RateLimitError,
+    ApiError,
+    /// Anthropic answers a temporarily unavailable service with 529, and its
+    /// clients retry that status, so a busy or restarting local worker uses it.
+    OverloadedError,
+}
+
+impl AnthropicErrorType {
+    /// The HTTP status Anthropic returns for this error type.
+    #[must_use]
+    pub const fn http_status_code(self) -> u16 {
+        match self {
+            Self::InvalidRequestError => 400,
+            Self::NotFoundError => 404,
+            Self::RequestTooLarge => 413,
+            Self::RateLimitError => 429,
+            Self::ApiError => 500,
+            Self::OverloadedError => 529,
+        }
+    }
+}
+
+/// One Anthropic error.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct AnthropicError {
     #[serde(rename = "type")]
-    pub error_type: &'static str,
+    pub error_type: AnthropicErrorType,
     pub message: String,
 }
 
 impl AnthropicError {
     #[must_use]
     pub fn invalid_request(message: impl Into<String>) -> Self {
-        Self::with_type("invalid_request_error", message)
+        Self::with_type(AnthropicErrorType::InvalidRequestError, message)
     }
 
     #[must_use]
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self::with_type("not_found_error", message)
+        Self::with_type(AnthropicErrorType::NotFoundError, message)
     }
 
     #[must_use]
     pub fn request_too_large(message: impl Into<String>) -> Self {
-        Self::with_type("request_too_large", message)
+        Self::with_type(AnthropicErrorType::RequestTooLarge, message)
     }
 
     #[must_use]
     pub fn rate_limit(message: impl Into<String>) -> Self {
-        Self::with_type("rate_limit_error", message)
+        Self::with_type(AnthropicErrorType::RateLimitError, message)
     }
 
     #[must_use]
     pub fn api_error(message: impl Into<String>) -> Self {
-        Self::with_type("api_error", message)
+        Self::with_type(AnthropicErrorType::ApiError, message)
     }
 
     #[must_use]
     pub fn overloaded(message: impl Into<String>) -> Self {
-        Self::with_type("overloaded_error", message)
+        Self::with_type(AnthropicErrorType::OverloadedError, message)
     }
 
-    fn with_type(error_type: &'static str, message: impl Into<String>) -> Self {
+    fn with_type(error_type: AnthropicErrorType, message: impl Into<String>) -> Self {
         Self {
             error_type,
             message: message.into(),
         }
+    }
+
+    /// The HTTP status this error is answered with.
+    #[must_use]
+    pub const fn http_status_code(&self) -> u16 {
+        self.error_type.http_status_code()
     }
 
     /// Wraps this error in the top-level response envelope.

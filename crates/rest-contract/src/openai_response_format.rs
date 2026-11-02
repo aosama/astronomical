@@ -4,6 +4,7 @@
 //! still uses a bounded prompt instruction plus best-effort extraction, disclosed
 //! through the HTTP Warning header.
 
+use crate::json_nesting_depth::json_nesting_depth;
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
@@ -323,24 +324,6 @@ fn extract_first_json_value(visible_text: &str) -> Option<Value> {
     let json_start = visible_text.find(['{', '['])?;
     let mut json_deserializer = serde_json::Deserializer::from_str(&visible_text[json_start..]);
     Value::deserialize(&mut json_deserializer).ok()
-}
-
-fn json_nesting_depth(json_value: &Value) -> usize {
-    match json_value {
-        Value::Array(values) => values
-            .iter()
-            .map(json_nesting_depth)
-            .max()
-            .unwrap_or(0)
-            .saturating_add(1),
-        Value::Object(fields) => fields
-            .values()
-            .map(json_nesting_depth)
-            .max()
-            .unwrap_or(0)
-            .saturating_add(1),
-        _ => 0,
-    }
 }
 
 #[cfg(test)]

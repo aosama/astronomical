@@ -13,6 +13,7 @@ pub(crate) mod openai;
 
 pub(crate) mod cache_clear;
 pub(crate) mod chat_diagnostics;
+pub(crate) mod chronological_instruction;
 pub(crate) mod config_reload;
 pub(crate) mod config_reload_memory;
 pub(crate) mod config_reveal;
