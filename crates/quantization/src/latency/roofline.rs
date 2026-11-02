@@ -1,5 +1,7 @@
 //! The per-module roofline: bytes moved and operations performed at a bit
 //! width, and the latency the slower of the two implies.
+//!
+//! Ported from OptiQ's `estimate_layer_bytes`, `estimate_layer_flops`, `estimate_layer_latency`, and `get_layer_dimensions` (`optiq/core/latency.py`).
 
 use crate::bit_width::{BitWidth, GroupSize};
 

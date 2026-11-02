@@ -1,5 +1,7 @@
 //! The greedy cache-bit allocator and the byte estimate that reports what
 //! an allocation costs at a given context length.
+//!
+//! Ported from OptiQ's `optimize_kv_cache`, `_push_kv_upgrade`, and `estimate_kv_memory` (`optiq/core/kv_cache.py`).
 
 use serde::{Deserialize, Serialize};
 

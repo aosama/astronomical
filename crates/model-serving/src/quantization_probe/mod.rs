@@ -11,9 +11,11 @@
 //! sweep inside Astronomical: the allocation is calibrated on the kernels
 //! the artifact will actually run through.
 
+mod module_locations;
 mod qwen3_5_probe;
+mod simulated_quantization;
 
-pub use qwen3_5_probe::{
-    AttentionProjection, FeedForwardProjection, ModuleLocation, Qwen3_5SensitivityProbe,
-    load_qwen3_5_probe_model,
+pub use module_locations::{
+    AttentionProjection, FeedForwardProjection, ModuleLocation, module_location_for,
 };
+pub use qwen3_5_probe::{Qwen3_5SensitivityProbe, load_qwen3_5_probe_model};

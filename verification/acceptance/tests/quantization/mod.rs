@@ -18,5 +18,6 @@
 mod exact_sweep;
 mod python_parity;
 mod requantize_throughput;
+mod served_generation;
 mod static_conversion;
 mod support;

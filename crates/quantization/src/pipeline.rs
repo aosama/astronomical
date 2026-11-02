@@ -5,6 +5,8 @@
 //! so its branching (reference-mode resolution, static versus exact,
 //! baseline reuse, sidecar handling) is testable with fakes in the integration
 //! lane; the GPU stages are reached through the `direct-mlx` feature.
+//!
+//! Ported from OptiQ's `run_llm_pipeline`, `_resolve_reference_mode`, and `_estimate_bf16_size_bytes` (`optiq/models/llm.py`).
 
 use std::path::{Path, PathBuf};
 

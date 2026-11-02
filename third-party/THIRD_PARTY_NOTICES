@@ -346,7 +346,10 @@ that Astronomical ports to Rust in crates/quantization. The port
 incorporates, as source translations from mlx-optiq 0.6.5 and 0.7.9:
 - The per-module KL-divergence sensitivity sweep with its measured-majority
   guard, the structural fallback, the bf16 layer index (module inventory),
-  the KL formula, the sensitivity checkpoint, and the sensitivity report
+  the bf16 and block-scaled FP8 weight loading (the requantizer's source
+  reader), the swap-forward-restore probe cycle (the Qwen3.5 probe in
+  crates/model-serving/src/quantization_probe), the KL formula, the
+  sensitivity checkpoint, and the sensitivity report
   (optiq/core/sensitivity.py).
 - The greedy knapsack allocator with the block-aware floor and block-run
   guard, and the quantization predicate (optiq/core/optimizer.py).
@@ -354,9 +357,11 @@ incorporates, as source translations from mlx-optiq 0.6.5 and 0.7.9:
   (optiq/core/lowbit.py).
 - The tensor-at-a-time shard-wise requantizer, its MoE bit policy, router
   and expert predicates, and shard writer (optiq/core/shardwise.py).
-- The roofline latency model (optiq/core/latency.py) and the mixed-precision
-  key-value cache allocator (optiq/core/kv_cache.py).
-- The calibration mix loader (optiq/calibration/datasets.py).
+- The roofline latency model (optiq/core/latency.py), and the
+  mixed-precision key-value cache sensitivity sweep, allocator, and memory
+  estimate (optiq/core/kv_cache.py).
+- The calibration mix loader (optiq/calibration/datasets.py), and the
+  conversion command's defaults (optiq/cli.py).
 - The artifact layout and its metadata and sensitivity documents
   (optiq/artifacts.py, optiq/models/llm.py), and the conversion pipeline
   (optiq/models/llm.py).
