@@ -246,8 +246,21 @@ fn every_tier_lane_applies_its_kind_and_archive_filters() {
         rest_text.contains("rest-api.tar.zst") && rest_text.contains("--no-fail-fast"),
         "the REST lane is not running its whole archive with --no-fail-fast"
     );
+    // Only the command line is inspected: the step's comment explains the
+    // filter it replaced and would trip a whole-text search.
+    let mut rest_command_lines = Vec::new();
+    for line in rest_text.lines() {
+        if line.trim_start().starts_with("cargo-nextest") {
+            rest_command_lines.push(line);
+        }
+    }
+    assert_eq!(
+        rest_command_lines.len(),
+        1,
+        "the REST lane should run exactly one cargo-nextest command"
+    );
     assert!(
-        !rest_text.contains(" -E ") && !rest_text.contains(" library"),
+        !rest_command_lines[0].contains(" -E ") && !rest_command_lines[0].contains(" library"),
         "the REST lane filters its archive again instead of running every contract"
     );
     let e2e_steps = steps_of(required_job(&workflow, "e2e-journeys"), "e2e-journeys");
