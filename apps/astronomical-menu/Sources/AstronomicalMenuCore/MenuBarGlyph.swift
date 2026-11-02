@@ -1,4 +1,4 @@
-// Draws the Night plate mark as the menu bar glyph and decides which state it
+// Draws the Astronomical mark as the menu bar glyph and decides which state it
 // shows. The glyph uses the product's state texture (solid = in memory,
 // hatched = streaming from the SSD) so the menu bar answers "where does the
 // model live right now" without opening the popover.
