@@ -54,7 +54,7 @@ The CLI's `astronomical quantize` verb has three sub-verbs. `plan` (allocate fro
 
 The output is OptiQ's artifact layout, which three independent readers accept: stock mlx-lm (`config.json`'s `quantization` document with global defaults plus per-module `{bits, group_size, mode}` entries), OptiQ's own tools (`optiq/metadata.json` with the `per_layer` bit map, in the published `optiq_mixed_precision` layout for measured conversions and the static allocator's layout for structural ones, listing only quantized modules; and `optiq/sensitivity.json` with the measured sweep), and Astronomical's model-serving crate, whose strict `MlxQuantizationDocument` and `OptiQMetadata` readers validate the two documents against each other at load. The model-serving integration test `artifacts::optiq_artifact_round_trip` feeds this crate's writers straight into those readers.
 
-Two rules from the field are encoded, not left to discipline: the metadata describes the weights that were written (a router passed through, a module dropped to group size 32), never the plan; and the sensitivity document ships with every quant so a re-target is a knapsack re-run, not a repeated ten-hour sweep.
+Three rules from the field are encoded, not left to discipline: vision and audio tower tensors are never quantized (OptiQ re-attaches them at bf16, and Astronomical's validator refuses a quantized tower), so the inventory passes them through; the metadata describes the weights that were written (a router passed through, a module dropped to group size 32), never the plan; and the sensitivity document ships with every quant so a re-target is a knapsack re-run, not a repeated ten-hour sweep.
 
 ## Calibration
 

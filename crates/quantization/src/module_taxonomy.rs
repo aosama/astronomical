@@ -93,6 +93,31 @@ pub const LINEAR_ATTENTION_PROJECTION_SUFFIXES: &[&str] = &[
     "out_proj",
 ];
 
+/// Whether a tensor belongs to a vision or audio tower rather than the
+/// language model. OptiQ never quantizes the towers: mlx-lm's convert drops
+/// them and OptiQ re-attaches them at bf16 as sidecars, and Astronomical's
+/// Qwen3.5 validator refuses a quantized tower tensor outright. The
+/// requantizer therefore copies them unencoded, and the allocator never
+/// spends bits on them. A tower is recognized by its root segment, with or
+/// without a leading `model.`.
+#[must_use]
+pub fn is_non_language_tower_tensor(tensor_name: &str) -> bool {
+    let without_model_prefix = tensor_name.strip_prefix("model.").unwrap_or(tensor_name);
+    let root_segment = without_model_prefix.split('.').next().unwrap_or_default();
+    NON_LANGUAGE_TOWER_ROOTS.contains(&root_segment)
+}
+
+/// The root segments vision-language and audio checkpoints put their
+/// towers under: Qwen3.5 and Gemma (`vision_tower`, `audio_tower`), Qwen2.5-VL
+/// (`visual`), and SigLIP-style adapters (`vision_model`, `audio_model`).
+const NON_LANGUAGE_TOWER_ROOTS: [&str; 5] = [
+    "vision_tower",
+    "visual",
+    "vision_model",
+    "audio_tower",
+    "audio_model",
+];
+
 /// Extracts the transformer block index from `...layers.7.mlp.up_proj`.
 ///
 /// Returns `None` for modules outside any block. The regex OptiQ uses is

@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 
 use crate::bit_width::GroupSize;
 use crate::error::QuantizationError;
-use crate::module_taxonomy::{classify_module, transformer_block_index};
+use crate::module_taxonomy::{
+    classify_module, is_non_language_tower_tensor, transformer_block_index,
+};
 // The requantizer's router rule, not the allocator taxonomy's tighter one:
 // the inventory's pass-through list is exactly what the requantizer copies
 // unencoded, so both must agree on what a router is.
@@ -147,7 +149,7 @@ impl InventoryWalk {
             self.pass_through(located_tensor);
             return;
         };
-        if is_router_tensor_key(tensor_name) {
+        if is_router_tensor_key(tensor_name) || is_non_language_tower_tensor(tensor_name) {
             self.pass_through(located_tensor);
             return;
         }
