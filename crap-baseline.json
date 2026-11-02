@@ -859,8 +859,17 @@
     },
     {
       "file": "apps/astronomical-cli/src/verbs/quantize.rs",
+      "function": "QuantizeError::stdout_unwritable",
+      "line": 176,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize.rs",
       "function": "StandardErrorProgressReporter::report",
-      "line": 46,
+      "line": 75,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -868,35 +877,8 @@
     },
     {
       "file": "apps/astronomical-cli/src/verbs/quantize.rs",
-      "function": "parse_candidate_bits",
-      "line": 238,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-cli"
-    },
-    {
-      "file": "apps/astronomical-cli/src/verbs/quantize.rs",
-      "function": "parse_quantize_command",
-      "line": 230,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-cli"
-    },
-    {
-      "file": "apps/astronomical-cli/src/verbs/quantize.rs",
       "function": "run_quantize_convert",
-      "line": 106,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-cli"
-    },
-    {
-      "file": "apps/astronomical-cli/src/verbs/quantize.rs",
-      "function": "run_quantize_convert",
-      "line": 120,
+      "line": 166,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -905,19 +887,307 @@
     {
       "file": "apps/astronomical-cli/src/verbs/quantize.rs",
       "function": "run_quantize_inspect",
-      "line": 88,
+      "line": 135,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize.rs",
+      "function": "run_quantize_plan",
+      "line": 98,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize.rs",
+      "function": "write_json_line",
+      "line": 184,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "QuantizeArgumentCursor::flag_value",
+      "line": 157,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "QuantizeArgumentCursor::new",
+      "line": 141,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
       "crate": "astronomical-cli"
     },
     {
-      "file": "apps/astronomical-cli/src/verbs/quantize.rs",
-      "function": "run_quantize_plan",
-      "line": 73,
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "QuantizeArgumentCursor::next_argument",
+      "line": 149,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "apply_convert_argument",
+      "line": 323,
+      "cyclomatic": 14.0,
+      "coverage": null,
+      "crap": 210.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "apply_convert_numeric_or_path",
+      "line": 359,
+      "cyclomatic": 25.0,
+      "coverage": null,
+      "crap": 650.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "apply_plan_argument",
+      "line": 204,
+      "cyclomatic": 17.0,
+      "coverage": null,
+      "crap": 306.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "invalid_value",
+      "line": 503,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_candidate_bits",
+      "line": 116,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_convert_arguments",
+      "line": 284,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_group_size",
+      "line": 455,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_inspect_arguments",
+      "line": 246,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_method",
+      "line": 421,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_plan_arguments",
+      "line": 178,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_quantize_command",
+      "line": 99,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_reference",
+      "line": 432,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_target",
+      "line": 445,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "parse_unsigned",
+      "line": 463,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "required",
+      "line": 496,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "set_once",
+      "line": 476,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_arguments.rs",
+      "function": "set_switch",
+      "line": 488,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_convert.rs",
+      "function": "Qwen3_5ProbeModelLoader::load_probe_model",
+      "line": 74,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_convert.rs",
+      "function": "memory_limits_for",
+      "line": 155,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_convert.rs",
+      "function": "physical_memory_unreadable",
+      "line": 188,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_convert.rs",
+      "function": "pipeline_request_from",
+      "line": 91,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_convert.rs",
+      "function": "run_quantize_convert",
+      "line": 40,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_convert.rs",
+      "function": "sample_physical_ram_bytes",
+      "line": 130,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_convert.rs",
+      "function": "write_summary",
+      "line": 163,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_reports.rs",
+      "function": "compare_decisions_by_module_name",
+      "line": 105,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_reports.rs",
+      "function": "module_count_by_bits",
+      "line": 95,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_reports.rs",
+      "function": "render_inspect_text",
+      "line": 59,
+      "cyclomatic": 15.0,
+      "coverage": null,
+      "crap": 240.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/quantize/quantize_reports.rs",
+      "function": "render_plan_text",
+      "line": 13,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
       "crate": "astronomical-cli"
     },
     {
@@ -65398,6 +65668,15 @@
     },
     {
       "file": "crates/quantization/src/pipeline.rs",
+      "function": "ProbeModelSweeper::run_sweep",
+      "line": 254,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/src/pipeline.rs",
       "function": "allocation_constraints_for",
       "line": 142,
       "cyclomatic": 1.0,
@@ -65507,7 +65786,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "artifact_directory_name",
-      "line": 106,
+      "line": 102,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65516,7 +65795,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "artifact_write_failure",
-      "line": 365,
+      "line": 358,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65525,7 +65804,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "ensure_uniform_baseline",
-      "line": 231,
+      "line": 224,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -65534,7 +65813,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "finish_artifact",
-      "line": 313,
+      "line": 306,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65543,7 +65822,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "load_calibration_samples",
-      "line": 197,
+      "line": 190,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -65552,7 +65831,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "log_allocation_summary",
-      "line": 352,
+      "line": 345,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -65561,7 +65840,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "measure_exact_sensitivity",
-      "line": 140,
+      "line": 136,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
@@ -65570,7 +65849,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "prepare_artifact_directory",
-      "line": 116,
+      "line": 112,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -65579,7 +65858,7 @@
     {
       "file": "crates/quantization/src/pipeline/conversion.rs",
       "function": "requantize_with_allocation",
-      "line": 285,
+      "line": 278,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66694,6 +66973,15 @@
     },
     {
       "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
+      "function": "Bfloat16ReferenceLoader::load_probe_model",
+      "line": 204,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
       "function": "FixedTableProbe::run_sweep",
       "line": 164,
       "cyclomatic": 3.0,
@@ -66703,8 +66991,17 @@
     },
     {
       "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
-      "function": "bfloat16_reference_loader",
-      "line": 196,
+      "function": "UniformReferenceLoader::load_probe_model",
+      "line": 218,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-quantization"
+    },
+    {
+      "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
+      "function": "UnusedProbeLoader::load_probe_model",
+      "line": 192,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66713,7 +67010,7 @@
     {
       "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
       "function": "bfloat16_weight",
-      "line": 270,
+      "line": 285,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66722,7 +67019,7 @@
     {
       "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
       "function": "is_source_directory",
-      "line": 216,
+      "line": 231,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66731,7 +67028,7 @@
     {
       "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
       "function": "pipeline_request",
-      "line": 220,
+      "line": 235,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66740,25 +67037,7 @@
     {
       "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
       "function": "read_json",
-      "line": 282,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-quantization"
-    },
-    {
-      "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
-      "function": "uniform_reference_loader",
-      "line": 205,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-quantization"
-    },
-    {
-      "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
-      "function": "unused_probe_loader",
-      "line": 189,
+      "line": 297,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66767,7 +67046,7 @@
     {
       "file": "crates/quantization/tests/direct_mlx/pipeline_contracts.rs",
       "function": "write_source",
-      "line": 241,
+      "line": 256,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,

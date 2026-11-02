@@ -90,11 +90,13 @@ pub struct Qwen3_5SensitivityProbe {
 pub fn load_qwen3_5_probe_model(
     model_directory: &Path,
     bfloat16_source_directory: Option<&Path>,
+    memory_limits: astronomical_runtime_integration::MlxMemoryLimits,
     prefill_chunk_tokens: usize,
 ) -> Result<Qwen3_5SensitivityProbe, QuantizationError> {
     let _ = (
         model_directory,
         bfloat16_source_directory,
+        memory_limits,
         prefill_chunk_tokens,
     );
     todo!("validate, initialize the runtime, load and materialize, index module locations")

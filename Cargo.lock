@@ -79,6 +79,8 @@ dependencies = [
  "astronomical-ipc-protocol",
  "astronomical-model-serving",
  "astronomical-quantization",
+ "astronomical-runtime-integration",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror",

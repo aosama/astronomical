@@ -204,17 +204,13 @@ pub fn plan_from_sensitivity_table(
 /// Peak memory for the sweep is one model plus one tensor's float32 working
 /// copy; for the requantizer, one tensor plus its working copy.
 #[cfg(feature = "direct-mlx")]
-pub fn run_quantization_pipeline<ProbeModelLoader>(
+pub fn run_quantization_pipeline(
     runtime: &astronomical_runtime_integration::MlxRuntime,
     request: &QuantizationPipelineRequest,
     available_memory_bytes: u64,
-    probe_model_loader: ProbeModelLoader,
+    probe_model_loader: &mut dyn ProbeModelLoader,
     progress_reporter: &mut dyn crate::progress::ProgressReporter,
-) -> Result<QuantizationPipelineOutcome, QuantizationError>
-where
-    ProbeModelLoader:
-        FnOnce(&Path, Option<&Path>) -> Result<Box<dyn ProbeModelHandle>, QuantizationError>,
-{
+) -> Result<QuantizationPipelineOutcome, QuantizationError> {
     conversion::run_conversion(
         runtime,
         request,
@@ -224,6 +220,20 @@ where
     )
 }
 
+/// Loads the engine's probe model for the exact sweep. The static path never
+/// calls it. A trait rather than a function parameter so an engine can carry
+/// its own configuration (memory limits, prefill chunk) into the load.
+pub trait ProbeModelLoader {
+    /// `probe_directory` is the model to load: the bf16 source, or the
+    /// uniform 4-bit baseline, in which case `streaming_source_directory`
+    /// names the bf16 source the probe re-encodes modules from.
+    fn load_probe_model(
+        &mut self,
+        probe_directory: &Path,
+        streaming_source_directory: Option<&Path>,
+    ) -> Result<Box<dyn ProbeModelHandle>, QuantizationError>;
+}
+
 /// Type-erased probe model so the pipeline can be generic over engines
 /// without a generic parameter leaking into the CLI.
 pub trait ProbeModelHandle {
@@ -231,4 +241,20 @@ pub trait ProbeModelHandle {
         &mut self,
         request: crate::sensitivity::exact_sweep::ExactSweepRequest<'_>,
     ) -> Result<SensitivityTable, QuantizationError>;
+}
+
+/// Any engine's probe model as a [`ProbeModelHandle`]: the sweep is the
+/// crate's own driver, so an engine implements only
+/// [`crate::sensitivity::SensitivityProbeModel`] and boxes its probe in this.
+pub struct ProbeModelSweeper<ProbeModel>(pub ProbeModel);
+
+impl<ProbeModel: crate::sensitivity::SensitivityProbeModel> ProbeModelHandle
+    for ProbeModelSweeper<ProbeModel>
+{
+    fn run_sweep(
+        &mut self,
+        request: crate::sensitivity::exact_sweep::ExactSweepRequest<'_>,
+    ) -> Result<SensitivityTable, QuantizationError> {
+        crate::sensitivity::exact_sweep::run_exact_sweep(&mut self.0, request)
+    }
 }

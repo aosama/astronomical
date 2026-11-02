@@ -7,7 +7,7 @@ use std::path::Path;
 use astronomical_quantization::bit_width::GroupSize;
 use astronomical_quantization::error::QuantizationError;
 use astronomical_quantization::pipeline::{
-    PipelineMethod, ProbeModelHandle, QuantizationPipelineRequest, ReferenceMode,
+    PipelineMethod, ProbeModelHandle, ProbeModelLoader, QuantizationPipelineRequest, ReferenceMode,
     run_quantization_pipeline,
 };
 use astronomical_quantization::progress::SilentProgressReporter;
@@ -43,7 +43,7 @@ fn should_write_a_complete_static_artifact() {
         &runtime,
         &request,
         u64::MAX,
-        unused_probe_loader,
+        &mut UnusedProbeLoader,
         &mut silent_reporter,
     )
     .expect("the static conversion should succeed");
@@ -85,7 +85,7 @@ fn should_refuse_an_existing_artifact_unless_overwrite_is_requested() {
         &runtime,
         &request,
         u64::MAX,
-        unused_probe_loader,
+        &mut UnusedProbeLoader,
         &mut silent_reporter,
     );
     request.overwrite_output = true;
@@ -93,7 +93,7 @@ fn should_refuse_an_existing_artifact_unless_overwrite_is_requested() {
         &runtime,
         &request,
         u64::MAX,
-        unused_probe_loader,
+        &mut UnusedProbeLoader,
         &mut silent_reporter,
     );
 
@@ -117,7 +117,7 @@ fn should_sweep_against_the_bfloat16_source_when_it_fits() {
         &runtime,
         &request,
         u64::MAX,
-        bfloat16_reference_loader,
+        &mut Bfloat16ReferenceLoader,
         &mut silent_reporter,
     )
     .expect("the exact conversion should succeed");
@@ -142,7 +142,7 @@ fn should_sweep_against_a_uniform_baseline_and_remove_it_when_bfloat16_does_not_
         &runtime,
         &request,
         1,
-        uniform_reference_loader,
+        &mut UniformReferenceLoader,
         &mut silent_reporter,
     )
     .expect("the exact conversion should succeed");
@@ -186,31 +186,46 @@ impl ProbeModelHandle for FixedTableProbe {
     }
 }
 
-fn unused_probe_loader(
-    _probe_directory: &Path,
-    _streaming_source_directory: Option<&Path>,
-) -> Result<Box<dyn ProbeModelHandle>, QuantizationError> {
-    panic!("the static path never loads a probe model")
+struct UnusedProbeLoader;
+
+impl ProbeModelLoader for UnusedProbeLoader {
+    fn load_probe_model(
+        &mut self,
+        _probe_directory: &Path,
+        _streaming_source_directory: Option<&Path>,
+    ) -> Result<Box<dyn ProbeModelHandle>, QuantizationError> {
+        panic!("the static path never loads a probe model")
+    }
 }
 
-fn bfloat16_reference_loader(
-    probe_directory: &Path,
-    streaming_source_directory: Option<&Path>,
-) -> Result<Box<dyn ProbeModelHandle>, QuantizationError> {
-    assert!(probe_directory.ends_with("source"));
-    assert!(streaming_source_directory.is_none());
-    Ok(Box::new(FixedTableProbe))
+struct Bfloat16ReferenceLoader;
+
+impl ProbeModelLoader for Bfloat16ReferenceLoader {
+    fn load_probe_model(
+        &mut self,
+        probe_directory: &Path,
+        streaming_source_directory: Option<&Path>,
+    ) -> Result<Box<dyn ProbeModelHandle>, QuantizationError> {
+        assert!(probe_directory.ends_with("source"));
+        assert!(streaming_source_directory.is_none());
+        Ok(Box::new(FixedTableProbe))
+    }
 }
 
-fn uniform_reference_loader(
-    probe_directory: &Path,
-    streaming_source_directory: Option<&Path>,
-) -> Result<Box<dyn ProbeModelHandle>, QuantizationError> {
-    assert!(probe_directory.ends_with("_uniform_4bit_baseline"));
-    assert!(probe_directory.join("config.json").is_file());
-    assert!(probe_directory.join("tokenizer.json").is_file());
-    assert!(streaming_source_directory.is_some_and(is_source_directory));
-    Ok(Box::new(FixedTableProbe))
+struct UniformReferenceLoader;
+
+impl ProbeModelLoader for UniformReferenceLoader {
+    fn load_probe_model(
+        &mut self,
+        probe_directory: &Path,
+        streaming_source_directory: Option<&Path>,
+    ) -> Result<Box<dyn ProbeModelHandle>, QuantizationError> {
+        assert!(probe_directory.ends_with("_uniform_4bit_baseline"));
+        assert!(probe_directory.join("config.json").is_file());
+        assert!(probe_directory.join("tokenizer.json").is_file());
+        assert!(streaming_source_directory.is_some_and(is_source_directory));
+        Ok(Box::new(FixedTableProbe))
+    }
 }
 
 fn is_source_directory(directory: &Path) -> bool {
