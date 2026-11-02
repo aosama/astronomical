@@ -40,9 +40,7 @@ const SMALL_PROMPT_TOKEN_COUNT: usize = 256;
 /// Context the resident phases reserve: the small prompt, its chat template,
 /// and the generated tokens, rounded up so template growth cannot overflow it.
 const RESIDENT_PHASE_CONTEXT_TOKEN_COUNT: usize = 512;
-/// The public memory endpoint and configuration use the gigabyte Apple
-/// markets machines with: 1 GB = 2^30 bytes.
-const BYTES_PER_MARKETED_GIGABYTE: u64 = 1 << 30;
+use crate::support::marketed_gigabytes::BYTES_PER_MARKETED_GIGABYTE;
 const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_5000_romeo_and_juliet_words.txt");
 

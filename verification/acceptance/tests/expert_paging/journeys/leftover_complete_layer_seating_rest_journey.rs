@@ -276,7 +276,7 @@ fn write_acceptance_config(
         .expect("the leftover-seating configuration directory should be created");
     let configuration_document = json!({
         "model_directories": [model_directory],
-        "maximum_mlx_memory_gb": maximum_mlx_memory_bytes / 1_000_000_000,
+        "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_most(maximum_mlx_memory_bytes),
         "max_output_tokens": MAXIMUM_OUTPUT_TOKEN_COUNT,
         "persistent_prompt_cache_enabled": true,
         "prompt_cache_max_size_gb": 50,

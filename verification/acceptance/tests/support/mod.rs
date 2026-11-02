@@ -11,6 +11,8 @@ pub(crate) mod attribution_log;
 pub(crate) mod exact_model_prompt;
 #[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 pub(crate) mod http;
+#[allow(dead_code)]
+pub(crate) mod marketed_gigabytes;
 #[cfg(any(feature = "serving-acceptance", feature = "expert-paging",))]
 #[allow(dead_code)]
 pub(crate) mod memory_utilization_parity;

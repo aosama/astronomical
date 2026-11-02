@@ -41,6 +41,11 @@ pub enum ExpertLayerResidencyTarget {
     AdmitPartialOnMandatoryRouteRead,
     StreamOperationLocal,
     ReleasePartial,
+    /// Drop this seated complete layer's whole table. "Exact deficit" names the
+    /// planner's aggregate byte accounting, not a per-layer partial keep: the
+    /// enactment removes every expert of the layer (issue #1522), and only
+    /// while idle, because prefill would stream the layer back on the next
+    /// chunk (`should_enact_planned_expert_release`).
     ReleaseCompleteForExactDeficit,
     /// A mandatory multi-token read already materialized the complete payload;
     /// keep it when admission funds it rather than re-reading next chunk.

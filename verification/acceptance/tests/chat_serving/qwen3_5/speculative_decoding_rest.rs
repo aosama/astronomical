@@ -169,7 +169,7 @@ fn write_speculative_acceptance_config(
         "schema_version": 1,
         "runtime": {
             "model_directories": [acceptance_model_scan_root(model_directory)],
-            "maximum_mlx_memory_gb": speculative_memory_ceiling_bytes.div_ceil(1_000_000_000),
+            "maximum_mlx_memory_gb": crate::support::marketed_gigabytes::marketed_gigabytes_at_least(speculative_memory_ceiling_bytes),
         },
         // The cache stays enabled to match the control journey's working
         // attribution path; admitted speculative sessions bypass it in both

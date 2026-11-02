@@ -33,11 +33,7 @@ use crate::support::{
 };
 
 const MAXIMUM_REAL_MODEL_MEMORY_BYTES: u64 = 36_000_000_000;
-/// The daemon expands every whole-GB ceiling input at 2^30 bytes per GB
-/// (the marketed-gigabyte convention); all GB arithmetic in this journey
-/// must use the same unit or the pending/effective echoes mismatch the
-/// expectations by roughly seven percent.
-const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
+use crate::support::marketed_gigabytes::BYTES_PER_MARKETED_GIGABYTE;
 const FIXED_PREFILL_CHUNK_SIZE_TOKENS: u32 = 2_048;
 const MAXIMUM_OUTPUT_TOKEN_COUNT: u32 = 8;
 const QUEUED_GENERATION_MAXIMUM_OUTPUT_TOKENS: u32 = 128;
