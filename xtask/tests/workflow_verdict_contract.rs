@@ -14,16 +14,17 @@ use contract_support::{
 };
 
 /// The lanes the verdict must fan in, in workflow order: the classifier, the
-/// macOS build job, the four per-tier test lanes it feeds, the second macOS
-/// contract job, and the two ubuntu lanes. A lane removed from this list
-/// escapes the merge gate entirely.
-const EXPECTED_VERDICT_LANES: [&str; 9] = [
+/// macOS build job, the four per-tier test lanes it feeds, the Neural Engine
+/// crate lane, the second macOS contract job, and the two ubuntu lanes. A lane
+/// removed from this list escapes the merge gate entirely.
+const EXPECTED_VERDICT_LANES: [&str; 10] = [
     "detect-changes",
     "rust-core",
     "unit-tests",
     "integration-tests",
     "rest-contracts",
     "e2e-journeys",
+    "neural-engine",
     "swift-node",
     "static",
     "config-contracts",
@@ -84,9 +85,10 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
         verdict_text.contains("exit 1"),
         "the verdict does not fail closed"
     );
-    // A skip is legitimate only under the classifier's decision: the macOS
-    // build job and every lane it feeds may skip when macOS verification is
-    // not required; each other lane must reach success on its own.
+    // A skip is legitimate only under the classifier's decision: every
+    // macOS-gated lane (the build job, the lanes it feeds, the Neural Engine
+    // and Swift lanes) may skip when macOS verification is not required; each
+    // other lane must reach success on its own.
     assert!(
         verdict_text.contains("skipped while classification requires macOS verification"),
         "the verdict lost its skip-legitimacy check"
@@ -99,7 +101,7 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
     }
 }
 
-/// A scenario's per-lane results for the six macOS-gated lanes; scenarios
+/// A scenario's per-lane results for the seven macOS-gated lanes; scenarios
 /// omit a lane to mean `success`.
 struct Scenario<'a> {
     name: &'static str,
@@ -111,12 +113,13 @@ struct Scenario<'a> {
     expected_pass: bool,
 }
 
-const MACOS_GATED_LANES: [&str; 6] = [
+const MACOS_GATED_LANES: [&str; 7] = [
     "rust-core",
     "unit-tests",
     "integration-tests",
     "rest-contracts",
     "e2e-journeys",
+    "neural-engine",
     "swift-node",
 ];
 
@@ -182,6 +185,24 @@ fn verdict_script_decides_every_scenario_correctly() {
             classification: "success",
             macos_required: "true",
             macos_lane_results: &[("e2e-journeys", "skipped")],
+            static_checks: "success",
+            config_contracts: "success",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a failed neural-engine lane fails the gate",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[("neural-engine", "failure")],
+            static_checks: "success",
+            config_contracts: "success",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a neural-engine lane skipped while classification requires macOS work",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[("neural-engine", "skipped")],
             static_checks: "success",
             config_contracts: "success",
             expected_pass: false,

@@ -1058,6 +1058,135 @@ jobs:
           # needed here.
           cargo-nextest nextest run --no-fail-fast --archive-file "$RUNNER_TEMP/nextest-archive/e2e.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite
 
+  # The Neural Engine research crate (issue #161) is outside the workspace
+  # default-members and every nextest archive selection, so nothing else in
+  # CI compiles its Objective-C Core ML bridge: a cc bump or a bridge edit
+  # could break it behind a green verdict. It runs as its own job instead of
+  # joining the macOS build because its default graph is a few dozen small
+  # crates with no MLX native build (the MLX baseline is behind a feature this
+  # lane leaves off), so it runs in parallel with the build job, which it
+  # would only slow down, and finishes well inside that job's minutes. It
+  # restores none of the build job's caches: the shared registry archive
+  # (~95 MB, ~4 s to restore) holds the whole workspace's downloads, and the
+  # shared sccache archive (~186 MB) is almost entirely objects this crate
+  # never compiles. Its own small sccache directory, under its own prune
+  # family, holds the crate's Rust graph and the cc-compiled C file (cc routes
+  # the compiler through an sccache RUSTC_WRAPPER); the Objective-C bridge
+  # always recompiles because sccache refuses -fmodules, a sub-second cost.
+  neural-engine:
+    name: Neural Engine crate
+    if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
+    needs: detect-changes
+    runs-on: macos-26
+    timeout-minutes: 6
+    env:
+      SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
+    steps:
+      - name: Configure step timing attribution and the compiler cache
+        run: |
+          printf 'ASTRONOMICAL_CI_TIMING_FILE=%s/astronomical-ci-step-timings.csv\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          {
+            printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/neural-engine-sccache"
+            printf '%s\n' 'RUSTC_WRAPPER=sccache'
+            # The crate's whole compiled graph is ~8 MiB, far under this cap;
+            # it exists only so a dependency surge cannot grow the entry
+            # without bound, since this family carries no prune size ceiling.
+            printf 'SCCACHE_CACHE_SIZE=%s\n' "150M"
+            # sccache refuses incremental compilation (see the build job).
+            printf '%s\n' 'CARGO_INCREMENTAL=0'
+          } >> "$GITHUB_ENV"
+      - name: Require successful change classification
+        if: ${{ needs.detect-changes.result != 'success' }}
+        run: |
+          printf '%s\n' 'Error: required macOS verification could not classify the changed content' >&2
+          exit 1
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      # The bridge compiles against the macOS SDK through clang, so it must
+      # see the same pinned Xcode as the build job.
+      - name: Assert pinned Xcode toolchain
+        run: |
+          set -euo pipefail
+          pinned_xcode_version="$ASTRONOMICAL_PINNED_XCODE_VERSION"
+          resolved_developer_dir=""
+          for xcode_bundle_candidate in \
+            "/Applications/Xcode_${pinned_xcode_version}.app" \
+            "/Applications/Xcode_${pinned_xcode_version}.0.app"; do
+            if [ -x "$xcode_bundle_candidate/Contents/Developer/usr/bin/xcodebuild" ]; then
+              resolved_developer_dir="$xcode_bundle_candidate/Contents/Developer"
+              break
+            fi
+          done
+          if [ -z "$resolved_developer_dir" ]; then
+            printf '%s\n' "Error: this runner image ships no Xcode matching the pinned version ${pinned_xcode_version}." >&2
+            printf '%s\n' 'Error: installed Xcode applications on this image:' >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            printf '%s\n' 'Error: pick an installed version and update the workflow-level ASTRONOMICAL_PINNED_XCODE_VERSION pin.' >&2
+            exit 1
+          fi
+          export DEVELOPER_DIR="$resolved_developer_dir"
+          printf 'DEVELOPER_DIR=%s\n' "$resolved_developer_dir" >> "$GITHUB_ENV"
+          printf '[pinned-xcode] status=verified developer_dir=%s version=%s\n' \
+            "$resolved_developer_dir" "$pinned_xcode_version"
+          xcodebuild -version
+          pinned_sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          printf '[pinned-xcode] sdk_version=%s\n' "$pinned_sdk_version"
+      # The prebuilt, digest-verified release through the same pinned action
+      # the lanes use for nextest: `cargo xtask install-verification-tools`
+      # would first compile xtask cold, which costs more than this whole lane
+      # compiles. The version must equal the third-party/tool-pins pin (the
+      # cache-owner contract enforces it) so both jobs share one cache format.
+      - name: Provision pinned sccache
+        uses: taiki-e/install-action@1919c4a95903d2c33e4a221102edca87309fc14b # v2.89.0
+        with:
+          tool: sccache@0.19.0
+          fallback: none
+      - name: Restore neural-engine-sccache-cache
+        id: neural-engine-sccache-cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: neural-engine-sccache
+          path: ~/Library/Caches/Astronomical/neural-engine-sccache
+          # The family token `neural-engine-sccache` sits before `-macOS`, so
+          # cargo xtask prune-caches keeps it apart from the build job's
+          # sccache family, and the build job's `astronomical-v2-sccache-`
+          # fallbacks can never restore it. Keyed like that family: tool pins
+          # rotate the sccache cache format, Cargo.lock the dependency graph.
+          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
+      # Every target compiles, so the #[ignore]d real-hardware journeys stay
+      # buildable; only the pure unit tests execute (see the alias comment).
+      - name: Compile every target and run the unit tests
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end neural-engine-tests' EXIT
+          scripts/ci/ci-step-timing.sh begin neural-engine-tests
+          cargo test-neural-engine --locked
+        timeout-minutes: 4
+      # Default-branch-only, like the build job's sccache save: pull requests
+      # restore the default-branch entry, and a saved pull-request entry would
+      # only duplicate it inside the 10 GB repository budget.
+      - name: Save neural-engine-sccache-cache
+        id: neural-engine-sccache-cache-save
+        if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch && steps.neural-engine-sccache-cache.outputs.cache-hit != 'true' }}
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: save
+          owner: neural-engine-sccache
+          path: ~/Library/Caches/Astronomical/neural-engine-sccache
+          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+      - name: Print compiler cache statistics
+        if: always()
+        run: sccache --show-stats
+      - name: Publish step timing summary
+        if: always()
+        run: scripts/ci/publish-ci-timing-summary.sh
+        timeout-minutes: 1
+
   # The one required check of this workflow (issue #1553): a fan-in verdict
   # that fails closed over every lane, so branch protection and the ruleset
   # list exactly one check whose name never changes and jobs above stay free
@@ -1068,13 +1197,13 @@ jobs:
   # satisfied — a failing lane would merge. The step below therefore sees
   # every lane's terminal result and decides.
   #
-  # Skip legitimacy: the two macOS lanes legitimately skip when the
+  # Skip legitimacy: the macOS lanes legitimately skip when the
   # classifier marked macOS verification not required (site-only changes);
   # the verdict accepts a skip only under that classifier decision, so a
   # lane skipped for any other reason fails the gate.
   verdict:
     name: CI verdict
-    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, swift-node, static, config-contracts]
+    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, neural-engine, swift-node, static, config-contracts]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -1093,6 +1222,7 @@ jobs:
           integration_tests_result="${{ needs.integration-tests.result }}"
           rest_contracts_result="${{ needs.rest-contracts.result }}"
           e2e_journeys_result="${{ needs.e2e-journeys.result }}"
+          neural_engine_result="${{ needs.neural-engine.result }}"
           swift_node_result="${{ needs.swift-node.result }}"
           static_result="${{ needs.static.result }}"
           config_contracts_result="${{ needs.config-contracts.result }}"
@@ -1102,7 +1232,7 @@ jobs:
           if [ "$macos_verification_required" != "true" ]; then
             macos_lanes_may_skip=true
           fi
-          for lane_result_pair in "rust-core:$rust_core_result" "unit-tests:$unit_tests_result" "integration-tests:$integration_tests_result" "rest-contracts:$rest_contracts_result" "e2e-journeys:$e2e_journeys_result" "swift-node:$swift_node_result"; do
+          for lane_result_pair in "rust-core:$rust_core_result" "unit-tests:$unit_tests_result" "integration-tests:$integration_tests_result" "rest-contracts:$rest_contracts_result" "e2e-journeys:$e2e_journeys_result" "neural-engine:$neural_engine_result" "swift-node:$swift_node_result"; do
             lane_name="${lane_result_pair%%:*}"
             lane_result="${lane_result_pair##*:}"
             case "$lane_result" in

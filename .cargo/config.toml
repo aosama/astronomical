@@ -181,8 +181,14 @@ test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomic
 # `cargo test-neural-engine-hello footprint_of_mlp_gate_and_up_as_ml_program_eight_bit_lookup`)
 # so earlier loads in the process do not blur its numbers. Real hardware,
 # optimized build, serial; about three minutes in all. The crate's pure unit
-# tests run with `cargo test -p astronomical-neural-engine --lib`.
+# tests run with `cargo test-neural-engine` (below).
 test-neural-engine-hello = "test --release --no-fail-fast -p astronomical-neural-engine --features mlx-baseline --test neural_engine_hello -- --ignored --nocapture --test-threads=1"
+
+# The Neural Engine CI lane (job `neural-engine`): compiles every target of the
+# crate without the MLX baseline, so the #[ignore]d hardware journeys above
+# stay buildable, and runs only the pure unit tests (the journeys never run
+# in CI). Seconds locally; no native MLX build.
+test-neural-engine = "test --no-fail-fast -p astronomical-neural-engine --all-targets"
 
 # Engine-versus-memory-ceiling isolation on the resident 35B sparse-MoE
 # model; narrow with --filter, add --configuration PATH with
