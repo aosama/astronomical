@@ -11,7 +11,7 @@ use astronomical_ipc_protocol::{ChatGenerationCommand, ChatModelCapabilities};
 use tokio::sync::mpsc;
 
 /// The one model the scripted worker reports as ready.
-pub(crate) const SCRIPTED_CHAT_MODEL_ID: &str = "astronomical/responses-endpoint-test-model";
+pub(crate) const SCRIPTED_CHAT_MODEL_ID: &str = "astronomical/scripted-chat-test-model";
 
 /// A worker stand-in that answers every generation with a fixed event script
 /// (or a fixed start refusal) and reports one ready chat model.

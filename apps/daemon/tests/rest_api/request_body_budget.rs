@@ -143,7 +143,7 @@ async fn post_messages_body(
 }
 
 #[tokio::test]
-async fn should_reject_a_messages_body_declared_over_the_shared_budget() {
+async fn should_reject_a_messages_body_over_the_shared_budget_in_the_anthropic_envelope() {
     let application = build_application(PanicOnGenerationStartExecutor);
     let oversized_content_length = oversized_body_byte_count().to_string();
 
@@ -151,6 +151,9 @@ async fn should_reject_a_messages_body_declared_over_the_shared_budget() {
         post_messages_body(application, b"{}".to_vec(), Some(&oversized_content_length)).await;
 
     assert_eq!(http_response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    let error_json = response_error_json(http_response).await;
+    assert_eq!(error_json["type"], "error");
+    assert_eq!(error_json["error"]["type"], "request_too_large");
 }
 
 #[tokio::test]

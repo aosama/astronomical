@@ -15,12 +15,13 @@ use axum::{
 };
 use tokio::sync::mpsc::Receiver;
 
-use super::messages_endpoint::{MessagesWork, admit_message_generation};
+use super::messages_endpoint::admit_message_generation;
 use super::messages_errors::{
     anthropic_error_response, failure_error, json_rejection_error, validation_rejection_error,
     worker_unavailable_error,
 };
 use crate::application::ApplicationState;
+use crate::serving::chat_generation_executor::ChatWork;
 use crate::{ChatGenerationStreamErrorCode, ChatGenerationStreamEvent};
 
 pub(crate) async fn count_message_tokens(
@@ -35,7 +36,7 @@ pub(crate) async fn count_message_tokens(
         &application_state,
         request_parts,
         request_body_bytes.len(),
-        MessagesWork::CountTokens,
+        ChatWork::CountPromptTokens,
     )
     .await
     {

@@ -24,7 +24,7 @@ use self::{
     chat_models::chat_models_from_models_document,
     claude_code_config::claude_code_environment,
     codex_config::{CODEX_HOME_VARIABLE, codex_process_home},
-    installed_tools::{LaunchToolKind, resolve_launch_tool},
+    installed_tools::{LaunchToolKind, harness_endpoint, resolve_launch_tool},
     opencode_config::{OPENCODE_CONFIG_CONTENT_VARIABLE, opencode_config_content},
     picker::{select_chat_model, warn_if_context_window_is_narrow},
 };
@@ -72,7 +72,10 @@ pub fn prepare_launch(
         launch_dependencies.http_timeout,
     )
     .map_err(|_| LaunchError::ModelListUnavailable)?;
-    let chat_models = chat_models_from_models_document(&models_document)?;
+    let chat_models = chat_models_from_models_document(
+        &models_document,
+        harness_endpoint(resolved_launch_tool.kind),
+    )?;
     let selected_chat_model = select_chat_model(
         &chat_models,
         launch_arguments.model_id.as_deref(),

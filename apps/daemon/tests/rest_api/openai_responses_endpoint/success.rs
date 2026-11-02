@@ -148,7 +148,7 @@ async fn should_return_extracted_json_and_a_warning_for_text_format_json_schema(
     let http_response = post_response_body(
         application,
         r#"{
-            "model":"astronomical/responses-endpoint-test-model",
+            "model":"astronomical/scripted-chat-test-model",
             "input":"O Romeo, Romeo, wherefore art thou Romeo?",
             "text":{"format":{"type":"json_schema","name":"romeo_line","schema":{"type":"object"}}},
             "stream":false

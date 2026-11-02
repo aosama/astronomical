@@ -91,6 +91,17 @@ pub(crate) type ChatGenerationStartFuture<'a> = Pin<
     >,
 >;
 
+/// What a chat request asks the worker to do with its command: generate, or
+/// only count the prompt tokens generation would prefill. Both share the chat
+/// queue, model swap, and completion path, and differ only in the worker
+/// command dispatched, so the REST surfaces and the worker loop use this one
+/// kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ChatWork {
+    Generate,
+    CountPromptTokens,
+}
+
 /// Starts a bounded chat stream through the one local worker.
 pub trait ChatGenerationExecutor: Send + Sync + 'static {
     fn start_chat_generation(

@@ -73,6 +73,16 @@ fn launch_tool_registration(
     }
 }
 
+/// Pure: the generation endpoint each harness speaks, which decides which
+/// Library models it can be launched on.
+pub fn harness_endpoint(launch_tool_kind: LaunchToolKind) -> &'static str {
+    match launch_tool_kind {
+        LaunchToolKind::OpenCode => "/v1/chat/completions",
+        LaunchToolKind::Codex => "/v1/responses",
+        LaunchToolKind::ClaudeCode => "/v1/messages",
+    }
+}
+
 /// Pure: the install hint for a registered harness that is not on PATH.
 fn missing_tool_error(launch_tool_kind: LaunchToolKind) -> LaunchError {
     match launch_tool_kind {
