@@ -8,6 +8,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
+
+use crate::artifact::json_file::write_pretty_json;
 use crate::error::QuantizationError;
 
 #[cfg(test)]
@@ -60,15 +63,34 @@ impl<Tensor> ShardWriter<Tensor> {
         tensor_bytes: u64,
         flush: &mut dyn ShardFlush<Tensor>,
     ) -> Result<(), QuantizationError> {
-        let _ = (tensor_key, tensor, tensor_bytes, flush);
-        todo!("push, add bytes, flush when buffered_bytes >= limit")
+        self.buffered.push((tensor_key, tensor));
+        self.buffered_bytes += tensor_bytes;
+        if self.buffered_bytes >= self.shard_bytes_limit {
+            self.flush(flush)?;
+        }
+        Ok(())
     }
 
     /// Writes the buffer as `model-part-NNNNN.safetensors` (five digits,
     /// zero-based) and records every key in the weight map.
     pub fn flush(&mut self, flush: &mut dyn ShardFlush<Tensor>) -> Result<(), QuantizationError> {
-        let _ = flush;
-        todo!("no-op on an empty buffer; otherwise name, flush, record, reset")
+        if self.buffered.is_empty() {
+            return Ok(());
+        }
+        let temporary_shard_name = format!(
+            "model-part-{:05}.safetensors",
+            self.temporary_shard_names.len()
+        );
+        let buffered_tensors = std::mem::take(&mut self.buffered);
+        for (tensor_key, _) in &buffered_tensors {
+            self.weight_map
+                .insert(tensor_key.clone(), temporary_shard_name.clone());
+        }
+        let shard_path = self.output_directory.join(&temporary_shard_name);
+        self.total_bytes_written += flush.flush_shard(&shard_path, buffered_tensors)?;
+        self.temporary_shard_names.push(temporary_shard_name);
+        self.buffered_bytes = 0;
+        Ok(())
     }
 
     /// Flushes, renames to the conventional pattern, writes the index, and
@@ -84,16 +106,40 @@ impl<Tensor> ShardWriter<Tensor> {
         &mut self,
         flush: &mut dyn ShardFlush<Tensor>,
     ) -> Result<usize, QuantizationError> {
-        let _ = flush;
-        todo!("flush, rename, write the index, return the count")
+        self.flush(flush)?;
+        let shard_count = self.temporary_shard_names.len();
+        let mut final_name_by_temporary_name = BTreeMap::new();
+        for (temporary_index, temporary_shard_name) in self.temporary_shard_names.iter().enumerate()
+        {
+            let final_shard_name = Self::final_shard_name(temporary_index, shard_count);
+            let rename_outcome = std::fs::rename(
+                self.output_directory.join(temporary_shard_name),
+                self.output_directory.join(&final_shard_name),
+            );
+            if let Err(rename_error) = rename_outcome {
+                return Err(self.write_failure(&rename_error.to_string()));
+            }
+            final_name_by_temporary_name.insert(temporary_shard_name.clone(), final_shard_name);
+        }
+        let mut final_weight_map = BTreeMap::new();
+        for (tensor_key, temporary_shard_name) in &self.weight_map {
+            let final_shard_name = final_name_by_temporary_name[temporary_shard_name].clone();
+            final_weight_map.insert(tensor_key.clone(), final_shard_name);
+        }
+        self.write_index(final_weight_map)?;
+        Ok(shard_count)
     }
 
     /// Final shard file name for a temporary name given the total count.
     #[must_use]
     pub fn final_shard_name(temporary_index: usize, shard_count: usize) -> String {
-        let _ = (temporary_index, shard_count);
-        todo!(
-            "model.safetensors for one shard, else model-<index+1 five digits>-of-<count five digits>.safetensors"
+        if shard_count == 1 {
+            return SINGLE_SHARD_NAME.to_owned();
+        }
+        format!(
+            "model-{:05}-of-{:05}.safetensors",
+            temporary_index + 1,
+            shard_count
         )
     }
 
@@ -131,4 +177,47 @@ impl<Tensor> ShardWriter<Tensor> {
     pub fn temporary_shard_names(&self) -> &[String] {
         &self.temporary_shard_names
     }
+
+    /// `model.safetensors.index.json`, written even for a single shard
+    /// because Astronomical's loader reads the index.
+    fn write_index(
+        &self,
+        final_weight_map: BTreeMap<String, String>,
+    ) -> Result<(), QuantizationError> {
+        let shard_index = ShardIndexDocument {
+            metadata: ShardIndexMetadata {
+                total_size: self.total_bytes_written,
+            },
+            weight_map: final_weight_map,
+        };
+        write_pretty_json(
+            &shard_index,
+            &self.output_directory.join(SHARD_INDEX_FILE_NAME),
+        )
+    }
+
+    fn write_failure(&self, description: &str) -> QuantizationError {
+        QuantizationError::ArtifactWriteFailure {
+            output_directory: self.output_directory.clone(),
+            description: description.to_owned(),
+        }
+    }
+}
+
+/// The name a lone shard takes.
+const SINGLE_SHARD_NAME: &str = "model.safetensors";
+
+/// The shard index loaders read to find each tensor.
+pub const SHARD_INDEX_FILE_NAME: &str = "model.safetensors.index.json";
+
+/// The index document in the Hugging Face layout.
+#[derive(Serialize)]
+struct ShardIndexDocument {
+    metadata: ShardIndexMetadata,
+    weight_map: BTreeMap<String, String>,
+}
+
+#[derive(Serialize)]
+struct ShardIndexMetadata {
+    total_size: u64,
 }

@@ -3,7 +3,6 @@
 use super::*;
 
 #[test]
-#[ignore = "pending implementation of from_written_modules"]
 fn should_serialize_defaults_and_flattened_module_entries() {
     let written = BTreeMap::from([
         ("model.layers.0.mlp.up_proj".to_owned(), (8_u32, 64_u32)),
@@ -21,7 +20,6 @@ fn should_serialize_defaults_and_flattened_module_entries() {
 }
 
 #[test]
-#[ignore = "pending implementation of write_into_config and read_from_config"]
 fn should_preserve_every_other_config_key_when_writing() {
     let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
     let source_config_path = directory.path().join("source-config.json");
@@ -51,7 +49,6 @@ fn should_preserve_every_other_config_key_when_writing() {
 }
 
 #[test]
-#[ignore = "pending implementation of source_parameters_for"]
 fn should_resolve_per_module_source_parameters_over_the_defaults() {
     let document = QuantizationConfigDocument {
         group_size: 64,
@@ -75,4 +72,33 @@ fn should_resolve_per_module_source_parameters_over_the_defaults() {
         document.source_parameters_for("model.layers.1.mlp.up_proj"),
         (4, 64)
     );
+}
+
+#[test]
+fn should_read_no_document_from_a_config_without_either_key() {
+    let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+    let config_path = directory.path().join("config.json");
+    std::fs::write(&config_path, r#"{"model_type": "qwen3_5"}"#)
+        .expect("the fixture config should be writable");
+
+    let document = QuantizationConfigDocument::read_from_config(&config_path)
+        .expect("a config without a quantization document still reads");
+
+    assert!(document.is_none());
+}
+
+#[test]
+fn should_report_a_missing_source_config_as_unreadable() {
+    let directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+    let document = QuantizationConfigDocument::from_written_modules(64, 4, &BTreeMap::new());
+
+    let write_outcome = document.write_into_config(
+        &directory.path().join("missing.json"),
+        &directory.path().join("config.json"),
+    );
+
+    assert!(matches!(
+        write_outcome,
+        Err(QuantizationError::ModelConfigUnreadable { .. })
+    ));
 }

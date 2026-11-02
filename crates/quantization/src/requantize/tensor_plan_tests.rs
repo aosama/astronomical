@@ -5,7 +5,6 @@ use super::*;
 use crate::bit_width::{BitWidth, GroupSize};
 
 #[test]
-#[ignore = "pending implementation of estimate_output_bytes"]
 fn should_estimate_packed_weight_plus_scales_and_biases() {
     // 1024 elements at 4 bits = 512 bytes; 16 groups of 64, each with a
     // 2-byte scale and a 2-byte bias = 64 bytes.
@@ -21,7 +20,6 @@ fn should_estimate_packed_weight_plus_scales_and_biases() {
 }
 
 #[test]
-#[ignore = "pending implementation of estimate_output_bytes"]
 fn should_estimate_pass_through_tensors_at_bfloat16() {
     let estimate =
         RequantizeTensorPlan::estimate_output_bytes(&[16, 64], TensorEncodingDecision::PassThrough);

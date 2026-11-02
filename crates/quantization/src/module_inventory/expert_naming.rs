@@ -27,15 +27,19 @@ pub struct ExpertNamingRules {
     pub projection_renames: BTreeMap<&'static str, &'static str>,
 }
 
-/// Group sizes an already-quantized source declares in its `quantization`
-/// document: the global default and per-module overrides.
+/// The `(bits, group_size)` an already-quantized source declares in its
+/// `quantization` document: the global defaults and per-module overrides. A
+/// mixed-precision source's overrides are not decoration: dequantizing an
+/// 8-bit tensor with the global 4 fails outright.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SourceQuantizationGroupSizes {
+pub struct SourceQuantizationParameters {
+    pub default_bits: Option<u32>,
     pub default_group_size: Option<u32>,
+    pub bits_by_module: BTreeMap<String, u32>,
     pub group_size_by_module: BTreeMap<String, u32>,
 }
 
-impl SourceQuantizationGroupSizes {
+impl SourceQuantizationParameters {
     /// The group size the source used for `module_name`.
     #[must_use]
     pub fn group_size_for(&self, module_name: &str) -> Option<u32> {
@@ -44,25 +48,36 @@ impl SourceQuantizationGroupSizes {
             None => self.default_group_size,
         }
     }
+
+    /// `(bits, group_size)` for `module_name`, each from its override or the
+    /// default; `None` when either is undeclared.
+    #[must_use]
+    pub fn parameters_for(&self, module_name: &str) -> Option<(u32, u32)> {
+        let bits = match self.bits_by_module.get(module_name) {
+            Some(bits) => Some(*bits),
+            None => self.default_bits,
+        };
+        Some((bits?, self.group_size_for(module_name)?))
+    }
 }
 
 /// Both readings of `config.json`. A source without a config gets the
 /// Gemma-style defaults and no source quantization, which is what OptiQ does.
 pub fn read_model_config(
     source_directory: &Path,
-) -> Result<(ExpertNamingRules, SourceQuantizationGroupSizes), QuantizationError> {
+) -> Result<(ExpertNamingRules, SourceQuantizationParameters), QuantizationError> {
     let config_path = source_directory.join("config.json");
     if !config_path.is_file() {
         return Ok((
             rules_for_family(""),
-            SourceQuantizationGroupSizes::default(),
+            SourceQuantizationParameters::default(),
         ));
     }
     let config_value = parse_config(&config_path)?;
     let family_text = family_text(&config_value);
     Ok((
         rules_for_family(&family_text),
-        source_group_sizes(&config_value),
+        source_quantization_parameters(&config_value),
     ))
 }
 
@@ -117,33 +132,45 @@ fn is_switch_mlp_family(family_text: &str) -> bool {
     false
 }
 
-/// The `quantization` (or `quantization_config`) document's group sizes.
-fn source_group_sizes(config_value: &serde_json::Value) -> SourceQuantizationGroupSizes {
-    let mut group_sizes = SourceQuantizationGroupSizes::default();
+/// The `quantization` (or `quantization_config`) document's widths and
+/// group sizes, global and per module.
+fn source_quantization_parameters(
+    config_value: &serde_json::Value,
+) -> SourceQuantizationParameters {
+    let mut parameters = SourceQuantizationParameters::default();
     let quantization_document = if config_value["quantization"].is_object() {
         &config_value["quantization"]
     } else {
         &config_value["quantization_config"]
     };
     let Some(quantization_entries) = quantization_document.as_object() else {
-        return group_sizes;
+        return parameters;
     };
+    parameters.default_bits = quantization_document["bits"]
+        .as_u64()
+        .map(narrow_group_size);
+    parameters.default_group_size = quantization_document["group_size"]
+        .as_u64()
+        .map(narrow_group_size);
     for (entry_name, entry_value) in quantization_entries {
-        if entry_name == "group_size" {
-            group_sizes.default_group_size = entry_value.as_u64().map(narrow_group_size);
-        } else if let Some(module_group_size) = entry_value["group_size"].as_u64() {
-            group_sizes
+        if let Some(module_bits) = entry_value["bits"].as_u64() {
+            parameters
+                .bits_by_module
+                .insert(entry_name.clone(), narrow_group_size(module_bits));
+        }
+        if let Some(module_group_size) = entry_value["group_size"].as_u64() {
+            parameters
                 .group_size_by_module
                 .insert(entry_name.clone(), narrow_group_size(module_group_size));
         }
     }
-    group_sizes
+    parameters
 }
 
-/// Group sizes are small; anything that does not fit `u32` is malformed and
-/// reads as zero, which no tensor divides into.
-fn narrow_group_size(group_size: u64) -> u32 {
-    u32::try_from(group_size).unwrap_or(0)
+/// Widths and group sizes are small; anything that does not fit `u32` is
+/// malformed and reads as zero, which no width or tensor accepts.
+fn narrow_group_size(declared_value: u64) -> u32 {
+    u32::try_from(declared_value).unwrap_or(0)
 }
 
 fn parse_config(config_path: &Path) -> Result<serde_json::Value, QuantizationError> {

@@ -26,7 +26,6 @@ impl ShardFlush<Vec<u8>> for RecordingFlush {
 }
 
 #[test]
-#[ignore = "pending implementation of ShardWriter::final_shard_name"]
 fn should_name_a_single_shard_model_safetensors() {
     assert_eq!(
         ShardWriter::<Vec<u8>>::final_shard_name(0, 1),
@@ -35,7 +34,6 @@ fn should_name_a_single_shard_model_safetensors() {
 }
 
 #[test]
-#[ignore = "pending implementation of ShardWriter::final_shard_name"]
 fn should_name_multiple_shards_one_based_with_five_digits() {
     assert_eq!(
         ShardWriter::<Vec<u8>>::final_shard_name(0, 3),
@@ -48,7 +46,6 @@ fn should_name_multiple_shards_one_based_with_five_digits() {
 }
 
 #[test]
-#[ignore = "pending implementation of ShardWriter::add and flush"]
 fn should_flush_when_the_buffer_reaches_the_limit() {
     let output_directory = tempfile::tempdir().expect("a temporary directory should be creatable");
     let mut writer = ShardWriter::<Vec<u8>>::new(output_directory.path(), 8);
@@ -67,7 +64,6 @@ fn should_flush_when_the_buffer_reaches_the_limit() {
 }
 
 #[test]
-#[ignore = "pending implementation of ShardWriter::finalize"]
 fn should_write_an_index_mapping_every_key_to_its_final_shard() {
     let output_directory = tempfile::tempdir().expect("a temporary directory should be creatable");
     let mut writer = ShardWriter::<Vec<u8>>::new(output_directory.path(), 4);
@@ -98,4 +94,39 @@ fn should_write_an_index_mapping_every_key_to_its_final_shard() {
             .join("model-00001-of-00002.safetensors")
             .exists()
     );
+}
+
+#[test]
+fn should_write_a_single_shard_as_model_safetensors_with_an_index() {
+    let output_directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+    let mut writer = ShardWriter::<Vec<u8>>::new(output_directory.path(), 1024);
+    let mut flush = RecordingFlush::default();
+    writer
+        .add("a".to_owned(), vec![0; 4], 4, &mut flush)
+        .expect("buffering should succeed");
+
+    let shard_count = writer
+        .finalize(&mut flush)
+        .expect("finalize should succeed");
+
+    assert_eq!(shard_count, 1);
+    assert!(output_directory.path().join("model.safetensors").exists());
+    let index: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(output_directory.path().join(SHARD_INDEX_FILE_NAME))
+            .expect("the index should exist"),
+    )
+    .expect("the index should be JSON");
+    assert_eq!(index["weight_map"]["a"], "model.safetensors");
+}
+
+#[test]
+fn should_not_write_a_shard_when_flushing_an_empty_buffer() {
+    let output_directory = tempfile::tempdir().expect("a temporary directory should be creatable");
+    let mut writer = ShardWriter::<Vec<u8>>::new(output_directory.path(), 8);
+    let mut flush = RecordingFlush::default();
+
+    writer.flush(&mut flush).expect("an empty flush succeeds");
+
+    assert!(flush.flushed.is_empty());
+    assert!(writer.temporary_shard_names().is_empty());
 }

@@ -14,6 +14,7 @@
 //! ecosystem reads (`config.json`, `generation_config.json`, the chat
 //! template, the tokenizer, the weights).
 
+pub mod json_file;
 pub mod layout;
 pub mod metadata;
 pub mod quantization_config;
@@ -23,6 +24,8 @@ pub use layout::{
     LEGACY_METADATA_FILE_NAME, METADATA_FILE_NAME, OPTIQ_SUBDIRECTORY, SENSITIVITY_FILE_NAME,
     artifact_path, resolve_metadata_path,
 };
-pub use metadata::OptiQArtifactMetadata;
+pub use metadata::{
+    MixedPrecisionMetadata, OptiQArtifactMetadata, PerLayerEntry, StaticAllocationMetadata,
+};
 pub use quantization_config::QuantizationConfigDocument;
 pub use sensitivity_document::OptiQSensitivityDocument;

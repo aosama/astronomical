@@ -8,11 +8,11 @@ use std::collections::BTreeMap;
 
 use astronomical_model_serving::OptiQMetadata;
 use astronomical_quantization::artifact::{OptiQArtifactMetadata, QuantizationConfigDocument};
+use astronomical_quantization::sensitivity::SensitivityMethod;
 
 use super::frozen_ornith_1_0_fixtures::frozen_ornith_1_0_optiq_config_bytes;
 
 #[test]
-#[ignore = "pending implementation of the quantization crate's artifact writers"]
 fn should_produce_metadata_the_strict_optiq_reader_accepts_and_validates_against_the_config() {
     // Rebuild the frozen Ornith 1.0 config's written module map through the
     // quantization crate's writer, then hand both documents to this crate's
@@ -27,18 +27,11 @@ fn should_produce_metadata_the_strict_optiq_reader_accepts_and_validates_against
         .map(|(name, profile)| (name.clone(), (profile.bits, profile.group_size)))
         .collect();
 
-    let mut metadata = OptiQArtifactMetadata {
-        method: "optiq_mixed_precision".to_owned(),
-        base_model: "example/base".to_owned(),
-        reference: "bf16".to_owned(),
-        target_bits_per_weight: 4.0,
-        achieved_bits_per_weight: 4.0,
-        module_count_at_highest_width: 0,
-        module_count_at_lowest_width: 0,
-        threshold: 0.0,
-        per_layer: BTreeMap::new(),
-        producer: "astronomical-quantization".to_owned(),
-    };
+    let mut metadata = OptiQArtifactMetadata::for_method(
+        SensitivityMethod::ExactBfloat16Reference,
+        "example/base",
+        64,
+    );
     metadata.describe_written_artifact(&written);
     let metadata_bytes = serde_json::to_vec(&metadata).expect("the metadata should serialize");
 
@@ -51,7 +44,6 @@ fn should_produce_metadata_the_strict_optiq_reader_accepts_and_validates_against
 }
 
 #[test]
-#[ignore = "pending implementation of QuantizationConfigDocument::from_written_modules"]
 fn should_produce_a_quantization_document_the_config_parser_accepts() {
     // The writer's document, embedded under both keys of a minimal config,
     // must parse through Qwen3_5Config and resolve the same per-module
@@ -69,9 +61,20 @@ fn should_produce_a_quantization_document_the_config_parser_accepts() {
     let document = QuantizationConfigDocument::from_written_modules(64, 4, &written);
     let document_value = serde_json::to_value(&document).expect("the document should serialize");
 
-    // The exact minimal config shape is the frozen fixture's with both
-    // quantization keys replaced; the implementer splices `document_value`
-    // in and asserts `quantized_module_profiles()` reports (4, 64) and
-    // (8, 64) for the two modules.
-    assert_eq!(document_value["mode"], "affine");
+    // Splice the writer's document into the frozen Ornith config under both
+    // keys, then parse it the way a daemon load does.
+    let mut config_value: serde_json::Value =
+        serde_json::from_slice(&frozen_ornith_1_0_optiq_config_bytes())
+            .expect("the frozen config should be JSON");
+    config_value["quantization"] = document_value.clone();
+    config_value["quantization_config"] = document_value;
+    let config_bytes = serde_json::to_vec(&config_value).expect("the config should serialize");
+    let parsed_config = astronomical_model_serving::Qwen3_5Config::from_json_bytes(&config_bytes)
+        .expect("the spliced config should parse");
+
+    let profiles = parsed_config.quantized_module_profiles();
+    let gate_profile = &profiles["model.layers.0.mlp.switch_mlp.gate_proj"];
+    let query_profile = &profiles["model.layers.0.self_attn.q_proj"];
+    assert_eq!((gate_profile.bits, gate_profile.group_size), (4, 64));
+    assert_eq!((query_profile.bits, query_profile.group_size), (8, 64));
 }

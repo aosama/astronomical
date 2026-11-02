@@ -52,6 +52,7 @@ fn descriptor(module_name: &str, logical_parameter_count: u64) -> QuantizableMod
         },
         role: classify_module(module_name),
         transformer_block_index: transformer_block_index(module_name),
+        source_quantization: None,
     }
 }
 

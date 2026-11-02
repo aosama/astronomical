@@ -17,14 +17,16 @@ use crate::module_taxonomy::{classify_module, transformer_block_index};
 // unencoded, so both must agree on what a router is.
 use crate::requantize::bit_policy::is_router_tensor_key;
 
-use super::expert_naming::{ExpertNamingRules, SourceQuantizationGroupSizes, read_model_config};
+use super::expert_naming::{ExpertNamingRules, SourceQuantizationParameters, read_model_config};
 use super::safetensors_header::{HeaderTensor, read_header_tensors};
-use super::{ModuleWeightSource, QuantizableModuleDescriptor, SourceTensorDtype};
+use super::{
+    ModuleWeightSource, PassThroughTensor, QuantizableModuleDescriptor, SourceTensorDtype,
+};
 
 /// Everything the walk produces, before it is wrapped in a `ModuleInventory`.
 pub struct InventoryContents {
     pub modules: BTreeMap<String, QuantizableModuleDescriptor>,
-    pub pass_through_tensor_names: Vec<String>,
+    pub pass_through_tensors: Vec<PassThroughTensor>,
     pub aliases: BTreeMap<String, String>,
 }
 
@@ -46,11 +48,11 @@ struct PerExpertTensor {
 /// The walk's state across every shard.
 struct InventoryWalk {
     naming_rules: ExpertNamingRules,
-    source_group_sizes: SourceQuantizationGroupSizes,
+    source_quantization_parameters: SourceQuantizationParameters,
     group_elements: usize,
     shape_by_tensor_name: BTreeMap<String, Vec<usize>>,
     modules: BTreeMap<String, QuantizableModuleDescriptor>,
-    pass_through_tensor_names: Vec<String>,
+    pass_through_tensors: Vec<PassThroughTensor>,
     unfused_experts: BTreeMap<(String, String), Vec<PerExpertTensor>>,
 }
 
@@ -60,15 +62,15 @@ pub fn build_inventory_contents(
     group_size: GroupSize,
 ) -> Result<InventoryContents, QuantizationError> {
     let shard_paths = list_shard_paths(source_directory)?;
-    let (naming_rules, source_group_sizes) = read_model_config(source_directory)?;
+    let (naming_rules, source_quantization_parameters) = read_model_config(source_directory)?;
     let located_tensors = read_every_header(&shard_paths)?;
     let mut walk = InventoryWalk {
         naming_rules,
-        source_group_sizes,
+        source_quantization_parameters,
         group_elements: group_size.elements() as usize,
         shape_by_tensor_name: BTreeMap::new(),
         modules: BTreeMap::new(),
-        pass_through_tensor_names: Vec::new(),
+        pass_through_tensors: Vec::new(),
         unfused_experts: BTreeMap::new(),
     };
     for located_tensor in &located_tensors {
@@ -83,7 +85,7 @@ pub fn build_inventory_contents(
     let aliases = aliases_for(&walk.modules);
     Ok(InventoryContents {
         modules: walk.modules,
-        pass_through_tensor_names: walk.pass_through_tensor_names,
+        pass_through_tensors: walk.pass_through_tensors,
         aliases,
     })
 }
@@ -141,11 +143,11 @@ impl InventoryWalk {
             return;
         }
         let Some(source_dtype) = self.source_dtype_of(&located_tensor.header_tensor) else {
-            self.pass_through(tensor_name);
+            self.pass_through(located_tensor);
             return;
         };
         if is_router_tensor_key(tensor_name) {
-            self.pass_through(tensor_name);
+            self.pass_through(located_tensor);
             return;
         }
         if let Some((base_name, expert_index, projection)) = parse_unfused_expert(tensor_name) {
@@ -164,7 +166,7 @@ impl InventoryWalk {
             return;
         }
         if !self.add_modules_for(located_tensor, source_dtype) {
-            self.pass_through(tensor_name);
+            self.pass_through(located_tensor);
         }
     }
 
@@ -228,8 +230,12 @@ impl InventoryWalk {
         }
     }
 
-    fn pass_through(&mut self, tensor_name: &str) {
-        self.pass_through_tensor_names.push(tensor_name.to_owned());
+    fn pass_through(&mut self, located_tensor: &LocatedTensor) {
+        self.pass_through_tensors.push(PassThroughTensor {
+            shard_file_name: located_tensor.shard_file_name.clone(),
+            tensor_name: located_tensor.header_tensor.tensor_name.clone(),
+            shape: located_tensor.header_tensor.shape.clone(),
+        });
     }
 }
 
@@ -310,9 +316,11 @@ fn descriptor_for(
     logical_shape: Vec<usize>,
     source_dtype: SourceTensorDtype,
     weight_source: ModuleWeightSource,
+    source_quantization: Option<(u32, u32)>,
 ) -> QuantizableModuleDescriptor {
     let logical_parameter_count = logical_shape.iter().product::<usize>() as u64;
     QuantizableModuleDescriptor {
+        source_quantization,
         role: classify_module(&module_name),
         transformer_block_index: transformer_block_index(&module_name),
         module_name,
