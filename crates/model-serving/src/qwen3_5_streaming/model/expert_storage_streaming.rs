@@ -22,7 +22,33 @@ impl Qwen3_5StreamingModel {
         request_shape: Qwen3_5ExpertStreamingRequestShape,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), ExpertPagingError> {
-        let serving_phase = self.current_serving_phase(request_shape.route_token_count);
+        self.stream_expert_page_from_storage_in_phase(
+            expert_pager,
+            layer_index,
+            expert_ids,
+            request_shape,
+            self.current_serving_phase(request_shape.route_token_count),
+            performance_attribution,
+        )
+    }
+
+    /// [`Self::stream_expert_page_from_storage`] for a caller that knows which
+    /// phase the read serves better than the engine's phase state does.
+    ///
+    /// Decode seating streams complete layers after the last prefill chunk but
+    /// before the first decode forward switches the phase state, so those
+    /// reads were filed as prefill: on a 12,401-token prompt two seated layers
+    /// showed six prefill reads across five prefill forwards, which hid the
+    /// seating cost inside prefill statistics (issue #1717).
+    pub(super) fn stream_expert_page_from_storage_in_phase(
+        &self,
+        expert_pager: &Qwen3_5ExpertPager,
+        layer_index: usize,
+        expert_ids: &[usize],
+        request_shape: Qwen3_5ExpertStreamingRequestShape,
+        serving_phase: SessionStreamingPhase,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(Qwen3_5PagedExpertWeights, QuantizedExpertPageManifest), ExpertPagingError> {
         let (streamed_expert_weights, streamed_page_manifest) = expert_pager
             .stream_selected_expert_page_from_ssd(
                 &self.runtime,
@@ -47,7 +73,7 @@ impl Qwen3_5StreamingModel {
     /// A model without a warm cache cannot track phase state; its streaming
     /// reads fall back to the route-length approximation, documented here so
     /// the fallback is visible rather than implicit.
-    fn current_serving_phase(&self, route_token_count: i32) -> SessionStreamingPhase {
+    pub(super) fn current_serving_phase(&self, route_token_count: i32) -> SessionStreamingPhase {
         match self.retained_experts.as_ref() {
             Some(retained_experts) => retained_experts.borrow().current_serving_phase(),
             None => fallback_serving_phase_from_route_token_count(route_token_count),
