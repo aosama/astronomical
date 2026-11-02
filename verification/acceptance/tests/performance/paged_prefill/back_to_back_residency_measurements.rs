@@ -6,18 +6,22 @@
 //! Back-to-back requests on the large sparse model (issue #1716).
 //!
 //! Decode seats every layer at these ceilings while prefill plans against a
-//! smaller expert budget, so the second request's prefill can release layers
-//! the first request's decode warmed and then stream them again on every
-//! chunk. Each journey reports that cost — layers re-streamed, bytes, and
-//! each request's memory peak — and pins the invariant any residency change
-//! must keep: no request may exceed the configured ceiling.
+//! smaller expert budget, so each later request's prefill can release layers
+//! the previous decode warmed and then stream them again on every chunk. The
+//! journey sends four identical requests so the report shows the steady state
+//! a chat session reaches, not only the first hand-over. For every request
+//! after the first it reports layers re-streamed and bytes, and it pins the
+//! invariant any residency change must keep: no request may exceed the
+//! configured ceiling.
 //!
-//! Measured at 37 GiB on a machine whose wired budget caps the effective
-//! ceiling at about 39.2 GB: two layers (8.39 GB) are re-streamed per
-//! 8,192-token request. A two-layer prefill activation floor removed that
-//! churn for 8,192 tokens but caused a rejected resident attempt at 26,549
-//! tokens, so the floor needs a measured, context-dependent curve rather than
-//! a lower constant (issue #1716).
+//! Measured at 37 GiB (effective ceiling about 39.2 GB, 4,096-token chunks):
+//! requests 2-4 each re-stream two layers (5.09 GB). The layers leave through
+//! generation-context admission, which reserves a three-layer activation
+//! floor and one expert page while every layer is seated. Halving the
+//! re-streamed bytes with measured activation evidence did not make prefill
+//! faster (3.9 s against 4.0 s), because those layers are served from the
+//! file cache while compute runs; see issue #1716 before changing residency
+//! for speed.
 
 use std::{collections::BTreeSet, fs, path::Path};
 
@@ -35,6 +39,7 @@ use crate::support::{
 const JOURNEY_BUDGET: Duration = Duration::from_secs(115);
 const PROMPT_TOKEN_TARGET: usize = 8_192;
 const MAXIMUM_OUTPUT_TOKENS: u64 = 32;
+const REQUEST_COUNT: usize = 4;
 const STATS_POLL_ATTEMPTS: usize = 50;
 const STATS_POLL_INTERVAL: Duration = Duration::from_millis(100);
 const ROMEO_AND_JULIET_SOURCE: &str =
@@ -49,9 +54,11 @@ async fn should_measure_layers_restreamed_between_back_to_back_requests() {
         .expect("the back-to-back journey must finish inside the 120-second runner budget");
 }
 
-/// Runs two identical requests and returns how many layers complete after
-/// the first were streamed again by the second request's prefill.
-async fn run_back_to_back_journey(ceiling_gibibytes: u64) -> usize {
+/// Runs identical requests back to back and returns, for each request after
+/// the first, how many layers complete before it were streamed again by its
+/// prefill. Several requests show the steady state a chat session reaches,
+/// not only the first hand-over from decode to prefill.
+async fn run_back_to_back_journey(ceiling_gibibytes: u64) -> Vec<usize> {
     let model_id = crate::support::large_sparse_moe_streaming_model_id();
     let model_directory = TestRunContext::current()
         .configuration
@@ -80,14 +87,17 @@ async fn run_back_to_back_journey(ceiling_gibibytes: u64) -> usize {
     )
     .await;
     let client = LocalOpenAiClient::new(server.server_address, "back-to-back-residency");
-    send_request(&client, model_id, &prompt).await;
-    let layers_complete_after_first =
-        complete_layer_indices(&poll_until_stats_available(server.server_address).await);
-    send_request(&client, model_id, &prompt).await;
+    let mut layers_complete_before_each_request = Vec::new();
+    for _request_index in 0..REQUEST_COUNT {
+        send_request(&client, model_id, &prompt).await;
+        layers_complete_before_each_request.push(complete_layer_indices(
+            &poll_until_stats_available(server.server_address).await,
+        ));
+    }
     stop_real_model_rest_server(server).await;
     report_and_check(
         &worker_home,
-        &layers_complete_after_first,
+        &layers_complete_before_each_request,
         ceiling_gibibytes << 30,
     )
 }
@@ -149,39 +159,43 @@ fn complete_layer_indices(stats_document: &Value) -> BTreeSet<u64> {
 
 fn report_and_check(
     worker_home: &Path,
-    layers_complete_after_first: &BTreeSet<u64>,
+    layers_complete_after_each_request: &[BTreeSet<u64>],
     ceiling_bytes: u64,
-) -> usize {
+) -> Vec<usize> {
     let generation_reports = generation_reports(worker_home);
     assert_eq!(
         generation_reports.len(),
-        2,
-        "both requests must publish a token-producing generation report; found request ids {:?} in {}",
+        REQUEST_COUNT,
+        "every request must publish a token-producing generation report; found request ids {:?} in {}",
         report_request_ids(&generation_reports),
         worker_home.display()
     );
-    let second_request = &generation_reports[1];
-    let restreamed_layers =
-        prefill_streamed_layers_among(second_request, layers_complete_after_first);
-    let restreamed_bytes =
-        prefill_streamed_bytes_among(second_request, layers_complete_after_first);
-    println!(
-        "[back-to-back-residency] complete_after_first={} restreamed_layers={} restreamed_gb={:.2} second_prefill_gb={:.2} peak_first_gb={:.2} peak_second_gb={:.2} ceiling_gb={:.2}",
-        layers_complete_after_first.len(),
-        restreamed_layers.len(),
-        restreamed_bytes as f64 / 1e9,
-        prefill_streamed_bytes_among(second_request, &all_layers()) as f64 / 1e9,
-        peak_memory_bytes(&generation_reports[0]) as f64 / 1e9,
-        peak_memory_bytes(second_request) as f64 / 1e9,
-        ceiling_bytes as f64 / 1e9,
-    );
+    let mut restreamed_layer_counts = Vec::new();
+    for request_index in 1..REQUEST_COUNT {
+        let layers_complete_before_request = &layers_complete_after_each_request[request_index - 1];
+        let generation_report = &generation_reports[request_index];
+        let restreamed_layers =
+            prefill_streamed_layers_among(generation_report, layers_complete_before_request);
+        println!(
+            "[back-to-back-residency] request={} complete_before={} restreamed_layers={} restreamed_gb={:.2} prefill_streamed_gb={:.2} peak_gb={:.2} ceiling_gb={:.2}",
+            request_index + 1,
+            layers_complete_before_request.len(),
+            restreamed_layers.len(),
+            prefill_streamed_bytes_among(generation_report, layers_complete_before_request) as f64
+                / 1e9,
+            prefill_streamed_bytes_among(generation_report, &all_layers()) as f64 / 1e9,
+            peak_memory_bytes(generation_report) as f64 / 1e9,
+            ceiling_bytes as f64 / 1e9,
+        );
+        restreamed_layer_counts.push(restreamed_layers.len());
+    }
     for generation_report in &generation_reports {
         assert!(
             peak_memory_bytes(generation_report) <= ceiling_bytes,
             "a request exceeded the MLX memory ceiling"
         );
     }
-    restreamed_layers.len()
+    restreamed_layer_counts
 }
 
 fn report_request_ids(generation_reports: &[Value]) -> Vec<u64> {
