@@ -53,9 +53,10 @@ test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomic
 # cargo build --bins -p astronomical-daemon.
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 
-# The macOS app-builder packaging journey as an integration test
-# (macOS-only; runs in the required macOS CI check).
-test-app-builder = "test -p xtask --test integration_app_builder_journeys"
+# The macOS packaging contracts of `cargo xtask app package` (signing
+# plans, Cargo arguments, bundle layout, plist checks for every channel);
+# runs in the required macOS CI check.
+test-app-builder = "test -p xtask --bin xtask app_package"
 
 # Both lanes together; run this before committing.
 test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astronomical-cli -p astronomical-ipc-protocol -p astronomical-memory-policy -p astronomical-jangtq2-qwen35 -p astronomical-native-build-orchestration -p astronomical-native-build-tool -p astronomical-runtime-integration -p astronomical-model-serving -p astronomical-inference-worker -p astronomical-daemon -p astronomical-quantization -p astronomical-rest-contract --lib --test integration_tests --test rest_api_tests"
@@ -80,7 +81,11 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # signing) and swaps it in for the running one; `cargo xtask app instance
 # status|start|stop|restart` controls that instance headless; `cargo xtask
 # app info-plist --channel development|stable|app-store` prints the plist a
-# channel would get, for inspecting the channel profiles.
+# channel would get, for inspecting the channel profiles. `cargo xtask app
+# package --channel stable|app-store [--signing-identity NAME]` builds a
+# release bundle from a clean commit in the disposable app-release lane, and
+# `cargo xtask app smoke-test --app-bundle PATH [--real-model MODEL_ID]`
+# launches a built bundle in isolation.
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
 # MLX runtime into the machine-wide store before Cargo compiles anything.
 # `cargo xtask provision-bindgen-headers [--verify-headers]` extracts the

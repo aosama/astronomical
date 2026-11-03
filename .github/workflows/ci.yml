@@ -260,12 +260,14 @@ jobs:
           # from the restored cargo-downloads registry in well under the step
           # budget. The host-agnostic workflow and cache contracts moved to
           # the config-contracts lane (issue #1553); what stays here is the
-          # one contract that exercises macOS packaging tooling: the real
-          # build-macos-app.sh in a sandbox with fixture-bin tool shims,
-          # deterministic and done in seconds, so it enforces the packaging
-          # contract on every pull request instead of only before releases.
+          # one contract that exercises macOS packaging tooling: the typed
+          # `cargo xtask app package` pipeline's signing plans, Cargo
+          # arguments, assembled-bundle layout, and plist checks for every
+          # channel, deterministic and done in seconds, so it enforces the
+          # packaging contract on every pull request instead of only before
+          # releases.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
-          cargo test --locked -p xtask --test integration_app_builder_journeys
+          cargo test --locked -p xtask --bin xtask app_package
         timeout-minutes: 5
       - name: Install verification tools
         run: |

@@ -2,8 +2,9 @@
 //! profiles. `app dev` is the Development edit loop: persistent incremental
 //! outputs, cached icon and npm install, ad-hoc signing, structural checks,
 //! then a swap of the running app. `app instance` controls that instance
-//! headless. Release packaging still runs through
-//! `scripts/internal/build-macos-app.sh` until `app package` replaces it.
+//! headless. `app package` builds Stable and App Store bundles from a clean
+//! commit in a disposable target directory, and `app smoke-test` launches a
+//! built bundle in isolation.
 
 mod build_identity;
 mod build_steps;
@@ -17,12 +18,18 @@ mod icon_cache;
 mod info_plist;
 mod instance_control;
 mod native_metallib;
+mod package_pipeline;
+mod release_build_steps;
 mod running_instance;
+mod smoke_test;
 mod step_reporter;
 mod tool_command;
 
 #[cfg(test)]
 #[path = "app_bundle_tests.rs"]
 mod app_bundle_tests;
+#[cfg(test)]
+#[path = "app_package_tests.rs"]
+mod app_package_tests;
 
 pub use command::run;

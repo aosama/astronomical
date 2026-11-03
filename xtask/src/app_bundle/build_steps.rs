@@ -67,11 +67,8 @@ pub(crate) fn build_rust_executables(
     run_tool(&mut cargo_command, step_reporter)
 }
 
-pub(crate) fn rust_executable_path(repository_root: &Path, executable_name: &str) -> PathBuf {
-    repository_root
-        .join("target")
-        .join(APP_DEV_CARGO_PROFILE)
-        .join(executable_name)
+pub(crate) fn rust_executable_directory(repository_root: &Path) -> PathBuf {
+    repository_root.join("target").join(APP_DEV_CARGO_PROFILE)
 }
 
 /// Builds the Thin Talk offline shell. `npm ci` deletes and reinstalls

@@ -16,6 +16,10 @@ print_usage() {
     printf '%s\n' "--dry-run builds Stable and previews the installation without promoting it."
 }
 
+package_stable_bundle() {
+    (CDPATH='' cd -- "$1" && cargo xtask app package --channel stable)
+}
+
 run_step() {
     step_name="$1"
     shift
@@ -58,10 +62,9 @@ main() {
     done
 
     repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
-    stable_builder="${repository_root}/scripts/release/build-stable-app.sh"
     stable_installer="${repository_root}/scripts/release/install-stable-app.sh"
 
-    run_step "build-and-validate-stable" "$stable_builder"
+    run_step "build-and-validate-stable" package_stable_bundle "$repository_root"
     if [ "$DRY_RUN" = "true" ]; then
         run_step "preview-stable-installation" "$stable_installer" --dry-run
     else

@@ -374,8 +374,7 @@ fn packaging_contracts_run_on_required_checks() {
     let app_builder_step =
         find_step_by_name(&verification_steps, "Run the app-builder packaging journey");
     assert!(
-        run_text_of(app_builder_step, "app-builder")
-            .contains("--test integration_app_builder_journeys"),
+        run_text_of(app_builder_step, "app-builder").contains("--bin xtask app_package"),
         "the app-builder journey is not enforced on the macOS verification lane"
     );
 
