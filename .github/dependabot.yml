@@ -25,6 +25,13 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      # tower-http is held at the version reqwest resolves, so it compiles
+      # once instead of twice. A 0.x minor bump is the breaking one; lift
+      # this once reqwest moves to the newer tower-http.
+      - dependency-name: tower-http
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
   # Verification-tool pins (sccache, cargo-about) live as exact `=X.Y.Z`
   # dependencies of a never-built crate so this entry can bump them; the
   # installer and the notices check read those exact versions. No
