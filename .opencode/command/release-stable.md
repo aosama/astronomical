@@ -12,12 +12,12 @@ Release version `$1`. If it is empty, ask the user for a numeric `MAJOR.MINOR.PA
 
 - Work from the repository root and follow `AGENTS.md`.
 - Never use chat history, chat-memex, memory, or guesswork for credential names.
-- Never commit or place credential values, local paths, Keychain output, or machine logs in GitHub content or the final report. Do not suppress authoritative release-script output merely because it contains local operator paths.
+- Never commit or place credential values, local paths, Keychain output, or machine logs in GitHub content or the final report. Do not suppress authoritative release-command output merely because it contains local operator paths.
 - Use only `cargo xtask release prepare-and-publish` (or its credential-resolving front door `cargo xtask release prepare-signed`) to prepare or publish distribution artifacts.
 - Never manually edit `site/appcast.xml`; it is a signed generated artifact.
 - Never move or replace a pushed release tag. Fix forward with a new patch version.
-- Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `cargo xtask release validate-dmg`, and installation and launch of the fictional fixture under `target/` by `accept-sparkle-update.sh`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
-- Every test must use its built-in timeout of at most 120 seconds. The notarization operation is not a test and uses `cargo xtask release notarize-dmg`'s 180-second default, overridable with `--timeout-seconds N`.
+- Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `cargo xtask release validate-dmg`, and installation and launch of the fictional fixture under `target/` by `cargo xtask release accept-sparkle-update`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
+- Every test must use its built-in timeout of at most 120 seconds. The Sparkle acceptance's 120-second budget covers the acceptance itself; resolving its Swift and Xcode tools beforehand reports its own progress. The notarization operation is not a test and uses `cargo xtask release notarize-dmg`'s 180-second default, overridable with `--timeout-seconds N`.
 - Keep commands live and unfiltered. Never pipe long-running commands through `head`, `tail`, or another buffering filter.
 
 ## Credential map
@@ -29,16 +29,10 @@ Use these sources exactly; no other credential discovery is allowed:
 - **Notarization profile:** `Astronomical Notarization`.
 - **Sparkle private key:** the Keychain key automatically selected by Sparkle's `generate_appcast`. `cargo xtask release accept-sparkle-update` proves that it matches Astronomical's embedded public key.
 
-Resolve the non-secret signing arguments without displaying them:
+`cargo xtask release prepare-signed` resolves this map itself, failing closed unless exactly one Developer ID Application identity and a 10-character Team ID are found, and it checks the notarization profile is readable before any build starts. Use it instead of resolving the values by hand. To check the profile alone during preflight:
 
 ```sh
-SIGNING_IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p')"
-IDENTITY_COUNT="$(printf '%s\n' "$SIGNING_IDENTITY" | awk 'NF { count += 1 } END { print count + 0 }')"
-[ "$IDENTITY_COUNT" = 1 ] || { printf '%s\n' 'Error: exactly one Developer ID Application identity is required' >&2; exit 1; }
-TEAM_ID="$(printf '%s\n' "$SIGNING_IDENTITY" | sed -n 's/.*(\([[:alnum:]]\{10\}\))$/\1/p')"
-[ "${#TEAM_ID}" = 10 ] || { printf '%s\n' 'Error: Developer ID identity does not contain a 10-character Team ID' >&2; exit 1; }
-NOTARY_PROFILE="Astronomical Notarization"
-xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null
+xcrun notarytool history --keychain-profile "Astronomical Notarization" >/dev/null
 ```
 
 If any credential check fails, stop and ask the user to unlock the Mac or repair the Keychain. Do not search chats for alternatives.
@@ -73,7 +67,7 @@ The packaging contracts are split three ways: the app icon renderer contract is 
 
 ## 3. Preflight and prepare locally
 
-1. Re-resolve the credential map above and run:
+1. Check the notarization profile as described above and run:
 
 ```sh
 cargo xtask release accept-sparkle-update
@@ -89,20 +83,17 @@ cargo test --release -p astronomical-acceptance --features serving-acceptance --
 
 Every chat-capable model the Development configuration's model directories discover must load and stream a non-empty sampled reply (roughly one hundred tokens in at temperature 1.0, one-hundred-token budget, 120-second budget per model). The Development configuration is the single source of the variant inventory. A variant that fails to load or replies empty blocks the release; fix forward before tagging. This journey needs a real graphics processor and installed model inventory — it never runs in continuous integration.
 
-3. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe. Re-resolve signing arguments in the same shell invocation that runs preparation; do not assume shell variables persisted from preflight.
+3. Require a clean worktree, workspace version `$VERSION`, and release notes that are nonempty and public-safe.
 4. Create a local lightweight tag with `git tag "$TAG"`. Do not push it until the publication approval gate passes.
 5. Prepare the release:
 
 ```sh
-cargo xtask release prepare-and-publish \
+cargo xtask release prepare-signed \
   --tag "$TAG" \
-  --notes-file "$RELEASE_NOTES_FILE" \
-  --signing-identity "$SIGNING_IDENTITY" \
-  --team-id "$TEAM_ID" \
-  --notary-profile "$NOTARY_PROFILE"
+  --notes-file "$RELEASE_NOTES_FILE"
 ```
 
-This authoritative script signs nested Sparkle code and Astronomical executables inside-out, signs the app with Hardened Runtime and timestamps, creates and signs the DMG, submits it to Apple, staples and validates the ticket, validates the mounted installation layout, Sparkle-signs the final stapled bytes, signs the feed, and writes `target/releases/${TAG}/release-manifest.json`. This output is long and carries the notarization submission ID that section 4 requires; if you background the run, keep its log so that ID and the final `Prepared signed release` line stay retrievable.
+This authoritative command resolves the credential map, then signs nested Sparkle code and Astronomical executables inside-out, signs the app with Hardened Runtime and timestamps, creates and signs the DMG, submits it to Apple, staples and validates the ticket, validates the mounted installation layout, Sparkle-signs the final stapled bytes, signs the feed, and writes `target/releases/${TAG}/release-manifest.json`. This output is long and carries the notarization submission ID that section 4 requires; if you background the run, keep its log so that ID and the final `Prepared signed release` line stay retrievable.
 
 ## 4. Mandatory publication approval gate
 
@@ -124,13 +115,13 @@ After approval, push the already-reviewed immutable tag first; the publish prefl
 
 ```sh
 git push origin "refs/tags/${TAG}"
-cargo xtask release prepare-and-publish \
+cargo xtask release prepare-signed \
   --tag "$TAG" \
   --output-directory "target/releases/${TAG}" \
   --publish
 ```
 
-Use the exact option name `--output-directory`; `--output-dir` is not accepted. If publication is interrupted after a matching draft release exists, rerun this same command so the authoritative script resumes the draft rather than creating a second release. Require the remote tag to resolve to the manifest commit. Verify the public GitHub release is Stable, not draft or prerelease, has the exact title and notes, and contains exactly the manifest-named DMG with matching size and SHA-256 digest. Download the public DMG to a temporary directory, verify its digest against the manifest, then delete the temporary download. Do not mount, install, or launch it.
+Use the exact option name `--output-directory`; `--output-dir` is not accepted. If publication is interrupted after a matching draft release exists, rerun this same command so it resumes the draft rather than creating a second release. Require the remote tag to resolve to the manifest commit. Verify the public GitHub release is Stable, not draft or prerelease, has the exact title and notes, and contains exactly the manifest-named DMG with matching size and SHA-256 digest. Download the public DMG to a temporary directory, verify its digest against the manifest, then delete the temporary download. Do not mount, install, or launch it.
 
 Comparing the published notes to `$RELEASE_NOTES_FILE` can show one spurious trailing blank line, because `gh release view --json body --jq .body` appends a newline to what it prints; treat only that trailing blank line as equal. A HEAD probe of the enclosure URL likewise returns an empty body by design, so use the HTTP status for reachability and the full download for the digest.
 
@@ -170,25 +161,25 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 
 - Before tag push: fix the cause, remove only an invalid `target/releases/${TAG}` after explicit user approval, recreate the local tag only if its commit is wrong, and prepare again.
 - After tag push: never move the tag; withhold appcast activation and fix forward with a new patch release.
-- Interrupted matching draft publication: rerun the same `--publish` command; the script safely resumes it.
+- Interrupted matching draft publication: rerun the same `--publish` command; it safely resumes the draft.
 - A GitHub HTTP 404 from `verify-remote-release-tag` means the reviewed tag has not been pushed yet; push that exact local tag, never recreate or move it.
 - Conflicting remote release, asset, notes, digest, or tag: stop without clobbering anything.
 - Failed Pages deployment or public-byte comparison: keep the prior feed active when possible, do not declare success, and repair through a pull request.
 
 ## Known gotchas (accumulated from release runs)
 
-- `cargo xtask release accept-sparkle-update` rebuilds Sparkle's `sparkle-cli` with `xcodebuild` only when the prebuilt binary is missing. A refreshed checkout (wiped `build/` directory) therefore exposes a latent failure: Sparkle's Xcode project pins `MACOSX_DEPLOYMENT_TARGET=10.13`, which is below the minimum supported by current Xcode SDKs, and the build fails with exit 65. The script overrides the deployment target on the command line for this fixture-only build; release bytes are unaffected because the app and `generate_appcast` come from SwiftPM artifacts. If the acceptance preflight still fails at `resolve-sparkle-tools`, check for a new SDK minimum and bump the override in `build_sparkle_cli`.
+- `cargo xtask release accept-sparkle-update` rebuilds Sparkle's `sparkle-cli` with `xcodebuild` only when the prebuilt binary is missing. A refreshed checkout (wiped `build/` directory) therefore exposes a latent failure: Sparkle's Xcode project pins `MACOSX_DEPLOYMENT_TARGET=10.13`, which is below the minimum supported by current Xcode SDKs, and the build fails with exit 65. The command overrides the deployment target on the command line for this fixture-only build; release bytes are unaffected because the app and `generate_appcast` come from SwiftPM artifacts. If the acceptance preflight still fails at `resolve-sparkle-tools`, check for a new SDK minimum and bump the override in `resolve_sparkle_tools` (`xtask/src/release/sparkle_acceptance.rs`).
 - The release-notes `mktemp` template carries no `X` placeholders: macOS `mktemp` never expands placeholders that sit before a suffix, so the old suffix-bearing template produced a literal `XXXXXX` filename. The template is now deterministic per tag, which means an aborted earlier run can leave the file behind; `mktemp` creates exclusively and fails on it, so remove the stale file and rerun.
 - The PR issue compliance validator searches only the `## Linked issue` section once the heading exists: the section must carry at least one canonical reference (`Fixes|Closes|Resolves|Refs #N`; grouped forms like `Refs #N and #M` are accepted), and every `#N` inside it must use a canonical keyword — a bare `#N` in prose fails. Keep narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
-- Expected CI duration for integration verification PRs is roughly 5-8 minutes (live runs since #1348: the macOS build job just under 5 minutes, macOS Swift and Node contracts around 4 minutes including the packaging release contracts step, and the per-tier test lanes another minute or two after the build finishes); do not treat a pending job at the 2-3 minute mark as stuck. That budget assumes a native-build cache hit: a GitHub runner-image rollout re-fingerprints the native identity (the toolchain probes are identity inputs), so the next PR can miss the native-build cache and pay a ~5-minute CMake rebuild, producing a roughly 11-minute job (hit live in the 0.2.70 release run). Before suspecting the release change, check the job log for `Cache not found for input keys: astronomical-v2-native-build-…` and compare the logged `[native-build-identity] … identity=…` value against the cached keys (`gh cache list --key astronomical-v2-native-build`); a changed identity with an unchanged `crates/native-identity/src` tree means GitHub rolled the image, not that the release broke something. Toolchain pinning to stop this drift is tracked separately (#1261).
-- `cargo xtask release prepare-and-publish` requires signing identity, team ID, and notary profile resolved inside the same shell invocation as the command; resolving them in an earlier command does not persist. `cargo xtask release prepare-signed` resolves them itself.
+- Expected CI duration for integration verification PRs is roughly 5-8 minutes (live runs since #1348: the macOS build job just under 5 minutes, macOS Swift and Node contracts around 2-3 minutes (its packaging contracts step is a few-second Swift icon contract), the macOS build job also running every xtask unit test, and the per-tier test lanes another minute or two after the build finishes); do not treat a pending job at the 2-3 minute mark as stuck. That budget assumes a native-build cache hit: a GitHub runner-image rollout re-fingerprints the native identity (the toolchain probes are identity inputs), so the next PR can miss the native-build cache and pay a ~5-minute CMake rebuild, producing a roughly 11-minute job (hit live in the 0.2.70 release run). Before suspecting the release change, check the job log for `Cache not found for input keys: astronomical-v2-native-build-…` and compare the logged `[native-build-identity] … identity=…` value against the cached keys (`gh cache list --key astronomical-v2-native-build`); a changed identity with an unchanged `crates/native-identity/src` tree means GitHub rolled the image, not that the release broke something. Toolchain pinning to stop this drift is tracked separately (#1261).
+- `cargo xtask release prepare-and-publish` takes the signing identity, team ID, and notary profile as explicit flags; `cargo xtask release prepare-signed` resolves them itself, which is why this procedure uses it.
 - A version bump leaves `third-party/RUST_DEPENDENCY_NOTICES.digest`'s `input_sha256` memo behind because the root `Cargo.toml` is one of its recorded inputs; the notices text itself is unchanged by a version bump. The check passes on the text-match contract (log line `digest_memo=behind`), so committing `cargo xtask notices` output in the bump branch is optional fast-path hygiene, not a merge requirement (previously a hard CI failure, hit live in the 0.2.66 release run, fixed by #1395).
 - Removing a config field from the Rust structs is not enough: add the removed field name to `strip_retired_config_fields` in `crates/config/src/config_file.rs` and drop any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change, or upgraded installs fail strict parsing and the daemon exits before readiness (hit live in the 0.2.66 release run, fixed by #1116).
 
 ## FAQ
 
-- Why did the Sparkle acceptance fail right after it worked in a previous release? The acceptance script skips `xcodebuild` when a prebuilt `sparkle-cli` exists. A prior release can succeed with the stale binary; the next checkout refresh deletes `build/`, forces the rebuild, and only then exposes the deployment-target incompatibility.
+- Why did the Sparkle acceptance fail right after it worked in a previous release? The acceptance command skips `xcodebuild` when a prebuilt `sparkle-cli` exists. A prior release can succeed with the stale binary; the next checkout refresh deletes `build/`, forces the rebuild, and only then exposes the deployment-target incompatibility.
 - Why do the macOS jobs show "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full integration run. The CI verdict check accepts those skips as legitimate under the classifier's decision; every other lane must still reach a terminal success state.
 - Why does the `## Linked issue` section reject my body? Every `#N` inside the section must carry a canonical keyword (`Fixes|Closes|Resolves|Refs`); a bare `#N` buried in prose fails so release provenance stays auditable. Keyword-free narrative is accepted; keep it above the heading.
-- Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; the script resumes the matching draft publication safely.
+- Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; it resumes the matching draft publication safely.
 - Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-integration-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): every release step is now a typed `cargo xtask release` command whose decisions run as `cargo test -p xtask` unit tests on every pull request, alongside the icon renderer contract.
