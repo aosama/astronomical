@@ -94,7 +94,55 @@ pub(crate) fn layout_problems(bundle_path: &Path, channel_profile: &ChannelProfi
         layout_problems
             .push("an App Store bundle must not embed Sparkle or its license".to_owned());
     }
+    layout_problems.extend(hidden_entry_problems(bundle_path));
     layout_problems
+}
+
+/// Hidden entries reported before the list is cut short; enough to name a
+/// stray directory without burying the other layout problems.
+const MAXIMUM_REPORTED_HIDDEN_ENTRIES: usize = 10;
+
+/// Every file or directory inside the bundle whose name starts with a dot.
+///
+/// A correct bundle has none, Sparkle's framework included. They arrive when
+/// a git-ignored file sits inside a directory a build copies whole: the
+/// clean-worktree check cannot see ignored files, and v0.2.88 shipped two
+/// Playwright debug logs from a `.playwright-cli/` folder inside the Thin
+/// Talk canvas resources that way. Symlinks are reported, never followed, so
+/// the walk stays inside the bundle.
+pub(crate) fn hidden_entry_problems(bundle_path: &Path) -> Vec<String> {
+    let mut hidden_entry_problems = Vec::new();
+    let mut pending_directories = vec![bundle_path.to_path_buf()];
+    while let Some(directory_path) = pending_directories.pop() {
+        let Ok(directory_entries) = std::fs::read_dir(&directory_path) else {
+            continue;
+        };
+        for directory_entry in directory_entries.flatten() {
+            let entry_path = directory_entry.path();
+            if directory_entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with('.')
+            {
+                if hidden_entry_problems.len() < MAXIMUM_REPORTED_HIDDEN_ENTRIES {
+                    let relative_path = entry_path.strip_prefix(bundle_path).unwrap_or(&entry_path);
+                    hidden_entry_problems.push(format!(
+                        "hidden entry inside the bundle: {}",
+                        relative_path.display()
+                    ));
+                }
+                continue;
+            }
+            match std::fs::symlink_metadata(&entry_path) {
+                Ok(entry_metadata) if entry_metadata.is_dir() => {
+                    pending_directories.push(entry_path)
+                }
+                _ => {}
+            }
+        }
+    }
+    hidden_entry_problems.sort();
+    hidden_entry_problems
 }
 
 /// The plist must describe exactly the channel it was built for; a stray
