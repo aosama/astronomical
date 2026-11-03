@@ -176,7 +176,15 @@ strip = "symbols"
 # every edit, and incremental lets a one-crate change recompile one crate.
 # Its persistent target/app-dev directory is what makes the second build
 # cheap; the release lane's disposable target directory starts cold.
+# It keeps symbols and line tables because a worker that dies inside MLX or
+# Metal writes no final log line: its macOS crash report is the only stack,
+# and a stripped binary turns that stack into bare offsets. On macOS the
+# line tables stay in target/app-dev's object files (unpacked split debug
+# info), so the bundled binaries stay small; lldb reads them through the
+# binary's debug map, and `dsymutil` gathers them into a dSYM for `atos`.
 [profile.app-dev]
 inherits = "release"
 lto = false
 incremental = true
+strip = "none"
+debug = "line-tables-only"

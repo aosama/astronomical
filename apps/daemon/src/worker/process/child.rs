@@ -15,6 +15,7 @@ use tokio::{
     time::timeout,
 };
 
+use crate::worker::process::exit_description::worker_exit_status_description;
 use crate::worker::process::relaunch_memory::startup_configuration_carrying_applied_memory_ceiling;
 use crate::{WorkerControlError, worker::process::stderr_tail::WorkerStderrTail};
 
@@ -508,13 +509,6 @@ fn spawn_worker_stderr_drain(
             }
         }
     })
-}
-
-fn worker_exit_status_description(worker_exit_status: ExitStatus) -> String {
-    match worker_exit_status.code() {
-        Some(exit_code) => format!("exit code {exit_code}"),
-        None => "terminated by signal".to_owned(),
-    }
 }
 
 async fn wait_for_worker(
