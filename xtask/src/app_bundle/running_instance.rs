@@ -14,34 +14,65 @@ use super::channel_profile::ChannelProfile;
 use super::tool_command::run_quiet_tool;
 
 const MENU_QUIT_WAIT: Duration = Duration::from_secs(15);
+/// Quit rounds before giving up: one per concurrently running worktree
+/// bundle of the channel, with headroom for parallel sessions.
+const MAXIMUM_MENU_QUIT_ROUNDS: usize = 4;
 /// The daemon may still be releasing a model's wired GPU memory when it is
 /// asked to stop, so it gets longer than the menu app does.
 const DAEMON_EXIT_WAIT: Duration = Duration::from_secs(30);
 const STOP_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const WAIT_PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 
-/// Quits the running menu app; returns whether one was running. Its quit
-/// handler tears down the daemon it owns, so this is usually all it takes.
-pub(crate) fn quit_menu_app(
-    bundle_path: &Path,
-    channel_profile: &ChannelProfile,
-) -> Result<bool, String> {
-    let menu_pattern = bundle_path
-        .join("Contents/MacOS/astronomical-menu")
-        .display()
-        .to_string();
-    if !process_is_running(&menu_pattern) {
-        return Ok(false);
+/// Quits every running menu app of the channel; returns whether one was
+/// running. Its quit handler tears down the daemon it owns, so this is
+/// usually all it takes.
+///
+/// The match is per channel, not per bundle path: each worktree builds its
+/// own bundle, and a menu app opened from another worktree would otherwise
+/// stay in the menu bar with no daemon behind it once this channel's daemon
+/// stops. One quit Apple Event reaches a single copy when several share the
+/// bundle identifier, so the quit repeats until none is left.
+pub(crate) fn quit_menu_app(channel_profile: &ChannelProfile) -> Result<bool, String> {
+    let menu_pattern = menu_process_pattern(channel_profile);
+    let was_running = process_is_running(&menu_pattern);
+    for _quit_round in 0..MAXIMUM_MENU_QUIT_ROUNDS {
+        let running_menu_count = running_process_count(&menu_pattern);
+        if running_menu_count == 0 {
+            return Ok(was_running);
+        }
+        run_quiet_tool(Command::new("osascript").args([
+            "-e",
+            &format!(
+                "tell application id \"{}\" to quit",
+                channel_profile.bundle_identifier
+            ),
+        ]))?;
+        wait_for_process_count_at_most(
+            &menu_pattern,
+            "menu app",
+            MENU_QUIT_WAIT,
+            running_menu_count - 1,
+        )?;
     }
-    run_quiet_tool(Command::new("osascript").args([
-        "-e",
-        &format!(
-            "tell application id \"{}\" to quit",
-            channel_profile.bundle_identifier
-        ),
-    ]))?;
-    wait_for_exit(&menu_pattern, "menu app", MENU_QUIT_WAIT)?;
-    Ok(true)
+    if process_is_running(&menu_pattern) {
+        return Err(format!(
+            "{MAXIMUM_MENU_QUIT_ROUNDS} quit requests left a menu app of this channel running (process state: {}); quit it yourself and rerun",
+            process_states(&menu_pattern)
+        ));
+    }
+    Ok(was_running)
+}
+
+/// The command-line fragment shared by the channel's menu app in every
+/// worktree's bundle. The output directory is part of it because Stable and
+/// App Store share the bundle name "Astronomical": without it, stopping one
+/// channel would wait on the other's menu app, which the quit sent to this
+/// channel's bundle identifier never reaches.
+pub(crate) fn menu_process_pattern(channel_profile: &ChannelProfile) -> String {
+    format!(
+        "/{}/{}.app/Contents/MacOS/astronomical-menu",
+        channel_profile.output_directory_name, channel_profile.bundle_name
+    )
 }
 
 /// Waits for the channel's daemon to release its port before the new
@@ -77,12 +108,18 @@ pub(crate) fn daemon_process_pattern(channel_profile: &ChannelProfile) -> String
 }
 
 fn process_is_running(command_line_pattern: &str) -> bool {
+    running_process_count(command_line_pattern) > 0
+}
+
+fn running_process_count(command_line_pattern: &str) -> usize {
     match Command::new("pgrep")
         .args(["-f", command_line_pattern])
         .output()
     {
-        Ok(pgrep_output) => pgrep_output.status.success(),
-        Err(_) => false,
+        Ok(pgrep_output) => String::from_utf8_lossy(&pgrep_output.stdout)
+            .lines()
+            .count(),
+        Err(_) => 0,
     }
 }
 
@@ -91,9 +128,20 @@ fn wait_for_exit(
     process_description: &str,
     exit_wait: Duration,
 ) -> Result<(), String> {
+    wait_for_process_count_at_most(command_line_pattern, process_description, exit_wait, 0)
+}
+
+/// Waits until at most `remaining_process_count` processes match, so a quit
+/// sent to one of several copies can wait for just that copy.
+fn wait_for_process_count_at_most(
+    command_line_pattern: &str,
+    process_description: &str,
+    exit_wait: Duration,
+    remaining_process_count: usize,
+) -> Result<(), String> {
     let wait_started_at = Instant::now();
     let mut last_progress_at = Instant::now();
-    while process_is_running(command_line_pattern) {
+    while running_process_count(command_line_pattern) > remaining_process_count {
         if wait_started_at.elapsed() >= exit_wait {
             return Err(format!(
                 "the running {process_description} did not exit within {}s (process state: {}); quit it yourself and rerun",

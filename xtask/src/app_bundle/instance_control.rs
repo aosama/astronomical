@@ -52,17 +52,17 @@ pub(crate) fn run_instance_action(
     match instance_action {
         InstanceAction::Status => print_status(repository_root, &channel_profile),
         InstanceAction::Start => start_instance(&bundle_path, &channel_profile),
-        InstanceAction::Stop => stop_instance(&bundle_path, &channel_profile),
+        InstanceAction::Stop => stop_instance(&channel_profile),
         InstanceAction::Restart => {
-            stop_instance(&bundle_path, &channel_profile)?;
+            stop_instance(&channel_profile)?;
             start_instance(&bundle_path, &channel_profile)?;
             print_status(repository_root, &channel_profile)
         }
     }
 }
 
-fn stop_instance(bundle_path: &Path, channel_profile: &ChannelProfile) -> Result<(), String> {
-    quit_menu_app(bundle_path, channel_profile)?;
+fn stop_instance(channel_profile: &ChannelProfile) -> Result<(), String> {
+    quit_menu_app(channel_profile)?;
     wait_for_daemon_exit(channel_profile)?;
     println!("[app-instance] {} is stopped", channel_profile.bundle_name);
     Ok(())
