@@ -9,17 +9,11 @@
 // daemon's system-telemetry module: sampling evidence is inseparable from
 // the accounting syscall and C layout that produce it, and splitting the
 // snapshot from its syscall would put an FFI seam through the evidence path.
-// The unsafe surface never escapes this file — one extern declaration, one
-// synchronous call into a uniquely writable local buffer.
+// The unsafe surface never escapes this file — one synchronous call into a
+// uniquely writable local buffer.
 #![allow(unsafe_code)]
 
 use thiserror::Error;
-
-// Keep the flavor and Rust layout together. Version 4 is old enough for every
-// supported Astronomical macOS deployment and is the first stable layout that
-// contains the cumulative disk read/write fields needed here. Using CURRENT
-// would make the FFI layout silently depend on the build SDK.
-const RUSAGE_INFO_V4: i32 = 4;
 
 /// One cumulative process input/output sample.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -173,11 +167,22 @@ fn sample_process_io_for_process_id_on_platform(
         i32::try_from(process_id).map_err(|_| MacosProcessIoError::SamplingFailed {
             os_error_code: libc::EINVAL,
         })?;
-    let mut resource_usage = MacosResourceUsageInfoV4::default();
-    // SAFETY: `resource_usage` has the SDK's `rusage_info_v4` C layout and is
-    // uniquely writable for this synchronous call.
-    let status =
-        unsafe { proc_pid_rusage(process_id, RUSAGE_INFO_V4, (&raw mut resource_usage).cast()) };
+    // The layout comes from `libc`, never a local transcription: the kernel
+    // writes the flavor's complete structure, and a hand copy that once
+    // lacked the trailing `ri_runnable_time` let that write run eight bytes
+    // past the buffer onto a saved register, crashing the worker on its first
+    // streamed expert page. Version 4 is the first stable layout with the
+    // cumulative disk counters; CURRENT would tie the layout to the build SDK.
+    let mut resource_usage = std::mem::MaybeUninit::<libc::rusage_info_v4>::zeroed();
+    // SAFETY: `resource_usage` is `libc`'s `rusage_info_v4`, the exact layout
+    // the V4 flavor fills, and is uniquely writable for this synchronous call.
+    let status = unsafe {
+        libc::proc_pid_rusage(
+            process_id,
+            libc::RUSAGE_INFO_V4,
+            resource_usage.as_mut_ptr().cast(),
+        )
+    };
     if status != 0 {
         return Err(MacosProcessIoError::SamplingFailed {
             os_error_code: std::io::Error::last_os_error()
@@ -185,6 +190,9 @@ fn sample_process_io_for_process_id_on_platform(
                 .unwrap_or(status),
         });
     }
+    // SAFETY: the buffer started zeroed and every field is a plain integer,
+    // so it is initialised whether or not the kernel filled it.
+    let resource_usage = unsafe { resource_usage.assume_init() };
     Ok(MacosProcessIoSnapshot::from_cumulative_bytes(
         resource_usage.ri_diskio_bytesread,
         resource_usage.ri_diskio_byteswritten,
@@ -201,57 +209,6 @@ fn sample_process_io_for_process_id_on_platform(
     _process_id: u32,
 ) -> Result<MacosProcessIoSnapshot, MacosProcessIoError> {
     Err(MacosProcessIoError::UnsupportedPlatform)
-}
-
-#[cfg(target_os = "macos")]
-#[repr(C)]
-#[derive(Default)]
-struct MacosResourceUsageInfoV4 {
-    // This is an exact transcription of Apple's public `rusage_info_v4` layout.
-    // Fields preceding disk I/O cannot be omitted because C writes the complete
-    // structure. Fields following disk I/O remain present so the allocation is
-    // large enough for the selected flavor on every supported SDK/runtime pair.
-    ri_uuid: [u8; 16],
-    ri_user_time: u64,
-    ri_system_time: u64,
-    ri_pkg_idle_wkups: u64,
-    ri_interrupt_wkups: u64,
-    ri_pageins: u64,
-    ri_wired_size: u64,
-    ri_resident_size: u64,
-    ri_phys_footprint: u64,
-    ri_proc_start_abstime: u64,
-    ri_proc_exit_abstime: u64,
-    ri_child_user_time: u64,
-    ri_child_system_time: u64,
-    ri_child_pkg_idle_wkups: u64,
-    ri_child_interrupt_wkups: u64,
-    ri_child_pageins: u64,
-    ri_child_elapsed_abstime: u64,
-    ri_diskio_bytesread: u64,
-    ri_diskio_byteswritten: u64,
-    ri_cpu_time_qos_default: u64,
-    ri_cpu_time_qos_maintenance: u64,
-    ri_cpu_time_qos_background: u64,
-    ri_cpu_time_qos_utility: u64,
-    ri_cpu_time_qos_legacy: u64,
-    ri_cpu_time_qos_user_initiated: u64,
-    ri_cpu_time_qos_user_interactive: u64,
-    ri_billed_system_time: u64,
-    ri_serviced_system_time: u64,
-    ri_logical_writes: u64,
-    ri_lifetime_max_phys_footprint: u64,
-    ri_instructions: u64,
-    ri_cycles: u64,
-    ri_billed_energy: u64,
-    ri_serviced_energy: u64,
-    ri_interval_max_phys_footprint: u64,
-}
-
-#[cfg(target_os = "macos")]
-#[link(name = "proc")]
-unsafe extern "C" {
-    fn proc_pid_rusage(process_id: i32, flavor: i32, buffer: *mut std::ffi::c_void) -> i32;
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@
 
 pub(crate) mod child;
 pub(crate) mod containment;
+pub(crate) mod exit_description;
 pub(crate) mod model_swap;
 pub(crate) mod relaunch_memory;
 pub(crate) mod replacement;
