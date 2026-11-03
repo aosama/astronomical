@@ -739,20 +739,18 @@ jobs:
           # instead of scrolling past the log.
           swift test --package-path apps/thin-talk -Xswiftc -warnings-as-errors 2>&1 | tee "$RUNNER_TEMP/test-logs/thin-talk.log"
         timeout-minutes: 6
-      # The packaging publication contracts (DMG, notarization, App Store
-      # pkg, installer promotion) are sandbox integration journeys like the
-      # app-builder one on the verification job; wiring them here keeps the
-      # release scripts from rotting between releases (issue #1346). The
-      # suite takes about half a minute with its faked toolchain. macOS
-      # runner images ship no GNU timeout, and every contract bounds its
-      # subject with one, so the committed wrapper goes first on PATH.
+      # The release steps themselves are typed `cargo xtask release`
+      # commands whose decisions are unit-tested on the Rust lanes; what
+      # stays here is the one packaging contract that needs Swift: the app
+      # icon renderer draws a deterministic, channel-distinct icon family
+      # (issue #1346). It runs as a Swift program on this Swift job, so no
+      # job installs an extra toolchain for it.
       - name: Run macOS packaging release contracts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end release-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin release-contracts
           set -o pipefail
-          export PATH="$PWD/scripts/ci:$PATH"
-          scripts/release/tests/test-release-contracts.sh 2>&1 | tee "$RUNNER_TEMP/test-logs/release-contracts.log"
+          swift scripts/internal/render-macos-app-icon-contract.swift 2>&1 | tee "$RUNNER_TEMP/test-logs/release-contracts.log"
         timeout-minutes: 4
       - name: Upload test logs
         if: always()

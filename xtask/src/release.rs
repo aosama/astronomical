@@ -16,9 +16,13 @@ mod release_identity;
 mod release_manifest;
 mod release_preparation;
 mod scratch_space;
+mod sparkle_acceptance;
 mod stable_installation;
 mod system_step;
 
+#[cfg(test)]
+#[path = "release_installation_tests.rs"]
+mod release_installation_tests;
 #[cfg(test)]
 #[path = "release_publication_tests.rs"]
 mod release_publication_tests;

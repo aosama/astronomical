@@ -27,7 +27,7 @@ Use these sources exactly; no other credential discovery is allowed:
 - **Developer ID identity:** the single Keychain code-signing identity whose quoted name starts with `Developer ID Application:`.
 - **Team ID:** the 10-character value in the final parentheses of that identity.
 - **Notarization profile:** `Astronomical Notarization`.
-- **Sparkle private key:** the Keychain key automatically selected by Sparkle's `generate_appcast`. `scripts/release/accept-sparkle-update.sh` proves that it matches Astronomical's embedded public key.
+- **Sparkle private key:** the Keychain key automatically selected by Sparkle's `generate_appcast`. `cargo xtask release accept-sparkle-update` proves that it matches Astronomical's embedded public key.
 
 Resolve the non-secret signing arguments without displaying them:
 
@@ -59,13 +59,14 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 5. Run, in order:
 
 ```sh
-scripts/release/tests/test-release-contracts.sh
+swift scripts/internal/render-macos-app-icon-contract.swift
+cargo test -p xtask
 cargo test-app-builder
 cargo fmt --all -- --check
 cargo test-integration-and-rest
 ```
 
-The packaging contract suite is split in two: the publication journeys live in `test-release-contracts.sh`, while the typed `cargo xtask app package` contracts (signing plans, Cargo arguments, bundle layout, plist checks) run as the `cargo test-app-builder` lane, so a release run must invoke both to exercise every packaging contract explicitly.
+The packaging contracts are split three ways: the app icon renderer contract is a Swift program, the release steps' decisions (DMG layout, signatures, notarization plan, installation, publication) are `cargo test -p xtask` unit tests, and the typed `cargo xtask app package` contracts (signing plans, Cargo arguments, bundle layout, plist checks) run as the `cargo test-app-builder` lane, so a release run invokes all three.
 
 6. Inspect `git status`, `git diff`, and `git log --oneline -10`; commit only `Cargo.toml`, `Cargo.lock`, and the regenerated `third-party/RUST_DEPENDENCY_NOTICES.digest` with `chore: bump version to ${VERSION}`.
 7. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}`. Wait for required checks, merge it, then synchronize the release commit: in a primary checkout, switch to `main` and pull with `--ff-only`; in a linked worktree whose primary checkout owns `main`, fetch and check out the merge commit directly (`git checkout --detach origin/main`). Either way, verify local `HEAD`, `refs/remotes/origin/main`, and GitHub `main` resolve to the same commit.
@@ -75,10 +76,10 @@ The packaging contract suite is split in two: the publication journeys live in `
 1. Re-resolve the credential map above and run:
 
 ```sh
-scripts/release/accept-sparkle-update.sh
+cargo xtask release accept-sparkle-update
 ```
 
-Its transcript is long, so capture the exit code explicitly (`scripts/release/accept-sparkle-update.sh; echo EXIT=$?`); the terminal result otherwise scrolls out of reach.
+Its transcript is long, so capture the exit code explicitly (`cargo xtask release accept-sparkle-update; echo EXIT=$?`); the terminal result otherwise scrolls out of reach.
 
 2. Run the installed-variant round trip — the gate that catches pack variants the single-pack journeys structurally miss (a real installed export whose config shape the loader refuses must fail here, before the release ships):
 
@@ -142,7 +143,7 @@ Publication intentionally leaves the old public appcast active and writes the ne
 3. Run:
 
 ```sh
-scripts/release/accept-sparkle-update.sh
+cargo xtask release accept-sparkle-update
 cargo fmt --all -- --check
 cargo test-integration-and-rest
 ```
@@ -176,7 +177,7 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 
 ## Known gotchas (accumulated from release runs)
 
-- `accept-sparkle-update.sh` rebuilds Sparkle's `sparkle-cli` with `xcodebuild` only when the prebuilt binary is missing. A refreshed checkout (wiped `build/` directory) therefore exposes a latent failure: Sparkle's Xcode project pins `MACOSX_DEPLOYMENT_TARGET=10.13`, which is below the minimum supported by current Xcode SDKs, and the build fails with exit 65. The script overrides the deployment target on the command line for this fixture-only build; release bytes are unaffected because the app and `generate_appcast` come from SwiftPM artifacts. If the acceptance preflight still fails at `resolve-sparkle-tools`, check for a new SDK minimum and bump the override in `build_sparkle_cli`.
+- `cargo xtask release accept-sparkle-update` rebuilds Sparkle's `sparkle-cli` with `xcodebuild` only when the prebuilt binary is missing. A refreshed checkout (wiped `build/` directory) therefore exposes a latent failure: Sparkle's Xcode project pins `MACOSX_DEPLOYMENT_TARGET=10.13`, which is below the minimum supported by current Xcode SDKs, and the build fails with exit 65. The script overrides the deployment target on the command line for this fixture-only build; release bytes are unaffected because the app and `generate_appcast` come from SwiftPM artifacts. If the acceptance preflight still fails at `resolve-sparkle-tools`, check for a new SDK minimum and bump the override in `build_sparkle_cli`.
 - The release-notes `mktemp` template carries no `X` placeholders: macOS `mktemp` never expands placeholders that sit before a suffix, so the old suffix-bearing template produced a literal `XXXXXX` filename. The template is now deterministic per tag, which means an aborted earlier run can leave the file behind; `mktemp` creates exclusively and fails on it, so remove the stale file and rerun.
 - The PR issue compliance validator searches only the `## Linked issue` section once the heading exists: the section must carry at least one canonical reference (`Fixes|Closes|Resolves|Refs #N`; grouped forms like `Refs #N and #M` are accepted), and every `#N` inside it must use a canonical keyword — a bare `#N` in prose fails. Keep narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
 - Expected CI duration for integration verification PRs is roughly 5-8 minutes (live runs since #1348: the macOS build job just under 5 minutes, macOS Swift and Node contracts around 4 minutes including the packaging release contracts step, and the per-tier test lanes another minute or two after the build finishes); do not treat a pending job at the 2-3 minute mark as stuck. That budget assumes a native-build cache hit: a GitHub runner-image rollout re-fingerprints the native identity (the toolchain probes are identity inputs), so the next PR can miss the native-build cache and pay a ~5-minute CMake rebuild, producing a roughly 11-minute job (hit live in the 0.2.70 release run). Before suspecting the release change, check the job log for `Cache not found for input keys: astronomical-v2-native-build-…` and compare the logged `[native-build-identity] … identity=…` value against the cached keys (`gh cache list --key astronomical-v2-native-build`); a changed identity with an unchanged `crates/native-identity/src` tree means GitHub rolled the image, not that the release broke something. Toolchain pinning to stop this drift is tracked separately (#1261).
@@ -190,4 +191,4 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - Why do the macOS jobs show "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full integration run. The CI verdict check accepts those skips as legitimate under the classifier's decision; every other lane must still reach a terminal success state.
 - Why does the `## Linked issue` section reject my body? Every `#N` inside the section must carry a canonical keyword (`Fixes|Closes|Resolves|Refs`); a bare `#N` buried in prose fails so release provenance stays auditable. Keyword-free narrative is accepted; keep it above the heading.
 - Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; the script resumes the matching draft publication safely.
-- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-integration-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): the publication journeys in `scripts/release/tests/test-release-contracts.sh` run on every pull request through the macOS Swift and Node contracts check, and the app-builder journey runs there as `cargo test-app-builder` on the macOS build job — running them explicitly before release work is now defense in depth, not the only line.
+- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-integration-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): every release step is now a typed `cargo xtask release` command whose decisions run as `cargo test -p xtask` unit tests on every pull request, alongside the icon renderer contract.

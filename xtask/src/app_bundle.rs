@@ -39,3 +39,6 @@ pub(crate) use channel_profile::{Channel, ChannelProfile};
 // The publisher derives the release version and update feed exactly as the
 // packager does, so the two cannot disagree about either.
 pub(crate) use build_identity::{daemon_package_identity, github_pages_feed_url};
+// The Sparkle acceptance journey builds fixture apps with the product's own
+// update key and the same XML escaping.
+pub(crate) use info_plist::{SPARKLE_PUBLIC_ED25519_KEY, escape_xml_text};

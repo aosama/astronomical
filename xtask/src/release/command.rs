@@ -10,11 +10,12 @@ use super::distribution_signature::validate_distribution_app;
 use super::notarization::{NotarizationRequest, notarize_disk_image, parse_timeout_seconds};
 use super::publication_entry::{run_prepare_and_publish, run_prepare_signed};
 use super::release_identity::PublicationRequest;
+use super::sparkle_acceptance::accept_sparkle_update;
 use super::stable_installation::{
     InstallRequest, build_and_install_stable, default_stable_bundle, install_stable,
 };
 
-pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH] | release prepare-and-publish --tag vX.Y.Z (--notes-file PATH --signing-identity NAME --team-id ID --notary-profile NAME | --publish) [--output-directory PATH] | release prepare-signed --tag vX.Y.Z [--notes-file PATH] [--output-directory PATH] [--publish]";
+pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH] | release prepare-and-publish --tag vX.Y.Z (--notes-file PATH --signing-identity NAME --team-id ID --notary-profile NAME | --publish) [--output-directory PATH] | release prepare-signed --tag vX.Y.Z [--notes-file PATH] [--output-directory PATH] [--publish] | release accept-sparkle-update";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReleaseCommand {
@@ -35,6 +36,7 @@ pub(crate) enum ReleaseCommand {
     AppStorePackage(AppStorePackageRequest),
     PrepareAndPublish(PublicationRequest),
     PrepareSigned(PublicationRequest),
+    AcceptSparkleUpdate,
 }
 
 pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseCommand, String> {
@@ -79,6 +81,9 @@ pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseComma
                 ],
             )?,
         )),
+        "accept-sparkle-update" if subcommand_arguments.is_empty() => {
+            Ok(ReleaseCommand::AcceptSparkleUpdate)
+        }
         "prepare-signed" => Ok(ReleaseCommand::PrepareSigned(parse_publication_request(
             subcommand_arguments,
             &["--tag", "--notes-file", "--output-directory"],
@@ -209,6 +214,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         ReleaseCommand::PrepareSigned(publication_request) => {
             run_prepare_signed(repository_root, &publication_request)
         }
+        ReleaseCommand::AcceptSparkleUpdate => accept_sparkle_update(repository_root),
     }
 }
 

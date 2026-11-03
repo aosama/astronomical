@@ -97,7 +97,9 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # bundle in its signed installer package; `cargo xtask release prepare-and-publish`
 # and its credential-resolving front door `cargo xtask release prepare-signed`
 # prepare a signed release locally and, with --publish, publish the reviewed
-# directory (release-only steps).
+# directory; `cargo xtask release accept-sparkle-update` proves a signed
+# update installs and relaunches and a corrupted one is rejected (release-only
+# steps).
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
 # MLX runtime into the machine-wide store before Cargo compiles anything.
 # `cargo xtask provision-bindgen-headers [--verify-headers]` extracts the
