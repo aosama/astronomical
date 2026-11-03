@@ -59,13 +59,14 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 5. Run, in order:
 
 ```sh
-scripts/release/tests/test-release-contracts.sh
+swift scripts/internal/render-macos-app-icon-contract.swift
+cargo test -p xtask
 cargo test-app-builder
 cargo fmt --all -- --check
 cargo test-integration-and-rest
 ```
 
-The packaging contract suite is split in two: the publication journeys live in `test-release-contracts.sh`, while the typed `cargo xtask app package` contracts (signing plans, Cargo arguments, bundle layout, plist checks) run as the `cargo test-app-builder` lane, so a release run must invoke both to exercise every packaging contract explicitly.
+The packaging contracts are split three ways: the app icon renderer contract is a Swift program, the release steps' decisions (DMG layout, signatures, notarization plan, installation, publication) are `cargo test -p xtask` unit tests, and the typed `cargo xtask app package` contracts (signing plans, Cargo arguments, bundle layout, plist checks) run as the `cargo test-app-builder` lane, so a release run invokes all three.
 
 6. Inspect `git status`, `git diff`, and `git log --oneline -10`; commit only `Cargo.toml`, `Cargo.lock`, and the regenerated `third-party/RUST_DEPENDENCY_NOTICES.digest` with `chore: bump version to ${VERSION}`.
 7. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}`. Wait for required checks, merge it, then synchronize the release commit: in a primary checkout, switch to `main` and pull with `--ff-only`; in a linked worktree whose primary checkout owns `main`, fetch and check out the merge commit directly (`git checkout --detach origin/main`). Either way, verify local `HEAD`, `refs/remotes/origin/main`, and GitHub `main` resolve to the same commit.
@@ -190,4 +191,4 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - Why do the macOS jobs show "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full integration run. The CI verdict check accepts those skips as legitimate under the classifier's decision; every other lane must still reach a terminal success state.
 - Why does the `## Linked issue` section reject my body? Every `#N` inside the section must carry a canonical keyword (`Fixes|Closes|Resolves|Refs`); a bare `#N` buried in prose fails so release provenance stays auditable. Keyword-free narrative is accepted; keep it above the heading.
 - Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; the script resumes the matching draft publication safely.
-- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-integration-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): the publication journeys in `scripts/release/tests/test-release-contracts.sh` run on every pull request through the macOS Swift and Node contracts check, and the app-builder journey runs there as `cargo test-app-builder` on the macOS build job — running them explicitly before release work is now defense in depth, not the only line.
+- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-integration-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): every release step is now a typed `cargo xtask release` command whose decisions run as `cargo test -p xtask` unit tests on every pull request, alongside the icon renderer contract.

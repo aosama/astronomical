@@ -251,7 +251,7 @@ fn required_check_steps_keep_their_bounded_contracts() {
         find_step_by_name(&swift_steps, "Run macOS packaging release contracts");
     let release_contracts_text = run_text_of(release_contracts_step, "release-contracts");
     assert!(
-        release_contracts_text.contains("scripts/release/tests/test-release-contracts.sh"),
+        release_contracts_text.contains("scripts/internal/render-macos-app-icon-contract.swift"),
         "the release packaging contracts are not enforced on the required swift-node check"
     );
     assert!(
@@ -406,7 +406,7 @@ fn packaging_contracts_run_on_required_checks() {
         find_step_by_name(&swift_steps, "Run macOS packaging release contracts");
     let release_contracts_text = run_text_of(release_contracts_step, "release-contracts");
     assert!(
-        release_contracts_text.contains("scripts/release/tests/test-release-contracts.sh"),
+        release_contracts_text.contains("scripts/internal/render-macos-app-icon-contract.swift"),
         "the release packaging contracts are not enforced on the required swift-node check"
     );
     assert!(

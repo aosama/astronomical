@@ -136,7 +136,7 @@ Stable installation and release publication are release-only commands (`cargo xt
 
     cargo xtask release build-and-install-stable
 
-Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `cargo xtask app package --channel stable` and `cargo xtask release install-stable` remain available when the two stages need to run independently. Installing moves the previously installed app to the Trash rather than deleting it. The packaging contracts run on every pull request and can also be run explicitly before release work with `scripts/release/tests/test-release-contracts.sh`; the typed packaging contracts run as `cargo test-app-builder` on the macOS build job.
+Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `cargo xtask app package --channel stable` and `cargo xtask release install-stable` remain available when the two stages need to run independently. Installing moves the previously installed app to the Trash rather than deleting it. The packaging contracts run on every pull request: the release steps' decisions through `cargo test -p xtask`, the typed packaging contracts as `cargo test-app-builder`, and the icon renderer contract as `swift scripts/internal/render-macos-app-icon-contract.swift`.
 
 Stable candidate builds perform signature, resource, metadata, and bundled-daemon validation without launching over a running Stable instance. Promotion does not restart the running app. Stable builds require a clean Git worktree.
 
