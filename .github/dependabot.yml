@@ -41,8 +41,9 @@ updates:
   # `=X.Y.Z` pin always does, rewriting it to the new exact version rather
   # than widening it. The cooldown gives a fresh release a week before it is
   # proposed, as supply-chain protection for binaries CI executes. A
-  # cargo-about bump can change the generated license notices; the nightly
-  # notices-freshness lane flags that within a day.
+  # cargo-about bump can change the generated license notices; the ci.yml
+  # notices-freshness lane fails such a pull request until someone runs
+  # `cargo xtask notices` on its branch and commits the result.
   - package-ecosystem: cargo
     directory: /third-party/tool-pins
     schedule:

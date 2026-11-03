@@ -15,9 +15,9 @@ use contract_support::{
 
 /// The lanes the verdict must fan in, in workflow order: the classifier, the
 /// macOS build job, the four per-tier test lanes it feeds, the Neural Engine
-/// crate lane, the second macOS contract job, and the two ubuntu lanes. A lane
-/// removed from this list escapes the merge gate entirely.
-const EXPECTED_VERDICT_LANES: [&str; 10] = [
+/// crate lane, the second macOS contract job, and the three ubuntu lanes. A
+/// lane removed from this list escapes the merge gate entirely.
+const EXPECTED_VERDICT_LANES: [&str; 11] = [
     "detect-changes",
     "rust-core",
     "unit-tests",
@@ -28,6 +28,7 @@ const EXPECTED_VERDICT_LANES: [&str; 10] = [
     "swift-node",
     "static",
     "config-contracts",
+    "notices-freshness",
 ];
 
 #[test]
@@ -93,6 +94,11 @@ fn verdict_fan_in_fails_closed_over_every_lane() {
         verdict_text.contains("skipped while classification requires macOS verification"),
         "the verdict lost its skip-legitimacy check"
     );
+    assert!(
+        verdict_text.contains("needs.detect-changes.outputs.notices_inputs_changed")
+            && verdict_text.contains("skipped while classification requires a notices check"),
+        "the notices-freshness lane may skip without the classifier's consent"
+    );
     for lane in ["static", "config-contracts"] {
         assert!(
             verdict_text.contains(&format!("lane={lane}")),
@@ -110,6 +116,8 @@ struct Scenario<'a> {
     macos_lane_results: &'a [(&'static str, &'static str)],
     static_checks: &'static str,
     config_contracts: &'static str,
+    notices_required: &'static str,
+    notices_freshness: &'static str,
     expected_pass: bool,
 }
 
@@ -142,6 +150,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: true,
         },
         Scenario {
@@ -151,6 +161,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &MACOS_GATED_LANES.map(|lane| (lane, "skipped")),
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: true,
         },
         Scenario {
@@ -160,6 +172,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[("rust-core", "failure")],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -169,6 +183,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[("unit-tests", "failure")],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -178,6 +194,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[("integration-tests", "failure")],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -187,6 +205,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[("e2e-journeys", "skipped")],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -196,6 +216,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[("neural-engine", "failure")],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -205,6 +227,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[("neural-engine", "skipped")],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -214,6 +238,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -223,6 +249,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &MACOS_GATED_LANES.map(|lane| (lane, "skipped")),
             static_checks: "skipped",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -232,6 +260,8 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[("swift-node", "cancelled")],
             static_checks: "success",
             config_contracts: "success",
+            notices_required: "false",
+            notices_freshness: "skipped",
             expected_pass: false,
         },
         Scenario {
@@ -241,6 +271,52 @@ fn verdict_script_decides_every_scenario_correctly() {
             macos_lane_results: &[],
             static_checks: "success",
             config_contracts: "failure",
+            notices_required: "false",
+            notices_freshness: "skipped",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a lockfile change with fresh notices passes",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[],
+            static_checks: "success",
+            config_contracts: "success",
+            notices_required: "true",
+            notices_freshness: "success",
+            expected_pass: true,
+        },
+        Scenario {
+            name: "a lockfile change with stale notices fails the gate",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[],
+            static_checks: "success",
+            config_contracts: "success",
+            notices_required: "true",
+            notices_freshness: "failure",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a notices lane skipped while classification requires it fails the gate",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[],
+            static_checks: "success",
+            config_contracts: "success",
+            notices_required: "true",
+            notices_freshness: "skipped",
+            expected_pass: false,
+        },
+        Scenario {
+            name: "a cancelled notices lane fails the gate",
+            classification: "success",
+            macos_required: "true",
+            macos_lane_results: &[],
+            static_checks: "success",
+            config_contracts: "success",
+            notices_required: "true",
+            notices_freshness: "cancelled",
             expected_pass: false,
         },
     ];
@@ -258,6 +334,14 @@ fn verdict_script_decides_every_scenario_correctly() {
             .replace(
                 "${{ needs.config-contracts.result }}",
                 scenario.config_contracts,
+            )
+            .replace(
+                "${{ needs.detect-changes.outputs.notices_inputs_changed }}",
+                scenario.notices_required,
+            )
+            .replace(
+                "${{ needs.notices-freshness.result }}",
+                scenario.notices_freshness,
             );
         for lane in MACOS_GATED_LANES {
             let lane_result = scenario

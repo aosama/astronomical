@@ -177,6 +177,73 @@ pub(crate) fn harvest_verdict(
     }
 }
 
+/// The stale failure: the fix to run, then the lines that moved, so a log
+/// says what changed instead of only that something did.
+fn stale_notices_report(regenerated_bytes: &[u8], committed_bytes: &[u8]) -> String {
+    let mut stale_report = String::from(
+        "[rust-dependency-notices] third-party/RUST_DEPENDENCY_NOTICES is stale; run `cargo xtask notices` and commit both regenerated files",
+    );
+    for line_difference in stale_notices_line_differences(
+        &String::from_utf8_lossy(regenerated_bytes),
+        &String::from_utf8_lossy(committed_bytes),
+        MAXIMUM_REPORTED_STALE_LINES,
+    ) {
+        stale_report.push_str("\n[rust-dependency-notices] ");
+        stale_report.push_str(&line_difference);
+    }
+    stale_report
+}
+
+/// Lines reported per side when the notices are stale: enough to name the
+/// crates that moved, short enough that a lockfile churn stays readable.
+const MAXIMUM_REPORTED_STALE_LINES: usize = 20;
+
+/// The lines only the fresh harvest has (`+`) and only the committed file
+/// has (`-`), each side capped at `maximum_lines_per_side`. "Stale" alone
+/// cannot tell a real dependency change from a harvest that differs by host,
+/// so the failure names what changed.
+pub(crate) fn stale_notices_line_differences(
+    regenerated_text: &str,
+    committed_text: &str,
+    maximum_lines_per_side: usize,
+) -> Vec<String> {
+    let mut line_differences = Vec::new();
+    for regenerated_line in
+        lines_missing_from(regenerated_text, committed_text, maximum_lines_per_side)
+    {
+        line_differences.push(format!("+ {regenerated_line}"));
+    }
+    for committed_line in
+        lines_missing_from(committed_text, regenerated_text, maximum_lines_per_side)
+    {
+        line_differences.push(format!("- {committed_line}"));
+    }
+    line_differences
+}
+
+/// Lines of `source_text` that `other_text` lacks, in source order, counting
+/// repeats so a duplicated line is reported when only one copy moved.
+fn lines_missing_from<'text>(
+    source_text: &'text str,
+    other_text: &str,
+    maximum_lines: usize,
+) -> Vec<&'text str> {
+    let mut remaining_other_lines: std::collections::HashMap<&str, usize> =
+        std::collections::HashMap::new();
+    for other_line in other_text.lines() {
+        *remaining_other_lines.entry(other_line).or_insert(0) += 1;
+    }
+    let mut missing_lines = Vec::new();
+    for source_line in source_text.lines() {
+        match remaining_other_lines.get_mut(source_line) {
+            Some(remaining_count) if *remaining_count > 0 => *remaining_count -= 1,
+            _ if missing_lines.len() < maximum_lines => missing_lines.push(source_line),
+            _ => {}
+        }
+    }
+    missing_lines
+}
+
 /// Reads the digest file's recorded `input_sha256` and compares it with the
 /// digest of the manifests currently on disk. A missing or malformed digest
 /// file also reports `false`: the harvest comparison has already proven the
@@ -322,10 +389,7 @@ pub fn run(repository_root: &Path, check_only: bool) -> Result<(), String> {
         );
         match verdict {
             HarvestVerdict::NoticesTextStale => {
-                return Err(
-                    "[rust-dependency-notices] third-party/RUST_DEPENDENCY_NOTICES is stale; regenerate it"
-                        .to_owned(),
-                );
+                return Err(stale_notices_report(&regenerated_bytes, &committed_bytes));
             }
             HarvestVerdict::Current {
                 memo_matches_inputs,

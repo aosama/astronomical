@@ -43,6 +43,7 @@ jobs:
       code_changed: ${{ steps.classify.outputs.code_changed }}
       native_inputs_changed: ${{ steps.classify.outputs.native_inputs_changed }}
       macos_verification_required: ${{ steps.classify.outputs.macos_verification_required }}
+      notices_inputs_changed: ${{ steps.classify.outputs.notices_inputs_changed }}
     steps:
       - name: Check out source history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -298,9 +299,9 @@ jobs:
       # ephemeral working tree "so the bundle never ships stale notices" —
       # but no step in any workflow bundles the app or uploads the notices,
       # so the refreshed bytes died with the runner. Freshness is now a
-      # contract instead: the nightly notices-freshness workflow runs
-      # `cargo xtask notices --check` and fails loudly when a bot-merged
-      # dependency update leaves the committed file one regeneration behind.
+      # contract instead: the ubuntu notices-freshness lane below checks the
+      # committed file on every change to its inputs, and the nightly
+      # notices-freshness workflow stays as the backstop.
       - name: Provision verified native dependencies
         id: native-archive-provisioning
         run: |
@@ -876,6 +877,37 @@ jobs:
         run: scripts/ci/publish-ci-timing-summary.sh
         timeout-minutes: 1
 
+  # Committed dependency notices freshness, before merge. A dependency bump
+  # rewrites Cargo.lock; without this lane a bot pull request that never ran
+  # `cargo xtask notices` merged green and the nightly notices-freshness
+  # workflow turned the default branch red the next morning. The classifier
+  # opens this lane only when a notices input changed (Cargo.lock, the
+  # cargo-about pin, its config or template, or the committed artifact), so
+  # every other pull request pays one skipped job. It runs on ubuntu, off the
+  # macOS critical path and outside the macOS runner concurrency pool: the
+  # cargo-about harvest reads `cargo metadata` across all targets, so its
+  # output does not depend on the host. Like config-contracts it restores no
+  # caches, for the same runner.os keying reason. A pull request that did
+  # regenerate takes the check's input-digest fast path and skips the harvest.
+  notices-freshness:
+    name: Rust dependency notices freshness
+    needs: detect-changes
+    if: ${{ always() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.notices_inputs_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Install pinned verification tools (cargo-about, sccache)
+        run: cargo run --locked --quiet -p xtask -- install-verification-tools
+        timeout-minutes: 6
+      - name: Check committed Rust dependency notices freshness
+        run: cargo run --locked --quiet -p xtask -- notices --check
+        timeout-minutes: 4
+
   # Per-tier test lanes (issue #1553 phase 2b): the macOS build job above
   # compiles once and uploads one nextest archive per lane; each lane checks
   # out the source (same absolute workspace path as the builder, which the
@@ -1139,12 +1171,13 @@ jobs:
   # every lane's terminal result and decides.
   #
   # Skip legitimacy: the macOS lanes legitimately skip when the
-  # classifier marked macOS verification not required (site-only changes);
-  # the verdict accepts a skip only under that classifier decision, so a
-  # lane skipped for any other reason fails the gate.
+  # classifier marked macOS verification not required (site-only changes),
+  # and the notices-freshness lane when no notices input changed; the
+  # verdict accepts a skip only under that classifier decision, so a lane
+  # skipped for any other reason fails the gate.
   verdict:
     name: CI verdict
-    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, neural-engine, swift-node, static, config-contracts]
+    needs: [detect-changes, rust-core, unit-tests, integration-tests, rest-contracts, e2e-journeys, neural-engine, swift-node, static, config-contracts, notices-freshness]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -1167,6 +1200,8 @@ jobs:
           swift_node_result="${{ needs.swift-node.result }}"
           static_result="${{ needs.static.result }}"
           config_contracts_result="${{ needs.config-contracts.result }}"
+          notices_inputs_changed="${{ needs.detect-changes.outputs.notices_inputs_changed }}"
+          notices_freshness_result="${{ needs.notices-freshness.result }}"
           [ "$classification_result" = "success" ] \
             || fail "classification-result=$classification_result"
           macos_lanes_may_skip=false
@@ -1199,5 +1234,15 @@ jobs:
           case "$config_contracts_result" in
             success) printf '[ci-verdict] lane=config-contracts result=success\n' ;;
             *) fail "lane=config-contracts result=$config_contracts_result" ;;
+          esac
+          case "$notices_freshness_result" in
+            success) printf '[ci-verdict] lane=notices-freshness result=success\n' ;;
+            skipped)
+              if [ "$notices_inputs_changed" = "true" ]; then
+                fail "lane=notices-freshness skipped while classification requires a notices check"
+              fi
+              printf '[ci-verdict] lane=notices-freshness result=skipped classification=notices-inputs-unchanged\n'
+              ;;
+            *) fail "lane=notices-freshness result=$notices_freshness_result" ;;
           esac
           printf '[ci-verdict] status=pass\n'

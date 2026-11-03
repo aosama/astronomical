@@ -31,6 +31,22 @@ const NATIVE_INPUT_PATHSPECS: &[&str] = &[
     "rust-toolchain.toml",
 ];
 
+/// Paths whose change can alter the text `cargo xtask notices` generates:
+/// the resolved dependency graph, the pinned cargo-about, its configuration
+/// and template, and the committed artifact itself. Deliberately narrower
+/// than the digest inputs in `notices.rs`: workspace crates are `private`
+/// (ignored by about.toml), so their manifests and license files only move
+/// the generated text through `Cargo.lock`, and gating on every manifest edit
+/// would pay a harvest for workspace version bumps that cannot change it.
+const NOTICES_FRESHNESS_INPUT_PATHS: &[&str] = &[
+    "Cargo.lock",
+    "third-party/tool-pins/Cargo.toml",
+    "third-party/about.toml",
+    "third-party/rust-dependency-notices.hbs",
+    "third-party/RUST_DEPENDENCY_NOTICES",
+    "third-party/RUST_DEPENDENCY_NOTICES.digest",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiEvent {
     PullRequest,
@@ -54,6 +70,7 @@ pub struct ChangeScopeVerdict {
     pub code_changed: bool,
     pub native_inputs_changed: bool,
     pub macos_verification_required: bool,
+    pub notices_inputs_changed: bool,
     pub classification: String,
     pub changed_file_count: usize,
 }
@@ -65,6 +82,21 @@ pub fn is_static_only_path(changed_path: &str) -> bool {
         || changed_path.ends_with(".md")
         || changed_path.starts_with(".github/assets/")
         || changed_path == ".github/workflows/pages.yml"
+}
+
+/// True when the changed path can make the committed dependency notices
+/// stale, so the pull request must prove them fresh before it merges.
+pub fn is_notices_freshness_input_path(changed_path: &str) -> bool {
+    NOTICES_FRESHNESS_INPUT_PATHS.contains(&changed_path)
+}
+
+fn any_notices_freshness_input(changed_paths: &[String]) -> bool {
+    for changed_path in changed_paths {
+        if is_notices_freshness_input_path(changed_path) {
+            return true;
+        }
+    }
+    false
 }
 
 /// The pure verdict: identical inputs give identical outputs, no environment
@@ -81,6 +113,7 @@ pub fn classify_change_scope(
             code_changed: true,
             native_inputs_changed: false,
             macos_verification_required: true,
+            notices_inputs_changed: true,
             classification: "manual_run".to_owned(),
             changed_file_count: 0,
         },
@@ -89,6 +122,7 @@ pub fn classify_change_scope(
                 .iter()
                 .any(|changed_path| !is_static_only_path(changed_path));
             let macos_verification_required = code_changed;
+            let notices_inputs_changed = any_notices_freshness_input(changed_paths);
             let classification = if !code_changed {
                 "static_only"
             } else if native_inputs_changed {
@@ -100,6 +134,7 @@ pub fn classify_change_scope(
                 code_changed,
                 native_inputs_changed,
                 macos_verification_required,
+                notices_inputs_changed,
                 classification: classification.to_owned(),
                 changed_file_count: changed_paths.len(),
             }
@@ -116,6 +151,7 @@ pub(crate) fn fail_safe_verdict() -> ChangeScopeVerdict {
         code_changed: true,
         native_inputs_changed: true,
         macos_verification_required: true,
+        notices_inputs_changed: true,
         classification: "unknown_history".to_owned(),
         changed_file_count: 0,
     }
@@ -255,13 +291,20 @@ fn publish_verdict(
         verdict.macos_verification_required
     )
     .unwrap();
+    writeln!(
+        github_output,
+        "notices_inputs_changed={}",
+        verdict.notices_inputs_changed
+    )
+    .unwrap();
     eprintln!(
-        "[ci-change-scope] status=complete event={event_name} classification={} changed_files={} code_changed={} native_inputs_changed={} macos_verification_required={} elapsed_seconds={}",
+        "[ci-change-scope] status=complete event={event_name} classification={} changed_files={} code_changed={} native_inputs_changed={} macos_verification_required={} notices_inputs_changed={} elapsed_seconds={}",
         verdict.classification,
         verdict.changed_file_count,
         verdict.code_changed,
         verdict.native_inputs_changed,
         verdict.macos_verification_required,
+        verdict.notices_inputs_changed,
         started_at.elapsed().as_secs()
     );
 }

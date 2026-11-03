@@ -107,6 +107,10 @@ fn detect_changes_outputs_drive_the_authority() {
             .is_some(),
         "macOS authority output is missing"
     );
+    assert!(
+        detection_outputs.get("notices_inputs_changed").is_some(),
+        "notices freshness authority output is missing"
+    );
     let detection_steps = steps_of(detection_job, "detect-changes");
     let classification_step = find_step_by_id(&detection_steps, "classify");
     assert!(
@@ -265,14 +269,13 @@ fn required_check_steps_keep_their_bounded_contracts() {
 }
 
 #[test]
-fn ci_runs_no_dependency_notices_work() {
-    // The dependency-notices lane left ci.yml entirely (issue #1684): the
-    // in-run refresh regenerated third-party/RUST_DEPENDENCY_NOTICES into
-    // the runner's ephemeral working tree, where no bundle ever consumed
-    // it. Neither the strict pull-request freshness gate (removed once
-    // before for failing pull requests whose authors had not regenerated
-    // locally) nor the in-run refresh may come back silently — freshness
-    // is now the nightly notices-freshness workflow's contract.
+fn macos_build_lane_runs_no_dependency_notices_work() {
+    // The in-run refresh left the macOS build job (issue #1684): it
+    // regenerated third-party/RUST_DEPENDENCY_NOTICES into the runner's
+    // ephemeral working tree, where no bundle ever consumed it, on the CI
+    // critical path. Notices freshness belongs to the classifier-gated
+    // ubuntu notices-freshness lane and the nightly backstop, never to the
+    // macOS build job.
     let workflow = workflow_contract();
     let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
     let mut step_names: Vec<&str> = Vec::new();
@@ -284,17 +287,72 @@ fn ci_runs_no_dependency_notices_work() {
     for step_name in &step_names {
         assert!(
             !step_name.to_lowercase().contains("dependency notices"),
-            "a dependency-notices step crept back into the ci.yml macOS lane; freshness belongs to the nightly notices-freshness workflow"
+            "a dependency-notices step crept back into the ci.yml macOS lane; freshness belongs to the ubuntu notices-freshness lane"
         );
     }
     for step in &verification_steps {
         if let Some(run_text) = step.get("run").and_then(Value::as_str) {
             assert!(
                 !run_text.contains("xtask notices"),
-                "notices generation crept back into the ci.yml macOS lane; freshness belongs to the nightly notices-freshness workflow"
+                "notices generation crept back into the ci.yml macOS lane; freshness belongs to the ubuntu notices-freshness lane"
             );
         }
     }
+}
+
+#[test]
+fn should_check_committed_notices_on_ubuntu_when_classifier_flags_notices_inputs() {
+    // A Dependabot lockfile bump once merged green and turned the nightly
+    // notices check red. The pull-request lane closes that gap only while it
+    // stays classifier-gated (other pull requests pay one skipped job), off
+    // the macOS runners (the critical path and their concurrency pool), and
+    // a read-only check of the committed copy through the locked xtask
+    // runner. The verdict contract pins that its result reaches the gate.
+    let workflow = workflow_contract();
+    let notices_lane = required_job(&workflow, "notices-freshness");
+    assert_eq!(
+        required_text(notices_lane, "needs", "job notices-freshness"),
+        "detect-changes",
+        "the notices lane must start with the classifier, not wait for the macOS build"
+    );
+    let lane_condition = required_text(notices_lane, "if", "job notices-freshness");
+    assert!(
+        lane_condition.contains("needs.detect-changes.result == 'success'")
+            && lane_condition
+                .contains("needs.detect-changes.outputs.notices_inputs_changed == 'true'"),
+        "the notices lane lost its classifier gate"
+    );
+    assert_eq!(
+        required_text(notices_lane, "runs-on", "job notices-freshness"),
+        "ubuntu-24.04",
+        "the notices lane moved onto a macOS runner"
+    );
+    assert!(
+        required_u64(notices_lane, "timeout-minutes", "job notices-freshness") <= 10,
+        "the notices lane exceeded its bounded timeout"
+    );
+    let workflow_permissions = required_field(&workflow, "permissions", "the ci workflow");
+    assert_eq!(
+        required_text(workflow_permissions, "contents", "the ci permissions"),
+        "read",
+        "the ci workflow gained write permissions"
+    );
+    assert!(
+        notices_lane.get("permissions").is_none(),
+        "the notices lane must stay a read-only check under the workflow permissions"
+    );
+    let notices_steps = steps_of(notices_lane, "notices-freshness");
+    let notices_check_step = find_step_by_name(
+        &notices_steps,
+        "Check committed Rust dependency notices freshness",
+    );
+    let notices_check_text = run_text_of(notices_check_step, "notices-freshness");
+    assert!(
+        notices_check_text.contains("--locked")
+            && notices_check_text.contains("-p xtask")
+            && notices_check_text.contains("notices --check"),
+        "the notices lane no longer checks the committed copy through the locked xtask runner"
+    );
 }
 
 #[test]
