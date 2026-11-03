@@ -7,6 +7,8 @@
 mod command;
 mod disk_image_creation;
 mod disk_image_validation;
+mod distribution_signature;
+mod notarization;
 mod scratch_space;
 mod system_step;
 

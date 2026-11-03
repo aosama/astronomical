@@ -5,13 +5,20 @@ use std::path::{Path, PathBuf};
 
 use super::disk_image_creation::{DiskImageRequest, create_disk_image};
 use super::disk_image_validation::validate_disk_image;
+use super::distribution_signature::validate_distribution_app;
+use super::notarization::{NotarizationRequest, notarize_disk_image, parse_timeout_seconds};
 
-pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH";
+pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N]";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReleaseCommand {
     CreateDiskImage(DiskImageRequest),
     ValidateDiskImage(PathBuf),
+    ValidateDistributionApp {
+        app_bundle: PathBuf,
+        team_identifier: String,
+    },
+    NotarizeDiskImage(NotarizationRequest),
 }
 
 pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseCommand, String> {
@@ -34,7 +41,41 @@ pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseComma
                 "--dmg",
             )?))
         }
+        "validate-distribution-app" => {
+            let flag_values =
+                parse_flag_values(subcommand_arguments, &["--app-bundle", "--team-id"])?;
+            Ok(ReleaseCommand::ValidateDistributionApp {
+                app_bundle: required_path(&flag_values, "--app-bundle")?,
+                team_identifier: required_text(&flag_values, "--team-id")?,
+            })
+        }
+        "notarize-dmg" => parse_notarization_command(subcommand_arguments),
         _ => Err(RELEASE_USAGE.to_owned()),
+    }
+}
+
+fn parse_notarization_command(subcommand_arguments: &[String]) -> Result<ReleaseCommand, String> {
+    let flag_values = parse_flag_values(
+        subcommand_arguments,
+        &[
+            "--dmg",
+            "--signing-identity",
+            "--notary-profile",
+            "--timeout-seconds",
+        ],
+    )?;
+    Ok(ReleaseCommand::NotarizeDiskImage(NotarizationRequest {
+        disk_image: required_path(&flag_values, "--dmg")?,
+        signing_identity: required_text(&flag_values, "--signing-identity")?,
+        notary_profile: required_text(&flag_values, "--notary-profile")?,
+        timeout_seconds: parse_timeout_seconds(flag_values.get("--timeout-seconds"))?,
+    }))
+}
+
+fn required_text(flag_values: &BTreeMap<String, String>, flag: &str) -> Result<String, String> {
+    match flag_values.get(flag) {
+        Some(flag_value) => Ok(flag_value.clone()),
+        None => Err(format!("{flag} is required\n{RELEASE_USAGE}")),
     }
 }
 
@@ -44,6 +85,13 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
             create_disk_image(repository_root, &disk_image_request)
         }
         ReleaseCommand::ValidateDiskImage(disk_image_path) => validate_disk_image(&disk_image_path),
+        ReleaseCommand::ValidateDistributionApp {
+            app_bundle,
+            team_identifier,
+        } => validate_distribution_app(&app_bundle, &team_identifier),
+        ReleaseCommand::NotarizeDiskImage(notarization_request) => {
+            notarize_disk_image(&notarization_request)
+        }
     }
 }
 
