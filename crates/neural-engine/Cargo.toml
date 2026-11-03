@@ -9,6 +9,10 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[package.metadata.cargo-machete]
+# cargo-machete reports this build dependency as unused, but build.rs uses it.
+ignored = ["cc"]
+
 [features]
 default = []
 # Adds the MLX graphics-processor baseline to the hardware measurement. Off by

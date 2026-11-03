@@ -66,4 +66,3 @@ tokio = { workspace = true, features = ["test-util"] }
 # serialize (see memory_behavior_tests.rs).
 serial_test.workspace = true
 tempfile = "=3.27.0"
-tracing-subscriber.workspace = true

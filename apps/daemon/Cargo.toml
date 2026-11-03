@@ -7,6 +7,10 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[package.metadata.cargo-machete]
+# idna_adapter is a resolution-only pin with no import (see its entry below).
+ignored = ["idna_adapter"]
+
 # The daemon binary: a thin composition root (argument grammar, instance
 # lock, startup failure reporting) over the library in src/.
 [[bin]]
