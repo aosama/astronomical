@@ -374,7 +374,8 @@ fn packaging_contracts_run_on_required_checks() {
     let app_builder_step =
         find_step_by_name(&verification_steps, "Run the app-builder packaging journey");
     assert!(
-        run_text_of(app_builder_step, "app-builder").contains("--bin xtask app_package"),
+        run_text_of(app_builder_step, "app-builder")
+            .contains("cargo test --locked -p xtask --bin xtask"),
         "the app-builder journey is not enforced on the macOS verification lane"
     );
 
@@ -564,9 +565,11 @@ fn should_restore_swift_input_mtimes_from_full_history_before_any_swift_build() 
     }
     let mtime_step_index = first_step_index_mentioning(&swift_steps, SWIFT_MTIME_ACTION)
         .expect("the Swift mtime restore step should exist");
-    let first_swift_build_index =
-        first_step_index_mentioning(&swift_steps, "test-macos-menu-contracts.sh")
-            .expect("the menu contracts step should exist");
+    let first_swift_build_index = first_step_index_mentioning(
+        &swift_steps,
+        "swift test --package-path apps/astronomical-menu",
+    )
+    .expect("the menu contracts step should exist");
     assert!(
         mtime_step_index < first_swift_build_index,
         "the Swift mtime restore must run before the first Swift build"

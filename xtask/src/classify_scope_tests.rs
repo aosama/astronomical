@@ -27,9 +27,7 @@ fn static_only_paths_span_site_docs_assets_and_the_pages_workflow() {
     assert!(is_static_only_path(".github/assets/banner.png"));
     assert!(is_static_only_path(".github/workflows/pages.yml"));
     assert!(!is_static_only_path(".github/workflows/ci.yml"));
-    assert!(!is_static_only_path(
-        "scripts/ci/test-macos-menu-contracts.sh"
-    ));
+    assert!(!is_static_only_path("scripts/ci/ci-step-timing.sh"));
     assert!(!is_static_only_path("docs/readme.txt"));
 }
 

@@ -155,7 +155,7 @@ To bump a pinned dependency:
    patch set adds exactly one C symbol (`mlx_array_detach`, owned by
    `crates/mlx-c-fork`); a new patch that adds more symbols must extend
    that crate and its `FORK_BRIDGED_FUNCTIONS`. The coverage contract
-   (run by `scripts/generate-mlx-c-coverage-inventory.sh`) fails on any
+   (run by `cargo xtask mlx-c-coverage-inventory`) fails on any
    unbridged, stale, or unjustified symbol across both crates. Before the
    first native build of the new pin, diff the C header surface itself with
    the bindgen header provisioning (see the next section); header-level

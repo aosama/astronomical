@@ -267,7 +267,11 @@ jobs:
           # packaging contract on every pull request instead of only before
           # releases.
           unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
-          cargo test --locked -p xtask --bin xtask app_package
+          # Every xtask unit test runs here, not only the packaging ones: the
+          # release, provisioning, and repository-tooling decisions are unit
+          # tests in the same binary, and running them all costs about a
+          # second once it is compiled.
+          cargo test --locked -p xtask --bin xtask
         timeout-minutes: 5
       - name: Install verification tools
         run: |
@@ -715,7 +719,12 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end macos-menu-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin macos-menu-contracts
           set -o pipefail
-          scripts/ci/test-macos-menu-contracts.sh 2>&1 | tee "$RUNNER_TEMP/test-logs/menu-status.log"
+          # A verification gate never touches stored credentials: Sparkle is
+          # public and resolves anonymously, so the Git credential helper is
+          # cleared. Warnings are defects. `cargo xtask menu-contracts` runs
+          # the same command locally; this job has no Rust toolchain.
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=credential.helper GIT_CONFIG_VALUE_0= \
+            swift test --package-path apps/astronomical-menu -Xswiftc -warnings-as-errors 2>&1 | tee "$RUNNER_TEMP/test-logs/menu-status.log"
         timeout-minutes: 2
       # Observatory moved here from the macOS build job when test execution
       # split into per-tier lanes: it is a Node contract suite, and this job
@@ -849,18 +858,16 @@ jobs:
           cargo test --locked -p xtask --test workflow_xcode_pin_contract
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
-      # The tier-pyramid contract below tests the local tool's behavior on a
-      # fixture tree; the pyramid count over this repository is local-only
-      # (cargo xtask tier-pyramid), not a CI step.
+      # The pyramid count over this repository is local-only (cargo xtask
+      # tier-pyramid); its behavior on a fixture tree is an xtask unit test.
       - name: Run repository contract scripts
         run: |
           trap 'scripts/ci/ci-step-timing.sh end repository-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin repository-contracts
           export PATH="$PWD/scripts/ci:$PATH"
           verification/tooling_contracts/test-cargo-citation-contract.sh
-          verification/tooling_contracts/test-channel-isolation-checker-contract.sh
           verification/tooling_contracts/test-source-size-check.sh
-          scripts/ci/tests/test-report-tier-pyramid-contract.sh
+          cargo xtask check-test-channel-isolation
           cargo xtask check-architecture
         timeout-minutes: 5
       - name: Publish step timing summary
