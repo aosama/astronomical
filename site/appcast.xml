@@ -4,35 +4,31 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.89</title>
-            <pubDate>Mon, 02 Nov 2026 22:46:32 -0500</pubDate>
-            <sparkle:version>2040</sparkle:version>
-            <sparkle:shortVersionString>0.2.89</sparkle:shortVersionString>
+            <title>0.2.90</title>
+            <pubDate>Tue, 03 Nov 2026 00:52:09 -0500</pubDate>
+            <sparkle:version>2052</sparkle:version>
+            <sparkle:shortVersionString>0.2.90</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.89
+            <description sparkle:format="markdown"><![CDATA[## What's new in Astronomical 0.2.90
 
-## What changed
-
-- **No more worker crash on long prompts with SSD-streamed experts.** When a request is too large to keep every expert in memory and switches to streaming experts from the SSD, the inference worker no longer crashes on the first streamed page. The crash came from a disk-statistics call writing past its buffer; it now uses the operating system's exact structure layout.
-- **The app recovers from a worker crash by itself.** If the inference worker stops unexpectedly, the daemon starts a fresh one about a second later, so the next request is served instead of every request failing until the app is restarted. A worker that keeps crashing is relaunched at most three times in ten minutes, then stays stopped with one clear log line.
-- **Clearer crash reports in the log.** When the worker ends on a signal, the log now names the signal and says whether a macOS crash report exists for it.
-- **A new look: Darkroom.** One identity across the app icon, the menu bar, the Observatory console, and the website. The menu bar glyph now shows state: solid while every expert is in memory, hatched while experts stream from the SSD.
-- **A quieter Maximum model RAM control.** The menu bar and the web console show one grey "Up to N GB on this Mac" caption, offer only values the engine can actually use, and show the orange cap notice only when a requested value is really being capped.
-- **`astronomical quantize plan` and `astronomical quantize inspect`.** `plan` allocates a mixed-precision bit map from an OptiQ sensitivity document and prints it, or JSON with `--json`; `inspect` summarizes an OptiQ artifact's metadata.
+- **`astronomical image`** draws one image from a prompt on your Mac, through the local daemon: `astronomical image "a lighthouse at dusk" --size 1024x576 --output lighthouse.png`. It also accepts `--seed` for reproducible results and `--model` to pick a model. It defaults to FLUX.2 Klein; Qwen-Image remains available with `--model Qwen-Image-2.1-MLX-4bit`. An existing file is never overwritten, and nothing is left behind if the image fails.
+- **Model downloads are easier to follow.** A download now shows percent, sizes, transfer rate and time remaining, and announces the total size before it starts. The wait ends only when a download stops making progress, so a large model on a slow connection is no longer cut off after two minutes.
+- **Model downloads resume.** Running a command for a model that is already downloading attaches to that download, an interrupted or paused download continues from the bytes already on disk, and restarting the app in the middle of a download no longer aborts the command that is waiting for it.
+- **Safer packaging.** The app bundle check now refuses hidden files and directories inside the bundle.
 
 ## Compatibility
 
-There are no configuration-format or REST API changes; existing requests are answered as before. Your models, settings, and caches are preserved.
+Your settings, installed models and conversations are preserved. The command-line tool and the app's daemon ship together in this release.
 
 ## Distribution
 
-This release is signed with a Developer ID certificate, notarized by Apple, and delivered through the signed Sparkle update feed.
+Signed with a Developer ID, notarized by Apple and stapled. The in-app updater verifies the update with an Ed25519 signature before installing.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.89/Astronomical-0.2.89-macOS-arm64.dmg" length="18052967" type="application/octet-stream" sparkle:edSignature="eJexpIgtiZh5388xYuaQPkjUGReJ/Vk2FvnJehQ14nZx+4FMOQTxHr5o6lTm0G5g/cTFsDfKNcDrp/vB4JxsCw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.90/Astronomical-0.2.90-macOS-arm64.dmg" length="18101300" type="application/octet-stream" sparkle:edSignature="ccAAM25FPku74fCDTaSRoXCyAa0n3RuntNGXwvvosNLCREVXxu+c9GU3vzPgHuDQ+30Af7dDlFfwpVkXoCxJCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: YMqPUbO195rZY++leRmIyPuyfN1c7cdFdxZ9wedKveW2a4yTNdNTHudOo2sgy7dm7mrFtd2BKOHG5+jTRgI+CA==
-length: 3201
+edSignature: z+iybUwZEIRuK03Mxo2yk2hmgUHZqAPmpVboOAtX3jkXPfTSk6bGj32CV+qynJmMNKMV+MO+2rah9kaenspfAg==
+length: 2729
 -->
