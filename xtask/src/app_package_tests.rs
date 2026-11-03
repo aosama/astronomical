@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use super::build_identity::BuildIdentity;
 use super::bundle_assembly::{BundleInputs, assemble_bundle, missing_inputs};
-use super::bundle_check::{layout_problems, plist_identity_problems};
+use super::bundle_check::{hidden_entry_problems, layout_problems, plist_identity_problems};
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{
     APPLICATION_ENTITLEMENTS_PATH, INHERITED_ENTITLEMENTS_PATH, SigningRequest, signing_plan,
@@ -403,6 +403,65 @@ fn should_report_a_missing_metallib_executable_bit_and_stray_sparkle() {
             .contains(&"an App Store bundle must not embed Sparkle or its license".to_owned()),
         "{store_problems:?}"
     );
+}
+
+/// The v0.2.88 leak: a git-ignored Playwright folder inside the Thin Talk
+/// web resources was copied whole into the shipped bundle.
+#[test]
+fn should_report_a_leaked_playwright_folder_inside_the_canvas_resources() {
+    let (_fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Stable);
+    let leaked_folder =
+        bundle_path.join("Contents/Resources/ThinTalk_ThinTalkCanvas.bundle/.playwright-cli");
+    write_fixture_file(&leaked_folder.join("console.log"), "debug", false);
+
+    let stable_problems =
+        layout_problems(&bundle_path, &ChannelProfile::for_channel(Channel::Stable));
+
+    assert_eq!(
+        stable_problems,
+        vec![
+            "hidden entry inside the bundle: Contents/Resources/ThinTalk_ThinTalkCanvas.bundle/.playwright-cli"
+                .to_owned()
+        ]
+    );
+}
+
+#[test]
+fn should_report_a_hidden_file_at_any_depth_of_the_bundle() {
+    let (_fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Development);
+    write_fixture_file(&bundle_path.join("Contents/.DS_Store"), "finder", false);
+
+    assert_eq!(
+        hidden_entry_problems(&bundle_path),
+        vec!["hidden entry inside the bundle: Contents/.DS_Store".to_owned()]
+    );
+}
+
+/// Sparkle's framework links `Versions/Current`; following symlinks could
+/// walk out of the bundle and blame it for files it does not contain.
+#[test]
+fn should_not_follow_a_symlink_out_of_the_bundle() {
+    let (fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Stable);
+    let outside_directory = fixture_directory.path().join("outside");
+    write_fixture_file(&outside_directory.join(".hidden"), "outside", false);
+    std::os::unix::fs::symlink(&outside_directory, bundle_path.join("Contents/linked"))
+        .expect("symlink out of the bundle");
+
+    assert!(hidden_entry_problems(&bundle_path).is_empty());
+}
+
+#[test]
+fn should_cap_the_hidden_entry_report() {
+    let (_fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Stable);
+    for hidden_index in 0..15 {
+        write_fixture_file(
+            &bundle_path.join(format!("Contents/Resources/.stray-{hidden_index:02}")),
+            "stray",
+            false,
+        );
+    }
+
+    assert_eq!(hidden_entry_problems(&bundle_path).len(), 10);
 }
 
 fn plist_document_for(channel: Channel, is_dirty: bool) -> serde_json::Value {
