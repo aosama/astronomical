@@ -8,6 +8,10 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[package.metadata.cargo-machete]
+# cargo-machete reports this build dependency as unused, but build.rs uses it.
+ignored = ["astronomical-native-build-orchestration"]
+
 [features]
 default = []
 # `mlx` links the pinned, patched native MLX image (see build.rs and
@@ -58,7 +62,6 @@ astronomical-native-build-orchestration = { path = "../native-build-orchestratio
 [dev-dependencies]
 astronomical-native-identity = { path = "../native-identity" }
 astronomical-test-harness = { path = "../../crates/test-harness" }
-fs4.workspace = true
 sha2.workspace = true
 tempfile = "=3.27.0"
 

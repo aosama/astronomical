@@ -41,6 +41,7 @@ use crate::worker::memory::limit::{
 use crate::worker::process::containment::{
     close_worker_if_running, contain_worker_failure, shutdown_worker,
 };
+use crate::worker::process::failure_relaunch::relaunch_contained_worker;
 use crate::worker::process::replacement::WorkerReplacement;
 use crate::{
     ChatGenerationStreamEvent, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
@@ -135,6 +136,9 @@ pub(in crate::worker) async fn run_worker_iteration(
         is_worker_running,
         has_loaded_model,
     } = prepare_worker_loop_iteration(runtime);
+    observe_worker_for_contained_failure_relaunch(runtime, is_worker_running);
+    let contained_failure_relaunch_deadline =
+        runtime.contained_failure_relaunch.relaunch_deadline();
 
     tokio::select! {
         worker_loop_command = command_receiver.recv() => {
@@ -173,6 +177,10 @@ pub(in crate::worker) async fn run_worker_iteration(
             send_image_deadline_exceeded(&runtime.active_generation);
             cancel_active_request(runtime).await;
         }
+        () = wait_for_deadline(contained_failure_relaunch_deadline),
+            if !is_worker_running && contained_failure_relaunch_deadline.is_some() => {
+            relaunch_contained_worker(runtime).await;
+        }
         _ = idle_control_interval.tick(), if is_worker_running
             && runtime.is_ready
             && runtime.active_generation.is_none()
@@ -181,6 +189,24 @@ pub(in crate::worker) async fn run_worker_iteration(
         }
     }
     WorkerLoopFlow::Continue
+}
+
+/// Hands the relaunch schedule the worker's liveness and health status, read
+/// after the idle-drain pass so a containment that pass performed is seen in
+/// the same iteration.
+fn observe_worker_for_contained_failure_relaunch(
+    runtime: &mut WorkerLoopRuntime,
+    is_worker_running: bool,
+) {
+    let worker_health_status = match runtime.health_snapshot.read() {
+        Ok(worker_health_snapshot) => Some(worker_health_snapshot.status),
+        Err(_poisoned_health_lock) => None,
+    };
+    runtime.contained_failure_relaunch.observe_worker(
+        is_worker_running,
+        worker_health_status,
+        tokio::time::Instant::now(),
+    );
 }
 
 /// Dispatches one worker-loop command to the matching arm unit. The `match`

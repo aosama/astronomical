@@ -16,6 +16,11 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
+[package.metadata.cargo-machete]
+# These pins are never imported: they exist for Dependabot to bump (see the
+# header comment), so an unused-dependency scan must not remove them.
+ignored = ["cargo-about", "sccache"]
+
 [lib]
 path = "lib.rs"
 

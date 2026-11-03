@@ -7,6 +7,10 @@ repository.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[package.metadata.cargo-machete]
+# idna_adapter is a resolution-only pin with no import (see its entry below).
+ignored = ["idna_adapter"]
+
 # The daemon binary: a thin composition root (argument grammar, instance
 # lock, startup failure reporting) over the library in src/.
 [[bin]]
@@ -102,7 +106,9 @@ sha1.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tower-http = { version = "0.7.1", features = ["cors"] }
+# Matches reqwest's tower-http so one copy is compiled; the daemon uses only
+# CorsLayer, whose API 0.7 did not change.
+tower-http = { version = "0.6.11", features = ["cors"] }
 tracing.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true

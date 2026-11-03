@@ -17,6 +17,7 @@ mod persistent_prompt_cache_diagnostics;
 mod request_queue;
 mod startup_failure_record;
 mod worker_cancellation;
+mod worker_failure_relaunch;
 mod worker_health_snapshot;
 mod worker_launch;
 mod worker_memory_demotion;

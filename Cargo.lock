@@ -62,7 +62,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "serial_test",
- "sha2",
  "tempfile",
  "thiserror",
  "tokenizers",
@@ -93,7 +92,6 @@ dependencies = [
 name = "astronomical-config"
 version = "0.2.88"
 dependencies = [
- "astronomical-test-harness",
  "libc",
  "serde",
  "serde_json",
@@ -128,7 +126,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tower",
- "tower-http 0.7.1",
+ "tower-http",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -159,21 +157,13 @@ dependencies = [
  "astronomical-daemon",
  "astronomical-ipc-protocol",
  "astronomical-model-serving",
- "astronomical-rest-contract",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
- "axum",
- "base64 0.23.1",
- "futures-util",
- "image",
  "mlx-c-rust",
- "serde",
  "serde_json",
  "serial_test",
- "sha2",
  "tempfile",
  "thiserror",
- "tokenizers",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -185,7 +175,6 @@ name = "astronomical-ipc-protocol"
 version = "0.2.88"
 dependencies = [
  "astronomical-rest-contract",
- "astronomical-test-harness",
  "base64 0.23.1",
  "bytes",
  "crc32fast",
@@ -216,7 +205,6 @@ name = "astronomical-memory-policy"
 version = "0.2.88"
 dependencies = [
  "astronomical-ipc-protocol",
- "astronomical-test-harness",
  "serde",
  "serde_json",
  "thiserror",
@@ -255,7 +243,6 @@ dependencies = [
  "tokenizers",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -279,7 +266,6 @@ dependencies = [
 name = "astronomical-native-identity"
 version = "0.2.88"
 dependencies = [
- "astronomical-test-harness",
  "sha2",
 ]
 
@@ -300,7 +286,6 @@ name = "astronomical-quantization"
 version = "0.2.88"
 dependencies = [
  "astronomical-runtime-integration",
- "astronomical-test-harness",
  "mlx-c-rust",
  "safetensors",
  "serde",
@@ -331,7 +316,6 @@ dependencies = [
  "astronomical-native-build-orchestration",
  "astronomical-native-identity",
  "astronomical-test-harness",
- "fs4",
  "libc",
  "mlx-c-rust",
  "sha2",
@@ -1716,7 +1700,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower",
- "tower-http 0.6.11",
+ "tower-http",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -2382,21 +2366,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "url",
-]
-
-[[package]]
-name = "tower-http"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08a05a66a4fdd61cbbe0a1d755ffe0ca6aba159dd4820936a0ff8a8278245b9c"
-dependencies = [
- "bitflags",
- "bytes",
- "http",
- "percent-encoding",
- "pin-project-lite",
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]
