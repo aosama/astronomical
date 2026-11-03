@@ -371,6 +371,40 @@ fn should_name_every_missing_bundle_input() {
     assert!(missing_paths.contains(&PathBuf::from("/absent-repository/mlx.metallib")));
 }
 
+/// `.build/release` is the only output path both SwiftPM build systems
+/// provide; `out/Products` exists only under swiftbuild, so a native-build
+/// runner (the CI image's Swift) would miss any input read from there.
+#[test]
+fn should_read_every_swift_build_product_from_the_release_directory() {
+    let swift_build_directory = Path::new("/repository/apps/astronomical-menu/.build");
+    for channel in [Channel::Development, Channel::Stable, Channel::AppStore] {
+        let bundle_inputs = BundleInputs::for_repository(
+            Path::new("/repository"),
+            &ChannelProfile::for_channel(channel),
+            Path::new("/repository/target/release"),
+            PathBuf::from("/repository/mlx.metallib"),
+            PathBuf::from("/repository/icon.icns"),
+        );
+        for source_path in bundle_inputs.every_source_path() {
+            assert!(
+                !source_path.to_string_lossy().contains("out/Products"),
+                "{} reads the swiftbuild-only layout",
+                source_path.display()
+            );
+            let Ok(path_inside_swift_build) = source_path.strip_prefix(swift_build_directory)
+            else {
+                continue;
+            };
+            assert!(
+                path_inside_swift_build.starts_with("release")
+                    || path_inside_swift_build.starts_with("checkouts"),
+                "{} is a Swift input outside .build/release",
+                source_path.display()
+            );
+        }
+    }
+}
+
 #[test]
 fn should_parse_every_instance_action() {
     assert_eq!(

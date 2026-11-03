@@ -65,8 +65,13 @@ impl BundleInputs {
             menu_executable: swift_build_directory
                 .join("release")
                 .join(channel_profile.menu_swift_product),
+            // `.build/release` is the one path both SwiftPM build systems
+            // provide: a real directory under the native system, a link to
+            // `out/Products/Release` under swiftbuild. Reading the swiftbuild
+            // path directly worked only where Swift defaulted to swiftbuild,
+            // and failed on a runner whose Swift builds natively.
             thin_talk_resource_bundle: swift_build_directory
-                .join("out/Products/Release/ThinTalk_ThinTalkCanvas.bundle"),
+                .join("release/ThinTalk_ThinTalkCanvas.bundle"),
             rust_executables,
             metallib,
             icon,

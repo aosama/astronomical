@@ -270,7 +270,7 @@ fn assembled_fixture_bundle(channel: Channel) -> (tempfile::TempDir, PathBuf) {
         true,
     );
     write_fixture_file(
-        &swift_build.join("out/Products/Release/ThinTalk_ThinTalkCanvas.bundle/index.html"),
+        &swift_build.join("release/ThinTalk_ThinTalkCanvas.bundle/index.html"),
         "<html>",
         false,
     );
