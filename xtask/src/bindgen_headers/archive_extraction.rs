@@ -12,7 +12,7 @@ use astronomical_native_identity::digest_bytes;
 use super::hash_manifest::count_regular_files;
 use super::patch_pipeline::{PatchStep, resolve_patch_path};
 use super::pinned_archives::PinnedArchive;
-use super::step_log::log_line;
+use crate::step_log::log_line;
 
 const APPLY_PATCH_HELPER_PATH: &str =
     "crates/runtime-integration/native/apply_patch_if_needed.cmake";

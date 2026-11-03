@@ -9,10 +9,8 @@ repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
 for contract_test in \
     test-render-app-icon.sh \
     test-package-app-store-pkg.sh \
-    test-create-dmg.sh \
     test-validate-distribution-app.sh \
     test-notarize-dmg.sh \
-    test-validate-dmg.sh \
     test-prepare-and-publish.sh \
     test-build-and-install-stable-app.sh \
     test-install-stable-app.sh

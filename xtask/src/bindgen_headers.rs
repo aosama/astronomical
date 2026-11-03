@@ -17,7 +17,6 @@ mod options;
 mod patch_pipeline;
 mod pinned_archives;
 mod provision_flow;
-mod step_log;
 mod verify_flow;
 
 #[cfg(test)]

@@ -197,10 +197,8 @@ validate_distribution_credentials() {
     esac
     validate_notary_profile_access
     for helper_script in \
-        create-dmg.sh \
         notarize-dmg.sh \
-        validate-distribution-app.sh \
-        validate-dmg.sh
+        validate-distribution-app.sh
     do
         [ -x "${repository_root}/scripts/release/${helper_script}" ] || {
             print_error "release helper is unavailable: scripts/release/${helper_script}"
@@ -260,8 +258,8 @@ prepare_release() {
     release_asset_name="Astronomical-${release_version}-macOS-arm64.dmg"
     release_dmg="${STAGING_DIRECTORY}/${release_asset_name}"
     start_step "create-drag-to-applications-dmg"
-    "${repository_root}/scripts/release/create-dmg.sh" \
-        --app-bundle "$stable_app_bundle" --output "$release_dmg"
+    (CDPATH='' cd -- "$repository_root" && cargo xtask release create-dmg \
+        --app-bundle "$stable_app_bundle" --output "$release_dmg")
     finish_step
 
     start_step "verify-notary-profile-access"
@@ -275,7 +273,7 @@ prepare_release() {
     finish_step
 
     start_step "validate-notarized-dmg"
-    "${repository_root}/scripts/release/validate-dmg.sh" --dmg "$release_dmg"
+    (CDPATH='' cd -- "$repository_root" && cargo xtask release validate-dmg --dmg "$release_dmg")
     finish_step
 
     release_notes_copy="${STAGING_DIRECTORY}/Astronomical-${release_version}-macOS-arm64.md"

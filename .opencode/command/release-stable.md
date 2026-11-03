@@ -16,7 +16,7 @@ Release version `$1`. If it is empty, ask the user for a numeric `MAJOR.MINOR.PA
 - Use only `scripts/release/prepare-and-publish.sh` to prepare or publish distribution artifacts.
 - Never manually edit `site/appcast.xml`; it is a signed generated artifact.
 - Never move or replace a pushed release tag. Fix forward with a new patch version.
-- Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `validate-dmg.sh`, and installation and launch of the fictional fixture under `target/` by `accept-sparkle-update.sh`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
+- Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `cargo xtask release validate-dmg`, and installation and launch of the fictional fixture under `target/` by `accept-sparkle-update.sh`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
 - Every test must use its built-in timeout of at most 120 seconds. The notarization operation is not a test and uses the release script's 180-second default, overridable through `NOTARIZATION_TIMEOUT_SECONDS`.
 - Keep commands live and unfiltered. Never pipe long-running commands through `head`, `tail`, or another buffering filter.
 
@@ -110,7 +110,7 @@ Validate `target/releases/${TAG}` without changing it:
 - Manifest tag, version, and commit equal `$TAG`, `$VERSION`, and `HEAD`.
 - DMG, notes, and appcast sizes and SHA-256 digests equal the manifest.
 - The DMG name is `Astronomical-${VERSION}-macOS-arm64.dmg`.
-- `scripts/release/validate-dmg.sh --dmg "target/releases/${TAG}/Astronomical-${VERSION}-macOS-arm64.dmg"` passes for that exact DMG. It accepts `--dmg`, not a positional path.
+- `cargo xtask release validate-dmg --dmg "target/releases/${TAG}/Astronomical-${VERSION}-macOS-arm64.dmg"` passes for that exact DMG. It accepts `--dmg`, not a positional path.
 - Record the notarization submission ID from preparation, query it with `xcrun notarytool log SUBMISSION_ID --keychain-profile "Astronomical Notarization"`, and require `Accepted` with zero issues. Parse only status and issue count; do not publish the complete log.
 - Appcast XML is valid and contains `$VERSION`, a build number greater than the previous release, macOS `14.0` and above, `arm64`, the exact GitHub release URL, an enclosure Ed25519 signature, and a signed-feed envelope.
 - The prepared directory contains exactly the DMG, copied Markdown notes, `appcast.xml`, and `release-manifest.json`.

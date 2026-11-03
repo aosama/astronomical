@@ -14,8 +14,8 @@ use super::header_locations::{
 use super::options::ProvisionOptions;
 use super::patch_pipeline::PatchStep;
 use super::pinned_archives::{PinnedHeaderArchives, select_pinned_header_archives};
-use super::step_log::{log_line, start_step};
 use crate::bootstrap_native_dependencies::read_pinned_manifest_text;
+use crate::step_log::{log_line, start_step};
 
 pub(crate) fn provision_headers(
     repository_root: &Path,
