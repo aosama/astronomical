@@ -4559,7 +4559,7 @@ Used by:
 - base64 0.23.1
 - bitflags 2.13.1
 - bumpalo 3.20.3
-- cc 1.4.3
+- cc 1.10.0
 - cexpr 0.6.0
 - cfg-if 1.0.4
 - core-foundation-sys 0.8.7
@@ -4572,7 +4572,7 @@ Used by:
 - equivalent 1.0.2
 - errno 0.3.14
 - fastrand 2.5.0
-- find-msvc-tools 0.1.11
+- find-msvc-tools 0.1.15
 - flate2 1.1.9
 - fnv 1.0.7
 - form_urlencoded 1.2.2

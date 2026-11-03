@@ -18,9 +18,6 @@ workspace = true
 [dependencies]
 sha2.workspace = true
 
-[dev-dependencies]
-astronomical-test-harness = { path = "../test-harness" }
-
 [[test]]
 name = "integration_tests"
 path = "tests/integration/source_identity.rs"
