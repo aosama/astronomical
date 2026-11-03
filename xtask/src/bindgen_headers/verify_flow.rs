@@ -11,7 +11,7 @@ use super::header_locations::{
     extraction_directory, native_build_store_schema_version, source_identity,
 };
 use super::options::ProvisionOptions;
-use super::step_log::{log_line, start_step};
+use crate::step_log::{log_line, start_step};
 
 /// How many differing paths the mismatch line names, as the shell did.
 const REPORTED_DIFFERENCE_LIMIT: usize = 10;

@@ -86,6 +86,9 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # release bundle from a clean commit in the disposable app-release lane, and
 # `cargo xtask app smoke-test --app-bundle PATH [--real-model MODEL_ID]`
 # launches a built bundle in isolation.
+# `cargo xtask release create-dmg --app-bundle PATH --output PATH` builds the
+# drag-to-Applications image and `cargo xtask release validate-dmg --dmg PATH`
+# proves a notarized image's install journey (release-only steps).
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
 # MLX runtime into the machine-wide store before Cargo compiles anything.
 # `cargo xtask provision-bindgen-headers [--verify-headers]` extracts the

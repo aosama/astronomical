@@ -10,8 +10,8 @@ use super::patch_pipeline::{
     PatchStep, parse_cmake_patch_pipeline, parse_patch_list, render_patch_list, require_patch_files,
 };
 use super::provision_flow::provision_headers;
-use super::step_log::start_step;
 use super::verify_flow::verify_headers_against_native_build;
+use crate::step_log::start_step;
 
 const NATIVE_CMAKE_LISTS_PATH: &str = "crates/runtime-integration/native/CMakeLists.txt";
 

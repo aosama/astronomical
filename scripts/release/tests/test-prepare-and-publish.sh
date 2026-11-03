@@ -28,6 +28,13 @@ write_fixture_commands() {
 
     cat > "${fake_command_directory}/cargo" <<'CARGO'
 #!/usr/bin/env sh
+# Ported release steps run as `cargo xtask release <step>`; the sandbox's
+# fake step scripts keep standing in for them.
+if [ "${1:-}" = "xtask" ] && [ "${2:-}" = "release" ]; then
+    release_step="$3"
+    shift 3
+    exec "${PWD}/scripts/release/${release_step}.sh" "$@"
+fi
 if [ "${1:-}" = "xtask" ] && [ "${2:-}" = "app" ] && [ "${3:-}" = "package" ]; then
     case "$*" in *'--channel stable --signing-identity Developer ID Application: Example (ABCDE12345)'*) ;; *) exit 1 ;; esac
     app_bundle="${PWD}/target/astronomical-macos-stable.noindex/Astronomical.app"

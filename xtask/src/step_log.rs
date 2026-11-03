@@ -1,4 +1,5 @@
-//! Step lines in the shell pipeline's `<timestamp> step=NAME status=...`
+//! Step lines shared by the provisioning and release commands, in the
+//! retired shell pipelines' `<timestamp> step=NAME status=...`
 //! shape, so logs and the CI searches written against them keep parsing.
 
 use std::time::Instant;
