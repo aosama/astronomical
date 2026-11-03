@@ -13,6 +13,7 @@ use super::icon_cache::cached_icon_file_name;
 use super::info_plist::{escape_xml_text, render_info_plist};
 use super::instance_control::{InstanceAction, status_report_lines};
 use super::native_metallib::metallib_store_path;
+use super::running_instance::menu_process_pattern;
 use super::step_reporter::estimate_remaining_seconds;
 
 fn sample_build_identity(is_dirty: bool) -> BuildIdentity {
@@ -462,4 +463,65 @@ fn should_report_unknown_fields_as_dashes_for_a_sparse_status_document() {
         "  memory ceiling:    - effective of - (configured -, pending -)"
     );
     assert_eq!(status_lines[4], "  build: unknown");
+}
+
+/// A command line as `pgrep -f` sees it, from a channel's bundle built in
+/// `worktree_name`'s target directory.
+fn bundle_command_line(worktree_name: &str, channel: Channel, executable_name: &str) -> String {
+    let channel_profile = ChannelProfile::for_channel(channel);
+    format!(
+        "/repository/.claude/worktrees/{worktree_name}/target/{}/{}.app/Contents/MacOS/{executable_name}",
+        channel_profile.output_directory_name, channel_profile.bundle_name
+    )
+}
+
+#[test]
+fn should_match_the_development_menu_app_from_any_worktree() {
+    let development_pattern =
+        menu_process_pattern(&ChannelProfile::for_channel(Channel::Development));
+
+    for worktree_name in ["first-worktree", "second-worktree"] {
+        let command_line =
+            bundle_command_line(worktree_name, Channel::Development, "astronomical-menu");
+        assert!(
+            command_line.contains(&development_pattern),
+            "{command_line}"
+        );
+    }
+}
+
+#[test]
+fn should_not_match_the_development_menu_app_with_the_stable_pattern() {
+    let stable_pattern = menu_process_pattern(&ChannelProfile::for_channel(Channel::Stable));
+    let development_command_line =
+        bundle_command_line("any-worktree", Channel::Development, "astronomical-menu");
+
+    assert!(!development_command_line.contains(&stable_pattern));
+}
+
+#[test]
+fn should_keep_stable_and_app_store_menu_apps_apart_despite_one_bundle_name() {
+    let stable_pattern = menu_process_pattern(&ChannelProfile::for_channel(Channel::Stable));
+    let stable_command_line =
+        bundle_command_line("any-worktree", Channel::Stable, "astronomical-menu");
+    let app_store_command_line =
+        bundle_command_line("any-worktree", Channel::AppStore, "astronomical-menu");
+
+    assert!(stable_command_line.contains(&stable_pattern));
+    assert!(!app_store_command_line.contains(&stable_pattern));
+}
+
+#[test]
+fn should_not_match_the_daemon_or_worker_inside_the_same_bundle() {
+    let development_pattern =
+        menu_process_pattern(&ChannelProfile::for_channel(Channel::Development));
+
+    for executable_name in ["astronomicald", "astronomical-inference-worker"] {
+        let command_line =
+            bundle_command_line("any-worktree", Channel::Development, executable_name);
+        assert!(
+            !command_line.contains(&development_pattern),
+            "{command_line}"
+        );
+    }
 }

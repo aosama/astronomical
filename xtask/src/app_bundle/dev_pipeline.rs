@@ -170,7 +170,7 @@ fn run_bundle_steps(
     )?;
     step_reporter.finish_step();
     step_reporter.start_step("swap-and-open");
-    quit_menu_app(&pipeline_paths.bundle_path, channel_profile)?;
+    quit_menu_app(channel_profile)?;
     swap_in_staged_bundle(pipeline_paths)?;
     wait_for_daemon_exit(channel_profile)?;
     open_bundle(&pipeline_paths.bundle_path)?;
