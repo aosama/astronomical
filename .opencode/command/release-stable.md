@@ -13,7 +13,7 @@ Release version `$1`. If it is empty, ask the user for a numeric `MAJOR.MINOR.PA
 - Work from the repository root and follow `AGENTS.md`.
 - Never use chat history, chat-memex, memory, or guesswork for credential names.
 - Never commit or place credential values, local paths, Keychain output, or machine logs in GitHub content or the final report. Do not suppress authoritative release-script output merely because it contains local operator paths.
-- Use only `scripts/release/prepare-and-publish.sh` to prepare or publish distribution artifacts.
+- Use only `cargo xtask release prepare-and-publish` (or its credential-resolving front door `cargo xtask release prepare-signed`) to prepare or publish distribution artifacts.
 - Never manually edit `site/appcast.xml`; it is a signed generated artifact.
 - Never move or replace a pushed release tag. Fix forward with a new patch version.
 - Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `cargo xtask release validate-dmg`, and installation and launch of the fictional fixture under `target/` by `accept-sparkle-update.sh`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
@@ -93,7 +93,7 @@ Every chat-capable model the Development configuration's model directories disco
 5. Prepare the release:
 
 ```sh
-scripts/release/prepare-and-publish.sh \
+cargo xtask release prepare-and-publish \
   --tag "$TAG" \
   --notes-file "$RELEASE_NOTES_FILE" \
   --signing-identity "$SIGNING_IDENTITY" \
@@ -123,7 +123,7 @@ After approval, push the already-reviewed immutable tag first; the publish prefl
 
 ```sh
 git push origin "refs/tags/${TAG}"
-scripts/release/prepare-and-publish.sh \
+cargo xtask release prepare-and-publish \
   --tag "$TAG" \
   --output-directory "target/releases/${TAG}" \
   --publish
@@ -180,7 +180,7 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - The release-notes `mktemp` template carries no `X` placeholders: macOS `mktemp` never expands placeholders that sit before a suffix, so the old suffix-bearing template produced a literal `XXXXXX` filename. The template is now deterministic per tag, which means an aborted earlier run can leave the file behind; `mktemp` creates exclusively and fails on it, so remove the stale file and rerun.
 - The PR issue compliance validator searches only the `## Linked issue` section once the heading exists: the section must carry at least one canonical reference (`Fixes|Closes|Resolves|Refs #N`; grouped forms like `Refs #N and #M` are accepted), and every `#N` inside it must use a canonical keyword — a bare `#N` in prose fails. Keep narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
 - Expected CI duration for integration verification PRs is roughly 5-8 minutes (live runs since #1348: the macOS build job just under 5 minutes, macOS Swift and Node contracts around 4 minutes including the packaging release contracts step, and the per-tier test lanes another minute or two after the build finishes); do not treat a pending job at the 2-3 minute mark as stuck. That budget assumes a native-build cache hit: a GitHub runner-image rollout re-fingerprints the native identity (the toolchain probes are identity inputs), so the next PR can miss the native-build cache and pay a ~5-minute CMake rebuild, producing a roughly 11-minute job (hit live in the 0.2.70 release run). Before suspecting the release change, check the job log for `Cache not found for input keys: astronomical-v2-native-build-…` and compare the logged `[native-build-identity] … identity=…` value against the cached keys (`gh cache list --key astronomical-v2-native-build`); a changed identity with an unchanged `crates/native-identity/src` tree means GitHub rolled the image, not that the release broke something. Toolchain pinning to stop this drift is tracked separately (#1261).
-- `scripts/release/prepare-and-publish.sh` requires signing identity, team ID, and notary profile resolved inside the same shell invocation as the script call; resolving them in an earlier command does not persist.
+- `cargo xtask release prepare-and-publish` requires signing identity, team ID, and notary profile resolved inside the same shell invocation as the command; resolving them in an earlier command does not persist. `cargo xtask release prepare-signed` resolves them itself.
 - A version bump leaves `third-party/RUST_DEPENDENCY_NOTICES.digest`'s `input_sha256` memo behind because the root `Cargo.toml` is one of its recorded inputs; the notices text itself is unchanged by a version bump. The check passes on the text-match contract (log line `digest_memo=behind`), so committing `cargo xtask notices` output in the bump branch is optional fast-path hygiene, not a merge requirement (previously a hard CI failure, hit live in the 0.2.66 release run, fixed by #1395).
 - Removing a config field from the Rust structs is not enough: add the removed field name to `strip_retired_config_fields` in `crates/config/src/config_file.rs` and drop any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change, or upgraded installs fail strict parsing and the daemon exits before readiness (hit live in the 0.2.66 release run, fixed by #1116).
 
