@@ -36,3 +36,6 @@ pub use command::run;
 // Stable installation re-checks a bundle with the same rules that built it.
 pub(crate) use bundle_check::{layout_problems, plist_identity_problems, version_text_reports};
 pub(crate) use channel_profile::{Channel, ChannelProfile};
+// The publisher derives the release version and update feed exactly as the
+// packager does, so the two cannot disagree about either.
+pub(crate) use build_identity::{daemon_package_identity, github_pages_feed_url};

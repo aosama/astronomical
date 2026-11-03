@@ -9,11 +9,19 @@ mod command;
 mod disk_image_creation;
 mod disk_image_validation;
 mod distribution_signature;
+mod github_publication;
 mod notarization;
+mod publication_entry;
+mod release_identity;
+mod release_manifest;
+mod release_preparation;
 mod scratch_space;
 mod stable_installation;
 mod system_step;
 
+#[cfg(test)]
+#[path = "release_publication_tests.rs"]
+mod release_publication_tests;
 #[cfg(test)]
 #[path = "release_tests.rs"]
 mod release_tests;

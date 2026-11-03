@@ -8,11 +8,13 @@ use super::disk_image_creation::{DiskImageRequest, create_disk_image};
 use super::disk_image_validation::validate_disk_image;
 use super::distribution_signature::validate_distribution_app;
 use super::notarization::{NotarizationRequest, notarize_disk_image, parse_timeout_seconds};
+use super::publication_entry::{run_prepare_and_publish, run_prepare_signed};
+use super::release_identity::PublicationRequest;
 use super::stable_installation::{
     InstallRequest, build_and_install_stable, default_stable_bundle, install_stable,
 };
 
-pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH]";
+pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH] | release prepare-and-publish --tag vX.Y.Z (--notes-file PATH --signing-identity NAME --team-id ID --notary-profile NAME | --publish) [--output-directory PATH] | release prepare-signed --tag vX.Y.Z [--notes-file PATH] [--output-directory PATH] [--publish]";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReleaseCommand {
@@ -31,6 +33,8 @@ pub(crate) enum ReleaseCommand {
         is_dry_run: bool,
     },
     AppStorePackage(AppStorePackageRequest),
+    PrepareAndPublish(PublicationRequest),
+    PrepareSigned(PublicationRequest),
 }
 
 pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseCommand, String> {
@@ -62,6 +66,23 @@ pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseComma
             })
         }
         "notarize-dmg" => parse_notarization_command(subcommand_arguments),
+        "prepare-and-publish" => Ok(ReleaseCommand::PrepareAndPublish(
+            parse_publication_request(
+                subcommand_arguments,
+                &[
+                    "--tag",
+                    "--notes-file",
+                    "--output-directory",
+                    "--signing-identity",
+                    "--team-id",
+                    "--notary-profile",
+                ],
+            )?,
+        )),
+        "prepare-signed" => Ok(ReleaseCommand::PrepareSigned(parse_publication_request(
+            subcommand_arguments,
+            &["--tag", "--notes-file", "--output-directory"],
+        )?)),
         "app-store-pkg" => {
             let flag_values = parse_flag_values(
                 subcommand_arguments,
@@ -113,16 +134,39 @@ fn parse_notarization_command(subcommand_arguments: &[String]) -> Result<Release
 /// `--dry-run` is the one valueless flag; it is taken out before the
 /// `--flag value` pairs are parsed.
 fn take_dry_run_flag(subcommand_arguments: &[String]) -> (bool, Vec<String>) {
-    let mut is_dry_run = false;
+    take_switch_flag(subcommand_arguments, "--dry-run")
+}
+
+/// Removes a valueless switch from the arguments and reports whether it was
+/// present.
+fn take_switch_flag(subcommand_arguments: &[String], switch_flag: &str) -> (bool, Vec<String>) {
+    let mut is_present = false;
     let mut valued_arguments = Vec::new();
     for subcommand_argument in subcommand_arguments {
-        if subcommand_argument == "--dry-run" {
-            is_dry_run = true;
+        if subcommand_argument == switch_flag {
+            is_present = true;
         } else {
             valued_arguments.push(subcommand_argument.clone());
         }
     }
-    (is_dry_run, valued_arguments)
+    (is_present, valued_arguments)
+}
+
+fn parse_publication_request(
+    subcommand_arguments: &[String],
+    accepted_flags: &[&str],
+) -> Result<PublicationRequest, String> {
+    let (is_publish, valued_arguments) = take_switch_flag(subcommand_arguments, "--publish");
+    let flag_values = parse_flag_values(&valued_arguments, accepted_flags)?;
+    Ok(PublicationRequest {
+        release_tag: required_text(&flag_values, "--tag")?,
+        notes_file: flag_values.get("--notes-file").map(PathBuf::from),
+        output_directory: flag_values.get("--output-directory").map(PathBuf::from),
+        is_publish,
+        signing_identity: flag_values.get("--signing-identity").cloned(),
+        team_identifier: flag_values.get("--team-id").cloned(),
+        notary_profile: flag_values.get("--notary-profile").cloned(),
+    })
 }
 
 fn required_text(flag_values: &BTreeMap<String, String>, flag: &str) -> Result<String, String> {
@@ -159,6 +203,12 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
             build_and_install_stable(repository_root, is_dry_run)
         }
         ReleaseCommand::AppStorePackage(package_request) => package_for_app_store(&package_request),
+        ReleaseCommand::PrepareAndPublish(publication_request) => {
+            run_prepare_and_publish(repository_root, &publication_request)
+        }
+        ReleaseCommand::PrepareSigned(publication_request) => {
+            run_prepare_signed(repository_root, &publication_request)
+        }
     }
 }
 
