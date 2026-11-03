@@ -323,7 +323,7 @@ pub fn run(repository_root: &Path, check_only: bool) -> Result<(), String> {
         match verdict {
             HarvestVerdict::NoticesTextStale => {
                 return Err(
-                    "[rust-dependency-notices] third-party/RUST_DEPENDENCY_NOTICES is stale; regenerate it"
+                    "[rust-dependency-notices] third-party/RUST_DEPENDENCY_NOTICES is stale; run `cargo xtask notices` and commit both regenerated files"
                         .to_owned(),
                 );
             }

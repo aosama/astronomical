@@ -9,10 +9,14 @@ name: Notices freshness
 # leaves it one regeneration behind, so someone runs `cargo xtask notices`
 # and commits the result before a release bundles stale notices.
 #
-# Deliberately not a pull-request gate: PR authors are not blocked over
-# notices hygiene (the strict PR gate was removed once before for exactly
-# that friction). Nightly cadence catches drift within a day at negligible
-# cost; workflow_dispatch allows an on-demand check after dependency churn.
+# The pull-request gate lives in ci.yml: its classifier-gated ubuntu
+# notices-freshness lane runs this same check only when a pull request
+# changes a notices input (Cargo.lock, the cargo-about pin, its config or
+# template), so ordinary pull requests pay nothing and a lockfile bump that
+# skipped regeneration fails the CI verdict instead of merging. This nightly
+# lane stays as the backstop for anything that reaches the default branch
+# around that gate (a direct push, or a regression in the gate itself);
+# workflow_dispatch allows an on-demand check after dependency churn.
 
 on:
   schedule:
