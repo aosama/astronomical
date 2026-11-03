@@ -451,7 +451,7 @@ verify_headers_against_native_build() {
     built_entry_directory="${NATIVE_BUILD_STORE_DIRECTORY}/${NATIVE_STORE_SCHEMA_DIRECTORY_NAME}/entries/${built_identity}"
     if [ ! -f "${built_entry_directory}/complete" ]; then
         print_error "no completed native build for identity ${built_identity}: ${built_entry_directory}"
-        print_error "run scripts/ci/prewarm-native-build.sh --profile $NATIVE_BUILD_PROFILE (or pass --profile for a profile that is already built)"
+        print_error "run cargo xtask prewarm-native-build --profile $NATIVE_BUILD_PROFILE (or pass --profile for a profile that is already built)"
         exit 1
     fi
     built_headers_directory="${built_entry_directory}/include/mlx"

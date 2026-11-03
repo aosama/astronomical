@@ -122,11 +122,15 @@ Provision the pinned, checksum-verified native dependencies:
 
     cargo xtask bootstrap-native-dependencies
 
-Build and validate the Development app without replacing or stopping Stable:
+Build the Development app and open it, without touching Stable:
 
-    scripts/build-development-app.sh
+    cargo xtask app dev
 
-The signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Stable uses the clean product icon, while Development uses a restrained channel badge. Default validation does not load a second model. Use `scripts/internal/validate-macos-app.sh --real-model MODEL_ID` only when shared GPU pressure is acceptable; the identifier must be advertised by the Development instance.
+The first run compiles everything; later runs rebuild incrementally and replace the running Development app in seconds. A failed build leaves the running app untouched. Control the Development instance headless, for example to start its daemon with exported `ASTRONOMICAL_*` experiment flags:
+
+    cargo xtask app instance status|start|stop|restart
+
+The ad-hoc signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Stable uses the clean product icon, while Development uses a restrained channel badge. Default validation does not load a second model. Use `scripts/internal/validate-macos-app.sh --real-model MODEL_ID` only when shared GPU pressure is acceptable; the identifier must be advertised by the Development instance.
 
 Stable installation and release publication are isolated under `scripts/release/`. They are never part of ordinary commit or push verification. Build a clean Stable candidate and explicitly promote it outside the repository build tree with one release-only command:
 

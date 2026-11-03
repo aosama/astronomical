@@ -6,7 +6,6 @@ This folder contains scripts invoked by GitHub Actions workflows or actions. Kee
 
 | Script | Role |
 |---|---|
-| `prewarm-native-build.sh` | Build the native runtime before Cargo compilation |
 | `ci-step-timing.sh` | Record named workflow-step timing segments |
 | `publish-ci-timing-summary.sh` | Write the workflow timing table to the run summary |
 | `report-build-cache-restoration.sh` | Report cache-operation outcomes in hosted action logs |
@@ -25,7 +24,8 @@ native-fingerprint [--source-only] [--explain] --profile core|core+memory-contra
 [--dry-run] [--repo owner/name]`, `cargo xtask save-sccache
 <primary-cache-key>`, `cargo xtask install-verification-tools [--prefix
 DIR]`, `cargo xtask bootstrap-native-dependencies [--cache-dir
-ABSOLUTE_PATH] [--verify]`, and `cargo xtask disposable-target --lane NAME
+ABSOLUTE_PATH] [--verify]`, `cargo xtask prewarm-native-build --profile
+NAME [--profile NAME ...]`, and `cargo xtask disposable-target --lane NAME
 -- COMMAND [ARGUMENT ...]` (see `.cargo/config.toml`). The native identity
 policy itself lives in
 the `astronomical-native-identity` crate (`crates/native-identity`),

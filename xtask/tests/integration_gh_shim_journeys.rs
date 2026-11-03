@@ -76,7 +76,7 @@ impl Drop for GhShim {
 const THREE_FAMILY_CACHE_LIST: &str = "1\tastronomical-v2-native-build-macOS-a\trefs/heads/main\t2026-10-01T00:00:00Z\t100\n\
 2\tastronomical-v2-native-build-macOS-b\trefs/heads/main\t2026-10-02T00:00:00Z\t100\n\
 3\tastronomical-v2-native-build-macOS-c\trefs/heads/main\t2026-10-03T00:00:00Z\t100\n\
-4\tastronomical-v2-sccache-macOS-oversize\trefs/heads/main\t2026-10-09T00:00:00Z\t500000000\n\
+4\tastronomical-v2-sccache-macOS-oversize\trefs/heads/main\t2026-10-09T00:00:00Z\t700000000\n\
 5\tastronomical-v2-sccache-macOS-good\trefs/heads/main\t2026-10-01T00:00:00Z\t100000000\n";
 
 fn output_path(root_directory: &std::path::Path) -> PathBuf {
@@ -256,16 +256,19 @@ fn sccache_save_without_a_listable_cache_degrades_to_skip() {
 
 #[test]
 fn should_apply_fixed_sccache_save_budgets_despite_retired_environment_entries() {
+    // The fixed sccache budget is 680,000,000 bytes (raised from 450,000,000
+    // in the #1688 cache hunt): the boundary entry fits, one byte more is
+    // oversize, whatever the retired environment entries say.
     for (stored_entry_bytes, directory_budget, entry_budget, expected_decision) in [
-        (450_000_000, "1", "1", "fresh-entry-within-budget"),
-        (450_000_001, "1", "900000000", "replace-oversize-entry"),
+        (680_000_000, "1", "1", "fresh-entry-within-budget"),
+        (680_000_001, "1", "900000000", "replace-oversize-entry"),
         (
-            450_000_001,
+            680_000_001,
             "not-an-integer",
             "not-an-integer",
             "replace-oversize-entry",
         ),
-        (450_000_001, "", "", "replace-oversize-entry"),
+        (680_000_001, "", "", "replace-oversize-entry"),
     ] {
         let test_directory = tempfile::tempdir().expect("the test directory should be created");
         let cache_list = format!(

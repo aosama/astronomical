@@ -310,7 +310,7 @@ main() {
     fi
     # The native build store is machine-wide, so pre-warming once here keeps
     # the release build's build script from invoking CMake at all.
-    "${repository_root}/scripts/ci/prewarm-native-build.sh" --profile core
+    (CDPATH='' cd -- "${repository_root}" && cargo xtask prewarm-native-build --profile core)
     # Cargo prints its own live compilation progress to stderr.
     cargo build --release --target "$host_target_triple" \
         -p astronomical-inference-worker --bin astronomical-inference-worker \
@@ -534,7 +534,7 @@ main() {
 
     if [ "$APPLICATION_CHANNEL" = "development" ] && pgrep -f "astronomicald --instance development" > /dev/null 2>&1; then
         printf '%s\n' "note: a development daemon from this build is still running on http://127.0.0.1:6733."
-        printf '%s\n' "manage it with: scripts/development/astronomical-dev-instance.sh status|stop|restart"
+        printf '%s\n' "manage it with: cargo xtask app instance status|stop|restart"
     fi
 
     # ── Summary ──────────────────────────────────────────────────────────

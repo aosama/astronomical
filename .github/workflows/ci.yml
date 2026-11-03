@@ -319,7 +319,7 @@ jobs:
           # count. Every later Cargo step finds the native build store warm
           # and skips CMake, so native and Rust compilation never overlap on
           # the small hosted runners.
-          scripts/ci/prewarm-native-build.sh --profile core
+          cargo xtask prewarm-native-build --profile core
           [ -f "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE" ] || {
             printf '%s\n' 'Error: native build status was not published' >&2
             exit 1

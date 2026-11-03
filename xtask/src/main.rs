@@ -4,6 +4,7 @@
 //! lines and exit codes are kept compatible so local habits, hooks, and CI
 //! steps survive the move unchanged.
 
+mod app_bundle;
 mod audit_test_declarations;
 #[cfg(test)]
 mod audit_test_declarations_tests;
@@ -38,6 +39,9 @@ mod native_fingerprint;
 mod notices;
 #[cfg(test)]
 mod notices_tests;
+mod prewarm_native_build;
+#[cfg(test)]
+mod prewarm_native_build_tests;
 #[path = "disposable_target/signal_edge.rs"]
 mod process_signals;
 mod retired_native_scan;
@@ -65,6 +69,10 @@ fn main() -> ExitCode {
     let resolve_root = move || repository_root_override.unwrap_or_else(resolve_repository_root);
     match arguments.first().map(String::as_str) {
         Some("test-run") => test_run::run(&resolve_root(), &arguments[1..]),
+        Some("app") => run_command(app_bundle::run(&resolve_root(), &arguments[1..])),
+        Some("prewarm-native-build") => {
+            run_command(prewarm_native_build::run(&resolve_root(), &arguments[1..]))
+        }
         Some("mlx-c-coverage-inventory") => {
             test_run::refresh_coverage_inventory(&resolve_root(), &arguments[1..])
         }
@@ -104,7 +112,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
