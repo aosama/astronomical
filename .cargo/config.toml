@@ -75,7 +75,14 @@ test-quantization-direct-mlx = "test --no-fail-fast -p astronomical-quantization
 test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test quantization --ignored"
 
 # Repository tooling as typed Rust; the subcommand catalog lives in the
-# xtask sources. `cargo xtask audit-test-declarations` walks every crate's
+# xtask sources. `cargo xtask app dev` rebuilds the Development app
+# (incremental `app-dev` profile, cached icon and npm install, ad-hoc
+# signing) and swaps it in for the running one; `cargo xtask app instance
+# status|start|stop|restart` controls that instance headless; `cargo xtask
+# app info-plist --channel development|stable|app-store` prints the plist a
+# channel would get, for inspecting the channel profiles.
+# `cargo xtask prewarm-native-build --profile core` builds the pinned native
+# MLX runtime into the machine-wide store before Cargo compiles anything. `cargo xtask audit-test-declarations` walks every crate's
 # tests/ tree and fails when a test file is unreachable from any target
 # through `mod` declarations (the class of silent-orphan bug that once hid
 # seven tests in an undeclared file). `cargo xtask test-run` builds exact

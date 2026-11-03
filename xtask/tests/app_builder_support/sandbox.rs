@@ -43,7 +43,6 @@ impl AppBuilderSandbox {
             &shim_directory,
             &lane_root_directory,
             &repository_directory.join("scripts/internal/entitlements"),
-            &repository_directory.join("scripts/ci"),
             &sparkle_framework_directory.join("Updater.app"),
             &sparkle_framework_directory.join("XPCServices/Downloader.xpc"),
             &sparkle_framework_directory.join("XPCServices/Installer.xpc"),
@@ -279,15 +278,10 @@ impl AppBuilderSandbox {
         ] {
             self.write_shim(benign_command, "#!/bin/sh\nexit 0\n");
         }
-        // The builder invokes two repository scripts by path; the sandbox
-        // must provide stubs so the journey never touches the machine-wide
-        // native store or launches the produced bundle for validation.
-        self.write_shim_at(
-            &self
-                .repository_directory
-                .join("scripts/ci/prewarm-native-build.sh"),
-            "#!/bin/sh\nexit 0\n",
-        );
+        // The builder invokes the validator by path; the sandbox stubs it so
+        // the journey never launches the produced bundle. The native prewarm
+        // is `cargo xtask prewarm-native-build`, which the fake cargo above
+        // answers with success, so the machine-wide native store is untouched.
         self.write_shim_at(
             &self
                 .repository_directory

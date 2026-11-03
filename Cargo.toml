@@ -169,3 +169,14 @@ split-debuginfo = "packed"
 [profile.release]
 lto = "thin"
 strip = "symbols"
+
+# The Development app's edit loop (`cargo xtask app dev`). It keeps release
+# optimisation so the app serves models at shipped speed, but drops thin LTO
+# and turns incremental compilation on: LTO re-optimises the whole program on
+# every edit, and incremental lets a one-crate change recompile one crate.
+# Its persistent target/app-dev directory is what makes the second build
+# cheap; the release lane's disposable target directory starts cold.
+[profile.app-dev]
+inherits = "release"
+lto = false
+incremental = true

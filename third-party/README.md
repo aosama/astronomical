@@ -140,7 +140,7 @@ To bump a pinned dependency:
 1. Download the candidate release archive and compute its SHA-256.
 2. Replace the pin file under `pins/` with the new commit, URL, and digest.
 3. Run `cargo xtask bootstrap-native-dependencies`, then
-   `scripts/ci/prewarm-native-build.sh --profile core`. Every patch must apply
+   `cargo xtask prewarm-native-build --profile core`. Every patch must apply
    cleanly; a failure means the patch set must be reconciled with the new
    tree. Re-diff each patch against the new archive before deciding it is
    superseded — never judge by release notes alone. For the two JIT
@@ -237,11 +237,11 @@ toolchain, CMake 3.24 or newer, and `patch`.
 
 ```bash
 cargo xtask bootstrap-native-dependencies
-scripts/ci/prewarm-native-build.sh --profile core
+cargo xtask prewarm-native-build --profile core
 cargo build -p astronomical-inference-worker
 ```
 
-The first script provisions and verifies every pinned archive into the
+The first command provisions and verifies every pinned archive into the
 platform cache. The second configures and compiles the native runtime image
 (static MLX, MLX-C, and the Astronomical bridges) and publishes it to the
 content-addressed native build store. The third links the worker against the
