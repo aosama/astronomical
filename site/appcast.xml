@@ -4,34 +4,35 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.88</title>
-            <pubDate>Mon, 02 Nov 2026 00:26:40 -0500</pubDate>
-            <sparkle:version>1947</sparkle:version>
-            <sparkle:shortVersionString>0.2.88</sparkle:shortVersionString>
+            <title>0.2.89</title>
+            <pubDate>Mon, 02 Nov 2026 22:46:32 -0500</pubDate>
+            <sparkle:version>2040</sparkle:version>
+            <sparkle:shortVersionString>0.2.89</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.88
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.89
 
 ## What changed
 
-- **Claude Code runs on your local models.** `astronomical launch claude` starts Claude Code for one session pointed at this Mac: every model alias and the subagent model route to the local model, and Claude Code is given the model's real context window. Your saved Claude Code settings are left alone, and arguments after `--` go to Claude Code unchanged.
-- **An Anthropic-compatible Messages API.** The local API now serves `/v1/messages`, streaming and non-streaming, with tools and thinking control, plus `/v1/messages/count_tokens`, counted by the model's own tokenizer. Errors arrive in the Anthropic error format, and a prompt longer than the context window is reported the way Claude Code expects, so it compacts the conversation instead of failing.
-- **One model listing for both protocols.** `/v1/models` entries carry the Anthropic listing fields alongside the OpenAI ones, and each launcher offers only the models that serve its agent's protocol.
-- **Model catalog.** The REAP 19B model is no longer offered for download.
-- **Expert statistics.** Expert reads made while setting up a decode step are now counted under decode instead of prefill.
+- **No more worker crash on long prompts with SSD-streamed experts.** When a request is too large to keep every expert in memory and switches to streaming experts from the SSD, the inference worker no longer crashes on the first streamed page. The crash came from a disk-statistics call writing past its buffer; it now uses the operating system's exact structure layout.
+- **The app recovers from a worker crash by itself.** If the inference worker stops unexpectedly, the daemon starts a fresh one about a second later, so the next request is served instead of every request failing until the app is restarted. A worker that keeps crashing is relaunched at most three times in ten minutes, then stays stopped with one clear log line.
+- **Clearer crash reports in the log.** When the worker ends on a signal, the log now names the signal and says whether a macOS crash report exists for it.
+- **A new look: Darkroom.** One identity across the app icon, the menu bar, the Observatory console, and the website. The menu bar glyph now shows state: solid while every expert is in memory, hatched while experts stream from the SSD.
+- **A quieter Maximum model RAM control.** The menu bar and the web console show one grey "Up to N GB on this Mac" caption, offer only values the engine can actually use, and show the orange cap notice only when a requested value is really being capped.
+- **`astronomical quantize plan` and `astronomical quantize inspect`.** `plan` allocates a mixed-precision bit map from an OptiQ sensitivity document and prints it, or JSON with `--json`; `inspect` summarizes an OptiQ artifact's metadata.
 
 ## Compatibility
 
-The REST changes are additions; existing OpenAI-compatible requests are answered as before. There are no configuration-format changes. Your models, settings, and caches are preserved.
+There are no configuration-format or REST API changes; existing requests are answered as before. Your models, settings, and caches are preserved.
 
 ## Distribution
 
 This release is signed with a Developer ID certificate, notarized by Apple, and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.88/Astronomical-0.2.88-macOS-arm64.dmg" length="18158042" type="application/octet-stream" sparkle:edSignature="9dXUwtrgZh72i9usKE6+NASakXVgqVUeDk9bHEXzN8nydQ2NC4BW16SiNwl52i1TUMzP5wzfLjrWZpCu+myJAg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.89/Astronomical-0.2.89-macOS-arm64.dmg" length="18052967" type="application/octet-stream" sparkle:edSignature="eJexpIgtiZh5388xYuaQPkjUGReJ/Vk2FvnJehQ14nZx+4FMOQTxHr5o6lTm0G5g/cTFsDfKNcDrp/vB4JxsCw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: HdAUEZfvgP2KOW8WQFLm5/2BMFwJNLf1bbpk23Wfd6hlMiJftUDEfInxVxz3g/iSYoOEKZz2nkK4EZljYliFAg==
-length: 2776
+edSignature: YMqPUbO195rZY++leRmIyPuyfN1c7cdFdxZ9wedKveW2a4yTNdNTHudOo2sgy7dm7mrFtd2BKOHG5+jTRgI+CA==
+length: 3201
 -->
