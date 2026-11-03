@@ -1,10 +1,23 @@
 use std::path::{Path, PathBuf};
 
+use super::app_store_package::{
+    AppStorePackageRequest, app_store_channel_problem, default_output_package, identity_is_listed,
+};
 use super::command::{ReleaseCommand, parse_release_command};
 use super::disk_image_creation::{
     DiskImageRequest, FINDER_LAYOUT_SCRIPT, partial_output_path, validate_disk_image_request,
 };
 use super::disk_image_validation::{mounted_layout_problems, validate_disk_image};
+use super::distribution_signature::{
+    discover_code_objects, signature_problems, validate_distribution_app,
+};
+use super::notarization::{
+    DEFAULT_NOTARIZATION_TIMEOUT_SECONDS, NotarizationRequest, notarization_plan,
+    validate_notarization_request,
+};
+use super::stable_installation::{
+    PromotionTools, canonical_home_directory, promote_bundle, stable_promotion_problems,
+};
 
 fn arguments(argument_words: &[&str]) -> Vec<String> {
     let mut owned_arguments = Vec::new();
@@ -187,4 +200,462 @@ fn should_refuse_to_validate_an_empty_or_missing_disk_image() {
             .contains("nonempty")
     );
     assert!(validate_disk_image(&fixture_directory.path().join("absent.dmg")).is_err());
+}
+
+const DISTRIBUTABLE_SIGNATURE: &str = "Executable=/fixture/astronomicald\nCodeDirectory v=20500 size=1 flags=0x10000(runtime) hashes=1+7\nAuthority=Developer ID Application: Example (ABCDE12345)\nTimestamp=3 Nov 2026 at 01:00:00\nTeamIdentifier=ABCDE12345\n";
+
+#[test]
+fn should_accept_a_developer_id_runtime_timestamped_signature_of_the_release_team() {
+    assert!(signature_problems(DISTRIBUTABLE_SIGNATURE, "ABCDE12345").is_empty());
+}
+
+#[test]
+fn should_name_each_missing_property_of_a_distributable_signature() {
+    let ad_hoc_signature = "Executable=/fixture/astronomicald\nCodeDirectory v=20500 size=1 flags=0x2(adhoc) hashes=1+7\nSignature=adhoc\nTeamIdentifier=not set\n";
+
+    assert_eq!(
+        signature_problems(ad_hoc_signature, "ABCDE12345"),
+        vec![
+            "code object is not signed by Developer ID Application",
+            "code object Team ID does not match release configuration",
+            "code object does not enable Hardened Runtime",
+            "code object does not have a secure timestamp",
+        ]
+    );
+    assert_eq!(
+        signature_problems(DISTRIBUTABLE_SIGNATURE, "ZZZZZ99999"),
+        vec!["code object Team ID does not match release configuration"]
+    );
+}
+
+#[test]
+fn should_discover_bundles_frameworks_services_and_executables_without_following_symlinks() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let app_bundle = fixture_directory.path().join("Astronomical.app");
+    let framework_versions = app_bundle.join("Contents/Frameworks/Sparkle.framework/Versions");
+    write_fixture_file(
+        &framework_versions.join("B/XPCServices/Installer.xpc/Contents/Info.plist"),
+        "plist",
+    );
+    write_fixture_file(&app_bundle.join("Contents/MacOS/astronomicald"), "binary");
+    write_fixture_file(&app_bundle.join("Contents/Resources/LICENSE"), "text");
+    let executable_permissions = std::os::unix::fs::PermissionsExt::from_mode(0o755);
+    std::fs::set_permissions(
+        app_bundle.join("Contents/MacOS/astronomicald"),
+        executable_permissions,
+    )
+    .expect("executable bit");
+    std::os::unix::fs::symlink("B", framework_versions.join("Current")).expect("Current link");
+
+    let code_objects = discover_code_objects(&app_bundle).expect("the bundle should be walkable");
+
+    let mut relative_objects = Vec::new();
+    for code_object in &code_objects {
+        relative_objects.push(
+            code_object
+                .strip_prefix(fixture_directory.path())
+                .expect("inside the fixture")
+                .display()
+                .to_string(),
+        );
+    }
+    assert_eq!(
+        relative_objects,
+        vec![
+            "Astronomical.app",
+            "Astronomical.app/Contents/Frameworks/Sparkle.framework",
+            "Astronomical.app/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc",
+            "Astronomical.app/Contents/MacOS/astronomicald",
+        ]
+    );
+}
+
+#[test]
+fn should_refuse_distribution_validation_before_running_codesign() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let app_bundle = fixture_app_bundle(fixture_directory.path());
+
+    assert!(
+        validate_distribution_app(&fixture_directory.path().join("absent.app"), "ABCDE12345")
+            .is_err()
+    );
+    assert!(
+        validate_distribution_app(&app_bundle, "ABC")
+            .expect_err("short team")
+            .contains("--team-id")
+    );
+    assert!(
+        validate_distribution_app(&app_bundle, "ABCDE12345")
+            .expect_err("no Sparkle")
+            .contains("code object is unavailable")
+    );
+}
+
+fn notarization_request(disk_image: &Path, timeout_seconds: u64) -> NotarizationRequest {
+    NotarizationRequest {
+        disk_image: disk_image.to_path_buf(),
+        signing_identity: "Developer ID Application: Example (ABCDE12345)".to_owned(),
+        notary_profile: "astronomical-notary".to_owned(),
+        timeout_seconds,
+    }
+}
+
+#[test]
+fn should_plan_sign_submit_staple_validate_and_assess_in_order() {
+    let planned_steps = notarization_plan(&notarization_request(Path::new("/release/A.dmg"), 180));
+
+    let mut step_names = Vec::new();
+    for planned_step in &planned_steps {
+        step_names.push(planned_step.step_name);
+    }
+    assert_eq!(
+        step_names,
+        vec![
+            "sign-dmg",
+            "submit-dmg-for-notarization",
+            "staple-notarization-ticket",
+            "validate-stapled-ticket",
+            "assess-notarized-dmg"
+        ]
+    );
+    assert_eq!(
+        planned_steps[0].program_arguments.join(" "),
+        "--force --sign Developer ID Application: Example (ABCDE12345) --timestamp /release/A.dmg"
+    );
+    assert_eq!(
+        planned_steps[1].program_arguments.join(" "),
+        "notarytool submit /release/A.dmg --keychain-profile astronomical-notary --wait --timeout 180s"
+    );
+}
+
+#[test]
+fn should_default_the_notarization_timeout_and_refuse_bad_values() {
+    let parsed_command = parse_release_command(&arguments(&[
+        "notarize-dmg",
+        "--dmg",
+        "/a.dmg",
+        "--signing-identity",
+        "Dev",
+        "--notary-profile",
+        "p",
+    ]));
+    assert_eq!(
+        parsed_command,
+        Ok(ReleaseCommand::NotarizeDiskImage(NotarizationRequest {
+            disk_image: PathBuf::from("/a.dmg"),
+            signing_identity: "Dev".to_owned(),
+            notary_profile: "p".to_owned(),
+            timeout_seconds: DEFAULT_NOTARIZATION_TIMEOUT_SECONDS,
+        }))
+    );
+    assert!(
+        parse_release_command(&arguments(&[
+            "notarize-dmg",
+            "--dmg",
+            "/a.dmg",
+            "--signing-identity",
+            "Dev"
+        ]))
+        .is_err()
+    );
+    assert!(
+        parse_release_command(&arguments(&[
+            "notarize-dmg",
+            "--dmg",
+            "/a.dmg",
+            "--signing-identity",
+            "Dev",
+            "--notary-profile",
+            "p",
+            "--timeout-seconds",
+            "soon",
+        ]))
+        .is_err()
+    );
+
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let disk_image = fixture_directory.path().join("A.dmg");
+    write_fixture_file(&disk_image, "image");
+    assert!(
+        validate_notarization_request(&notarization_request(&disk_image, 0))
+            .expect_err("zero")
+            .contains("positive")
+    );
+    assert!(
+        validate_notarization_request(&notarization_request(
+            &fixture_directory.path().join("absent.dmg"),
+            180
+        ))
+        .is_err()
+    );
+    assert_eq!(
+        validate_notarization_request(&notarization_request(&disk_image, 180)),
+        Ok(())
+    );
+}
+
+#[test]
+fn should_resolve_a_real_home_directory_and_refuse_unsafe_ones() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let home_text = fixture_directory.path().display().to_string();
+
+    assert_eq!(
+        canonical_home_directory(Some(&home_text)),
+        Ok(std::fs::canonicalize(fixture_directory.path()).expect("canonical fixture"))
+    );
+    assert!(canonical_home_directory(None).is_err());
+    assert!(canonical_home_directory(Some("relative/home")).is_err());
+    assert!(
+        canonical_home_directory(Some(&format!("{home_text}/../escape")))
+            .expect_err("parent")
+            .contains("parent")
+    );
+    assert!(
+        canonical_home_directory(Some(&format!("{home_text}/absent")))
+            .expect_err("absent")
+            .contains("existing")
+    );
+    assert!(
+        canonical_home_directory(Some("/"))
+            .expect_err("root")
+            .contains("root")
+    );
+}
+
+#[test]
+fn should_promote_only_clean_stable_bundles() {
+    let clean_stable =
+        serde_json::json!({"AstronomicalChannel": "stable", "AstronomicalBuildDirty": false});
+    let dirty_stable =
+        serde_json::json!({"AstronomicalChannel": "stable", "AstronomicalBuildDirty": true});
+    let development =
+        serde_json::json!({"AstronomicalChannel": "development", "AstronomicalBuildDirty": false});
+
+    assert!(stable_promotion_problems(&clean_stable).is_empty());
+    assert_eq!(
+        stable_promotion_problems(&dirty_stable),
+        vec!["dirty builds cannot be promoted to Stable"]
+    );
+    assert_eq!(
+        stable_promotion_problems(&development),
+        vec!["only a Stable bundle may be promoted"]
+    );
+}
+
+fn copy_fixture_bundle(source_bundle: &Path, staged_bundle: &Path) -> Result<(), String> {
+    let source_marker =
+        std::fs::read_to_string(source_bundle.join("marker")).map_err(drop_error)?;
+    write_fixture_file(&staged_bundle.join("marker"), &source_marker);
+    Ok(())
+}
+
+fn refuse_to_stage(_source_bundle: &Path, staged_bundle: &Path) -> Result<(), String> {
+    write_fixture_file(&staged_bundle.join("partial"), "half-copied");
+    Err("the staged copy does not verify".to_owned())
+}
+
+fn delete_fixture_backup(backup_bundle: &Path) -> Result<(), String> {
+    std::fs::remove_dir_all(backup_bundle).map_err(drop_error)
+}
+
+fn drop_error(io_error: std::io::Error) -> String {
+    io_error.to_string()
+}
+
+const FIXTURE_PROMOTION_TOOLS: PromotionTools = PromotionTools {
+    stage_copy: copy_fixture_bundle,
+    dispose_backup: delete_fixture_backup,
+};
+
+#[test]
+fn should_install_fresh_then_replace_the_previous_app_leaving_no_staging_residue() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let applications_directory = fixture_directory.path().join("Applications");
+    let first_bundle = fixture_directory.path().join("first.app");
+    let second_bundle = fixture_directory.path().join("second.app");
+    write_fixture_file(&first_bundle.join("marker"), "first");
+    write_fixture_file(&second_bundle.join("marker"), "second");
+
+    promote_bundle(
+        &first_bundle,
+        &applications_directory,
+        &FIXTURE_PROMOTION_TOOLS,
+    )
+    .expect("a fresh install");
+    promote_bundle(
+        &second_bundle,
+        &applications_directory,
+        &FIXTURE_PROMOTION_TOOLS,
+    )
+    .expect("a replacement");
+
+    let installed_marker =
+        std::fs::read_to_string(applications_directory.join("Astronomical.app/marker"))
+            .expect("installed");
+    assert_eq!(installed_marker, "second");
+    let mut directory_names = Vec::new();
+    for directory_entry in std::fs::read_dir(&applications_directory)
+        .expect("listable")
+        .flatten()
+    {
+        directory_names.push(directory_entry.file_name().to_string_lossy().into_owned());
+    }
+    assert_eq!(
+        directory_names,
+        vec!["Astronomical.app"],
+        "no stage or backup may remain"
+    );
+}
+
+#[test]
+fn should_leave_the_installed_app_untouched_when_staging_fails() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let applications_directory = fixture_directory.path().join("Applications");
+    write_fixture_file(
+        &applications_directory.join("Astronomical.app/marker"),
+        "installed",
+    );
+    let failing_tools = PromotionTools {
+        stage_copy: refuse_to_stage,
+        dispose_backup: delete_fixture_backup,
+    };
+
+    let promotion_error = promote_bundle(
+        &fixture_directory.path().join("any.app"),
+        &applications_directory,
+        &failing_tools,
+    )
+    .expect_err("must fail");
+
+    assert!(
+        promotion_error.contains("does not verify"),
+        "{promotion_error}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(applications_directory.join("Astronomical.app/marker"))
+            .expect("kept"),
+        "installed"
+    );
+    assert_eq!(
+        std::fs::read_dir(&applications_directory)
+            .expect("listable")
+            .count(),
+        1,
+        "the partial stage was removed"
+    );
+}
+
+#[test]
+fn should_parse_install_commands_with_an_optional_bundle_and_dry_run() {
+    assert_eq!(
+        parse_release_command(&arguments(&[
+            "install-stable",
+            "--dry-run",
+            "--app-bundle",
+            "/a.app"
+        ])),
+        Ok(ReleaseCommand::InstallStable {
+            app_bundle: Some(PathBuf::from("/a.app")),
+            is_dry_run: true
+        })
+    );
+    assert_eq!(
+        parse_release_command(&arguments(&["install-stable"])),
+        Ok(ReleaseCommand::InstallStable {
+            app_bundle: None,
+            is_dry_run: false
+        })
+    );
+    assert_eq!(
+        parse_release_command(&arguments(&["build-and-install-stable", "--dry-run"])),
+        Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: true })
+    );
+    assert!(
+        parse_release_command(&arguments(&[
+            "build-and-install-stable",
+            "--app-bundle",
+            "/a.app"
+        ]))
+        .is_err()
+    );
+    assert!(parse_release_command(&arguments(&["install-stable", "--force"])).is_err());
+}
+
+#[test]
+fn should_package_only_app_store_channel_bundles() {
+    assert_eq!(
+        app_store_channel_problem(&serde_json::json!({"AstronomicalChannel": "app-store"})),
+        None
+    );
+    assert!(
+        app_store_channel_problem(&serde_json::json!({"AstronomicalChannel": "stable"}))
+            .expect("stable is refused")
+            .contains("this bundle declares stable")
+    );
+    assert!(
+        app_store_channel_problem(&serde_json::json!({}))
+            .expect("missing channel")
+            .contains("does not declare")
+    );
+}
+
+#[test]
+fn should_match_the_installer_identity_by_its_full_quoted_name() {
+    let identity_listing = "  1) ABCDEF0123456789 \"3rd Party Mac Developer Installer: Example (ABCDE12345)\"\n     1 valid identities found\n";
+
+    assert!(identity_is_listed(
+        identity_listing,
+        "3rd Party Mac Developer Installer: Example (ABCDE12345)"
+    ));
+    assert!(!identity_is_listed(
+        identity_listing,
+        "Mac Developer Installer"
+    ));
+    assert!(!identity_is_listed(identity_listing, ""));
+}
+
+#[test]
+fn should_write_the_package_beside_the_bundle_by_default() {
+    assert_eq!(
+        default_output_package(
+            Path::new("/target/astronomical-macos-app-store.noindex/Astronomical.app"),
+            "0.2.88"
+        ),
+        PathBuf::from(
+            "/target/astronomical-macos-app-store.noindex/Astronomical-0.2.88-app-store.pkg"
+        )
+    );
+}
+
+#[test]
+fn should_parse_the_app_store_package_command() {
+    assert_eq!(
+        parse_release_command(&arguments(&[
+            "app-store-pkg",
+            "--app-bundle",
+            "/a.app",
+            "--installer-identity",
+            "Installer"
+        ])),
+        Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
+            app_bundle: PathBuf::from("/a.app"),
+            installer_identity: "Installer".to_owned(),
+            output_package: None,
+        }))
+    );
+    assert!(
+        parse_release_command(&arguments(&["app-store-pkg", "--app-bundle", "/a.app"])).is_err()
+    );
+    assert!(
+        parse_release_command(&arguments(&[
+            "app-store-pkg",
+            "--app-bundle",
+            "/a.app",
+            "--app-bundle",
+            "/b.app",
+            "--installer-identity",
+            "I",
+        ]))
+        .is_err()
+    );
 }

@@ -196,15 +196,6 @@ validate_distribution_credentials() {
         *) print_error "configured identity must be a Developer ID Application identity"; exit 1 ;;
     esac
     validate_notary_profile_access
-    for helper_script in \
-        notarize-dmg.sh \
-        validate-distribution-app.sh
-    do
-        [ -x "${repository_root}/scripts/release/${helper_script}" ] || {
-            print_error "release helper is unavailable: scripts/release/${helper_script}"
-            exit 1
-        }
-    done
 }
 
 validate_notary_profile_access() {
@@ -251,8 +242,8 @@ prepare_release() {
     [ "$bundled_feed_url" = "$update_feed_url" ] || { print_error "built app update feed does not match this repository"; exit 1; }
 
     start_step "validate-developer-id-app"
-    "${repository_root}/scripts/release/validate-distribution-app.sh" \
-        --app-bundle "$stable_app_bundle" --team-id "$EXPECTED_TEAM_ID"
+    (CDPATH='' cd -- "$repository_root" && cargo xtask release validate-distribution-app \
+        --app-bundle "$stable_app_bundle" --team-id "$EXPECTED_TEAM_ID")
     finish_step
 
     release_asset_name="Astronomical-${release_version}-macOS-arm64.dmg"
@@ -267,9 +258,9 @@ prepare_release() {
     finish_step
 
     start_step "notarize-and-staple-dmg"
-    "${repository_root}/scripts/release/notarize-dmg.sh" \
+    (CDPATH='' cd -- "$repository_root" && cargo xtask release notarize-dmg \
         --dmg "$release_dmg" --signing-identity "$SIGNING_IDENTITY" \
-        --notary-profile "$NOTARY_PROFILE"
+        --notary-profile "$NOTARY_PROFILE")
     finish_step
 
     start_step "validate-notarized-dmg"

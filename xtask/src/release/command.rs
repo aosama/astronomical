@@ -3,15 +3,34 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use super::app_store_package::{AppStorePackageRequest, package_for_app_store};
 use super::disk_image_creation::{DiskImageRequest, create_disk_image};
 use super::disk_image_validation::validate_disk_image;
+use super::distribution_signature::validate_distribution_app;
+use super::notarization::{NotarizationRequest, notarize_disk_image, parse_timeout_seconds};
+use super::stable_installation::{
+    InstallRequest, build_and_install_stable, default_stable_bundle, install_stable,
+};
 
-pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH";
+pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH]";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReleaseCommand {
     CreateDiskImage(DiskImageRequest),
     ValidateDiskImage(PathBuf),
+    ValidateDistributionApp {
+        app_bundle: PathBuf,
+        team_identifier: String,
+    },
+    NotarizeDiskImage(NotarizationRequest),
+    InstallStable {
+        app_bundle: Option<PathBuf>,
+        is_dry_run: bool,
+    },
+    BuildAndInstallStable {
+        is_dry_run: bool,
+    },
+    AppStorePackage(AppStorePackageRequest),
 }
 
 pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseCommand, String> {
@@ -34,7 +53,82 @@ pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseComma
                 "--dmg",
             )?))
         }
+        "validate-distribution-app" => {
+            let flag_values =
+                parse_flag_values(subcommand_arguments, &["--app-bundle", "--team-id"])?;
+            Ok(ReleaseCommand::ValidateDistributionApp {
+                app_bundle: required_path(&flag_values, "--app-bundle")?,
+                team_identifier: required_text(&flag_values, "--team-id")?,
+            })
+        }
+        "notarize-dmg" => parse_notarization_command(subcommand_arguments),
+        "app-store-pkg" => {
+            let flag_values = parse_flag_values(
+                subcommand_arguments,
+                &["--app-bundle", "--installer-identity", "--output-pkg"],
+            )?;
+            Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
+                app_bundle: required_path(&flag_values, "--app-bundle")?,
+                installer_identity: required_text(&flag_values, "--installer-identity")?,
+                output_package: flag_values.get("--output-pkg").map(PathBuf::from),
+            }))
+        }
+        "install-stable" => {
+            let (is_dry_run, valued_arguments) = take_dry_run_flag(subcommand_arguments);
+            let flag_values = parse_flag_values(&valued_arguments, &["--app-bundle"])?;
+            Ok(ReleaseCommand::InstallStable {
+                app_bundle: flag_values.get("--app-bundle").map(PathBuf::from),
+                is_dry_run,
+            })
+        }
+        "build-and-install-stable" => match subcommand_arguments {
+            [] => Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: false }),
+            [dry_run_flag] if dry_run_flag == "--dry-run" => {
+                Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: true })
+            }
+            _ => Err(RELEASE_USAGE.to_owned()),
+        },
         _ => Err(RELEASE_USAGE.to_owned()),
+    }
+}
+
+fn parse_notarization_command(subcommand_arguments: &[String]) -> Result<ReleaseCommand, String> {
+    let flag_values = parse_flag_values(
+        subcommand_arguments,
+        &[
+            "--dmg",
+            "--signing-identity",
+            "--notary-profile",
+            "--timeout-seconds",
+        ],
+    )?;
+    Ok(ReleaseCommand::NotarizeDiskImage(NotarizationRequest {
+        disk_image: required_path(&flag_values, "--dmg")?,
+        signing_identity: required_text(&flag_values, "--signing-identity")?,
+        notary_profile: required_text(&flag_values, "--notary-profile")?,
+        timeout_seconds: parse_timeout_seconds(flag_values.get("--timeout-seconds"))?,
+    }))
+}
+
+/// `--dry-run` is the one valueless flag; it is taken out before the
+/// `--flag value` pairs are parsed.
+fn take_dry_run_flag(subcommand_arguments: &[String]) -> (bool, Vec<String>) {
+    let mut is_dry_run = false;
+    let mut valued_arguments = Vec::new();
+    for subcommand_argument in subcommand_arguments {
+        if subcommand_argument == "--dry-run" {
+            is_dry_run = true;
+        } else {
+            valued_arguments.push(subcommand_argument.clone());
+        }
+    }
+    (is_dry_run, valued_arguments)
+}
+
+fn required_text(flag_values: &BTreeMap<String, String>, flag: &str) -> Result<String, String> {
+    match flag_values.get(flag) {
+        Some(flag_value) => Ok(flag_value.clone()),
+        None => Err(format!("{flag} is required\n{RELEASE_USAGE}")),
     }
 }
 
@@ -44,6 +138,27 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
             create_disk_image(repository_root, &disk_image_request)
         }
         ReleaseCommand::ValidateDiskImage(disk_image_path) => validate_disk_image(&disk_image_path),
+        ReleaseCommand::ValidateDistributionApp {
+            app_bundle,
+            team_identifier,
+        } => validate_distribution_app(&app_bundle, &team_identifier),
+        ReleaseCommand::NotarizeDiskImage(notarization_request) => {
+            notarize_disk_image(&notarization_request)
+        }
+        ReleaseCommand::InstallStable {
+            app_bundle,
+            is_dry_run,
+        } => install_stable(&InstallRequest {
+            source_bundle: match app_bundle {
+                Some(app_bundle) => app_bundle,
+                None => default_stable_bundle(repository_root),
+            },
+            is_dry_run,
+        }),
+        ReleaseCommand::BuildAndInstallStable { is_dry_run } => {
+            build_and_install_stable(repository_root, is_dry_run)
+        }
+        ReleaseCommand::AppStorePackage(package_request) => package_for_app_store(&package_request),
     }
 }
 
