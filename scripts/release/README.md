@@ -7,7 +7,7 @@ Every release step is a typed `cargo xtask release <step>` command; ordinary dev
 - Build a Stable candidate with `cargo xtask app package --channel stable`.
 - Run all Stable packaging and publication contracts explicitly with `scripts/release/tests/test-release-contracts.sh`.
 - Prepare or publish a signed release only through `cargo xtask release prepare-and-publish --tag vX.Y.Z ...` (add `--publish` with the reviewed `--output-directory` to publish).
-- The individual steps are `cargo xtask release create-dmg`, `validate-dmg`, `validate-distribution-app`, `notarize-dmg [--timeout-seconds N]`, `install-stable`, `build-and-install-stable`, and `app-store-pkg`.
+- The individual steps are `cargo xtask release create-dmg`, `validate-dmg`, `validate-distribution-app`, `notarize-dmg [--timeout-seconds N]`, `install-stable`, `build-and-install-stable`, `app-store-pkg`, and `accept-sparkle-update` (the end-to-end Sparkle update acceptance, using the fixtures in `fixtures/`).
 - `cargo xtask release prepare-signed --tag vX.Y.Z [--notes-file PATH] [--output-directory PATH] [--publish]` is the convenience front door for the same publisher: it resolves the documented credential map (exactly one Developer ID identity, its Team ID, the Astronomical Notarization profile) and runs the publisher in the same process. It performs no artifact work itself.
 
 Release commands may open Finder, mount disk images, access signing identities, submit notarization requests, or mutate GitHub release state. Review their arguments and prerequisites before execution.
