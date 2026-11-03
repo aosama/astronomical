@@ -238,7 +238,7 @@ fn unix_epoch_seconds() -> u64 {
 /// Local timestamp in the shell runner's `date '+%Y-%m-%dT%H:%M:%S%z'`
 /// shape, so log readers and greps written against the shell output keep
 /// parsing the start line unchanged.
-fn local_timestamp() -> String {
+pub(crate) fn local_timestamp() -> String {
     let epoch_seconds = unix_epoch_seconds() as libc::time_t;
     let mut broken_down_time: libc::tm = unsafe { std::mem::zeroed() };
     let time_conversion_succeeded =
