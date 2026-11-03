@@ -122,7 +122,7 @@ final class TelemetryStore: ObservableObject {
       let successFeedbackGeneration = presentControlActionFeedback(.success(updateMessage))
       let refreshedStatusDocument = await refresh()
       guard controlActionFeedbackGeneration == successFeedbackGeneration else { return }
-      editableMaximumMlxMemoryGigabytes = clampedEditableMaximumMlxMemoryGigabytes(
+      editableMaximumMlxMemoryGigabytes = appliedMaximumMlxMemoryWholeGigabytes(
         for: refreshedStatusDocument)
     } catch {
       guard controlActionFeedbackGeneration == memoryUpdateFeedbackGeneration else { return }
@@ -282,7 +282,7 @@ final class TelemetryStore: ObservableObject {
   private func apply(_ nextStatusDocument: DaemonStatusDocument) {
     statusDocument = nextStatusDocument
     if !popoverIsVisible {
-      editableMaximumMlxMemoryGigabytes = clampedEditableMaximumMlxMemoryGigabytes(
+      editableMaximumMlxMemoryGigabytes = appliedMaximumMlxMemoryWholeGigabytes(
         for: nextStatusDocument)
     }
     onMenuBarTitleChanged?(nextStatusDocument.menuBarTitle)
@@ -347,44 +347,19 @@ final class TelemetryStore: ObservableObject {
     (statusDocument.minimumMlxMemoryCeilingBytes + 1_073_741_823) / 1_073_741_824
   }
 
-  /// Largest whole-GB setting that is fully reachable: the machine ceiling
-  /// floored, and floored again by the wired-residency budget when macOS
-  /// grants less than the machine ceiling. The stepper never offers a value
-  /// the engine cannot serve — a ceiling above the wired budget only ever
-  /// exists through "Use Mac Maximum" or the configuration file, and the
-  /// panel's effective line carries that truth (issue #1282).
+  /// Largest whole-GB setting the engine serves unchanged; the stepper never
+  /// offers a value the engine would cap (issue #1282).
   var maximumWholeGigabytes: UInt64 {
-    maximumWholeGigabytes(for: statusDocument)
+    reachableMaximumMlxMemoryWholeGigabytes(for: statusDocument)
   }
 
-  private func maximumWholeGigabytes(
-    for statusDocument: DaemonStatusDocument
-  ) -> UInt64 {
-    let machineCeilingWholeGigabytes =
-      statusDocument.machineMlxMemoryCeilingBytes / 1_073_741_824
-    guard let wiredResidencyBudgetBytes = statusDocument.wiredResidencyBudgetBytes else {
-      return machineCeilingWholeGigabytes
-    }
-    return min(
-      machineCeilingWholeGigabytes,
-      wiredResidencyBudgetBytes / 1_073_741_824
+  var maximumMlxMemoryControlPresentation: MaximumMlxMemoryControlPresentation {
+    MaximumMlxMemoryControlPresentation(
+      statusDocument: statusDocument,
+      editableMaximumWholeGigabytes: editableMaximumMlxMemoryGigabytes
     )
   }
 
-  /// Keeps the stepper value inside its range even when the applied ceiling
-  /// sits above the reachable bound ("Use Mac Maximum" requests the machine
-  /// ceiling and lets the engine clamp it).
-  private func clampedEditableMaximumMlxMemoryGigabytes(
-    for statusDocument: DaemonStatusDocument
-  ) -> UInt64 {
-    let requestedWholeGigabytes: UInt64
-    if let configuredWholeGigabytes = statusDocument.configuredMaximumMlxMemoryGigabytes {
-      requestedWholeGigabytes = configuredWholeGigabytes
-    } else {
-      requestedWholeGigabytes = maximumWholeGigabytes(for: statusDocument)
-    }
-    return min(requestedWholeGigabytes, maximumWholeGigabytes(for: statusDocument))
-  }
 
   private func controlActionErrorMessage(_ controlActionError: Error) -> String {
     if let localizedControlActionError = controlActionError as? LocalizedError,

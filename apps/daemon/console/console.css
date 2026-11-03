@@ -322,6 +322,7 @@ body[data-application-channel="development"] .application-build-identity { color
 .mlx-memory-control-row, .controls-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .mlx-memory-control input { min-width: 110px; min-height: 40px; flex: 1 1 110px; padding: 8px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-small); background: var(--panel-2); color: var(--text); }
 .mlx-memory-control-status { min-height: 1.5em; font-size: var(--text-md); overflow-wrap: anywhere; }
+.mlx-memory-control-notice { color: var(--warn); font-size: var(--text-md); overflow-wrap: anywhere; }
 .button { min-height: 40px; padding: 8px 16px; border: 1px solid transparent; border-radius: 999px; cursor: pointer; font-size: var(--text-lg); font-weight: var(--weight-label); transition: opacity 150ms ease, background-color 150ms ease; }
 .button:disabled { opacity: 0.4; cursor: not-allowed; }
 .button-primary { background: var(--silver); color: var(--ground); }

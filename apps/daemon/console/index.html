@@ -310,15 +310,14 @@
                     <div class="settings-grid">
                         <section class="panel settings-panel">
                             <h3>Maximum model RAM</h3>
-                            <p class="panel-note">Whole decimal gigabytes available to MLX model execution.</p>
                             <div class="mlx-memory-control">
-                                <label for="maximum-mlx-memory-gb">Maximum model RAM (decimal GB)</label>
                                 <div class="mlx-memory-control-row">
-                                    <input id="maximum-mlx-memory-gb" type="number" inputmode="numeric" step="1" aria-label="Maximum model RAM in decimal gigabytes">
-                                    <button id="maximum-mlx-memory-apply" class="button button-primary" type="button">Apply</button>
-                                    <button id="maximum-mlx-memory-reset" class="button button-secondary" type="button">Use Mac Maximum</button>
+                                    <input id="maximum-mlx-memory-gb" type="number" inputmode="numeric" step="1" aria-label="Maximum model RAM in GB">
+                                    <button id="maximum-mlx-memory-apply" class="button button-primary" type="button" hidden>Apply</button>
+                                    <button id="maximum-mlx-memory-reset" class="button button-secondary" type="button" aria-label="Use the Mac maximum" hidden>Use Max</button>
                                 </div>
-                                <div id="maximum-mlx-memory-status" class="mlx-memory-control-status" aria-live="polite"></div>
+                                <div id="maximum-mlx-memory-status" class="mlx-memory-control-status"></div>
+                                <div id="maximum-mlx-memory-notice" class="mlx-memory-control-notice" aria-live="polite" hidden></div>
                             </div>
                         </section>
                         <section id="controls-panel" class="panel controls-panel">
