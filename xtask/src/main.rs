@@ -33,6 +33,9 @@ mod disposable_target_tests;
 mod install_verification_tools;
 #[cfg(test)]
 mod install_verification_tools_tests;
+mod menu_contracts;
+#[cfg(test)]
+mod menu_contracts_tests;
 mod native_dependency_manifest;
 #[cfg(test)]
 mod native_dependency_manifest_tests;
@@ -53,8 +56,13 @@ mod retired_native_scan_tests;
 mod sccache_save_tests;
 mod source_size;
 mod step_log;
+mod test_channel_isolation;
+#[cfg(test)]
+mod test_channel_isolation_tests;
 mod test_run;
 mod tier_pyramid;
+#[cfg(test)]
+mod tier_pyramid_tests;
 mod tool_pins;
 #[cfg(test)]
 mod tool_pins_tests;
@@ -70,16 +78,17 @@ fn main() -> ExitCode {
     let mut arguments: Vec<String> = std::env::args().skip(1).collect();
     let repository_root_override = take_repository_root_override(&mut arguments);
     let resolve_root = move || repository_root_override.unwrap_or_else(resolve_repository_root);
+    if let Some(command_name) = arguments.first()
+        && APP_AND_RELEASE_COMMANDS.contains(&command_name.as_str())
+    {
+        return run_command(run_app_and_release_command(
+            command_name,
+            &resolve_root(),
+            &arguments[1..],
+        ));
+    }
     match arguments.first().map(String::as_str) {
         Some("test-run") => test_run::run(&resolve_root(), &arguments[1..]),
-        Some("app") => run_command(app_bundle::run(&resolve_root(), &arguments[1..])),
-        Some("release") => run_command(release::run(&resolve_root(), &arguments[1..])),
-        Some("provision-bindgen-headers") => {
-            run_command(bindgen_headers::run(&resolve_root(), &arguments[1..]))
-        }
-        Some("prewarm-native-build") => {
-            run_command(prewarm_native_build::run(&resolve_root(), &arguments[1..]))
-        }
         Some("mlx-c-coverage-inventory") => {
             test_run::refresh_coverage_inventory(&resolve_root(), &arguments[1..])
         }
@@ -119,7 +128,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | check-test-channel-isolation | menu-contracts | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
@@ -153,6 +162,33 @@ fn take_repository_root_override(arguments: &mut Vec<String>) -> Option<std::pat
             Some(std::path::PathBuf::from(journey_root))
         }
         _ => None,
+    }
+}
+
+/// The app, release, native-provisioning, and repository-check commands
+/// that replaced shell scripts, dispatched apart from `main` so its match
+/// stays within the complexity budget.
+const APP_AND_RELEASE_COMMANDS: [&str; 6] = [
+    "app",
+    "release",
+    "provision-bindgen-headers",
+    "prewarm-native-build",
+    "menu-contracts",
+    "check-test-channel-isolation",
+];
+
+fn run_app_and_release_command(
+    command_name: &str,
+    repository_root: &Path,
+    command_arguments: &[String],
+) -> Result<(), String> {
+    match command_name {
+        "app" => app_bundle::run(repository_root, command_arguments),
+        "release" => release::run(repository_root, command_arguments),
+        "provision-bindgen-headers" => bindgen_headers::run(repository_root, command_arguments),
+        "prewarm-native-build" => prewarm_native_build::run(repository_root, command_arguments),
+        "menu-contracts" => menu_contracts::run(repository_root, command_arguments),
+        _ => test_channel_isolation::run(repository_root, command_arguments),
     }
 }
 

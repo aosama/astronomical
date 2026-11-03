@@ -29,6 +29,7 @@ async fn should_report_the_live_stubbed_channel_and_the_dead_channel() {
     let mut doctor_dependencies = DoctorDependencies {
         executable_path: test_directory.join("astronomical"),
         channel_socket_paths: vec![
+            // channel-isolation: allow — the Stable label maps to this test's own stub socket, never live Stable state.
             (AstronomicalRuntimeInstance::Stable, live_socket_path),
             (AstronomicalRuntimeInstance::Development, dead_socket_path),
         ],

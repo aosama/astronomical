@@ -163,7 +163,7 @@ Check Rust formatting, then run the Rust integration and REST suites:
 
 Run the macOS menu contracts:
 
-    scripts/ci/test-macos-menu-contracts.sh
+    cargo xtask menu-contracts
 
 Direct MLX and real-model acceptance lanes remain explicit because they require Apple graphics hardware or local model artifacts.
 

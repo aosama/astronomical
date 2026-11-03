@@ -206,14 +206,19 @@ fn write_baseline(repository_root: &Path, tiers: [usize; 4]) -> Result<(), Strin
     })
 }
 
-pub fn run(repository_root: &Path, update_baseline: bool) -> Result<(), String> {
-    let tiers = [
+/// Unit, integration, e2e, and acceptance test counts for a tree.
+pub(crate) fn count_tiers(repository_root: &Path) -> [usize; 4] {
+    [
         count_unit_tier(repository_root),
         count_integration_tier(repository_root),
         count_e2e_package_tier(repository_root, false),
         count_e2e_package_tier(repository_root, true)
             + count_acceptance_package_tier(repository_root),
-    ];
+    ]
+}
+
+pub fn run(repository_root: &Path, update_baseline: bool) -> Result<(), String> {
+    let tiers = count_tiers(repository_root);
     let total: usize = tiers.iter().sum();
 
     println!("[tier-pyramid] status=start mode=report");
