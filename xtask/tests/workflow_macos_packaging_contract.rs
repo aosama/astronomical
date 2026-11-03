@@ -113,7 +113,7 @@ fn should_gate_only_pull_requests_that_touch_packaging() {
     let triggers = triggers_of(&workflow);
     assert!(
         triggers.get("schedule").is_some(),
-        "the nightly run is missing"
+        "the scheduled run is missing"
     );
     assert!(
         triggers.get("workflow_dispatch").is_some(),
