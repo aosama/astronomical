@@ -7,6 +7,8 @@
 use std::path::Path;
 use std::process::Command;
 
+use crate::version_only_bump::{VersionBumpTexts, is_version_only_bump};
+
 const ZERO_GIT_SHA: &str = "0000000000000000000000000000000000000000";
 
 /// Pathspecs mirroring native source-identity ownership plus the Rust
@@ -103,10 +105,16 @@ fn any_notices_freshness_input(changed_paths: &[String]) -> bool {
 /// access. PRs and pushes (PR merges) both gate on code changes so that
 /// default-branch pushes save native-build and sccache caches for future PRs
 /// to restore; static-only changes still skip.
+///
+/// `is_version_only_bump` is a content proof made by the git edge (see
+/// `version_only_bump`), never a path guess: a proven bump is identical to
+/// the commit main already verified apart from the version string, so the
+/// macOS lanes would only re-prove it.
 pub fn classify_change_scope(
     event: CiEvent,
     changed_paths: &[String],
     native_inputs_changed: bool,
+    is_version_only_bump: bool,
 ) -> ChangeScopeVerdict {
     match event {
         CiEvent::WorkflowDispatch => ChangeScopeVerdict {
@@ -118,27 +126,35 @@ pub fn classify_change_scope(
             changed_file_count: 0,
         },
         CiEvent::PullRequest | CiEvent::Push => {
-            let code_changed = changed_paths
-                .iter()
-                .any(|changed_path| !is_static_only_path(changed_path));
-            let macos_verification_required = code_changed;
-            let notices_inputs_changed = any_notices_freshness_input(changed_paths);
-            let classification = if !code_changed {
-                "static_only"
-            } else if native_inputs_changed {
-                "native_inputs"
-            } else {
-                "code_or_build"
-            };
-            ChangeScopeVerdict {
-                code_changed,
-                native_inputs_changed,
-                macos_verification_required,
-                notices_inputs_changed,
-                classification: classification.to_owned(),
-                changed_file_count: changed_paths.len(),
-            }
+            classify_changed_paths(changed_paths, native_inputs_changed, is_version_only_bump)
         }
+    }
+}
+
+fn classify_changed_paths(
+    changed_paths: &[String],
+    native_inputs_changed: bool,
+    is_version_only_bump: bool,
+) -> ChangeScopeVerdict {
+    let code_changed = changed_paths
+        .iter()
+        .any(|changed_path| !is_static_only_path(changed_path));
+    let classification = if !code_changed {
+        "static_only"
+    } else if is_version_only_bump {
+        "version_only_bump"
+    } else if native_inputs_changed {
+        "native_inputs"
+    } else {
+        "code_or_build"
+    };
+    ChangeScopeVerdict {
+        code_changed,
+        native_inputs_changed,
+        macos_verification_required: code_changed && !is_version_only_bump,
+        notices_inputs_changed: any_notices_freshness_input(changed_paths),
+        classification: classification.to_owned(),
+        changed_file_count: changed_paths.len(),
     }
 }
 
@@ -166,7 +182,7 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
     eprintln!("[ci-change-scope] status=start event={event_name}");
 
     let verdict = match event {
-        CiEvent::WorkflowDispatch => classify_change_scope(event, &[], false),
+        CiEvent::WorkflowDispatch => classify_change_scope(event, &[], false, false),
         CiEvent::PullRequest | CiEvent::Push => {
             let (base_sha, head_sha) = match event {
                 CiEvent::PullRequest => (
@@ -207,11 +223,68 @@ fn resolve_verdict_from_history(
     let changed_paths = changed_paths_between(repository_root, &base_sha, &head_sha)?;
     let native_inputs_changed =
         native_inputs_changed_between(repository_root, &base_sha, &head_sha)?;
+    let is_version_only_bump =
+        version_only_bump_between(repository_root, &base_sha, &head_sha, &changed_paths);
     Some(classify_change_scope(
         CiEvent::PullRequest,
         &changed_paths,
         native_inputs_changed,
+        is_version_only_bump,
     ))
+}
+
+/// Reads the base and head texts a version bump rewrites and asks the pure
+/// proof. The files are read only when both appear in the diff, and any read
+/// failure answers false: when the proof cannot be made, verify everything.
+fn version_only_bump_between(
+    repository_root: &Path,
+    base_sha: &str,
+    head_sha: &str,
+    changed_paths: &[String],
+) -> bool {
+    if !changed_paths
+        .iter()
+        .any(|changed_path| changed_path == "Cargo.toml")
+        || !changed_paths
+            .iter()
+            .any(|changed_path| changed_path == "Cargo.lock")
+    {
+        return false;
+    }
+    let Some(base_manifest) = file_text_at(repository_root, base_sha, "Cargo.toml") else {
+        return false;
+    };
+    let Some(head_manifest) = file_text_at(repository_root, head_sha, "Cargo.toml") else {
+        return false;
+    };
+    let Some(base_lockfile) = file_text_at(repository_root, base_sha, "Cargo.lock") else {
+        return false;
+    };
+    let Some(head_lockfile) = file_text_at(repository_root, head_sha, "Cargo.lock") else {
+        return false;
+    };
+    is_version_only_bump(
+        changed_paths,
+        &VersionBumpTexts {
+            base_manifest: &base_manifest,
+            head_manifest: &head_manifest,
+            base_lockfile: &base_lockfile,
+            head_lockfile: &head_lockfile,
+        },
+    )
+}
+
+fn file_text_at(repository_root: &Path, commit_sha: &str, file_path: &str) -> Option<String> {
+    let git_output = Command::new("git")
+        .arg("-C")
+        .arg(repository_root)
+        .args(["show", &format!("{commit_sha}:{file_path}")])
+        .output()
+        .ok()?;
+    if !git_output.status.success() {
+        return None;
+    }
+    String::from_utf8(git_output.stdout).ok()
 }
 
 fn commit_exists(repository_root: &Path, commit_sha: &str) -> bool {

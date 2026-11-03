@@ -69,6 +69,9 @@ mod tier_pyramid_tests;
 mod tool_pins;
 #[cfg(test)]
 mod tool_pins_tests;
+mod version_only_bump;
+#[cfg(test)]
+mod version_only_bump_tests;
 
 mod sccache_save;
 

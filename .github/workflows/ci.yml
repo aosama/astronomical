@@ -1171,8 +1171,9 @@ jobs:
   # every lane's terminal result and decides.
   #
   # Skip legitimacy: the macOS lanes legitimately skip when the
-  # classifier marked macOS verification not required (site-only changes),
-  # and the notices-freshness lane when no notices input changed; the
+  # classifier marked macOS verification not required (site-only changes, or
+  # a version-only bump proven from the file contents), and the
+  # notices-freshness lane when no notices input changed; the
   # verdict accepts a skip only under that classifier decision, so a lane
   # skipped for any other reason fails the gate.
   verdict:

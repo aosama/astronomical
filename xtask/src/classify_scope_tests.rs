@@ -11,7 +11,7 @@ fn verdict_for(
         .iter()
         .map(|path| (*path).to_owned())
         .collect();
-    let verdict = classify_change_scope(event, &owned_paths, native_inputs_changed);
+    let verdict = classify_change_scope(event, &owned_paths, native_inputs_changed, false);
     (
         verdict.code_changed,
         verdict.native_inputs_changed,
@@ -102,7 +102,7 @@ fn notices_inputs_changed_for(event: CiEvent, changed_paths: &[&str]) -> bool {
     for changed_path in changed_paths {
         owned_paths.push((*changed_path).to_owned());
     }
-    classify_change_scope(event, &owned_paths, false).notices_inputs_changed
+    classify_change_scope(event, &owned_paths, false, false).notices_inputs_changed
 }
 
 #[test]
@@ -162,4 +162,49 @@ fn should_not_flag_notices_inputs_for_an_empty_change_range() {
 fn should_flag_notices_inputs_on_manual_dispatch() {
     // A manual run verifies everything, the notices lane included.
     assert!(notices_inputs_changed_for(CiEvent::WorkflowDispatch, &[]));
+}
+
+fn verdict_with_bump_proof(
+    changed_paths: &[&str],
+    is_version_only_bump: bool,
+) -> (bool, bool, String) {
+    let mut owned_paths = Vec::new();
+    for changed_path in changed_paths {
+        owned_paths.push((*changed_path).to_owned());
+    }
+    let verdict = classify_change_scope(
+        CiEvent::PullRequest,
+        &owned_paths,
+        false,
+        is_version_only_bump,
+    );
+    (
+        verdict.macos_verification_required,
+        verdict.notices_inputs_changed,
+        verdict.classification,
+    )
+}
+
+#[test]
+fn should_skip_macos_verification_for_a_proven_version_only_bump() {
+    assert_eq!(
+        verdict_with_bump_proof(&["Cargo.toml", "Cargo.lock"], true),
+        (false, true, "version_only_bump".to_owned())
+    );
+}
+
+#[test]
+fn should_still_require_macos_verification_without_the_content_proof() {
+    assert_eq!(
+        verdict_with_bump_proof(&["Cargo.toml", "Cargo.lock"], false),
+        (true, true, "code_or_build".to_owned())
+    );
+}
+
+#[test]
+fn should_never_let_a_manual_run_skip_macos_verification() {
+    let verdict = classify_change_scope(CiEvent::WorkflowDispatch, &[], false, true);
+
+    assert!(verdict.macos_verification_required);
+    assert_eq!(verdict.classification, "manual_run");
 }
