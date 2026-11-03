@@ -245,6 +245,7 @@ struct OrbitalTelemetryPopover: View {
     if telemetryStore.minimumWholeGigabytes <= telemetryStore.maximumWholeGigabytes,
       telemetryStore.maximumWholeGigabytes > 0
     {
+      let controlPresentation = telemetryStore.maximumMlxMemoryControlPresentation
       VStack(alignment: .leading, spacing: 6) {
         Text("Maximum model RAM").foregroundStyle(.secondary)
         HStack {
@@ -255,19 +256,20 @@ struct OrbitalTelemetryPopover: View {
             Text("\(telemetryStore.editableMaximumMlxMemoryGigabytes) GB")
               .font(PopoverTypography.monospacedBody)
           }
-          Button("Apply", action: telemetryStore.updateMaximumMlxMemoryLimit)
-          Button("Use Mac Maximum", action: telemetryStore.restoreMacMaximumMlxMemoryLimit)
+          if controlPresentation.shouldOfferApply {
+            Button("Apply", action: telemetryStore.updateMaximumMlxMemoryLimit)
+          }
+          Spacer()
+          if controlPresentation.shouldOfferMacMaximum {
+            Button("Use Max", action: telemetryStore.restoreMacMaximumMlxMemoryLimit)
+              .controlSize(.small)
+              .accessibilityLabel("Use the Mac maximum")
+          }
         }
-        Text(
-          "Effective \(gigabyteValueText(byteCount: statusDocument.mlxMemoryCeilingBytes)) of \(gigabyteValueText(byteCount: statusDocument.machineMlxMemoryCeilingBytes))"
-        ).font(.caption).foregroundStyle(.secondary)
-        if let wiredResidencyLimitTitle = statusDocument.wiredResidencyLimitTitle {
-          Text(
-            "macOS lets Astronomical lock up to \(wiredResidencyLimitTitle) of GPU memory on this Mac"
-          )
-          .font(.caption).foregroundStyle(.orange)
-          .accessibilityLabel(
-            "Operating-system GPU memory lock limit: \(wiredResidencyLimitTitle)")
+        Text(controlPresentation.reachableMaximumCaption)
+          .font(.caption).foregroundStyle(.secondary)
+        if let cappedCeilingCaption = controlPresentation.cappedCeilingCaption {
+          Text(cappedCeilingCaption).font(.caption).foregroundStyle(.orange)
         }
         if let pendingMlxMemoryCeilingBytes = statusDocument.pendingMlxMemoryCeilingBytes {
           Text("Pending \(gigabyteValueText(byteCount: pendingMlxMemoryCeilingBytes))")

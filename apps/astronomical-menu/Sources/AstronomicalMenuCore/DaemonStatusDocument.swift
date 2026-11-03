@@ -191,8 +191,8 @@ struct DaemonStatusDocument: Codable, Equatable {
   let mlxMemoryCeilingBytes: UInt64
   let machineMlxMemoryCeilingBytes: UInt64
   // GPU memory macOS granted the worker as a wired pool; nil when serving is
-  // pageable with no wired claim. The effective ceiling never exceeds it, so
-  // the memory panel can name the operating-system bound whenever it clamps.
+  // pageable with no wired claim. The engine plans below it by a Metal
+  // margin, so the memory stepper derives its reachable top from it.
   let wiredResidencyBudgetBytes: UInt64?
   let minimumMlxMemoryCeilingBytes: UInt64
   let configuredMaximumMlxMemoryGigabytes: UInt64?
@@ -419,22 +419,6 @@ struct DaemonStatusDocument: Codable, Equatable {
     )
   }
 
-  /// The wired GPU budget only when it clamps below the machine ceiling, so
-  /// the memory panel names the operating-system bound instead of presenting
-  /// an unexplained smaller effective number. `nil` when serving is pageable
-  /// or when macOS grants at least the machine ceiling (issue #1282).
-  var clampedWiredResidencyBudgetBytes: UInt64? {
-    guard let wiredResidencyBudgetBytes,
-      wiredResidencyBudgetBytes < machineMlxMemoryCeilingBytes
-    else { return nil }
-    return wiredResidencyBudgetBytes
-  }
-
-  /// Plain-language title for the operating-system GPU lock limit, shown only
-  /// while the limit actually clamps the ceiling.
-  var wiredResidencyLimitTitle: String? {
-    clampedWiredResidencyBudgetBytes.map { gigabyteValueText(byteCount: $0) }
-  }
   var sessionTitle: String {
     let requestCount = servingSession.completedRequestCount
     return

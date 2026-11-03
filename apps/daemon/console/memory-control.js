@@ -1,39 +1,94 @@
 const MAXIMUM_MLX_MEMORY_URL = "/v1/config/maximum-mlx-memory";
 const MARKETED_GIGABYTE_BYTES = 1073741824;
+// Mirrors METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND in the serving ceiling:
+// the engine plans 2.5% below any wired claim, so the control must too or it
+// offers a top value the engine quietly cuts.
+const METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND = 25;
 let maximumMlxMemoryEditIsActive = false;
+
+function mlxMemoryCeilingTheEngineWillInstall(requestedCeilingBytes, wiredResidencyBudgetBytes) {
+    if (wiredResidencyBudgetBytes === null || wiredResidencyBudgetBytes === undefined) {
+        return requestedCeilingBytes;
+    }
+    const metalWorkingSetMarginBytes =
+        Math.floor(wiredResidencyBudgetBytes / 1000) * METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND;
+    const plannableWiredResidencyBytes = Math.max(0, wiredResidencyBudgetBytes - metalWorkingSetMarginBytes);
+    return Math.min(requestedCeilingBytes, plannableWiredResidencyBytes);
+}
 
 function wholeGigabyteBounds(statusDocument) {
     const machineBytes = statusDocument.machine_mlx_memory_ceiling_bytes || 0;
+    const reachableBytes = mlxMemoryCeilingTheEngineWillInstall(
+        machineBytes, statusDocument.wired_residency_budget_bytes);
     return {
         minimumGigabytes: 1,
-        maximumGigabytes: Math.floor(machineBytes / MARKETED_GIGABYTE_BYTES)
+        maximumGigabytes: Math.floor(reachableBytes / MARKETED_GIGABYTE_BYTES)
     };
 }
+
+// The value the input rests on while nobody edits it; never above the
+// reachable maximum, even when the configuration file asks for more.
+function appliedMaximumGigabytes(statusDocument, bounds) {
+    const configuredGigabytes = statusDocument.configured_maximum_mlx_memory_gb;
+    if (configuredGigabytes === null || configuredGigabytes === undefined) {
+        return bounds.maximumGigabytes;
+    }
+    return Math.min(configuredGigabytes, bounds.maximumGigabytes);
+}
+
+// Something worth colour: an error, a queued change, or an explicit request
+// the engine serves below. "Use Max" landing under the machine ceiling is the
+// request being honoured, so it never counts as a cap.
+function memoryLimitNotice(statusDocument) {
+    if (statusDocument.mlx_memory_limit_error) { return statusDocument.mlx_memory_limit_error; }
+    if (statusDocument.pending_mlx_memory_ceiling_bytes) {
+        return "Pending " + formatGigabytes(statusDocument.pending_mlx_memory_ceiling_bytes);
+    }
+    const configuredGigabytes = statusDocument.configured_maximum_mlx_memory_gb;
+    const liveCeilingBytes = statusDocument.mlx_memory_ceiling_bytes || 0;
+    if (configuredGigabytes === null || configuredGigabytes === undefined || liveCeilingBytes === 0) {
+        return "";
+    }
+    if (configuredGigabytes * MARKETED_GIGABYTE_BYTES > liveCeilingBytes) {
+        return "Capped at " + formatGigabytes(liveCeilingBytes) + " on this Mac";
+    }
+    return "";
+}
+
+function renderMemoryLimitButtons(statusDocument) {
+    const input = document.getElementById("maximum-mlx-memory-gb");
+    const applyButton = document.getElementById("maximum-mlx-memory-apply");
+    const resetButton = document.getElementById("maximum-mlx-memory-reset");
+    const bounds = wholeGigabyteBounds(statusDocument);
+    const configuredGigabytes = statusDocument.configured_maximum_mlx_memory_gb;
+    const configurationIsExplicit = configuredGigabytes !== null && configuredGigabytes !== undefined;
+    // A configuration above the reachable maximum also earns Apply: the input
+    // already rests on the reachable value, so one click replaces it.
+    const configurationIsUnreachable = configurationIsExplicit && configuredGigabytes > bounds.maximumGigabytes;
+    applyButton.hidden = Number(input.value) === appliedMaximumGigabytes(statusDocument, bounds)
+        && !configurationIsUnreachable;
+    resetButton.hidden = !configurationIsExplicit;
+}
+
+let lastRenderedMemoryStatusDocument = null;
 
 function renderMemoryLimitControl(statusDocument) {
     const input = document.getElementById("maximum-mlx-memory-gb");
     if (!input) { return; }
+    lastRenderedMemoryStatusDocument = statusDocument;
     const bounds = wholeGigabyteBounds(statusDocument);
     input.min = String(bounds.minimumGigabytes);
     input.max = String(bounds.maximumGigabytes);
     input.disabled = bounds.minimumGigabytes > bounds.maximumGigabytes;
     if (!maximumMlxMemoryEditIsActive) {
-        const configuredGigabytes = statusDocument.configured_maximum_mlx_memory_gb;
-        input.value = configuredGigabytes === null || configuredGigabytes === undefined
-            ? String(bounds.maximumGigabytes) : String(configuredGigabytes);
+        input.value = String(appliedMaximumGigabytes(statusDocument, bounds));
     }
-    const effectiveGigabytes = formatGigabytes(statusDocument.mlx_memory_ceiling_bytes || 0);
-    const machineGigabytes = formatGigabytes(statusDocument.machine_mlx_memory_ceiling_bytes || 0);
-    let message = "Effective " + effectiveGigabytes + " of " + machineGigabytes;
-    const minimumGigabytes = formatGigabytes(statusDocument.minimum_mlx_memory_ceiling_bytes || 0);
-    if (statusDocument.minimum_mlx_memory_ceiling_bytes > 1) {
-        message += " · Loaded model floor " + minimumGigabytes;
-    }
-    if (statusDocument.pending_mlx_memory_ceiling_bytes) {
-        message += " · Pending " + formatGigabytes(statusDocument.pending_mlx_memory_ceiling_bytes);
-    }
-    if (statusDocument.mlx_memory_limit_error) { message = statusDocument.mlx_memory_limit_error; }
-    document.getElementById("maximum-mlx-memory-status").textContent = message;
+    renderMemoryLimitButtons(statusDocument);
+    document.getElementById("maximum-mlx-memory-status").textContent =
+        "Up to " + bounds.maximumGigabytes + " GB on this Mac";
+    const noticeElement = document.getElementById("maximum-mlx-memory-notice");
+    noticeElement.textContent = memoryLimitNotice(statusDocument);
+    noticeElement.hidden = noticeElement.textContent === "";
 }
 
 function wireMemoryLimitControl() {
@@ -41,7 +96,10 @@ function wireMemoryLimitControl() {
     const applyButton = document.getElementById("maximum-mlx-memory-apply");
     const resetButton = document.getElementById("maximum-mlx-memory-reset");
     if (!input || !applyButton || !resetButton) { return; }
-    input.addEventListener("input", () => { maximumMlxMemoryEditIsActive = true; });
+    input.addEventListener("input", () => {
+        maximumMlxMemoryEditIsActive = true;
+        if (lastRenderedMemoryStatusDocument) { renderMemoryLimitButtons(lastRenderedMemoryStatusDocument); }
+    });
     input.addEventListener("blur", () => { maximumMlxMemoryEditIsActive = false; });
     applyButton.addEventListener("click", async () => {
         const requestedGigabytes = Number(input.value);
