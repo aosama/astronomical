@@ -218,9 +218,9 @@ impl WorkerProcess {
     /// Starts a clean process from this worker's exact portable launch inputs.
     ///
     /// The launch snapshot includes a memory ceiling adopted after a live apply.
-    /// A cancellation failure reaches this path with the process already dead,
-    /// so the ceiling has to live on the launch snapshot rather than in the old
-    /// process.
+    /// A cancellation failure and failure containment both reach this path with
+    /// the process already dead, so the ceiling has to live on the launch
+    /// snapshot rather than in the old process.
     pub(crate) async fn relaunch_after_termination(&mut self) -> Result<(), WorkerControlError> {
         let replacement_worker = Self::launch_with_timeouts_and_startup_configuration(
             &self.launch_executable_path,
