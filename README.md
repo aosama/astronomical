@@ -132,11 +132,11 @@ The first run compiles everything; later runs rebuild incrementally and replace 
 
 The ad-hoc signed local bundle is written to `target/astronomical-macos-development.noindex/Astronomical Development.app`. The `.noindex` build directory keeps generated app bundles out of Spotlight while preserving them for validation and direct launch. Stable uses the clean product icon, while Development uses a restrained channel badge. To rehearse a launch of any built bundle in isolation, run `cargo xtask app smoke-test --app-bundle PATH`; add `--real-model MODEL_ID` to send one prompt through an advertised model, only when shared GPU pressure is acceptable.
 
-Stable installation and release publication are isolated under `scripts/release/`. They are never part of ordinary commit or push verification. Build a clean Stable candidate and explicitly promote it outside the repository build tree with one release-only command:
+Stable installation and release publication are release-only commands (`cargo xtask release ...` and `scripts/release/`). They are never part of ordinary commit or push verification. Build a clean Stable candidate and explicitly promote it outside the repository build tree with one release-only command:
 
-    scripts/release/build-and-install-stable-app.sh
+    cargo xtask release build-and-install-stable
 
-Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `cargo xtask app package --channel stable` and `scripts/release/install-stable-app.sh` remain available when the two stages need to run independently. The packaging contracts run on every pull request and can also be run explicitly before release work with `scripts/release/tests/test-release-contracts.sh`; the typed packaging contracts run as `cargo test-app-builder` on the macOS build job.
+Use `--dry-run` to build and validate Stable while previewing, rather than performing, the installation. `cargo xtask app package --channel stable` and `cargo xtask release install-stable` remain available when the two stages need to run independently. Installing moves the previously installed app to the Trash rather than deleting it. The packaging contracts run on every pull request and can also be run explicitly before release work with `scripts/release/tests/test-release-contracts.sh`; the typed packaging contracts run as `cargo test-app-builder` on the macOS build job.
 
 Stable candidate builds perform signature, resource, metadata, and bundled-daemon validation without launching over a running Stable instance. Promotion does not restart the running app. Stable builds require a clean Git worktree.
 

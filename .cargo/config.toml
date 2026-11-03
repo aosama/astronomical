@@ -90,8 +90,9 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # drag-to-Applications image and `cargo xtask release validate-dmg --dmg PATH`
 # proves a notarized image's install journey; `cargo xtask release
 # validate-distribution-app` checks Developer ID signatures and `cargo xtask
-# release notarize-dmg [--timeout-seconds N]` notarizes and staples an image
-# (release-only steps).
+# release notarize-dmg [--timeout-seconds N]` notarizes and staples an image;
+# `cargo xtask release install-stable [--dry-run]` and `build-and-install-stable
+# [--dry-run]` promote Stable to ~/Applications (release-only steps).
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
 # MLX runtime into the machine-wide store before Cargo compiles anything.
 # `cargo xtask provision-bindgen-headers [--verify-headers]` extracts the

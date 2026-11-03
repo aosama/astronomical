@@ -33,3 +33,6 @@ mod app_bundle_tests;
 mod app_package_tests;
 
 pub use command::run;
+// Stable installation re-checks a bundle with the same rules that built it.
+pub(crate) use bundle_check::{layout_problems, plist_identity_problems, version_text_reports};
+pub(crate) use channel_profile::{Channel, ChannelProfile};

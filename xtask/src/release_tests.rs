@@ -12,6 +12,9 @@ use super::notarization::{
     DEFAULT_NOTARIZATION_TIMEOUT_SECONDS, NotarizationRequest, notarization_plan,
     validate_notarization_request,
 };
+use super::stable_installation::{
+    PromotionTools, canonical_home_directory, promote_bundle, stable_promotion_problems,
+};
 
 fn arguments(argument_words: &[&str]) -> Vec<String> {
     let mut owned_arguments = Vec::new();
@@ -386,4 +389,191 @@ fn should_default_the_notarization_timeout_and_refuse_bad_values() {
         validate_notarization_request(&notarization_request(&disk_image, 180)),
         Ok(())
     );
+}
+
+#[test]
+fn should_resolve_a_real_home_directory_and_refuse_unsafe_ones() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let home_text = fixture_directory.path().display().to_string();
+
+    assert_eq!(
+        canonical_home_directory(Some(&home_text)),
+        Ok(std::fs::canonicalize(fixture_directory.path()).expect("canonical fixture"))
+    );
+    assert!(canonical_home_directory(None).is_err());
+    assert!(canonical_home_directory(Some("relative/home")).is_err());
+    assert!(
+        canonical_home_directory(Some(&format!("{home_text}/../escape")))
+            .expect_err("parent")
+            .contains("parent")
+    );
+    assert!(
+        canonical_home_directory(Some(&format!("{home_text}/absent")))
+            .expect_err("absent")
+            .contains("existing")
+    );
+    assert!(
+        canonical_home_directory(Some("/"))
+            .expect_err("root")
+            .contains("root")
+    );
+}
+
+#[test]
+fn should_promote_only_clean_stable_bundles() {
+    let clean_stable =
+        serde_json::json!({"AstronomicalChannel": "stable", "AstronomicalBuildDirty": false});
+    let dirty_stable =
+        serde_json::json!({"AstronomicalChannel": "stable", "AstronomicalBuildDirty": true});
+    let development =
+        serde_json::json!({"AstronomicalChannel": "development", "AstronomicalBuildDirty": false});
+
+    assert!(stable_promotion_problems(&clean_stable).is_empty());
+    assert_eq!(
+        stable_promotion_problems(&dirty_stable),
+        vec!["dirty builds cannot be promoted to Stable"]
+    );
+    assert_eq!(
+        stable_promotion_problems(&development),
+        vec!["only a Stable bundle may be promoted"]
+    );
+}
+
+fn copy_fixture_bundle(source_bundle: &Path, staged_bundle: &Path) -> Result<(), String> {
+    let source_marker =
+        std::fs::read_to_string(source_bundle.join("marker")).map_err(drop_error)?;
+    write_fixture_file(&staged_bundle.join("marker"), &source_marker);
+    Ok(())
+}
+
+fn refuse_to_stage(_source_bundle: &Path, staged_bundle: &Path) -> Result<(), String> {
+    write_fixture_file(&staged_bundle.join("partial"), "half-copied");
+    Err("the staged copy does not verify".to_owned())
+}
+
+fn delete_fixture_backup(backup_bundle: &Path) -> Result<(), String> {
+    std::fs::remove_dir_all(backup_bundle).map_err(drop_error)
+}
+
+fn drop_error(io_error: std::io::Error) -> String {
+    io_error.to_string()
+}
+
+const FIXTURE_PROMOTION_TOOLS: PromotionTools = PromotionTools {
+    stage_copy: copy_fixture_bundle,
+    dispose_backup: delete_fixture_backup,
+};
+
+#[test]
+fn should_install_fresh_then_replace_the_previous_app_leaving_no_staging_residue() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let applications_directory = fixture_directory.path().join("Applications");
+    let first_bundle = fixture_directory.path().join("first.app");
+    let second_bundle = fixture_directory.path().join("second.app");
+    write_fixture_file(&first_bundle.join("marker"), "first");
+    write_fixture_file(&second_bundle.join("marker"), "second");
+
+    promote_bundle(
+        &first_bundle,
+        &applications_directory,
+        &FIXTURE_PROMOTION_TOOLS,
+    )
+    .expect("a fresh install");
+    promote_bundle(
+        &second_bundle,
+        &applications_directory,
+        &FIXTURE_PROMOTION_TOOLS,
+    )
+    .expect("a replacement");
+
+    let installed_marker =
+        std::fs::read_to_string(applications_directory.join("Astronomical.app/marker"))
+            .expect("installed");
+    assert_eq!(installed_marker, "second");
+    let mut directory_names = Vec::new();
+    for directory_entry in std::fs::read_dir(&applications_directory)
+        .expect("listable")
+        .flatten()
+    {
+        directory_names.push(directory_entry.file_name().to_string_lossy().into_owned());
+    }
+    assert_eq!(
+        directory_names,
+        vec!["Astronomical.app"],
+        "no stage or backup may remain"
+    );
+}
+
+#[test]
+fn should_leave_the_installed_app_untouched_when_staging_fails() {
+    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
+    let applications_directory = fixture_directory.path().join("Applications");
+    write_fixture_file(
+        &applications_directory.join("Astronomical.app/marker"),
+        "installed",
+    );
+    let failing_tools = PromotionTools {
+        stage_copy: refuse_to_stage,
+        dispose_backup: delete_fixture_backup,
+    };
+
+    let promotion_error = promote_bundle(
+        &fixture_directory.path().join("any.app"),
+        &applications_directory,
+        &failing_tools,
+    )
+    .expect_err("must fail");
+
+    assert!(
+        promotion_error.contains("does not verify"),
+        "{promotion_error}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(applications_directory.join("Astronomical.app/marker"))
+            .expect("kept"),
+        "installed"
+    );
+    assert_eq!(
+        std::fs::read_dir(&applications_directory)
+            .expect("listable")
+            .count(),
+        1,
+        "the partial stage was removed"
+    );
+}
+
+#[test]
+fn should_parse_install_commands_with_an_optional_bundle_and_dry_run() {
+    assert_eq!(
+        parse_release_command(&arguments(&[
+            "install-stable",
+            "--dry-run",
+            "--app-bundle",
+            "/a.app"
+        ])),
+        Ok(ReleaseCommand::InstallStable {
+            app_bundle: Some(PathBuf::from("/a.app")),
+            is_dry_run: true
+        })
+    );
+    assert_eq!(
+        parse_release_command(&arguments(&["install-stable"])),
+        Ok(ReleaseCommand::InstallStable {
+            app_bundle: None,
+            is_dry_run: false
+        })
+    );
+    assert_eq!(
+        parse_release_command(&arguments(&["build-and-install-stable", "--dry-run"])),
+        Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: true })
+    );
+    assert!(
+        parse_release_command(&arguments(&[
+            "build-and-install-stable",
+            "--app-bundle",
+            "/a.app"
+        ]))
+        .is_err()
+    );
+    assert!(parse_release_command(&arguments(&["install-stable", "--force"])).is_err());
 }

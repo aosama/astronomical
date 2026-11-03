@@ -303,11 +303,24 @@ pub(crate) fn daemon_version_matches(
     daemon_version_text: &str,
     build_identity: &BuildIdentity,
 ) -> bool {
-    let Some(version_position) = daemon_version_text.find(&build_identity.application_version)
-    else {
+    version_text_reports(
+        daemon_version_text,
+        &build_identity.application_version,
+        &build_identity.build_commit,
+    )
+}
+
+/// True when a `--version` line names this version followed by this commit;
+/// shared with Stable installation, which reads both from the bundle plist.
+pub(crate) fn version_text_reports(
+    version_text: &str,
+    application_version: &str,
+    build_commit: &str,
+) -> bool {
+    let Some(version_position) = version_text.find(application_version) else {
         return false;
     };
-    daemon_version_text[version_position..].contains(&build_identity.build_commit)
+    version_text[version_position..].contains(build_commit)
 }
 
 fn is_executable_file(file_path: &Path) -> bool {

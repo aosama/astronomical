@@ -10,6 +10,7 @@ mod disk_image_validation;
 mod distribution_signature;
 mod notarization;
 mod scratch_space;
+mod stable_installation;
 mod system_step;
 
 #[cfg(test)]
