@@ -55,7 +55,7 @@ pub(in crate::worker) async fn cancel_active_generation(
             );
             return;
         }
-        if let Err(recovery_error) = recover_worker_after_cancellation_failure(
+        if let Err(recovery_error) = replace_terminated_worker(
             worker_process,
             health_snapshot,
             recovery_acknowledgement_timeout,
@@ -63,18 +63,41 @@ pub(in crate::worker) async fn cancel_active_generation(
         .await
         {
             tracing::error!(error = %recovery_error, "failed to replace worker after cancellation containment");
-            let _cleanup_outcome = worker_process.force_terminate().await;
-            publish_health(
-                health_snapshot,
-                WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
-            );
             return;
         }
         *is_ready = true;
     }
 }
 
-async fn recover_worker_after_cancellation_failure(
+/// Relaunches an already-terminated worker from its trusted launch inputs and
+/// waits for its startup acknowledgement. On failure the half-started
+/// replacement is terminated and health is `Unavailable`, so callers only log.
+///
+/// Both the cancellation failure and failure containment recover through this
+/// one path, so a replacement worker is validated the same way whichever
+/// failure produced it.
+pub(in crate::worker) async fn replace_terminated_worker(
+    worker_process: &mut WorkerProcess,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    recovery_acknowledgement_timeout: Duration,
+) -> Result<(), WorkerControlError> {
+    let recovery_outcome = relaunch_and_acknowledge_worker(
+        worker_process,
+        health_snapshot,
+        recovery_acknowledgement_timeout,
+    )
+    .await;
+    if recovery_outcome.is_err() {
+        let _cleanup_outcome = worker_process.force_terminate().await;
+        publish_health(
+            health_snapshot,
+            WorkerHealthSnapshot::unavailable(WorkerHealthStatus::Unavailable),
+        );
+    }
+    recovery_outcome
+}
+
+async fn relaunch_and_acknowledge_worker(
     worker_process: &mut WorkerProcess,
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     recovery_acknowledgement_timeout: Duration,

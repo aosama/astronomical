@@ -14,6 +14,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::worker::memory::limit::PendingMlxMemoryLimitUpdate;
+use crate::worker::process::failure_relaunch::ContainedFailureRelaunch;
 use crate::{
     ChatGenerationStreamEvent, CompletedToolCall, CompletionAttributionLog,
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationPerformanceLog, GenerationStartError,
@@ -44,6 +45,7 @@ pub(in crate::worker) struct WorkerLoopRuntime {
     pub model_load_timeout: Duration,
     pub cancellation_acknowledgement_timeout: Duration,
     pub image_generation_timeouts: crate::ImageGenerationTimeouts,
+    pub contained_failure_relaunch: ContainedFailureRelaunch,
 }
 
 /// The work kind is defined beside the executor contract it belongs to; the

@@ -43,6 +43,7 @@ use tokio::time::{Instant, MissedTickBehavior, interval};
 use crate::worker::command_arms::{WorkerLoopFlow, run_worker_iteration};
 use crate::worker::health::publish_health;
 use crate::worker::loop_types::{WorkerLoopCommand, WorkerLoopRuntime};
+use crate::worker::process::failure_relaunch::ContainedFailureRelaunch;
 use crate::{
     CompletionAttributionLog, GenerationPerformanceLog, ImageGenerationTimeouts,
     RuntimeModelPolicy, WorkerHealthSnapshot, WorkerHealthStatus, WorkerProcess,
@@ -86,6 +87,7 @@ pub(crate) async fn run_worker(
         model_load_timeout,
         cancellation_acknowledgement_timeout,
         image_generation_timeouts,
+        contained_failure_relaunch: ContainedFailureRelaunch::new(),
     };
     let mut idle_control_interval = interval(Duration::from_secs(1));
     idle_control_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
