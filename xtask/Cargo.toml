@@ -67,3 +67,7 @@ path = "tests/workflow_cache_owner_contract.rs"
 [[test]]
 name = "workflow_xcode_pin_contract"
 path = "tests/workflow_xcode_pin_contract.rs"
+
+[[test]]
+name = "workflow_macos_packaging_contract"
+path = "tests/workflow_macos_packaging_contract.rs"

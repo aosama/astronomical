@@ -11,6 +11,9 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 pub(crate) struct StepReporter {
+    /// The log prefix, so `app package` lines are not mistaken for the
+    /// edit loop's in a CI log or a terminal running both.
+    log_label: &'static str,
     step_names: Vec<&'static str>,
     previous_step_seconds: BTreeMap<String, f64>,
     measured_step_seconds: BTreeMap<String, f64>,
@@ -21,9 +24,14 @@ pub(crate) struct StepReporter {
 }
 
 impl StepReporter {
-    pub(crate) fn new(step_names: Vec<&'static str>, timings_path: PathBuf) -> Self {
+    pub(crate) fn new(
+        log_label: &'static str,
+        step_names: Vec<&'static str>,
+        timings_path: PathBuf,
+    ) -> Self {
         let previous_step_seconds = read_step_timings(&timings_path);
         Self {
+            log_label,
             step_names,
             previous_step_seconds,
             measured_step_seconds: BTreeMap::new(),
@@ -45,7 +53,8 @@ impl StepReporter {
         self.current_step_index = step_index;
         self.current_step_started_at = Instant::now();
         println!(
-            "[app-dev] step={}/{} name={step_name} status=start eta={}",
+            "[{}] step={}/{} name={step_name} status=start eta={}",
+            self.log_label,
             step_index + 1,
             self.step_names.len(),
             self.eta_text()
@@ -58,7 +67,8 @@ impl StepReporter {
         self.measured_step_seconds
             .insert(step_name.to_owned(), step_seconds);
         println!(
-            "[app-dev] step={}/{} name={step_name} status=success elapsed_seconds={step_seconds:.1} total_elapsed_seconds={:.1}",
+            "[{}] step={}/{} name={step_name} status=success elapsed_seconds={step_seconds:.1} total_elapsed_seconds={:.1}",
+            self.log_label,
             self.current_step_index + 1,
             self.step_names.len(),
             self.run_started_at.elapsed().as_secs_f64()
@@ -69,7 +79,8 @@ impl StepReporter {
         let step_name = self.step_names[self.current_step_index];
         let completed_fraction = self.current_step_index as f64 / self.step_names.len() as f64;
         println!(
-            "[app-dev] step={}/{} name={step_name} status=running step_elapsed_seconds={:.0} progress={:.0}% eta={}",
+            "[{}] step={}/{} name={step_name} status=running step_elapsed_seconds={:.0} progress={:.0}% eta={}",
+            self.log_label,
             self.current_step_index + 1,
             self.step_names.len(),
             self.current_step_started_at.elapsed().as_secs_f64(),
@@ -87,7 +98,10 @@ impl StepReporter {
         }
         let timings_text = serde_json::Value::Object(timings_document).to_string();
         if let Err(write_error) = std::fs::write(&self.timings_path, timings_text) {
-            eprintln!("[app-dev] warning: could not save step timings: {write_error}");
+            eprintln!(
+                "[{}] warning: could not save step timings: {write_error}",
+                self.log_label
+            );
         }
     }
 

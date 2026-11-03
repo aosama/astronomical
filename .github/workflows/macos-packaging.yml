@@ -1,0 +1,81 @@
+name: macOS packaging
+
+# Builds a real Stable bundle through `cargo xtask app package` and launches
+# it with `cargo xtask app smoke-test`, so main proves the shipped packaging
+# path end to end: native MLX build, thin-LTO release executables in the
+# disposable target lane, the Swift menu app, Thin Talk web assets, ad hoc
+# signing, and the bundle checks.
+#
+# Deliberately not a pull-request gate. The pipeline's contracts (signing
+# plans, Info.plist rendering, bundle layout checks) are typed xtask unit
+# tests that the macOS build job already runs on every pull request; a cold
+# release build here costs far more than that job's whole critical path, so
+# gating every pull request on it would multiply CI wall time for no new
+# coverage. It runs nightly against main, on demand, and on pull requests
+# that change this workflow or the packaging pipeline itself.
+#
+# Never signs with an identity, notarizes, or publishes: Stable signs ad hoc
+# when no --signing-identity is given, which is exactly what CI can verify
+# without release credentials.
+
+on:
+  schedule:
+    # Nightly at 03:41 UTC, off the hour and clear of the 02:23 notices lane.
+    - cron: "41 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/macos-packaging.yml
+      - xtask/src/app_bundle/**
+      - xtask/src/app_bundle.rs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-packaging-${{ github.ref }}
+  # A newer push supersedes a pull request's in-flight packaging run; this
+  # lane is informational there, never a required check.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Must equal ci.yml's pin: the native-build identity hashes toolchain
+  # outputs, so one Xcode version serves every macOS workflow. The
+  # workflow_xcode_pin_contract test fails when the two drift apart.
+  ASTRONOMICAL_PINNED_XCODE_VERSION: "26.6"
+
+jobs:
+  package-stable:
+    name: Package and smoke-test the Stable bundle
+    runs-on: macos-26
+    # A cold native MLX build (~6 min) plus a cold thin-LTO release build of
+    # every executable in the disposable target lane fit well inside this.
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Assert pinned Xcode toolchain
+        uses: ./.github/actions/assert-pinned-xcode
+        with:
+          xcode-version: ${{ env.ASTRONOMICAL_PINNED_XCODE_VERSION }}
+      - name: Set up Node for Thin Talk web assets
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: apps/thin-talk/web/package-lock.json
+      - name: Provision verified native dependencies
+        # The package pipeline only verifies the pinned native archives
+        # (MLX and its peers); a fresh runner has none, so they are
+        # downloaded and digest-checked first, exactly as the macOS build
+        # job does.
+        run: cargo xtask bootstrap-native-dependencies
+      - name: Package the Stable bundle
+        # The pipeline reports each step with its elapsed time and an ETA,
+        # and requires the clean checkout this job starts from.
+        run: cargo xtask app package --channel stable
+      - name: Smoke-test the packaged Stable bundle
+        run: cargo xtask app smoke-test --app-bundle "target/astronomical-macos-stable.noindex/Astronomical.app"

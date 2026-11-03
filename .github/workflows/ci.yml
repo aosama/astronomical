@@ -856,6 +856,7 @@ jobs:
           cargo test --locked -p xtask --test workflow_lane_split_contract
           cargo test --locked -p xtask --test workflow_cache_owner_contract
           cargo test --locked -p xtask --test workflow_xcode_pin_contract
+          cargo test --locked -p xtask --test workflow_macos_packaging_contract
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
       # The pyramid count over this repository is local-only (cargo xtask

@@ -68,6 +68,7 @@ pub(crate) fn run_dev_pipeline(repository_root: &Path) -> Result<(), String> {
     let pipeline_paths = DevPipelinePaths::for_profile(repository_root, &channel_profile);
     create_directory(&pipeline_paths.cache_directory)?;
     let mut step_reporter = StepReporter::new(
+        "app-dev",
         DEV_PIPELINE_STEP_NAMES.to_vec(),
         pipeline_paths.cache_directory.join("step-timings.json"),
     );
