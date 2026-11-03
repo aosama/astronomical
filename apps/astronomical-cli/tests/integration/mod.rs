@@ -5,7 +5,9 @@
 //! fakes and environment helpers live under `support`.
 
 mod doctor;
+mod download_wait;
 mod embed;
+mod image;
 mod launch;
 mod models;
 mod quantize;

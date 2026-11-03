@@ -32,10 +32,10 @@
     {
       "file": "apps/astronomical-cli/src/arguments.rs",
       "function": "parse_command",
-      "line": 105,
-      "cyclomatic": 17.0,
+      "line": 122,
+      "cyclomatic": 18.0,
       "coverage": null,
-      "crap": 306.0,
+      "crap": 342.0,
       "crate": "astronomical-cli"
     },
     {
@@ -213,9 +213,9 @@
       "file": "apps/astronomical-cli/src/main.rs",
       "function": "main",
       "line": 19,
-      "cyclomatic": 16.0,
+      "cyclomatic": 17.0,
       "coverage": null,
-      "crap": 272.0,
+      "crap": 306.0,
       "crate": "astronomical-cli"
     },
     {
@@ -243,6 +243,15 @@
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/main.rs",
+      "function": "run_image_verb",
+      "line": 298,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
       "crate": "astronomical-cli"
     },
     {
@@ -310,6 +319,24 @@
     },
     {
       "file": "apps/astronomical-cli/src/model_lifecycle.rs",
+      "function": "ModelLifecycle::observe_vanished_job",
+      "line": 327,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/model_lifecycle.rs",
+      "function": "ModelLifecycle::poll_download",
+      "line": 293,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/model_lifecycle.rs",
       "function": "ModelLifecycle::prepare_model_id",
       "line": 111,
       "cyclomatic": 13.0,
@@ -320,10 +347,10 @@
     {
       "file": "apps/astronomical-cli/src/model_lifecycle.rs",
       "function": "ModelLifecycle::resolve_requested_model_id",
-      "line": 205,
-      "cyclomatic": 3.0,
+      "line": 236,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 20.0,
       "crate": "astronomical-cli"
     },
     {
@@ -356,28 +383,28 @@
     {
       "file": "apps/astronomical-cli/src/model_lifecycle.rs",
       "function": "RequiredCapability::capability_text",
-      "line": 70,
-      "cyclomatic": 3.0,
+      "line": 89,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 20.0,
       "crate": "astronomical-cli"
     },
     {
       "file": "apps/astronomical-cli/src/model_lifecycle.rs",
       "function": "RequiredCapability::describes_catalog_entry",
-      "line": 84,
-      "cyclomatic": 3.0,
+      "line": 105,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 20.0,
       "crate": "astronomical-cli"
     },
     {
       "file": "apps/astronomical-cli/src/model_lifecycle.rs",
       "function": "RequiredCapability::describes_installed_model",
-      "line": 77,
-      "cyclomatic": 3.0,
+      "line": 97,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 20.0,
       "crate": "astronomical-cli"
     },
     {
@@ -387,15 +414,6 @@
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-cli"
-    },
-    {
-      "file": "apps/astronomical-cli/src/model_lifecycle.rs",
-      "function": "download_timeout_reason",
-      "line": 287,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
       "crate": "astronomical-cli"
     },
     {
@@ -414,6 +432,24 @@
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/model_lifecycle/download_progress.rs",
+      "function": "StallWatch::observe",
+      "line": 179,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/model_lifecycle/download_progress.rs",
+      "function": "format_time_remaining",
+      "line": 129,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-cli"
     },
     {
@@ -669,6 +705,69 @@
       "crate": "astronomical-cli"
     },
     {
+      "file": "apps/astronomical-cli/src/verbs/image.rs",
+      "function": "ImageError::from",
+      "line": 315,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/image.rs",
+      "function": "image_failure_reason_text",
+      "line": 228,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/image/image_arguments.rs",
+      "function": "PartialImageArguments::consume",
+      "line": 57,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/image/image_arguments.rs",
+      "function": "PartialImageArguments::set_value_flag",
+      "line": 84,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/image/image_arguments.rs",
+      "function": "value_flag_name",
+      "line": 131,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/image/image_output.rs",
+      "function": "reserve_output_file",
+      "line": 28,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-cli"
+    },
+    {
+      "file": "apps/astronomical-cli/src/verbs/image/image_output.rs",
+      "function": "write_png",
+      "line": 80,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-cli"
+    },
+    {
       "file": "apps/astronomical-cli/src/verbs/launch.rs",
       "function": "first_healthy_instance",
       "line": 114,
@@ -687,12 +786,12 @@
       "crate": "astronomical-cli"
     },
     {
-      "file": "apps/astronomical-cli/src/verbs/launch/chat_models.rs",
-      "function": "advertises_chat_completions",
-      "line": 46,
-      "cyclomatic": 1.0,
+      "file": "apps/astronomical-cli/src/verbs/launch.rs",
+      "function": "session_environment",
+      "line": 105,
+      "cyclomatic": 6.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 42.0,
       "crate": "astronomical-cli"
     },
     {
@@ -2165,10 +2264,10 @@
     {
       "file": "apps/astronomical-cli/tests/integration/support/stub_daemon.rs",
       "function": "spawn_stub_daemon",
-      "line": 160,
-      "cyclomatic": 22.0,
+      "line": 214,
+      "cyclomatic": 23.0,
       "coverage": null,
-      "crap": 506.0,
+      "crap": 552.0,
       "crate": "astronomical-cli"
     },
     {
@@ -3495,6 +3594,15 @@
       "crate": "astronomical-daemon"
     },
     {
+      "file": "apps/daemon/src/ipc/images.rs",
+      "function": "resolve_image_terminal_response",
+      "line": 57,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-daemon"
+    },
+    {
       "file": "apps/daemon/src/ipc/models.rs",
       "function": "active_download_job",
       "line": 386,
@@ -3510,6 +3618,15 @@
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/ipc/models.rs",
+      "function": "attach_to_the_racing_download",
+      "line": 370,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -3546,6 +3663,15 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/ipc/models.rs",
+      "function": "execute_download_start",
+      "line": 329,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -3705,9 +3831,9 @@
       "file": "apps/daemon/src/ipc/service.rs",
       "function": "handle_streaming_daemon_request",
       "line": 141,
-      "cyclomatic": 10.0,
+      "cyclomatic": 11.0,
       "coverage": null,
-      "crap": 110.0,
+      "crap": 132.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -7833,6 +7959,96 @@
       "crate": "astronomical-daemon"
     },
     {
+      "file": "apps/daemon/src/rest/anthropic/count_tokens_endpoint.rs",
+      "function": "await_token_count",
+      "line": 72,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_assembly.rs",
+      "function": "AnthropicMessageCollector::ingest_event",
+      "line": 67,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_assembly.rs",
+      "function": "AnthropicMessageCollector::into_message",
+      "line": 106,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_endpoint.rs",
+      "function": "create_message",
+      "line": 38,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_endpoint.rs",
+      "function": "create_non_streaming_response",
+      "line": 314,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_sse_response.rs",
+      "function": "next_serialized_stream_event",
+      "line": 36,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_stream.rs",
+      "function": "AnthropicMessagesStreamEncoder::encode",
+      "line": 70,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_translation.rs",
+      "function": "append_chat_messages",
+      "line": 114,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_translation.rs",
+      "function": "append_user_turn",
+      "line": 157,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/anthropic/messages_translation.rs",
+      "function": "translate_anthropic_messages_request_parts",
+      "line": 23,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-daemon"
+    },
+    {
       "file": "apps/daemon/src/rest/cache_clear.rs",
       "function": "clear_cache",
       "line": 29,
@@ -7911,6 +8127,15 @@
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/chronological_instruction.rs",
+      "function": "append_escaped_instruction",
+      "line": 65,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -8707,15 +8932,6 @@
     },
     {
       "file": "apps/daemon/src/rest/openai/image_generation_endpoint.rs",
-      "function": "generated_seed",
-      "line": 459,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/rest/openai/image_generation_endpoint.rs",
       "function": "generation_start_error_response",
       "line": 311,
       "cyclomatic": 5.0,
@@ -8952,42 +9168,6 @@
       "file": "apps/daemon/src/rest/openai/models_endpoint.rs",
       "function": "tool_call_format_for_model",
       "line": 236,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/rest/openai/request_body_budget.rs",
-      "function": "declared_content_length",
-      "line": 59,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/rest/openai/request_body_budget.rs",
-      "function": "enforce_openai_request_body_budget",
-      "line": 27,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/rest/openai/request_body_budget.rs",
-      "function": "request_body_too_large_response",
-      "line": 69,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/rest/openai/request_body_budget.rs",
-      "function": "request_body_too_large_without_overshoot_response",
-      "line": 84,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -9427,24 +9607,6 @@
     },
     {
       "file": "apps/daemon/src/rest/openai/responses_translation.rs",
-      "function": "append_escaped_instruction",
-      "line": 221,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/rest/openai/responses_translation.rs",
-      "function": "append_instruction",
-      "line": 197,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/rest/openai/responses_translation.rs",
       "function": "flush_pending_assistant_message",
       "line": 172,
       "cyclomatic": 4.0,
@@ -9495,6 +9657,15 @@
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/rest/request_body_budget.rs",
+      "function": "enforce_request_body_budget",
+      "line": 50,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -12009,15 +12180,6 @@
       "crate": "astronomical-daemon"
     },
     {
-      "file": "apps/daemon/src/worker/process/child.rs",
-      "function": "worker_exit_status_description",
-      "line": 479,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-daemon"
-    },
-    {
       "file": "apps/daemon/src/worker/process/containment.rs",
       "function": "cancel_active_generation",
       "line": 22,
@@ -12100,20 +12262,29 @@
     },
     {
       "file": "apps/daemon/src/worker/process/containment.rs",
-      "function": "recover_worker_after_cancellation_failure",
-      "line": 77,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/src/worker/process/containment.rs",
       "function": "shutdown_worker",
       "line": 462,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/process/exit_description.rs",
+      "function": "terminating_signal_description",
+      "line": 36,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/src/worker/process/failure_relaunch.rs",
+      "function": "ContainedFailureRelaunch::observe_worker",
+      "line": 69,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -12622,15 +12793,6 @@
     },
     {
       "file": "apps/daemon/tests/fixtures/scripted_worker.rs",
-      "function": "cancellation_memory_snapshot",
-      "line": 245,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/fixtures/scripted_worker.rs",
       "function": "dispatch_unstructured_chat",
       "line": 272,
       "cyclomatic": 46.0,
@@ -12654,6 +12816,24 @@
       "cyclomatic": 38.0,
       "coverage": null,
       "crap": 1482.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/tests/fixtures/scripted_worker_cancellation.rs",
+      "function": "emit_cancellation_telemetry",
+      "line": 32,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/tests/fixtures/scripted_worker_cancellation.rs",
+      "function": "send_mlx_telemetry",
+      "line": 80,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -14769,6 +14949,15 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "astronomical-daemon"
+    },
+    {
+      "file": "apps/daemon/tests/rest_api/anthropic_messages_endpoint/support.rs",
+      "function": "parsed_sse_events",
+      "line": 51,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -17283,105 +17472,6 @@
       "crate": "astronomical-daemon"
     },
     {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "PanicOnGenerationStartExecutor::start_chat_generation",
-      "line": 160,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "PanicOnGenerationStartExecutor::worker_health_snapshot",
-      "line": 177,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "oversized_body_byte_count",
-      "line": 19,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "post_chat_body",
-      "line": 23,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "response_error_json",
-      "line": 45,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "should_accept_a_chat_body_at_exactly_the_request_budget",
-      "line": 88,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "should_reject_a_chat_body_declared_over_the_budget_before_reading_it",
-      "line": 70,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "should_return_413_without_exact_overshoot_when_a_chat_body_streams_far_past_the_budget",
-      "line": 125,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "should_return_openai_shaped_413_when_a_chat_body_exceeds_the_request_budget",
-      "line": 53,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "should_return_openai_shaped_413_when_an_embeddings_body_exceeds_the_request_budget",
-      "line": 101,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_request_body_budget.rs",
-      "function": "should_treat_an_unparseable_content_length_as_absent",
-      "line": 146,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
       "file": "apps/daemon/tests/rest_api/openai_responses_endpoint/request_rejection.rs",
       "function": "should_canonicalize_a_provider_prefixed_model_for_an_idle_worker",
       "line": 89,
@@ -17586,51 +17676,6 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_responses_endpoint/support.rs",
-      "function": "ScriptedResponsesExecutor::idle_with_expected_model",
-      "line": 144,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_responses_endpoint/support.rs",
-      "function": "ScriptedResponsesExecutor::new",
-      "line": 126,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_responses_endpoint/support.rs",
-      "function": "ScriptedResponsesExecutor::start_chat_generation",
-      "line": 155,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_responses_endpoint/support.rs",
-      "function": "ScriptedResponsesExecutor::with_start_error",
-      "line": 135,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-daemon"
-    },
-    {
-      "file": "apps/daemon/tests/rest_api/openai_responses_endpoint/support.rs",
-      "function": "ScriptedResponsesExecutor::worker_health_snapshot",
-      "line": 188,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "astronomical-daemon"
     },
     {
@@ -46273,6 +46318,15 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/decoder_layer_weights.rs",
+      "function": "Qwen3_5AffineWeights::concatenate_experts",
+      "line": 140,
+      "cyclomatic": 12.0,
+      "coverage": null,
+      "crap": 156.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/decoder_layer_weights.rs",
       "function": "Qwen3_5AffineWeights::expert_count",
       "line": 74,
       "cyclomatic": 4.0,
@@ -47217,135 +47271,36 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationConfig::default_bits",
-      "line": 161,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationConfig::default_group_size",
-      "line": 153,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationConfig::validate",
-      "line": 171,
+      "file": "crates/model-serving/src/qwen3_5_core/quantizations/mlx_quantization/document.rs",
+      "function": "MlxQuantizationDocument::validate",
+      "line": 175,
       "cyclomatic": 13.0,
       "coverage": null,
       "crap": 182.0,
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationProfile::affine",
-      "line": 90,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationProfile::is_jangtq2_codebook",
-      "line": 76,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationProfile::is_unquantized",
-      "line": 70,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationProfile::jangtq2_codebook",
-      "line": 101,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "OptiQQuantizationProfile::unquantized",
-      "line": 114,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/quantizations/mlx_quantization/document.rs",
       "function": "expected_quantized_module_names",
-      "line": 268,
+      "line": 272,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "is_mlx_affine_quantization_bit_width_supported",
-      "line": 14,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/config.rs",
-      "function": "is_mlx_affine_quantization_group_size_supported",
-      "line": 19,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/metadata.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/quantizations/producers/optiq/metadata.rs",
       "function": "OptiQMetadata::from_json_bytes",
-      "line": 31,
+      "line": 33,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/metadata.rs",
-      "function": "OptiQMetadata::measured_module_count",
-      "line": 108,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/metadata.rs",
-      "function": "OptiQMetadata::provenance_only_from_json_bytes",
-      "line": 82,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/quantizations/optiq/metadata.rs",
+      "file": "crates/model-serving/src/qwen3_5_core/quantizations/producers/optiq/metadata.rs",
       "function": "OptiQMetadata::validate_against_config",
-      "line": 113,
+      "line": 111,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -54499,6 +54454,15 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_pager/mod.rs",
+      "function": "Qwen3_5PagedExpertWeights::concatenate_expert_pages",
+      "line": 199,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_pager/mod.rs",
       "function": "Qwen3_5PagedExpertWeights::resident_payload_byte_count",
       "line": 109,
       "cyclomatic": 1.0,
@@ -54580,15 +54544,6 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_usage_history.rs",
-      "function": "persisted_expert_usage_layer",
-      "line": 142,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_usage_history.rs",
       "function": "read_expert_usage",
       "line": 86,
       "cyclomatic": 9.0,
@@ -54603,42 +54558,6 @@
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_usage_history_tests.rs",
-      "function": "should_reject_a_corrupt_history_file_impl",
-      "line": 33,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_usage_history_tests.rs",
-      "function": "should_reject_a_history_written_for_a_different_layer_count_impl",
-      "line": 22,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_usage_history_tests.rs",
-      "function": "should_round_trip_sparse_demand_counts_impl",
-      "line": 5,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/expert_usage_history_tests.rs",
-      "function": "should_treat_a_missing_history_as_a_cold_start_impl",
-      "line": 41,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -54778,15 +54697,6 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::expert_demand_counts",
-      "line": 224,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
       "function": "WarmExpertSlotTableCache::full_coverage_page",
       "line": 279,
       "cyclomatic": 6.0,
@@ -54801,15 +54711,6 @@
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::historical_demand_count",
-      "line": 215,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -54900,15 +54801,6 @@
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache.rs",
-      "function": "WarmExpertSlotTableCache::seed_expert_demand_history",
-      "line": 176,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -55014,60 +54906,6 @@
       "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/decode_cache_policy.rs",
       "function": "available_probationary_slot_count",
       "line": 129,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand.rs",
-      "function": "WarmExpertSlotTableCache::clear_expert_demand",
-      "line": 33,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand.rs",
-      "function": "WarmExpertSlotTableCache::current_layer_residency",
-      "line": 71,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand.rs",
-      "function": "WarmExpertSlotTableCache::record_disk_load",
-      "line": 49,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand.rs",
-      "function": "WarmExpertSlotTableCache::record_expert_demand",
-      "line": 13,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand.rs",
-      "function": "WarmExpertSlotTableCache::set_demand_assignment_weight",
-      "line": 45,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/expert_streaming/warm_expert_slot_table_cache/demand.rs",
-      "function": "WarmExpertSlotTableCache::topology_snapshot",
-      "line": 59,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57756,6 +57594,15 @@
       "crate": "astronomical-model-serving"
     },
     {
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/expert_streaming_stats.rs",
+      "function": "Qwen3_5Model::expert_streaming_session_stats",
+      "line": 59,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/forward.rs",
       "function": "Qwen3_5Model::dispatch_full_hit_routed_page",
       "line": 390,
@@ -58594,15 +58441,6 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/phase_aware_expert_residency.rs",
-      "function": "Qwen3_5StreamingModel::clear_expert_demand_for_residency",
-      "line": 20,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/phase_aware_expert_residency.rs",
       "function": "Qwen3_5StreamingModel::clear_phase_aware_expert_residency_plan",
       "line": 58,
       "cyclomatic": 1.0,
@@ -58650,15 +58488,6 @@
       "file": "crates/model-serving/src/qwen3_5_streaming/model/phase_aware_expert_residency.rs",
       "function": "Qwen3_5StreamingModel::refresh_retained_expert_ceiling",
       "line": 184,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/phase_aware_expert_residency.rs",
-      "function": "Qwen3_5StreamingModel::set_expert_demand_assignment_weight_for_residency",
-      "line": 27,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -58824,6 +58653,15 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/prefill_partial_page.rs",
+      "function": "Qwen3_5Model::assemble_refused_prefill_page",
+      "line": 25,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -64065,6 +63903,33 @@
       "crate": "astronomical-native-identity"
     },
     {
+      "file": "crates/neural-engine/src/affine_quantized_weights.rs",
+      "function": "validate_layout",
+      "line": 283,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-neural-engine"
+    },
+    {
+      "file": "crates/neural-engine/src/mil_program_wire.rs",
+      "function": "MilDataType::proto_code",
+      "line": 24,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-neural-engine"
+    },
+    {
+      "file": "crates/neural-engine/src/projection_shape.rs",
+      "function": "ProjectionShape::new",
+      "line": 32,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-neural-engine"
+    },
+    {
       "file": "crates/quantization/src/allocation/bits_per_weight.rs",
       "function": "bits_per_weight_of_allocation",
       "line": 37,
@@ -67665,21 +67530,111 @@
       "crate": "astronomical-quantization"
     },
     {
-      "file": "crates/rest-contract/src/image_input.rs",
-      "function": "OpenAiImageInput::decoded_bytes",
-      "line": 31,
-      "cyclomatic": 1.0,
+      "file": "crates/rest-contract/src/anthropic_count_tokens.rs",
+      "function": "AnthropicCountTokensRequest::into_parts",
+      "line": 52,
+      "cyclomatic": 11.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 132.0,
       "crate": "astronomical-rest-contract"
     },
     {
-      "file": "crates/rest-contract/src/image_input.rs",
-      "function": "OpenAiImageInput::mime_type",
-      "line": 25,
-      "cyclomatic": 1.0,
+      "file": "crates/rest-contract/src/anthropic_messages_content.rs",
+      "function": "AnthropicImageBudget::admit",
+      "line": 363,
+      "cyclomatic": 6.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 42.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_content.rs",
+      "function": "AnthropicInputMessage::into_parts",
+      "line": 188,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_content.rs",
+      "function": "assistant_message_parts",
+      "line": 321,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_content.rs",
+      "function": "system_message_parts",
+      "line": 208,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_content.rs",
+      "function": "tool_result_segment",
+      "line": 286,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_content.rs",
+      "function": "user_message_parts",
+      "line": 259,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_request.rs",
+      "function": "AnthropicMessagesRequest::into_parts",
+      "line": 148,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_request.rs",
+      "function": "resolve_thinking_budget",
+      "line": 262,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_request.rs",
+      "function": "validate_request_scalars",
+      "line": 207,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_response.rs",
+      "function": "AnthropicErrorType::http_status_code",
+      "line": 182,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/anthropic_messages_response.rs",
+      "function": "AnthropicMessageStreamEvent::event_type",
+      "line": 125,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
       "crate": "astronomical-rest-contract"
     },
     {
@@ -67698,6 +67653,15 @@
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
+      "crate": "astronomical-rest-contract"
+    },
+    {
+      "file": "crates/rest-contract/src/json_nesting_depth.rs",
+      "function": "json_nesting_depth",
+      "line": 8,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-rest-contract"
     },
     {
@@ -68116,15 +68080,6 @@
     },
     {
       "file": "crates/rest-contract/src/openai_chat_types.rs",
-      "function": "json_nesting_depth",
-      "line": 526,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-rest-contract"
-    },
-    {
-      "file": "crates/rest-contract/src/openai_chat_types.rs",
       "function": "validate_function_name",
       "line": 503,
       "cyclomatic": 3.0,
@@ -68358,42 +68313,6 @@
       "crate": "astronomical-rest-contract"
     },
     {
-      "file": "crates/rest-contract/src/openai_request_budget.rs",
-      "function": "base64_wire_byte_count",
-      "line": 114,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-rest-contract"
-    },
-    {
-      "file": "crates/rest-contract/src/openai_request_budget/wire_budget_tests.rs",
-      "function": "chat_request_with_image_data_uris",
-      "line": 20,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-rest-contract"
-    },
-    {
-      "file": "crates/rest-contract/src/openai_request_budget/wire_budget_tests.rs",
-      "function": "image_data_uri",
-      "line": 13,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-rest-contract"
-    },
-    {
-      "file": "crates/rest-contract/src/openai_request_budget/wire_budget_tests.rs",
-      "function": "responses_request_with_image_data_uris",
-      "line": 36,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-rest-contract"
-    },
-    {
       "file": "crates/rest-contract/src/openai_response_format.rs",
       "function": "OpenAiResponseFormat::into_structured_output",
       "line": 103,
@@ -68451,15 +68370,6 @@
       "file": "crates/rest-contract/src/openai_response_format.rs",
       "function": "fenced_json_payload",
       "line": 309,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-rest-contract"
-    },
-    {
-      "file": "crates/rest-contract/src/openai_response_format.rs",
-      "function": "json_nesting_depth",
-      "line": 328,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -68832,15 +68742,6 @@
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
-      "crate": "astronomical-rest-contract"
-    },
-    {
-      "file": "crates/rest-contract/src/openai_responses_tools.rs",
-      "function": "json_nesting_depth",
-      "line": 126,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
       "crate": "astronomical-rest-contract"
     },
     {
@@ -80355,6 +80256,15 @@
       "crate": "astronomical-acceptance"
     },
     {
+      "file": "verification/acceptance/tests/performance/paged_prefill/prefill_chunk_restreaming_measurements.rs",
+      "function": "steady_state_generation_report",
+      "line": 230,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-acceptance"
+    },
+    {
       "file": "verification/acceptance/tests/performance/paged_prefill/prefill_chunk_sweep.rs",
       "function": "assert_valid_prefill_chunk_sweep_result",
       "line": 70,
@@ -83163,6 +83073,312 @@
       "crate": "astronomical-e2e"
     },
     {
+      "file": "xtask/src/app_bundle/build_identity.rs",
+      "function": "BuildIdentity::gather",
+      "line": 21,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_assembly.rs",
+      "function": "assemble_bundle",
+      "line": 114,
+      "cyclomatic": 15.0,
+      "coverage": null,
+      "crap": 240.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_check.rs",
+      "function": "check_bundle",
+      "line": 34,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_check.rs",
+      "function": "check_signatures",
+      "line": 279,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_check.rs",
+      "function": "hidden_entry_problems",
+      "line": 113,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_check.rs",
+      "function": "is_all_digits",
+      "line": 240,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_check.rs",
+      "function": "layout_problems",
+      "line": 68,
+      "cyclomatic": 12.0,
+      "coverage": null,
+      "crap": 156.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_check.rs",
+      "function": "plist_identity_problems",
+      "line": 150,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/bundle_check.rs",
+      "function": "sparkle_key_problems",
+      "line": 209,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/code_signing.rs",
+      "function": "signing_plan",
+      "line": 48,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/command.rs",
+      "function": "parse_app_command",
+      "line": 30,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/command.rs",
+      "function": "parse_flag_values",
+      "line": 82,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/command.rs",
+      "function": "run",
+      "line": 110,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/dev_pipeline.rs",
+      "function": "resolve_bundle_inputs",
+      "line": 182,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/dev_pipeline.rs",
+      "function": "run_bundle_steps",
+      "line": 142,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/dev_pipeline.rs",
+      "function": "run_dev_pipeline",
+      "line": 66,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/dev_pipeline.rs",
+      "function": "swap_in_staged_bundle",
+      "line": 224,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/icon_cache.rs",
+      "function": "cached_channel_icon",
+      "line": 16,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/info_plist.rs",
+      "function": "escape_xml_text",
+      "line": 142,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/instance_control.rs",
+      "function": "InstanceAction::from_action_name",
+      "line": 33,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/instance_control.rs",
+      "function": "print_status",
+      "line": 190,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/instance_control.rs",
+      "function": "run_instance_action",
+      "line": 46,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/instance_control.rs",
+      "function": "start_instance",
+      "line": 71,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/package_pipeline.rs",
+      "function": "assemble_and_sign_release_bundle",
+      "line": 217,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/package_pipeline.rs",
+      "function": "build_release_bundle",
+      "line": 139,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/package_pipeline.rs",
+      "function": "reenter_in_disposable_target",
+      "line": 108,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/package_pipeline.rs",
+      "function": "release_bundle_inputs",
+      "line": 249,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/package_pipeline.rs",
+      "function": "run_release_compile_steps",
+      "line": 189,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/running_instance.rs",
+      "function": "quit_menu_app",
+      "line": 35,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/smoke_test.rs",
+      "function": "exercise_running_instance",
+      "line": 79,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/smoke_test.rs",
+      "function": "probe_real_model",
+      "line": 187,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/smoke_test.rs",
+      "function": "run_smoke_test",
+      "line": 40,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/smoke_test.rs",
+      "function": "wait_for_child_exit",
+      "line": 286,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/app_bundle/tool_command.rs",
+      "function": "run_tool",
+      "line": 16,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
       "file": "xtask/src/audit_test_declarations.rs",
       "function": "OrphanFinding::describe",
       "line": 30,
@@ -83268,6 +83484,168 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/archive_extraction.rs",
+      "function": "apply_dependency_patches",
+      "line": 122,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/archive_extraction.rs",
+      "function": "extract_and_patch_archive",
+      "line": 30,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/archive_extraction.rs",
+      "function": "require_verified_archive",
+      "line": 77,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/command.rs",
+      "function": "effective_patch_steps",
+      "line": 57,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/command.rs",
+      "function": "run",
+      "line": 18,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/hash_manifest.rs",
+      "function": "collect_regular_files",
+      "line": 40,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/hash_manifest.rs",
+      "function": "manifest_differences",
+      "line": 86,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/header_locations.rs",
+      "function": "native_build_store_directory",
+      "line": 38,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/options.rs",
+      "function": "apply_argument",
+      "line": 51,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/options.rs",
+      "function": "apply_valued_flag",
+      "line": 92,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/patch_pipeline.rs",
+      "function": "parse_cmake_patch_pipeline",
+      "line": 23,
+      "cyclomatic": 12.0,
+      "coverage": null,
+      "crap": 156.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/pinned_archives.rs",
+      "function": "select_pinned_header_archives",
+      "line": 23,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/provision_flow.rs",
+      "function": "HeaderPublication::stage_and_publish",
+      "line": 131,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/provision_flow.rs",
+      "function": "extraction_is_intact",
+      "line": 82,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/provision_flow.rs",
+      "function": "provision_headers",
+      "line": 20,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/provision_flow.rs",
+      "function": "replace_directory",
+      "line": 237,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/verify_flow.rs",
+      "function": "verification_target_triple",
+      "line": 89,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/bindgen_headers/verify_flow.rs",
+      "function": "verify_headers_against_native_build",
+      "line": 19,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
       "crate": "xtask"
     },
     {
@@ -83673,6 +84051,42 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/commit_identity.rs",
+      "function": "check_pushed_commits",
+      "line": 260,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/commit_identity.rs",
+      "function": "identity_emails_in_raw_commit",
+      "line": 110,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/commit_identity.rs",
+      "function": "is_publishable_identity_email",
+      "line": 44,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/commit_identity.rs",
+      "function": "run_pre_push_mode",
+      "line": 237,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "xtask"
     },
     {
@@ -84343,15 +84757,6 @@
     },
     {
       "file": "xtask/src/install_verification_tools.rs",
-      "function": "read_dotted_version_pin",
-      "line": 39,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/src/install_verification_tools.rs",
       "function": "run",
       "line": 327,
       "cyclomatic": 13.0,
@@ -84433,11 +84838,38 @@
     },
     {
       "file": "xtask/src/main.rs",
+      "function": "run_app_and_release_command",
+      "line": 187,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/main.rs",
       "function": "run_command",
       "line": 126,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/main.rs",
+      "function": "take_repository_root_override",
+      "line": 151,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/menu_contracts.rs",
+      "function": "run",
+      "line": 17,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
       "crate": "xtask"
     },
     {
@@ -84649,6 +85081,15 @@
     },
     {
       "file": "xtask/src/notices.rs",
+      "function": "lines_missing_from",
+      "line": 226,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/notices.rs",
       "function": "list_notices_input_paths",
       "line": 103,
       "cyclomatic": 3.0,
@@ -84735,6 +85176,375 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/prewarm_native_build.rs",
+      "function": "parse_profiles",
+      "line": 58,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/prewarm_native_build.rs",
+      "function": "prewarm_profiles",
+      "line": 97,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/prewarm_native_build.rs",
+      "function": "wait_relaying_progress",
+      "line": 185,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/app_store_package.rs",
+      "function": "package_for_app_store",
+      "line": 22,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/app_store_package.rs",
+      "function": "resolved_output_package",
+      "line": 115,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/command.rs",
+      "function": "parse_flag_values",
+      "line": 230,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/command.rs",
+      "function": "parse_notarization_command",
+      "line": 121,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/command.rs",
+      "function": "parse_release_command",
+      "line": 42,
+      "cyclomatic": 29.0,
+      "coverage": null,
+      "crap": 870.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/command.rs",
+      "function": "run",
+      "line": 184,
+      "cyclomatic": 14.0,
+      "coverage": null,
+      "crap": 210.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/disk_image_creation.rs",
+      "function": "apply_finder_layout",
+      "line": 158,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/disk_image_creation.rs",
+      "function": "create_disk_image",
+      "line": 88,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/disk_image_creation.rs",
+      "function": "run_finder_layout_script",
+      "line": 181,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/disk_image_creation.rs",
+      "function": "stage_installation_volume",
+      "line": 124,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/disk_image_creation.rs",
+      "function": "validate_disk_image_request",
+      "line": 54,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/disk_image_validation.rs",
+      "function": "mounted_layout_problems",
+      "line": 88,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/disk_image_validation.rs",
+      "function": "validate_disk_image",
+      "line": 14,
+      "cyclomatic": 17.0,
+      "coverage": null,
+      "crap": 306.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/distribution_signature.rs",
+      "function": "collect_code_objects",
+      "line": 136,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/distribution_signature.rs",
+      "function": "validate_distribution_app",
+      "line": 34,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/github_publication.rs",
+      "function": "load_prepared_release",
+      "line": 29,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/github_publication.rs",
+      "function": "publish_verified_draft",
+      "line": 191,
+      "cyclomatic": 12.0,
+      "coverage": null,
+      "crap": 156.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/github_publication.rs",
+      "function": "uploaded_asset_problems",
+      "line": 300,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/github_publication.rs",
+      "function": "verify_remote_release_tag",
+      "line": 89,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/notarization.rs",
+      "function": "validate_notarization_request",
+      "line": 106,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/publication_entry.rs",
+      "function": "run_prepare_and_publish",
+      "line": 24,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/release_identity.rs",
+      "function": "resolve_release_identity",
+      "line": 66,
+      "cyclomatic": 17.0,
+      "coverage": null,
+      "crap": 306.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/release_manifest.rs",
+      "function": "ReleaseManifest::from_json_text",
+      "line": 89,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/release_manifest.rs",
+      "function": "verify_artifact",
+      "line": 51,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/release_preparation.rs",
+      "function": "build_stable_bundle",
+      "line": 138,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/release_preparation.rs",
+      "function": "prepare_release",
+      "line": 94,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "accept_sparkle_update",
+      "line": 61,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "assemble_acceptance_app",
+      "line": 250,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "install_and_relaunch",
+      "line": 434,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "reject_corrupted_update",
+      "line": 482,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "resolve_sparkle_tools",
+      "line": 99,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "run_checked",
+      "line": 606,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "stop_relaunched_app",
+      "line": 526,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/sparkle_acceptance.rs",
+      "function": "wait_for_text",
+      "line": 642,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/stable_installation.rs",
+      "function": "canonical_home_directory",
+      "line": 63,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/stable_installation.rs",
+      "function": "promote_bundle",
+      "line": 149,
+      "cyclomatic": 10.0,
+      "coverage": null,
+      "crap": 110.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/stable_installation.rs",
+      "function": "validate_stable_bundle",
+      "line": 87,
+      "cyclomatic": 11.0,
+      "coverage": null,
+      "crap": 132.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/release/system_step.rs",
+      "function": "require_commands",
+      "line": 32,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "xtask"
     },
     {
@@ -85089,6 +85899,15 @@
       "crate": "xtask"
     },
     {
+      "file": "xtask/src/test_channel_isolation.rs",
+      "function": "collect_rust_sources",
+      "line": 132,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "xtask"
+    },
+    {
       "file": "xtask/src/test_run.rs",
       "function": "RunFailure::from",
       "line": 462,
@@ -85404,6 +86223,33 @@
       "crate": "xtask"
     },
     {
+      "file": "xtask/src/thin_talk_assets.rs",
+      "function": "asset_problem",
+      "line": 108,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/thin_talk_assets.rs",
+      "function": "download_asset",
+      "line": 134,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "xtask"
+    },
+    {
+      "file": "xtask/src/thin_talk_assets.rs",
+      "function": "run",
+      "line": 37,
+      "cyclomatic": 7.0,
+      "coverage": null,
+      "crap": 56.0,
+      "crate": "xtask"
+    },
+    {
       "file": "xtask/src/tier_pyramid.rs",
       "function": "collect_rs_files",
       "line": 34,
@@ -85530,165 +86376,21 @@
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/app_builder_support/journey.rs",
-      "function": "assert_disposable_target_was_removed",
-      "line": 85,
-      "cyclomatic": 1.0,
+      "file": "xtask/src/version_only_bump.rs",
+      "function": "changes_only_version_bump_paths",
+      "line": 58,
+      "cyclomatic": 7.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 56.0,
       "crate": "xtask"
     },
     {
-      "file": "xtask/tests/app_builder_support/journey.rs",
-      "function": "file_text",
-      "line": 31,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/journey.rs",
-      "function": "log_line_count_containing",
-      "line": 65,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/journey.rs",
-      "function": "plist_string",
-      "line": 39,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/journey.rs",
-      "function": "preparatory_development_journey",
-      "line": 72,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/journey.rs",
-      "function": "resource_text",
-      "line": 55,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::app_store_bundle_path",
-      "line": 400,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::cargo_arguments_text",
-      "line": 405,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::development_bundle_path",
-      "line": 390,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::drop",
-      "line": 415,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::install",
-      "line": 26,
+      "file": "xtask/src/version_only_bump.rs",
+      "function": "lockfile_differs_only_in_workspace_versions",
+      "line": 108,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::run_builder",
-      "line": 308,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::stable_bundle_path",
-      "line": 395,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::swift_arguments_text",
-      "line": 409,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::write_shim",
-      "line": 299,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::write_shim_at",
-      "line": 303,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "AppBuilderSandbox::write_tool_shims",
-      "line": 140,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/app_builder_support/sandbox.rs",
-      "function": "make_executable_if_requested",
-      "line": 420,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "xtask"
     },
     {
@@ -86013,24 +86715,6 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/integration_app_builder_journeys.rs",
-      "function": "assert_app_store_bundle_identity",
-      "line": 191,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "xtask"
-    },
-    {
-      "file": "xtask/tests/integration_app_builder_journeys.rs",
-      "function": "assert_app_store_entitlements_contract",
-      "line": 250,
-      "cyclomatic": 8.0,
-      "coverage": null,
-      "crap": 72.0,
       "crate": "xtask"
     },
     {

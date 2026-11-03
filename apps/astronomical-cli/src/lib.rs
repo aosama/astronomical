@@ -16,6 +16,7 @@ pub use model_lifecycle::{ModelLifecycle, RequiredCapability};
 pub use transport::ipc::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
 pub use verbs::doctor::{DoctorDependencies, DoctorError, run_doctor};
 pub use verbs::embed::{EmbedArguments, EmbedDependencies, EmbedError, run_embed};
+pub use verbs::image::{ImageArguments, ImageDependencies, ImageError, run_image};
 pub use verbs::launch::{LaunchDependencies, LaunchError, PreparedLaunch, prepare_launch};
 pub use verbs::models::{ModelsCommand, ModelsDependencies, ModelsError, run_models};
 pub use verbs::quantize::{

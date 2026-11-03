@@ -25,7 +25,7 @@ fn models_dependencies<'a>(
         stdout: stdout as &mut dyn Write,
         stderr: stderr as &mut dyn Write,
         request_timeout: TEST_TIMEOUT,
-        download_stage_bound: TEST_TIMEOUT,
+        download_stall_bound: TEST_TIMEOUT,
         download_poll_interval: DOWNLOAD_POLL_INTERVAL,
     }
 }

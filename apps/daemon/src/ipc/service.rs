@@ -190,6 +190,14 @@ async fn handle_streaming_daemon_request(
             )
             .await
         }
+        DaemonRequest::ImageGenerate(image_request) => {
+            crate::ipc::images::run_image_generation(
+                &generation_context,
+                image_request,
+                streaming_response_writer,
+            )
+            .await
+        }
         DaemonRequest::ModelsList => {
             crate::ipc::models::handle_models_list(
                 &generation_context,

@@ -5,8 +5,9 @@
 use crate::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationSettings,
     ChatMessage, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonRequest,
-    DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, decode_daemon_request,
-    decode_daemon_response, encode_daemon_request, encode_daemon_response,
+    DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, GeneratedImage,
+    ImageGenerateRequest, ImageGenerationFailureReason, ImageGenerationResultMetadata,
+    decode_daemon_request, decode_daemon_response, encode_daemon_request, encode_daemon_response,
 };
 
 fn chat_generate_request() -> DaemonRequest {
@@ -49,6 +50,20 @@ fn should_round_trip_daemon_requests_through_the_wire_codec() {
             inputs: vec!["embed whatever is resident".to_owned()],
             dimensions: None,
         },
+        DaemonRequest::ImageGenerate(ImageGenerateRequest {
+            model: "Qwen-Image-2.1-MLX-4bit".to_owned(),
+            prompt: "a lighthouse at dusk".to_owned(),
+            width_pixels: 1024,
+            height_pixels: 576,
+            seed: Some(42),
+        }),
+        DaemonRequest::ImageGenerate(ImageGenerateRequest {
+            model: "Qwen-Image-2.1-MLX-4bit".to_owned(),
+            prompt: "let the daemon pick the seed".to_owned(),
+            width_pixels: 512,
+            height_pixels: 512,
+            seed: None,
+        }),
         DaemonRequest::ModelsList,
         DaemonRequest::Catalog,
         DaemonRequest::DownloadStart {
@@ -100,6 +115,7 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
                 family: "qwen".to_owned(),
                 context_window: Some(32_768),
                 supports_embeddings: false,
+                supports_image_generation: false,
                 is_resident: true,
                 size_bytes: 1_750_000_000,
             }],
@@ -177,6 +193,13 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
                 maximum_context_tokens: 2_048,
             },
         },
+        image_completed_response(1_024),
+        DaemonResponse::ImageGenerationFailed {
+            reason: ImageGenerationFailureReason::EngineBusy,
+        },
+        DaemonResponse::ImageGenerationFailed {
+            reason: ImageGenerationFailureReason::invalid_request("width must be a multiple of 16"),
+        },
     ];
     for daemon_response in daemon_responses {
         let encoded_response = encode_daemon_response(&daemon_response)
@@ -188,4 +211,56 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             "the codec should preserve the daemon response"
         );
     }
+}
+
+/// The PNG bytes are opaque to the codec; only the frame size matters here.
+fn image_completed_response(png_byte_count: usize) -> DaemonResponse {
+    DaemonResponse::ImageGenerationCompleted {
+        model: "Qwen-Image-2.1-MLX-4bit".to_owned(),
+        image: GeneratedImage {
+            mime_type: "image/png".to_owned(),
+            encoded_bytes: vec![0x89; png_byte_count],
+        },
+        metadata: ImageGenerationResultMetadata {
+            width_pixels: 1024,
+            height_pixels: 576,
+            steps: 20,
+            guidance_thousandths: 1_000,
+            seed: 42,
+            elapsed_millis: 61_000,
+        },
+    }
+}
+
+/// An 8 MB PNG is larger than any supported size produces; base64 grows it by
+/// a third, so the frame is about 11 MB, well inside the 32 MB ceiling.
+#[test]
+fn should_carry_a_large_generated_image_inside_the_frame_ceiling() {
+    let large_response = image_completed_response(8 * 1024 * 1024);
+
+    let encoded_response = encode_daemon_response(&large_response)
+        .expect("an 8 MB image should fit one frame as base64");
+    let decoded_response =
+        decode_daemon_response(&encoded_response).expect("the large frame should decode");
+
+    assert_eq!(decoded_response, large_response);
+}
+
+#[test]
+fn should_refuse_an_image_whose_frame_would_exceed_the_ceiling() {
+    let oversized_response = image_completed_response(30 * 1024 * 1024);
+
+    assert!(encode_daemon_response(&oversized_response).is_err());
+}
+
+#[test]
+fn should_encode_the_png_as_base64_text_not_an_integer_array() {
+    let encoded_response =
+        encode_daemon_response(&image_completed_response(3)).expect("a tiny image should encode");
+    let frame_text = String::from_utf8(encoded_response).expect("the frame is JSON text");
+
+    assert!(
+        frame_text.contains("\"encoded_bytes\":\"iYmJ\""),
+        "{frame_text}"
+    );
 }

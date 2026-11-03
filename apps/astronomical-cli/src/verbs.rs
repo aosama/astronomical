@@ -6,6 +6,7 @@
 
 pub mod doctor;
 pub mod embed;
+pub mod image;
 pub mod launch;
 pub mod models;
 pub mod quantize;

@@ -39,8 +39,8 @@ pub struct EmbedDependencies<'a> {
     pub stderr: &'a mut dyn Write,
     /// Bound for each protocol stage of the journey.
     pub request_timeout: Duration,
-    /// Bound for the whole download-wait stage, if the model must download.
-    pub download_stage_bound: Duration,
+    /// How long a download may go without any change before the wait gives up.
+    pub download_stall_bound: Duration,
     /// Wait between download status polls.
     pub download_poll_interval: Duration,
 }
@@ -60,7 +60,7 @@ pub async fn run_embed(
     };
     let model_lifecycle = ModelLifecycle {
         daemon_probe,
-        download_stage_bound: embed_dependencies.download_stage_bound,
+        download_stall_bound: embed_dependencies.download_stall_bound,
         download_poll_interval: embed_dependencies.download_poll_interval,
     };
     let mut progress_started = false;
@@ -68,7 +68,7 @@ pub async fn run_embed(
         .prepare_model_id(
             embed_arguments.model_id.as_deref(),
             RequiredCapability::Embeddings,
-            &mut |progress_line| {
+            &mut |progress_line: &str| {
                 progress_started = true;
                 let _ = write!(embed_dependencies.stderr, "\r{progress_line}");
                 let _ = embed_dependencies.stderr.flush();

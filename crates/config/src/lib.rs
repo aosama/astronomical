@@ -37,8 +37,8 @@ pub use chunking_config::{
 };
 pub use config_error::AstronomicalConfigError;
 pub use default_model::{
-    BUILTIN_DEFAULT_MODEL_ID, DefaultModelConfigUpdate, commit_default_model_update,
-    prepare_default_model_update, write_default_model,
+    BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID, DefaultModelConfigUpdate,
+    commit_default_model_update, prepare_default_model_update, write_default_model,
 };
 pub use logging_config::{LogLevel, LoggingConfig};
 pub use maximum_mlx_memory::{

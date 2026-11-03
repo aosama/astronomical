@@ -2,7 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationSettings,
-    ChatMessage, EmbeddingsFailureReason,
+    ChatMessage, EmbeddingsFailureReason, GeneratedImage, ImageGenerationFailureReason,
+    ImageGenerationResultMetadata,
 };
 
 /// Protocol version the daemon and its local CLI clients negotiate on connect.
@@ -60,6 +61,10 @@ pub enum DaemonRequest {
         /// Optional Matryoshka dimension truncation requested by the caller.
         dimensions: Option<u32>,
     },
+    /// Generates one image from a text prompt. The daemon owns everything
+    /// model-specific (the capability envelope, the diffusion step count,
+    /// the guidance scale) so the CLI carries only what the user chose.
+    ImageGenerate(ImageGenerateRequest),
     /// Lists the models discovered on this Mac with their capability flags.
     ModelsList,
     /// Lists the release download catalog with ready/download state per entry.
@@ -75,6 +80,23 @@ pub enum DaemonRequest {
     DefaultModelSet {
         model_id: String,
     },
+}
+
+/// What the user chose for one image: the daemon adds the model family's own
+/// step count and guidance, so neither is a field here.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ImageGenerateRequest {
+    /// Exact worker-advertised image model ID; the daemon swaps the resident
+    /// model itself when it differs.
+    pub model: String,
+    /// What to draw.
+    pub prompt: String,
+    pub width_pixels: u32,
+    pub height_pixels: u32,
+    /// Reproducibility seed; the daemon picks one when absent and reports the
+    /// effective seed in the completion.
+    pub seed: Option<u64>,
 }
 
 /// One reply the daemon sends back to the local CLI process. `Eq` is
@@ -140,6 +162,19 @@ pub enum DaemonResponse {
     },
     /// Terminal frame for a failed embedding batch.
     EmbeddingsFailed { reason: EmbeddingsFailureReason },
+    /// Terminal frame for a finished image. The PNG travels as base64 in the
+    /// frame, well inside the 32 MB frame ceiling for any supported size.
+    ImageGenerationCompleted {
+        /// Worker-advertised model ID that drew the image.
+        model: String,
+        image: GeneratedImage,
+        /// Effective seed, size, steps, guidance, and elapsed time.
+        metadata: ImageGenerationResultMetadata,
+    },
+    /// Terminal frame for an image request the worker failed after admission.
+    ImageGenerationFailed {
+        reason: ImageGenerationFailureReason,
+    },
 }
 
 /// One model discovered on this Mac, any capability class.
@@ -155,6 +190,8 @@ pub struct DaemonListedModel {
     pub context_window: Option<u32>,
     /// True when this model can produce embeddings for `embed`.
     pub supports_embeddings: bool,
+    /// True when this model can draw an image from text for `image`.
+    pub supports_image_generation: bool,
     /// True when this model is currently resident in the worker.
     pub is_resident: bool,
     /// Artifact size in bytes; the CLI renders gigabytes of 2³⁰ bytes.

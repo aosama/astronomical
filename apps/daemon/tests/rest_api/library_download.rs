@@ -19,6 +19,7 @@ use tower::ServiceExt;
 
 use crate::support::ScriptedExecutor;
 
+mod ipc_download_start;
 mod restart;
 mod support;
 
@@ -384,10 +385,16 @@ impl DownloadPublicationRefresh for FailingDiscoveryRefresh {
     }
 }
 
-fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Router {
-    let download_catalog = test_catalog();
-    let coordinator = Arc::new(LibraryDownloadCoordinator::new(
-        Arc::clone(&download_catalog),
+/// A real coordinator over the scripted hub, rooted at `test_directory`.
+/// Shared by the REST journeys and the IPC ones, so both drive the same
+/// download machinery.
+fn build_test_coordinator(
+    test_directory: &Path,
+    download_catalog: Arc<DownloadCatalog>,
+    hub: Arc<ScriptedHub>,
+) -> Arc<LibraryDownloadCoordinator> {
+    Arc::new(LibraryDownloadCoordinator::new(
+        download_catalog,
         test_directory.join("models"),
         Arc::new(AvailableCapacity),
         hub.clone(),
@@ -395,7 +402,12 @@ fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Route
         Arc::new(ValidatingDiscoveryRefresh),
         DaemonPerformanceAttributionLog::open(test_directory, false)
             .expect("disabled attribution should construct"),
-    ));
+    ))
+}
+
+fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Router {
+    let download_catalog = test_catalog();
+    let coordinator = build_test_coordinator(test_directory, Arc::clone(&download_catalog), hub);
     build_application_with_library_download(
         ScriptedExecutor::unavailable(),
         download_catalog,

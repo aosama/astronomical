@@ -18,6 +18,17 @@ use crate::legacy_config_migration::{
 /// resolution and the CLI's request resolution so the two can never drift.
 pub const BUILTIN_DEFAULT_MODEL_ID: &str = "Qwen3.5-2B-4bit";
 
+/// Built-in image model for `astronomical image` when the user names none.
+/// The persisted default model is a chat model and cannot draw, so images
+/// have their own default. FLUX.2 Klein runs 4 diffusion steps where
+/// Qwen-Image runs 40: on one Apple silicon Mac it drew the same 1024x576
+/// prompt in about 9 seconds against Qwen's 89, which is the difference
+/// between a first image that feels instant and one that feels hung. The
+/// price is a larger one-time download (about 14.9 GB against 9.8 GB, in the
+/// 2^30-byte gigabytes the CLI prints). Qwen-Image stays available with
+/// `--model Qwen-Image-2.1-MLX-4bit`.
+pub const BUILTIN_DEFAULT_IMAGE_MODEL_ID: &str = "FLUX.2-klein-4B";
+
 /// Rejects ids that cannot resolve to a catalog entry or discovered model.
 fn validate_default_model_id(model_id: &str) -> Result<(), AstronomicalConfigError> {
     if model_id.is_empty() || model_id.trim() != model_id {

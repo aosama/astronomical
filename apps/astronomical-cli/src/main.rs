@@ -49,6 +49,7 @@ fn main() -> ExitCode {
         }
         Ok(CliCommand::Respond(respond_arguments)) => run_respond_verb(respond_arguments),
         Ok(CliCommand::Embed(embed_arguments)) => run_embed_verb(embed_arguments),
+        Ok(CliCommand::Image(image_arguments)) => run_image_verb(image_arguments),
         Ok(CliCommand::Models(models_command)) => run_models_verb(models_command),
         Ok(CliCommand::Status) => run_status_verb(),
         Ok(CliCommand::Doctor) => run_doctor_verb(),
@@ -224,7 +225,7 @@ fn run_respond_verb(respond_arguments: astronomical_cli::RespondArguments) -> Ex
         stdout: &mut stdout,
         stderr: &mut stderr,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
-        download_stage_bound: astronomical_cli::model_lifecycle::DOWNLOAD_WAIT_STAGE_BOUND,
+        download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
         download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
     };
     match respond_runtime.block_on(astronomical_cli::run_respond(
@@ -265,7 +266,7 @@ fn run_embed_verb(embed_arguments: astronomical_cli::EmbedArguments) -> ExitCode
         stdout: &mut stdout,
         stderr: &mut stderr,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
-        download_stage_bound: astronomical_cli::model_lifecycle::DOWNLOAD_WAIT_STAGE_BOUND,
+        download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
         download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
     };
     match embed_runtime.block_on(astronomical_cli::run_embed(
@@ -281,6 +282,63 @@ fn run_embed_verb(embed_arguments: astronomical_cli::EmbedArguments) -> ExitCode
         }
         Err(embed_error) => {
             let _ = writeln!(stderr, "astronomical: {embed_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// An image is the slowest verb: the daemon stops one at 15 minutes (its own
+/// bound), so the CLI waits a little longer than that and reports the daemon's
+/// verdict instead of cutting the run off first.
+const IMAGE_GENERATION_WAIT_BOUND: std::time::Duration = std::time::Duration::from_secs(16 * 60);
+
+/// How often an image run reports elapsed time on standard error.
+const IMAGE_PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
+fn run_image_verb(image_arguments: astronomical_cli::ImageArguments) -> ExitCode {
+    let image_runtime = match build_current_thread_runtime() {
+        Ok(image_runtime) => image_runtime,
+        Err(runtime_error) => {
+            eprintln!("astronomical: {runtime_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let default_output_directory = match std::env::current_dir() {
+        Ok(current_directory) => current_directory,
+        Err(directory_error) => {
+            eprintln!("astronomical: could not read the working directory: {directory_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
+    let (image_runtime_instance, image_candidate_socket_paths) =
+        own_runtime_instance_and_ipc_socket_paths();
+    let mut image_dependencies = astronomical_cli::ImageDependencies {
+        candidate_socket_paths: image_candidate_socket_paths,
+        runtime_instance: image_runtime_instance,
+        default_output_directory,
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
+        generation_bound: IMAGE_GENERATION_WAIT_BOUND,
+        progress_interval: IMAGE_PROGRESS_INTERVAL,
+        download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
+        download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
+    };
+    match image_runtime.block_on(astronomical_cli::run_image(
+        &image_arguments,
+        &mut image_dependencies,
+    )) {
+        Ok(()) => ExitCode::SUCCESS,
+        // A missing model or an unusable output path is fixed by changing the
+        // command, so it exits 2 like a bad flag.
+        Err(image_error) if image_error.is_usage_error() => {
+            let _ = writeln!(stderr, "astronomical: {image_error}");
+            ExitCode::from(2)
+        }
+        Err(image_error) => {
+            let _ = writeln!(stderr, "astronomical: {image_error}");
             ExitCode::FAILURE
         }
     }
@@ -304,7 +362,7 @@ fn run_models_verb(models_command: astronomical_cli::ModelsCommand) -> ExitCode 
         stdout: &mut stdout,
         stderr: &mut stderr,
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
-        download_stage_bound: astronomical_cli::model_lifecycle::DOWNLOAD_WAIT_STAGE_BOUND,
+        download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
         download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
     };
     match models_runtime.block_on(astronomical_cli::run_models(
