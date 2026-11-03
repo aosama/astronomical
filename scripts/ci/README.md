@@ -19,6 +19,7 @@ Former scripts in this folder and at the root of `scripts/` are now xtask comman
 - `cargo xtask check-test-channel-isolation`, which now also scans `verification/*/tests` and runs on the real repository in CI
 - `cargo xtask menu-contracts`, for local use; CI runs the same `swift test` inline because its Swift job has no Rust
 - `cargo xtask mlx-c-coverage-inventory`
+- `cargo xtask vendor-thin-talk-assets [--verify-only]`, which vendors and verifies the Thin Talk canvas's pinned web assets
 
 The tier pyramid is local: `cargo xtask tier-pyramid` reports the repository's per-tier test distribution against `tier-pyramid-baseline.json`. Its behaviour on a fixture tree is an xtask unit test.
 

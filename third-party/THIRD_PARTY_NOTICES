@@ -204,7 +204,7 @@ Thin Talk conversation canvas web assets
 
 These JavaScript and font assets are vendored into the Thin Talk app bundle and
 served to its conversation canvas from the bundle itself, never from a network
-host. scripts/vendor-thin-talk-canvas-assets.sh pins each one by SHA-256 digest
+host. `cargo xtask vendor-thin-talk-assets` pins each one by SHA-256 digest
 and downloads it from the package host on demand, and each asset ships with its
 own complete license text beside it in the bundle.
 
