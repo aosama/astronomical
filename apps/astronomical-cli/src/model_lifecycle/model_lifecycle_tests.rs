@@ -92,6 +92,7 @@ fn should_list_near_matches_and_the_supported_hint_for_an_unknown_model() {
         family: "qwen3_5".to_owned(),
         context_window: Some(32_768),
         supports_embeddings: false,
+        supports_image_generation: false,
         is_resident: false,
         size_bytes: 1_500_000_000,
     }];
@@ -102,4 +103,50 @@ fn should_list_near_matches_and_the_supported_hint_for_an_unknown_model() {
     );
     assert!(reason.contains("did you mean: qwen3.5-2b-4bit"), "{reason}");
     assert!(reason.contains("astronomical models supported"), "{reason}");
+}
+
+fn listed_model(model_id: &str, context_window: Option<u32>, can_draw: bool) -> DaemonListedModel {
+    DaemonListedModel {
+        model_id: model_id.to_owned(),
+        family: "stub".to_owned(),
+        context_window,
+        supports_embeddings: false,
+        supports_image_generation: can_draw,
+        is_resident: false,
+        size_bytes: 1,
+    }
+}
+
+#[test]
+fn should_describe_only_image_models_as_image_capable() {
+    let image_model = listed_model("Qwen-Image-2.1-MLX-4bit", None, true);
+    let chat_model = listed_model("Qwen3.5-2B-4bit", Some(32_768), false);
+
+    assert!(RequiredCapability::ImageGeneration.describes_installed_model(&image_model));
+    assert!(!RequiredCapability::ImageGeneration.describes_installed_model(&chat_model));
+    assert!(!RequiredCapability::Chat.describes_installed_model(&image_model));
+    assert!(!RequiredCapability::Embeddings.describes_installed_model(&image_model));
+}
+
+#[test]
+fn should_describe_only_image_catalog_entries_as_image_capable() {
+    let mut image_entry = catalog_entry("mlx-community/Qwen-Image-2.1-MLX-4bit", None);
+    image_entry.context_window = None;
+    image_entry.supports_image_generation = true;
+    let chat_entry = catalog_entry("mlx-community/Qwen3.5-2B-4bit", None);
+
+    assert!(RequiredCapability::ImageGeneration.describes_catalog_entry(&image_entry));
+    assert!(!RequiredCapability::ImageGeneration.describes_catalog_entry(&chat_entry));
+}
+
+#[test]
+fn should_say_image_generation_when_a_chat_model_is_asked_to_draw() {
+    let chat_model = listed_model("Qwen3.5-2B-4bit", Some(32_768), false);
+    let reason = model_lifecycle::unknown_model_reason(
+        "Qwen-Image-2.1",
+        &[chat_model],
+        RequiredCapability::ImageGeneration,
+    );
+
+    assert!(reason.contains("image-generation models"), "{reason}");
 }

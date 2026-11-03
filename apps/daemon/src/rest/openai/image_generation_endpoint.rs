@@ -21,6 +21,7 @@ use axum::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
+use crate::serving::image_seed::generated_seed;
 use crate::{
     GenerationStartError, ImageGenerationExecutionError, ImageGenerationOutput,
     application::{ApplicationState, allocate_chat_request_id},
@@ -455,18 +456,6 @@ fn request_identifier_exhausted_response() -> Response {
     )
         .into_response()
 }
-
-fn generated_seed(request_id: u64) -> u64 {
-    let time_seed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration_since_epoch| {
-            duration_since_epoch.as_secs().rotate_left(32)
-                ^ u64::from(duration_since_epoch.subsec_nanos())
-        })
-        .unwrap_or_default();
-    time_seed ^ request_id.rotate_left(17)
-}
-
 #[cfg(test)]
 #[path = "image_generation_endpoint_tests.rs"]
 mod image_generation_endpoint_tests;

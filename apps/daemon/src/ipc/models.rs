@@ -20,7 +20,8 @@ use crate::{
     },
     library::{
         CatalogEntryProjection, DownloadCatalog, DownloadCatalogEntry, DownloadJob,
-        LibraryDownloadCoordinator, requestable_model_id_from_huggingface_id,
+        DownloadJobState, LibraryDownloadCoordinator, LibraryDownloadCoordinatorError,
+        requestable_model_id_from_huggingface_id,
     },
     performance::attribution::{
         DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
@@ -81,6 +82,11 @@ fn build_listed_models(
             supports_embeddings: matches!(
                 discovered_model.capabilities,
                 ModelCapabilities::Embeddings(_)
+            ),
+            supports_image_generation: matches!(
+                &discovered_model.capabilities,
+                ModelCapabilities::ImageGeneration(image_capabilities)
+                    if image_capabilities.supports_text_to_image
             ),
             is_resident: health_snapshot.ready_model_id.as_deref()
                 == Some(discovered_model.model_id.as_str()),
@@ -224,33 +230,158 @@ fn catalog_model_id_candidates(download_catalog: &DownloadCatalog) -> Vec<String
         .collect()
 }
 
+/// What `DownloadStart` should do, given the job the daemon already holds.
+#[derive(Debug, Eq, PartialEq)]
+pub(crate) enum DownloadStartAction {
+    /// No job exists: begin a fresh download.
+    Start,
+    /// The same model's job is paused or failed: continue it from the bytes
+    /// already staged on disk.
+    Resume,
+    /// The same model's job is already running: there is nothing to start,
+    /// and the caller should simply keep watching it.
+    AlreadyRunning,
+    /// A different model's job holds the Library.
+    BusyWith { other_huggingface_id: String },
+}
+
+/// Decides the start action from the existing job's identity and state.
+///
+/// `AlreadyRunning` is what makes the CLI safe to rerun. A command that gave
+/// up waiting (or was interrupted with Ctrl-C) leaves its download running in
+/// the daemon, and the next run asks to start the same download again. That
+/// must attach to the running job, not fail with "another download is
+/// active", or the user could never finish a large download that took longer
+/// than one command was willing to wait.
+pub(crate) fn download_start_action(
+    existing_job: Option<(&str, DownloadJobState)>,
+    requested_huggingface_id: &str,
+) -> DownloadStartAction {
+    let Some((existing_huggingface_id, existing_state)) = existing_job else {
+        return DownloadStartAction::Start;
+    };
+    if existing_huggingface_id != requested_huggingface_id {
+        return DownloadStartAction::BusyWith {
+            other_huggingface_id: existing_huggingface_id.to_owned(),
+        };
+    }
+    match existing_state {
+        DownloadJobState::Paused | DownloadJobState::Failed => DownloadStartAction::Resume,
+        DownloadJobState::CheckingDisk
+        | DownloadJobState::FetchingManifest
+        | DownloadJobState::Downloading
+        | DownloadJobState::Verifying
+        | DownloadJobState::Publishing => DownloadStartAction::AlreadyRunning,
+    }
+}
+
+/// The two facts the start decision needs from a job.
+fn download_job_identity(download_job: &DownloadJob) -> (&str, DownloadJobState) {
+    (download_job.huggingface_id(), download_job.state())
+}
+
+/// How a start or resume attempt ended short of success.
+enum StartFailure {
+    /// The coordinator refused because another request got there first.
+    LostRace(String),
+    /// Refused for any other reason.
+    Refused(String),
+}
+
+/// How long to wait, in total, for a racing request's job to appear: the job
+/// file is written a moment after the download task is spawned, so a request
+/// that lost the race can briefly find no job at all.
+const RACE_SETTLE_ATTEMPTS: u32 = 20;
+const RACE_SETTLE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(25);
+
 async fn start_or_resume_download(
     download_coordinator: &Arc<LibraryDownloadCoordinator>,
     huggingface_id: &str,
 ) -> Result<(), String> {
-    match download_coordinator.current_job().await {
-        Ok(Some(active_job)) if active_job.huggingface_id() == huggingface_id => {
-            download_coordinator
-                .resume()
-                .await
-                .map(|_| ())
-                .map_err(|resume_error| {
-                    format!("the paused download could not be resumed: {resume_error}")
-                })
+    let action = decide_download_start(download_coordinator, huggingface_id).await?;
+    match execute_download_start(download_coordinator, huggingface_id, action).await {
+        Ok(()) => Ok(()),
+        Err(StartFailure::Refused(reason)) => Err(reason),
+        Err(StartFailure::LostRace(reason)) => {
+            attach_to_the_racing_download(download_coordinator, huggingface_id, reason).await
         }
-        Ok(Some(active_job)) => Err(format!(
-            "a download of {} is already active; wait for it to finish or cancel it before downloading {huggingface_id}",
-            active_job.huggingface_id()
-        )),
-        Ok(None) => download_coordinator
-            .start(huggingface_id)
-            .await
-            .map(|_| ())
-            .map_err(|start_error| format!("the download could not be started: {start_error}")),
-        Err(query_error) => Err(format!(
-            "the download job state could not be read: {query_error}"
-        )),
     }
+}
+
+/// Reads the daemon's current job and decides what asking to download this
+/// model should do.
+async fn decide_download_start(
+    download_coordinator: &Arc<LibraryDownloadCoordinator>,
+    huggingface_id: &str,
+) -> Result<DownloadStartAction, String> {
+    let existing_job = match download_coordinator.current_job().await {
+        Ok(existing_job) => existing_job,
+        Err(query_error) => {
+            return Err(format!(
+                "the download job state could not be read: {query_error}"
+            ));
+        }
+    };
+    let existing_identity = existing_job.as_ref().map(download_job_identity);
+    Ok(download_start_action(existing_identity, huggingface_id))
+}
+
+async fn execute_download_start(
+    download_coordinator: &Arc<LibraryDownloadCoordinator>,
+    huggingface_id: &str,
+    action: DownloadStartAction,
+) -> Result<(), StartFailure> {
+    match action {
+        DownloadStartAction::AlreadyRunning => Ok(()),
+        DownloadStartAction::Resume => match download_coordinator.resume().await {
+            Ok(()) => Ok(()),
+            Err(resume_error) => Err(start_failure(
+                &resume_error,
+                format!("the paused download could not be resumed: {resume_error}"),
+            )),
+        },
+        DownloadStartAction::Start => match download_coordinator.start(huggingface_id).await {
+            Ok(_) => Ok(()),
+            Err(start_error) => Err(start_failure(
+                &start_error,
+                format!("the download could not be started: {start_error}"),
+            )),
+        },
+        DownloadStartAction::BusyWith {
+            other_huggingface_id,
+        } => Err(StartFailure::Refused(format!(
+            "a download of {other_huggingface_id} is already active; wait for it to finish or cancel it before downloading {huggingface_id}"
+        ))),
+    }
+}
+
+fn start_failure(error: &LibraryDownloadCoordinatorError, reason: String) -> StartFailure {
+    match error {
+        LibraryDownloadCoordinatorError::LibraryBusy => StartFailure::LostRace(reason),
+        _ => StartFailure::Refused(reason),
+    }
+}
+
+/// Two commands asking for the same model at once (two terminals on a fresh
+/// install) both find no job, and the second start is refused as busy. That
+/// refusal means someone else is already doing the work, so wait briefly for
+/// their job to appear: if it is this model's, attach to it; if it is another
+/// model's, or never appears, report the refusal.
+async fn attach_to_the_racing_download(
+    download_coordinator: &Arc<LibraryDownloadCoordinator>,
+    huggingface_id: &str,
+    refusal_reason: String,
+) -> Result<(), String> {
+    for _settle_attempt in 0..RACE_SETTLE_ATTEMPTS {
+        match decide_download_start(download_coordinator, huggingface_id).await? {
+            DownloadStartAction::AlreadyRunning => return Ok(()),
+            DownloadStartAction::BusyWith { .. } => return Err(refusal_reason),
+            DownloadStartAction::Start | DownloadStartAction::Resume => {
+                tokio::time::sleep(RACE_SETTLE_INTERVAL).await;
+            }
+        }
+    }
+    Err(refusal_reason)
 }
 
 /// Reports the active library download job, if any.
@@ -372,7 +503,9 @@ fn unknown_default_model_error(
 }
 
 /// Discovered models from the live config, empty when no config is wired.
-fn live_discovered_models(generation_context: &DaemonIpcGenerationContext) -> Vec<DiscoveredModel> {
+pub(crate) fn live_discovered_models(
+    generation_context: &DaemonIpcGenerationContext,
+) -> Vec<DiscoveredModel> {
     generation_context
         .reloadable_config
         .as_ref()
@@ -400,3 +533,7 @@ async fn active_validated_publications(
         None => Default::default(),
     }
 }
+
+#[cfg(test)]
+#[path = "models_tests.rs"]
+mod models_tests;

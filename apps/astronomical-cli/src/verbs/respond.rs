@@ -40,8 +40,8 @@ pub struct RespondDependencies<'a> {
     pub stderr: &'a mut dyn Write,
     /// Bound for each protocol stage of the journey.
     pub request_timeout: Duration,
-    /// Bound for the whole download-wait stage, if the model must download.
-    pub download_stage_bound: Duration,
+    /// How long a download may go without any change before the wait gives up.
+    pub download_stall_bound: Duration,
     /// Wait between download status polls.
     pub download_poll_interval: Duration,
 }
@@ -60,7 +60,7 @@ pub async fn run_respond(
     };
     let model_lifecycle = ModelLifecycle {
         daemon_probe,
-        download_stage_bound: respond_dependencies.download_stage_bound,
+        download_stall_bound: respond_dependencies.download_stall_bound,
         download_poll_interval: respond_dependencies.download_poll_interval,
     };
     // Local inputs fail before any daemon work: a missing schema file or an
@@ -75,7 +75,7 @@ pub async fn run_respond(
         .prepare_model_id(
             respond_arguments.model_id.as_deref(),
             RequiredCapability::Chat,
-            &mut |progress_line| {
+            &mut |progress_line: &str| {
                 progress_started = true;
                 let _ = write!(respond_dependencies.stderr, "\r{progress_line}");
                 let _ = respond_dependencies.stderr.flush();

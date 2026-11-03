@@ -26,8 +26,8 @@ pub struct ModelsDependencies<'a> {
     pub stderr: &'a mut dyn Write,
     /// Bound for each protocol exchange.
     pub request_timeout: Duration,
-    /// Bound for the whole download-wait stage.
-    pub download_stage_bound: Duration,
+    /// How long a download may go without any change before the wait gives up.
+    pub download_stall_bound: Duration,
     /// Wait between download status polls.
     pub download_poll_interval: Duration,
 }
@@ -55,14 +55,14 @@ pub async fn run_models(
             Some(model_id) => {
                 let model_lifecycle = ModelLifecycle {
                     daemon_probe,
-                    download_stage_bound: models_dependencies.download_stage_bound,
+                    download_stall_bound: models_dependencies.download_stall_bound,
                     download_poll_interval: models_dependencies.download_poll_interval,
                 };
                 // Persist the choice only once the model can actually serve:
                 // a default pointing at a model this Mac lacks is fetched
                 // first, and an id outside the catalog is rejected here.
                 let resolved_model_id = model_lifecycle
-                    .ensure_downloaded(model_id, &mut |progress_line| {
+                    .ensure_downloaded(model_id, &mut |progress_line: &str| {
                         let _ = write!(models_dependencies.stderr, "\r{progress_line}");
                         let _ = models_dependencies.stderr.flush();
                     })
@@ -93,11 +93,11 @@ pub async fn run_models(
         ModelsCommand::Download { model_id } => {
             let model_lifecycle = ModelLifecycle {
                 daemon_probe,
-                download_stage_bound: models_dependencies.download_stage_bound,
+                download_stall_bound: models_dependencies.download_stall_bound,
                 download_poll_interval: models_dependencies.download_poll_interval,
             };
             let resolved_model_id = model_lifecycle
-                .ensure_downloaded(model_id, &mut |progress_line| {
+                .ensure_downloaded(model_id, &mut |progress_line: &str| {
                     let _ = write!(models_dependencies.stderr, "\r{progress_line}");
                     let _ = models_dependencies.stderr.flush();
                 })

@@ -14,8 +14,9 @@ use std::{
 use astronomical_ipc_protocol::{
     ChatGenerationSettings, ChatImageInput, ChatMessage, DAEMON_APPLICATION_NAME,
     DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel,
-    DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, ProtocolReader,
-    ProtocolWriter,
+    DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, GeneratedImage,
+    ImageGenerateRequest, ImageGenerationFailureReason, ImageGenerationResultMetadata,
+    ProtocolReader, ProtocolWriter,
 };
 
 /// One installed model the stub reports for `ModelsList`.
@@ -23,16 +24,29 @@ pub struct StubInstalledModel {
     pub model_id: String,
     pub context_window: Option<u32>,
     pub supports_embeddings: bool,
+    pub supports_image_generation: bool,
     pub is_resident: bool,
 }
 
 impl StubInstalledModel {
+    /// An installed text-to-image model.
+    pub fn image(model_id: &str, is_resident: bool) -> Self {
+        StubInstalledModel {
+            model_id: model_id.to_owned(),
+            context_window: None,
+            supports_embeddings: false,
+            supports_image_generation: true,
+            is_resident,
+        }
+    }
+
     /// A chat-capable installed model.
     pub fn chat(model_id: &str, is_resident: bool) -> Self {
         StubInstalledModel {
             model_id: model_id.to_owned(),
             context_window: Some(32_768),
             supports_embeddings: false,
+            supports_image_generation: false,
             is_resident,
         }
     }
@@ -43,6 +57,7 @@ impl StubInstalledModel {
             model_id: model_id.to_owned(),
             context_window: None,
             supports_embeddings: true,
+            supports_image_generation: false,
             is_resident,
         }
     }
@@ -57,9 +72,27 @@ pub struct StubCatalogEntry {
     pub download_state: Option<String>,
     pub context_window: Option<u32>,
     pub supports_embeddings: bool,
+    pub supports_image_generation: bool,
 }
 
 impl StubCatalogEntry {
+    /// A downloadable text-to-image model.
+    pub fn image(
+        huggingface_id: &str,
+        requestable_model_id: &str,
+        ready_on_this_mac: bool,
+    ) -> Self {
+        StubCatalogEntry {
+            huggingface_id: huggingface_id.to_owned(),
+            requestable_model_id: Some(requestable_model_id.to_owned()),
+            ready_on_this_mac,
+            download_state: None,
+            context_window: None,
+            supports_embeddings: false,
+            supports_image_generation: true,
+        }
+    }
+
     /// A downloadable chat model.
     pub fn chat(huggingface_id: &str, requestable_model_id: &str, ready_on_this_mac: bool) -> Self {
         StubCatalogEntry {
@@ -69,6 +102,7 @@ impl StubCatalogEntry {
             download_state: None,
             context_window: Some(32_768),
             supports_embeddings: false,
+            supports_image_generation: false,
         }
     }
 
@@ -85,8 +119,21 @@ impl StubCatalogEntry {
             download_state: None,
             context_window: None,
             supports_embeddings: true,
+            supports_image_generation: false,
         }
     }
+}
+
+/// Scripted result of an image request.
+pub enum StubImageOutcome {
+    /// The daemon answers with these PNG bytes.
+    Completed(Vec<u8>),
+    /// The daemon refuses before admission, with this reason.
+    Rejected(String),
+    /// The worker fails the image after admission.
+    Failed(ImageGenerationFailureReason),
+    /// The daemon accepts the request and never answers (a wedged worker).
+    Stalls,
 }
 
 /// Scripted result of an embeddings request.
@@ -107,6 +154,11 @@ pub struct StubDaemonConfig {
     pub chat_fragments: Vec<String>,
     pub embeddings_outcome: StubEmbeddingsOutcome,
     pub embedding_vector: Vec<f32>,
+    /// What the daemon does with an `ImageGenerate` request.
+    pub image_outcome: StubImageOutcome,
+    /// Captures the most recent `ImageGenerate` request the CLI sent, so a
+    /// test can assert exactly what crossed the socket.
+    pub image_request_capture: Arc<std::sync::Mutex<Option<DaemonRequest>>>,
     /// Captures the images the CLI attached to the most recent `ChatGenerate`,
     /// when a test supplies one. Shared across connections by the Arc clone.
     pub image_capture: Arc<std::sync::Mutex<Option<Vec<ChatImageInput>>>>,
@@ -135,6 +187,8 @@ impl Default for StubDaemonConfig {
             chat_fragments: Vec::new(),
             embeddings_outcome: StubEmbeddingsOutcome::Completed,
             embedding_vector: vec![0.25, -0.5],
+            image_outcome: StubImageOutcome::Completed(Vec::new()),
+            image_request_capture: Arc::new(std::sync::Mutex::new(None)),
             download_jobs: Vec::new(),
             image_capture: Arc::new(std::sync::Mutex::new(None)),
             messages_capture: Arc::new(std::sync::Mutex::new(None)),
@@ -229,6 +283,8 @@ pub fn spawn_stub_daemon(
                                     family: "stub".to_owned(),
                                     context_window: installed_model.context_window,
                                     supports_embeddings: installed_model.supports_embeddings,
+                                    supports_image_generation: installed_model
+                                        .supports_image_generation,
                                     is_resident: installed_model.is_resident,
                                     size_bytes: 1_000_000_000,
                                 })
@@ -272,7 +328,8 @@ pub fn spawn_stub_daemon(
                                         supports_reasoning: false,
                                         supports_vision: false,
                                         supports_tool_calls: false,
-                                        supports_image_generation: false,
+                                        supports_image_generation: catalog_entry
+                                            .supports_image_generation,
                                         supports_embeddings: catalog_entry.supports_embeddings,
                                     }
                                 })
@@ -407,11 +464,65 @@ pub fn spawn_stub_daemon(
                             let _ = protocol_writer.close().await;
                             return;
                         }
+                        DaemonRequest::ImageGenerate(image_request) => {
+                            *config
+                                .image_request_capture
+                                .lock()
+                                .expect("the stub image capture should stay live") =
+                                Some(DaemonRequest::ImageGenerate(image_request.clone()));
+                            let Some(image_response) =
+                                scripted_image_response(&config.image_outcome, image_request).await
+                            else {
+                                return;
+                            };
+                            protocol_writer
+                                .send_daemon_response(&image_response)
+                                .await
+                                .expect("the stub image frame should transmit");
+                            let _ = protocol_writer.close().await;
+                            return;
+                        }
                     }
                 }
             });
         }
     })
+}
+
+/// The frame the stub answers an image request with, or `None` when the
+/// scripted worker never answers: the stalled case waits out an hour (far
+/// beyond any test bound) so the client's own deadline is what ends it.
+async fn scripted_image_response(
+    image_outcome: &StubImageOutcome,
+    image_request: ImageGenerateRequest,
+) -> Option<DaemonResponse> {
+    match image_outcome {
+        StubImageOutcome::Completed(png_bytes) => Some(DaemonResponse::ImageGenerationCompleted {
+            model: image_request.model,
+            image: GeneratedImage {
+                mime_type: "image/png".to_owned(),
+                encoded_bytes: png_bytes.clone(),
+            },
+            metadata: ImageGenerationResultMetadata {
+                width_pixels: image_request.width_pixels,
+                height_pixels: image_request.height_pixels,
+                steps: 4,
+                guidance_thousandths: 1_000,
+                seed: image_request.seed.unwrap_or(7),
+                elapsed_millis: 1_234,
+            },
+        }),
+        StubImageOutcome::Rejected(reason) => Some(DaemonResponse::GenerationRejected {
+            reason: reason.clone(),
+        }),
+        StubImageOutcome::Failed(failure_reason) => Some(DaemonResponse::ImageGenerationFailed {
+            reason: failure_reason.clone(),
+        }),
+        StubImageOutcome::Stalls => {
+            tokio::time::sleep(std::time::Duration::from_secs(3_600)).await;
+            None
+        }
+    }
 }
 
 /// One scripted download job for the stub's `DownloadStatus` sequence.

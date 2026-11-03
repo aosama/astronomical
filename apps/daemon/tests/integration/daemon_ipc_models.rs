@@ -58,6 +58,7 @@ async fn should_list_discovered_models_over_daemon_ipc() {
                 family: "qwen3_5".to_owned(),
                 context_window: Some(2_048),
                 supports_embeddings: false,
+                supports_image_generation: false,
                 is_resident: true,
                 size_bytes: 1_000_000_000,
             }],

@@ -14,19 +14,20 @@ use std::{
 
 use astronomical_config::{
     AstronomicalInstancePaths, AstronomicalRuntimeInstance,
-    ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel, LogLevel,
-    LoggingConfig, ModelCapabilities, ModelFamily, PromptCacheConfig,
+    ChatModelCapabilities as DiscoveredChatModelCapabilities, DiscoveredModel,
+    ImageGenerationCapabilities, LogLevel, LoggingConfig, ModelCapabilities, ModelFamily,
+    PromptCacheConfig,
 };
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, DaemonIpcGenerationContext,
     DaemonIpcService, DaemonPerformanceAttributionLog, EmbeddingsExecutionError, EmbeddingsOutput,
-    GenerationStartError, ImageGenerationExecutor, ResolvedRuntimeConfig,
-    RuntimeModelGenerationDefaults, RuntimeModelPolicy, WorkerHealthSnapshot,
-    start_daemon_ipc_service,
+    GenerationStartError, ImageGenerationExecutionError, ImageGenerationExecutor,
+    ImageGenerationOutput, ResolvedRuntimeConfig, RuntimeModelGenerationDefaults,
+    RuntimeModelPolicy, WorkerHealthSnapshot, start_daemon_ipc_service,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
-    ChatModelCapabilities, DaemonRequest, EmbeddingsCommand,
+    ChatModelCapabilities, DaemonRequest, EmbeddingsCommand, ImageGenerationCommand,
     WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
 };
 use tokio::{sync::mpsc, time::timeout};
@@ -185,6 +186,11 @@ pub(crate) struct StubGenerationExecutor {
     /// Present when the stub should serve embeddings requests.
     pub(crate) embeddings_output: Option<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
     pub(crate) received_embeddings_commands: Mutex<Vec<EmbeddingsCommand>>,
+    /// Present when the stub should serve image requests.
+    pub(crate) image_output: Option<Result<ImageGenerationOutput, ImageGenerationExecutionError>>,
+    /// Every image command the daemon admitted to the executor; a request the
+    /// daemon rejected before admission never appears here.
+    pub(crate) received_image_commands: Mutex<Vec<ImageGenerationCommand>>,
 }
 
 impl StubGenerationExecutor {
@@ -196,6 +202,15 @@ impl StubGenerationExecutor {
         self.received_commands
             .lock()
             .expect("the stub command log lock should not be poisoned")
+            .clone()
+    }
+
+    /// An owned snapshot of the logged image commands, for the same
+    /// guard-free assertions as `logged_commands`.
+    pub(crate) fn logged_image_commands(&self) -> Vec<ImageGenerationCommand> {
+        self.received_image_commands
+            .lock()
+            .expect("the stub image command log lock should not be poisoned")
             .clone()
     }
 
@@ -246,6 +261,39 @@ impl ChatGenerationExecutor for StubGenerationExecutor {
 }
 
 impl ImageGenerationExecutor for StubGenerationExecutor {
+    fn start_image_generation(
+        &self,
+        image_generation_command: ImageGenerationCommand,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<
+                            Result<ImageGenerationOutput, ImageGenerationExecutionError>,
+                        >,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        self.received_image_commands
+            .lock()
+            .expect("the stub image command log lock should not be poisoned")
+            .push(image_generation_command);
+        let image_output = self.image_output.clone();
+        Box::pin(async move {
+            let Some(image_output) = image_output else {
+                return Err(GenerationStartError::WorkerUnavailable);
+            };
+            let (image_result_sender, image_result_receiver) = mpsc::channel(1);
+            tokio::spawn(async move {
+                let _ = image_result_sender.send(image_output).await;
+            });
+            Ok(image_result_receiver)
+        })
+    }
+
     fn start_embeddings_generation(
         &self,
         embeddings_command: EmbeddingsCommand,
@@ -306,7 +354,45 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
         received_commands: Mutex::new(Vec::new()),
         embeddings_output: None,
         received_embeddings_commands: Mutex::new(Vec::new()),
+        image_output: None,
+        received_image_commands: Mutex::new(Vec::new()),
     })
+}
+
+/// A ready stub whose worker serves image requests with the given outcome.
+pub(crate) fn ready_stub_executor_with_image(
+    ready_model_id: &str,
+    image_output: Result<ImageGenerationOutput, ImageGenerationExecutionError>,
+) -> Arc<StubGenerationExecutor> {
+    let mut stub_executor = ready_stub_executor(ready_model_id);
+    Arc::get_mut(&mut stub_executor)
+        .expect("the stub executor should be uniquely owned here")
+        .image_output = Some(image_output);
+    stub_executor
+}
+
+/// A discovered text-to-image model whose envelope is the FLUX family's
+/// (64 to 1,024 pixels, multiples of 16, four steps), so size rejections are
+/// exercised against real numbers.
+pub(crate) fn ipc_image_discovered_model(model_id: &str) -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id: None,
+        model_family: ModelFamily::Flux2Klein,
+        revision: "ipc-image-test-revision".to_owned(),
+        model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
+        capabilities: ModelCapabilities::ImageGeneration(ImageGenerationCapabilities {
+            supports_text_to_image: true,
+            supports_image_editing: false,
+            supports_multiple_reference_images: false,
+            default_steps: 4,
+            minimum_dimension_pixels: 64,
+            maximum_dimension_pixels: 1_024,
+            dimension_multiple_pixels: 16,
+        }),
+        license: None,
+        model_size_bytes: 2_000_000_000,
+    }
 }
 
 pub(crate) fn ready_stub_executor_with_embeddings(

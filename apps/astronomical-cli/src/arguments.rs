@@ -6,6 +6,7 @@ use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error;
 
 use crate::verbs::embed::EmbedArguments;
+use crate::verbs::image::{ImageArguments, parse_image_arguments};
 use crate::verbs::models::ModelsCommand;
 use crate::verbs::quantize::QuantizeCommand;
 use crate::verbs::respond::RespondArguments;
@@ -22,6 +23,8 @@ const HELP_TEXT: &str = concat!(
     "                                   [--instructions TEXT] [--thinking-budget N] [--schema FILE]\n",
     "                                   [--no-stream]\n",
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
+    "       astronomical image PROMPT [--size WIDTHxHEIGHT] [--model MODEL_ID] [--seed N]\n",
+    "                                 [--output PATH]\n",
     "       astronomical models list | supported | default [MODEL_ID] | download MODEL_ID\n",
     "       astronomical status\n",
     "       astronomical doctor\n",
@@ -50,6 +53,9 @@ const HELP_TEXT: &str = concat!(
     "                   model automatically when it is not resident yet\n",
     "  embed [TEXT]     One-shot embedding vector as one JSON document; the daemon\n",
     "                   loads or downloads the model automatically when needed\n",
+    "  image PROMPT     Draw one image from text and save it as a PNG (default: 1024x1024 in the\n",
+    "                   working directory); prints the saved path; the daemon loads or downloads\n",
+    "                   the image model automatically; never overwrites an existing file\n",
     "  models list      Models installed on this Mac\n",
     "  models supported Release catalog: what can be downloaded, with local state\n",
     "  models default   Show the effective default model; with MODEL_ID, download it\n",
@@ -72,6 +78,9 @@ const HELP_TEXT: &str = concat!(
     "  --image PATH         Attach a raster image (png, jpg, jpeg, webp) to the respond prompt; repeatable\n",
     "  --schema FILE        Force the respond reply to be one JSON object matching the JSON schema in FILE\n",
     "  --file PATH          Embed the file's contents instead of TEXT or stdin\n",
+    "  --size WIDTHxHEIGHT  Image size in pixels for image, e.g. 1024x576 (default: 1024x1024)\n",
+    "  --seed N             Reproducibility seed for image; the run reports the seed it used\n",
+    "  --output PATH        Where image saves the PNG; must end in .png and not exist yet\n",
     "  --instance NAME      Which instance to inspect for validate config (default: development)\n",
     "  --json               Render the validate config report as JSON\n",
     "  -v, --verbose        Print launch timings on stderr\n",
@@ -87,6 +96,7 @@ pub enum CliCommand {
     Launch(LaunchArguments),
     Respond(RespondArguments),
     Embed(EmbedArguments),
+    Image(ImageArguments),
     Models(ModelsCommand),
     Status,
     Doctor,
@@ -132,6 +142,7 @@ pub fn parse_command(
         "launch" => parse_launch_arguments(&remaining_arguments[1..]).map(CliCommand::Launch),
         "respond" => parse_respond_arguments(&remaining_arguments[1..]).map(CliCommand::Respond),
         "embed" => parse_embed_arguments(&remaining_arguments[1..]).map(CliCommand::Embed),
+        "image" => parse_image_arguments(&remaining_arguments[1..]).map(CliCommand::Image),
         "models" => parse_models_command(&remaining_arguments[1..]).map(CliCommand::Models),
         "status" => {
             if remaining_arguments.len() > 1 {
@@ -266,7 +277,7 @@ fn parse_positional_model_id(raw_model_id: &OsString) -> Result<String, UsageErr
 /// Reads the value that must follow a value-taking flag. A missing,
 /// invalid, empty, or flag-shaped value is the same usage failure: the
 /// flag's value is what is missing.
-fn flag_value(
+pub(crate) fn flag_value(
     remaining_arguments: &[OsString],
     value_index: usize,
     flag_name: &'static str,
@@ -633,6 +644,12 @@ pub enum UsageError {
     InvalidThinkingBudget(String),
     #[error("embed takes one input. Pass TEXT, --file PATH, or pipe stdin — not several.")]
     EmbedInputConflict,
+    #[error("image needs a prompt. Try: astronomical image 'a lighthouse at dusk'")]
+    ImagePromptRequired,
+    #[error("--size must look like 1024x576 (width x height, positive whole pixels): {0}")]
+    InvalidImageSize(String),
+    #[error("--seed must be a whole number from 0 to 18446744073709551615: {0}")]
+    InvalidImageSeed(String),
     #[error("models needs a subcommand: list, supported, default, download")]
     ModelsSubcommandRequired,
     #[error("unknown models subcommand: {0}. Try: list, supported, default, download")]

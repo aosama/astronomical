@@ -57,7 +57,7 @@ pub use daemon_client::DaemonIpcClient;
 pub use daemon_listener::{DaemonIpcListener, StreamingResponseWriter};
 pub use daemon_protocol::{
     DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob,
-    DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus,
+    DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ImageGenerateRequest,
 };
 pub use daemon_transport_error::DaemonTransportError;
 pub use embeddings::{
