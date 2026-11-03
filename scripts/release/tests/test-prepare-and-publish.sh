@@ -28,6 +28,13 @@ write_fixture_commands() {
 
     cat > "${fake_command_directory}/cargo" <<'CARGO'
 #!/usr/bin/env sh
+if [ "${1:-}" = "xtask" ] && [ "${2:-}" = "app" ] && [ "${3:-}" = "package" ]; then
+    case "$*" in *'--channel stable --signing-identity Developer ID Application: Example (ABCDE12345)'*) ;; *) exit 1 ;; esac
+    app_bundle="${PWD}/target/astronomical-macos-stable.noindex/Astronomical.app"
+    mkdir -p "${app_bundle}/Contents"
+    printf '%s\n' '<plist><dict></dict></plist>' > "${app_bundle}/Contents/Info.plist"
+    exit 0
+fi
 printf '%s\n' '{"packages":[{"name":"astronomical-daemon","version":"0.2.1","repository":"https://github.com/example/astronomical"}]}'
 CARGO
     cat > "${fake_command_directory}/git" <<'GIT'
@@ -131,18 +138,6 @@ write_fixture_repository() {
         "${sandbox_repository}/scripts/release/prepare-and-publish.sh"
     chmod +x "${sandbox_repository}/scripts/release/prepare-and-publish.sh"
     printf '%s\n' '# Release notes' 'Safe signed update fixture.' > "${sandbox_repository}/release-notes.md"
-
-    cat > "${sandbox_repository}/scripts/release/build-stable-app.sh" <<'BUILDER'
-#!/usr/bin/env sh
-set -eu
-[ "${ASTRONOMICAL_UPDATE_FEED_URL:-}" = 'https://example.github.io/astronomical/appcast.xml' ]
-case "$*" in *'--signing-identity Developer ID Application: Example (ABCDE12345)'*) ;; *) exit 1 ;; esac
-repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
-app_bundle="${repository_root}/target/astronomical-macos-stable.noindex/Astronomical.app"
-mkdir -p "${app_bundle}/Contents"
-printf '%s\n' '<plist><dict></dict></plist>' > "${app_bundle}/Contents/Info.plist"
-BUILDER
-    chmod +x "${sandbox_repository}/scripts/release/build-stable-app.sh"
 
     cat > "${sandbox_repository}/scripts/release/validate-distribution-app.sh" <<'VALIDATE_APP'
 #!/usr/bin/env sh

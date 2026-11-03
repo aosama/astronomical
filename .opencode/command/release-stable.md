@@ -65,7 +65,7 @@ cargo fmt --all -- --check
 cargo test-integration-and-rest
 ```
 
-The packaging contract suite split in two (issue #1346): the publication journeys stayed in `test-release-contracts.sh`, while the app-builder packaging journey became the `cargo test-app-builder` lane, so a release run must invoke both to exercise every packaging contract explicitly.
+The packaging contract suite is split in two: the publication journeys live in `test-release-contracts.sh`, while the typed `cargo xtask app package` contracts (signing plans, Cargo arguments, bundle layout, plist checks) run as the `cargo test-app-builder` lane, so a release run must invoke both to exercise every packaging contract explicitly.
 
 6. Inspect `git status`, `git diff`, and `git log --oneline -10`; commit only `Cargo.toml`, `Cargo.lock`, and the regenerated `third-party/RUST_DEPENDENCY_NOTICES.digest` with `chore: bump version to ${VERSION}`.
 7. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}`. Wait for required checks, merge it, then synchronize the release commit: in a primary checkout, switch to `main` and pull with `--ff-only`; in a linked worktree whose primary checkout owns `main`, fetch and check out the merge commit directly (`git checkout --detach origin/main`). Either way, verify local `HEAD`, `refs/remotes/origin/main`, and GitHub `main` resolve to the same commit.

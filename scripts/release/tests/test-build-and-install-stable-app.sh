@@ -45,11 +45,16 @@ main() {
     cp "${repository_root}/scripts/release/build-and-install-stable-app.sh" \
         "${sandbox_scripts_directory}/build-and-install-stable-app.sh"
 
-    cat > "${sandbox_scripts_directory}/build-stable-app.sh" <<'BUILDER'
+    fake_command_directory="${SANDBOX_DIRECTORY}/fake-bin"
+    mkdir -p "$fake_command_directory"
+    cat > "${fake_command_directory}/cargo" <<'BUILDER'
 #!/usr/bin/env sh
 printf 'build %s\n' "$*" >> "${CALL_LOG:?CALL_LOG is required}"
 exit "${FAKE_BUILD_EXIT_CODE:-0}"
 BUILDER
+    chmod +x "${fake_command_directory}/cargo"
+    PATH="${fake_command_directory}:${PATH}"
+    export PATH
     cat > "${sandbox_scripts_directory}/install-stable-app.sh" <<'INSTALLER'
 #!/usr/bin/env sh
 printf 'install %s\n' "$*" >> "${CALL_LOG:?CALL_LOG is required}"
@@ -73,7 +78,7 @@ INSTALLER
         print_error "workflow returned ${workflow_exit_code}, expected the build failure code 17"
         exit 1
     }
-    printf '%s\n' 'build ' > "$expected_call_log"
+    printf '%s\n' 'build xtask app package --channel stable' > "$expected_call_log"
     assert_call_log "$expected_call_log" "$call_log"
     printf '%s\n' '[stable-workflow-test] case=build-failure-blocks-install status=success'
 
@@ -82,7 +87,7 @@ INSTALLER
     CALL_LOG="$call_log" timeout "$SUBJECT_TIMEOUT_SECONDS" \
         "${sandbox_scripts_directory}/build-and-install-stable-app.sh" \
         > "${SANDBOX_DIRECTORY}/success-output.log" 2>&1
-    printf '%s\n' 'build ' 'install ' > "$expected_call_log"
+    printf '%s\n' 'build xtask app package --channel stable' 'install ' > "$expected_call_log"
     assert_call_log "$expected_call_log" "$call_log"
     printf '%s\n' '[stable-workflow-test] case=successful-build-installs status=success'
 
@@ -91,7 +96,7 @@ INSTALLER
     CALL_LOG="$call_log" timeout "$SUBJECT_TIMEOUT_SECONDS" \
         "${sandbox_scripts_directory}/build-and-install-stable-app.sh" --dry-run \
         > "${SANDBOX_DIRECTORY}/dry-run-output.log" 2>&1
-    printf '%s\n' 'build ' 'install --dry-run' > "$expected_call_log"
+    printf '%s\n' 'build xtask app package --channel stable' 'install --dry-run' > "$expected_call_log"
     assert_call_log "$expected_call_log" "$call_log"
     printf '%s\n' '[stable-workflow-test] case=dry-run-previews-install status=success'
 }

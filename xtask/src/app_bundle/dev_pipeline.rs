@@ -11,12 +11,12 @@ use std::path::{Path, PathBuf};
 use super::build_identity::{BuildIdentity, github_pages_feed_url};
 use super::build_steps::{
     build_menu_application, build_rust_executables, build_thin_talk_web_assets,
-    prewarm_native_runtime,
+    prewarm_native_runtime, rust_executable_directory,
 };
 use super::bundle_assembly::{BundleInputs, assemble_bundle, missing_inputs};
 use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
-use super::code_signing::sign_bundle_ad_hoc;
+use super::code_signing::{SigningRequest, sign_bundle};
 use super::icon_cache::cached_channel_icon;
 use super::info_plist::render_info_plist;
 use super::native_metallib::packaged_metallib_source;
@@ -155,10 +155,19 @@ fn run_bundle_steps(
         &bundle_inputs,
         &info_plist_text,
     )?;
-    sign_bundle_ad_hoc(&pipeline_paths.staging_bundle_path, channel_profile)?;
+    sign_bundle(&SigningRequest {
+        bundle_path: &pipeline_paths.staging_bundle_path,
+        channel_profile,
+        signing_identity: None,
+        repository_root,
+    })?;
     step_reporter.finish_step();
     step_reporter.start_step("check-bundle");
-    check_bundle(&pipeline_paths.staging_bundle_path, build_identity)?;
+    check_bundle(
+        &pipeline_paths.staging_bundle_path,
+        channel_profile,
+        build_identity,
+    )?;
     step_reporter.finish_step();
     step_reporter.start_step("swap-and-open");
     quit_menu_app(&pipeline_paths.bundle_path, channel_profile)?;
@@ -191,8 +200,13 @@ fn resolve_bundle_inputs(
         &icon_cache_directory,
         channel_profile.icon_channel,
     )?;
-    let bundle_inputs =
-        BundleInputs::for_repository(repository_root, channel_profile, metallib, icon);
+    let bundle_inputs = BundleInputs::for_repository(
+        repository_root,
+        channel_profile,
+        &rust_executable_directory(repository_root),
+        metallib,
+        icon,
+    );
     let missing_paths = missing_inputs(&bundle_inputs);
     if !missing_paths.is_empty() {
         let mut missing_lines = String::new();

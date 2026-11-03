@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::build_steps::{RUST_EXECUTABLE_NAMES, rust_executable_path};
+use super::build_steps::RUST_EXECUTABLE_NAMES;
 use super::channel_profile::ChannelProfile;
 use super::tool_command::run_quiet_tool;
 
@@ -30,6 +30,7 @@ impl BundleInputs {
     pub(crate) fn for_repository(
         repository_root: &Path,
         channel_profile: &ChannelProfile,
+        rust_executable_directory: &Path,
         metallib: PathBuf,
         icon: PathBuf,
     ) -> Self {
@@ -38,7 +39,7 @@ impl BundleInputs {
         for executable_name in RUST_EXECUTABLE_NAMES {
             rust_executables.push((
                 executable_name,
-                rust_executable_path(repository_root, executable_name),
+                rust_executable_directory.join(executable_name),
             ));
         }
         let mut notice_files = vec![

@@ -41,10 +41,6 @@ name = "integration_bootstrap_journeys"
 path = "tests/integration_bootstrap_journeys.rs"
 
 [[test]]
-name = "integration_app_builder_journeys"
-path = "tests/integration_app_builder_journeys.rs"
-
-[[test]]
 name = "integration_disposable_target_journeys"
 path = "tests/integration_disposable_target_journeys.rs"
 

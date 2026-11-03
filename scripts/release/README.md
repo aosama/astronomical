@@ -4,7 +4,7 @@ Everything in this directory is release-only: ordinary development builds, commi
 
 - Build Development with `cargo xtask app dev`.
 - Verify ordinary changes with `cargo fmt --all -- --check` and `cargo test-integration-and-rest`.
-- Build a Stable candidate with `scripts/release/build-stable-app.sh`.
+- Build a Stable candidate with `cargo xtask app package --channel stable`.
 - Run all Stable packaging and publication contracts explicitly with `scripts/release/tests/test-release-contracts.sh`.
 - Prepare or publish a signed release only through `scripts/release/prepare-and-publish.sh`.
 - `scripts/release/prepare-signed-release.sh` is the convenience front door for the same publisher: it resolves the documented credential map (single Developer ID identity, Team ID, notarization profile) in the caller's shell process and execs the publisher with `--tag`/`--notes-file` plus optional `--output-directory` and `--publish`. It performs no artifact work itself.

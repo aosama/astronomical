@@ -4,7 +4,7 @@
 # package that App Store Connect accepts.
 #
 # The bundle must already be assembled and signed by
-# scripts/internal/build-macos-app.sh --channel app-store. The installer
+# `cargo xtask app package --channel app-store --signing-identity NAME`. The installer
 # package is signed with the third-party Mac Developer Installer certificate;
 # App Store Connect rejects unsigned or Developer ID-signed packages.
 

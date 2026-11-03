@@ -6,7 +6,7 @@ use super::build_steps::npm_install_is_current;
 use super::bundle_assembly::{BundleInputs, missing_inputs};
 use super::bundle_check::daemon_version_matches;
 use super::channel_profile::{Channel, ChannelProfile, SandboxPolicy};
-use super::code_signing::ad_hoc_signing_order;
+use super::code_signing::{SigningRequest, signing_plan};
 use super::command::{AppCommand, parse_app_command};
 use super::dev_pipeline::DevPipelinePaths;
 use super::icon_cache::cached_icon_file_name;
@@ -263,27 +263,35 @@ fn should_place_the_metallib_inside_the_versioned_native_store_entry() {
 
 #[test]
 fn should_sign_sparkle_first_and_the_bundle_last() {
-    let signing_order = ad_hoc_signing_order(
-        Path::new("/fixture/Dev.app"),
-        &ChannelProfile::for_channel(Channel::Development),
+    let development_profile = ChannelProfile::for_channel(Channel::Development);
+    let signing_invocations = signing_plan(&SigningRequest {
+        bundle_path: Path::new("/fixture/Dev.app"),
+        channel_profile: &development_profile,
+        signing_identity: None,
+        repository_root: Path::new("/repository"),
+    })
+    .expect("an ad-hoc Development plan is valid");
+
+    assert_eq!(signing_invocations.len(), 10);
+    assert!(
+        signing_invocations[0]
+            .code_object_path
+            .ends_with("Sparkle.framework/Versions/B/Autoupdate")
     );
-
-    assert_eq!(signing_order.len(), 10);
-    assert!(signing_order[0].ends_with("Sparkle.framework/Versions/B/Autoupdate"));
-    assert!(signing_order[4].ends_with("Frameworks/Sparkle.framework"));
-    assert_eq!(signing_order[9], PathBuf::from("/fixture/Dev.app"));
-}
-
-#[test]
-fn should_sign_no_sparkle_code_for_a_channel_without_sparkle() {
-    let signing_order = ad_hoc_signing_order(
-        Path::new("/fixture/Store.app"),
-        &ChannelProfile::for_channel(Channel::AppStore),
+    assert!(
+        signing_invocations[4]
+            .code_object_path
+            .ends_with("Frameworks/Sparkle.framework")
     );
-
-    assert_eq!(signing_order.len(), 5);
-    for code_object_path in &signing_order {
-        assert!(!code_object_path.to_string_lossy().contains("Sparkle"));
+    assert_eq!(
+        signing_invocations[9].code_object_path,
+        PathBuf::from("/fixture/Dev.app")
+    );
+    for signing_invocation in &signing_invocations {
+        assert_eq!(
+            signing_invocation.codesign_arguments,
+            vec!["--force", "--sign", "-", "--preserve-metadata=entitlements"]
+        );
     }
 }
 
@@ -352,6 +360,7 @@ fn should_name_every_missing_bundle_input() {
     let bundle_inputs = BundleInputs::for_repository(
         Path::new("/absent-repository"),
         &ChannelProfile::for_channel(Channel::Development),
+        Path::new("/absent-repository/target/app-dev"),
         PathBuf::from("/absent-repository/mlx.metallib"),
         PathBuf::from("/absent-repository/icon.icns"),
     );

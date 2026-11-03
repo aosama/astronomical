@@ -239,9 +239,10 @@ prepare_release() {
     STAGING_DIRECTORY="$(mktemp -d "${repository_root}/target/astronomical-release-staging.XXXXXX")"
 
     start_step "build-stable-app"
-    ASTRONOMICAL_UPDATE_FEED_URL="$update_feed_url" \
-        "${repository_root}/scripts/release/build-stable-app.sh" \
-            --signing-identity "$SIGNING_IDENTITY"
+    # The packager derives the same GitHub Pages feed URL from the workspace
+    # repository; the plist check below proves the two agree.
+    (CDPATH='' cd -- "$repository_root" && cargo xtask app package --channel stable \
+        --signing-identity "$SIGNING_IDENTITY")
     finish_step
 
     stable_app_bundle="${repository_root}/target/astronomical-macos-stable.noindex/Astronomical.app"
