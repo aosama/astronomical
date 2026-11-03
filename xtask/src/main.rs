@@ -60,6 +60,9 @@ mod test_channel_isolation;
 #[cfg(test)]
 mod test_channel_isolation_tests;
 mod test_run;
+mod thin_talk_assets;
+#[cfg(test)]
+mod thin_talk_assets_tests;
 mod tier_pyramid;
 #[cfg(test)]
 mod tier_pyramid_tests;
@@ -128,7 +131,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | check-test-channel-isolation | menu-contracts | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release <step> (see scripts/release/README.md) | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | check-test-channel-isolation | menu-contracts | vendor-thin-talk-assets [--verify-only] | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
@@ -168,13 +171,14 @@ fn take_repository_root_override(arguments: &mut Vec<String>) -> Option<std::pat
 /// The app, release, native-provisioning, and repository-check commands
 /// that replaced shell scripts, dispatched apart from `main` so its match
 /// stays within the complexity budget.
-const APP_AND_RELEASE_COMMANDS: [&str; 6] = [
+const APP_AND_RELEASE_COMMANDS: [&str; 7] = [
     "app",
     "release",
     "provision-bindgen-headers",
     "prewarm-native-build",
     "menu-contracts",
     "check-test-channel-isolation",
+    "vendor-thin-talk-assets",
 ];
 
 fn run_app_and_release_command(
@@ -188,6 +192,7 @@ fn run_app_and_release_command(
         "provision-bindgen-headers" => bindgen_headers::run(repository_root, command_arguments),
         "prewarm-native-build" => prewarm_native_build::run(repository_root, command_arguments),
         "menu-contracts" => menu_contracts::run(repository_root, command_arguments),
+        "vendor-thin-talk-assets" => thin_talk_assets::run(repository_root, command_arguments),
         _ => test_channel_isolation::run(repository_root, command_arguments),
     }
 }
