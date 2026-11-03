@@ -8,6 +8,7 @@ mod app_bundle;
 mod audit_test_declarations;
 #[cfg(test)]
 mod audit_test_declarations_tests;
+mod bindgen_headers;
 mod bootstrap_native_dependencies;
 #[cfg(test)]
 mod bootstrap_native_dependencies_tests;
@@ -70,6 +71,9 @@ fn main() -> ExitCode {
     match arguments.first().map(String::as_str) {
         Some("test-run") => test_run::run(&resolve_root(), &arguments[1..]),
         Some("app") => run_command(app_bundle::run(&resolve_root(), &arguments[1..])),
+        Some("provision-bindgen-headers") => {
+            run_command(bindgen_headers::run(&resolve_root(), &arguments[1..]))
+        }
         Some("prewarm-native-build") => {
             run_command(prewarm_native_build::run(&resolve_root(), &arguments[1..]))
         }
@@ -112,7 +116,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }

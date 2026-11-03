@@ -122,24 +122,21 @@ fn prewarm_profiles(
 
 /// The MLX-C bindings crate's build script resolves its headers from this
 /// extraction. The step is idempotent: a warm cache verifies in about a
-/// second and never touches the network.
+/// second and never touches the network. It runs in-process, since the
+/// provisioning command lives in this same binary.
 fn provision_bindgen_headers(repository_root: &Path) -> Result<(), String> {
     println!("{STATUS_PREFIX} status=provision-bindgen-headers start");
     let provision_started_at = Instant::now();
-    let provision_status = Command::new("sh")
-        .arg(repository_root.join("scripts/provision-bindgen-headers.sh"))
-        .current_dir(repository_root)
-        .status();
-    match provision_status {
-        Ok(exit_status) if exit_status.success() => {
+    match crate::bindgen_headers::run(repository_root, &[]) {
+        Ok(()) => {
             println!(
                 "{STATUS_PREFIX} status=provision-bindgen-headers success elapsed_seconds={}",
                 provision_started_at.elapsed().as_secs()
             );
             Ok(())
         }
-        _ => Err(format!(
-            "{STATUS_PREFIX} Error: bindgen header provisioning failed; run cargo xtask bootstrap-native-dependencies if the archive cache is empty"
+        Err(provision_error) => Err(format!(
+            "{STATUS_PREFIX} Error: bindgen header provisioning failed: {provision_error}\n{STATUS_PREFIX} Error: run cargo xtask bootstrap-native-dependencies if the archive cache is empty"
         )),
     }
 }

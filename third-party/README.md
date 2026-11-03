@@ -200,7 +200,7 @@ boundary — memory-limit enforcement, metallib resolution and verification,
 the safetensors vtable policies, and native build orchestration — and links
 both bridge crates against the pinned patched native image.
 
-`scripts/provision-bindgen-headers.sh` extracts the pinned MLX and MLX-C
+`cargo xtask provision-bindgen-headers` extracts the pinned MLX and MLX-C
 archives from the verified native dependency cache and applies the same patch
 pipeline as the native build (the patch list is parsed from the native
 CMakeLists, so the two can never drift). The extraction is keyed by the
@@ -210,8 +210,8 @@ recorded hash manifests without re-extracting. The script never downloads;
 run `cargo xtask bootstrap-native-dependencies` first.
 
 ```bash
-scripts/provision-bindgen-headers.sh
-scripts/provision-bindgen-headers.sh --verify-headers
+cargo xtask provision-bindgen-headers
+cargo xtask provision-bindgen-headers --verify-headers
 ```
 
 `--verify-headers` resolves the completed native build for the current
@@ -225,8 +225,8 @@ to enumerate the exact C surface change. After the new pin's first native
 build, `--verify-headers` closes the loop by proving the extraction matches
 what the build actually staged.
 
-The contract suite in `verification/tooling_contracts/test-provision-bindgen-headers-contract.sh`
-covers extraction, patch application, idempotent reuse, self-healing,
+The `bindgen_headers` tests in the xtask crate (`cargo test -p xtask --bin xtask bindgen_headers`)
+cover extraction, patch application, idempotent reuse, self-healing,
 tampered-archive refusal, no-network behavior, and verification against local
 store fixtures.
 

@@ -50,7 +50,7 @@ fn resolve_header_directory() -> Result<PathBuf, String> {
         .join("mlx_c-src/mlx/c");
     if !header_directory.is_dir() {
         return Err(format!(
-            "no provisioned bindgen headers for the current source identity at {header_directory:?}; run scripts/provision-bindgen-headers.sh"
+            "no provisioned bindgen headers for the current source identity at {header_directory:?}; run cargo xtask provision-bindgen-headers"
         ));
     }
     Ok(header_directory)

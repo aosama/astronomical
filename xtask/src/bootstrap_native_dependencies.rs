@@ -19,7 +19,8 @@ use sha2::Digest;
 
 const MAX_ARCHIVE_SIZE_BYTES: u64 = 268_435_456;
 const MINIMUM_FREE_SPACE_BYTES: u64 = 2_147_483_648;
-const NATIVE_DEPENDENCY_CACHE_DIRECTORY_VARIABLE: &str = "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
+pub(crate) const NATIVE_DEPENDENCY_CACHE_DIRECTORY_VARIABLE: &str =
+    "ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR";
 const DEFAULT_NATIVE_DEPENDENCY_CACHE_DIRECTORY_SUFFIX: &str =
     "Library/Caches/Astronomical/native-dependencies";
 const USAGE_TEXT: &str =
@@ -390,7 +391,7 @@ fn download_with_curl(download_destination: &Path, download_url: &str) -> Result
 
 /// Reads the pinned manifest by delegating to the CMake script that owns the
 /// pins; the manifest content never lives in two places.
-fn read_pinned_manifest_text(repository_root: &Path) -> Result<String, String> {
+pub(crate) fn read_pinned_manifest_text(repository_root: &Path) -> Result<String, String> {
     let manifest_cmake_path = repository_root.join("third-party/native-dependency-manifest.cmake");
     let temporary_manifest_path = std::env::temp_dir().join(format!(
         "astronomical-native-dependencies.{}.manifest",

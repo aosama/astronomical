@@ -82,7 +82,9 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # app info-plist --channel development|stable|app-store` prints the plist a
 # channel would get, for inspecting the channel profiles.
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
-# MLX runtime into the machine-wide store before Cargo compiles anything. `cargo xtask audit-test-declarations` walks every crate's
+# MLX runtime into the machine-wide store before Cargo compiles anything.
+# `cargo xtask provision-bindgen-headers [--verify-headers]` extracts the
+# pinned, patched MLX and MLX-C headers for bindgen (prewarm runs it first). `cargo xtask audit-test-declarations` walks every crate's
 # tests/ tree and fails when a test file is unreachable from any target
 # through `mod` declarations (the class of silent-orphan bug that once hid
 # seven tests in an undeclared file). `cargo xtask test-run` builds exact
