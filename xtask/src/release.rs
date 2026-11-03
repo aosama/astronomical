@@ -4,6 +4,7 @@
 //! during ordinary development, commits, or pull requests; CI exercises
 //! only the pure planning and checking functions through unit tests.
 
+mod app_store_package;
 mod command;
 mod disk_image_creation;
 mod disk_image_validation;

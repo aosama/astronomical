@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use super::app_store_package::{AppStorePackageRequest, package_for_app_store};
 use super::disk_image_creation::{DiskImageRequest, create_disk_image};
 use super::disk_image_validation::validate_disk_image;
 use super::distribution_signature::validate_distribution_app;
@@ -11,7 +12,7 @@ use super::stable_installation::{
     InstallRequest, build_and_install_stable, default_stable_bundle, install_stable,
 };
 
-pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run]";
+pub(crate) const RELEASE_USAGE: &str = "usage: cargo xtask release create-dmg --app-bundle PATH --output PATH | release validate-dmg --dmg PATH | release validate-distribution-app --app-bundle PATH --team-id ID | release notarize-dmg --dmg PATH --signing-identity NAME --notary-profile PROFILE [--timeout-seconds N] | release install-stable [--app-bundle PATH] [--dry-run] | release build-and-install-stable [--dry-run] | release app-store-pkg --app-bundle PATH --installer-identity NAME [--output-pkg PATH]";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ReleaseCommand {
@@ -29,6 +30,7 @@ pub(crate) enum ReleaseCommand {
     BuildAndInstallStable {
         is_dry_run: bool,
     },
+    AppStorePackage(AppStorePackageRequest),
 }
 
 pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseCommand, String> {
@@ -60,6 +62,17 @@ pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseComma
             })
         }
         "notarize-dmg" => parse_notarization_command(subcommand_arguments),
+        "app-store-pkg" => {
+            let flag_values = parse_flag_values(
+                subcommand_arguments,
+                &["--app-bundle", "--installer-identity", "--output-pkg"],
+            )?;
+            Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
+                app_bundle: required_path(&flag_values, "--app-bundle")?,
+                installer_identity: required_text(&flag_values, "--installer-identity")?,
+                output_package: flag_values.get("--output-pkg").map(PathBuf::from),
+            }))
+        }
         "install-stable" => {
             let (is_dry_run, valued_arguments) = take_dry_run_flag(subcommand_arguments);
             let flag_values = parse_flag_values(&valued_arguments, &["--app-bundle"])?;
@@ -145,6 +158,7 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         ReleaseCommand::BuildAndInstallStable { is_dry_run } => {
             build_and_install_stable(repository_root, is_dry_run)
         }
+        ReleaseCommand::AppStorePackage(package_request) => package_for_app_store(&package_request),
     }
 }
 

@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use super::app_store_package::{
+    AppStorePackageRequest, app_store_channel_problem, default_output_package, identity_is_listed,
+};
 use super::command::{ReleaseCommand, parse_release_command};
 use super::disk_image_creation::{
     DiskImageRequest, FINDER_LAYOUT_SCRIPT, partial_output_path, validate_disk_image_request,
@@ -576,4 +579,83 @@ fn should_parse_install_commands_with_an_optional_bundle_and_dry_run() {
         .is_err()
     );
     assert!(parse_release_command(&arguments(&["install-stable", "--force"])).is_err());
+}
+
+#[test]
+fn should_package_only_app_store_channel_bundles() {
+    assert_eq!(
+        app_store_channel_problem(&serde_json::json!({"AstronomicalChannel": "app-store"})),
+        None
+    );
+    assert!(
+        app_store_channel_problem(&serde_json::json!({"AstronomicalChannel": "stable"}))
+            .expect("stable is refused")
+            .contains("this bundle declares stable")
+    );
+    assert!(
+        app_store_channel_problem(&serde_json::json!({}))
+            .expect("missing channel")
+            .contains("does not declare")
+    );
+}
+
+#[test]
+fn should_match_the_installer_identity_by_its_full_quoted_name() {
+    let identity_listing = "  1) ABCDEF0123456789 \"3rd Party Mac Developer Installer: Example (ABCDE12345)\"\n     1 valid identities found\n";
+
+    assert!(identity_is_listed(
+        identity_listing,
+        "3rd Party Mac Developer Installer: Example (ABCDE12345)"
+    ));
+    assert!(!identity_is_listed(
+        identity_listing,
+        "Mac Developer Installer"
+    ));
+    assert!(!identity_is_listed(identity_listing, ""));
+}
+
+#[test]
+fn should_write_the_package_beside_the_bundle_by_default() {
+    assert_eq!(
+        default_output_package(
+            Path::new("/target/astronomical-macos-app-store.noindex/Astronomical.app"),
+            "0.2.88"
+        ),
+        PathBuf::from(
+            "/target/astronomical-macos-app-store.noindex/Astronomical-0.2.88-app-store.pkg"
+        )
+    );
+}
+
+#[test]
+fn should_parse_the_app_store_package_command() {
+    assert_eq!(
+        parse_release_command(&arguments(&[
+            "app-store-pkg",
+            "--app-bundle",
+            "/a.app",
+            "--installer-identity",
+            "Installer"
+        ])),
+        Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
+            app_bundle: PathBuf::from("/a.app"),
+            installer_identity: "Installer".to_owned(),
+            output_package: None,
+        }))
+    );
+    assert!(
+        parse_release_command(&arguments(&["app-store-pkg", "--app-bundle", "/a.app"])).is_err()
+    );
+    assert!(
+        parse_release_command(&arguments(&[
+            "app-store-pkg",
+            "--app-bundle",
+            "/a.app",
+            "--app-bundle",
+            "/b.app",
+            "--installer-identity",
+            "I",
+        ]))
+        .is_err()
+    );
 }

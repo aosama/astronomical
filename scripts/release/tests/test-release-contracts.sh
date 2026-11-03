@@ -8,7 +8,6 @@ repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../../.." && pwd -P)"
 
 for contract_test in \
     test-render-app-icon.sh \
-    test-package-app-store-pkg.sh \
     test-prepare-and-publish.sh
 do
     printf '%s\n' "[release-contracts] test=${contract_test} status=start"
