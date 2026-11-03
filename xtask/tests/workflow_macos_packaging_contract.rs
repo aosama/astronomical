@@ -17,6 +17,7 @@ use serde_yaml::Value;
 const PACKAGING_JOB_ID: &str = "package-stable";
 const PACKAGE_STEP_NAME: &str = "Package the Stable bundle";
 const SMOKE_TEST_STEP_NAME: &str = "Smoke-test the packaged Stable bundle";
+const NATIVE_BOOTSTRAP_STEP_NAME: &str = "Provision verified native dependencies";
 const STABLE_BUNDLE_PATH: &str = "target/astronomical-macos-stable.noindex/Astronomical.app";
 const PINNED_XCODE_ACTION: &str = "./.github/actions/assert-pinned-xcode";
 const PINNED_XCODE_VARIABLE: &str = "ASTRONOMICAL_PINNED_XCODE_VERSION";
@@ -175,5 +176,34 @@ fn should_pin_the_same_xcode_as_the_ci_workflow() {
             "pinned-xcode"
         ),
         "${{ env.ASTRONOMICAL_PINNED_XCODE_VERSION }}"
+    );
+}
+
+/// The package pipeline verifies the pinned native archives without
+/// downloading them, so a fresh runner fails unless bootstrap ran first.
+#[test]
+fn should_provision_native_archives_before_packaging() {
+    let workflow = macos_packaging_workflow_contract();
+    let job_steps = steps_of(required_job(&workflow, PACKAGING_JOB_ID), PACKAGING_JOB_ID);
+    let bootstrap_text = run_text_of(
+        find_step_by_name(&job_steps, NATIVE_BOOTSTRAP_STEP_NAME),
+        NATIVE_BOOTSTRAP_STEP_NAME,
+    );
+    assert_eq!(
+        bootstrap_text.trim(),
+        "cargo xtask bootstrap-native-dependencies"
+    );
+    let mut bootstrap_index = None;
+    let mut package_index = None;
+    for (step_index, step) in job_steps.iter().enumerate() {
+        match step.get("name").and_then(Value::as_str) {
+            Some(NATIVE_BOOTSTRAP_STEP_NAME) => bootstrap_index = Some(step_index),
+            Some(PACKAGE_STEP_NAME) => package_index = Some(step_index),
+            _ => {}
+        }
+    }
+    assert!(
+        bootstrap_index.is_some() && bootstrap_index < package_index,
+        "native archives must be provisioned before the bundle is packaged"
     );
 }

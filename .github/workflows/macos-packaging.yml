@@ -67,6 +67,12 @@ jobs:
           node-version-file: .node-version
           cache: npm
           cache-dependency-path: apps/thin-talk/web/package-lock.json
+      - name: Provision verified native dependencies
+        # The package pipeline only verifies the pinned native archives
+        # (MLX and its peers); a fresh runner has none, so they are
+        # downloaded and digest-checked first, exactly as the macOS build
+        # job does.
+        run: cargo xtask bootstrap-native-dependencies
       - name: Package the Stable bundle
         # The pipeline reports each step with its elapsed time and an ETA,
         # and requires the clean checkout this job starts from.

@@ -229,7 +229,7 @@ pub(crate) fn decide_provision(
     }
     if is_verify_only {
         return Err(format!(
-            "missing or invalid {dependency_description} archive: {}",
+            "missing or invalid {dependency_description} archive: {}; run `cargo xtask bootstrap-native-dependencies` to download and verify it",
             archive_path.display()
         ));
     }

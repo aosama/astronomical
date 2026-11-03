@@ -145,6 +145,7 @@ fn build_release_bundle(
     let timings_directory = repository_root.join("target/app-package-cache");
     create_directory(&timings_directory)?;
     let mut step_reporter = StepReporter::new(
+        "app-package",
         PACKAGE_STEP_NAMES.to_vec(),
         timings_directory.join(format!(
             "{}-step-timings.json",
