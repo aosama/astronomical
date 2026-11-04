@@ -30,7 +30,7 @@ use crate::row_major_block::row_block;
 
 // Specification version 9 is iOS 18 / macOS 15, the first with block-wise
 // 4-bit weights; its MIL opset is "CoreML8".
-const SPECIFICATION_VERSION: u64 = 9;
+pub(crate) const SPECIFICATION_VERSION: u64 = 9;
 const OPSET_NAME: &str = "CoreML8";
 const MAIN_FUNCTION_NAME: &str = "main";
 /// Where the program expects its weights, relative to the model package.
@@ -174,7 +174,12 @@ fn projection_operations(
         ));
         partial_projection_names.push(partial_projection_name);
     }
-    operations.extend(contraction_sum_operations(shape, &partial_projection_names));
+    operations.extend(contraction_sum_operations(
+        shape,
+        &partial_projection_names,
+        "contraction_sum",
+        PROJECTED_FEATURE_NAME,
+    ));
     operations
 }
 
@@ -214,7 +219,7 @@ const CONVOLUTION_PARAMETER_CONSTANTS: [&str; 5] = [
     "conv_groups",
 ];
 
-fn convolution_parameter_constants() -> Vec<Vec<u8>> {
+pub(crate) fn convolution_parameter_constants() -> Vec<Vec<u8>> {
     vec![
         constant_operation(
             "conv_strides",
@@ -249,7 +254,7 @@ fn convolution_parameter_constants() -> Vec<Vec<u8>> {
     ]
 }
 
-fn constant_operation(
+pub(crate) fn constant_operation(
     constant_name: &str,
     encoded_value: &[u8],
     data_type: MilDataType,
@@ -404,7 +409,11 @@ fn lookup_table_operation(
         .into_bytes()
 }
 
-fn weight_blob_value(data_type: MilDataType, dimensions: &[usize], blob_offset: u64) -> Vec<u8> {
+pub(crate) fn weight_blob_value(
+    data_type: MilDataType,
+    dimensions: &[usize],
+    blob_offset: u64,
+) -> Vec<u8> {
     blob_file_tensor_value(data_type, dimensions, WEIGHT_BLOB_FILE_NAME, blob_offset)
 }
 
@@ -438,7 +447,7 @@ fn blockwise_shift_scale_operation(
         .into_bytes()
 }
 
-fn convolution_operation(
+pub(crate) fn convolution_operation(
     shape: ProjectionShape,
     input_name: &str,
     weight_name: &str,
@@ -461,11 +470,13 @@ fn convolution_operation(
         .into_bytes()
 }
 
-/// `partial_0 + partial_1 + …` as a chain of binary adds ending in the
-/// `projected` output; MIL's `add` takes exactly two operands.
-fn contraction_sum_operations(
+/// `partial_0 + partial_1 + …` as a chain of binary adds ending in
+/// `final_output_name`; MIL's `add` takes exactly two operands.
+pub(crate) fn contraction_sum_operations(
     shape: ProjectionShape,
     partial_projection_names: &[String],
+    sum_name_prefix: &str,
+    final_output_name: &str,
 ) -> Vec<Vec<u8>> {
     let projected_type = activation_type(shape.output_channels(), shape.token_count());
     let mut operations = Vec::new();
@@ -473,9 +484,9 @@ fn contraction_sum_operations(
     for (part_index, partial_projection_name) in partial_projection_names.iter().enumerate().skip(1)
     {
         let sum_name = if part_index + 1 == partial_projection_names.len() {
-            PROJECTED_FEATURE_NAME.to_owned()
+            final_output_name.to_owned()
         } else {
-            format!("contraction_sum_{part_index}")
+            format!("{sum_name_prefix}_{part_index}")
         };
         operations.push(
             MilOperation::new("add", &sum_name)
@@ -489,11 +500,11 @@ fn contraction_sum_operations(
     operations
 }
 
-fn activation_type(channel_count: usize, token_count: usize) -> Vec<u8> {
+pub(crate) fn activation_type(channel_count: usize, token_count: usize) -> Vec<u8> {
     tensor_value_type(MilDataType::Float16, &[1, channel_count, 1, token_count])
 }
 
-fn program(shape: ProjectionShape, operations: &[Vec<u8>]) -> Vec<u8> {
+pub(crate) fn program(shape: ProjectionShape, operations: &[Vec<u8>]) -> Vec<u8> {
     let mut block = Vec::new();
     append_string_field(&mut block, 2, PROJECTED_FEATURE_NAME);
     for operation in operations {

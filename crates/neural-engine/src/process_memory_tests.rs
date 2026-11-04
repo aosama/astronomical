@@ -1,4 +1,4 @@
-use super::{MemoryGrowth, MemorySnapshot, mebibytes};
+use super::{MemoryGrowth, MemorySnapshot, mebibytes, physical_memory_bytes};
 
 fn snapshot(process_physical_footprint_bytes: u64, system_wired_bytes: u64) -> MemorySnapshot {
     MemorySnapshot {
@@ -13,6 +13,13 @@ fn should_read_a_non_zero_footprint_for_this_process() {
 
     assert!(current.process_physical_footprint_bytes > 0);
     assert!(current.system_wired_bytes > 0);
+}
+
+#[test]
+fn should_read_more_installed_memory_than_this_process_uses() {
+    let installed = physical_memory_bytes();
+
+    assert!(installed > MemorySnapshot::capture().process_physical_footprint_bytes);
 }
 
 #[test]

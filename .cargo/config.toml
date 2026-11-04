@@ -215,8 +215,18 @@ test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomic
 # and `footprint_of_mlp_gate_and_up_as_<form>` measures one 100-million-weight
 # load's process-footprint growth; run each footprint form alone (e.g.
 # `cargo test-neural-engine-hello footprint_of_mlp_gate_and_up_as_ml_program_eight_bit_lookup`)
-# so earlier loads in the process do not blur its numbers. Real hardware,
-# optimized build, serial; about three minutes in all. The crate's pure unit
+# so earlier loads in the process do not blur its numbers. The hand-off
+# journeys (`cargo test-neural-engine-hello model_hand_off`) time one whole
+# two-engine call per projection, including the activation conversion, the
+# host copy into the input surface, and the merge of both slices, and print a
+# per-model summary; about three minutes on their own. The token-split
+# journeys run a whole dense MLP on the Neural Engine for a slice of tokens:
+# `cargo test-neural-engine-hello whole_mlp_split_by_token` for speed (half a
+# minute), and `cargo test-neural-engine-hello one_mlp_program_per_layer` alone
+# for memory and cycling speed across one distinct program per layer (about 90
+# seconds; it holds roughly 18 GiB at its peak and stops loading at half of the
+# Mac's memory). Real hardware, optimized build, serial; about eight minutes in
+# all. The crate's pure unit
 # tests run with `cargo test-neural-engine` (below).
 test-neural-engine-hello = "test --release --no-fail-fast -p astronomical-neural-engine --features mlx-baseline --test neural_engine_hello -- --ignored --nocapture --test-threads=1"
 

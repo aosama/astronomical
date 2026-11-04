@@ -1,7 +1,8 @@
-//! A prefill projection loaded into Core ML with a chosen set of compute
-//! units, plus Apple's own report of where Core ML placed it.
+//! A prefill projection, or a whole MLP chain, loaded into Core ML with a
+//! chosen set of compute units, plus Apple's own report of where Core ML
+//! placed it and a zero-copy view of its output surface.
 
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, CString, c_char, c_void};
 use std::fs;
 use std::path::Path;
 use std::ptr::NonNull;
@@ -11,12 +12,14 @@ use thiserror::Error;
 
 use crate::core_ml_projection_document::encode_projection_document;
 use crate::ml_package_layout::write_ml_package;
+use crate::ml_program_mlp_document::{MlpFp16Weights, encode_ml_program_mlp};
 use crate::ml_program_projection_document::{MlProgramWeights, encode_ml_program_projection};
 use crate::native_bridge::{
     NativeCoreMlProjection, NativeLayerPlacement, astronomical_core_ml_projection_begin_predict,
     astronomical_core_ml_projection_finish_predict, astronomical_core_ml_projection_load,
-    astronomical_core_ml_projection_placement, astronomical_core_ml_projection_predict,
-    astronomical_core_ml_projection_read_output, astronomical_core_ml_projection_release,
+    astronomical_core_ml_projection_lock_output, astronomical_core_ml_projection_placement,
+    astronomical_core_ml_projection_predict, astronomical_core_ml_projection_read_output,
+    astronomical_core_ml_projection_release, astronomical_core_ml_projection_unlock_output,
     astronomical_core_ml_projection_write_input,
 };
 use crate::projection_model_interface::ProjectionDocumentError;
@@ -59,6 +62,8 @@ pub struct LayerPlacement {
     pub neural_engine_supported: bool,
     pub gpu_supported: bool,
     pub cpu_supported: bool,
+    /// Across the whole ML Program, not only the verdict's convolution.
+    pub operations_off_neural_engine: i32,
 }
 
 #[derive(Debug, Error)]
@@ -75,6 +80,8 @@ pub enum CoreMlProjectionError {
     ElementCountMismatch { expected: usize, actual: usize },
     #[error("the IOSurface copy failed")]
     SurfaceCopy,
+    #[error("the output IOSurface could not be locked for reading")]
+    SurfaceLock,
     #[error("Core ML prediction failed: {0}")]
     Prediction(String),
     #[error("the asynchronous prediction could not start")]
@@ -147,7 +154,64 @@ pub struct CoreMlProjection {
     shape: ProjectionShape,
 }
 
+/// The output IOSurface, locked for reading until this guard drops.
+///
+/// Rung 4 of issue #161 hands this memory to MLX without a host copy, because
+/// a fused projection's output runs to tens of megabytes per chunk. The
+/// borrow keeps a new prediction from rewriting the surface while it is read.
+pub struct LockedOutputSurface<'projection> {
+    projection: &'projection CoreMlProjection,
+    base_address: *const c_void,
+    bytes_per_row: usize,
+}
+
+impl LockedOutputSurface<'_> {
+    /// The first fp16 value of `[output_channels][tokens]`, or `None` when
+    /// the surface pads its rows and so cannot be read as one contiguous
+    /// array. Dereferencing it is valid only while this guard is alive.
+    #[must_use]
+    pub fn contiguous_fp16_values(&self) -> Option<*const u16> {
+        let row_bytes = self.projection.shape.token_count() * size_of::<u16>();
+        (self.bytes_per_row == row_bytes).then_some(self.base_address.cast())
+    }
+}
+
+impl Drop for LockedOutputSurface<'_> {
+    fn drop(&mut self) {
+        // SAFETY: this guard holds the lock taken in `lock_output_surface` on
+        // a handle that its borrow keeps alive, and releases it exactly once.
+        unsafe {
+            astronomical_core_ml_projection_unlock_output(
+                self.projection.native_projection.as_ptr(),
+            );
+        }
+    }
+}
+
 impl CoreMlProjection {
+    /// Locks the output IOSurface for reading without a host copy.
+    pub fn lock_output_surface(&self) -> Result<LockedOutputSurface<'_>, CoreMlProjectionError> {
+        let mut base_address = std::ptr::null();
+        let mut bytes_per_row = 0_u64;
+        // SAFETY: the handle is live and both out-pointers are valid and
+        // exclusive; the bridge refuses while a prediction is in flight.
+        let status = unsafe {
+            astronomical_core_ml_projection_lock_output(
+                self.native_projection.as_ptr(),
+                &mut base_address,
+                &mut bytes_per_row,
+            )
+        };
+        if status != 0 {
+            return Err(CoreMlProjectionError::SurfaceLock);
+        }
+        Ok(LockedOutputSurface {
+            projection: self,
+            base_address,
+            bytes_per_row: bytes_per_row as usize,
+        })
+    }
+
     /// Writes the model document into `model_directory`, compiles it, and
     /// loads it for `compute_units`. Compilation happens inside Core ML, so
     /// no developer tools are needed at run time. `contraction_part_count`
@@ -178,6 +242,27 @@ impl CoreMlProjection {
     ) -> Result<Self, CoreMlProjectionError> {
         let package_contents =
             encode_ml_program_projection(shape, weights, contraction_part_count)?;
+        let package_path = write_ml_package(model_directory, &package_contents)?;
+        Self::load_model_at(&package_path, shape, compute_units)
+    }
+
+    /// As [`Self::load_ml_program`] for a whole MLP chain, whose activations
+    /// and outputs are `shape`'s `[hidden][tokens]`; see
+    /// [`encode_ml_program_mlp`].
+    pub fn load_ml_program_mlp(
+        shape: ProjectionShape,
+        intermediate_channels: usize,
+        weights: MlpFp16Weights<'_>,
+        contraction_part_width: usize,
+        compute_units: CoreMlComputeUnits,
+        model_directory: &Path,
+    ) -> Result<Self, CoreMlProjectionError> {
+        let package_contents = encode_ml_program_mlp(
+            shape,
+            intermediate_channels,
+            weights,
+            contraction_part_width,
+        )?;
         let package_path = write_ml_package(model_directory, &package_contents)?;
         Self::load_model_at(&package_path, shape, compute_units)
     }
@@ -213,6 +298,16 @@ impl CoreMlProjection {
                 &native_error,
             ))),
         }
+    }
+
+    #[must_use]
+    pub fn token_count(&self) -> usize {
+        self.shape.token_count()
+    }
+
+    #[must_use]
+    pub fn output_channel_count(&self) -> usize {
+        self.shape.output_channels()
     }
 
     #[must_use]
@@ -354,6 +449,7 @@ fn layer_placement_from_native(native_placement: NativeLayerPlacement) -> LayerP
         neural_engine_supported: native_placement.neural_engine_supported != 0,
         gpu_supported: native_placement.gpu_supported != 0,
         cpu_supported: native_placement.cpu_supported != 0,
+        operations_off_neural_engine: native_placement.operations_off_neural_engine,
     }
 }
 

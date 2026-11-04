@@ -16,7 +16,9 @@
 //! - [`ml_program_projection_document`]: the same projection as an ML
 //!   Program whose weights can stay 4-bit ([`affine_quantized_weights`]),
 //!   packaged by [`ml_package_layout`].
-//! - [`core_ml_projection`]: either model loaded for chosen compute units,
+//! - [`ml_program_mlp_document`]: a whole `silu(gate) · up → down` MLP as one
+//!   ML Program, so token-split prefill needs no hand-off inside the chain.
+//! - [`core_ml_projection`]: any of these models loaded for chosen compute units,
 //!   with `MLComputePlan`'s placement verdict and per-prediction timing.
 //! - [`accelerate_reference`]: the fp32 numerical oracle.
 //! - [`numerical_comparison`], [`timing_summary`], and [`process_memory`]:
@@ -31,6 +33,7 @@ pub mod deterministic_values;
 pub mod half_precision;
 mod mil_program_wire;
 pub mod ml_package_layout;
+pub mod ml_program_mlp_document;
 pub mod ml_program_projection_document;
 mod ml_program_weight_blob;
 mod native_bridge;

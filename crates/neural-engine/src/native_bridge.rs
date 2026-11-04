@@ -1,9 +1,10 @@
 //! Raw declarations of the Objective-C Core ML bridge and Accelerate's BLAS.
 //!
-//! Only the safe owners in this crate call these; nothing outside the crate
-//! sees a raw pointer.
+//! Only the safe owners in this crate call these. The one raw pointer that
+//! leaves the crate is `LockedOutputSurface`'s, because handing a surface to
+//! MLX without a copy is the point of that guard.
 
-use std::ffi::c_char;
+use std::ffi::{c_char, c_void};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -21,6 +22,7 @@ pub struct NativeLayerPlacement {
     pub neural_engine_supported: i32,
     pub gpu_supported: i32,
     pub cpu_supported: i32,
+    pub operations_off_neural_engine: i32,
 }
 
 /// Opaque owner of a loaded Core ML projection and its IOSurfaces.
@@ -63,6 +65,14 @@ unsafe extern "C" {
         element_count: u64,
     ) -> i32;
 
+    pub fn astronomical_core_ml_projection_lock_output(
+        projection: *const NativeCoreMlProjection,
+        base_address: *mut *const c_void,
+        bytes_per_row: *mut u64,
+    ) -> i32;
+
+    pub fn astronomical_core_ml_projection_unlock_output(projection: *const NativeCoreMlProjection);
+
     pub fn astronomical_core_ml_projection_predict(
         projection: *mut NativeCoreMlProjection,
         elapsed_nanoseconds: *mut u64,
@@ -104,4 +114,5 @@ unsafe extern "C" {
     // native/process_memory.c: zero when the kernel query fails.
     pub fn astronomical_process_physical_footprint_bytes() -> u64;
     pub fn astronomical_system_wired_bytes() -> u64;
+    pub fn astronomical_physical_memory_bytes() -> u64;
 }
