@@ -263,6 +263,10 @@ fn load_layer_program(
     if program.predict().is_err() {
         return Err("the Neural Engine could not run the MLP program");
     }
+    // The daemon stops a worker with SIGKILL on a swap or shutdown, so the
+    // bridge's release never runs there; left to it, every load wrote a whole
+    // layer's weights per program into the temporary directory for good.
+    program.discard_compiled_model_files();
     Ok(program)
 }
 

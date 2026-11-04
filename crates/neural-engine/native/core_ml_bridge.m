@@ -267,6 +267,15 @@ static int32_t astronomical_bind_surfaces(AstronomicalCoreMlProjection *projecti
   return projection->input_features == nil ? -1 : 0;
 }
 
+void astronomical_core_ml_projection_discard_compiled_model(
+    AstronomicalCoreMlProjection *projection) {
+  if (projection == NULL || projection->compiled_model_url == nil) {
+    return;
+  }
+  [[NSFileManager defaultManager] removeItemAtURL:projection->compiled_model_url error:nil];
+  projection->compiled_model_url = nil;
+}
+
 void astronomical_core_ml_projection_release(AstronomicalCoreMlProjection *projection) {
   if (projection == NULL) {
     return;

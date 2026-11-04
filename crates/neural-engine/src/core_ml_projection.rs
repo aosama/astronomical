@@ -16,6 +16,7 @@ use crate::ml_program_mlp_document::{MlpFp16Weights, encode_ml_program_mlp};
 use crate::ml_program_projection_document::{MlProgramWeights, encode_ml_program_projection};
 use crate::native_bridge::{
     NativeCoreMlProjection, NativeLayerPlacement, astronomical_core_ml_projection_begin_predict,
+    astronomical_core_ml_projection_discard_compiled_model,
     astronomical_core_ml_projection_finish_predict, astronomical_core_ml_projection_load,
     astronomical_core_ml_projection_lock_output, astronomical_core_ml_projection_placement,
     astronomical_core_ml_projection_predict, astronomical_core_ml_projection_read_output,
@@ -323,6 +324,18 @@ impl CoreMlProjection {
     #[must_use]
     pub fn output_channel_count(&self) -> usize {
         self.shape.output_channels()
+    }
+
+    /// Removes the compiled model from the temporary directory while the loaded
+    /// program stays usable. Release also removes it, but a process that exits
+    /// without releasing would otherwise leave one copy of the weights behind per
+    /// program, which is the leak this exists to close.
+    pub fn discard_compiled_model_files(&mut self) {
+        // SAFETY: the handle is valid for this borrow, and the bridge clears its
+        // stored path so release cannot remove the directory a second time.
+        unsafe {
+            astronomical_core_ml_projection_discard_compiled_model(self.native_projection.as_ptr());
+        }
     }
 
     #[must_use]

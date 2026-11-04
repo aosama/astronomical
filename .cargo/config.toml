@@ -215,7 +215,10 @@ test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomic
 # and `footprint_of_mlp_gate_and_up_as_<form>` measures one 100-million-weight
 # load's process-footprint growth; run each footprint form alone (e.g.
 # `cargo test-neural-engine-hello footprint_of_mlp_gate_and_up_as_ml_program_eight_bit_lookup`)
-# so earlier loads in the process do not blur its numbers. The hand-off
+# so earlier loads in the process do not blur its numbers. The discard journey
+# (`cargo test-neural-engine-hello discarding_the_compiled_model`) proves a
+# program keeps predicting after its compiled copy leaves the temporary
+# directory, which serving relies on. The hand-off
 # journeys (`cargo test-neural-engine-hello model_hand_off`) time one whole
 # two-engine call per projection, including the activation conversion, the
 # host copy into the input surface, and the merge of both slices, and print a

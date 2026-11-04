@@ -90,6 +90,9 @@ unsafe extern "C" {
         elapsed_nanoseconds: *mut u64,
     ) -> i32;
 
+    pub fn astronomical_core_ml_projection_discard_compiled_model(
+        projection: *mut NativeCoreMlProjection,
+    );
     pub fn astronomical_core_ml_projection_release(projection: *mut NativeCoreMlProjection);
 
     // Accelerate's CBLAS single-precision matrix product (BLAS level 3).
