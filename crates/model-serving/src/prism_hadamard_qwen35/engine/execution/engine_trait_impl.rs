@@ -105,7 +105,12 @@ impl MlxInferenceExecution for PrismHadamardQwen35InferenceExecution {
         self.record_model_loading_performance_attribution(performance_attribution);
         Ok(EngineLoadResult::new()
             .with_expert_memory_mode(Some(ExpertMemoryMode::Resident))
-            .with_minimum_mlx_memory_ceiling_bytes(minimum_ceiling_bytes))
+            .with_minimum_mlx_memory_ceiling_bytes(minimum_ceiling_bytes)
+            .with_neural_engine_prefill_status(
+                EngineLoadResult::neural_engine_prefill_unsupported_when_enabled(
+                    pending.neural_engine_mlp_prefill_requested,
+                ),
+            ))
     }
 
     fn start_generation(

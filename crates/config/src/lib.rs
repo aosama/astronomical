@@ -5,6 +5,7 @@ use std::{net::SocketAddr, path::PathBuf};
 mod astronomical_runtime_instance;
 mod chunking_config;
 mod config_document;
+mod config_document_edit;
 mod config_error;
 mod config_file;
 mod configuration_generation;
@@ -34,6 +35,10 @@ pub use chunking_config::{
     LEGACY_DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     LEGACY_DEFAULT_FIXED_SSD_STREAMING_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
     should_materialize_ssd_streaming_chunk_default,
+};
+pub use config_document_edit::{
+    ConfigDocumentSnapshot, config_schema_bytes, read_config_document, reset_config_document,
+    save_config_document, validate_config_document,
 };
 pub use config_error::AstronomicalConfigError;
 pub use default_model::{

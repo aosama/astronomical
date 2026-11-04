@@ -21,6 +21,11 @@ impl Qwen3_5EngineState {
             )
             .with_minimum_mlx_memory_ceiling_bytes(minimum_mlx_memory_ceiling_bytes)
             .with_startup_residency_facts(self.startup_residency_facts)
+            .with_neural_engine_prefill_status(
+                EngineLoadResult::neural_engine_prefill_unsupported_when_enabled(
+                    self.chunking.experimental_neural_engine_mlp_prefill_enabled,
+                ),
+            )
     }
 
     #[allow(clippy::too_many_arguments)]

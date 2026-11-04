@@ -18,6 +18,9 @@ const MEMORY_CONTROL_JS: &str = include_str!("../../console/memory-control.js");
 const CONNECT_JS: &str = include_str!("../../console/connect.js");
 const EXPERTS_JS: &str = include_str!("../../console/experts.js");
 const EXPERTS_RENDER_JS: &str = include_str!("../../console/experts-render.js");
+const CONFIGURATION_MODEL_JS: &str = include_str!("../../console/configuration-model.js");
+const CONFIGURATION_JS: &str = include_str!("../../console/configuration.js");
+const CONFIGURATION_CSS: &str = include_str!("../../console/configuration.css");
 const CONSOLE_CSS: &str = include_str!("../../console/console.css");
 const LIBRARY_CSS: &str = include_str!("../../console/library.css");
 const EXPERTS_CSS: &str = include_str!("../../console/experts.css");
@@ -40,7 +43,11 @@ where
         .route("/experts", get(console_index))
         .route("/library", get(console_index))
         .route("/connect", get(console_index))
+        .route("/configuration", get(console_index))
         .route("/settings", get(console_index))
+        .route("/configuration-model.js", get(configuration_model_script))
+        .route("/configuration.js", get(configuration_script))
+        .route("/configuration.css", get(configuration_stylesheet))
         .route("/console.js", get(console_script))
         .route("/library.js", get(library_script))
         .route("/library-render.js", get(library_render_script))
@@ -97,6 +104,18 @@ pub(crate) async fn experts_script() -> Response {
 
 pub(crate) async fn experts_render_script() -> Response {
     embedded_text_response(EXPERTS_RENDER_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn configuration_model_script() -> Response {
+    embedded_text_response(CONFIGURATION_MODEL_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn configuration_script() -> Response {
+    embedded_text_response(CONFIGURATION_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn configuration_stylesheet() -> Response {
+    embedded_text_response(CONFIGURATION_CSS, CSS_CONTENT_TYPE)
 }
 
 /// `GET /experts.css` — the Experts view styling (library bar, layer rows,

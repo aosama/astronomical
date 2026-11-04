@@ -294,8 +294,12 @@ impl MemoryDemotionRestart {
                 model_policy.worker_model_configuration.clone(),
             )
             .await?;
-        let swap_wait_outcome = timeout(
+        let model_load_budget = crate::worker::process::model_swap::model_load_budget(
             self.acknowledgement_timeout,
+            &model_policy.worker_model_configuration,
+        );
+        let swap_wait_outcome = timeout(
+            model_load_budget,
             crate::worker::process::model_swap::wait_for_model_swap(
                 &mut WorkerLoopState {
                     worker_process: &mut *replacement_state.trusted_worker_process,
@@ -321,7 +325,7 @@ impl MemoryDemotionRestart {
         )
         .await
         .map_err(|_| WorkerControlError::ModelLoadTimeout {
-            model_load_timeout_millis: self.acknowledgement_timeout.as_millis(),
+            model_load_timeout_millis: model_load_budget.as_millis(),
         })
         .and_then(|swap_wait_outcome| swap_wait_outcome)?;
         match swap_wait_outcome {
@@ -462,6 +466,7 @@ async fn read_candidate_acknowledgement(
             }
             event @ (WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
+            | WorkerEvent::NeuralEnginePrefillChanged { .. }
             | WorkerEvent::PersistentPromptCacheStats { .. }) => {
                 if deferred_process_events.len() >= MAXIMUM_DEFERRED_DEMOTION_PROCESS_EVENTS {
                     return Err(WorkerControlError::CandidateProtocolViolation {

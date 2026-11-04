@@ -26,12 +26,13 @@ impl Qwen3_5ResidentModel {
         // One-token decode keeps the low-overhead existing graph.
         let mlp_forward_span_started_at = performance_attribution.begin_operation_span();
         let mlp_output = match &decoder_layer_weights.mlp_weights {
-            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
-                self.base.forward_qwen3_5_dense_mlp(
+            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => self
+                .forward_resident_dense_mlp(
                     &attention_output.normalized_attention,
                     dense_mlp_weights,
-                )
-            }
+                    token_count,
+                    layer_index,
+                ),
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
                 let resident_expert_layer_weights = self
                     .resident_expert_weights

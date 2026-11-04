@@ -154,6 +154,21 @@ pub struct CoreMlProjection {
     shape: ProjectionShape,
 }
 
+// SAFETY: the handle has one owner and moves between threads with it; Core ML
+// models and the bridge's dispatch queue have no thread affinity, and every
+// call into the bridge takes this owner by reference, so calls cannot overlap
+// across threads without `Sync`, which this type does not implement.
+unsafe impl Send for CoreMlProjection {}
+
+impl std::fmt::Debug for CoreMlProjection {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CoreMlProjection")
+            .field("shape", &self.shape)
+            .finish_non_exhaustive()
+    }
+}
+
 /// The output IOSurface, locked for reading until this guard drops.
 ///
 /// Rung 4 of issue #161 hands this memory to MLX without a host copy, because

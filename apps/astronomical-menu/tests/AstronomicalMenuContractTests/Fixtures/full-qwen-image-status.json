@@ -106,6 +106,7 @@
   "configured_generation": null,
   "configured_maximum_mlx_memory_gb": null,
   "effective_generation": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "neural_engine_prefill": null,
   "expert_memory_mode": null,
   "expert_residency": null,
   "machine_mlx_memory_ceiling_bytes": 0,

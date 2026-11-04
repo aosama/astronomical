@@ -80,6 +80,15 @@ pub(crate) fn clear_active_request_progress(health_snapshot: &Arc<RwLock<WorkerH
     }
 }
 
+pub(crate) fn publish_neural_engine_prefill(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.neural_engine_prefill = neural_engine_prefill;
+    }
+}
+
 pub(crate) fn publish_expert_memory_mode(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     expert_memory_mode: ExpertMemoryMode,

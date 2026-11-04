@@ -230,6 +230,12 @@ test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomic
 # tests run with `cargo test-neural-engine` (below).
 test-neural-engine-hello = "test --release --no-fail-fast -p astronomical-neural-engine --features mlx-baseline --test neural_engine_hello -- --ignored --nocapture --test-threads=1"
 
+# The opt-in Neural Engine prefill on a real dense artifact: the same loaded
+# model with and without its per-layer programs, comparing prefill speed, final
+# logits, and greedy tokens over the Shakespeare fixture. Holds about 20 GiB and
+# takes about three minutes; run it with no model loaded in either instance.
+test-neural-engine-real-model = "test --release --no-fail-fast -p astronomical-acceptance --features direct-mlx --test installed_model_contracts should_compare_real_dense_prefill_with_and_without_the_neural_engine -- --ignored --nocapture --test-threads=1"
+
 # The Neural Engine CI lane (job `neural-engine`): compiles every target of the
 # crate without the MLX baseline, so the #[ignore]d hardware journeys above
 # stay buildable, and runs only the pure unit tests (the journeys never run

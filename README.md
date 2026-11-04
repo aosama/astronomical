@@ -108,6 +108,22 @@ On first launch each instance creates its own versioned `config.json` and adjace
 
 The memory value uses the gigabyte Apple uses to market the Mac: 1 GB = 1,073,741,824 bytes (2³⁰). Remove `maximum_mlx_memory_gb` to use the Mac-reported MLX ceiling. Per-model entries can set a lower context ceiling, generation defaults, chunking overrides, and multi-token-prediction depth. Explicit request values override generation defaults. Overrides for temporarily absent models remain dormant and are reported as unmatched rather than preventing other models from serving. Global chunking controls remain available under `chunking`, and each model may override individual values. See the [version 1 configuration schema](https://aosama.github.io/astronomical/schemas/config/v1/astronomical-config.schema.json) for the complete contract.
 
+## Edit the configuration
+
+Observatory's **Configuration** page edits every setting in that instance's `config.json`: set or change a value, remove it to return to its default, add settings for one model, or reset everything. The page is generated from the version 1 schema. Saving validates the whole document, refuses to overwrite a file that changed since the page loaded it, and reports whether the change applied, is waiting for a running request, or needs a restart. Reset keeps the old file beside the new one as `config.previous.json`.
+
+## Neural Engine prefill (experimental)
+
+Dense models can run part of each full prompt chunk on the Apple Neural Engine next to the GPU. Set `experimental_neural_engine_mlp_prefill_enabled` under `chunking`, globally or for one model; it is off by default.
+
+Measured on Ornith-1.5-9B on one M5-class Mac, with 10,000-token Shakespeare prompts through the daemon: prefill rose about 1.13× with the prompt cache on (median 1,233 to 1,398 tokens per second) and about 1.2× with it off (1,225 to 1,466), and decode did not change. The first long prompt after a load sees little of that gain. The costs are real:
+
+- **Memory:** 12 to 16 GB for that model, which must fit under the MLX memory ceiling beside the model and its largest context. That one needs a ceiling of about 33 GB.
+- **Load time:** about 100 seconds longer on each model load, and performance attribution, when enabled, removes the speed gain by adding synchronization.
+- **Output:** part of each prompt computes in fp16, so output can differ slightly from the GPU alone. Answers from the two paths stayed coherent but diverged within the first 110 characters.
+
+Mixture-of-experts models do not benefit, because their routed experts stay on the GPU. When the feature cannot run, serving stays on the GPU and `/v1/status` and the Configuration page say why.
+
 ## Build the app
 
 Required tools:

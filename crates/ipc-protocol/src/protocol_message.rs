@@ -332,6 +332,11 @@ pub enum WorkerEvent {
     ExpertMemoryModeChanged {
         expert_memory_mode: ExpertMemoryMode,
     },
+    /// Reports what the loaded model's opt-in Neural Engine prefill is doing.
+    /// Absent after a load means the setting was off.
+    NeuralEnginePrefillChanged {
+        neural_engine_prefill: crate::NeuralEnginePrefillStatus,
+    },
     /// Reports final engine residency and MLX memory after request cleanup.
     ///
     /// This is separate from prompt-progress telemetry because automatic expert

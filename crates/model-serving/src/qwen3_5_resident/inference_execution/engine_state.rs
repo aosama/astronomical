@@ -63,6 +63,9 @@ pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) prompt_processing_chunk_sizer:
         Qwen3_5ResidentPromptProcessingChunkSizer,
     pub(in crate::qwen3_5_resident::inference_execution) chunking: WorkerChunkingConfiguration,
+    /// What the opt-in Neural Engine prefill ended up doing at load.
+    pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_status:
+        astronomical_ipc_protocol::NeuralEnginePrefillStatus,
     /// The last completed generation's live decoder state, retained for
     /// in-memory prefix adoption (issue #1167). Dropped when the next request
     /// fails to adopt it or when the retention policy says so at completion.

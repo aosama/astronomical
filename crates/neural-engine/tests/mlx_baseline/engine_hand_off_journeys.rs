@@ -12,8 +12,8 @@
 //! 3. the Neural Engine runs its slice next to the GPU;
 //! 4. the Neural Engine's surface becomes an MLX array and the slices merge.
 //!
-//! The hand-off steps themselves live in `engine_hand_off`, shared with the
-//! token-split journeys. The baseline is the same activation through MLX's
+//! The hand-off steps themselves are serving code, in
+//! `astronomical_neural_engine::mlx_hand_off`. The baseline is the same activation through MLX's
 //! 4-bit matrix multiply. Both arms evaluate once per operation. Serving batches operations into
 //! larger graphs, so these figures do not yet include the synchronization
 //! points a hand-off would force on it.
@@ -21,6 +21,10 @@
 use std::time::{Duration, Instant};
 
 use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::mlx_hand_off::{
+    OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice, surface_as_array,
+    write_prepared_input,
+};
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype, raw};
 use serial_test::serial;
@@ -32,10 +36,7 @@ use super::dense_model_ab_journeys::{
     DenseOperation, QuantizedOperation, channel_major_values, prepare_quantized_operation,
     quantized_form, trailing_rows,
 };
-use super::engine_hand_off::{
-    OutputHandOff, StageDurations, StageSummaries, channel_major_fp16, summarize_stages,
-    surface_as_array, write_prepared_input,
-};
+use super::hand_off_stage_timing::{StageDurations, StageSummaries, summarize_stages};
 use super::mlx_projection_journeys::{build_projection, initialize_runtime, time_projection};
 use crate::hello::measured_projection::{
     MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
@@ -65,66 +66,22 @@ fn surface_stays_mapped(runtime: &MlxRuntime, projection: &CoreMlProjection) -> 
     let fp16_values = surface
         .contiguous_fp16_values()
         .expect("a 2,048-token surface has no row padding");
-    let surface_array = surface_as_array(
-        &surface,
-        [projection.output_channel_count() as i32, token_count],
-        OutputHandOff::ZeroCopySurface,
-    );
+    // SAFETY: the array is evaluated and dropped below, inside the guard's life,
+    // and the shape is the projection's own.
+    let surface_array = unsafe {
+        surface_as_array(
+            &surface,
+            [projection.output_channel_count() as i32, token_count],
+            OutputHandOff::ZeroCopySurface,
+        )
+    }
+    .expect("the surface becomes an array");
     runtime
         .evaluate_arrays(&[&surface_array])
         .expect("the surface array evaluates");
     // SAFETY: the array is evaluated and live; only its address is compared.
     let array_values = unsafe { raw::mlx_array_data_float16(surface_array.raw()) };
     std::ptr::eq(array_values.cast::<u16>(), fp16_values)
-}
-
-/// Joins the slices into `[1, tokens, channels]` bf16, the baseline's form.
-fn merge_slices(
-    runtime: &MlxRuntime,
-    surface_array: &MlxArray,
-    gpu_slice: &MlxArray,
-    token_count: i32,
-    neural_engine_channels: i32,
-) -> MlxArray {
-    let tokens_first = runtime
-        .transpose_axes(surface_array, &[1, 0])
-        .expect("the surface transposes");
-    let batched = runtime
-        .reshape(&tokens_first, &[1, token_count, neural_engine_channels])
-        .expect("the surface reshapes");
-    let bfloat = runtime
-        .astype(&batched, MlxDtype::BFloat16)
-        .expect("the surface converts");
-    runtime
-        .concatenate_axis(&[&bfloat, gpu_slice], 2)
-        .expect("the slices merge")
-}
-
-fn merge_from_surface(
-    runtime: &MlxRuntime,
-    projection: &CoreMlProjection,
-    gpu_slice: &MlxArray,
-    output_hand_off: OutputHandOff,
-) -> MlxArray {
-    let token_count = gpu_slice.shape()[1];
-    let neural_engine_channels = projection.output_channel_count() as i32;
-    let surface = projection.lock_output_surface().expect("the surface locks");
-    let surface_array = surface_as_array(
-        &surface,
-        [neural_engine_channels, token_count],
-        output_hand_off,
-    );
-    let merged = merge_slices(
-        runtime,
-        &surface_array,
-        gpu_slice,
-        token_count,
-        neural_engine_channels,
-    );
-    runtime
-        .evaluate_arrays(&[&merged])
-        .expect("the merge evaluates");
-    merged
 }
 
 fn run_hand_off_call(
@@ -134,7 +91,8 @@ fn run_hand_off_call(
     output_hand_off: OutputHandOff,
 ) -> (StageDurations, MlxArray) {
     let call_started_at = Instant::now();
-    let prepared = channel_major_fp16(runtime, arrays.token_major_bf16);
+    let prepared =
+        channel_major_fp16(runtime, arrays.token_major_bf16).expect("the reorder builds");
     runtime
         .evaluate_arrays(&[&prepared])
         .expect("the activations prepare");
@@ -150,7 +108,7 @@ fn run_hand_off_call(
         .async_eval_arrays(&[&gpu_slice])
         .expect("the GPU slice starts");
     let write_started_at = Instant::now();
-    write_prepared_input(&prepared, projection);
+    write_prepared_input(&prepared, projection).expect("the activations fit");
     let surface_write = write_started_at.elapsed();
     let engines_started_at = Instant::now();
     let pending = projection.begin_prediction().expect("the slice starts");
@@ -162,7 +120,14 @@ fn run_hand_off_call(
         .expect("the Neural Engine slice finishes");
     let engines_after_write = engines_started_at.elapsed();
     let merge_started_at = Instant::now();
-    let merged = merge_from_surface(runtime, projection, &gpu_slice, output_hand_off);
+    let merged = merge_surface_with_gpu_slice(
+        runtime,
+        projection,
+        &gpu_slice,
+        SplitAxis::Channels,
+        output_hand_off,
+    )
+    .expect("the slices merge");
     let stages = StageDurations {
         input_preparation,
         surface_write,

@@ -157,6 +157,7 @@ static NSURL *astronomical_compile_model(NSURL *model_url, NSError **error_out) 
 // NeuralNetwork document, or the first convolution of an ML Program. The
 // compute plan names ML Program operations with their opset ("ios18.conv"),
 // and its `const` and `constexpr_*` operations report no device usage.
+API_AVAILABLE(macos(14.4))
 static MLComputePlanDeviceUsage *astronomical_projection_device_usage(MLComputePlan *plan) {
   MLModelStructureNeuralNetwork *network = plan.modelStructure.neuralNetwork;
   if (network != nil) {
@@ -175,6 +176,7 @@ static MLComputePlanDeviceUsage *astronomical_projection_device_usage(MLComputeP
 // A chain such as the whole MLP has work beyond its first convolution, and one
 // activation left on the CPU would pass unnoticed by that convolution's verdict.
 // `const` and `constexpr_*` operations report no usage, so they are not counted.
+API_AVAILABLE(macos(14.4))
 static int32_t astronomical_count_operations_off_neural_engine(MLComputePlan *plan) {
   MLModelStructureProgramFunction *main_function = plan.modelStructure.program.functions[@"main"];
   int32_t off_neural_engine_count = 0;
@@ -189,6 +191,7 @@ static int32_t astronomical_count_operations_off_neural_engine(MLComputePlan *pl
   return off_neural_engine_count;
 }
 
+API_AVAILABLE(macos(14.4))
 static void astronomical_record_layer_placement(MLComputePlan *plan, AstronomicalLayerPlacement *placement) {
   placement->operations_off_neural_engine = astronomical_count_operations_off_neural_engine(plan);
   MLComputePlanDeviceUsage *usage = astronomical_projection_device_usage(plan);
@@ -204,6 +207,7 @@ static void astronomical_record_layer_placement(MLComputePlan *plan, Astronomica
   }
 }
 
+API_AVAILABLE(macos(14.4))
 static int32_t astronomical_load_layer_placement(NSURL *compiled_url,
                                                  MLModelConfiguration *configuration,
                                                  AstronomicalLayerPlacement *placement) {
@@ -304,8 +308,13 @@ static int32_t astronomical_load_model(AstronomicalCoreMlProjection *projection,
   if (projection->model == nil) {
     return -1;
   }
-  return astronomical_load_layer_placement(projection->compiled_model_url, configuration,
-                                           &projection->placement);
+  // Before 14.4 there is no compute plan, so placement stays unknown; callers
+  // that need proof of Neural Engine placement refuse an unknown verdict.
+  if (@available(macOS 14.4, *)) {
+    return astronomical_load_layer_placement(projection->compiled_model_url, configuration,
+                                             &projection->placement);
+  }
+  return 0;
 }
 
 AstronomicalCoreMlProjection *astronomical_core_ml_projection_load(

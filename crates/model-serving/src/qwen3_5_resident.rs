@@ -5,6 +5,7 @@ pub mod dflash_draft;
 mod experts;
 mod inference_execution;
 mod model;
+mod neural_engine_mlp_prefill;
 
 pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 pub(crate) use experts::maximum_resident_gate_up_fusion_transient_payload_bytes;

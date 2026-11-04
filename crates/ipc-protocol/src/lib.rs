@@ -23,6 +23,7 @@ mod image_generation;
 #[cfg(test)]
 mod image_generation_tests;
 mod message_codec;
+mod neural_engine_prefill_status;
 mod persistent_prompt_cache_diagnostics;
 #[cfg(test)]
 mod persistent_prompt_cache_diagnostics_tests;
@@ -74,6 +75,7 @@ pub use message_codec::{
     decode_command, decode_daemon_request, decode_daemon_response, decode_event, encode_command,
     encode_daemon_request, encode_daemon_response, encode_event,
 };
+pub use neural_engine_prefill_status::NeuralEnginePrefillStatus;
 pub use persistent_prompt_cache_diagnostics::{
     WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheExpectedBlockHashPrefix,
     WorkerPersistentPromptCacheLookupOutcome, WorkerPersistentPromptCacheMissReason,

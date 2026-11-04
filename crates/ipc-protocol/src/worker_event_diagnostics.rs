@@ -17,7 +17,9 @@ impl WorkerEvent {
             Self::MlxMemoryLimitRestartRequired { .. } => {
                 "mlx_memory_limit_restart_required".to_owned()
             }
-            Self::ExpertMemoryModeChanged { .. } => "expert_memory_mode_changed".to_owned(),
+            Self::ExpertMemoryModeChanged { .. } | Self::NeuralEnginePrefillChanged { .. } => {
+                model_state_event_diagnostic_summary(self)
+            }
             Self::GenerationFinalized { request_id, .. } => {
                 format!("generation_finalized request_id={}", request_id.value())
             }
@@ -81,6 +83,14 @@ impl WorkerEvent {
             }
         }
     }
+}
+
+fn model_state_event_diagnostic_summary(worker_event: &WorkerEvent) -> String {
+    match worker_event {
+        WorkerEvent::NeuralEnginePrefillChanged { .. } => "neural_engine_prefill_changed",
+        _ => "expert_memory_mode_changed",
+    }
+    .to_owned()
 }
 
 /// Observatory events share one arm of [`WorkerEvent::diagnostic_summary`].

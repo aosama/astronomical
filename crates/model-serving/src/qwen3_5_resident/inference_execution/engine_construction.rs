@@ -159,6 +159,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             persistent_prompt_cache: None,
             prompt_processing_chunk_sizer,
             chunking,
+            neural_engine_prefill_status: astronomical_ipc_protocol::NeuralEnginePrefillStatus::Off,
             retained_live_prefix: None,
             validated_artifact: Some(validated_artifact),
             vocabulary_size,

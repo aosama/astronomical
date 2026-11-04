@@ -145,6 +145,8 @@ impl Qwen3_5ResidentModel {
             // Publication occurs only after core materialization and a fresh idle
             // memory sample in the engine loading path.
             resident_expert_weights: None,
+            // Programs load after the weights are materialized, if at all.
+            neural_engine_mlp_prefill: None,
         })
     }
 }

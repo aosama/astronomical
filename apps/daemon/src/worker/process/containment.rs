@@ -169,6 +169,7 @@ async fn read_recovery_acknowledgement(
             }
             WorkerEvent::MlxMemorySample { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
+            | WorkerEvent::NeuralEnginePrefillChanged { .. }
             | WorkerEvent::PersistentPromptCacheStats { .. } => {}
             _ => {
                 return Err(WorkerControlError::WorkerProtocolViolation {

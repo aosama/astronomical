@@ -1,7 +1,7 @@
 [package]
 name = "astronomical-neural-engine"
 build = "build.rs"
-description = "Research crate: invoke prefill math on the Apple Neural Engine through public Core ML and prove placement, numerics, and speed (issue #161)."
+description = "Prefill math on the Apple Neural Engine through public Core ML: the opt-in serving path and the research journeys that measure its placement, numerics, and speed (issue #161)."
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -18,7 +18,10 @@ default = []
 # Adds the MLX graphics-processor baseline to the hardware measurement. Off by
 # default because it links the pinned native MLX build, which the pure
 # Neural Engine path does not need.
-mlx-baseline = ["dep:astronomical-runtime-integration", "dep:mlx-c-rust"]
+mlx-baseline = ["mlx-hand-off", "dep:astronomical-runtime-integration"]
+# Passes data between MLX and a loaded projection. Serving enables this without
+# the baseline's native MLX build, which its own graph already links.
+mlx-hand-off = ["dep:mlx-c-rust"]
 
 [lints.rust]
 # This crate exists to contain the Core ML, Accelerate, and IOSurface foreign

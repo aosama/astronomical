@@ -20,6 +20,7 @@ use tower::ServiceExt;
 
 use crate::support::ScriptedExecutor;
 
+mod config_document;
 mod configuration_status;
 mod generation_admission;
 mod maximum_mlx_memory;

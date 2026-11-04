@@ -111,6 +111,7 @@
   "configured_generation": null,
   "configured_maximum_mlx_memory_gb": null,
   "effective_generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "neural_engine_prefill": null,
   "expert_memory_mode": null,
   "expert_placement": {
     "reply_sentence": "",
@@ -160,6 +161,7 @@
           "experimental_in_memory_prefix_adoption_enabled": false,
           "experimental_quantized_kv_cache_enabled": false,
           "experimental_fused_moe_decode_enabled": false,
+          "experimental_neural_engine_mlp_prefill_enabled": false,
           "fixed_ssd_streaming_prompt_processing_chunk_size_tokens": 2048
         },
         "maximum_context_tokens": 65536,

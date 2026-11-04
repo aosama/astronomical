@@ -148,6 +148,43 @@ pub(in crate::worker) async fn handle_generate_command(
     Ok(())
 }
 
+/// Waits for the worker to finish the swap inside this model's load budget.
+async fn wait_for_model_swap_within_budget(
+    worker_loop_state: &mut WorkerLoopState<'_>,
+    worker_model_configuration: &astronomical_ipc_protocol::WorkerModelConfiguration,
+    expected_configuration_generation: Option<&str>,
+    expected_model_runtime_configuration: &astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
+) -> Result<ModelSwapWaitOutcome, WorkerControlError> {
+    let model_load_budget = crate::worker::process::model_swap::model_load_budget(
+        worker_loop_state.model_load_timeout,
+        worker_model_configuration,
+    );
+    let timed_swap_wait = timeout(
+        model_load_budget,
+        wait_for_model_swap(
+            &mut WorkerLoopState {
+                worker_process: &mut *worker_loop_state.worker_process,
+                health_snapshot: worker_loop_state.health_snapshot,
+                is_ready: &mut *worker_loop_state.is_ready,
+                model_load_deadline: &mut *worker_loop_state.model_load_deadline,
+                active_request: &mut *worker_loop_state.active_request,
+                performance_log: &mut *worker_loop_state.performance_log,
+                completion_log: &mut *worker_loop_state.completion_log,
+                model_load_timeout: worker_loop_state.model_load_timeout,
+            },
+            expected_configuration_generation,
+            expected_model_runtime_configuration,
+        ),
+    )
+    .await;
+    match timed_swap_wait {
+        Ok(model_swap_outcome) => model_swap_outcome,
+        Err(_elapsed) => Err(WorkerControlError::ModelLoadTimeout {
+            model_load_timeout_millis: model_load_budget.as_millis(),
+        }),
+    }
+}
+
 /// Ensures the requested model is the loaded one: an unmapped model with no
 /// worker is rejected, a policy-backed different model triggers a swap with
 /// its bounded wait, and every rejection answers the start sender before the
@@ -213,28 +250,13 @@ async fn ensure_requested_model_loaded(
         tracing::error!(error = %swap_error, "SwapModel command failed");
         return Ok(ModelSelectionOutcome::SwapFailed(swap_error));
     }
-    let model_swap_outcome = timeout(
-        worker_loop_state.model_load_timeout,
-        wait_for_model_swap(
-            &mut WorkerLoopState {
-                worker_process: &mut *worker_loop_state.worker_process,
-                health_snapshot: worker_loop_state.health_snapshot,
-                is_ready: &mut *worker_loop_state.is_ready,
-                model_load_deadline: &mut *worker_loop_state.model_load_deadline,
-                active_request: &mut *worker_loop_state.active_request,
-                performance_log: &mut *worker_loop_state.performance_log,
-                completion_log: &mut *worker_loop_state.completion_log,
-                model_load_timeout: worker_loop_state.model_load_timeout,
-            },
-            expected_configuration_generation.as_deref(),
-            &expected_model_runtime_configuration,
-        ),
+    let model_swap_outcome = wait_for_model_swap_within_budget(
+        worker_loop_state,
+        &model_policy.worker_model_configuration,
+        expected_configuration_generation.as_deref(),
+        &expected_model_runtime_configuration,
     )
-    .await
-    .map_err(|_| WorkerControlError::ModelLoadTimeout {
-        model_load_timeout_millis: worker_loop_state.model_load_timeout.as_millis(),
-    })
-    .and_then(|model_swap_outcome| model_swap_outcome);
+    .await;
     match model_swap_outcome {
         Ok(ModelSwapWaitOutcome::Loaded) => {}
         Ok(ModelSwapWaitOutcome::Rejected {

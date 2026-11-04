@@ -19,6 +19,10 @@ use astronomical_neural_engine::core_ml_projection::{
 };
 use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine::ml_program_mlp_document::MlpFp16Weights;
+use astronomical_neural_engine::mlx_hand_off::{
+    OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
+    write_prepared_input,
+};
 use astronomical_neural_engine::numerical_comparison::compare_values;
 use astronomical_neural_engine::process_memory::{
     MemoryGrowth, MemorySnapshot, mebibytes, physical_memory_bytes,
@@ -33,10 +37,7 @@ use super::concurrent_split_journeys::milliseconds;
 use super::dense_model_ab_journeys::{
     channel_major_values, quantize_and_round_trip, quantized_form,
 };
-use super::engine_hand_off::{
-    OutputHandOff, StageDurations, channel_major_fp16, summarize_stages, surface_as_array,
-    write_prepared_input,
-};
+use super::hand_off_stage_timing::{StageDurations, summarize_stages};
 use super::mlx_projection_journeys::{build_projection, initialize_runtime, token_major, upload};
 use crate::hello::measured_projection::{
     MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
@@ -54,8 +55,8 @@ const MINIMUM_MERGED_COSINE: f64 = 0.999;
 // array, and multiples of 64 fp16 tokens do. The chain's balance should sit
 // near the 37 to 44 percent the per-projection splits found.
 const NEURAL_ENGINE_TOKEN_COUNTS: [usize; 6] = [640, 768, 832, 896, 960, 1024];
-// The best share the speed journey found, so the per-layer programs match it.
-const LAYER_PROGRAM_TOKEN_COUNT: usize = 896;
+// The share serving uses for a 2,048-token chunk, so these programs match it.
+const LAYER_PROGRAM_TOKEN_COUNT: usize = 960;
 const WARM_UP_LAYER_CYCLES: usize = 2;
 const MEASURED_LAYER_CYCLES: usize = 4;
 
@@ -259,41 +260,6 @@ fn load_mlp_program(
     .expect("the MLP program loads")
 }
 
-/// The Neural Engine's `[hidden][tokens]` result joined before the GPU's along
-/// the token axis, as bf16 `[1, tokens, hidden]`.
-fn merge_token_slices(
-    runtime: &MlxRuntime,
-    projection: &CoreMlProjection,
-    gpu_slice: &MlxArray,
-) -> MlxArray {
-    let neural_engine_tokens = projection.token_count() as i32;
-    let surface = projection.lock_output_surface().expect("the surface locks");
-    let surface_array = surface_as_array(
-        &surface,
-        [HIDDEN_CHANNELS as i32, neural_engine_tokens],
-        OutputHandOff::ZeroCopySurface,
-    );
-    let tokens_first = runtime
-        .transpose_axes(&surface_array, &[1, 0])
-        .expect("the surface transposes");
-    let batched = runtime
-        .reshape(
-            &tokens_first,
-            &[1, neural_engine_tokens, HIDDEN_CHANNELS as i32],
-        )
-        .expect("the surface reshapes");
-    let bfloat = runtime
-        .astype(&batched, MlxDtype::BFloat16)
-        .expect("the surface converts");
-    let merged = runtime
-        .concatenate_axis(&[&bfloat, gpu_slice], 1)
-        .expect("the token slices merge");
-    runtime
-        .evaluate_arrays(&[&merged])
-        .expect("the merge evaluates");
-    merged
-}
-
 fn run_token_split_call(
     runtime: &MlxRuntime,
     compiled_swiglu: &MlxCompiledSwiGlu,
@@ -304,7 +270,7 @@ fn run_token_split_call(
     let call_started_at = Instant::now();
     let neural_engine_input =
         token_range(runtime, &fixture.token_major_bf16, 0, neural_engine_tokens);
-    let prepared = channel_major_fp16(runtime, &neural_engine_input);
+    let prepared = channel_major_fp16(runtime, &neural_engine_input).expect("the reorder builds");
     runtime
         .evaluate_arrays(&[&prepared])
         .expect("the activations prepare");
@@ -320,7 +286,7 @@ fn run_token_split_call(
         .async_eval_arrays(&[&gpu_slice])
         .expect("the GPU slice starts");
     let write_started_at = Instant::now();
-    write_prepared_input(&prepared, projection);
+    write_prepared_input(&prepared, projection).expect("the activations fit");
     let surface_write = write_started_at.elapsed();
     let engines_started_at = Instant::now();
     let pending = projection.begin_prediction().expect("the program starts");
@@ -332,7 +298,14 @@ fn run_token_split_call(
         .expect("the program finishes");
     let engines_after_write = engines_started_at.elapsed();
     let merge_started_at = Instant::now();
-    let merged = merge_token_slices(runtime, projection, &gpu_slice);
+    let merged = merge_surface_with_gpu_slice(
+        runtime,
+        projection,
+        &gpu_slice,
+        SplitAxis::Tokens,
+        OutputHandOff::ZeroCopySurface,
+    )
+    .expect("the token slices merge");
     let stages = StageDurations {
         input_preparation,
         surface_write,
