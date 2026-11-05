@@ -67,20 +67,20 @@
             "upstream_license": "Apache-2.0"
         },
         {
-            "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-vision-OptiQ-static-4.5bpw",
-            "revision": "27ea26a6175ead91d1067f020be41318d045849b",
-            "display_name": "Ornith 1.5 9B Vision OptiQ Static 4.5bpw",
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-MLX-4bit-vision",
+            "revision": "10450ee1a54d25d682f9589d6e428d480d913f03",
+            "display_name": "Ornith 1.5 9B MLX 4-bit Vision",
             "family": "qwen3_5",
-            "approximate_size_bytes": 7286495182,
+            "approximate_size_bytes": 5970332199,
             "public": true,
-            "description": "A capable everyday model that sees pictures and text, reasons before answering, and answers quickly. A strong all-rounder for common work - writing, coding, and understanding images - with great quality without the wait. Its leaner size runs comfortably on most Macs.",
+            "description": "A capable everyday model that sees pictures and text, reasons before answering, and answers quickly. A strong all-rounder for common work - writing, coding, and understanding images. Ornith's own 4-bit weights with its original vision tower, at a lean size that runs comfortably on most Macs.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
                 "supports_tool_calls": true,
                 "context_window": 262144
             },
-            "quantization_label": "OptiQ static 4.5bpw (mixed-precision affine, group 64)",
+            "quantization_label": "MLX 4-bit (affine, group 64), vision tower at bf16",
             "upstream_license": "MIT"
         },
         {
