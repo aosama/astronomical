@@ -1,0 +1,144 @@
+//! The compiled form of a model on disk: compiling without loading, loading what
+//! was compiled earlier, and keeping or discarding what Core ML left behind.
+
+use std::ffi::{CStr, CString, OsStr, c_char};
+use std::fs;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
+
+use super::compute_units::CoreMlComputeUnits;
+use super::error::{CoreMlProjectionError, NATIVE_ERROR_CAPACITY, native_error_text};
+use super::projection::CoreMlProjection;
+use crate::ml_package_layout::write_ml_package;
+use crate::ml_program_mlp_document::{MlpFp16Weights, encode_ml_program_mlp};
+use crate::ml_program_projection_document::{MlProgramWeights, encode_ml_program_projection};
+use crate::native_bridge::{
+    astronomical_core_ml_compile_model_to, astronomical_core_ml_projection_compiled_model_path,
+    astronomical_core_ml_projection_discard_compiled_model,
+};
+use crate::projection_shape::ProjectionShape;
+
+// macOS's PATH_MAX.
+const COMPILED_MODEL_PATH_CAPACITY: usize = 1024;
+
+impl CoreMlProjection {
+    /// Compiles a whole MLP chain and leaves the compiled model at `destination`
+    /// without loading it, for a program that will be kept and loaded from there.
+    /// See the bridge's `astronomical_core_ml_compile_model_to` for why the first
+    /// load must happen at the final path.
+    pub fn compile_ml_program_mlp_to(
+        shape: ProjectionShape,
+        intermediate_channels: usize,
+        weights: MlpFp16Weights<'_>,
+        contraction_part_width: usize,
+        model_directory: &Path,
+        destination: &Path,
+    ) -> Result<(), CoreMlProjectionError> {
+        let package_contents = encode_ml_program_mlp(
+            shape,
+            intermediate_channels,
+            weights,
+            contraction_part_width,
+        )?;
+        let package_path = write_ml_package(model_directory, &package_contents)?;
+        compile_package_to(&package_path, destination)
+    }
+
+    /// As [`Self::compile_ml_program_mlp_to`] for one projection.
+    pub fn compile_ml_program_to(
+        shape: ProjectionShape,
+        weights: MlProgramWeights<'_>,
+        contraction_part_count: usize,
+        model_directory: &Path,
+        destination: &Path,
+    ) -> Result<(), CoreMlProjectionError> {
+        let package_contents =
+            encode_ml_program_projection(shape, weights, contraction_part_count)?;
+        let package_path = write_ml_package(model_directory, &package_contents)?;
+        compile_package_to(&package_path, destination)
+    }
+
+    /// Loads a program compiled earlier, skipping the weights and the compiler. The
+    /// files stay where they are when this program is released.
+    pub fn load_compiled_model(
+        compiled_model_path: &Path,
+        shape: ProjectionShape,
+        compute_units: CoreMlComputeUnits,
+    ) -> Result<Self, CoreMlProjectionError> {
+        Self::load_model_at(compiled_model_path, shape, compute_units)
+    }
+
+    /// Moves the compiled model out of the temporary directory to `destination` for
+    /// later loads. The loaded program stays usable and no longer owns the files.
+    pub fn keep_compiled_model_files_at(
+        &mut self,
+        destination: &Path,
+    ) -> Result<(), CoreMlProjectionError> {
+        let mut path_buffer = [0 as c_char; COMPILED_MODEL_PATH_CAPACITY];
+        // SAFETY: the handle is valid for this borrow and the buffer is writable for
+        // its full stated capacity.
+        let path_status = unsafe {
+            astronomical_core_ml_projection_compiled_model_path(
+                self.native_projection.as_ptr(),
+                path_buffer.as_mut_ptr(),
+                COMPILED_MODEL_PATH_CAPACITY as u32,
+            )
+        };
+        if path_status != 0 {
+            return Err(CoreMlProjectionError::NoCompiledModelFiles);
+        }
+        // SAFETY: the bridge wrote a NUL-terminated path into the buffer on success.
+        let compiled_path = unsafe { CStr::from_ptr(path_buffer.as_ptr()) };
+        if let Some(parent_directory) = destination.parent() {
+            fs::create_dir_all(parent_directory)?;
+        }
+        fs::rename(
+            Path::new(OsStr::from_bytes(compiled_path.to_bytes())),
+            destination,
+        )?;
+        self.discard_compiled_model_files();
+        Ok(())
+    }
+
+    /// Removes the compiled model from the temporary directory while the loaded
+    /// program stays usable. Release also removes it, but a process that exits
+    /// without releasing would otherwise leave one copy of the weights behind per
+    /// program, which is the leak this exists to close.
+    pub fn discard_compiled_model_files(&mut self) {
+        // SAFETY: the handle is valid for this borrow, and the bridge clears its
+        // stored path so release cannot remove the directory a second time.
+        unsafe {
+            astronomical_core_ml_projection_discard_compiled_model(self.native_projection.as_ptr());
+        }
+    }
+}
+
+fn compile_package_to(
+    package_path: &Path,
+    destination: &Path,
+) -> Result<(), CoreMlProjectionError> {
+    if let Some(parent_directory) = destination.parent() {
+        fs::create_dir_all(parent_directory)?;
+    }
+    let package_path_text = CString::new(package_path.to_string_lossy().as_bytes())
+        .map_err(CoreMlProjectionError::from_interior_nul)?;
+    let destination_text = CString::new(destination.to_string_lossy().as_bytes())
+        .map_err(CoreMlProjectionError::from_interior_nul)?;
+    let mut native_error = [0 as c_char; NATIVE_ERROR_CAPACITY];
+    // SAFETY: both paths are valid NUL-terminated strings that outlive the call,
+    // and the error buffer is writable for its full stated capacity.
+    let status = unsafe {
+        astronomical_core_ml_compile_model_to(
+            package_path_text.as_ptr(),
+            destination_text.as_ptr(),
+            native_error.as_mut_ptr(),
+            NATIVE_ERROR_CAPACITY as u32,
+        )
+    };
+    if status != 0 {
+        return Err(CoreMlProjectionError::Load(native_error_text(
+            &native_error,
+        )));
+    }
+    Ok(())
+}

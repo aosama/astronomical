@@ -16,25 +16,19 @@
 //! checkpoint's own 64-input blocks cannot stay 4-bit on the Neural Engine.
 
 use crate::affine_quantized_weights::AffineQuantizedWeights;
-use crate::mil_program_wire::{
-    MilDataType, MilOperation, append_map_entry, blob_file_tensor_value, int32_tensor_value,
-    named_value_type, string_scalar_value, tensor_value_type,
+use crate::mil_operations::{
+    SPECIFICATION_VERSION, activation_type, constant_operation, contraction_sum_operations,
+    convolution_operation, convolution_parameter_constants, program, weight_blob_value,
 };
+use crate::mil_program_wire::{MilDataType, MilOperation, int32_tensor_value, tensor_value_type};
+use crate::ml_package_layout::MlProgramPackageContents;
 use crate::ml_program_weight_blob::WeightBlobFile;
 use crate::projection_model_interface::{
     ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
 };
 use crate::projection_shape::ProjectionShape;
-use crate::protobuf_wire::{append_bytes_field, append_string_field, append_varint_field};
+use crate::protobuf_wire::{append_bytes_field, append_varint_field};
 use crate::row_major_block::row_block;
-
-// Specification version 9 is iOS 18 / macOS 15, the first with block-wise
-// 4-bit weights; its MIL opset is "CoreML8".
-pub(crate) const SPECIFICATION_VERSION: u64 = 9;
-const OPSET_NAME: &str = "CoreML8";
-const MAIN_FUNCTION_NAME: &str = "main";
-/// Where the program expects its weights, relative to the model package.
-pub const WEIGHT_BLOB_FILE_NAME: &str = "@model_path/weights/weight.bin";
 
 /// The weights an ML Program projection is built from.
 #[derive(Clone, Copy, Debug)]
@@ -48,12 +42,6 @@ pub enum MlProgramWeights<'weights> {
     /// (`constexpr_lut_to_dense`), which reproduces the checkpoint exactly;
     /// palettized weights are the form Apple documents for the Neural Engine.
     LookupTable(&'weights AffineQuantizedWeights),
-}
-
-/// The two files of an `.mlpackage`: the model document and its weights.
-pub struct MlProgramPackageContents {
-    pub model_document: Vec<u8>,
-    pub weight_blob_file: Vec<u8>,
 }
 
 pub fn encode_ml_program_projection(
@@ -208,64 +196,6 @@ fn partial_projection_name(part_index: usize, contraction_part_count: usize) -> 
     }
 }
 
-// A 1 × 1 kernel with unit stride and no padding is exactly a matrix
-// multiply over channels; these are the values Apple's converter writes as
-// conv defaults, emitted once and shared by every part.
-const CONVOLUTION_PARAMETER_CONSTANTS: [&str; 5] = [
-    "conv_strides",
-    "conv_pad_type",
-    "conv_pad",
-    "conv_dilations",
-    "conv_groups",
-];
-
-pub(crate) fn convolution_parameter_constants() -> Vec<Vec<u8>> {
-    vec![
-        constant_operation(
-            "conv_strides",
-            &int32_tensor_value(&[1, 1], &[2]),
-            MilDataType::Int32,
-            &[2],
-        ),
-        constant_operation(
-            "conv_pad_type",
-            &string_scalar_value("valid"),
-            MilDataType::String,
-            &[],
-        ),
-        constant_operation(
-            "conv_pad",
-            &int32_tensor_value(&[0, 0, 0, 0], &[4]),
-            MilDataType::Int32,
-            &[4],
-        ),
-        constant_operation(
-            "conv_dilations",
-            &int32_tensor_value(&[1, 1], &[2]),
-            MilDataType::Int32,
-            &[2],
-        ),
-        constant_operation(
-            "conv_groups",
-            &int32_tensor_value(&[1], &[]),
-            MilDataType::Int32,
-            &[],
-        ),
-    ]
-}
-
-pub(crate) fn constant_operation(
-    constant_name: &str,
-    encoded_value: &[u8],
-    data_type: MilDataType,
-    dimensions: &[usize],
-) -> Vec<u8> {
-    MilOperation::new("const", constant_name)
-        .attribute("val", encoded_value)
-        .output(constant_name, &tensor_value_type(data_type, dimensions))
-        .into_bytes()
-}
-
 fn contraction_split_operations(
     shape: ProjectionShape,
     contraction_part_count: usize,
@@ -409,14 +339,6 @@ fn lookup_table_operation(
         .into_bytes()
 }
 
-pub(crate) fn weight_blob_value(
-    data_type: MilDataType,
-    dimensions: &[usize],
-    blob_offset: u64,
-) -> Vec<u8> {
-    blob_file_tensor_value(data_type, dimensions, WEIGHT_BLOB_FILE_NAME, blob_offset)
-}
-
 fn blockwise_shift_scale_operation(
     weight_name: &str,
     part_weights: &AffineQuantizedWeights,
@@ -445,86 +367,6 @@ fn blockwise_shift_scale_operation(
             &tensor_value_type(MilDataType::Float16, &weight_dimensions),
         )
         .into_bytes()
-}
-
-pub(crate) fn convolution_operation(
-    shape: ProjectionShape,
-    input_name: &str,
-    weight_name: &str,
-    output_name: &str,
-) -> Vec<u8> {
-    let mut convolution = MilOperation::new("conv", output_name)
-        .input_named("x", input_name)
-        .input_named("weight", weight_name);
-    for (parameter_name, constant_name) in ["strides", "pad_type", "pad", "dilations", "groups"]
-        .iter()
-        .zip(CONVOLUTION_PARAMETER_CONSTANTS)
-    {
-        convolution = convolution.input_named(parameter_name, constant_name);
-    }
-    convolution
-        .output(
-            output_name,
-            &activation_type(shape.output_channels(), shape.token_count()),
-        )
-        .into_bytes()
-}
-
-/// `partial_0 + partial_1 + …` as a chain of binary adds ending in
-/// `final_output_name`; MIL's `add` takes exactly two operands.
-pub(crate) fn contraction_sum_operations(
-    shape: ProjectionShape,
-    partial_projection_names: &[String],
-    sum_name_prefix: &str,
-    final_output_name: &str,
-) -> Vec<Vec<u8>> {
-    let projected_type = activation_type(shape.output_channels(), shape.token_count());
-    let mut operations = Vec::new();
-    let mut running_sum_name = partial_projection_names[0].clone();
-    for (part_index, partial_projection_name) in partial_projection_names.iter().enumerate().skip(1)
-    {
-        let sum_name = if part_index + 1 == partial_projection_names.len() {
-            final_output_name.to_owned()
-        } else {
-            format!("{sum_name_prefix}_{part_index}")
-        };
-        operations.push(
-            MilOperation::new("add", &sum_name)
-                .input_named("x", &running_sum_name)
-                .input_named("y", partial_projection_name)
-                .output(&sum_name, &projected_type)
-                .into_bytes(),
-        );
-        running_sum_name = sum_name;
-    }
-    operations
-}
-
-pub(crate) fn activation_type(channel_count: usize, token_count: usize) -> Vec<u8> {
-    tensor_value_type(MilDataType::Float16, &[1, channel_count, 1, token_count])
-}
-
-pub(crate) fn program(shape: ProjectionShape, operations: &[Vec<u8>]) -> Vec<u8> {
-    let mut block = Vec::new();
-    append_string_field(&mut block, 2, PROJECTED_FEATURE_NAME);
-    for operation in operations {
-        append_bytes_field(&mut block, 3, operation);
-    }
-    let mut function = Vec::new();
-    append_bytes_field(
-        &mut function,
-        1,
-        &named_value_type(
-            ACTIVATIONS_FEATURE_NAME,
-            &activation_type(shape.input_channels(), shape.token_count()),
-        ),
-    );
-    append_string_field(&mut function, 2, OPSET_NAME);
-    append_map_entry(&mut function, 3, OPSET_NAME, &block);
-    let mut program = Vec::new();
-    append_varint_field(&mut program, 1, 1);
-    append_map_entry(&mut program, 2, MAIN_FUNCTION_NAME, &function);
-    program
 }
 
 #[cfg(test)]

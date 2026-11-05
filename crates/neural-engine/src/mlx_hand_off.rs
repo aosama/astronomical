@@ -10,7 +10,7 @@ use std::ffi::c_void;
 use mlx_c_rust::{MlxArray, MlxBindingsContext, MlxCError, MlxDtype, raw};
 use thiserror::Error;
 
-use crate::core_ml_projection::{CoreMlProjection, CoreMlProjectionError, LockedOutputSurface};
+use crate::core_ml::{CoreMlProjection, CoreMlProjectionError, LockedOutputSurface};
 
 #[derive(Debug, Error)]
 pub enum MlxHandOffError {

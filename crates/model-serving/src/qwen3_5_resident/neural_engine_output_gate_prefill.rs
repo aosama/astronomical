@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use astronomical_ipc_protocol::WorkerChunkingConfiguration;
-use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::ml_program_projection_document::MlProgramWeights;
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, channel_major_fp16, surface_as_token_major, write_prepared_input,

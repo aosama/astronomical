@@ -9,8 +9,8 @@ use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfigu
 use astronomical_memory_policy::neural_engine_admission::{
     NeuralEnginePrefillAdmission, NeuralEnginePrefillMemoryRequirements,
 };
-use astronomical_neural_engine::compute_device_report::report_compute_devices;
-use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::compute_device_report::report_compute_devices;
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::ml_program_mlp_document::MlpFp16Weights;
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 use astronomical_runtime_integration::MlxRuntime;

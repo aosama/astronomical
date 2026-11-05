@@ -3,9 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml_projection::{
-    ComputePlacement, CoreMlComputeUnits, CoreMlProjection,
-};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::numerical_comparison::compare_values;
 use astronomical_neural_engine::timing_summary::TimingSummary;
 use astronomical_runtime_integration::MlxRuntime;

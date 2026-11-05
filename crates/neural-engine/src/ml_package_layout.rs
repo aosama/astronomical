@@ -10,8 +10,6 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::ml_program_projection_document::MlProgramPackageContents;
-
 // Item identifiers only need to be unique within one manifest, so fixed
 // values keep the package byte-for-byte reproducible.
 const MODEL_ITEM_IDENTIFIER: &str = "A1B2C3D4-0161-4000-8000-000000000001";
@@ -61,6 +59,12 @@ pub fn write_ml_package(
     )?;
     fs::write(weights_path.join("weight.bin"), &contents.weight_blob_file)?;
     Ok(package_path)
+}
+
+/// The two files of an `.mlpackage`: the model document and its weights.
+pub struct MlProgramPackageContents {
+    pub model_document: Vec<u8>,
+    pub weight_blob_file: Vec<u8>,
 }
 
 #[cfg(test)]
