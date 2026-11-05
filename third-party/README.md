@@ -16,7 +16,7 @@ never resolves an upstream repository live.
 | Dependency | Pinned version | Upstream ref | Pin file | Class |
 | --- | --- | --- | --- | --- |
 | MLX | 0.32.4 | release tag `v0.32.4` (commit `36969c094`) | `pins/mlx-v0.32.4.cmake` | core runtime |
-| MLX-C | 0.7.0 | release tag `v0.7.0` (commit `a341b4925`) | `pins/mlx-c-v0.7.0.cmake` | C-ABI bridge |
+| MLX-C | 0.8.0 | release tag `v0.8.0` (commit `a26f2d584`) | `pins/mlx-c-v0.8.0.cmake` | C-ABI bridge |
 | metal-cpp | 26 | Apple release download `metal-cpp_26.zip` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
 | nlohmann/json | 3.11.3 | release artifact `v3.11.3/json.tar.xz` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
 | fmt | 12.1.0 | release tag archive `12.1.0.tar.gz` | declared inside `pins/mlx-v0.32.4.cmake` | MLX transitive |
@@ -31,7 +31,7 @@ The pin files are canonical for digests and URLs; the current values are
 recorded here for review:
 
 - MLX `v0.32.4`: `https://github.com/ml-explore/mlx/archive/36969c094354086e15d2a327a9c50feb20b9cf11.tar.gz` — SHA-256 `391b1e41414cddebe7a4fb5c55bf193ea5edd70e26adcfb0e1d6a5e5e86ec34a`
-- MLX-C `v0.7.0`: `https://github.com/ml-explore/mlx-c/archive/a341b4925024b88b2c593468f16e12f5e17315da.tar.gz` — SHA-256 `4424dd3f6225708d111b691be4041bba9bc6da09719ae8d32e6900744852c7f6`
+- MLX-C `v0.8.0`: `https://github.com/ml-explore/mlx-c/archive/a26f2d584a14ec619ae8db9a09be03becd47598a.tar.gz` — SHA-256 `b2cd55408fb15e5cf44c622355ff3445b58fb835f691db07d620047dff24548c`
 - metal-cpp `26`: `https://developer.apple.com/metal/cpp/files/metal-cpp_26.zip` — SHA-256 `4df3c078b9aadcb516212e9cb03004cbc5ce9a3e9c068fa3144d021db585a3a4`
 - nlohmann/json `3.11.3`: `https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz` — SHA-256 `d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d`
 - fmt `12.1.0`: `https://github.com/fmtlib/fmt/archive/refs/tags/12.1.0.tar.gz` — SHA-256 `ea7de4299689e12b6dddd392f9896f08fb0777ac7168897a244a6d6085043fea`
@@ -50,10 +50,8 @@ development-commit pins, and no undocumented versions exist anywhere in the
 build path: the pin files are the only place a version, URL, or digest
 appears, and every other build file consumes them through CMake variables.
 
-The one intentional offset in the tree is between the two Astronomical-facing
-pins themselves: MLX-C v0.7.0 was authored against MLX v0.32.2, two patch
-releases behind the pinned MLX v0.32.4. That gap is bridged by the single
-compatibility patch listed below and is re-evaluated at every MLX-C bump.
+MLX-C v0.8.0 is the release authored against the pinned MLX v0.32.4, so the two
+Astronomical-facing pins carry no version gap and need no compatibility bridge.
 
 ## Patch registry
 
@@ -99,13 +97,21 @@ MLX patches (`mlx-0.32.4-*.patch`):
   `crates/model-serving/tests/direct_mlx/attention/masked_attention.rs`
   fails within seconds if the patch is dropped while the defect persists.
 
-MLX-C patches (`mlx-c-0.7.0-*.patch`):
+MLX-C patches (`mlx-c-0.8.0-*.patch`):
 
-- `mlx-0.32.4-gather-qmm-global-scale-compatibility` — the only compatibility
-  bridge in the tree. MLX carries, since v0.32.3, a `global_scale` parameter
-  in `gather_qmm` before `sorted_indices`; the MLX-C v0.7.0 C API does not
-  expose it, so the patch forwards the upstream default. Retires at the
-  first MLX-C release authored against MLX 0.32.3 or newer.
+- `expose-array-detach` — Astronomical feature. Adds `mlx_array_detach`, which
+  drops an array's graph and siblings while keeping its realized buffer, so
+  long-lived weights do not hold a whole graph alive. The Rust declaration
+  lives in the `astronomical-mlx-c-fork` crate. Retires when MLX-C exposes an
+  equivalent.
+
+- `gather-qmm-global-scale-compatibility` — retired at the v0.8.0 bump. MLX
+  carries, since v0.32.3, a `global_scale` parameter in `gather_qmm` before
+  `sorted_indices`; MLX-C v0.7.0 did not expose it, so the patch forwarded the
+  upstream default. The retirement was verified by reading `mlx_gather_qmm` in
+  the v0.8.0 archive, which declares `global_scale` as an optional argument,
+  and by the quantized gather contracts in the direct-MLX lane passing without
+  the patch.
 
 ## Pinning and digest verification, end to end
 
@@ -131,9 +137,9 @@ Archive paths are always the pinned filenames under the provisioned dependency c
 ## Bump-and-release process
 
 The reconciled-version policy: both MLX and MLX-C track the latest upstream
-release tags. Development-commit pins are not used. When MLX-C lags MLX by
-one release, the gather-qmm bridge patch is the sanctioned, flagged bridge;
-it is deleted at the next MLX-C bump.
+release tags. Development-commit pins are not used. When MLX-C lags the pinned
+MLX, a compatibility bridge patch is the sanctioned, flagged way to span the
+gap; it is deleted at the next MLX-C bump.
 
 To bump a pinned dependency:
 
@@ -167,7 +173,7 @@ To bump a pinned dependency:
    bindings-only (`default-features = false`): the crate emits zero link
    directives and runtime-integration owns the linker end to end. That mode
    arrived in the crate's 0.32.4-alpha.2 release (upstream
-   aosama/mlx-c-rust#19); keep the dependency declaration pinned to it.
+   aosama/mlx-c-rust#19); keep the dependency bindings-only.
    One lockfile property rides along with the crate: its build dependency
    bindgen declares a wildcard `syn = ">=2, <4"` range but only compiles
    against the syn 3 line, so the lockfile pairs bindgen with `syn 3.0.3`.

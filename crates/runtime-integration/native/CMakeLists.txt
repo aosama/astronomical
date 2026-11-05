@@ -23,7 +23,7 @@ project(astronomical_runtime_integration LANGUAGES C CXX)
 
 include(FetchContent)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-v0.32.4.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-c-v0.7.0.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../third-party/pins/mlx-c-v0.8.0.cmake")
 find_program(PATCH_EXECUTABLE patch REQUIRED)
 
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -124,12 +124,8 @@ FetchContent_Declare(
         "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-0.32.4-streaming-safetensors-writer.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
-# The pinned mlx-c v0.7.0 release absorbed the four MLX 0.32.x version-gap
-# compatibility bridges and the app-bundle Metal library path override
-# (mlx_metal_set_metallib_path) that our v0.6.0 pin carried as local patch
-# files. One bridge remains: mlx-c v0.7.0 was authored against MLX v0.32.2,
-# while the pinned MLX carries, since v0.32.3, a global_scale parameter in
-# gather_qmm that the v0.7.0 C API does not expose.
+# The pinned mlx-c v0.8.0 release pairs with the pinned MLX v0.32.4, so no version-gap
+# bridge is needed. The one patch adds mlx_array_detach, which the C API does not offer.
 FetchContent_Declare(
     mlx_c
     URL "${ASTRONOMICAL_MLX_C_SOURCE_ARCHIVE}"
@@ -137,12 +133,7 @@ FetchContent_Declare(
     PATCH_COMMAND
         "${CMAKE_COMMAND}"
         "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.7.0-mlx-0.32.4-gather-qmm-global-scale-compatibility.patch"
-        -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-DPATCH_EXECUTABLE=${PATCH_EXECUTABLE}"
-        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.7.0-expose-array-detach.patch"
+        "-DPATCH_FILE=${CMAKE_CURRENT_LIST_DIR}/../../../third-party/patches/mlx-c-0.8.0-expose-array-detach.patch"
         -P "${CMAKE_CURRENT_LIST_DIR}/apply_patch_if_needed.cmake"
 )
 

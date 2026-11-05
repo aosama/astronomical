@@ -15,7 +15,7 @@ use mlx_c_rust::{MlxArray, MlxCError, error::check_status};
 /// fully accounted.
 pub const FORK_BRIDGED_FUNCTIONS: [&str; 1] = ["mlx_array_detach"];
 
-// Added by the local patch `mlx-c-0.7.0-expose-array-detach.patch`: strips an
+// Added by the local patch `mlx-c-0.8.0-expose-array-detach.patch`: strips an
 // array's lazy graph while keeping the realized buffer.
 unsafe extern "C" {
     fn mlx_array_detach(arr: mlx_c_rust::raw::mlx_array) -> i32;
