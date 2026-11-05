@@ -60,6 +60,7 @@ pub mod expert_paging;
 pub mod forward_admission;
 pub mod geometry_floor;
 pub mod memory_equation;
+pub mod neural_engine_admission;
 pub mod phase;
 pub mod placement;
 pub mod reclamation;

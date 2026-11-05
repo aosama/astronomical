@@ -232,6 +232,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let experimentalInMemoryPrefixAdoptionEnabled: Bool
   let experimentalQuantizedKvCacheEnabled: Bool
   let experimentalFusedMoeDecodeEnabled: Bool
+  let experimentalNeuralEngineMlpPrefillEnabled: Bool
 
   enum CodingKeys: String, CodingKey, CaseIterable {
     case fixedPromptProcessingChunkSizeTokens = "fixed_prompt_processing_chunk_size_tokens"
@@ -248,6 +249,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case experimentalInMemoryPrefixAdoptionEnabled = "experimental_in_memory_prefix_adoption_enabled"
     case experimentalQuantizedKvCacheEnabled = "experimental_quantized_kv_cache_enabled"
     case experimentalFusedMoeDecodeEnabled = "experimental_fused_moe_decode_enabled"
+    case experimentalNeuralEngineMlpPrefillEnabled = "experimental_neural_engine_mlp_prefill_enabled"
   }
 
   init(from decoder: Decoder) throws {
@@ -282,5 +284,7 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       Bool.self, forKey: .experimentalQuantizedKvCacheEnabled)
     experimentalFusedMoeDecodeEnabled = try container.decode(
       Bool.self, forKey: .experimentalFusedMoeDecodeEnabled)
+    experimentalNeuralEngineMlpPrefillEnabled = try container.decode(
+      Bool.self, forKey: .experimentalNeuralEngineMlpPrefillEnabled)
   }
 }

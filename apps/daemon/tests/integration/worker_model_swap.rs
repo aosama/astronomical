@@ -461,6 +461,7 @@ pub(super) fn runtime_model_policy(
                     experimental_in_memory_prefix_adoption_enabled: false,
                     experimental_quantized_kv_cache_enabled: false,
                     experimental_fused_moe_decode_enabled: false,
+                    experimental_neural_engine_mlp_prefill_enabled: false,
                 },
             },
         ),

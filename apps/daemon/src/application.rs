@@ -28,8 +28,12 @@ use std::{
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
 use tokio::sync::Mutex as AsyncMutex;
 use tower_http::cors::{AllowOrigin, CorsLayer};
+
+// The config file itself is capped at 1 MiB; this leaves room for the JSON around it.
+const MAXIMUM_CONFIG_DOCUMENT_REQUEST_BYTES: usize = 2 * 1024 * 1024;
 
 use crate::rest::request_body_budget::enforce_request_body_budget;
 // Request counters restart with each Router. A process/time/instance namespace
@@ -459,10 +463,22 @@ fn capability_conditional_routes(
     supports_shutdown: bool,
 ) -> Router<ApplicationState> {
     let router = if supports_config_reload {
-        router.route(
-            "/v1/config/reload",
-            post(crate::rest::config_reload::reload_config),
-        )
+        router
+            .route(
+                "/v1/config/reload",
+                post(crate::rest::config_reload::reload_config),
+            )
+            .route(
+                "/v1/config",
+                get(crate::rest::config_document::read_config_document)
+                    .put(crate::rest::config_document::save_config_document)
+                    .layer(DefaultBodyLimit::max(MAXIMUM_CONFIG_DOCUMENT_REQUEST_BYTES)),
+            )
+            .route(
+                "/v1/config/reset",
+                post(crate::rest::config_document::reset_config_document)
+                    .layer(DefaultBodyLimit::max(4 * 1024)),
+            )
     } else {
         router
     };

@@ -13,13 +13,17 @@ fn main() {
         .file("native/core_ml_bridge.m")
         .flag("-fobjc-arc")
         .flag("-fmodules")
-        .flag("-mmacosx-version-min=14.4")
+        // The worker links this bridge and supports macOS 14.0, so anything
+        // newer stays weak: MLComputePlan (14.4) is guarded at run time, and an
+        // ML Program this OS cannot compile fails its load instead of the
+        // worker failing to launch.
+        .flag("-mmacosx-version-min=14.0")
         .warnings_into_errors(true)
         .compile("astronomical_core_ml_bridge");
     println!("cargo:rerun-if-changed=native/process_memory.c");
     cc::Build::new()
         .file("native/process_memory.c")
-        .flag("-mmacosx-version-min=14.4")
+        .flag("-mmacosx-version-min=14.0")
         .warnings_into_errors(true)
         .compile("astronomical_process_memory");
     for framework in [

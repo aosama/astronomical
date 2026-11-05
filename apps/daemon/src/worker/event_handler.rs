@@ -24,8 +24,8 @@ use crate::{
         clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
         publish_expert_memory_mode, publish_expert_streaming_stats, publish_health,
         publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
-        publish_mlx_memory_limit_rejection, publish_persistent_prompt_cache_stats,
-        publish_worker_expert_residency,
+        publish_mlx_memory_limit_rejection, publish_neural_engine_prefill,
+        publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
     },
     worker::loop_types::{ActiveGeneration, ActiveWorkerRequest},
 };
@@ -49,8 +49,9 @@ pub(super) fn handle_worker_event(
         runtime_feature_event @ WorkerEvent::RuntimeFeatureConfigurationApplied { .. } => {
             apply_runtime_feature_configuration(runtime_feature_event, health_snapshot)?;
         }
-        WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
-            publish_expert_memory_mode(health_snapshot, expert_memory_mode)
+        model_state_event @ (WorkerEvent::ExpertMemoryModeChanged { .. }
+        | WorkerEvent::NeuralEnginePrefillChanged { .. }) => {
+            apply_model_state_event(model_state_event, health_snapshot)
         }
         worker_ready_event @ WorkerEvent::Ready { .. } => {
             apply_worker_ready(
@@ -202,6 +203,23 @@ fn apply_runtime_feature_configuration(
     Ok(())
 }
 
+/// Publishes what the worker reports about the loaded model's execution state.
+fn apply_model_state_event(
+    model_state_event: WorkerEvent,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+) {
+    match model_state_event {
+        WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode } => {
+            publish_expert_memory_mode(health_snapshot, expert_memory_mode);
+        }
+        WorkerEvent::NeuralEnginePrefillChanged {
+            neural_engine_prefill,
+        } => publish_neural_engine_prefill(health_snapshot, Some(neural_engine_prefill)),
+        // The dispatch match routes only the two events above here.
+        _ => {}
+    }
+}
+
 /// Applies worker readiness with a loaded model. Mirrors the inlined arm,
 /// including the duplicate-readiness protocol violation.
 fn apply_worker_ready(
@@ -224,6 +242,8 @@ fn apply_worker_ready(
         return Err(protocol_violation("duplicate worker readiness"));
     }
     *is_ready = true;
+    // A worker that opted in announces this right after readiness.
+    publish_neural_engine_prefill(health_snapshot, None);
     tracing::info!(model = %model_id, "worker model is ready");
     *model_load_deadline = None;
     publish_health(

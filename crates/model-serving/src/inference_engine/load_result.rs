@@ -1,4 +1,4 @@
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use astronomical_ipc_protocol::{ExpertMemoryMode, NeuralEnginePrefillStatus};
 
 use crate::StreamingStartupResidencyFacts;
 
@@ -11,6 +11,7 @@ pub struct EngineLoadResult {
     expert_memory_mode: Option<ExpertMemoryMode>,
     minimum_mlx_memory_ceiling_bytes: u64,
     startup_residency_facts: Option<StreamingStartupResidencyFacts>,
+    neural_engine_prefill_status: NeuralEnginePrefillStatus,
 }
 
 impl EngineLoadResult {
@@ -20,6 +21,7 @@ impl EngineLoadResult {
             expert_memory_mode: None,
             minimum_mlx_memory_ceiling_bytes: 1,
             startup_residency_facts: None,
+            neural_engine_prefill_status: NeuralEnginePrefillStatus::Off,
         }
     }
 
@@ -57,6 +59,45 @@ impl EngineLoadResult {
         self
     }
 
+    /// Sets what the loaded model's Neural Engine prefill ended up doing.
+    #[must_use]
+    pub fn with_neural_engine_prefill_status(
+        mut self,
+        neural_engine_prefill_status: NeuralEnginePrefillStatus,
+    ) -> Self {
+        self.neural_engine_prefill_status = neural_engine_prefill_status;
+        self
+    }
+
+    /// For an engine that has no Neural Engine path: a user who opted in still
+    /// gets told why it is not running, rather than seeing it reported as off.
+    #[must_use]
+    pub fn neural_engine_prefill_unsupported_when_enabled(
+        is_enabled: bool,
+    ) -> NeuralEnginePrefillStatus {
+        if is_enabled {
+            NeuralEnginePrefillStatus::Unavailable {
+                reason: "this model's engine does not support it".to_owned(),
+            }
+        } else {
+            NeuralEnginePrefillStatus::Off
+        }
+    }
+
+    /// The event announcing a setting that was on, or `None` when it was off,
+    /// so workers that never opt in publish exactly what they always did.
+    #[must_use]
+    pub fn neural_engine_prefill_event(&self) -> Option<astronomical_ipc_protocol::WorkerEvent> {
+        if self.neural_engine_prefill_status == NeuralEnginePrefillStatus::Off {
+            return None;
+        }
+        Some(
+            astronomical_ipc_protocol::WorkerEvent::NeuralEnginePrefillChanged {
+                neural_engine_prefill: self.neural_engine_prefill_status.clone(),
+            },
+        )
+    }
+
     /// Returns the expert-memory mode selected before readiness.
     #[must_use]
     pub const fn expert_memory_mode(&self) -> Option<ExpertMemoryMode> {
@@ -81,3 +122,7 @@ impl Default for EngineLoadResult {
         Self::new()
     }
 }
+
+#[cfg(test)]
+#[path = "load_result_tests.rs"]
+mod tests;

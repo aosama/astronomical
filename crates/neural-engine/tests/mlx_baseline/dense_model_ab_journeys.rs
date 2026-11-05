@@ -7,14 +7,16 @@
 //!   Neural Engine and the rest on the GPU in the same 4-bit format, both
 //!   started at the same instant.
 //!
-//! The Neural Engine slice holds the *dequantized* 4-bit weights as fp16.
-//! Every 4-bit affine value is exactly representable in fp16 here, so B
-//! computes with the same weights as A; the cost is memory, four times the
-//! 4-bit bytes for the Neural Engine's share. Its contraction is split into
+//! The Neural Engine slice holds the *dequantized* 4-bit weights as fp16,
+//! rounded to within 0.3 percent of the weight RMS (the compressed-weight
+//! journeys measure this), so B computes with nearly but not exactly A's
+//! weights; the cost is memory, four times the 4-bit bytes for the Neural
+//! Engine's share. Its contraction is split into
 //! 2,048-deep parts, which the contraction-split journeys measured at the
 //! Neural Engine's full rate.
 //!
-//! Not included in B: merging the two slices into one tensor (rung 4).
+//! Not included in B: passing data between the engines and merging the two
+//! slices; the hand-off journeys measure the whole call.
 
 use std::time::Duration;
 
@@ -46,22 +48,22 @@ const ORNITH_WEIGHT_SEED: u64 = 0x5eed_0909;
 // GPU's 4-bit rate, which puts the balance near one half; the sweep brackets it.
 const NEURAL_ENGINE_SHARE_SIXTEENTHS: [usize; 4] = [6, 7, 8, 9];
 
-struct DenseOperation {
-    label: &'static str,
-    input_channels: usize,
-    output_channels: usize,
-    layer_count: usize,
+pub(super) struct DenseOperation {
+    pub(super) label: &'static str,
+    pub(super) input_channels: usize,
+    pub(super) output_channels: usize,
+    pub(super) layer_count: usize,
 }
 
-struct QuantizedOperation {
-    fixture: ProjectionFixture,
-    packed_weights: MlxArray,
-    scales: MlxArray,
-    biases: MlxArray,
-    token_major_activations: MlxArray,
+pub(super) struct QuantizedOperation {
+    pub(super) fixture: ProjectionFixture,
+    pub(super) packed_weights: MlxArray,
+    pub(super) scales: MlxArray,
+    pub(super) biases: MlxArray,
+    pub(super) token_major_activations: MlxArray,
 }
 
-fn quantize_and_round_trip(
+pub(super) fn quantize_and_round_trip(
     runtime: &MlxRuntime,
     shape: ProjectionShape,
 ) -> (MlxArray, MlxArray, MlxArray, Vec<u16>) {
@@ -116,7 +118,7 @@ fn quantize_and_round_trip(
     )
 }
 
-fn prepare_quantized_operation(
+pub(super) fn prepare_quantized_operation(
     runtime: &MlxRuntime,
     operation: &DenseOperation,
 ) -> QuantizedOperation {
@@ -145,7 +147,11 @@ fn prepare_quantized_operation(
 
 /// Rows `first_row..` of a quantized tensor, copied contiguous. Affine groups
 /// run along the input axis, so whole rows slice cleanly.
-fn trailing_rows(runtime: &MlxRuntime, quantized_tensor: &MlxArray, first_row: usize) -> MlxArray {
+pub(super) fn trailing_rows(
+    runtime: &MlxRuntime,
+    quantized_tensor: &MlxArray,
+    first_row: usize,
+) -> MlxArray {
     let tensor_shape = quantized_tensor.shape();
     let sliced = runtime
         .slice(
@@ -162,7 +168,7 @@ fn trailing_rows(runtime: &MlxRuntime, quantized_tensor: &MlxArray, first_row: u
     contiguous
 }
 
-fn quantized_form<'arrays>(
+pub(super) fn quantized_form<'arrays>(
     activations: &'arrays MlxArray,
     packed_weights: &'arrays MlxArray,
     scales: &'arrays MlxArray,
@@ -184,8 +190,17 @@ fn channel_major_projection(
     channel_count: usize,
 ) -> Vec<f32> {
     let projected = build_projection(runtime, gpu_form);
+    channel_major_values(runtime, &projected, channel_count)
+}
+
+/// An evaluated or lazy `[1, tokens, channels]` array as `[channels][tokens]`.
+pub(super) fn channel_major_values(
+    runtime: &MlxRuntime,
+    projected: &MlxArray,
+    channel_count: usize,
+) -> Vec<f32> {
     let single = runtime
-        .astype(&projected, MlxDtype::Float32)
+        .astype(projected, MlxDtype::Float32)
         .expect("result converts");
     let token_major_values = runtime
         .array_to_vec_f32(&single)

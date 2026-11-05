@@ -12,7 +12,7 @@ use crate::duplicate_key_json;
 use crate::legacy_config_migration;
 
 const CONFIG_SCHEMA_FILE_NAME: &str = "astronomical-config.schema.json";
-const CONFIG_SCHEMA_BYTES: &[u8] =
+pub(crate) const CONFIG_SCHEMA_BYTES: &[u8] =
     include_bytes!("../../../site/schemas/config/v1/astronomical-config.schema.json");
 const MAXIMUM_CONFIG_FILE_BYTES: usize = 1_048_576;
 static TEMPORARY_CONFIG_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);

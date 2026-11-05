@@ -35,6 +35,8 @@ pub struct PrismHadamardQwen35PendingStartup {
     pub prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
     pub configured_prompt_cache_block_token_count: Option<usize>,
     pub prompt_cache_common_prefix_stride_blocks: u32,
+    /// Lets `load` explain that this engine has no Neural Engine path.
+    pub neural_engine_mlp_prefill_requested: bool,
     pub performance_attribution: PerformanceAttribution,
     pub performance_attribution_log: PerformanceAttributionLog,
     pub attribution_model_id: String,

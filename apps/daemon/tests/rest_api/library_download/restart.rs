@@ -106,8 +106,12 @@ async fn should_leave_a_mismatched_pre_existing_publication_untouched() {
     .expect("mismatched destination rejection should remain bounded");
 }
 
+// Publication verifies files on a background task, so a busy machine can take far
+// longer than an idle one; one second failed intermittently under parallel builds.
+const CATALOG_READY_POLL_ATTEMPTS: usize = 3_000;
+
 async fn wait_for_catalog_ready(application: &Router) -> serde_json::Value {
-    for _poll_attempt in 0..100 {
+    for _poll_attempt in 0..CATALOG_READY_POLL_ATTEMPTS {
         let catalog_response = application
             .clone()
             .oneshot(

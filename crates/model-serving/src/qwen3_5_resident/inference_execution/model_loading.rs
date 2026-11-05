@@ -15,8 +15,25 @@ use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use crate::qwen3_5_resident::neural_engine_mlp_prefill::prepare_neural_engine_mlp_prefill;
 
 impl Qwen3_5EngineState {
+    /// The model's last parts, once its core weights are in place. Programs come
+    /// last so their admission sees the model's own memory.
+    fn load_experts_and_neural_engine_programs(
+        &mut self,
+        model: &mut Qwen3_5ResidentModel,
+        model_loading_performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<(), InferenceEngineError> {
+        synchronize_gpu_stream_then_load_experts(model, model_loading_performance_attribution)?;
+        self.neural_engine_prefill_status = prepare_neural_engine_mlp_prefill(
+            model,
+            &self.chunking,
+            u32::try_from(self.hard_maximum_position_count).unwrap_or(u32::MAX),
+        );
+        Ok(())
+    }
+
     pub(super) fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
         if let Some(model) = self.model.as_ref() {
             return Ok(self.engine_load_result(model.minimum_mlx_memory_ceiling_bytes()?));
@@ -76,10 +93,11 @@ impl Qwen3_5EngineState {
                     persistent_visual_embedding_model_contract.as_ref(),
                     &mut model_loading_performance_attribution,
                 )?;
-            synchronize_gpu_stream_then_load_experts(
+            self.load_experts_and_neural_engine_programs(
                 &mut model,
                 &mut model_loading_performance_attribution,
-            )?; // DFlash speculative decoding is DISABLED BY DESIGN. The
+            )?;
+            // DFlash speculative decoding is DISABLED BY DESIGN. The
             // configuration key is accepted and ignored everywhere, the
             // worker wire contract no longer carries a block length, and
             // no draft runtime is ever installed here — every session

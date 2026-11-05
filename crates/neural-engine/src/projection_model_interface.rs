@@ -29,6 +29,13 @@ pub enum ProjectionDocumentError {
         contraction_part_count: usize,
     },
     #[error(
+        "{input_channels} input channels cannot be cut into parts {contraction_part_width} wide"
+    )]
+    UnevenContractionPartWidth {
+        input_channels: usize,
+        contraction_part_width: usize,
+    },
+    #[error(
         "quantized weights are {output_channels} × {input_channels}, \
          which does not match the projection shape"
     )]

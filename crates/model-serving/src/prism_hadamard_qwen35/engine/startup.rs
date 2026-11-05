@@ -129,6 +129,7 @@ pub fn initialize_prism_hadamard_qwen35_model_with_serving_settings(
         prompt_cache_disk_store_config,
         configured_prompt_cache_block_token_count,
         prompt_cache_common_prefix_stride_blocks,
+        neural_engine_mlp_prefill_requested: neural_engine_mlp_prefill_requested(&serving_settings),
         performance_attribution,
         performance_attribution_log,
         attribution_model_id: model_id,
@@ -197,6 +198,15 @@ fn prompt_cache_disk_store_config_for(
                 per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
             )
         })
+}
+
+fn neural_engine_mlp_prefill_requested(
+    serving_settings: &PrismHadamardQwen35ServingSettings,
+) -> bool {
+    match serving_settings.chunking.as_ref() {
+        Some(chunking) => chunking.experimental_neural_engine_mlp_prefill_enabled,
+        None => false,
+    }
 }
 
 /// Reads the durable-cache layout knobs from the chunking settings: the

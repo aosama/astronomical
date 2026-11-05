@@ -40,6 +40,7 @@ typedef struct {
   int32_t neural_engine_supported;
   int32_t gpu_supported;
   int32_t cpu_supported;
+  int32_t operations_off_neural_engine;
 } AstronomicalLayerPlacement;
 
 typedef struct AstronomicalCoreMlProjection {
@@ -156,6 +157,7 @@ static NSURL *astronomical_compile_model(NSURL *model_url, NSError **error_out) 
 // NeuralNetwork document, or the first convolution of an ML Program. The
 // compute plan names ML Program operations with their opset ("ios18.conv"),
 // and its `const` and `constexpr_*` operations report no device usage.
+API_AVAILABLE(macos(14.4))
 static MLComputePlanDeviceUsage *astronomical_projection_device_usage(MLComputePlan *plan) {
   MLModelStructureNeuralNetwork *network = plan.modelStructure.neuralNetwork;
   if (network != nil) {
@@ -171,7 +173,27 @@ static MLComputePlanDeviceUsage *astronomical_projection_device_usage(MLComputeP
   return nil;
 }
 
+// A chain such as the whole MLP has work beyond its first convolution, and one
+// activation left on the CPU would pass unnoticed by that convolution's verdict.
+// `const` and `constexpr_*` operations report no usage, so they are not counted.
+API_AVAILABLE(macos(14.4))
+static int32_t astronomical_count_operations_off_neural_engine(MLComputePlan *plan) {
+  MLModelStructureProgramFunction *main_function = plan.modelStructure.program.functions[@"main"];
+  int32_t off_neural_engine_count = 0;
+  for (MLModelStructureProgramOperation *operation in main_function.block.operations) {
+    MLComputePlanDeviceUsage *usage = [plan computeDeviceUsageForMLProgramOperation:operation];
+    if (usage != nil
+        && astronomical_placement_of_device(usage.preferredComputeDevice)
+               != ASTRONOMICAL_PLACEMENT_NEURAL_ENGINE) {
+      off_neural_engine_count++;
+    }
+  }
+  return off_neural_engine_count;
+}
+
+API_AVAILABLE(macos(14.4))
 static void astronomical_record_layer_placement(MLComputePlan *plan, AstronomicalLayerPlacement *placement) {
+  placement->operations_off_neural_engine = astronomical_count_operations_off_neural_engine(plan);
   MLComputePlanDeviceUsage *usage = astronomical_projection_device_usage(plan);
   if (usage == nil) {
     return;
@@ -185,6 +207,7 @@ static void astronomical_record_layer_placement(MLComputePlan *plan, Astronomica
   }
 }
 
+API_AVAILABLE(macos(14.4))
 static int32_t astronomical_load_layer_placement(NSURL *compiled_url,
                                                  MLModelConfiguration *configuration,
                                                  AstronomicalLayerPlacement *placement) {
@@ -244,6 +267,15 @@ static int32_t astronomical_bind_surfaces(AstronomicalCoreMlProjection *projecti
   return projection->input_features == nil ? -1 : 0;
 }
 
+void astronomical_core_ml_projection_discard_compiled_model(
+    AstronomicalCoreMlProjection *projection) {
+  if (projection == NULL || projection->compiled_model_url == nil) {
+    return;
+  }
+  [[NSFileManager defaultManager] removeItemAtURL:projection->compiled_model_url error:nil];
+  projection->compiled_model_url = nil;
+}
+
 void astronomical_core_ml_projection_release(AstronomicalCoreMlProjection *projection) {
   if (projection == NULL) {
     return;
@@ -285,8 +317,13 @@ static int32_t astronomical_load_model(AstronomicalCoreMlProjection *projection,
   if (projection->model == nil) {
     return -1;
   }
-  return astronomical_load_layer_placement(projection->compiled_model_url, configuration,
-                                           &projection->placement);
+  // Before 14.4 there is no compute plan, so placement stays unknown; callers
+  // that need proof of Neural Engine placement refuse an unknown verdict.
+  if (@available(macOS 14.4, *)) {
+    return astronomical_load_layer_placement(projection->compiled_model_url, configuration,
+                                             &projection->placement);
+  }
+  return 0;
 }
 
 AstronomicalCoreMlProjection *astronomical_core_ml_projection_load(
@@ -323,7 +360,7 @@ AstronomicalCoreMlProjection *astronomical_core_ml_projection_load(
 
 AstronomicalLayerPlacement astronomical_core_ml_projection_placement(
     const AstronomicalCoreMlProjection *projection) {
-  AstronomicalLayerPlacement unknown_placement = {0, 0, 0, 0};
+  AstronomicalLayerPlacement unknown_placement = {0, 0, 0, 0, 0};
   return projection == NULL ? unknown_placement : projection->placement;
 }
 
@@ -372,6 +409,29 @@ int32_t astronomical_core_ml_projection_read_output(const AstronomicalCoreMlProj
   }
   return astronomical_copy_surface_rows(projection->output_pixel_buffer, fp16_projected,
                                         projection->output_channels, projection->token_count, 0);
+}
+
+int32_t astronomical_core_ml_projection_lock_output(const AstronomicalCoreMlProjection *projection,
+                                                    const void **base_address,
+                                                    uint64_t *bytes_per_row) {
+  if (projection == NULL || base_address == NULL || bytes_per_row == NULL
+      || projection->prediction_in_flight) {
+    return -1;
+  }
+  if (CVPixelBufferLockBaseAddress(projection->output_pixel_buffer, kCVPixelBufferLock_ReadOnly)
+      != kCVReturnSuccess) {
+    return -1;
+  }
+  *base_address = CVPixelBufferGetBaseAddress(projection->output_pixel_buffer);
+  *bytes_per_row = (uint64_t)CVPixelBufferGetBytesPerRow(projection->output_pixel_buffer);
+  return 0;
+}
+
+void astronomical_core_ml_projection_unlock_output(const AstronomicalCoreMlProjection *projection) {
+  if (projection == NULL) {
+    return;
+  }
+  CVPixelBufferUnlockBaseAddress(projection->output_pixel_buffer, kCVPixelBufferLock_ReadOnly);
 }
 
 static int32_t astronomical_run_prediction(AstronomicalCoreMlProjection *projection,

@@ -18,6 +18,7 @@ const OBSERVATORY_PATH_MAP = {
     experts: "/experts",
     library: "/library",
     connect: "/connect",
+    configuration: "/configuration",
     settings: "/settings"
 };
 
@@ -38,6 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wireLibraryCatalog();
     wireConnectMaterial();
     wireExpertObservatory();
+    wireConfigurationEditor();
     pollStatus();
     pollCacheStats();
     pollModels();
@@ -110,6 +112,7 @@ async function pollStatus() {
         renderAboutFromStatus(data);
         renderCompactMlxMemory(data);
         renderMemoryLimitControl(data);
+        renderConfigurationNeuralEngineStatus(data);
         renderModelDiscoveryDiagnostic(data.configuration);
         renderSession(data);
         renderAboutEnhanced(data);

@@ -113,7 +113,11 @@ where
         }
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
-        self.emit_persistent_prompt_cache_stats(event_writer).await
+        self.emit_cache_stats_then_neural_engine_status(
+            event_writer,
+            engine_load_result.neural_engine_prefill_event().as_ref(),
+        )
+        .await
     }
 
     /// Loads the image engine and announces its readiness event and the

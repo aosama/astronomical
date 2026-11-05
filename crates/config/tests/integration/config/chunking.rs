@@ -112,6 +112,10 @@ fn should_default_the_decode_levers_off_so_the_measured_fast_path_serves() {
         "the fused expert decode kernels measured slower than the gathered chain and must stay opt-in"
     );
     assert!(
+        !chunking.experimental_neural_engine_mlp_prefill_enabled(),
+        "Neural Engine MLP prefill holds about twice the MLP weights in memory and must stay opt-in"
+    );
+    assert!(
         !chunking.experimental_decode_stage_attribution_enabled(),
         "attribution-gated stage evaluations roughly double decode time and must stay diagnostic-only"
     );
@@ -390,4 +394,45 @@ fn should_ignore_out_of_range_speculative_decoding_block_lengths() {
              the key carries no policy while DFlash is disabled by design"
         );
     }
+}
+
+#[test]
+fn should_let_one_model_opt_into_neural_engine_prefill_without_changing_the_others() {
+    let temporary_home = tempfile::tempdir().expect("a temporary home directory");
+    let config_directory = temporary_home.path().join(".astronomical-dev");
+    std::fs::create_dir_all(&config_directory).expect("the config directory is created");
+    std::fs::write(
+        config_directory.join("config.json"),
+        r#"{
+          "$schema": "./astronomical-config.schema.json",
+          "schema_version": 1,
+          "runtime": { "model_directories": [] },
+          "models": {
+            "opted-in-model": {
+              "chunking": { "experimental_neural_engine_mlp_prefill_enabled": true }
+            }
+          }
+        }"#,
+    )
+    .expect("the config is written");
+
+    let config = AstronomicalConfig::load_from_development_home_directory(temporary_home.path())
+        .expect("the configuration loads");
+
+    let opted_in_policy = config
+        .resolved_model_config("opted-in-model", 262_144)
+        .expect("the model policy resolves");
+    let other_policy = config
+        .resolved_model_config("other-model", 262_144)
+        .expect("the model policy resolves");
+    assert!(
+        opted_in_policy
+            .chunking()
+            .experimental_neural_engine_mlp_prefill_enabled()
+    );
+    assert!(
+        !other_policy
+            .chunking()
+            .experimental_neural_engine_mlp_prefill_enabled()
+    );
 }

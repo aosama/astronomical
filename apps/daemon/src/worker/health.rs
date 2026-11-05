@@ -11,6 +11,8 @@ mod publisher;
 #[cfg(test)]
 #[path = "health/expert_streaming_tests.rs"]
 mod expert_streaming_tests;
+#[cfg(test)]
+mod neural_engine_prefill_tests;
 
 pub(crate) mod expert_streaming;
 
@@ -20,9 +22,9 @@ pub(crate) use publisher::{
     publish_expert_residency, publish_expert_streaming_stats, publish_health,
     publish_latest_mlx_memory_snapshot, publish_mlx_memory_limit_changed,
     publish_mlx_memory_limit_rejection, publish_mlx_memory_limit_restart_required,
-    publish_pending_mlx_memory_ceiling, publish_pending_prompt_cache_clear,
-    publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
-    record_prompt_work_reuse, record_serving_session,
+    publish_neural_engine_prefill, publish_pending_mlx_memory_ceiling,
+    publish_pending_prompt_cache_clear, publish_persistent_prompt_cache_stats,
+    publish_worker_expert_residency, record_prompt_work_reuse, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.
@@ -243,6 +245,9 @@ pub struct WorkerHealthSnapshot {
     pub active_request_progress: Option<ActiveRequestProgress>,
     /// Latest worker-reported sparse-expert residency.
     pub expert_memory_mode: Option<ExpertMemoryMode>,
+    /// What the loaded model's opt-in Neural Engine prefill is doing; `None`
+    /// when the setting is off or no model is loaded.
+    pub neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
     /// Concrete topology retained independently of transient request progress.
     pub expert_residency: Option<ExpertResidencySnapshot>,
     /// Feature settings explicitly acknowledged by the currently running worker.
@@ -294,6 +299,7 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: Some(capabilities.into()),
             active_request_progress: None,
             expert_memory_mode: None,
+            neural_engine_prefill: None,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
@@ -366,6 +372,7 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: None,
             active_request_progress: None,
             expert_memory_mode: None,
+            neural_engine_prefill: None,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
@@ -394,6 +401,7 @@ impl WorkerHealthSnapshot {
             ready_model_capabilities: None,
             active_request_progress: None,
             expert_memory_mode: None,
+            neural_engine_prefill: None,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,

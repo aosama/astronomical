@@ -77,6 +77,7 @@ struct LoadedReplacement<
     runtime_configuration: astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
     engine_placement: Option<EnginePlacement>,
     startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
+    neural_engine_prefill_event: Option<WorkerEvent>,
 }
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
@@ -154,6 +155,7 @@ where
             runtime_configuration,
             engine_placement,
             startup_residency_facts,
+            neural_engine_prefill_event,
         } = self
             .load_replacement_runtime(factory_runtime, &model_configuration)
             .await?;
@@ -187,9 +189,11 @@ where
         }
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
-        self.emit_persistent_prompt_cache_stats(event_writer)
-            .await?;
-        Ok(())
+        self.emit_cache_stats_then_neural_engine_status(
+            event_writer,
+            neural_engine_prefill_event.as_ref(),
+        )
+        .await
     }
 
     /// Loads whichever replacement runtime the factory produced: the
@@ -262,6 +266,7 @@ where
             runtime_configuration,
             engine_placement,
             startup_residency_facts: engine_load_result.startup_residency_facts(),
+            neural_engine_prefill_event: engine_load_result.neural_engine_prefill_event(),
         })
     }
 
@@ -304,6 +309,7 @@ where
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
             startup_residency_facts: None,
+            neural_engine_prefill_event: None,
         })
     }
 
@@ -346,6 +352,7 @@ where
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
             startup_residency_facts: None,
+            neural_engine_prefill_event: None,
         })
     }
 }

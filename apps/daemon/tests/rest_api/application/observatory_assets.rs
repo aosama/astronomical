@@ -84,6 +84,7 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
         "/experts",
         "/library",
         "/connect",
+        "/configuration",
         "/settings",
     ] {
         let application =

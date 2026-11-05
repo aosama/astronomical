@@ -387,6 +387,25 @@ where
     /// Emits a `WorkerEvent::PersistentPromptCacheStats` event when the engine
     /// has a persistent prompt cache. Silently skips when the engine returns
     /// `None` (no cache open) or when collection fails.
+    /// The last events of a model load. The Neural Engine status comes after the
+    /// runtime configuration because the daemon clears it when it completes a swap,
+    /// which happens on that configuration.
+    pub(crate) async fn emit_cache_stats_then_neural_engine_status<WriteTransport>(
+        &self,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+        neural_engine_prefill_event: Option<&WorkerEvent>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        self.emit_persistent_prompt_cache_stats(event_writer)
+            .await?;
+        if let Some(neural_engine_prefill_event) = neural_engine_prefill_event {
+            event_writer.send_event(neural_engine_prefill_event).await?;
+        }
+        Ok(())
+    }
+
     pub(crate) async fn emit_persistent_prompt_cache_stats<WriteTransport>(
         &self,
         event_writer: &mut ProtocolWriter<WriteTransport>,

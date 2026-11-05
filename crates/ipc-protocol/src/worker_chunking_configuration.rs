@@ -51,6 +51,10 @@ pub struct WorkerChunkingConfiguration {
     /// Fused single-token quantized expert decode kernels for capable MoE families.
     #[serde(default)]
     pub experimental_fused_moe_decode_enabled: bool,
+    /// Whole dense MLP programs on the Neural Engine for a slice of prefill
+    /// tokens; costs memory beyond the MLX ceiling's own accounting.
+    #[serde(default)]
+    pub experimental_neural_engine_mlp_prefill_enabled: bool,
 }
 
 /// Returns the command-buffer submission interval for one forward.

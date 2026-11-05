@@ -23,6 +23,10 @@ pub struct Qwen3_5ResidentModel {
     pub(crate) expert_layer_plans: Vec<QuantizedExpertLayerPlan>,
     /// Complete contiguous expert arrays when the whole sparse payload fits.
     pub(crate) resident_expert_weights: Option<Qwen3_5ResidentExpertWeights>,
+    /// Opt-in Neural Engine programs for dense prefill; `None` keeps every chunk
+    /// on the GPU.
+    pub(crate) neural_engine_mlp_prefill:
+        Option<crate::qwen3_5_resident::neural_engine_mlp_prefill::NeuralEngineMlpPrefill>,
 }
 
 impl std::ops::Deref for Qwen3_5ResidentModel {
@@ -112,6 +116,21 @@ impl Qwen3_5ResidentModel {
                 &decoder_cache_layout,
                 full_attention_kv_state_growth_tokens,
             )
+    }
+
+    /// Loads the opt-in Neural Engine programs exactly as production loading does,
+    /// so a journey can measure one loaded model with and without them.
+    #[cfg(feature = "direct-mlx")]
+    pub fn prepare_neural_engine_mlp_prefill_matching_production(
+        &mut self,
+        chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
+        maximum_context_tokens: u32,
+    ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
+        crate::qwen3_5_resident::neural_engine_mlp_prefill::prepare_neural_engine_mlp_prefill(
+            self,
+            chunking,
+            maximum_context_tokens,
+        )
     }
 
     /// Materializes dense target weights and the complete resident expert

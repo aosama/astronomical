@@ -6,7 +6,8 @@
 //! system wired count beside it as a cross-check.
 
 use crate::native_bridge::{
-    astronomical_process_physical_footprint_bytes, astronomical_system_wired_bytes,
+    astronomical_physical_memory_bytes, astronomical_process_physical_footprint_bytes,
+    astronomical_system_wired_bytes,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,6 +27,14 @@ impl MemorySnapshot {
             }
         }
     }
+}
+
+/// This Mac's installed memory, read at run time so no journey assumes a
+/// particular machine; zero when the kernel query fails.
+#[must_use]
+pub fn physical_memory_bytes() -> u64 {
+    // SAFETY: the reader takes no arguments and only queries the kernel.
+    unsafe { astronomical_physical_memory_bytes() }
 }
 
 /// Signed growth between two snapshots; memory can also be returned.

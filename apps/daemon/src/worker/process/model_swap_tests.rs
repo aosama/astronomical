@@ -31,6 +31,7 @@ fn sample_chunking_configuration() -> WorkerChunkingConfiguration {
         experimental_in_memory_prefix_adoption_enabled: false,
         experimental_quantized_kv_cache_enabled: false,
         experimental_fused_moe_decode_enabled: false,
+        experimental_neural_engine_mlp_prefill_enabled: false,
     }
 }
 
@@ -364,5 +365,40 @@ fn should_reject_a_duplicate_runtime_policy_acknowledgement() {
     assert_protocol_violation(
         second_stage_outcome,
         "duplicate model swap runtime policy acknowledgement",
+    );
+}
+
+fn autoregressive_model_with_neural_engine(
+    neural_engine_enabled: bool,
+) -> astronomical_ipc_protocol::WorkerModelConfiguration {
+    let mut chunking = sample_chunking_configuration();
+    chunking.experimental_neural_engine_mlp_prefill_enabled = neural_engine_enabled;
+    astronomical_ipc_protocol::WorkerModelConfiguration::Autoregressive(
+        astronomical_ipc_protocol::WorkerAutoregressiveModelConfiguration {
+            model_id: SAMPLE_MODEL_ID.to_owned(),
+            maximum_context_tokens: 65_536,
+            maximum_output_tokens: 8_192,
+            chunking,
+        },
+    )
+}
+
+#[test]
+fn should_keep_the_tight_load_budget_for_a_model_that_did_not_opt_in() {
+    let base_budget = std::time::Duration::from_secs(60);
+
+    assert_eq!(
+        super::model_load_budget(base_budget, &autoregressive_model_with_neural_engine(false)),
+        base_budget
+    );
+}
+
+#[test]
+fn should_extend_the_load_budget_only_for_a_model_that_opted_in() {
+    let base_budget = std::time::Duration::from_secs(60);
+
+    assert_eq!(
+        super::model_load_budget(base_budget, &autoregressive_model_with_neural_engine(true)),
+        base_budget + super::NEURAL_ENGINE_PROGRAM_LOAD_ALLOWANCE
     );
 }

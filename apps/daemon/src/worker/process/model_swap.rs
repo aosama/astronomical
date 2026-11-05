@@ -1,7 +1,9 @@
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 use astronomical_ipc_protocol::{
-    WorkerEvent, WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
+    WorkerEvent, WorkerLoadedModelRuntimeConfiguration, WorkerModelConfiguration,
+    WorkerRuntimeFeatureConfiguration,
 };
 
 use crate::worker::event_handler;
@@ -42,6 +44,29 @@ enum ModelSwapEventReaction {
     AwaitNextWorkerEvent,
     /// The worker rejected the swap; the wait ends with this outcome.
     SwapFailed(ModelSwapWaitOutcome),
+}
+
+/// Extra load time for a model opted into Neural Engine prefill: its programs took
+/// about 100 seconds for 32 layers on an M5-class Mac, already past the 60-second
+/// budget, and scale with layer count and weight size. Only opted-in models get
+/// it, so every other load keeps the tight budget that catches a hung worker.
+const NEURAL_ENGINE_PROGRAM_LOAD_ALLOWANCE: Duration = Duration::from_secs(600);
+
+/// How long one model may take to load before its worker counts as hung.
+pub(in crate::worker) fn model_load_budget(
+    model_load_timeout: Duration,
+    worker_model_configuration: &WorkerModelConfiguration,
+) -> Duration {
+    match worker_model_configuration.autoregressive() {
+        Some(model_configuration)
+            if model_configuration
+                .chunking
+                .experimental_neural_engine_mlp_prefill_enabled =>
+        {
+            model_load_timeout + NEURAL_ENGINE_PROGRAM_LOAD_ALLOWANCE
+        }
+        _ => model_load_timeout,
+    }
 }
 
 /// Drains worker events until the model swap succeeds or is rejected.
@@ -402,6 +427,8 @@ fn publish_staged_model_swap(
         &current_health_snapshot,
     );
     replacement_health_snapshot.expert_memory_mode = expert_memory_mode;
+    // The replacement announces its own Neural Engine status right after this.
+    replacement_health_snapshot.neural_engine_prefill = None;
     if let Some(runtime_configuration) = runtime_configuration {
         replacement_health_snapshot.worker_runtime_feature_configuration =
             Some(runtime_configuration);

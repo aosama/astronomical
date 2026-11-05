@@ -9,6 +9,7 @@
 
 #include <mach/mach.h>
 #include <stdint.h>
+#include <sys/sysctl.h>
 
 uint64_t astronomical_process_physical_footprint_bytes(void) {
   task_vm_info_data_t vm_info;
@@ -16,6 +17,13 @@ uint64_t astronomical_process_physical_footprint_bytes(void) {
   kern_return_t status =
       task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)&vm_info, &info_count);
   return status == KERN_SUCCESS ? vm_info.phys_footprint : 0;
+}
+
+uint64_t astronomical_physical_memory_bytes(void) {
+  uint64_t physical_memory_bytes = 0;
+  size_t value_size = sizeof(physical_memory_bytes);
+  int status = sysctlbyname("hw.memsize", &physical_memory_bytes, &value_size, NULL, 0);
+  return status == 0 ? physical_memory_bytes : 0;
 }
 
 uint64_t astronomical_system_wired_bytes(void) {

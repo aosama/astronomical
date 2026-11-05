@@ -111,6 +111,7 @@
   "configured_generation": null,
   "configured_maximum_mlx_memory_gb": null,
   "effective_generation": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "neural_engine_prefill": null,
   "expert_memory_mode": null,
   "expert_placement": {
     "reply_sentence": "",

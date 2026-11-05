@@ -1,0 +1,29 @@
+/* The Configuration page: one panel per config.json section, generated from the
+   schema. Behavior hooks are the element IDs in index.html and configuration.js. */
+
+.configuration-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.configuration-toolbar-spacer { flex: 1 1 auto; }
+#configuration-unsaved-note { color: var(--warn); font-size: var(--text-md); }
+#configuration-feedback { margin-bottom: 16px; }
+.configuration-neural-engine { margin-bottom: 16px; }
+#configuration-sections { display: flex; flex-direction: column; gap: 16px; }
+.configuration-section { display: flex; flex-direction: column; gap: 14px; }
+.configuration-group { display: flex; flex-direction: column; gap: 14px; }
+.configuration-group h4 { margin: 8px 0 0; font-size: var(--text-lg); font-weight: var(--weight-strong); }
+.configuration-setting { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
+.configuration-setting-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.configuration-setting-label { font-size: var(--text-md); font-weight: var(--weight-label); }
+.configuration-apply-mode { color: var(--text-dim); font-size: var(--text-xs); }
+.configuration-setting-description { margin: 0; color: var(--text-dim); font-size: var(--text-sm); }
+.configuration-setting-message { margin: 0; color: var(--warn); font-size: var(--text-sm); }
+.configuration-setting-message:empty { display: none; }
+.configuration-control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.configuration-input { min-width: 220px; min-height: 40px; padding: 8px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-small); background: var(--panel-raised); color: var(--text); font-size: var(--text-md); }
+.configuration-default-note { color: var(--text-dim); font-size: var(--text-sm); }
+.configuration-list { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.configuration-list-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.configuration-list-row .configuration-input { flex: 1 1 320px; }
+.configuration-list-value { flex: 1 1 320px; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--text-sm); }
+.configuration-model-entry { display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-small); }
+.configuration-model-entry > summary { margin-bottom: 10px; font-family: var(--font-mono); font-size: var(--text-md); cursor: pointer; }
+.configuration-preview-panel pre { max-height: 360px; margin: 0; overflow: auto; font-family: var(--font-mono); font-size: var(--text-sm); }
