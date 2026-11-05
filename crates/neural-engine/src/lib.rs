@@ -38,6 +38,7 @@ mod mil_program_wire;
 pub mod ml_package_layout;
 pub mod ml_program_mlp_document;
 pub mod ml_program_projection_document;
+pub mod ml_program_rotated_mlp_document;
 mod ml_program_weight_blob;
 #[cfg(feature = "mlx-hand-off")]
 pub mod mlx_hand_off;
@@ -48,4 +49,5 @@ pub mod projection_model_interface;
 pub mod projection_shape;
 mod protobuf_wire;
 mod row_major_block;
+pub mod shared_lookup_tables;
 pub mod timing_summary;

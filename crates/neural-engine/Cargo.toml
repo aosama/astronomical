@@ -49,6 +49,7 @@ thiserror.workspace = true
 cc = "1.2"
 
 [dev-dependencies]
+serde_json.workspace = true
 serial_test.workspace = true
 tempfile = "=3.27.0"
 

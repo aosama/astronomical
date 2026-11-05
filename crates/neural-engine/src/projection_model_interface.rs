@@ -50,6 +50,16 @@ pub enum ProjectionDocumentError {
         part_width: usize,
         block_input_columns: usize,
     },
+    #[error("{output_channels} output rows cannot share tables of {rows_per_table} rows")]
+    UnevenLookupTableRows {
+        output_channels: usize,
+        rows_per_table: usize,
+    },
+    #[error("{channel_count} channels cannot be rotated in blocks of {block_size}")]
+    UnevenRotationBlocks {
+        channel_count: usize,
+        block_size: usize,
+    },
 }
 
 /// The `ModelDescription` declaring the fp16 `activations` input and
