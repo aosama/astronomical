@@ -38,12 +38,13 @@ use crate::support::measured_projection::{
     MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
 };
 use crate::support::mlx_projection::{build_projection, initialize_runtime, time_projection};
-use crate::support::program_loading::load_neural_network;
+use crate::support::program_loading::load_ml_program;
 use crate::support::projection_fixture::ProjectionFixture;
 use crate::support::quantized_operation::{
     DenseOperation, QuantizedOperation, channel_major_values, prepare_quantized_operation,
     quantized_form, trailing_rows,
 };
+use astronomical_neural_engine::documents::projection::MlProgramWeights;
 
 const CONTRACTION_PART_WIDTH: usize = 2048;
 // Shares in sixteenths of the output channels, bracketing the 44 percent the
@@ -441,9 +442,9 @@ fn should_measure_the_mixture_of_experts_model_hand_off() {
 }
 
 fn cpu_only_projection(fixture: &ProjectionFixture, directory: &std::path::Path) -> CoreMlProgram {
-    let mut projection = load_neural_network(
+    let mut projection = load_ml_program(
         fixture.shape,
-        &fixture.fp16_weights,
+        MlProgramWeights::Fp16(&fixture.fp16_weights),
         CoreMlComputeUnits::CpuOnly,
         1,
         directory,

@@ -35,7 +35,7 @@ impl std::fmt::Debug for CoreMlProgram {
 }
 
 impl CoreMlProgram {
-    /// Loads a written model document, `.mlpackage`, or compiled `.mlmodelc` for
+    /// Loads a written `.mlpackage` or a compiled `.mlmodelc` for
     /// `compute_units`. Compilation happens inside Core ML, so no developer tools
     /// are needed at run time. Files at a compiled model's path stay where they are
     /// when this program is released.

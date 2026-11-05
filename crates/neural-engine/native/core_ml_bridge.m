@@ -155,17 +155,11 @@ static NSURL *astronomical_compile_model(NSURL *model_url, NSError **error_out) 
   return compiled_url;
 }
 
-// The projection's work is its convolution: the first network layer of a
-// NeuralNetwork document, or the first convolution of an ML Program. The
-// compute plan names ML Program operations with their opset ("ios18.conv"),
+// The projection's work is its convolution, the first one of the ML Program.
+// The compute plan names ML Program operations with their opset ("ios18.conv"),
 // and its `const` and `constexpr_*` operations report no device usage.
 API_AVAILABLE(macos(14.4))
 static MLComputePlanDeviceUsage *astronomical_projection_device_usage(MLComputePlan *plan) {
-  MLModelStructureNeuralNetwork *network = plan.modelStructure.neuralNetwork;
-  if (network != nil) {
-    MLModelStructureNeuralNetworkLayer *first_layer = network.layers.firstObject;
-    return first_layer == nil ? nil : [plan computeDeviceUsageForNeuralNetworkLayer:first_layer];
-  }
   MLModelStructureProgramFunction *main_function = plan.modelStructure.program.functions[@"main"];
   for (MLModelStructureProgramOperation *operation in main_function.block.operations) {
     if ([operation.operatorName isEqualToString:@"conv"] || [operation.operatorName hasSuffix:@".conv"]) {

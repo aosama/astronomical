@@ -31,7 +31,7 @@ use serial_test::serial;
 
 use crate::support::journey_constants::{MINIMUM_COSINE_SIMILARITY, PREFILL_CHUNK_TOKEN_COUNT};
 use crate::support::measured_projection::{
-    ProjectionEvidence, ProjectionModel, measure_projection_model, print_evidence,
+    ProjectionEvidence, measure_projection_with_weights, print_evidence,
 };
 use crate::support::projection_fixture::ProjectionFixture;
 
@@ -261,11 +261,11 @@ fn should_map_which_compressed_weight_forms_the_neural_engine_accepts() {
             HIDDEN_SIZE,
             form.layout,
         );
-        let evidence = measure_projection_model(
+        let evidence = measure_projection_with_weights(
             &encoded.fixture,
             CoreMlComputeUnits::CpuAndNeuralEngine,
             HIDDEN_SIZE_CONTRACTION_PARTS,
-            ProjectionModel::MlProgram(form.ml_program_weights(&encoded.encoded_weights)),
+            form.ml_program_weights(&encoded.encoded_weights),
         );
         print_probe_line(*form, &encoded, &evidence);
         assert_accurate(&evidence);
@@ -287,11 +287,11 @@ fn should_place_an_fp16_ml_program_projection_on_the_neural_engine() {
         QuantizationLayout::CHECKPOINT_INT4,
     );
 
-    let evidence = measure_projection_model(
+    let evidence = measure_projection_with_weights(
         &encoded.fixture,
         CoreMlComputeUnits::CpuAndNeuralEngine,
         HIDDEN_SIZE_CONTRACTION_PARTS,
-        ProjectionModel::MlProgram(MlProgramWeights::Fp16(&encoded.fixture.fp16_weights)),
+        MlProgramWeights::Fp16(&encoded.fixture.fp16_weights),
     );
 
     print_evidence(
@@ -305,7 +305,6 @@ fn should_place_an_fp16_ml_program_projection_on_the_neural_engine() {
 /// The document and weight form a footprint journey loads.
 #[derive(Clone, Copy)]
 enum FootprintCandidate {
-    NeuralNetworkFp16,
     MlProgramFp16,
     MlProgramCompressed(CompressedForm),
 }
@@ -313,7 +312,6 @@ enum FootprintCandidate {
 impl FootprintCandidate {
     fn label(self) -> &'static str {
         match self {
-            Self::NeuralNetworkFp16 => "NeuralNetwork, fp16",
             Self::MlProgramFp16 => "ML Program, fp16",
             Self::MlProgramCompressed(form) => form.label,
         }
@@ -325,19 +323,14 @@ impl FootprintCandidate {
     fn layout(self) -> QuantizationLayout {
         match self {
             Self::MlProgramCompressed(form) => form.layout,
-            Self::NeuralNetworkFp16 | Self::MlProgramFp16 => QuantizationLayout::CHECKPOINT_INT4,
+            Self::MlProgramFp16 => QuantizationLayout::CHECKPOINT_INT4,
         }
     }
 
-    fn projection_model(self, encoded: &EncodedProjection) -> ProjectionModel<'_> {
+    fn ml_program_weights(self, encoded: &EncodedProjection) -> MlProgramWeights<'_> {
         match self {
-            Self::NeuralNetworkFp16 => ProjectionModel::NeuralNetworkFp16,
-            Self::MlProgramFp16 => {
-                ProjectionModel::MlProgram(MlProgramWeights::Fp16(&encoded.fixture.fp16_weights))
-            }
-            Self::MlProgramCompressed(form) => {
-                ProjectionModel::MlProgram(form.ml_program_weights(&encoded.encoded_weights))
-            }
+            Self::MlProgramFp16 => MlProgramWeights::Fp16(&encoded.fixture.fp16_weights),
+            Self::MlProgramCompressed(form) => form.ml_program_weights(&encoded.encoded_weights),
         }
     }
 }
@@ -354,11 +347,11 @@ fn measure_mlp_gate_and_up_footprint(candidate: FootprintCandidate) {
         HIDDEN_SIZE,
         candidate.layout(),
     );
-    let evidence = measure_projection_model(
+    let evidence = measure_projection_with_weights(
         &encoded.fixture,
         CoreMlComputeUnits::CpuAndNeuralEngine,
         HIDDEN_SIZE_CONTRACTION_PARTS,
-        candidate.projection_model(&encoded),
+        candidate.ml_program_weights(&encoded),
     );
     print_evidence(
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -373,13 +366,6 @@ fn measure_mlp_gate_and_up_footprint(candidate: FootprintCandidate) {
             .maximum_error_relative_to_reference_rms
     );
     assert_on_neural_engine_and_accurate(&evidence);
-}
-
-#[test]
-#[serial(neural_engine)]
-#[ignore = "loads a 100-million-weight projection on the real Neural Engine"]
-fn should_measure_the_footprint_of_mlp_gate_and_up_as_neural_network_fp16() {
-    measure_mlp_gate_and_up_footprint(FootprintCandidate::NeuralNetworkFp16);
 }
 
 #[test]
