@@ -1,14 +1,18 @@
 //! Writes one prefill projection as a Core ML ML Program (iOS 18 opset), the
 //! format that can keep weights compressed.
 //!
-//! Each weight is an fp16 `const`, a `constexpr_blockwise_shift_scale`, or a
-//! `constexpr_lut_to_dense` over affine-quantized codes; the projection itself
-//! is the same 1 × 1 convolution, with the same optional contraction split, as
-//! the legacy fp16 document ([`crate::documents::neural_network`]).
+//! The projection is expressed as a 1 × 1 convolution over a
+//! `[1, input_channels, 1, tokens]` tensor because the Neural Engine runs
+//! convolutions at roughly 1.8 times its general matrix-multiply rate on M5-class
+//! silicon (18.8 versus 10.2 TFLOP/s measured in #540); the arithmetic is
+//! identical to `weights · activations`. Each weight is an fp16 `const`, a
+//! `constexpr_blockwise_shift_scale`, or a `constexpr_lut_to_dense` over
+//! affine-quantized codes.
 //!
 //! Measured on the MLP gate and up projection (100.7 million weights, issue
 //! #161): the ML Program format alone cuts the process-footprint growth of a
-//! Neural Engine load from 1,493 MiB (`NeuralNetwork`, fp16) to 392 MiB, and
+//! Neural Engine load from 1,493 MiB (the retired `NeuralNetwork` format, fp16,
+//! which is why that format is no longer written) to 392 MiB, and
 //! 8-bit lookup tables shared by 16 rows cut it to 155 MiB at the same speed.
 //! Core ML places shift-scale weights on the CPU in every block shape, and
 //! lookup tables on the Neural Engine only when each table spans several

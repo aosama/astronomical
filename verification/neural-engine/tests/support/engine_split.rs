@@ -15,7 +15,8 @@ use super::mlx_projection::MlxProjectionForm;
 use super::projection_fixture::ProjectionFixture;
 use crate::support::journey_constants::NEURAL_ENGINE_FINISH_TIMEOUT;
 use crate::support::mlx_projection::build_projection;
-use crate::support::program_loading::load_neural_network;
+use crate::support::program_loading::load_ml_program;
+use astronomical_neural_engine::documents::projection::MlProgramWeights;
 
 pub(crate) enum MeasuredEngines {
     GpuAlone,
@@ -96,9 +97,9 @@ pub(crate) fn load_neural_engine_slice(
     contraction_part_count: usize,
     model_directory: &std::path::Path,
 ) -> CoreMlProgram {
-    let mut projection = load_neural_network(
+    let mut projection = load_ml_program(
         neural_engine_fixture.shape,
-        &neural_engine_fixture.fp16_weights,
+        MlProgramWeights::Fp16(&neural_engine_fixture.fp16_weights),
         CoreMlComputeUnits::CpuAndNeuralEngine,
         contraction_part_count,
         model_directory,

@@ -1,4 +1,4 @@
-//! Every model document format compiled by the real Core ML and run on the CPU.
+//! Every model document compiled by the real Core ML and run on the CPU.
 //!
 //! The encoders' unit tests only read back the bytes they wrote, so a document
 //! Core ML itself refuses would pass them. Limiting these to CPU compute units
@@ -25,7 +25,6 @@ use astronomical_test_harness::deterministic_values::{
 use crate::support::journey_constants::MINIMUM_COSINE_SIMILARITY;
 use crate::support::program_loading::{
     compile_ml_program_to, load_ml_program, load_ml_program_mlp, load_ml_program_rotated_mlp,
-    load_neural_network,
 };
 
 const INPUT_CHANNELS: usize = 8;
@@ -84,23 +83,6 @@ fn assert_all_finite_and_not_all_zero(output_values: &[f32]) {
         has_nonzero_value = has_nonzero_value || *output_value != 0.0;
     }
     assert!(has_nonzero_value, "the output is entirely zero");
-}
-
-#[test]
-fn should_compile_and_run_a_neural_network_document() {
-    let model_directory = tempfile::tempdir().expect("a scratch directory");
-    let weights = projection_weights();
-
-    let mut program = load_neural_network(
-        projection_shape(),
-        &f32_slice_to_f16_bits(&weights),
-        CoreMlComputeUnits::CpuOnly,
-        SINGLE_CONTRACTION_PART,
-        model_directory.path(),
-    )
-    .expect("Core ML accepts the document");
-
-    assert_matches_reference(&mut program, &weights);
 }
 
 #[test]

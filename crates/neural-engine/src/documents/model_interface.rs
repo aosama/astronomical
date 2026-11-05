@@ -1,9 +1,9 @@
-//! What every projection model document promises the native bridge, whatever
-//! its format: one fp16 `activations` input, one fp16 `projected` output, both
-//! `[1, channels, 1, tokens]`, and the errors raised while writing one.
+//! What every model document promises the native bridge: one fp16 `activations`
+//! input, one fp16 `projected` output, both `[1, channels, 1, tokens]`, and the
+//! errors raised while writing one.
 //!
-//! The legacy `NeuralNetwork` document and the ML Program both declare this
-//! same interface, which is why one bridge loads either.
+//! Inputs and outputs are declared fp16 so IOSurface-backed half-precision
+//! buffers can be handed to Core ML without a conversion inside every prediction.
 
 use thiserror::Error;
 

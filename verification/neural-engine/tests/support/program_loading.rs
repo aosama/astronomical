@@ -6,30 +6,11 @@ use std::error::Error;
 use std::path::Path;
 
 use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, compile_model_to};
-use astronomical_neural_engine::documents::neural_network::{
-    encode_projection_document, write_model_document,
-};
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::documents::projection::{
     MlProgramWeights, encode_ml_program_projection,
 };
 use astronomical_neural_engine::program_shape::ProgramShape;
-
-pub(crate) fn load_neural_network(
-    shape: ProgramShape,
-    fp16_weights: &[u16],
-    compute_units: CoreMlComputeUnits,
-    contraction_part_count: usize,
-    model_directory: &Path,
-) -> Result<CoreMlProgram, Box<dyn Error>> {
-    let model_document = encode_projection_document(shape, fp16_weights, contraction_part_count)?;
-    let model_path = write_model_document(model_directory, &model_document)?;
-    Ok(CoreMlProgram::load_from_path(
-        &model_path,
-        shape,
-        compute_units,
-    )?)
-}
 
 pub(crate) fn load_ml_program(
     shape: ProgramShape,

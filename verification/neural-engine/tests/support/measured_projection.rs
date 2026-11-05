@@ -15,7 +15,7 @@ use astronomical_neural_engine_research::process_memory::{
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
 
 use super::projection_fixture::ProjectionFixture;
-use crate::support::program_loading::{load_ml_program, load_neural_network};
+use crate::support::program_loading::load_ml_program;
 
 // The first predictions pay for program loading and clock ramp-up. Warm-up
 // runs for at least three calls and at least 1.2 seconds, the GPU clock-ramp
@@ -44,14 +44,6 @@ pub struct ProjectionMemoryEvidence {
     pub after_release: MemoryGrowth,
 }
 
-/// Which Core ML document carries the projection's weights.
-#[derive(Clone, Copy)]
-pub enum ProjectionModel<'weights> {
-    /// The legacy `NeuralNetwork` document with the fixture's fp16 weights.
-    NeuralNetworkFp16,
-    MlProgram(MlProgramWeights<'weights>),
-}
-
 pub fn measure_projection(
     fixture: &ProjectionFixture,
     compute_units: CoreMlComputeUnits,
@@ -64,28 +56,28 @@ pub fn measure_projection_with_contraction_split(
     compute_units: CoreMlComputeUnits,
     contraction_part_count: usize,
 ) -> ProjectionEvidence {
-    measure_projection_model(
+    measure_projection_with_weights(
         fixture,
         compute_units,
         contraction_part_count,
-        ProjectionModel::NeuralNetworkFp16,
+        MlProgramWeights::Fp16(&fixture.fp16_weights),
     )
 }
 
-pub fn measure_projection_model(
+pub fn measure_projection_with_weights(
     fixture: &ProjectionFixture,
     compute_units: CoreMlComputeUnits,
     contraction_part_count: usize,
-    projection_model: ProjectionModel<'_>,
+    weights: MlProgramWeights<'_>,
 ) -> ProjectionEvidence {
     let model_directory = tempfile::tempdir().expect("a scratch directory for the model");
     let memory_before_load = MemorySnapshot::capture();
     let load_started_at = Instant::now();
-    let mut projection = load_projection_model(
+    let mut projection = load_projection_program(
         fixture,
         compute_units,
         contraction_part_count,
-        projection_model,
+        weights,
         model_directory.path(),
     );
     let load_duration = load_started_at.elapsed();
@@ -124,29 +116,20 @@ fn compare_with_reference(
         .expect("reference and candidate have the same length")
 }
 
-fn load_projection_model(
+fn load_projection_program(
     fixture: &ProjectionFixture,
     compute_units: CoreMlComputeUnits,
     contraction_part_count: usize,
-    projection_model: ProjectionModel<'_>,
+    weights: MlProgramWeights<'_>,
     model_directory: &Path,
 ) -> CoreMlProgram {
-    match projection_model {
-        ProjectionModel::NeuralNetworkFp16 => load_neural_network(
-            fixture.shape,
-            &fixture.fp16_weights,
-            compute_units,
-            contraction_part_count,
-            model_directory,
-        ),
-        ProjectionModel::MlProgram(weights) => load_ml_program(
-            fixture.shape,
-            weights,
-            compute_units,
-            contraction_part_count,
-            model_directory,
-        ),
-    }
+    load_ml_program(
+        fixture.shape,
+        weights,
+        compute_units,
+        contraction_part_count,
+        model_directory,
+    )
     .expect("Core ML loads the projection")
 }
 
