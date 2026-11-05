@@ -385,6 +385,7 @@ fn should_restart_worker_when_persistent_prompt_cache_flag_changes() {
 
 fn sample_resolved_config() -> ResolvedRuntimeConfig {
     ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),

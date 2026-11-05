@@ -236,14 +236,17 @@ pub(crate) fn validate_user_config_file(
             });
         }
     }
-    if let Some(model_download_directory) = &user_config_file.runtime.model_download_directory
-        && !model_download_directory.is_absolute()
-    {
-        return Err(AstronomicalConfigError::PathMustBeAbsolute {
-            field_name: "runtime.model_download_directory".to_owned(),
-            configured_path: model_download_directory.clone(),
-        });
-    }
+    require_absolute_path(
+        "runtime.model_download_directory",
+        user_config_file.runtime.model_download_directory.as_ref(),
+    )?;
+    require_absolute_path(
+        "runtime.neural_engine_program_directory",
+        user_config_file
+            .runtime
+            .neural_engine_program_directory
+            .as_ref(),
+    )?;
     if let Some(maximum_mlx_memory_gb) = user_config_file.runtime.maximum_mlx_memory_gb {
         crate::maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
     }
@@ -264,6 +267,21 @@ fn create_first_run_config(
     write_adjacent_schema(config_file_path)?;
     write_config_file_bytes_atomically(config_file_path, &first_run_config_bytes)?;
     Ok(first_run_config)
+}
+
+fn require_absolute_path(
+    field_name: &str,
+    configured_path: Option<&PathBuf>,
+) -> Result<(), AstronomicalConfigError> {
+    match configured_path {
+        Some(configured_path) if !configured_path.is_absolute() => {
+            Err(AstronomicalConfigError::PathMustBeAbsolute {
+                field_name: field_name.to_owned(),
+                configured_path: configured_path.clone(),
+            })
+        }
+        _ => Ok(()),
+    }
 }
 
 pub(crate) fn write_adjacent_schema(

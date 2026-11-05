@@ -150,6 +150,7 @@ pub(crate) fn ipc_runtime_config(
         })
         .collect();
     ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),

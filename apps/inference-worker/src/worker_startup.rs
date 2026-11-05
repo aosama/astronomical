@@ -117,6 +117,11 @@ where
         performance_attribution_log_path,
         persistent_prompt_cache_enabled,
     )
+    .with_neural_engine_program_directory(
+        worker_startup_configuration
+            .neural_engine_program_directory
+            .clone(),
+    )
     .with_diagnostic_qwen3_5_engine_override(
         worker_startup_configuration.diagnostic_qwen3_5_engine_override,
     )

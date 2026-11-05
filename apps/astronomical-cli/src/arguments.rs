@@ -26,7 +26,7 @@ const HELP_TEXT: &str = concat!(
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
     "       astronomical image PROMPT [--size WIDTHxHEIGHT] [--model MODEL_ID] [--seed N]\n",
     "                                 [--output PATH]\n",
-    "       astronomical models list | supported | default [MODEL_ID] | download MODEL_ID\n",
+    "       astronomical models list | supported | programs | default [MODEL_ID] | download MODEL_ID\n",
     "       astronomical status\n",
     "       astronomical doctor\n",
     "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
@@ -62,6 +62,8 @@ const HELP_TEXT: &str = concat!(
     "                   the image model automatically; never overwrites an existing file\n",
     "  models list      Models installed on this Mac\n",
     "  models supported Release catalog: what can be downloaded, with local state\n",
+    "  models programs  Compiled Neural Engine programs on this Mac: where, how large, and\n",
+    "                   any whose model is no longer installed\n",
     "  models default   Show the effective default model; with MODEL_ID, download it\n",
     "                   first when this Mac lacks it, then persist it\n",
     "  models download  Start (or resume) a download and wait, with live progress\n",
@@ -113,6 +115,7 @@ pub enum CliCommand {
     ValidateConfig(ValidateConfigArguments),
     Quantize(QuantizeCommand),
     Vision(VisionCommand),
+    ModelPrograms,
 }
 
 /// Launch-specific arguments after `astronomical launch`.
@@ -153,7 +156,7 @@ pub fn parse_command(
         "respond" => parse_respond_arguments(&remaining_arguments[1..]).map(CliCommand::Respond),
         "embed" => parse_embed_arguments(&remaining_arguments[1..]).map(CliCommand::Embed),
         "image" => parse_image_arguments(&remaining_arguments[1..]).map(CliCommand::Image),
-        "models" => parse_models_command(&remaining_arguments[1..]).map(CliCommand::Models),
+        "models" => parse_models_verb(&remaining_arguments[1..]),
         "status" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Status),
         "doctor" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Doctor),
         "schema" => parse_schema_command(&remaining_arguments[1..]).map(CliCommand::Schema),
@@ -206,6 +209,21 @@ fn parse_validate_command(
         ));
     }
     crate::verbs::validate_config::parse_validate_config_arguments(&remaining_arguments[1..])
+}
+
+/// `models programs` reads only the disk, so unlike its siblings it is not a request
+/// to the daemon, and it is a command of its own.
+fn parse_models_verb(remaining_arguments: &[OsString]) -> Result<CliCommand, UsageError> {
+    let first_argument = remaining_arguments.first();
+    if first_argument.is_some_and(is_programs_subcommand) {
+        reject_trailing_arguments(&remaining_arguments[1..])?;
+        return Ok(CliCommand::ModelPrograms);
+    }
+    parse_models_command(remaining_arguments).map(CliCommand::Models)
+}
+
+fn is_programs_subcommand(argument: &OsString) -> bool {
+    argument == "programs"
 }
 
 fn parse_models_command(remaining_arguments: &[OsString]) -> Result<ModelsCommand, UsageError> {

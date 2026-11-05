@@ -35,6 +35,7 @@ impl UserConfigFile {
                 maximum_mlx_memory_gb: None,
                 default_model: None,
                 model_download_directory: None,
+                neural_engine_program_directory: None,
                 metal_residency_refresh_enabled: None,
             },
             prompt_cache: None,
@@ -91,6 +92,8 @@ pub(crate) struct RuntimeConfigFile {
     pub(crate) default_model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) model_download_directory: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) neural_engine_program_directory: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) metal_residency_refresh_enabled: Option<bool>,
 }

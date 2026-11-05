@@ -403,6 +403,7 @@ fn startup_configuration(
     temporary_directory: &std::path::Path,
 ) -> WorkerStartupConfiguration {
     WorkerStartupConfiguration {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: configuration_generation.to_owned(),
         global_prompt_cache_root_directory: temporary_directory.join("cache"),
         global_prompt_cache_maximum_size_bytes: 1_000_000_000,

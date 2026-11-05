@@ -1,7 +1,8 @@
 //! The `astronomical models` verb: list installed models, show the release
 //! catalog, show or persist the effective default model, and drive a
 //! download with live progress. Report data goes to stdout; download
-//! progress goes to stderr.
+//! progress goes to stderr. `models programs` needs no daemon, so it is its own
+//! command in `model_programs`.
 
 use std::{fmt::Write as _, io::Write, path::PathBuf, time::Duration};
 

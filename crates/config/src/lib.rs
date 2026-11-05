@@ -68,7 +68,11 @@ pub use model_discovery::{
 pub use model_identity::{
     decode_huggingface_cache_directory_name, leaf_model_id, near_model_matches, resolve_model_id,
 };
-pub use neural_engine_program_cache::neural_engine_program_cache_directory_for_model;
+pub use neural_engine_program_cache::{
+    ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
+    NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME, NeuralEngineProgramSetManifest, directory_byte_count,
+    list_neural_engine_program_sets, neural_engine_program_cache_directory_for_model,
+};
 pub use prompt_cache_config::PromptCacheConfig;
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 
@@ -191,6 +195,22 @@ impl AstronomicalConfig {
             .runtime
             .model_download_directory
             .as_ref()
+    }
+
+    /// Returns where compiled Neural Engine programs live: the configured folder, or
+    /// the instance's default.
+    #[must_use]
+    pub fn neural_engine_program_directory(&self) -> PathBuf {
+        match &self
+            .user_config_file
+            .runtime
+            .neural_engine_program_directory
+        {
+            Some(configured_directory) => configured_directory.clone(),
+            None => self
+                .instance_paths
+                .default_neural_engine_program_directory(),
+        }
     }
 
     /// Finds one exact model ID beneath the configured recursive model roots.

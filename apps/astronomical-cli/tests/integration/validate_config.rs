@@ -79,6 +79,7 @@ fn should_report_effective_values_for_valid_config() {
     assert!(rendered_text.contains("/absolute/model/library"));
     assert!(rendered_text.contains("Runtime instance: development"));
     assert!(rendered_text.contains("Daemon bind address: 127.0.0.1"));
+    assert!(rendered_text.contains("Neural Engine programs: "));
     assert!(rendered_text.ends_with('\n'));
 }
 
@@ -137,6 +138,12 @@ fn should_render_json_report_for_scripts() {
     let report_document: serde_json::Value =
         serde_json::from_str(rendered_text.trim_end()).expect("json report parses");
     assert_eq!(report_document["runtime_instance"], "development");
+    assert!(
+        report_document["neural_engine_program_directory"]
+            .as_str()
+            .expect("the folder is reported")
+            .ends_with("neural-engine-programs")
+    );
     assert_eq!(
         report_document["model_directories"]
             .as_array()

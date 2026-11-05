@@ -46,6 +46,7 @@ fn main() -> ExitCode {
         Ok(CliCommand::Doctor) => run_doctor_verb(),
         Ok(CliCommand::Quantize(quantize_command)) => run_quantize_verb(quantize_command),
         Ok(CliCommand::Vision(vision_command)) => run_vision_verb(&vision_command),
+        Ok(CliCommand::ModelPrograms) => run_model_programs_verb(),
         Err(usage_error) => {
             eprint!("astronomical: {usage_error}\n\n{}", help_text());
             ExitCode::from(2)
@@ -80,6 +81,52 @@ fn run_validate_config_verb(
             ExitCode::FAILURE
         }
     }
+}
+
+/// Reads only this Mac's config and disk, so it answers with no daemon running.
+fn run_model_programs_verb() -> ExitCode {
+    let (runtime_instance, _) = own_runtime_instance_and_ipc_socket_paths();
+    let report_outcome = render_model_programs_for(runtime_instance);
+    match report_outcome {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(report_error) => {
+            eprintln!("astronomical: {report_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn render_model_programs_for(
+    runtime_instance: AstronomicalRuntimeInstance,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let instance_paths =
+        astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
+            runtime_instance,
+        )?;
+    let config =
+        astronomical_config::AstronomicalConfig::load_from_instance_paths(instance_paths.clone())?;
+    let program_directory = config.neural_engine_program_directory();
+    let program_sets = astronomical_config::list_neural_engine_program_sets(&program_directory);
+    let mut installed_model_ids = std::collections::BTreeSet::new();
+    let discovery = astronomical_config::discover_effective_models(
+        &instance_paths.models_directory(),
+        config.model_directories(),
+    );
+    let is_discovery_known = discovery.is_ok();
+    if let Ok(discovery) = discovery {
+        for discovered_model in discovery.discovered_models {
+            installed_model_ids.insert(discovered_model.model_id);
+        }
+    }
+    astronomical_cli::render_model_programs(
+        &astronomical_cli::ModelProgramsReport {
+            program_directory: &program_directory,
+            program_sets: &program_sets,
+            installed_model_ids: is_discovery_known.then_some(&installed_model_ids),
+        },
+        &mut io::stdout(),
+    )?;
+    Ok(())
 }
 
 fn run_schema_verb(schema_arguments: &astronomical_cli::SchemaArguments) -> ExitCode {

@@ -76,6 +76,7 @@ pub(super) fn write_minimal_qwen_model(model_directory: &std::path::Path) {
 pub(super) fn sample_resolved_config() -> ResolvedRuntimeConfig {
     use std::collections::HashMap;
     ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),

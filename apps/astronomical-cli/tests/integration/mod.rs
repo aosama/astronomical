@@ -9,6 +9,7 @@ mod download_wait;
 mod embed;
 mod image;
 mod launch;
+mod model_programs;
 mod models;
 mod quantize;
 mod respond;

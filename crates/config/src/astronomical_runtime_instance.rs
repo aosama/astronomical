@@ -290,6 +290,35 @@ impl AstronomicalInstancePaths {
         self.state_directory.join("cache")
     }
 
+    /// Where compiled Neural Engine programs live unless the config says otherwise.
+    /// Standard locations share the Stable instance's folder, because macOS caches
+    /// its compilation by path, so one path saves every instance the same work and
+    /// about 10 GB per model. A custom state directory keeps its own, which keeps
+    /// tests and one-off setups from touching a real instance's programs.
+    #[must_use]
+    pub fn default_neural_engine_program_directory(&self) -> PathBuf {
+        let stable_state_directory = self.stable_sibling_state_directory();
+        stable_state_directory.join(crate::NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME)
+    }
+
+    fn stable_sibling_state_directory(&self) -> PathBuf {
+        if !self.is_standard_state_directory {
+            return self.state_directory.clone();
+        }
+        let directory_name = self
+            .state_directory
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str);
+        let stable_directory_name = match directory_name {
+            Some(DEVELOPMENT_STATE_DIRECTORY_NAME) => STABLE_STATE_DIRECTORY_NAME,
+            Some(APPLICATION_SUPPORT_DEVELOPMENT_DIRECTORY_NAME) => {
+                APPLICATION_SUPPORT_STABLE_DIRECTORY_NAME
+            }
+            _ => return self.state_directory.clone(),
+        };
+        self.state_directory.with_file_name(stable_directory_name)
+    }
+
     #[must_use]
     pub fn models_directory(&self) -> PathBuf {
         self.state_directory.join("models")

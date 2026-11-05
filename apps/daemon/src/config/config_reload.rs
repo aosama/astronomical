@@ -31,6 +31,8 @@ pub struct ResolvedRuntimeConfig {
     pub configuration_generation: String,
     /// Resolved worker executable path used to spawn or replace the worker.
     pub worker_executable_path: PathBuf,
+    /// The declared home of compiled Neural Engine programs.
+    pub neural_engine_program_directory: PathBuf,
     /// All Qwen3.5-MoE-family models discovered from the resolved directories.
     pub discovered_models: Vec<DiscoveredModel>,
     /// Path-safe authored-root conflicts excluded from executable discovery.
@@ -169,6 +171,7 @@ impl ResolvedRuntimeConfigResolver {
             &unmatched_model_config_ids,
         )?;
         Ok(ResolvedRuntimeConfig {
+            neural_engine_program_directory: user_config.neural_engine_program_directory(),
             configuration_generation,
             worker_executable_path: self.fallback_worker_executable_path.clone(),
             discovered_models,
@@ -224,6 +227,7 @@ impl ResolvedRuntimeConfig {
     pub fn worker_startup_configuration(&self) -> WorkerStartupConfiguration {
         WorkerStartupConfiguration {
             configuration_generation: self.configuration_generation.clone(),
+            neural_engine_program_directory: self.neural_engine_program_directory.clone(),
             global_prompt_cache_root_directory: self
                 .prompt_cache_config
                 .global_prompt_cache_root_directory()

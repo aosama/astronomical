@@ -248,6 +248,9 @@ pub(crate) fn prepare_neural_engine_output_gate_prefill(
     if layer_program_count == 0 {
         return Err("the model has no linear-attention layers");
     }
+    if let Some(program_cache) = &program_cache {
+        program_cache.record_finished_set(u64::from(layer_program_count));
+    }
     model.base.output_gate_engine = Some(Box::new(NeuralEngineOutputGatePrefill {
         layer_programs: RefCell::new(layer_programs),
         chunk_token_count,
