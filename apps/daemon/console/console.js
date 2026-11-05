@@ -155,6 +155,30 @@ function renderModelDiscoveryDiagnostic(configurationDocument) {
     warningElement.hidden = false;
 }
 
+// Each channel opens Thin Talk through its own scheme, because macOS hands a shared
+// one to whichever installed app it prefers. There is deliberately no default: a
+// channel missing here gets no link rather than a link to another instance.
+// The daemon reports only these two channels, and an App Store build reports stable.
+// Mirrors ApplicationChannel.chatURLScheme and xtask's channel profiles.
+const THIN_TALK_CHAT_LINKS = new Map([
+    ["development", "astronomical-dev://chat"],
+    ["stable", "astronomical://chat"],
+]);
+
+function thinTalkChatLink(applicationChannel) {
+    return THIN_TALK_CHAT_LINKS.get(applicationChannel) || null;
+}
+
+function renderThinTalkLink(applicationChannel) {
+    const openThinTalkLink = document.getElementById("open-thin-talk");
+    const chatLink = thinTalkChatLink(applicationChannel);
+    if (chatLink) {
+        openThinTalkLink.setAttribute("href", chatLink);
+    } else {
+        openThinTalkLink.removeAttribute("href");
+    }
+}
+
 function renderApplicationIdentity(applicationIdentity) {
     const identityTitle = applicationIdentityTitle(applicationIdentity);
     document.getElementById("application-build-identity").textContent = identityTitle;
@@ -165,6 +189,7 @@ function renderApplicationIdentity(applicationIdentity) {
     document.getElementById("about-instance-note").textContent =
         `Single-user local console. Served by astronomicald on this machine. Config: ${applicationIdentity.state_directory}/config.json`;
     document.body.dataset.applicationChannel = applicationIdentity.channel || "unknown";
+    renderThinTalkLink(applicationIdentity.channel);
 }
 
 async function pollSystemTelemetry() {

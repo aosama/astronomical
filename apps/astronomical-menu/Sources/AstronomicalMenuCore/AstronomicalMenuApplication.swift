@@ -215,7 +215,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     chatWindowController.showChatWindow(handleClose: { _ = NSApp.setActivationPolicy(.accessory) })
   }
 
-  // The Observatory console hands chat over through astronomical://chat; macOS
+  // The Observatory console hands chat over through its channel's scheme; macOS
   // delivers custom-scheme links to a packaged app as a GURL Apple event, so
   // the handler lives here at launch rather than in a SwiftUI scene hook — the
   // menu application has no window scene to receive onOpenURL.
@@ -231,7 +231,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent: NSAppleEventDescriptor) {
     guard let openedURLString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
       let openedURL = URL(string: openedURLString),
-      isThinTalkChatOpenRequest(openedURL)
+      isThinTalkChatOpenRequest(openedURL, channel: applicationIdentity.channel)
     else { return }
     showChatWindow()
   }

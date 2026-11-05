@@ -5,7 +5,7 @@
 //! separate frontend build step. The console shell and its assets live at
 //! `apps/daemon/console/` and are reached via `../../console/...`; the console
 //! renders no model output — conversations live in Thin Talk, reached through
-//! the `astronomical://chat` link the console's chat view offers.
+//! the channel's own chat link the console's chat view offers.
 
 use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
@@ -173,7 +173,8 @@ mod tests {
 
     /// The console renders no model output anymore, so the shell must not load
     /// any render-stack asset or playground script; chat is handed off to Thin
-    /// Talk through the astronomical:// link with a menu-bar fallback.
+    /// Talk through the channel's own link with a menu-bar fallback. The shell
+    /// carries no scheme, so it cannot send one channel to another's window.
     #[test]
     fn console_hands_chat_to_thin_talk_without_a_render_stack() {
         for stale_reference in ["/render/", "playground"] {
@@ -182,7 +183,11 @@ mod tests {
                 "console shell still references the retired `{stale_reference}` surface"
             );
         }
-        for thin_talk_handoff in ["astronomical://chat", "Open Thin Talk", "choose Chat"] {
+        assert!(
+            !INDEX_HTML.contains("astronomical://"),
+            "console shell must not hardcode a channel's chat link"
+        );
+        for thin_talk_handoff in ["open-thin-talk", "Open Thin Talk", "choose Chat"] {
             assert!(
                 INDEX_HTML.contains(thin_talk_handoff),
                 "console shell is missing the Thin Talk handoff `{thin_talk_handoff}`"

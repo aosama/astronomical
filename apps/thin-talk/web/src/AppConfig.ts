@@ -19,6 +19,12 @@ export class AppConfig {
     this.expectedStateDirectory = init.expectedStateDirectory;
   }
 
+  /** What this window calls itself. Mirrors ThinTalkApplicationIdentity.windowTitle,
+   * so the sidebar agrees with the title bar about which instance this is. */
+  public get applicationTitle(): string {
+    return this.expectedChannel === "development" ? "Thin Talk Development" : "Thin Talk";
+  }
+
   /** Reads and validates the host-injected config, throwing when the host did
    * not inject one or the endpoint is not the loopback daemon. */
   public static fromWindow(config: unknown): AppConfig {

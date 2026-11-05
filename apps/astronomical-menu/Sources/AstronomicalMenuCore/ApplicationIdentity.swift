@@ -19,6 +19,13 @@ public enum ApplicationChannel: String, Equatable, Sendable {
   // DEVELOPMENT_LOOPBACK_PORT in crates/config/src/astronomical_runtime_instance.rs);
   // Swift cannot import the Rust constants, so keep the values in sync by hand.
   var defaultDaemonPort: Int { self == .development ? 6733 : 6732 }
+  // macOS gives a shared scheme to whichever installed app it prefers, so a shared
+  // one let Development's Observatory open Stable's chat window. The App Store
+  // build is the Stable product on Stable's port, so sharing Stable's scheme can
+  // never reach a different instance.
+  // Mirrors `chat_url_scheme` in xtask's channel profiles and THIN_TALK_CHAT_LINKS
+  // in the Observatory console; neither can import these values.
+  var chatURLScheme: String { self == .development ? "astronomical-dev" : "astronomical" }
 }
 
 /// Immutable application identity injected by the app bundle and shared by every local boundary.

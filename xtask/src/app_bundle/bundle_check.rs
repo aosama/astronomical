@@ -197,10 +197,11 @@ pub(crate) fn plist_identity_problems(
     {
         identity_problems.push("a release bundle must not be dirty".to_owned());
     }
-    if !registers_astronomical_url_scheme(plist_document) {
-        identity_problems.push(
-            "the bundle must register the astronomical URL scheme for the chat handoff".to_owned(),
-        );
+    if registered_url_schemes(plist_document) != [channel_profile.chat_url_scheme] {
+        identity_problems.push(format!(
+            "the bundle must register only the {} URL scheme for the chat handoff",
+            channel_profile.chat_url_scheme
+        ));
     }
     sparkle_key_problems(plist_document, channel_profile, &mut identity_problems);
     identity_problems
@@ -256,21 +257,22 @@ fn is_all_digits(candidate_text: Option<&str>, required_length: Option<usize>) -
     true
 }
 
-fn registers_astronomical_url_scheme(plist_document: &serde_json::Value) -> bool {
+fn registered_url_schemes(plist_document: &serde_json::Value) -> Vec<&str> {
+    let mut registered_schemes = Vec::new();
     let Some(url_types) = plist_document["CFBundleURLTypes"].as_array() else {
-        return false;
+        return registered_schemes;
     };
     for url_type in url_types {
         let Some(url_schemes) = url_type["CFBundleURLSchemes"].as_array() else {
             continue;
         };
         for url_scheme in url_schemes {
-            if url_scheme.as_str() == Some("astronomical") {
-                return true;
+            if let Some(url_scheme) = url_scheme.as_str() {
+                registered_schemes.push(url_scheme);
             }
         }
     }
-    false
+    registered_schemes
 }
 
 /// Strict seal verification, plus for the App Store the sandbox

@@ -27,8 +27,12 @@
   color: var(--text-secondary);
 }
 
+/* "Thin Talk Development" does not fit on one line beside this button, so the
+   name takes the wrap and the button keeps its shape. */
 .sidebar__new-chat {
   display: inline-flex;
+  flex-shrink: 0;
+  white-space: nowrap;
   align-items: center;
   gap: 5px;
   padding: 5px 12px;

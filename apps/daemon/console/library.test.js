@@ -496,13 +496,19 @@ test("does not offer the Thin Talk handoff for a ready image-generation-only mod
     assert.deepEqual(JSON.parse(JSON.stringify(actionLabels)), ["Details"]);
 });
 
-test("hands a ready model off to Thin Talk through the astronomical link", () => {
+function thinTalkHandoffsFromLibrary(applicationChannel) {
     const thinTalkHandoffs = [];
     const scriptContext = createLibraryContext();
     scriptContext.document = createLibraryDocument();
+    scriptContext.document.body = { dataset: { applicationChannel } };
     scriptContext.window = {
         location: { assign: (handoffTarget) => thinTalkHandoffs.push(handoffTarget) }
     };
+    // console.js owns the channel table and its own tests pin the values; this
+    // stands in for it so these tests prove the library asks for this instance's
+    // channel rather than naming a link of its own.
+    scriptContext.thinTalkChatLink = (requestedChannel) =>
+        requestedChannel === "development" ? "development-chat-link" : null;
     scriptContext.catalogRow = {
         huggingfaceId: "astronomical-test/example-qwen",
         readyOnThisMac: true,
@@ -525,7 +531,15 @@ test("hands a ready model off to Thin Talk through the astronomical link", () =>
     for (const clickListener of openInThinTalkButton.listeners.click) {
         clickListener();
     }
-    assert.deepEqual(thinTalkHandoffs, ["astronomical://chat"]);
+    return thinTalkHandoffs;
+}
+
+test("should_hand_a_ready_model_to_this_channels_thin_talk", () => {
+    assert.deepEqual(thinTalkHandoffsFromLibrary("development"), ["development-chat-link"]);
+});
+
+test("should_not_hand_off_when_this_channel_has_no_thin_talk_link", () => {
+    assert.deepEqual(thinTalkHandoffsFromLibrary("unknown"), []);
 });
 
 test("rejects an incomplete entry even when its visible fields are renderable", () => {

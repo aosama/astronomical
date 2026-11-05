@@ -283,7 +283,10 @@ function createLibraryPrimaryActions(catalogRow, isExpanded) {
 // conversation window is all the handoff needs; there is no in-Observatory
 // chat to preselect a model for anymore.
 function openThinTalkFromLibrary() {
-    window.location.assign("astronomical://chat");
+    const chatLink = thinTalkChatLink(document.body.dataset.applicationChannel);
+    if (chatLink) {
+        window.location.assign(chatLink);
+    }
 }
 
 function createLibraryDetailsPanel(catalogRow, allRows) {

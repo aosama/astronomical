@@ -5,6 +5,7 @@
 // The globals module must come first: it installs the DOM that DOMPurify and
 // the other window-reading modules bind to at import time.
 import "./support/globals";
+import "./appConfig.test";
 import "./sessionBridge.test";
 import "./sessionDocument.test";
 import "./sessionPreferences.test";

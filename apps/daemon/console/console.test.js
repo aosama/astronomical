@@ -625,3 +625,51 @@ test("should_drop_the_generating_style_when_the_next_prompt_starts", () => {
 
     assert.equal(elementsById.get("phase-fill").classNames.has("generating"), false);
 });
+
+function thinTalkLinkContext() {
+    const scriptContext = createConsoleContext();
+    const linkAttributes = new Map();
+    scriptContext.document.getElementById = function () {
+        return {
+            setAttribute(attributeName, attributeValue) { linkAttributes.set(attributeName, attributeValue); },
+            removeAttribute(attributeName) { linkAttributes.delete(attributeName); },
+        };
+    };
+    return { scriptContext, linkAttributes };
+}
+
+test("should_open_thin_talk_through_the_development_scheme_in_development", () => {
+    const { scriptContext, linkAttributes } = thinTalkLinkContext();
+
+    vm.runInContext('renderThinTalkLink("development")', scriptContext);
+
+    assert.equal(linkAttributes.get("href"), "astronomical-dev://chat");
+});
+
+test("should_open_thin_talk_through_the_stable_scheme_in_stable", () => {
+    const { scriptContext, linkAttributes } = thinTalkLinkContext();
+
+    vm.runInContext('renderThinTalkLink("stable")', scriptContext);
+
+    assert.equal(linkAttributes.get("href"), "astronomical://chat");
+});
+
+test("should_offer_no_thin_talk_link_for_an_unknown_channel", () => {
+    for (const unknownChannel of ["unknown", "", "constructor"]) {
+        const { scriptContext, linkAttributes } = thinTalkLinkContext();
+        linkAttributes.set("href", "astronomical://chat");
+
+        vm.runInContext(`renderThinTalkLink("${unknownChannel}")`, scriptContext);
+
+        assert.equal(linkAttributes.has("href"), false, unknownChannel);
+    }
+});
+
+test("should_keep_every_chat_link_out_of_the_library_and_the_shell", () => {
+    const libraryScript = fs.readFileSync(path.join(__dirname, "library-render.js"), "utf8");
+    const consoleShell = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+    for (const hardcodingSource of [libraryScript, consoleShell]) {
+        assert.equal(hardcodingSource.includes("astronomical://"), false);
+        assert.equal(hardcodingSource.includes("astronomical-dev://"), false);
+    }
+});

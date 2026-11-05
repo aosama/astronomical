@@ -474,7 +474,7 @@ fn plist_document_for(channel: Channel, is_dirty: bool) -> serde_json::Value {
         "CFBundleVersion": "4242",
         "AstronomicalBuildDate": "20261102",
         "AstronomicalBuildDirty": is_dirty,
-        "CFBundleURLTypes": [{"CFBundleURLSchemes": ["astronomical"]}]
+        "CFBundleURLTypes": [{"CFBundleURLSchemes": [channel_profile.chat_url_scheme]}]
     });
     if let Some(state_directory_name) = channel_profile.state_directory_name {
         plist_document["AstronomicalStateDirectoryName"] = serde_json::json!(state_directory_name);
@@ -532,6 +532,61 @@ fn should_refuse_a_dirty_release_and_a_plist_built_for_another_channel() {
 }
 
 #[test]
+fn should_refuse_a_development_bundle_that_registers_the_stable_chat_scheme() {
+    let mut development_plist = plist_document_for(Channel::Development, true);
+    development_plist["CFBundleURLTypes"] =
+        serde_json::json!([{"CFBundleURLSchemes": ["astronomical"]}]);
+
+    let identity_problems = plist_identity_problems(
+        &development_plist,
+        &ChannelProfile::for_channel(Channel::Development),
+    );
+
+    assert!(
+        identity_problems.contains(
+            &"the bundle must register only the astronomical-dev URL scheme for the chat handoff"
+                .to_owned()
+        )
+    );
+}
+
+#[test]
+fn should_refuse_a_development_bundle_that_also_registers_the_stable_chat_scheme() {
+    let mut development_plist = plist_document_for(Channel::Development, true);
+    development_plist["CFBundleURLTypes"] =
+        serde_json::json!([{"CFBundleURLSchemes": ["astronomical-dev", "astronomical"]}]);
+
+    let identity_problems = plist_identity_problems(
+        &development_plist,
+        &ChannelProfile::for_channel(Channel::Development),
+    );
+
+    assert!(
+        identity_problems.contains(
+            &"the bundle must register only the astronomical-dev URL scheme for the chat handoff"
+                .to_owned()
+        )
+    );
+}
+
+#[test]
+fn should_refuse_a_stable_bundle_that_registers_the_development_chat_scheme() {
+    let mut stable_plist = plist_document_for(Channel::Stable, false);
+    stable_plist["CFBundleURLTypes"] =
+        serde_json::json!([{"CFBundleURLSchemes": ["astronomical-dev"]}]);
+
+    let identity_problems =
+        plist_identity_problems(&stable_plist, &ChannelProfile::for_channel(Channel::Stable));
+
+    assert!(
+        identity_problems.contains(
+            &"the bundle must register only the astronomical URL scheme for the chat handoff"
+                .to_owned()
+        )
+    );
+}
+
+#[test]
 fn should_refuse_update_keys_state_directories_and_missing_url_schemes_in_the_store_plist() {
     let mut store_plist = plist_document_for(Channel::AppStore, false);
     store_plist["SUFeedURL"] = serde_json::json!("https://example.invalid/appcast.xml");
@@ -547,7 +602,7 @@ fn should_refuse_update_keys_state_directories_and_missing_url_schemes_in_the_st
     for expected_problem in [
         "an App Store bundle must not contain the SUFeedURL update key",
         "an App Store bundle must not embed a state directory name",
-        "the bundle must register the astronomical URL scheme for the chat handoff",
+        "the bundle must register only the astronomical URL scheme for the chat handoff",
         "bundle build date must use YYYYMMDD",
     ] {
         assert!(

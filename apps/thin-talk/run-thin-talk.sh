@@ -1,13 +1,17 @@
 #!/usr/bin/env sh
 #
-# Builds and launches the Thin Talk macOS app for one channel.
+# Builds and launches a standalone Thin Talk app for development. It only ever
+# talks to the Development instance: a Thin Talk built from a checkout and
+# pointed at Stable looked identical and caused constant confusion, so this
+# script has no way to choose another channel. Stable's Thin Talk is the chat
+# window inside the Stable app.
 #
 # Thin Talk is a thin client: it talks to the already-running Astronomical
 # daemon over its public REST endpoints, so the bundle carries only the
 # chat executable and its metadata. It bundles no daemon, worker, Sparkle
 # framework, or MLX metallib.
 #
-# Usage: apps/thin-talk/run-thin-talk.sh [--channel development|stable]
+# Usage: apps/thin-talk/run-thin-talk.sh
 #
 # Exit codes:
 #   0 — build and launch succeeded
@@ -15,57 +19,19 @@
 
 set -eu
 
-APPLICATION_CHANNEL="development"
+if [ "$#" -gt 0 ]; then
+    printf '%s\n' "Error: this script takes no arguments; it always targets Development" >&2
+    exit 1
+fi
 
-print_usage() {
-    printf '%s\n' "Usage: apps/thin-talk/run-thin-talk.sh [--channel development|stable]"
-    printf '%s\n' ""
-    printf '%s\n' "Builds the Thin Talk executable, assembles a lean app bundle, and"
-    printf '%s\n' "launches it. Development is the safe default."
-}
-
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        --channel)
-            [ "$#" -ge 2 ] || { printf '%s\n' "Error: --channel requires a value" >&2; exit 1; }
-            APPLICATION_CHANNEL="$2"
-            shift 2
-            continue
-            ;;
-        --help|-h)
-            print_usage
-            exit 0
-            ;;
-        *)
-            printf '%s\n' "Error: unrecognized argument: $1" >&2
-            print_usage >&2
-            exit 1
-            ;;
-    esac
-done
-
-# Channel table. The ports mirror the daemon's master constants in
+# These mirror the daemon's Development constants in
 # crates/config/src/astronomical_runtime_instance.rs; keep them in sync.
-case "$APPLICATION_CHANNEL" in
-    development)
-        bundle_name="Thin Talk Development"
-        bundle_identifier="dev.astronomical.thin-talk.development"
-        daemon_port="6733"
-        state_directory_name=".astronomical-dev"
-        icon_channel="development"
-        ;;
-    stable)
-        bundle_name="Thin Talk"
-        bundle_identifier="dev.astronomical.thin-talk"
-        daemon_port="6732"
-        state_directory_name=".astronomical"
-        icon_channel="stable"
-        ;;
-    *)
-        printf '%s\n' "Error: channel must be development or stable" >&2
-        exit 1
-        ;;
-esac
+APPLICATION_CHANNEL="development"
+bundle_name="Thin Talk Development"
+bundle_identifier="dev.astronomical.thin-talk.development"
+daemon_port="6733"
+state_directory_name=".astronomical-dev"
+icon_channel="development"
 
 repository_root="$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd -P)"
 package_path="${repository_root}/apps/thin-talk"
