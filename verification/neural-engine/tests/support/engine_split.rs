@@ -3,7 +3,7 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine_research::numerical_comparison::compare_values;
 use astronomical_neural_engine_research::timing_summary::TimingSummary;
 use astronomical_runtime_integration::MlxRuntime;
@@ -26,7 +26,7 @@ pub(crate) enum MeasuredEngines {
 pub(crate) fn time_split(
     runtime: &MlxRuntime,
     gpu_form: &MlxProjectionForm<'_>,
-    neural_engine_projection: &mut CoreMlProjection,
+    neural_engine_projection: &mut CoreMlProgram,
     measured_engines: &MeasuredEngines,
     engine_label: &str,
 ) -> [TimingSummary; 3] {
@@ -95,7 +95,7 @@ pub(crate) fn load_neural_engine_slice(
     neural_engine_fixture: &ProjectionFixture,
     contraction_part_count: usize,
     model_directory: &std::path::Path,
-) -> CoreMlProjection {
+) -> CoreMlProgram {
     let mut projection = load_neural_network(
         neural_engine_fixture.shape,
         &neural_engine_fixture.fp16_weights,
@@ -118,7 +118,7 @@ pub(crate) fn load_neural_engine_slice(
 fn run_split_call(
     runtime: &MlxRuntime,
     gpu_form: &MlxProjectionForm<'_>,
-    neural_engine_projection: &mut CoreMlProjection,
+    neural_engine_projection: &mut CoreMlProgram,
     measured_engines: &MeasuredEngines,
 ) -> (Duration, Duration, Duration) {
     let call_started_at = Instant::now();
@@ -166,3 +166,7 @@ pub(crate) fn evaluate_gpu_slice(runtime: &MlxRuntime, gpu_form: &MlxProjectionF
         .evaluate_arrays(&[&projected])
         .expect("the GPU slice evaluates");
 }
+
+#[cfg(test)]
+#[path = "engine_split_tests.rs"]
+mod tests;

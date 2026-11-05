@@ -1,5 +1,5 @@
 use super::{LOOKUP_TABLE_ENTRY_COUNT, SharedLookupTables};
-use crate::documents::model_interface::ProjectionDocumentError;
+use crate::documents::model_interface::ModelDocumentError;
 use crate::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
 
 fn fp16_ramp(value_count: usize) -> Vec<u16> {
@@ -112,7 +112,7 @@ fn should_refuse_rows_per_table_that_do_not_divide_the_rows() {
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::UnevenLookupTableRows {
+        Some(ModelDocumentError::UnevenLookupTableRows {
             output_channels: 5,
             rows_per_table: 2,
         })
@@ -125,7 +125,7 @@ fn should_refuse_zero_rows_per_table() {
 
     assert!(matches!(
         encoding_result,
-        Err(ProjectionDocumentError::UnevenLookupTableRows { .. })
+        Err(ModelDocumentError::UnevenLookupTableRows { .. })
     ));
 }
 
@@ -135,7 +135,7 @@ fn should_refuse_a_weight_count_that_does_not_match_the_shape() {
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::WeightCountMismatch {
+        Some(ModelDocumentError::WeightCountMismatch {
             expected: 4,
             actual: 3,
         })
@@ -148,6 +148,6 @@ fn should_refuse_an_empty_part() {
 
     assert!(matches!(
         encoding_result,
-        Err(ProjectionDocumentError::WeightCountMismatch { .. })
+        Err(ModelDocumentError::WeightCountMismatch { .. })
     ));
 }

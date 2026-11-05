@@ -2,8 +2,8 @@ use super::{
     RotatedMlpLayout, RotatedMlpWeights, encode_ml_program_rotated_mlp, normalized_hadamard_fp16,
 };
 use crate::documents::mlp_stages::StageWeightEncoding;
-use crate::documents::model_interface::ProjectionDocumentError;
-use crate::projection_shape::ProjectionShape;
+use crate::documents::model_interface::ModelDocumentError;
+use crate::program_shape::ProgramShape;
 use crate::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
 use crate::weights::shared_lookup_tables::LOOKUP_TABLE_ENTRY_COUNT;
 
@@ -25,7 +25,7 @@ fn contains_subsequence(encoded: &[u8], expected_bytes: &[u8]) -> bool {
 
 fn layout() -> RotatedMlpLayout {
     RotatedMlpLayout {
-        shape: ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, TOKEN_COUNT)
+        shape: ProgramShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, TOKEN_COUNT)
             .expect("valid shape"),
         intermediate_channels: INTERMEDIATE_CHANNELS,
         contraction_part_width: PART_WIDTH,
@@ -162,7 +162,7 @@ fn should_refuse_a_rotation_block_that_does_not_divide_the_intermediate_channels
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::UnevenRotationBlocks {
+        Some(ModelDocumentError::UnevenRotationBlocks {
             channel_count: INTERMEDIATE_CHANNELS,
             block_size: 5,
         })
@@ -185,7 +185,7 @@ fn should_refuse_a_rotation_block_of_zero() {
 
     assert!(matches!(
         encoding_result,
-        Err(ProjectionDocumentError::UnevenRotationBlocks { .. })
+        Err(ModelDocumentError::UnevenRotationBlocks { .. })
     ));
 }
 
@@ -206,7 +206,7 @@ fn should_refuse_a_rotation_block_that_is_not_a_power_of_two() {
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::UnevenRotationBlocks {
+        Some(ModelDocumentError::UnevenRotationBlocks {
             channel_count: 12,
             block_size: 6,
         })
@@ -226,7 +226,7 @@ fn should_refuse_signs_of_the_wrong_length() {
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::WeightCountMismatch {
+        Some(ModelDocumentError::WeightCountMismatch {
             expected: INTERMEDIATE_CHANNELS,
             actual: 3,
         })
@@ -249,6 +249,6 @@ fn should_refuse_table_rows_that_do_not_divide_the_output_rows() {
 
     assert!(matches!(
         encoding_result,
-        Err(ProjectionDocumentError::UnevenLookupTableRows { .. })
+        Err(ModelDocumentError::UnevenLookupTableRows { .. })
     ));
 }

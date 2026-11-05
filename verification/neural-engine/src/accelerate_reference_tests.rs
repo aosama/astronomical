@@ -1,10 +1,10 @@
 use super::{ReferenceProjectionError, reference_projection};
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 
 #[test]
 fn should_project_channels_by_tokens_like_a_hand_computed_product() {
     // Two input channels, three output channels, two tokens.
-    let shape = ProjectionShape::new(2, 3, 2).expect("valid shape");
+    let shape = ProgramShape::new(2, 3, 2).expect("valid shape");
     let weights = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
     let activations = [1.0, -1.0, 10.0, 0.5];
 
@@ -16,14 +16,14 @@ fn should_project_channels_by_tokens_like_a_hand_computed_product() {
 
 #[test]
 fn should_project_a_single_value() {
-    let shape = ProjectionShape::new(1, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(1, 1, 1).expect("valid shape");
 
     assert_eq!(reference_projection(shape, &[3.0], &[-2.0]), Ok(vec![-6.0]));
 }
 
 #[test]
 fn should_reject_missing_weights() {
-    let shape = ProjectionShape::new(2, 2, 1).expect("valid shape");
+    let shape = ProgramShape::new(2, 2, 1).expect("valid shape");
 
     assert_eq!(
         reference_projection(shape, &[1.0; 3], &[1.0; 2]),
@@ -36,7 +36,7 @@ fn should_reject_missing_weights() {
 
 #[test]
 fn should_reject_missing_activations() {
-    let shape = ProjectionShape::new(2, 2, 3).expect("valid shape");
+    let shape = ProgramShape::new(2, 2, 3).expect("valid shape");
 
     assert_eq!(
         reference_projection(shape, &[1.0; 4], &[1.0; 5]),

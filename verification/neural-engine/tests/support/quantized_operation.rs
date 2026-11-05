@@ -1,7 +1,7 @@
 //! One dense operation in the artifact's quantized form, prepared for both
 //! engines, shared by the whole-model and hand-off journeys.
 
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_neural_engine::weights::half_precision::f32_slice_to_f16_bits;
 use astronomical_runtime_integration::MlxRuntime;
 use astronomical_test_harness::deterministic_values::{
@@ -32,7 +32,7 @@ pub(crate) struct QuantizedOperation {
 
 pub(crate) fn quantize_and_round_trip(
     runtime: &MlxRuntime,
-    shape: ProjectionShape,
+    shape: ProgramShape,
 ) -> (MlxArray, MlxArray, MlxArray, Vec<u16>) {
     let trained_like_weights = bell_shaped_values(
         ORNITH_WEIGHT_SEED,
@@ -89,7 +89,7 @@ pub(crate) fn prepare_quantized_operation(
     runtime: &MlxRuntime,
     operation: &DenseOperation,
 ) -> QuantizedOperation {
-    let shape = ProjectionShape::new(
+    let shape = ProgramShape::new(
         operation.input_channels,
         operation.output_channels,
         PREFILL_CHUNK_TOKEN_COUNT,

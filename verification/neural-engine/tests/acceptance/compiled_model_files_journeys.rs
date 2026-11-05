@@ -10,9 +10,9 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine::documents::projection::MlProgramWeights;
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_neural_engine::weights::half_precision::{
     f16_bits_slice_to_f32, f32_slice_to_f16_bits,
 };
@@ -50,7 +50,7 @@ fn compiled_model_count(temporary_directory: &Path) -> usize {
     compiled_model_count
 }
 
-fn predicted_values(projection: &mut CoreMlProjection) -> Vec<u16> {
+fn predicted_values(projection: &mut CoreMlProgram) -> Vec<u16> {
     projection.predict().expect("the prediction runs");
     projection.read_projected().expect("the result reads")
 }
@@ -60,7 +60,7 @@ fn predicted_values(projection: &mut CoreMlProjection) -> Vec<u16> {
 #[ignore = "loads one small program on the real Neural Engine and removes its compiled copy"]
 fn should_keep_predicting_after_discarding_the_compiled_model() {
     let shape =
-        ProjectionShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
+        ProgramShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
     let fp16_weights = f32_slice_to_f16_bits(&bell_shaped_values(
         WEIGHT_SEED,
         shape.weight_element_count(),
@@ -126,7 +126,7 @@ fn should_keep_predicting_after_discarding_the_compiled_model() {
 #[ignore = "keeps one small program's compiled copy and loads it again on the Neural Engine"]
 fn should_predict_the_same_values_from_a_kept_compiled_model() {
     let shape =
-        ProjectionShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
+        ProgramShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
     let fp16_weights = f32_slice_to_f16_bits(&bell_shaped_values(
         WEIGHT_SEED,
         shape.weight_element_count(),
@@ -164,7 +164,7 @@ fn should_predict_the_same_values_from_a_kept_compiled_model() {
     assert!(kept_model_path.is_dir(), "release leaves a kept copy alone");
 
     drop(package_directory);
-    let mut reloaded = CoreMlProjection::load_from_path(
+    let mut reloaded = CoreMlProgram::load_from_path(
         &kept_model_path,
         shape,
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -186,7 +186,7 @@ fn should_predict_the_same_values_from_a_kept_compiled_model() {
 #[ignore = "compiles one small program straight to a kept path and loads it from there"]
 fn should_predict_the_same_values_from_a_program_compiled_to_its_final_path() {
     let shape =
-        ProjectionShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
+        ProgramShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
     let fixture = ProjectionFixture::with_shape(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT);
     let package_directory = tempfile::tempdir().expect("a scratch directory for the package");
     let kept_directory = tempfile::tempdir().expect("a directory for the kept program");
@@ -201,7 +201,7 @@ fn should_predict_the_same_values_from_a_program_compiled_to_its_final_path() {
         &kept_model_path,
     )
     .expect("the program compiles to its final path");
-    let mut kept_program = CoreMlProjection::load_from_path(
+    let mut kept_program = CoreMlProgram::load_from_path(
         &kept_model_path,
         shape,
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -226,11 +226,11 @@ fn should_predict_the_same_values_from_a_program_compiled_to_its_final_path() {
 #[ignore = "asks Core ML to load a kept program that was never compiled"]
 fn should_refuse_to_load_a_kept_program_that_was_never_compiled() {
     let shape =
-        ProjectionShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
+        ProgramShape::new(INPUT_CHANNELS, OUTPUT_CHANNELS, TOKEN_COUNT).expect("valid shape");
     let kept_directory = tempfile::tempdir().expect("a directory for the kept program");
     let kept_model_path = kept_directory.path().join("kept.mlmodelc");
 
-    let loaded = CoreMlProjection::load_from_path(
+    let loaded = CoreMlProgram::load_from_path(
         &kept_model_path,
         shape,
         CoreMlComputeUnits::CpuAndNeuralEngine,

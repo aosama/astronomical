@@ -26,7 +26,7 @@ enum TokenSplitForwardError {
     #[error(transparent)]
     Mlx(#[from] mlx_c_rust::MlxCError),
     #[error(transparent)]
-    Projection(#[from] astronomical_neural_engine::core_ml::CoreMlProjectionError),
+    Program(#[from] astronomical_neural_engine::core_ml::CoreMlProgramError),
     #[error("no Neural Engine program exists for decoder layer {layer_index}")]
     MissingLayerProgram { layer_index: usize },
 }

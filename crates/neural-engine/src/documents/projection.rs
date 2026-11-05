@@ -20,10 +20,10 @@ use crate::documents::mil_operations::{
     convolution_operation, convolution_parameter_constants, program, weight_blob_value,
 };
 use crate::documents::model_interface::{
-    ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
+    ACTIVATIONS_FEATURE_NAME, ModelDocumentError, PROJECTED_FEATURE_NAME, model_description,
 };
 use crate::documents::package_layout::MlProgramPackageContents;
-use crate::projection_shape::ProjectionShape;
+use crate::program_shape::ProgramShape;
 use crate::weights::affine_quantized::AffineQuantizedWeights;
 use crate::weights::row_major_block::row_block;
 use crate::wire::mil_program::{MilDataType, MilOperation, int32_tensor_value, tensor_value_type};
@@ -45,10 +45,10 @@ pub enum MlProgramWeights<'weights> {
 }
 
 pub fn encode_ml_program_projection(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     weights: MlProgramWeights<'_>,
     contraction_part_count: usize,
-) -> Result<MlProgramPackageContents, ProjectionDocumentError> {
+) -> Result<MlProgramPackageContents, ModelDocumentError> {
     validate_weights(shape, weights, contraction_part_count)?;
     let mut weight_blob_file = WeightBlobFile::new();
     let operations = projection_operations(
@@ -68,16 +68,16 @@ pub fn encode_ml_program_projection(
 }
 
 fn validate_weights(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     weights: MlProgramWeights<'_>,
     contraction_part_count: usize,
-) -> Result<(), ProjectionDocumentError> {
+) -> Result<(), ModelDocumentError> {
     if contraction_part_count == 0
         || !shape
             .input_channels()
             .is_multiple_of(contraction_part_count)
     {
-        return Err(ProjectionDocumentError::UnevenContractionSplit {
+        return Err(ModelDocumentError::UnevenContractionSplit {
             input_channels: shape.input_channels(),
             contraction_part_count,
         });
@@ -92,27 +92,27 @@ fn validate_weights(
 }
 
 fn validate_fp16_weights(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     fp16_weights: &[u16],
-) -> Result<(), ProjectionDocumentError> {
+) -> Result<(), ModelDocumentError> {
     if fp16_weights.len() == shape.weight_element_count() {
         return Ok(());
     }
-    Err(ProjectionDocumentError::WeightCountMismatch {
+    Err(ModelDocumentError::WeightCountMismatch {
         expected: shape.weight_element_count(),
         actual: fp16_weights.len(),
     })
 }
 
 fn validate_quantized_weights(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     quantized_weights: &AffineQuantizedWeights,
     contraction_part_count: usize,
-) -> Result<(), ProjectionDocumentError> {
+) -> Result<(), ModelDocumentError> {
     if quantized_weights.output_channels() != shape.output_channels()
         || quantized_weights.input_channels() != shape.input_channels()
     {
-        return Err(ProjectionDocumentError::QuantizedShapeMismatch {
+        return Err(ModelDocumentError::QuantizedShapeMismatch {
             output_channels: quantized_weights.output_channels(),
             input_channels: quantized_weights.input_channels(),
         });
@@ -120,18 +120,16 @@ fn validate_quantized_weights(
     let part_width = shape.input_channels() / contraction_part_count;
     let block_input_columns = quantized_weights.layout().block_input_columns;
     if !part_width.is_multiple_of(block_input_columns) {
-        return Err(
-            ProjectionDocumentError::ContractionPartCutsQuantizationBlock {
-                part_width,
-                block_input_columns,
-            },
-        );
+        return Err(ModelDocumentError::ContractionPartCutsQuantizationBlock {
+            part_width,
+            block_input_columns,
+        });
     }
     Ok(())
 }
 
 fn projection_operations(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     weights: MlProgramWeights<'_>,
     contraction_part_count: usize,
     weight_blob_file: &mut WeightBlobFile,
@@ -197,7 +195,7 @@ fn partial_projection_name(part_index: usize, contraction_part_count: usize) -> 
 }
 
 fn contraction_split_operations(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     contraction_part_count: usize,
 ) -> Vec<Vec<u8>> {
     let part_width = shape.input_channels() / contraction_part_count;
@@ -228,7 +226,7 @@ fn contraction_split_operations(
 
 fn part_weight_operation(
     weight_name: &str,
-    shape: ProjectionShape,
+    shape: ProgramShape,
     weights: MlProgramWeights<'_>,
     first_input_channel: usize,
     part_width: usize,

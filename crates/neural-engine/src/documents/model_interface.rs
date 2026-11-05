@@ -7,7 +7,7 @@
 
 use thiserror::Error;
 
-use crate::projection_shape::ProjectionShape;
+use crate::program_shape::ProgramShape;
 use crate::wire::protobuf::{append_bytes_field, append_string_field, append_varint_field};
 
 /// The input feature name the Objective-C bridge binds to.
@@ -18,7 +18,7 @@ pub const PROJECTED_FEATURE_NAME: &str = "projected";
 const FLOAT16_ARRAY_DATA_TYPE: u64 = 0x10000 | 16;
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub enum ProjectionDocumentError {
+pub enum ModelDocumentError {
     #[error("the projection needs {expected} fp16 weights, got {actual}")]
     WeightCountMismatch { expected: usize, actual: usize },
     #[error(
@@ -65,7 +65,7 @@ pub enum ProjectionDocumentError {
 /// The `ModelDescription` declaring the fp16 `activations` input and
 /// `projected` output.
 #[must_use]
-pub fn model_description(shape: ProjectionShape) -> Vec<u8> {
+pub fn model_description(shape: ProgramShape) -> Vec<u8> {
     let mut description = Vec::new();
     append_bytes_field(
         &mut description,

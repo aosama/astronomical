@@ -23,6 +23,6 @@ pub mod core_ml;
 pub mod documents;
 #[cfg(feature = "mlx-hand-off")]
 pub mod mlx_hand_off;
-pub mod projection_shape;
+pub mod program_shape;
 pub mod weights;
 mod wire;

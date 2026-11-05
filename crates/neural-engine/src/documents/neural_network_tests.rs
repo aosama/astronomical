@@ -1,5 +1,5 @@
-use super::{ProjectionDocumentError, encode_projection_document, write_model_document};
-use crate::projection_shape::ProjectionShape;
+use super::{ModelDocumentError, encode_projection_document, write_model_document};
+use crate::program_shape::ProgramShape;
 
 const SINGLE_CONVOLUTION: usize = 1;
 
@@ -14,7 +14,7 @@ fn contains_subsequence(document: &[u8], expected_bytes: &[u8]) -> bool {
 
 #[test]
 fn should_start_with_the_fp16_capable_specification_version() {
-    let shape = ProjectionShape::new(2, 3, 4).expect("valid shape");
+    let shape = ProgramShape::new(2, 3, 4).expect("valid shape");
 
     let document = encode_projection_document(shape, &[0x3c00; 6], SINGLE_CONVOLUTION)
         .expect("document encodes");
@@ -24,7 +24,7 @@ fn should_start_with_the_fp16_capable_specification_version() {
 
 #[test]
 fn should_name_the_features_the_native_bridge_binds() {
-    let shape = ProjectionShape::new(2, 3, 4).expect("valid shape");
+    let shape = ProgramShape::new(2, 3, 4).expect("valid shape");
 
     let document = encode_projection_document(shape, &[0x3c00; 6], SINGLE_CONVOLUTION)
         .expect("document encodes");
@@ -35,7 +35,7 @@ fn should_name_the_features_the_native_bridge_binds() {
 
 #[test]
 fn should_embed_every_weight_as_little_endian_fp16() {
-    let shape = ProjectionShape::new(2, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(2, 1, 1).expect("valid shape");
 
     let document = encode_projection_document(shape, &[0x3c00, 0xc100], SINGLE_CONVOLUTION)
         .expect("document encodes");
@@ -49,7 +49,7 @@ fn should_embed_every_weight_as_little_endian_fp16() {
 
 #[test]
 fn should_declare_channels_by_tokens_fp16_arrays() {
-    let shape = ProjectionShape::new(5, 3, 7).expect("valid shape");
+    let shape = ProgramShape::new(5, 3, 7).expect("valid shape");
 
     let document =
         encode_projection_document(shape, &[0; 15], SINGLE_CONVOLUTION).expect("document encodes");
@@ -63,11 +63,11 @@ fn should_declare_channels_by_tokens_fp16_arrays() {
 
 #[test]
 fn should_reject_a_weight_count_that_does_not_match_the_shape() {
-    let shape = ProjectionShape::new(2, 3, 4).expect("valid shape");
+    let shape = ProgramShape::new(2, 3, 4).expect("valid shape");
 
     assert_eq!(
         encode_projection_document(shape, &[0; 5], SINGLE_CONVOLUTION),
-        Err(ProjectionDocumentError::WeightCountMismatch {
+        Err(ModelDocumentError::WeightCountMismatch {
             expected: 6,
             actual: 5
         })
@@ -76,7 +76,7 @@ fn should_reject_a_weight_count_that_does_not_match_the_shape() {
 
 #[test]
 fn should_split_the_contraction_into_summed_part_convolutions() {
-    let shape = ProjectionShape::new(4, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(4, 1, 1).expect("valid shape");
 
     let document = encode_projection_document(shape, &[0x3c00, 0x4000, 0x4200, 0x4400], 2)
         .expect("document encodes");
@@ -94,7 +94,7 @@ fn should_split_the_contraction_into_summed_part_convolutions() {
 
 #[test]
 fn should_keep_a_single_convolution_when_the_contraction_is_not_split() {
-    let shape = ProjectionShape::new(4, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(4, 1, 1).expect("valid shape");
 
     let document =
         encode_projection_document(shape, &[0; 4], SINGLE_CONVOLUTION).expect("document encodes");
@@ -104,11 +104,11 @@ fn should_keep_a_single_convolution_when_the_contraction_is_not_split() {
 
 #[test]
 fn should_reject_a_contraction_split_that_does_not_divide_the_input_channels() {
-    let shape = ProjectionShape::new(6, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(6, 1, 1).expect("valid shape");
 
     assert_eq!(
         encode_projection_document(shape, &[0; 6], 4),
-        Err(ProjectionDocumentError::UnevenContractionSplit {
+        Err(ModelDocumentError::UnevenContractionSplit {
             input_channels: 6,
             contraction_part_count: 4
         })

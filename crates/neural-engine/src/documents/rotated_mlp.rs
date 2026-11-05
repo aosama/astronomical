@@ -29,10 +29,10 @@ use crate::documents::mlp_stages::{
     projection_stage_operations, silu_gating_operations, validated_stage_shape,
 };
 use crate::documents::model_interface::{
-    ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
+    ACTIVATIONS_FEATURE_NAME, ModelDocumentError, PROJECTED_FEATURE_NAME, model_description,
 };
 use crate::documents::package_layout::MlProgramPackageContents;
-use crate::projection_shape::ProjectionShape;
+use crate::program_shape::ProgramShape;
 use crate::weights::half_precision::f32_to_f16_bits;
 use crate::wire::mil_program::{MilDataType, MilOperation, bool_scalar_value};
 use crate::wire::protobuf::{append_bytes_field, append_varint_field};
@@ -47,7 +47,7 @@ const HADAMARD_WEIGHT_NAME: &str = "hadamard_weight";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RotatedMlpLayout {
     /// `hidden → hidden` over this program's tokens.
-    pub shape: ProjectionShape,
+    pub shape: ProgramShape,
     pub intermediate_channels: usize,
     pub contraction_part_width: usize,
     pub rotation_block_size: usize,
@@ -88,7 +88,7 @@ pub fn normalized_hadamard_fp16(block_size: usize) -> Vec<u16> {
 pub fn encode_ml_program_rotated_mlp(
     layout: RotatedMlpLayout,
     weights: RotatedMlpWeights<'_>,
-) -> Result<MlProgramPackageContents, ProjectionDocumentError> {
+) -> Result<MlProgramPackageContents, ModelDocumentError> {
     let token_count = layout.shape.token_count();
     let hidden_channels = layout.shape.input_channels();
     let intermediate_channels = layout.intermediate_channels;
@@ -157,19 +157,19 @@ pub fn encode_ml_program_rotated_mlp(
 fn validate_rotation(
     layout: RotatedMlpLayout,
     sign_count: usize,
-) -> Result<(), ProjectionDocumentError> {
+) -> Result<(), ModelDocumentError> {
     let intermediate_channels = layout.intermediate_channels;
     let block_size = layout.rotation_block_size;
     // The popcount rule only yields an orthogonal matrix at powers of two; any
     // other size would encode and run while silently corrupting the activations.
     if !block_size.is_power_of_two() || !intermediate_channels.is_multiple_of(block_size) {
-        return Err(ProjectionDocumentError::UnevenRotationBlocks {
+        return Err(ModelDocumentError::UnevenRotationBlocks {
             channel_count: intermediate_channels,
             block_size,
         });
     }
     if sign_count != intermediate_channels {
-        return Err(ProjectionDocumentError::WeightCountMismatch {
+        return Err(ModelDocumentError::WeightCountMismatch {
             expected: intermediate_channels,
             actual: sign_count,
         });
@@ -189,7 +189,7 @@ fn rotation_operations(
     let block_count = intermediate_channels / block_size;
     let intermediate_type = activation_type(intermediate_channels, token_count);
     let block_type = activation_type(block_size, token_count);
-    let block_shape = ProjectionShape::new(block_size, block_size, token_count)
+    let block_shape = ProgramShape::new(block_size, block_size, token_count)
         .expect("the block size and token count were validated as non-zero");
     let mut operations = rotation_constant_operations(layout, intermediate_signs, weight_blob_file);
     operations.push(

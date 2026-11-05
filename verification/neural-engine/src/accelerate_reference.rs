@@ -4,7 +4,7 @@
 //! its result is the yardstick both the Neural Engine (fp16) and MLX are
 //! measured against.
 
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 
 use thiserror::Error;
 
@@ -42,7 +42,7 @@ pub enum ReferenceProjectionError {
 
 /// `projected[o][t] = Σᵢ weights[o][i] · activations[i][t]`, all row-major.
 pub fn reference_projection(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     weights: &[f32],
     activations: &[f32],
 ) -> Result<Vec<f32>, ReferenceProjectionError> {
@@ -59,7 +59,7 @@ pub fn reference_projection(
         });
     }
     let mut projected = vec![0.0_f32; shape.projected_element_count()];
-    // ProjectionShape guarantees every dimension fits in i32.
+    // ProgramShape guarantees every dimension fits in i32.
     let output_channels = shape.output_channels() as i32;
     let input_channels = shape.input_channels() as i32;
     let token_count = shape.token_count() as i32;

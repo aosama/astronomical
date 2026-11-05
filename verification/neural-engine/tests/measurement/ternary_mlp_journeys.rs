@@ -22,7 +22,7 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlProgram};
 use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
@@ -261,7 +261,7 @@ fn write_rotated_tokens(
     runtime: &MlxRuntime,
     mlp: &GpuMlp,
     input: &MlxArray,
-    projection: &mut CoreMlProjection,
+    projection: &mut CoreMlProgram,
 ) {
     let rotated_input = rotate(runtime, input, &mlp.hidden_signs);
     let neural_engine_tokens = token_range(
@@ -278,7 +278,7 @@ fn write_rotated_tokens(
     write_prepared_input(&prepared, projection).expect("the activations fit");
 }
 
-fn time_neural_engine_alone(projection: &mut CoreMlProjection) -> TimingSummary {
+fn time_neural_engine_alone(projection: &mut CoreMlProgram) -> TimingSummary {
     let warm_up_started_at = Instant::now();
     let mut warm_up_calls = 0;
     while warm_up_calls < MINIMUM_WARM_UP_CALL_COUNT
@@ -298,7 +298,7 @@ fn run_token_split_call(
     runtime: &MlxRuntime,
     mlp: &GpuMlp,
     input: &MlxArray,
-    projection: &mut CoreMlProjection,
+    projection: &mut CoreMlProgram,
 ) -> (StageDurations, MlxArray) {
     let call_started_at = Instant::now();
     let rotated_input = rotate(runtime, input, &mlp.hidden_signs);
@@ -383,7 +383,7 @@ fn compare_neural_engine_tokens(
 }
 
 fn print_stop_gates(
-    projection: &CoreMlProjection,
+    projection: &CoreMlProgram,
     neural_engine_tflops: f64,
     comparison: &NumericalComparison,
 ) {
@@ -413,7 +413,7 @@ fn measure_token_split(
     runtime: &MlxRuntime,
     mlp: &GpuMlp,
     input: &MlxArray,
-    projection: &mut CoreMlProjection,
+    projection: &mut CoreMlProgram,
 ) -> (TimingSummary, MlxArray) {
     let warm_up_started_at = Instant::now();
     while warm_up_started_at.elapsed() < MINIMUM_WARM_UP_DURATION {
@@ -439,7 +439,7 @@ fn load_and_report_program(
     layer: &TernaryMlpLayer,
     weight_encoding: StageWeightEncoding,
     directory: &std::path::Path,
-) -> (CoreMlProjection, usize) {
+) -> (CoreMlProgram, usize) {
     let before_load = MemorySnapshot::capture();
     let load_started_at = Instant::now();
     let (mut projection, weight_count) = load_program(layer, weight_encoding, directory);
@@ -456,7 +456,7 @@ fn load_and_report_program(
 
 /// Returns the program's rate, counting the rotation's weights as work because
 /// it runs inside the program.
-fn measure_neural_engine_tflops(projection: &mut CoreMlProjection, weight_count: usize) -> f64 {
+fn measure_neural_engine_tflops(projection: &mut CoreMlProgram, weight_count: usize) -> f64 {
     let neural_engine_timing = time_neural_engine_alone(projection);
     let rotation_weights = (INTERMEDIATE_CHANNELS * ROTATION_BLOCK_SIZE) as f64;
     let floating_point_operations =

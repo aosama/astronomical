@@ -1,10 +1,10 @@
 //! The real ternary MLP's shape and program loading, shared by its accuracy and
 //! memory journeys.
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine::documents::rotated_mlp::{RotatedMlpLayout, RotatedMlpWeights};
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_neural_engine::weights::half_precision::f32_to_f16_bits;
 
 use super::ternary_checkpoint::TernaryMlpLayer;
@@ -27,7 +27,7 @@ pub(crate) fn load_program(
     layer: &TernaryMlpLayer,
     weight_encoding: StageWeightEncoding,
     directory: &std::path::Path,
-) -> (CoreMlProjection, usize) {
+) -> (CoreMlProgram, usize) {
     let mut gate_and_up_weights = layer.gate.fp16_weights();
     gate_and_up_weights.extend(layer.up.fp16_weights());
     let down_weights = layer.down.fp16_weights();
@@ -35,7 +35,7 @@ pub(crate) fn load_program(
     for sign in &layer.down.signs {
         fp16_signs.push(f32_to_f16_bits(*sign));
     }
-    let shape = ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, NEURAL_ENGINE_TOKEN_COUNT)
+    let shape = ProgramShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, NEURAL_ENGINE_TOKEN_COUNT)
         .expect("valid shape");
     let weight_count = gate_and_up_weights.len() + down_weights.len();
     let projection = load_ml_program_rotated_mlp(
@@ -61,3 +61,7 @@ pub(crate) fn load_program(
 pub(crate) fn gate_verdict(has_passed: bool) -> &'static str {
     if has_passed { "PASS" } else { "STOP" }
 }
+
+#[cfg(test)]
+#[path = "ternary_mlp_tests.rs"]
+mod tests;

@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection, LayerPlacement};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, LayerPlacement};
 use astronomical_neural_engine::documents::projection::MlProgramWeights;
 use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine_research::numerical_comparison::{
@@ -113,7 +113,7 @@ pub fn measure_projection_model(
 
 fn compare_with_reference(
     fixture: &ProjectionFixture,
-    projection: &CoreMlProjection,
+    projection: &CoreMlProgram,
 ) -> NumericalComparison {
     let candidate_projected = f16_bits_slice_to_f32(
         &projection
@@ -130,7 +130,7 @@ fn load_projection_model(
     contraction_part_count: usize,
     projection_model: ProjectionModel<'_>,
     model_directory: &Path,
-) -> CoreMlProjection {
+) -> CoreMlProgram {
     match projection_model {
         ProjectionModel::NeuralNetworkFp16 => load_neural_network(
             fixture.shape,
@@ -151,7 +151,7 @@ fn load_projection_model(
 }
 
 fn time_predictions(
-    projection: &mut CoreMlProjection,
+    projection: &mut CoreMlProgram,
     compute_units: CoreMlComputeUnits,
 ) -> TimingSummary {
     let warm_up_started_at = Instant::now();

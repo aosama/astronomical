@@ -16,9 +16,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::documents::model_interface::{
-    ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
+    ACTIVATIONS_FEATURE_NAME, ModelDocumentError, PROJECTED_FEATURE_NAME, model_description,
 };
-use crate::projection_shape::ProjectionShape;
+use crate::program_shape::ProgramShape;
 use crate::weights::row_major_block::row_block;
 use crate::wire::protobuf::{append_bytes_field, append_string_field, append_varint_field};
 
@@ -38,12 +38,12 @@ const EXACT_ARRAY_MAPPING: u64 = 1;
 /// 2,048-deep contraction at 18.6 TFLOP/s but a 4,096-deep one at 9.7
 /// (shape sweep, issue #161).
 pub fn encode_projection_document(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     fp16_weights: &[u16],
     contraction_part_count: usize,
-) -> Result<Vec<u8>, ProjectionDocumentError> {
+) -> Result<Vec<u8>, ModelDocumentError> {
     if fp16_weights.len() != shape.weight_element_count() {
-        return Err(ProjectionDocumentError::WeightCountMismatch {
+        return Err(ModelDocumentError::WeightCountMismatch {
             expected: shape.weight_element_count(),
             actual: fp16_weights.len(),
         });
@@ -53,7 +53,7 @@ pub fn encode_projection_document(
             .input_channels()
             .is_multiple_of(contraction_part_count)
     {
-        return Err(ProjectionDocumentError::UnevenContractionSplit {
+        return Err(ModelDocumentError::UnevenContractionSplit {
             input_channels: shape.input_channels(),
             contraction_part_count,
         });
@@ -118,7 +118,7 @@ fn convolution_layer(
 /// Split (field 330) → one convolution per part → add (field 230).
 fn append_contraction_split_layers(
     network: &mut Vec<u8>,
-    shape: ProjectionShape,
+    shape: ProgramShape,
     fp16_weights: &[u16],
     contraction_part_count: usize,
 ) {

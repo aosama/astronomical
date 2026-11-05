@@ -9,7 +9,7 @@
 //! with many blocks sharing them. Where a table would overflow, the two closest
 //! values merge, so the error lands where it is smallest.
 
-use crate::documents::model_interface::ProjectionDocumentError;
+use crate::documents::model_interface::ModelDocumentError;
 use crate::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
 
 /// Entries in every table, the only size an 8-bit code can address.
@@ -51,7 +51,7 @@ impl SharedLookupTables {
         output_channels: usize,
         input_channels: usize,
         rows_per_table: usize,
-    ) -> Result<Self, ProjectionDocumentError> {
+    ) -> Result<Self, ModelDocumentError> {
         validate_shape(
             fp16_weights.len(),
             output_channels,
@@ -110,16 +110,16 @@ fn validate_shape(
     output_channels: usize,
     input_channels: usize,
     rows_per_table: usize,
-) -> Result<(), ProjectionDocumentError> {
+) -> Result<(), ModelDocumentError> {
     if rows_per_table == 0 || !output_channels.is_multiple_of(rows_per_table) {
-        return Err(ProjectionDocumentError::UnevenLookupTableRows {
+        return Err(ModelDocumentError::UnevenLookupTableRows {
             output_channels,
             rows_per_table,
         });
     }
     let expected_count = output_channels * input_channels;
     if weight_count != expected_count || expected_count == 0 {
-        return Err(ProjectionDocumentError::WeightCountMismatch {
+        return Err(ModelDocumentError::WeightCountMismatch {
             expected: expected_count,
             actual: weight_count,
         });

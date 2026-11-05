@@ -43,7 +43,7 @@ impl DFlashDraftLoadedWeights {
             .map_err(DFlashDraftWeightsLoadingError::Runtime)?;
 
         let (query_output_rows, key_value_output_rows, intermediate_size) =
-            DFlashDraftWeights::expected_projection_shape(configuration);
+            DFlashDraftWeights::expected_program_shape(configuration);
         let hidden_size = configuration.hidden_size();
         let head_dimension = configuration.head_dimension();
 

@@ -9,7 +9,7 @@ use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine_research::process_memory::{
     MemoryGrowth, MemorySnapshot, mebibytes,
@@ -39,7 +39,7 @@ const MINIMUM_PROGRAMS_FOR_GROWTH: usize = 2;
 
 /// Prefill visits every layer once per chunk, so this cycles through distinct
 /// programs to expose any switching cost that one program in a loop would hide.
-fn time_program_cycles(programs: &mut [CoreMlProjection]) -> TimingSummary {
+fn time_program_cycles(programs: &mut [CoreMlProgram]) -> TimingSummary {
     let activations = vec![ONE_AS_FP16; HIDDEN_CHANNELS * NEURAL_ENGINE_TOKEN_COUNT];
     for projection in programs.iter_mut() {
         projection
@@ -109,7 +109,7 @@ fn stop_reason(volume_path: &Path) -> Option<String> {
 fn load_program_without_files(
     layer: &TernaryMlpLayer,
     weight_encoding: StageWeightEncoding,
-) -> CoreMlProjection {
+) -> CoreMlProgram {
     let directory = tempfile::tempdir().expect("a scratch directory for the model");
     let (mut projection, _) = load_program(layer, weight_encoding, directory.path());
     projection.predict().expect("the first prediction runs");
@@ -124,7 +124,7 @@ fn load_program_without_files(
 /// The programs a memory journey managed to load, with the snapshots its verdict
 /// needs.
 struct LoadedPrograms {
-    programs: Vec<CoreMlProjection>,
+    programs: Vec<CoreMlProgram>,
     before_loads: MemorySnapshot,
     after_first_load: MemorySnapshot,
     total_load_seconds: f64,
@@ -269,7 +269,7 @@ fn wired_gibibytes_above(baseline: MemorySnapshot, snapshot: MemorySnapshot) -> 
 
 /// One pass over every program, in milliseconds. A pass after idle shows what
 /// getting the memory back would cost the next prompt.
-fn one_program_cycle_milliseconds(programs: &mut [CoreMlProjection]) -> f64 {
+fn one_program_cycle_milliseconds(programs: &mut [CoreMlProgram]) -> f64 {
     let cycle_started_at = Instant::now();
     for projection in programs.iter_mut() {
         projection.predict().expect("the prediction runs");
@@ -344,7 +344,7 @@ const LOAD_PHASE_WARM_REPEATS: usize = 3;
 fn report_load_phases(
     label: &str,
     total_seconds: f64,
-    projection: &CoreMlProjection,
+    projection: &CoreMlProgram,
     first_predict_seconds: f64,
 ) {
     let (model_load_seconds, placement_seconds) = projection.load_phase_seconds();
@@ -385,7 +385,7 @@ fn should_measure_where_a_program_load_spends_its_time() {
 
     for warm_repeat in 0..LOAD_PHASE_WARM_REPEATS {
         let warm_started_at = Instant::now();
-        let mut warm_program = CoreMlProjection::load_from_path(
+        let mut warm_program = CoreMlProgram::load_from_path(
             &kept_model_path,
             shape,
             CoreMlComputeUnits::CpuAndNeuralEngine,

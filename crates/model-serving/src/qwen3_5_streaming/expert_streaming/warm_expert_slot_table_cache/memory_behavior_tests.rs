@@ -161,7 +161,7 @@ fn should_not_leave_retired_or_source_tensors_active_after_growth() {
 /// One wide native-BF16 projection: `expert_count × 2048` rows of a constant
 /// fill, large enough that a real graph pin towers over the CPU allocator's
 /// per-array size-class rounding.
-fn wide_native_projection(
+fn wide_native_program(
     runtime: &MlxRuntime,
     expert_count: usize,
     fill: f32,
@@ -185,13 +185,13 @@ fn wide_streamed_native_weights(
 ) -> Qwen3_5PagedExpertWeights {
     Qwen3_5PagedExpertWeights {
         gate_projection: Qwen3_5AffineWeights::NativeBfloat16 {
-            weight: wide_native_projection(runtime, expert_count, 1.0),
+            weight: wide_native_program(runtime, expert_count, 1.0),
         },
         up_projection: Qwen3_5AffineWeights::NativeBfloat16 {
-            weight: wide_native_projection(runtime, expert_count, 2.0),
+            weight: wide_native_program(runtime, expert_count, 2.0),
         },
         down_projection: Qwen3_5AffineWeights::NativeBfloat16 {
-            weight: wide_native_projection(runtime, expert_count, 3.0),
+            weight: wide_native_program(runtime, expert_count, 3.0),
         },
         gate_activation_rotation:
             astronomical_jangtq2_qwen35::configuration::Jangtq2CodebookRotation::NoRotation,

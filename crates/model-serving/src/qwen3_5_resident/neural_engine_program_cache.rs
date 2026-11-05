@@ -9,8 +9,8 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProjection};
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProgram};
+use astronomical_neural_engine::program_shape::ProgramShape;
 
 use super::neural_engine_mlp_prefill::ProgramPackageDirectory;
 
@@ -61,20 +61,20 @@ fn remove_other_sets_of_family(model_cache_directory: &Path, family: &str, kept_
 /// What one layer's program is built from. The MLP and the output gate differ
 /// only here, so loading, verifying and caching are written once.
 pub(crate) trait ProgramSource {
-    fn shape(&self) -> ProjectionShape;
+    fn shape(&self) -> ProgramShape;
 
     /// Compiles the program and leaves it at `destination` without loading it.
     fn compile_to(&self, package_directory: &Path, destination: &Path) -> Result<(), &'static str>;
 
     /// Compiles into the temporary directory and loads from there.
-    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProjection, &'static str>;
+    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProgram, &'static str>;
 }
 
 /// A program is usable only when all of it sits on the Neural Engine and it has
 /// run once. The first prediction wires its weights and is far slower than the
 /// rest, so running it here keeps that cost out of a user's first long prompt, and
 /// a program that cannot run fails the load instead of a request.
-fn verify_program(program: &mut CoreMlProjection) -> Result<(), &'static str> {
+fn verify_program(program: &mut CoreMlProgram) -> Result<(), &'static str> {
     let placement = program.placement();
     if placement.preferred != ComputePlacement::NeuralEngine
         || placement.operations_off_neural_engine != 0
@@ -94,14 +94,14 @@ fn load_kept_program(
     source: &dyn ProgramSource,
     kept_program_path: &Path,
     layer_index: usize,
-) -> Option<CoreMlProjection> {
+) -> Option<CoreMlProgram> {
     if !kept_program_path.is_dir() {
         let package_directory = ProgramPackageDirectory::create(layer_index)?;
         source
             .compile_to(&package_directory.path, kept_program_path)
             .ok()?;
     }
-    if let Ok(mut program) = CoreMlProjection::load_from_path(
+    if let Ok(mut program) = CoreMlProgram::load_from_path(
         kept_program_path,
         source.shape(),
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -122,7 +122,7 @@ pub(crate) fn load_verified_program(
     source: &dyn ProgramSource,
     cache: Option<&ProgramSetCache>,
     layer_index: usize,
-) -> Result<CoreMlProjection, &'static str> {
+) -> Result<CoreMlProgram, &'static str> {
     if let Some(cache) = cache
         && let Some(program) =
             load_kept_program(source, &cache.program_path(layer_index), layer_index)

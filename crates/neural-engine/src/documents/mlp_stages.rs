@@ -5,8 +5,8 @@ use crate::documents::mil_operations::{
     activation_type, constant_operation, contraction_sum_operations, convolution_operation,
     split_axis_constant, split_count_constant, weight_blob_value,
 };
-use crate::documents::model_interface::ProjectionDocumentError;
-use crate::projection_shape::ProjectionShape;
+use crate::documents::model_interface::ModelDocumentError;
+use crate::program_shape::ProgramShape;
 use crate::weights::row_major_block::row_block;
 use crate::weights::shared_lookup_tables::{LOOKUP_TABLE_ENTRY_COUNT, SharedLookupTables};
 use crate::wire::mil_program::{MilDataType, MilOperation, tensor_value_type};
@@ -34,7 +34,7 @@ pub(crate) struct ProjectionStage<'stage> {
     pub(crate) stage_name: &'stage str,
     pub(crate) input_name: &'stage str,
     pub(crate) output_name: &'stage str,
-    pub(crate) shape: ProjectionShape,
+    pub(crate) shape: ProgramShape,
     pub(crate) fp16_weights: &'stage [u16],
     pub(crate) part_count: usize,
     pub(crate) weight_encoding: StageWeightEncoding,
@@ -46,22 +46,22 @@ pub(crate) fn validated_stage_shape(
     token_count: usize,
     fp16_weights: &[u16],
     contraction_part_width: usize,
-) -> Result<ProjectionShape, ProjectionDocumentError> {
+) -> Result<ProgramShape, ModelDocumentError> {
     if contraction_part_width == 0 || !input_channels.is_multiple_of(contraction_part_width) {
-        return Err(ProjectionDocumentError::UnevenContractionPartWidth {
+        return Err(ModelDocumentError::UnevenContractionPartWidth {
             input_channels,
             contraction_part_width,
         });
     }
     // A zero dimension leaves no weights to place, so it is reported as that.
-    let Ok(stage_shape) = ProjectionShape::new(input_channels, output_channels, token_count) else {
-        return Err(ProjectionDocumentError::WeightCountMismatch {
+    let Ok(stage_shape) = ProgramShape::new(input_channels, output_channels, token_count) else {
+        return Err(ModelDocumentError::WeightCountMismatch {
             expected: 0,
             actual: fp16_weights.len(),
         });
     };
     if fp16_weights.len() != stage_shape.weight_element_count() {
-        return Err(ProjectionDocumentError::WeightCountMismatch {
+        return Err(ModelDocumentError::WeightCountMismatch {
             expected: stage_shape.weight_element_count(),
             actual: fp16_weights.len(),
         });
@@ -104,7 +104,7 @@ fn stage_part_weight(
     part_index: usize,
     weight_name: &str,
     weight_blob_file: &mut WeightBlobFile,
-) -> Result<Vec<u8>, ProjectionDocumentError> {
+) -> Result<Vec<u8>, ModelDocumentError> {
     let part_width = stage.shape.input_channels() / stage.part_count;
     let part_weights = row_block(
         stage.fp16_weights,
@@ -138,7 +138,7 @@ fn stage_part_weight(
 pub(crate) fn projection_stage_operations(
     stage: &ProjectionStage<'_>,
     weight_blob_file: &mut WeightBlobFile,
-) -> Result<Vec<Vec<u8>>, ProjectionDocumentError> {
+) -> Result<Vec<Vec<u8>>, ModelDocumentError> {
     let part_inputs = part_input_names(stage);
     let mut operations = Vec::new();
     if stage.part_count > 1 {
@@ -241,3 +241,7 @@ fn shared_lookup_table_operation(
         )
         .into_bytes()
 }
+
+#[cfg(test)]
+#[path = "mlp_stages_tests.rs"]
+mod tests;

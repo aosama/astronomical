@@ -17,7 +17,7 @@ pub(crate) use program_loading::{ProgramPackageDirectory, weight_as_fp16_bits};
 
 use std::cell::{Cell, RefCell};
 
-use astronomical_neural_engine::core_ml::CoreMlProjection;
+use astronomical_neural_engine::core_ml::CoreMlProgram;
 
 // 47 percent: on a real mixed-bit artifact at 44 percent the GPU finished last in
 // 88 percent of layers (18.6 ms against 16.5 ms), and each 64 tokens moves about
@@ -32,7 +32,7 @@ pub(crate) const NEURAL_ENGINE_TOKEN_GRANULARITY: u32 = 64;
 
 /// One program per decoder layer, each fixed to the chunk's token slice.
 pub(crate) struct NeuralEngineMlpPrefill {
-    layer_programs: RefCell<Vec<CoreMlProjection>>,
+    layer_programs: RefCell<Vec<CoreMlProgram>>,
     chunk_token_count: u32,
     neural_engine_token_count: u32,
     /// Set by the first runtime failure, so later chunks stay on the GPU.

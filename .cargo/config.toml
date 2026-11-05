@@ -207,46 +207,13 @@ test-jangtq2-decode-throughput = "test --release --no-fail-fast -p astronomical-
 test-jangtq2-direct-mlx = "test --no-fail-fast -p astronomical-jangtq2-qwen35 --features direct-mlx --lib --test direct_mlx -- --test-threads=1"
 test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter jangtq2 --ignored"
 
-# Neural Engine research (issue #161), verification/neural-engine. "Hello, Neural
-# Engine": the qwen3_5 MoE mixer output projection (2,048 tokens, 4,096 →
-# 2,048 channels, 34.4 GFLOP) written as a Core ML model from Rust, then run
-# with CPU+Neural Engine, CPU-only (negative control), and CPU+GPU compute
-# units, plus MLX on the GPU (fp16, bf16, and the artifact's 8-bit affine
-# format) as the baseline. Each journey prints MLComputePlan's placement, the
-# error against an Accelerate fp32 reference, and median/p90 timing. The
-# shape sweep repeats that for every candidate prefill projection, and the
-# split journeys run one projection's output channels on the Neural Engine
-# and the GPU at the same time (narrow with --filter, e.g.
-# `cargo test-neural-engine-journeys --filter deltanet`). The compressed-weight
-# journeys write the projection as an ML Program package instead:
-# `compressed_weight` runs the probe matrix (shift-scale and lookup-table
-# weights, 4 and 8 bits, block shapes) with placement, speed, and fidelity to
-# the 4-bit checkpoint, and `footprint_of_mlp_gate_and_up_as_<form>` measures
-# one 100-million-weight load's process-footprint growth. The discard journey
-# (`--filter discarding_the_compiled_model`) proves a program keeps predicting
-# after its compiled copy leaves the temporary directory, which serving relies
-# on. The hand-off journeys (`--filter model_hand_off`) time one whole
-# two-engine call per projection, including the activation conversion, the
-# host copy into the input surface, and the merge of both slices, and print a
-# per-model summary; about three minutes on their own. The token-split
-# journeys run a whole dense MLP on the Neural Engine for a slice of tokens:
-# `--filter whole_mlp_split_by_token` for speed (half a minute), and
-# `--filter one_mlp_program_per_layer` for memory and cycling speed across one
-# distinct program per layer (about 90 seconds; it holds roughly 18 GiB at its
-# peak and stops loading at half of the Mac's memory). The ternary journeys run
-# the real Ternary-Bonsai-2-27B weights, so append --configuration PATH whose
-# `model_directory` names that checkpoint: `--filter one_real_ternary_mlp_layer`
-# for one layer's placement, speed, and accuracy against the GPU (about 15
-# seconds per weight form), `--filter memory_of_real_ternary_mlp_programs` for
-# eight programs' memory growth and cycling speed (about 80 seconds per form),
-# and `--filter load_every_real_ternary_mlp_program` to load all 64 layers
-# (about 11 minutes and over 20 GiB of memory; it stops early if memory or disk
-# runs low). The runner gives each journey its own process, so an earlier load
-# cannot blur a memory reading, and the 900-second case budget exists for that
-# 64-layer load. The runner stops at the first failing journey, so a run without
-# --filter needs the ternary configuration to get past them. Real hardware,
-# optimized build; about twenty minutes in all.
-# The production crate's unit tests run with `cargo test-neural-engine` (below).
+# Neural Engine hardware journeys (issue #161), verification/neural-engine: real
+# hardware, optimized build, about twenty minutes in all. Narrow with --filter
+# NAME. The ternary journeys need --configuration PATH whose `model_directory`
+# names the Ternary-Bonsai-2-27B checkpoint, and the runner stops at the first
+# failing journey, so a run without --filter needs that configuration too. The
+# 900-second budget exists for the 64-layer load. The catalogue of journeys and
+# their filters is the header of tests/hardware_journeys.rs.
 test-neural-engine-journeys = "run -p xtask -- test-run --package astronomical-neural-engine-research --test hardware_journeys --release --ignored --case-budget-seconds 900"
 
 # The opt-in Neural Engine prefill on a real dense artifact: the same loaded
