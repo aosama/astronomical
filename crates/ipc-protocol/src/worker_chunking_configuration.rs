@@ -45,9 +45,6 @@ pub struct WorkerChunkingConfiguration {
     /// requests.
     #[serde(default)]
     pub experimental_in_memory_prefix_adoption_enabled: bool,
-    /// Diagnostic/quality-gated mode that stores the KV slab quantized.
-    #[serde(default)]
-    pub experimental_quantized_kv_cache_enabled: bool,
     /// Dense MLP and linear-attention output gate programs on the Neural Engine
     /// during prefill; costs memory beyond the MLX ceiling's own accounting.
     #[serde(default)]

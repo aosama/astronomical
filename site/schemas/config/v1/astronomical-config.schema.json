@@ -180,12 +180,6 @@
           "description": "Dense models only: runs part of each full prefill chunk on the Apple Neural Engine next to the GPU, through whole MLP programs and the linear-attention output gates. Measured 1.13x to 1.2x prefill speed on a 9B model with the prompt cache on and no change to decode. Holds up to about twice the programs' weights as fp16 in memory, which must fit under the MLX memory ceiling. A model's first load takes a minute or two longer and keeps about 10 GB of compiled programs on disk; later loads take seconds. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone. Falls back to the GPU when unavailable; /v1/status reports which happened.",
           "x-astronomical-apply-mode": "model-reload"
         },
-        "experimental_quantized_kv_cache_enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Stores the KV cache as affine-quantized slabs so decode attention reads fewer KV bytes at long context. Changes attention numerics; quality-gate before enabling.",
-          "x-astronomical-apply-mode": "model-reload"
-        },
         "prompt_cache_block_tokens": {
           "description": "Exact persistent-cache block length, or null for model-derived sizing.",
           "default": null,

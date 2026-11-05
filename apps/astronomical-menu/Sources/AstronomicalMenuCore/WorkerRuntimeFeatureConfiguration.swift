@@ -230,7 +230,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
   let experimentalDecodeStageAttributionEnabled: Bool
   let experimentalPrefillStageAttributionEnabled: Bool
   let experimentalInMemoryPrefixAdoptionEnabled: Bool
-  let experimentalQuantizedKvCacheEnabled: Bool
   let experimentalNeuralEnginePrefillEnabled: Bool
 
   enum CodingKeys: String, CodingKey, CaseIterable {
@@ -246,7 +245,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
     case experimentalDecodeStageAttributionEnabled = "experimental_decode_stage_attribution_enabled"
     case experimentalPrefillStageAttributionEnabled = "experimental_prefill_stage_attribution_enabled"
     case experimentalInMemoryPrefixAdoptionEnabled = "experimental_in_memory_prefix_adoption_enabled"
-    case experimentalQuantizedKvCacheEnabled = "experimental_quantized_kv_cache_enabled"
     case experimentalNeuralEnginePrefillEnabled = "experimental_neural_engine_prefill_enabled"
   }
 
@@ -278,8 +276,6 @@ struct WorkerChunkingConfiguration: Codable, Equatable {
       Bool.self, forKey: .experimentalPrefillStageAttributionEnabled)
     experimentalInMemoryPrefixAdoptionEnabled = try container.decode(
       Bool.self, forKey: .experimentalInMemoryPrefixAdoptionEnabled)
-    experimentalQuantizedKvCacheEnabled = try container.decode(
-      Bool.self, forKey: .experimentalQuantizedKvCacheEnabled)
     experimentalNeuralEnginePrefillEnabled = try container.decode(
       Bool.self, forKey: .experimentalNeuralEnginePrefillEnabled)
   }

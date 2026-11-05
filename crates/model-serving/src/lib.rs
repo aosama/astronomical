@@ -114,7 +114,6 @@ pub use decoder_cache::{
     ConvolutionState, ConvolutionStateBoundaryCheckpointUpdate, DecoderCacheState,
     DecoderCacheStateAllocationCheckpoint, FullAttentionKeyValueState,
     FullAttentionKeyValueStateAllocationCheckpoint, GatedDeltaRecurrentState,
-    QuantizedFullAttentionKeyValueState, QuantizedKeyValueViews, QuantizedTensorViews,
     RotatingKeyValueState, RotatingKeyValueStateAllocationCheckpoint,
 };
 
