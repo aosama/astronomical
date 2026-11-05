@@ -86,31 +86,31 @@
     border-radius: var(--radius);
     border-left: 3px solid transparent;
 }
-.library-model-card-ready { border-left-color: rgba(167, 195, 162, 0.55); }
-.library-model-card-downloading { border-left-color: rgba(216, 189, 126, 0.6); }
+.library-model-card-ready { border-left-color: rgba(74, 222, 159, 0.55); }
+.library-model-card-downloading { border-left-color: rgba(240, 198, 116, 0.6); }
 .library-model-card-expanded { border-left-width: 1px; border-radius: var(--radius); }
 
 /*
- * Every-day choice — the editorial highlight: a dim ember field with a
- * safelight rim, the site's treatment for large brand fields, so the two
- * recommended models stand apart from the plain graphite rows. The rim
+ * Every-day choice — the editorial highlight: a dim violet field with a
+ * lighter violet rim, the site's treatment for large brand fields, so the two
+ * recommended models stand apart from the plain rows. The rim
  * leaves the left edge alone so it never fights the readiness /
  * downloading status strip.
  */
 .library-model-card-everyday {
-    border-top: 1.5px solid var(--safelight);
-    border-right: 1.5px solid var(--safelight);
-    border-bottom: 1.5px solid var(--safelight);
-    background: var(--ember);
+    border-top: 1.5px solid var(--nebula-rim);
+    border-right: 1.5px solid var(--nebula-rim);
+    border-bottom: 1.5px solid var(--nebula-rim);
+    background: var(--nebula-dim);
 }
 .library-everyday-badge {
     display: inline-block;
     padding: 2px 8px;
     margin: 0 0 6px;
-    border: 1px solid var(--safelight);
+    border: 1px solid var(--nebula-rim);
     border-radius: 999px;
     background: transparent;
-    color: var(--safelight-bright);
+    color: var(--nebula-bright);
     font-size: var(--text-xs);
     font-weight: var(--weight-label);
     letter-spacing: 0.01em;
@@ -155,14 +155,14 @@
     white-space: nowrap;
 }
 .library-availability-ready {
-    border-color: rgba(167, 195, 162, 0.35);
-    background: rgba(167, 195, 162, 0.1);
+    border-color: rgba(74, 222, 159, 0.35);
+    background: rgba(74, 222, 159, 0.1);
     color: var(--ok);
 }
 .library-availability-downloading {
-    border-color: rgba(216, 189, 126, 0.35);
-    background: rgba(216, 189, 126, 0.1);
-    color: var(--accent);
+    border-color: rgba(240, 198, 116, 0.35);
+    background: rgba(240, 198, 116, 0.1);
+    color: var(--warn);
 }
 
 /* Description */
@@ -189,7 +189,7 @@
     padding: 3px 9px;
     border: 1px solid var(--border);
     border-radius: 999px;
-    background: rgba(228, 224, 214, 0.05);
+    background: rgba(243, 245, 255, 0.05);
     color: var(--text-dim);
     font-size: var(--text-xs);
     font-weight: var(--weight-label);
@@ -245,7 +245,7 @@
     padding: 16px;
     border: 1px solid var(--border);
     border-radius: var(--radius-small);
-    background: rgba(20, 21, 23, 0.6);
+    background: rgba(11, 14, 26, 0.6);
 }
 .library-details-heading {
     margin: 0 0 14px;

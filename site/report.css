@@ -1,7 +1,7 @@
 /* Field-note pages. A note reads like a page from an observing log: serif
    headings, SF prose, figures on raised plates, and the same state language
    as the product (solid = hit / resident, hatched = miss / streamed). The
-   "-featured" modifiers set a note's headline result on the dim ember field. */
+   "-featured" modifiers set a note's headline result on the dim violet field. */
 
 .report-page h1,
 .report-page h2 {
@@ -24,7 +24,7 @@
 .verdict-verified { color: var(--silver); }
 .verdict-verified i { background: var(--grain); }
 
-.report-stat-band { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--ember); }
+.report-stat-band { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--nebula-dim); }
 .report-stat-band > div { display: flex; min-height: 170px; flex-direction: column; justify-content: space-between; padding: 32px; border-right: 1px solid rgba(228, 224, 214, 0.2); }
 .report-stat-band > div:last-child { border-right: 0; }
 .report-stat-band strong { font-family: var(--display); font-size: clamp(2.4rem, 4vw, 3.8rem); font-weight: 400; letter-spacing: -0.02em; line-height: 1; }
@@ -46,22 +46,22 @@
 .evidence-list span { color: var(--silver); font-weight: 600; }
 .evidence-list p { margin: 0; color: var(--mist); }
 
-blockquote { margin: 0 0 96px; padding: 36px 40px; border-radius: 12px; background: var(--ember); }
+blockquote { margin: 0 0 96px; padding: 36px 40px; border-radius: 12px; background: var(--nebula-dim); }
 blockquote p { margin: 0; font-family: var(--display); font-size: clamp(1.75rem, 3vw, 2.5rem); font-style: italic; line-height: 1.15; }
 
-.decision-box { padding: 40px; border-radius: 12px; background: var(--ember); }
+.decision-box { padding: 40px; border-radius: 12px; background: var(--nebula-dim); }
 .decision-box h2 { margin-top: 16px; }
 .decision-box p { color: var(--silver-dim) !important; }
 
 .share-card { margin-bottom: 88px; padding: 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--ground-raised); }
 .share-card > span { color: var(--mist); font-family: var(--display); font-size: 1.125rem; font-style: italic; }
 .share-card > p { margin: 16px 0 28px; font-family: var(--display); font-size: 1.75rem; line-height: 1.25; }
-.share-card-featured { border-color: transparent; background: var(--ember); }
+.share-card-featured { border-color: transparent; background: var(--nebula-dim); }
 .share-card-featured > span { color: var(--silver-dim); }
 
 .report-sources { padding-top: 48px; border-top: 1px solid var(--line); }
 .report-sources h2 { font-size: 2rem; }
-.report-sources a { display: inline-flex; margin-top: 12px; align-items: center; gap: 10px; color: var(--safelight-bright); font-weight: 600; }
+.report-sources a { display: inline-flex; margin-top: 12px; align-items: center; gap: 10px; color: var(--nebula-bright); font-weight: 600; }
 
 /* The two requests reuse the product's state language: the miss is hatched
    (work streamed in), the hit is solid (state already resident). */

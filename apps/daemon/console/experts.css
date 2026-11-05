@@ -1,6 +1,6 @@
-/* Experts view. Darkroom tokens only. Experts in memory are solid grain,
+/* Experts view. Console tokens only. Experts in memory are solid data blue,
    matching .mlx-segment-experts on Overview so both bars are the same
-   object; expert weight that stayed on the SSD is hatched grain, the same
+   object; expert weight that stayed on the SSD is the same blue hatched, the
    texture the site and menu bar use for streaming. */
 
 .experts-lede {
@@ -52,10 +52,10 @@
 }
 
 .experts-bar-experts { background: var(--resident); }
-.experts-bar-model-core { background: var(--silver); }
-.experts-bar-context { background: rgba(157, 152, 142, 0.28); }
-.experts-bar-runtime { background: rgba(207, 202, 192, 0.55); }
-.experts-bar-available { background: rgba(228, 224, 214, 0.07); }
+.experts-bar-model-core { background: var(--ink); }
+.experts-bar-context { background: rgba(95, 200, 255, 0.28); }
+.experts-bar-runtime { background: rgba(95, 200, 255, 0.55); }
+.experts-bar-available { background: rgba(243, 245, 255, 0.07); }
 .experts-bar-ssd { background: var(--streaming); }
 
 .experts-caption {
@@ -127,7 +127,7 @@
 }
 
 .experts-swatch-ram { background: var(--resident); }
-.experts-swatch-ssd { background: var(--streaming); box-shadow: inset 0 0 0 1px var(--grain); }
+.experts-swatch-ssd { background: var(--streaming); box-shadow: inset 0 0 0 1px var(--data); }
 
 .experts-layer-map {
     display: flex;
@@ -153,7 +153,7 @@
     overflow: hidden;
     border-radius: 4px;
     background: var(--streaming);
-    box-shadow: inset 0 0 0 1px var(--grain);
+    box-shadow: inset 0 0 0 1px var(--data);
 }
 
 .experts-layer-column[aria-pressed="true"] .experts-layer-column-track {
@@ -188,7 +188,7 @@
     height: 10px;
     border-radius: 2px;
     background: var(--streaming);
-    box-shadow: inset 0 0 0 1px var(--grain);
+    box-shadow: inset 0 0 0 1px var(--data);
 }
 
 .experts-slot[data-warm="true"] {

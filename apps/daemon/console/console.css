@@ -1,47 +1,48 @@
-/* Astronomical Observatory console styling — Darkroom identity, shared with
-   site/styles.css: a graphite ground, silver-print type, and safelight red
-   for the brand and accent text only. Telemetry stays achromatic so red is
-   never read as a warning: experts in memory are solid grain, experts
-   streaming from the SSD are the same grain hatched, and generation is said
-   in words beside a filled marker rather than flagged in colour. Errors are
-   likewise carried by their wording. The layout is one macOS desktop window:
-   an icon sidebar beside an inset rounded workspace, and per-view panels.
-   Chat is redirected to Thin Talk through the astronomical:// entry point.
+/* Astronomical Observatory console styling — Deep space identity: a blue-black
+   ground, crisp white type, violet for the brand and for live work, and sky
+   blue for data. Violet means something is running right now, so an idle page
+   stays quiet and lights up when work starts; it never marks a health state.
+   Experts in memory are solid data blue and experts streaming from the SSD are
+   the same blue hatched. Errors are carried by their wording. The layout is one
+   macOS desktop window: an icon sidebar beside an inset rounded workspace, and
+   per-view panels.
+   Chat is redirected to Thin Talk through the channel's own link.
    Behavior hooks (element IDs and state classes) are contract with
    console.js and must not be renamed here. */
 
 :root {
-    /* Site tokens (site/styles.css). The console adds only the surface steps
-       a dense desktop window needs around ground and raised. */
-    --ground: #141517;
-    --ground-raised: #1d1e21;
-    --ember: #2a1714;
-    --safelight: #a8321f;
-    --safelight-bright: #e0634c;
-    --grain: #b9b4a9;
-    --silver: #e4e0d6;
-    --silver-dim: #cfcac0;
-    --mist: #9d988e;
+    /* The console's own palette; site/styles.css keeps a separate one. Cool
+       surfaces and white type replaced warm greys that read as muddy. */
+    --ground: #0b0e1a;
+    --ground-raised: #141a2e;
+    --nebula-dim: #241d4d;
+    --nebula-rim: #7d57d6;
+    /* 5.5:1 on --ground-raised and 4.5:1 on --panel-2, so it is safe for text. */
+    --nebula-bright: #9d7bff;
+    --data: #5fc8ff;
+    --ink: #f3f5ff;
+    --ink-dim: #c9d0e8;
+    --ink-faint: #98a2c4;
     --bg: var(--ground);
-    --sidebar: #101113;
+    --sidebar: #080a14;
     --panel: var(--ground-raised);
-    --panel-2: #26272b;
+    --panel-2: #232b47;
     --panel-raised: var(--ground);
-    --text: var(--silver);
-    --text-dim: var(--mist);
-    --accent: var(--safelight-bright);
-    --accent-cool: var(--silver-dim);
-    /* Health states are muted and never red, because red is the brand; the
+    --text: var(--ink);
+    --text-dim: var(--ink-faint);
+    --accent: var(--nebula-bright);
+    --accent-cool: var(--ink-dim);
+    /* Health states have their own colours and never take the brand's; the
        words beside them ("Ready", "Critical", the error text) carry meaning. */
-    --ok: #a7c3a2;
-    --warn: #d8bd7e;
-    --bad: var(--silver);
-    --resident: var(--grain);
-    --streaming: repeating-linear-gradient(45deg, var(--grain) 0 2px, transparent 2px 5px);
-    --border: rgba(228, 224, 214, 0.14);
-    --border-strong: rgba(228, 224, 214, 0.28);
-    --hover: rgba(228, 224, 214, 0.06);
-    --active: rgba(228, 224, 214, 0.11);
+    --ok: #4ade9f;
+    --warn: #f0c674;
+    --bad: var(--ink);
+    --resident: var(--data);
+    --streaming: repeating-linear-gradient(45deg, var(--data) 0 2px, transparent 2px 5px);
+    --border: rgba(152, 170, 230, 0.2);
+    --border-strong: rgba(152, 170, 230, 0.38);
+    --hover: rgba(152, 170, 230, 0.08);
+    --active: rgba(152, 170, 230, 0.14);
     --radius: 16px;
     --radius-small: 10px;
     /* Type scale: six steps govern every size. Body text is 15px; anything
@@ -101,8 +102,9 @@ button, summary, label { -webkit-tap-highlight-color: transparent; }
 .observatory-brand h1 { margin: 0; font-size: var(--text-xl); font-weight: var(--weight-strong); line-height: 1.2; letter-spacing: -0.01em; }
 .brand-subtitle { margin: 1px 0 0; color: var(--text-dim); font-size: var(--text-sm); }
 .application-build-identity { color: var(--text-dim); font-size: var(--text-sm); overflow-wrap: anywhere; }
-body[data-application-channel="development"] #application-channel,
-body[data-application-channel="development"] .application-build-identity { color: var(--warn); }
+/* Only the channel word is tinted: the warning colour on the whole build line
+   made an ordinary Development build read as something wrong. */
+body[data-application-channel="development"] #application-channel { color: var(--warn); }
 /* The sidebar mark is site/assets/mark.svg inlined, so the console keeps its
    no-filesystem asset contract (console_assets.rs embeds each file). */
 .brand-mark {
@@ -110,7 +112,7 @@ body[data-application-channel="development"] .application-build-identity { color
     width: 30px;
     height: 30px;
     border-radius: 7px;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3CclipPath id='p'%3E%3Crect width='64' height='64' rx='7'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23p)'%3E%3Crect width='64' height='64' fill='%23a8321f'/%3E%3Ccircle cx='8' cy='92' r='62' fill='%23e4e0d6'/%3E%3C/g%3E%3Cpath d='M44 11v6M44 23v6M35 20h6M47 20h6' stroke='%23e4e0d6' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='20' r='2.8' fill='%23e4e0d6'/%3E%3C/svg%3E") center / cover no-repeat;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3CclipPath id='p'%3E%3Crect width='64' height='64' rx='7'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23p)'%3E%3Crect width='64' height='64' fill='%236a3fc4'/%3E%3Ccircle cx='8' cy='92' r='62' fill='%23e4e0d6'/%3E%3C/g%3E%3Cpath d='M44 11v6M44 23v6M35 20h6M47 20h6' stroke='%23e4e0d6' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='44' cy='20' r='2.8' fill='%23e4e0d6'/%3E%3C/svg%3E") center / cover no-repeat;
     box-shadow: inset 0 0 0 1px var(--border);
 }
 .brand-mark span { display: none; }
@@ -144,7 +146,8 @@ body[data-application-channel="development"] .application-build-identity { color
 }
 .navigation-button svg { flex: 0 0 auto; width: 18px; height: 18px; opacity: 0.9; }
 .navigation-button:hover { background: var(--hover); color: var(--text); }
-.navigation-button[aria-current="page"] { background: var(--active); color: var(--text); }
+/* An inset shadow rather than a border, so the marker cannot shift the row. */
+.navigation-button[aria-current="page"] { background: var(--active); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
 .navigation-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .sidebar-note { margin: auto 0 0; padding: 0 10px; color: var(--text-dim); font-size: var(--text-sm); line-height: 1.5; }
 
@@ -169,14 +172,14 @@ body[data-application-channel="development"] .application-build-identity { color
     border-bottom: 1px solid var(--border);
 }
 .status-primary { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.status-star { flex: 0 0 auto; width: 12px; height: 12px; color: rgba(157, 152, 142, 0.45); transition: color 200ms ease; }
+.status-star { flex: 0 0 auto; width: 12px; height: 12px; color: rgba(152, 162, 196, 0.45); transition: color 200ms ease; }
 .status-header.loading .status-star {
     color: var(--accent);
     opacity: 0.55;
     animation: star-pulse 1.8s ease-in-out infinite;
 }
-.status-header.ready .status-star { color: var(--grain); }
-.status-header.active .status-star { color: var(--silver); animation: star-flicker 1s ease-in-out infinite; }
+.status-header.ready .status-star { color: var(--ok); }
+.status-header.active .status-star { color: var(--accent); animation: star-flicker 1s ease-in-out infinite; }
 .status-text { display: flex; flex: 1 1 auto; min-width: 0; align-items: baseline; gap: 10px; }
 .status-word { font-size: var(--text-lg); font-weight: var(--weight-strong); line-height: 1.2; }
 .status-model-id {
@@ -239,7 +242,7 @@ body[data-application-channel="development"] .application-build-identity { color
 .overview-summary-section { min-width: 0; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .overview-summary-section + .overview-summary-section { border-left: 1px solid var(--border); }
 .overview-summary-section h4 { margin: 0; color: var(--text); font-size: var(--text-lg); font-weight: var(--weight-strong); line-height: 1.3; }
-.phase-label { color: var(--accent); font-family: var(--font-mono); font-size: var(--text-md); font-weight: var(--weight-label); }
+.phase-label { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-md); font-weight: var(--weight-label); }
 .phase-bar, .reuse-bar {
     height: 8px;
     overflow: hidden;
@@ -247,9 +250,11 @@ body[data-application-channel="development"] .application-build-identity { color
     background: var(--panel-2);
 }
 .phase-fill, .reuse-fill { width: 0; height: 100%; border-radius: inherit; transition: width 250ms ease; }
-.phase-fill { background: var(--grain); }
-.phase-fill.generating { background: var(--silver); }
-.reuse-fill { background: var(--grain); }
+.phase-label.phase-live { color: var(--accent); }
+/* Prefill is the dimmer violet, so generation still reads as a step forward. */
+.phase-fill { background: var(--nebula-rim); }
+.phase-fill.generating { background: var(--accent); }
+.reuse-fill { background: var(--data); }
 .phase-stats { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .phase-stat-value, .metric-value {
     color: var(--text);
@@ -264,7 +269,7 @@ body[data-application-channel="development"] .application-build-identity { color
 .session-breakdown-row .metric-value { max-width: 65%; text-align: right; overflow-wrap: anywhere; }
 
 /* Chat redirection: conversations live in Thin Talk, opened through the
-   astronomical:// link; the Observatory renders no model output itself. */
+   channel's own link; the Observatory renders no model output itself. */
 .chat-redirect {
     max-width: 560px;
     display: flex;
@@ -278,13 +283,13 @@ body[data-application-channel="development"] .application-build-identity { color
 .control-feedback { padding: 10px 14px; border-radius: var(--radius-small); font-size: var(--text-lg); overflow-wrap: anywhere; }
 
 .mlx-segment { height: 100%; transition: width 300ms ease; }
-/* Segments are achromatic and separate by lightness; experts keep the
-   resident grain used everywhere else. */
+/* Segments are one data blue and separate by strength, so memory reads as a
+   single quantity; experts keep the resident colour used everywhere else. */
 .mlx-segment-experts { background: var(--resident); }
-.mlx-segment-model-core { background: var(--silver); }
-.mlx-segment-context-state { background: rgba(157, 152, 142, 0.28); }
-.mlx-segment-runtime-work { background: rgba(207, 202, 192, 0.55); }
-.mlx-segment-available { background: rgba(228, 224, 214, 0.07); }
+.mlx-segment-model-core { background: var(--ink); }
+.mlx-segment-context-state { background: rgba(95, 200, 255, 0.28); }
+.mlx-segment-runtime-work { background: rgba(95, 200, 255, 0.55); }
+.mlx-segment-available { background: rgba(243, 245, 255, 0.07); }
 
 .compact-memory-total { font-size: var(--text-lg); font-weight: var(--weight-label); }
 .compact-memory-bar { display: flex; height: 10px; overflow: hidden; border-radius: 999px; background: var(--panel-2); }
@@ -305,7 +310,7 @@ body[data-application-channel="development"] .application-build-identity { color
 .compact-cache-sparkline { flex: 0 0 auto; opacity: 0.8; }
 .compact-cache-stat { color: var(--text); font-family: var(--font-mono); font-size: var(--text-md); font-variant-numeric: tabular-nums; }
 .compact-cache-disk-bar { position: relative; height: 30px; margin-top: auto; padding: 0 12px; overflow: hidden; display: flex; align-items: center; border-radius: var(--radius-small); background: var(--panel-2); }
-.compact-cache-disk-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--grain), rgba(185, 180, 169, 0.6)); opacity: 0.6; transition: width 300ms ease; }
+.compact-cache-disk-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--data), rgba(95, 200, 255, 0.6)); opacity: 0.6; transition: width 300ms ease; }
 .compact-cache-disk-label { position: relative; z-index: 1; font-family: var(--font-mono); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 
 .about-stat-label { color: var(--text-dim); font-size: var(--text-xs); letter-spacing: 0.07em; text-transform: uppercase; }
@@ -325,16 +330,16 @@ body[data-application-channel="development"] .application-build-identity { color
 .mlx-memory-control-notice { color: var(--warn); font-size: var(--text-md); overflow-wrap: anywhere; }
 .button { min-height: 40px; padding: 8px 16px; border: 1px solid transparent; border-radius: 999px; cursor: pointer; font-size: var(--text-lg); font-weight: var(--weight-label); transition: opacity 150ms ease, background-color 150ms ease; }
 .button:disabled { opacity: 0.4; cursor: not-allowed; }
-.button-primary { background: var(--silver); color: var(--ground); }
+.button-primary { background: var(--ink); color: var(--ground); }
 .button-primary:not(:disabled):hover { background: #ffffff; }
 .button-secondary { border-color: var(--border-strong); background: transparent; color: var(--text); }
 .button-secondary:not(:disabled):hover { background: var(--hover); }
 .button-danger { border-color: var(--border-strong); background: transparent; color: var(--bad); }
 .button-danger:not(:disabled):hover { background: var(--hover); }
 .button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.control-feedback.feedback-success { border: 1px solid var(--ok); background: rgba(167, 195, 162, 0.10); color: var(--ok); }
-.control-feedback.feedback-progress { border: 1px solid var(--warn); background: rgba(216, 189, 126, 0.10); color: var(--warn); }
-.control-feedback.feedback-error { border: 1.5px solid var(--safelight); background: var(--ember); color: var(--bad); }
+.control-feedback.feedback-success { border: 1px solid var(--ok); background: rgba(74, 222, 159, 0.10); color: var(--ok); }
+.control-feedback.feedback-progress { border: 1px solid var(--warn); background: rgba(240, 198, 116, 0.10); color: var(--warn); }
+.control-feedback.feedback-error { border: 1.5px solid var(--nebula-rim); background: var(--nebula-dim); color: var(--bad); }
 .controls-note { margin: auto 0 0; color: var(--text-dim); font-size: var(--text-md); }
 
 .connect-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }

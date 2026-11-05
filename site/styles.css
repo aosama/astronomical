@@ -1,11 +1,10 @@
-/* Darkroom identity: a graphite ground, silver-print type, and safelight red
-   for the brand. Observatory plates were developed under a red safelight and
-   astronomers work under red light to keep their night vision, so the red is
-   the one colour with a reason to be here. The ground is dark because the
-   product lives beside dark editors and terminals; it is a cool graphite,
-   not navy, because navy with white read as travel and banking, not as
-   instrumentation. Large fields use a dim ember of the safelight, never the
-   saturated red, so the page glows rather than shouts. */
+/* Nebula identity: a graphite ground, silver-print type, and nebula violet for
+   the brand, one lit colour against a dark sky. The ground is dark because the
+   product lives beside dark editors and terminals; it stays a cool graphite,
+   because a whole page of navy with white read as travel and banking, not as
+   instrumentation, and a muted blue brand sank into it and read as gloomy.
+   Violet is kept to the mark and small accents, and large fields use a dim
+   violet so the page stays quiet. */
 
 /* Newsreader is self-hosted so the public site makes no third-party font
    request; the privacy page promises a product that keeps to itself. */
@@ -29,12 +28,14 @@
   color-scheme: dark;
   --ground: #141517;
   --ground-raised: #1d1e21;
-  --ember: #2a1714;
-  --safelight: #a8321f;
-  /* 5.3:1 on --ground, so it is safe for link and accent text. */
-  --safelight-bright: #e0634c;
-  /* Data marks (experts in memory, hatching) stay achromatic so the red is
-     never mistaken for a warning in telemetry. */
+  --nebula-dim: #241a3d;
+  /* Lighter than the mark's #6a3fc4, which is 2.7:1 on --ground and weak as a
+     thin line; this is 3.7:1 on --ground and 3.3:1 on --nebula-dim. */
+  --nebula-rim: #7d57d6;
+  /* 8:1 on --ground, so it is safe for link and accent text. */
+  --nebula-bright: #b79bff;
+  /* Data marks (experts in memory, hatching) stay achromatic so the brand colour
+     is never mistaken for a status in telemetry. */
   --grain: #b9b4a9;
   --silver: #e4e0d6;
   --silver-dim: #cfcac0;
@@ -105,7 +106,7 @@ code {
 }
 
 :focus-visible {
-  outline: 2px solid var(--safelight-bright);
+  outline: 2px solid var(--nebula-bright);
   outline-offset: 3px;
 }
 
@@ -153,7 +154,7 @@ code {
 }
 
 .text-link {
-  color: var(--safelight-bright);
+  color: var(--nebula-bright);
   font-weight: 500;
 }
 
@@ -174,12 +175,12 @@ code {
   height: 8px;
   margin-right: 8px;
   border-radius: 50%;
-  background: var(--safelight-bright);
+  background: var(--nebula-bright);
   vertical-align: 1px;
 }
 
 /* A release line is a fact, not activity, so its dot stays achromatic and
-   the safelight red keeps meaning "the brand", not "something is happening". */
+   the violet keeps meaning "the brand", not "something is happening". */
 .signal-dot-release {
   background: var(--grain);
 }

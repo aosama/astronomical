@@ -249,6 +249,20 @@ function selectAdvertisedModel(advertisedModels, preferredModelId) {
         || null;
 }
 
+// The phases /v1/status reports. "target" is prompt processing: the worker names
+// the model doing the work rather than the stage. A phase missing from this table
+// shows as "Active", because an internal name means nothing on this page.
+const PHASE_LABELS = new Map([
+    ["target", "Prefilling"],
+    ["generation_preparation", "Preparing output"],
+    ["generation", "Generating"],
+    ["preparing", "Preparing"],
+    ["encoding_prompt", "Encoding prompt"],
+    ["denoising", "Denoising"],
+    ["decoding", "Decoding"],
+    ["encoding_image", "Encoding image"],
+]);
+
 function renderNowStrip(data) {
     const phaseLabel = document.getElementById("phase-label");
     const phaseFill = document.getElementById("phase-fill");
@@ -262,14 +276,12 @@ function renderNowStrip(data) {
     const elapsedMs = progress.elapsed_ms || 0;
     const fillPercent = totalTokens > 0 ? Math.min(100, (processedTokens / totalTokens) * 100) : 0;
     const tokPerSecond = elapsedMs > 0 ? (processedTokens / elapsedMs) * 1000 : 0;
-    if (progress.phase === "prefill") {
-        phaseLabel.textContent = "Prefilling";
-        phaseFill.classList.remove("generating");
-    } else if (progress.phase === "generation") {
-        phaseLabel.textContent = "Generating";
+    phaseLabel.classList.add("phase-live");
+    phaseLabel.textContent = PHASE_LABELS.get(progress.phase) || "Active";
+    if (progress.phase === "generation") {
         phaseFill.classList.add("generating");
     } else {
-        phaseLabel.textContent = progress.phase || "Active";
+        phaseFill.classList.remove("generating");
     }
     phaseFill.style.width = fillPercent.toFixed(1) + "%";
     phaseTokens.textContent = processedTokens.toLocaleString() + " / " + totalTokens.toLocaleString();
@@ -279,6 +291,7 @@ function renderNowStrip(data) {
 
 function resetNowStrip() {
     document.getElementById("phase-label").textContent = "Idle";
+    document.getElementById("phase-label").classList.remove("phase-live");
     document.getElementById("phase-fill").style.width = "0%";
     document.getElementById("phase-fill").classList.remove("generating");
     document.getElementById("phase-tokens").textContent = "—";

@@ -5,7 +5,7 @@
     <clipPath id="plate"><rect width="64" height="64" rx="7"/></clipPath>
   </defs>
   <g clip-path="url(#plate)">
-    <rect width="64" height="64" fill="#a8321f"/>
+    <rect width="64" height="64" fill="#6a3fc4"/>
     <circle cx="8" cy="92" r="62" fill="#e4e0d6"/>
   </g>
   <path d="M44 11v6M44 23v6M35 20h6M47 20h6" stroke="#e4e0d6" stroke-width="2.4" stroke-linecap="round"/>
