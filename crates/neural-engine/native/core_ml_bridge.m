@@ -46,6 +46,8 @@ typedef struct {
 typedef struct AstronomicalCoreMlProjection {
   MLModel *model;
   NSURL *compiled_model_url;
+  double model_load_seconds;
+  double placement_seconds;
   MLMultiArray *input_array;
   MLMultiArray *output_array;
   CVPixelBufferRef input_pixel_buffer;
@@ -267,6 +269,29 @@ static int32_t astronomical_bind_surfaces(AstronomicalCoreMlProjection *projecti
   return projection->input_features == nil ? -1 : 0;
 }
 
+double astronomical_core_ml_projection_model_load_seconds(
+    const AstronomicalCoreMlProjection *projection) {
+  return projection == NULL ? 0.0 : projection->model_load_seconds;
+}
+
+double astronomical_core_ml_projection_placement_seconds(
+    const AstronomicalCoreMlProjection *projection) {
+  return projection == NULL ? 0.0 : projection->placement_seconds;
+}
+
+int32_t astronomical_core_ml_projection_compiled_model_path(
+    AstronomicalCoreMlProjection *projection, char *path_buffer, uint32_t path_capacity) {
+  if (projection == NULL || projection->compiled_model_url == nil || path_capacity == 0) {
+    return -1;
+  }
+  const char *compiled_path = projection->compiled_model_url.fileSystemRepresentation;
+  if (compiled_path == NULL || strlen(compiled_path) >= path_capacity) {
+    return -1;
+  }
+  strlcpy(path_buffer, compiled_path, path_capacity);
+  return 0;
+}
+
 void astronomical_core_ml_projection_discard_compiled_model(
     AstronomicalCoreMlProjection *projection) {
   if (projection == NULL || projection->compiled_model_url == nil) {
@@ -305,23 +330,34 @@ void astronomical_core_ml_projection_release(AstronomicalCoreMlProjection *proje
 
 static int32_t astronomical_load_model(AstronomicalCoreMlProjection *projection, NSURL *model_url,
                                        int32_t compute_units_code, NSError **error_out) {
-  projection->compiled_model_url = astronomical_compile_model(model_url, error_out);
-  if (projection->compiled_model_url == nil) {
-    return -1;
+  // An already compiled program belongs to whoever kept it, so it is loaded where it
+  // is and `compiled_model_url` stays nil: release must not remove a cached copy.
+  NSURL *compiled_url = model_url;
+  if (![model_url.pathExtension isEqualToString:@"mlmodelc"]) {
+    projection->compiled_model_url = astronomical_compile_model(model_url, error_out);
+    if (projection->compiled_model_url == nil) {
+      return -1;
+    }
+    compiled_url = projection->compiled_model_url;
   }
   MLModelConfiguration *configuration = [[MLModelConfiguration alloc] init];
   configuration.computeUnits = astronomical_compute_units(compute_units_code);
-  projection->model = [MLModel modelWithContentsOfURL:projection->compiled_model_url
+  CFAbsoluteTime model_load_started_at = CFAbsoluteTimeGetCurrent();
+  projection->model = [MLModel modelWithContentsOfURL:compiled_url
                                         configuration:configuration
                                                 error:error_out];
+  projection->model_load_seconds = CFAbsoluteTimeGetCurrent() - model_load_started_at;
   if (projection->model == nil) {
     return -1;
   }
   // Before 14.4 there is no compute plan, so placement stays unknown; callers
   // that need proof of Neural Engine placement refuse an unknown verdict.
   if (@available(macOS 14.4, *)) {
-    return astronomical_load_layer_placement(projection->compiled_model_url, configuration,
-                                             &projection->placement);
+    CFAbsoluteTime placement_started_at = CFAbsoluteTimeGetCurrent();
+    int32_t placement_status =
+        astronomical_load_layer_placement(compiled_url, configuration, &projection->placement);
+    projection->placement_seconds = CFAbsoluteTimeGetCurrent() - placement_started_at;
+    return placement_status;
   }
   return 0;
 }
@@ -503,3 +539,37 @@ int32_t astronomical_core_ml_projection_finish_predict(AstronomicalCoreMlProject
   *elapsed_nanoseconds = projection->asynchronous_elapsed_nanoseconds;
   return projection->asynchronous_status;
 }
+
+// Compiles a package and leaves the result at `destination_path` without loading
+// it. macOS keeps its own Neural Engine compilation keyed by the compiled model's
+// path, so a program meant to be kept must be loaded for the first time where it
+// will stay; loading it from the temporary directory first would pay that cost
+// twice.
+int32_t astronomical_core_ml_compile_model_to(const char *package_path, const char *destination_path,
+                                              char *error_message, uint32_t error_capacity) {
+  @autoreleasepool {
+    NSError *error = nil;
+    NSURL *package_url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:package_path]];
+    NSURL *destination_url =
+        [NSURL fileURLWithPath:[NSString stringWithUTF8String:destination_path]];
+    NSURL *compiled_url = astronomical_compile_model(package_url, &error);
+    if (compiled_url == nil) {
+      astronomical_copy_error(error_message, error_capacity,
+                              error.localizedDescription ?: @"failed to compile the Core ML model");
+      return -1;
+    }
+    NSFileManager *file_manager = [NSFileManager defaultManager];
+    [file_manager removeItemAtURL:destination_url error:nil];
+    if (![file_manager moveItemAtURL:compiled_url toURL:destination_url error:&error]) {
+      // Only the compiled model is ours to remove: Core ML chooses the folder it
+      // sits in, and that folder can be shared with everything else in the
+      // temporary directory.
+      [file_manager removeItemAtURL:compiled_url error:nil];
+      astronomical_copy_error(error_message, error_capacity,
+                              error.localizedDescription ?: @"failed to keep the compiled model");
+      return -1;
+    }
+    return 0;
+  }
+}
+

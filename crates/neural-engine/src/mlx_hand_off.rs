@@ -152,6 +152,31 @@ pub unsafe fn surface_as_array(
     }
 }
 
+/// The projection's whole output as an evaluated `[1, tokens, channels]` array in
+/// `result_dtype`. Evaluating into a copy is what frees the surface for the next
+/// prediction, because a transpose, a reshape and a same-type cast only borrow it.
+pub fn surface_as_token_major(
+    context: &MlxBindingsContext,
+    projection: &CoreMlProjection,
+    result_dtype: MlxDtype,
+    output_hand_off: OutputHandOff,
+) -> Result<MlxArray, MlxHandOffError> {
+    let token_count = projection.token_count() as i32;
+    let channel_count = projection.output_channel_count() as i32;
+    let surface = projection.lock_output_surface()?;
+    // SAFETY: the shape is the projection's own, and `owned` is evaluated into its
+    // own storage below while `surface` is still alive; the borrowing array and the
+    // lazy graph above it drop before the guard does.
+    let surface_array =
+        unsafe { surface_as_array(&surface, [channel_count, token_count], output_hand_off)? };
+    let tokens_first = context.transpose_axes(&surface_array, &[1, 0])?;
+    let batched = context.reshape(&tokens_first, &[1, token_count, channel_count])?;
+    let converted = context.astype(&batched, result_dtype)?;
+    let owned = context.copy(&converted)?;
+    context.evaluate_arrays(&[&owned])?;
+    Ok(owned)
+}
+
 /// Joins the projection's output before `gpu_slice` along `split_axis`, as an
 /// evaluated `[1, tokens, channels]` array in `gpu_slice`'s dtype.
 ///

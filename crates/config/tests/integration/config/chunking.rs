@@ -108,12 +108,8 @@ fn should_default_the_decode_levers_off_so_the_measured_fast_path_serves() {
         "the 8-bit KV slab measured slower than bfloat16 and must stay opt-in"
     );
     assert!(
-        !chunking.experimental_fused_moe_decode_enabled(),
-        "the fused expert decode kernels measured slower than the gathered chain and must stay opt-in"
-    );
-    assert!(
-        !chunking.experimental_neural_engine_mlp_prefill_enabled(),
-        "Neural Engine MLP prefill holds about twice the MLP weights in memory and must stay opt-in"
+        !chunking.experimental_neural_engine_prefill_enabled(),
+        "Neural Engine prefill holds about twice its programs' weights in memory and must stay opt-in"
     );
     assert!(
         !chunking.experimental_decode_stage_attribution_enabled(),
@@ -409,7 +405,7 @@ fn should_let_one_model_opt_into_neural_engine_prefill_without_changing_the_othe
           "runtime": { "model_directories": [] },
           "models": {
             "opted-in-model": {
-              "chunking": { "experimental_neural_engine_mlp_prefill_enabled": true }
+              "chunking": { "experimental_neural_engine_prefill_enabled": true }
             }
           }
         }"#,
@@ -428,11 +424,11 @@ fn should_let_one_model_opt_into_neural_engine_prefill_without_changing_the_othe
     assert!(
         opted_in_policy
             .chunking()
-            .experimental_neural_engine_mlp_prefill_enabled()
+            .experimental_neural_engine_prefill_enabled()
     );
     assert!(
         !other_policy
             .chunking()
-            .experimental_neural_engine_mlp_prefill_enabled()
+            .experimental_neural_engine_prefill_enabled()
     );
 }

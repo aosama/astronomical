@@ -19,6 +19,7 @@ mod model_discovery_huggingface_cache;
 mod model_identity;
 #[cfg(test)]
 mod model_identity_tests;
+mod neural_engine_program_cache;
 mod prompt_cache_config;
 mod resolved_model_config;
 
@@ -67,6 +68,7 @@ pub use model_discovery::{
 pub use model_identity::{
     decode_huggingface_cache_directory_name, leaf_model_id, near_model_matches, resolve_model_id,
 };
+pub use neural_engine_program_cache::neural_engine_program_cache_directory_for_model;
 pub use prompt_cache_config::PromptCacheConfig;
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};
 

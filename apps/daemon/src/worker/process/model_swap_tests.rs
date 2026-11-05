@@ -30,8 +30,7 @@ fn sample_chunking_configuration() -> WorkerChunkingConfiguration {
         experimental_prefill_stage_attribution_enabled: false,
         experimental_in_memory_prefix_adoption_enabled: false,
         experimental_quantized_kv_cache_enabled: false,
-        experimental_fused_moe_decode_enabled: false,
-        experimental_neural_engine_mlp_prefill_enabled: false,
+        experimental_neural_engine_prefill_enabled: false,
     }
 }
 
@@ -372,7 +371,7 @@ fn autoregressive_model_with_neural_engine(
     neural_engine_enabled: bool,
 ) -> astronomical_ipc_protocol::WorkerModelConfiguration {
     let mut chunking = sample_chunking_configuration();
-    chunking.experimental_neural_engine_mlp_prefill_enabled = neural_engine_enabled;
+    chunking.experimental_neural_engine_prefill_enabled = neural_engine_enabled;
     astronomical_ipc_protocol::WorkerModelConfiguration::Autoregressive(
         astronomical_ipc_protocol::WorkerAutoregressiveModelConfiguration {
             model_id: SAMPLE_MODEL_ID.to_owned(),

@@ -22351,15 +22351,6 @@
     },
     {
       "file": "crates/config/src/chunking_config.rs",
-      "function": "ChunkingConfig::experimental_fused_moe_decode_enabled",
-      "line": 411,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-config"
-    },
-    {
-      "file": "crates/config/src/chunking_config.rs",
       "function": "ChunkingConfig::experimental_in_memory_prefix_adoption_enabled",
       "line": 396,
       "cyclomatic": 1.0,

@@ -204,7 +204,7 @@ fn neural_engine_mlp_prefill_requested(
     serving_settings: &PrismHadamardQwen35ServingSettings,
 ) -> bool {
     match serving_settings.chunking.as_ref() {
-        Some(chunking) => chunking.experimental_neural_engine_mlp_prefill_enabled,
+        Some(chunking) => chunking.experimental_neural_engine_prefill_enabled,
         None => false,
     }
 }

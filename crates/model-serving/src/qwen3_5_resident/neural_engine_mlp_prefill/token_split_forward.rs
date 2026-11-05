@@ -46,17 +46,21 @@ impl Qwen3_5ResidentModel {
         if let Some(prefill) = self.neural_engine_mlp_prefill.as_ref()
             && prefill.handles(token_count)
         {
-            match self.forward_dense_mlp_split_by_token(
+            let forward_outcome = match self.forward_dense_mlp_split_by_token(
                 normalized_attention,
                 dense_mlp_weights,
                 layer_index,
                 prefill,
             ) {
+                Ok(merged) => Ok(merged),
+                Err(token_split_error) => Err(token_split_error.to_string()),
+            };
+            match forward_outcome {
                 Ok(merged) => return Ok(merged),
                 Err(forward_error) => {
                     tracing::warn!(
                         layer_index,
-                        error = %forward_error,
+                        error = forward_error.as_str(),
                         "Neural Engine MLP prefill failed; remaining prefill stays on the GPU"
                     );
                     prefill.has_failed.set(true);

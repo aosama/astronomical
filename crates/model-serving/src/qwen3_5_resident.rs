@@ -6,6 +6,9 @@ mod experts;
 mod inference_execution;
 mod model;
 mod neural_engine_mlp_prefill;
+mod neural_engine_output_gate_prefill;
+mod neural_engine_prefill_loading;
+mod neural_engine_program_cache;
 
 pub(crate) use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 pub(crate) use experts::maximum_resident_gate_up_fusion_transient_payload_bytes;

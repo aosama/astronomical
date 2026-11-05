@@ -58,7 +58,7 @@ test("should_describe_every_leaf_setting_with_a_supported_control", () => {
 });
 
 test("should_expose_the_neural_engine_opt_in_as_a_boolean_that_defaults_off", () => {
-    const descriptor = descriptorAt(["chunking", "experimental_neural_engine_mlp_prefill_enabled"]);
+    const descriptor = descriptorAt(["chunking", "experimental_neural_engine_prefill_enabled"]);
     assert.equal(descriptor.kind, "boolean");
     assert.equal(descriptor.defaultValue, false);
     assert.equal(descriptor.applyMode, "model-reload");
@@ -154,8 +154,8 @@ test("should_refuse_a_blank_string", () => {
 
 test("should_label_settings_with_their_acronyms_uppercased", () => {
     assert.equal(call("configurationSettingLabel", "maximum_mlx_memory_gb"), "Maximum MLX memory GB");
-    assert.equal(call("configurationSettingLabel", "experimental_neural_engine_mlp_prefill_enabled"),
-        "Experimental neural engine MLP prefill enabled");
+    assert.equal(call("configurationSettingLabel", "experimental_neural_engine_prefill_enabled"),
+        "Experimental neural engine prefill enabled");
 });
 
 test("should_report_a_save_that_applied", () => {

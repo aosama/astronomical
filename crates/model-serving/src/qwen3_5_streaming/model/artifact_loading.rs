@@ -1,5 +1,6 @@
 //! Artifact binding and startup-only MLX resource construction for Qwen3.5.
 
+use crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector;
 use std::cell::RefCell;
 use std::path::Path;
 
@@ -161,6 +162,7 @@ impl Qwen3_5Model {
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
+                output_gate_engine: None,
                 sorted_expert_weighted_sum_kernel,
                 compiled_swiglu,
                 compiled_elementwise_graphs,
@@ -172,10 +174,7 @@ impl Qwen3_5Model {
             },
             expert_pager,
             retained_experts,
-            route_observation: RefCell::new(
-                crate::qwen3_5_streaming::model::route_observation::RouteObservationCollector::new(
-                ),
-            ),
+            route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
             prefill_complete_layer_prefetch: RefCell::default(),
             prefill_layer_completion_refused: RefCell::default(),

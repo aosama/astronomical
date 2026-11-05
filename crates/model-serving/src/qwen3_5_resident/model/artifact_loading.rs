@@ -132,6 +132,7 @@ impl Qwen3_5ResidentModel {
                 gated_delta_kernel,
                 gated_delta_checkpoint_kernel,
                 gdn_decode_prework_kernel,
+                output_gate_engine: None,
                 sorted_expert_weighted_sum_kernel,
                 compiled_swiglu,
                 compiled_elementwise_graphs,

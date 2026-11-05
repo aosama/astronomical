@@ -85,8 +85,6 @@ pub enum PerformanceOperation {
     DecodeMixtureOfValuesGraphicsProcessorCompletionWait,
     DecodeFeedForwardGraphicsProcessorCompletionWait,
     DecodeSharedExpertGraphicsProcessorCompletionWait,
-    DecodeFusedValueExpertDecode,
-    DecodeFusedRoutedExpertDecode,
     /// One decode token's jangtq2 routed projection multiplied straight from
     /// packed codes by the fused gathered projection kernel.
     DecodeFusedJangtq2GatheredProjection,
@@ -253,8 +251,6 @@ impl PerformanceOperation {
         Self::DecodeMixtureOfValuesGraphicsProcessorCompletionWait,
         Self::DecodeFeedForwardGraphicsProcessorCompletionWait,
         Self::DecodeSharedExpertGraphicsProcessorCompletionWait,
-        Self::DecodeFusedValueExpertDecode,
-        Self::DecodeFusedRoutedExpertDecode,
         Self::DecodeFusedJangtq2GatheredProjection,
         Self::Jangtq2CodebookPageDecode,
         Self::Jangtq2ActivationRotationHadamard32,
@@ -475,8 +471,6 @@ impl PerformanceOperation {
             Self::DecodeSharedExpertGraphicsProcessorCompletionWait => {
                 "decode_shared_expert_graphics_processor_completion_wait"
             }
-            Self::DecodeFusedValueExpertDecode => "decode_fused_value_expert_decode",
-            Self::DecodeFusedRoutedExpertDecode => "decode_fused_routed_expert_decode",
             Self::DecodeFusedJangtq2GatheredProjection => {
                 "decode_fused_jangtq2_gathered_projection"
             }

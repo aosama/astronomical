@@ -2,8 +2,9 @@
 //! chosen set of compute units, plus Apple's own report of where Core ML
 //! placed it and a zero-copy view of its output surface.
 
-use std::ffi::{CStr, CString, c_char, c_void};
+use std::ffi::{CStr, CString, OsStr, c_char, c_void};
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr::NonNull;
 use std::time::Duration;
@@ -18,13 +19,16 @@ use crate::ml_program_rotated_mlp_document::{
     RotatedMlpLayout, RotatedMlpWeights, encode_ml_program_rotated_mlp,
 };
 use crate::native_bridge::{
-    NativeCoreMlProjection, NativeLayerPlacement, astronomical_core_ml_projection_begin_predict,
+    NativeCoreMlProjection, NativeLayerPlacement, astronomical_core_ml_compile_model_to,
+    astronomical_core_ml_projection_begin_predict,
+    astronomical_core_ml_projection_compiled_model_path,
     astronomical_core_ml_projection_discard_compiled_model,
     astronomical_core_ml_projection_finish_predict, astronomical_core_ml_projection_load,
-    astronomical_core_ml_projection_lock_output, astronomical_core_ml_projection_placement,
-    astronomical_core_ml_projection_predict, astronomical_core_ml_projection_read_output,
-    astronomical_core_ml_projection_release, astronomical_core_ml_projection_unlock_output,
-    astronomical_core_ml_projection_write_input,
+    astronomical_core_ml_projection_lock_output,
+    astronomical_core_ml_projection_model_load_seconds, astronomical_core_ml_projection_placement,
+    astronomical_core_ml_projection_placement_seconds, astronomical_core_ml_projection_predict,
+    astronomical_core_ml_projection_read_output, astronomical_core_ml_projection_release,
+    astronomical_core_ml_projection_unlock_output, astronomical_core_ml_projection_write_input,
 };
 use crate::projection_model_interface::ProjectionDocumentError;
 use crate::projection_shape::ProjectionShape;
@@ -34,6 +38,9 @@ const NATIVE_ERROR_CAPACITY: usize = 512;
 /// The devices Core ML may schedule on (`MLComputeUnits`). There is no
 /// "Neural Engine only" setting; excluding the GPU is how a GPU fallback is
 /// kept from passing as a Neural Engine result.
+// macOS's PATH_MAX.
+const COMPILED_MODEL_PATH_CAPACITY: usize = 1024;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoreMlComputeUnits {
     CpuOnly,
@@ -78,6 +85,8 @@ pub enum CoreMlProjectionError {
     ModelFile(#[from] std::io::Error),
     #[error("the model path contains an interior NUL byte")]
     ModelPath,
+    #[error("this program has no compiled model files to keep")]
+    NoCompiledModelFiles,
     #[error("Core ML could not load the projection: {0}")]
     Load(String),
     #[error("expected {expected} fp16 values, got {actual}")]
@@ -299,6 +308,42 @@ impl CoreMlProjection {
         Self::load_model_at(&package_path, layout.shape, compute_units)
     }
 
+    /// Compiles a whole MLP chain and leaves the compiled model at `destination`
+    /// without loading it, for a program that will be kept and loaded from there.
+    /// See the bridge's `astronomical_core_ml_compile_model_to` for why the first
+    /// load must happen at the final path.
+    pub fn compile_ml_program_mlp_to(
+        shape: ProjectionShape,
+        intermediate_channels: usize,
+        weights: MlpFp16Weights<'_>,
+        contraction_part_width: usize,
+        model_directory: &Path,
+        destination: &Path,
+    ) -> Result<(), CoreMlProjectionError> {
+        let package_contents = encode_ml_program_mlp(
+            shape,
+            intermediate_channels,
+            weights,
+            contraction_part_width,
+        )?;
+        let package_path = write_ml_package(model_directory, &package_contents)?;
+        compile_package_to(&package_path, destination)
+    }
+
+    /// As [`Self::compile_ml_program_mlp_to`] for one projection.
+    pub fn compile_ml_program_to(
+        shape: ProjectionShape,
+        weights: MlProgramWeights<'_>,
+        contraction_part_count: usize,
+        model_directory: &Path,
+        destination: &Path,
+    ) -> Result<(), CoreMlProjectionError> {
+        let package_contents =
+            encode_ml_program_projection(shape, weights, contraction_part_count)?;
+        let package_path = write_ml_package(model_directory, &package_contents)?;
+        compile_package_to(&package_path, destination)
+    }
+
     fn load_model_at(
         model_path: &Path,
         shape: ProjectionShape,
@@ -340,6 +385,66 @@ impl CoreMlProjection {
     #[must_use]
     pub fn output_channel_count(&self) -> usize {
         self.shape.output_channels()
+    }
+
+    #[must_use]
+    pub fn shape(&self) -> ProjectionShape {
+        self.shape
+    }
+
+    /// Seconds Core ML spent creating the model, and then planning its placement.
+    #[must_use]
+    pub fn load_phase_seconds(&self) -> (f64, f64) {
+        let native_projection = self.native_projection.as_ptr().cast_const();
+        // SAFETY: the handle is valid for this borrow and these only read two doubles.
+        unsafe {
+            (
+                astronomical_core_ml_projection_model_load_seconds(native_projection),
+                astronomical_core_ml_projection_placement_seconds(native_projection),
+            )
+        }
+    }
+
+    /// Loads a program compiled earlier, skipping the weights and the compiler. The
+    /// files stay where they are when this program is released.
+    pub fn load_compiled_model(
+        compiled_model_path: &Path,
+        shape: ProjectionShape,
+        compute_units: CoreMlComputeUnits,
+    ) -> Result<Self, CoreMlProjectionError> {
+        Self::load_model_at(compiled_model_path, shape, compute_units)
+    }
+
+    /// Moves the compiled model out of the temporary directory to `destination` for
+    /// later loads. The loaded program stays usable and no longer owns the files.
+    pub fn keep_compiled_model_files_at(
+        &mut self,
+        destination: &Path,
+    ) -> Result<(), CoreMlProjectionError> {
+        let mut path_buffer = [0 as c_char; COMPILED_MODEL_PATH_CAPACITY];
+        // SAFETY: the handle is valid for this borrow and the buffer is writable for
+        // its full stated capacity.
+        let path_status = unsafe {
+            astronomical_core_ml_projection_compiled_model_path(
+                self.native_projection.as_ptr(),
+                path_buffer.as_mut_ptr(),
+                COMPILED_MODEL_PATH_CAPACITY as u32,
+            )
+        };
+        if path_status != 0 {
+            return Err(CoreMlProjectionError::NoCompiledModelFiles);
+        }
+        // SAFETY: the bridge wrote a NUL-terminated path into the buffer on success.
+        let compiled_path = unsafe { CStr::from_ptr(path_buffer.as_ptr()) };
+        if let Some(parent_directory) = destination.parent() {
+            fs::create_dir_all(parent_directory)?;
+        }
+        fs::rename(
+            Path::new(OsStr::from_bytes(compiled_path.to_bytes())),
+            destination,
+        )?;
+        self.discard_compiled_model_files();
+        Ok(())
     }
 
     /// Removes the compiled model from the temporary directory while the loaded
@@ -461,6 +566,36 @@ impl CoreMlProjectionError {
     fn from_interior_nul(_interior_nul: std::ffi::NulError) -> Self {
         Self::ModelPath
     }
+}
+
+fn compile_package_to(
+    package_path: &Path,
+    destination: &Path,
+) -> Result<(), CoreMlProjectionError> {
+    if let Some(parent_directory) = destination.parent() {
+        fs::create_dir_all(parent_directory)?;
+    }
+    let package_path_text = CString::new(package_path.to_string_lossy().as_bytes())
+        .map_err(CoreMlProjectionError::from_interior_nul)?;
+    let destination_text = CString::new(destination.to_string_lossy().as_bytes())
+        .map_err(CoreMlProjectionError::from_interior_nul)?;
+    let mut native_error = [0 as c_char; NATIVE_ERROR_CAPACITY];
+    // SAFETY: both paths are valid NUL-terminated strings that outlive the call,
+    // and the error buffer is writable for its full stated capacity.
+    let status = unsafe {
+        astronomical_core_ml_compile_model_to(
+            package_path_text.as_ptr(),
+            destination_text.as_ptr(),
+            native_error.as_mut_ptr(),
+            NATIVE_ERROR_CAPACITY as u32,
+        )
+    };
+    if status != 0 {
+        return Err(CoreMlProjectionError::Load(native_error_text(
+            &native_error,
+        )));
+    }
+    Ok(())
 }
 
 fn check_element_count(expected: usize, actual: usize) -> Result<(), CoreMlProjectionError> {
