@@ -1,5 +1,6 @@
 mod config;
 #[cfg(feature = "direct-mlx")]
+mod neural_engine_answer_tasks;
 mod neural_engine_mlp_prefill;
 mod ornith_load;
 mod qwen_image_21_conditioning;

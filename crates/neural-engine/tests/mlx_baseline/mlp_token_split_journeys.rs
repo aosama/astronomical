@@ -54,7 +54,7 @@ const MINIMUM_MERGED_COSINE: f64 = 0.999;
 // A surface row must fill its alignment exactly for MLX to read it as one
 // array, and multiples of 64 fp16 tokens do. The chain's balance should sit
 // near the 37 to 44 percent the per-projection splits found.
-const NEURAL_ENGINE_TOKEN_COUNTS: [usize; 6] = [640, 768, 832, 896, 960, 1024];
+const NEURAL_ENGINE_TOKEN_COUNTS: [usize; 7] = [640, 768, 832, 896, 960, 1024, 1088];
 // The share serving uses for a 2,048-token chunk, so these programs match it.
 const LAYER_PROGRAM_TOKEN_COUNT: usize = 960;
 const WARM_UP_LAYER_CYCLES: usize = 2;

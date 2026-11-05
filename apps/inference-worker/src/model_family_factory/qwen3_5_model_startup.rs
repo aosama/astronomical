@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::PromptCacheConfig;
+use astronomical_config::{PromptCacheConfig, neural_engine_program_cache_directory_for_model};
 use astronomical_ipc_protocol::{
     WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy,
     WorkerDiagnosticQwen3_5EngineOverride,
@@ -134,12 +134,18 @@ pub(crate) fn initialize_qwen3_5_model(
             per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         )
     });
+    let neural_engine_program_cache_directory = neural_engine_program_cache_directory_for_model(
+        prompt_cache_config.global_prompt_cache_root_directory(),
+        &model_id,
+        &model_revision,
+    );
     let qwen3_5_engine = construct_selected_qwen3_5_engine(
         selected_engine,
         validated_artifact,
         active_memory_limit_bytes,
         allocator_cache_memory_limit_bytes,
         persistent_prompt_cache_disk_store_config,
+        neural_engine_program_cache_directory,
         think_end_token_id,
         &model_directory_path,
         maximum_context_tokens,
@@ -165,6 +171,7 @@ fn construct_selected_qwen3_5_engine(
     active_memory_limit_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+    neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
     maximum_context_tokens: u32,
@@ -184,6 +191,7 @@ fn construct_selected_qwen3_5_engine(
             active_memory_limit_bytes,
             allocator_cache_memory_limit_bytes,
             persistent_prompt_cache_disk_store_config,
+            neural_engine_program_cache_directory,
             think_end_token_id,
             model_directory_path,
             maximum_context_tokens,
@@ -391,6 +399,7 @@ fn construct_resident_engine(
     active_memory_limit_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     persistent_prompt_cache_disk_store_config: Option<PersistentPromptCacheDiskStoreConfig>,
+    neural_engine_program_cache_directory: Option<PathBuf>,
     think_end_token_id: u32,
     model_directory_path: &std::path::Path,
     maximum_context_tokens: u32,
@@ -440,6 +449,7 @@ fn construct_resident_engine(
         model_loading_performance_attribution,
         performance_attribution_log,
         diagnostic_resident_prefill_activation_floor_bytes,
+        neural_engine_program_cache_directory,
     )
     .map(ModelFamilyInferenceEngine::Qwen3_5)
     .map_err(|source| Qwen3_5ModelStartupError::EngineInitialization {

@@ -11,7 +11,7 @@ fn valid_document() -> serde_json::Value {
         "$schema": "./astronomical-config.schema.json",
         "schema_version": 1,
         "runtime": { "model_directories": [] },
-        "chunking": { "experimental_neural_engine_mlp_prefill_enabled": true }
+        "chunking": { "experimental_neural_engine_prefill_enabled": true }
     })
 }
 
@@ -182,7 +182,7 @@ fn should_reset_to_first_run_defaults_and_keep_the_previous_bytes() {
     let document = snapshot.document.expect("the reset document parses");
     assert_eq!(document["runtime"]["model_directories"], json!([]));
     assert_eq!(
-        document["chunking"]["experimental_neural_engine_mlp_prefill_enabled"],
+        document["chunking"]["experimental_neural_engine_prefill_enabled"],
         serde_json::Value::Null
     );
     assert_eq!(
@@ -225,8 +225,7 @@ fn should_describe_every_setting_including_the_neural_engine_opt_in() {
         serde_json::from_slice(config_schema_bytes()).expect("the bundled schema parses");
 
     assert_eq!(
-        schema["$defs"]["chunking"]["properties"]["experimental_neural_engine_mlp_prefill_enabled"]
-            ["default"],
+        schema["$defs"]["chunking"]["properties"]["experimental_neural_engine_prefill_enabled"]["default"],
         json!(false)
     );
 }

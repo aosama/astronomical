@@ -61,7 +61,7 @@ pub(in crate::worker) fn model_load_budget(
         Some(model_configuration)
             if model_configuration
                 .chunking
-                .experimental_neural_engine_mlp_prefill_enabled =>
+                .experimental_neural_engine_prefill_enabled =>
         {
             model_load_timeout + NEURAL_ENGINE_PROGRAM_LOAD_ALLOWANCE
         }

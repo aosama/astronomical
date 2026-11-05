@@ -18,7 +18,8 @@ pub struct NeuralEnginePrefillMemoryRequirements {
     pub resident_model_payload_bytes: u64,
     /// Decoder state at the model's largest context, which MLX can grow to.
     pub maximum_context_state_bytes: u64,
-    pub fp16_mlp_weight_bytes: u64,
+    /// Every program's weights as fp16: the MLPs and the output gates.
+    pub fp16_program_weight_bytes: u64,
     pub active_memory_ceiling_bytes: u64,
 }
 
@@ -40,7 +41,7 @@ impl NeuralEnginePrefillMemoryRequirements {
     #[must_use]
     pub const fn decide(self) -> NeuralEnginePrefillAdmission {
         let estimated_neural_engine_bytes = self
-            .fp16_mlp_weight_bytes
+            .fp16_program_weight_bytes
             .saturating_mul(NEURAL_ENGINE_BYTES_PER_TEN_FP16_WEIGHT_BYTES)
             / 10;
         let required_bytes = self

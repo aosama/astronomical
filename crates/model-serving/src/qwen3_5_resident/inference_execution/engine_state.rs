@@ -63,6 +63,10 @@ pub struct Qwen3_5InferenceExecution {
     pub(in crate::qwen3_5_resident::inference_execution) prompt_processing_chunk_sizer:
         Qwen3_5ResidentPromptProcessingChunkSizer,
     pub(in crate::qwen3_5_resident::inference_execution) chunking: WorkerChunkingConfiguration,
+    /// Where this model revision's compiled Neural Engine programs are kept
+    /// between loads; `None` compiles them again on every load.
+    pub(in crate::qwen3_5_resident::inference_execution) neural_engine_program_cache_directory:
+        Option<std::path::PathBuf>,
     /// What the opt-in Neural Engine prefill ended up doing at load.
     pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_status:
         astronomical_ipc_protocol::NeuralEnginePrefillStatus,

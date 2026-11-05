@@ -1,14 +1,19 @@
 //! Opt-in prefill that runs a slice of each full chunk's tokens through whole
-//! dense MLP programs on the Neural Engine, next to the GPU (issue #161).
+//! dense MLP programs on the Neural Engine, next to the GPU (issue #161). The
+//! linear-attention output gates have their own programs in
+//! `neural_engine_output_gate_prefill`.
 //!
-//! Only the MLP moves: as one program it needs one hand-off per layer, where
-//! splitting single projections by channel needs one per projection. Mixture-of-experts models are out of scope because their routed experts stay on
-//! the GPU, which measured about 1.04× for the chunk.
+//! The MLP moves as one program because that needs one hand-off per layer, where
+//! splitting single projections by channel needs one per projection. A whole-MLP
+//! token split also measured 1.24× against 1.07× for moving only gate and up by
+//! channel. Mixture-of-experts models are out of scope because their routed experts
+//! stay on the GPU, which measured about 1.04× for the chunk.
 
 mod program_loading;
 mod token_split_forward;
 
 pub(crate) use program_loading::prepare_neural_engine_mlp_prefill;
+pub(crate) use program_loading::{ProgramPackageDirectory, weight_as_fp16_bits};
 
 use std::cell::{Cell, RefCell};
 
@@ -23,7 +28,7 @@ const NEURAL_ENGINE_SHARE_NUMERATOR: u32 = 15;
 const NEURAL_ENGINE_SHARE_DENOMINATOR: u32 = 32;
 // A surface row must fill its alignment exactly for MLX to read it as one array,
 // and multiples of 64 fp16 tokens do.
-const NEURAL_ENGINE_TOKEN_GRANULARITY: u32 = 64;
+pub(crate) const NEURAL_ENGINE_TOKEN_GRANULARITY: u32 = 64;
 
 /// One program per decoder layer, each fixed to the chunk's token slice.
 pub(crate) struct NeuralEngineMlpPrefill {
@@ -32,6 +37,9 @@ pub(crate) struct NeuralEngineMlpPrefill {
     neural_engine_token_count: u32,
     /// Set by the first runtime failure, so later chunks stay on the GPU.
     has_failed: Cell<bool>,
+    /// Lets one loaded model alternate between arms in a measurement, because
+    /// separate runs differ by warm-up and heat as much as the effects measured.
+    is_paused: Cell<bool>,
 }
 
 impl std::fmt::Debug for NeuralEngineMlpPrefill {
@@ -46,10 +54,16 @@ impl std::fmt::Debug for NeuralEngineMlpPrefill {
 }
 
 impl NeuralEngineMlpPrefill {
+    pub(crate) fn set_paused(&self, is_paused: bool) {
+        self.is_paused.set(is_paused);
+    }
+
     /// Programs have fixed shapes, so tails, reduced chunks, and one-token decode
     /// all stay on the GPU. Fixed-shape execution never pads tokens to fit.
     fn handles(&self, token_count: i32) -> bool {
-        !self.has_failed.get() && u32::try_from(token_count) == Ok(self.chunk_token_count)
+        !self.has_failed.get()
+            && !self.is_paused.get()
+            && u32::try_from(token_count) == Ok(self.chunk_token_count)
     }
 }
 

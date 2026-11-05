@@ -90,7 +90,7 @@ async fn should_serve_the_document_its_digest_and_the_schema_describing_it() {
         64
     );
     assert_eq!(
-        response_json["schema"]["$defs"]["chunking"]["properties"]["experimental_neural_engine_mlp_prefill_enabled"]
+        response_json["schema"]["$defs"]["chunking"]["properties"]["experimental_neural_engine_prefill_enabled"]
             ["default"],
         false
     );

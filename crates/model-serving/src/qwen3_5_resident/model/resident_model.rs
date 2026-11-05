@@ -121,16 +121,42 @@ impl Qwen3_5ResidentModel {
     /// Loads the opt-in Neural Engine programs exactly as production loading does,
     /// so a journey can measure one loaded model with and without them.
     #[cfg(feature = "direct-mlx")]
-    pub fn prepare_neural_engine_mlp_prefill_matching_production(
+    pub fn prepare_neural_engine_prefill_matching_production(
         &mut self,
         chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
         maximum_context_tokens: u32,
+        program_cache_directory: Option<&std::path::Path>,
     ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
-        crate::qwen3_5_resident::neural_engine_mlp_prefill::prepare_neural_engine_mlp_prefill(
+        crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
             self,
             chunking,
             maximum_context_tokens,
+            program_cache_directory,
         )
+    }
+
+    /// Releases the programs so the next load in a measurement starts from none.
+    #[cfg(feature = "direct-mlx")]
+    pub fn release_neural_engine_mlp_prefill(&mut self) {
+        self.neural_engine_mlp_prefill = None;
+        self.base.output_gate_engine = None;
+    }
+
+    /// Sends full chunks to the GPU alone while paused, so one loaded model can
+    /// alternate between the arms of a measurement.
+    #[cfg(feature = "direct-mlx")]
+    pub fn set_neural_engine_mlp_prefill_paused(&self, is_paused: bool) {
+        if let Some(prefill) = self.neural_engine_mlp_prefill.as_ref() {
+            prefill.set_paused(is_paused);
+        }
+    }
+
+    /// As [`Self::set_neural_engine_mlp_prefill_paused`] for the output gate programs.
+    #[cfg(feature = "direct-mlx")]
+    pub fn set_neural_engine_output_gate_paused(&self, is_paused: bool) {
+        if let Some(output_gate_engine) = self.base.output_gate_engine.as_ref() {
+            output_gate_engine.set_paused(is_paused);
+        }
     }
 
     /// Materializes dense target weights and the complete resident expert

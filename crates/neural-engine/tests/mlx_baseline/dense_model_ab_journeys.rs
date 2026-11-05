@@ -47,6 +47,7 @@ const ORNITH_WEIGHT_SEED: u64 = 0x5eed_0909;
 // contraction split the Neural Engine runs near 18.6 TFLOP/s against the
 // GPU's 4-bit rate, which puts the balance near one half; the sweep brackets it.
 const NEURAL_ENGINE_SHARE_SIXTEENTHS: [usize; 4] = [6, 7, 8, 9];
+const DELTANET_OUTPUT_GATE_ROWS: usize = 4096;
 
 pub(super) struct DenseOperation {
     pub(super) label: &'static str,
@@ -267,7 +268,16 @@ fn measure_b(
     together.median
 }
 
+/// The balance sweep every whole operation uses, around an even split.
 fn run_ab(operation: &DenseOperation) {
+    let mut neural_engine_channel_candidates = Vec::new();
+    for share_sixteenths in NEURAL_ENGINE_SHARE_SIXTEENTHS {
+        neural_engine_channel_candidates.push(operation.output_channels * share_sixteenths / 16);
+    }
+    run_ab_for_channels(operation, &neural_engine_channel_candidates);
+}
+
+fn run_ab_for_channels(operation: &DenseOperation, neural_engine_channel_candidates: &[usize]) {
     let runtime = initialize_runtime();
     let quantized = prepare_quantized_operation(&runtime, operation);
     let full_form = quantized_form(
@@ -287,8 +297,7 @@ fn run_ab(operation: &DenseOperation) {
         milliseconds(a_median)
     );
     let mut best_b = (Duration::MAX, 0_usize);
-    for share_sixteenths in NEURAL_ENGINE_SHARE_SIXTEENTHS {
-        let neural_engine_channels = operation.output_channels * share_sixteenths / 16;
+    for neural_engine_channels in neural_engine_channel_candidates.iter().copied() {
         let b_label = format!(
             "B {} with {neural_engine_channels} NE channels",
             operation.label
@@ -334,6 +343,23 @@ fn should_compare_the_dense_deltanet_fused_input_alone_and_split() {
         output_channels: 12_352,
         layer_count: 24,
     });
+}
+
+/// Only the output gate's rows, which never enter the recurrent state. The whole
+/// fused input is 12,352 rows; `z` is the 4,096 of them at value width.
+#[test]
+#[serial(neural_engine)]
+#[ignore = "A/B of Ornith-1.5-9B's DeltaNet output gate rows on the real Neural Engine and GPU"]
+fn should_compare_the_dense_deltanet_output_gate_rows_alone_and_split() {
+    run_ab_for_channels(
+        &DenseOperation {
+            label: "DeltaNet fused input 4096→12352, output gate rows only",
+            input_channels: 4096,
+            output_channels: 12_352,
+            layer_count: 24,
+        },
+        &[DELTANET_OUTPUT_GATE_ROWS],
+    );
 }
 
 #[test]

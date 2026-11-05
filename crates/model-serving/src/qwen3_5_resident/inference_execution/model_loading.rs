@@ -15,7 +15,7 @@ use crate::qwen3_5_core::artifacts::ValidatedQwen3_5Artifact;
 use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 use crate::qwen3_5_core::vision::{Qwen3_5ImageProcessor, Qwen3_5VisionConfig};
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
-use crate::qwen3_5_resident::neural_engine_mlp_prefill::prepare_neural_engine_mlp_prefill;
+use crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill;
 
 impl Qwen3_5EngineState {
     /// The model's last parts, once its core weights are in place. Programs come
@@ -26,10 +26,11 @@ impl Qwen3_5EngineState {
         model_loading_performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), InferenceEngineError> {
         synchronize_gpu_stream_then_load_experts(model, model_loading_performance_attribution)?;
-        self.neural_engine_prefill_status = prepare_neural_engine_mlp_prefill(
+        self.neural_engine_prefill_status = prepare_neural_engine_prefill(
             model,
             &self.chunking,
             u32::try_from(self.hard_maximum_position_count).unwrap_or(u32::MAX),
+            self.neural_engine_program_cache_directory.as_deref(),
         );
         Ok(())
     }

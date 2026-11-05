@@ -118,13 +118,13 @@ macOS can release the Metal residency of wired memory while the GPU is idle, so 
 
 ## Neural Engine prefill (experimental)
 
-Dense models can run part of each full prompt chunk on the Apple Neural Engine next to the GPU. Set `experimental_neural_engine_mlp_prefill_enabled` under `chunking`, globally or for one model; it is off by default.
+Dense models can run part of each full prompt chunk on the Apple Neural Engine next to the GPU: 47 percent of each chunk's MLP work, and the DeltaNet layers' output gates. Set `experimental_neural_engine_prefill_enabled` under `chunking`, globally or for one model; it is off by default and applies at the next model load.
 
-Measured on Ornith-1.5-9B on one M5-class Mac, with 10,000-token Shakespeare prompts through the daemon: prefill rose about 1.13× with the prompt cache on (median 1,233 to 1,398 tokens per second) and about 1.2× with it off (1,225 to 1,466), and decode did not change. The first long prompt after a load sees little of that gain. The costs are real:
+Measured on Ornith-1.5-9B on one M5-class Mac, with 10,000-token Shakespeare prompts through the daemon and the prompt cache on: prefill rose from about 1,207 tokens per second to between 1,362 and 1,444, or 1.13× to 1.2×, and direct model runs without the cache's work measured about 1.27×. Decode did not change. The first long prompt after a load sees less of that gain, and only full 2,048-token chunks use the Neural Engine, so shorter prompts see none. The costs are real:
 
-- **Memory:** 12 to 16 GB for that model, which must fit under the MLX memory ceiling beside the model and its largest context. That one needs a ceiling of about 33 GB.
-- **Load time:** about 100 seconds longer on each model load, and performance attribution, when enabled, removes the speed gain by adding synchronization.
-- **Output:** part of each prompt computes in fp16, so output can differ slightly from the GPU alone. Answers from the two paths stayed coherent but diverged within the first 110 characters.
+- **Memory:** about 19 GB is reserved for that model's programs, which must fit under the MLX memory ceiling beside the model and its largest context. A ceiling of 34 GB admits it. The driver releases the programs' wired memory 10 to 20 seconds after work stops.
+- **Load time and disk:** a model's first load takes about 108 seconds longer and keeps about 10 GB of compiled programs under the instance's `neural-engine-programs` folder; later loads take about 3 seconds. Performance attribution, when enabled, removes the speed gain by adding synchronization.
+- **Output:** part of each prompt computes in fp16, so output can differ slightly from the GPU alone. In six exact-answer tasks over 13,000-token prompts every answer stayed correct, though on one coding task the answer ignored "output only the code".
 
 Mixture-of-experts models do not benefit, because their routed experts stay on the GPU. When the feature cannot run, serving stays on the GPU and `/v1/status` and the Configuration page say why.
 

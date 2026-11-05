@@ -35,6 +35,11 @@ pub struct Qwen3_5ModelBase {
     pub(crate) gated_delta_checkpoint_kernel: Option<MlxMetalKernel>,
     /// Fused decode prework kernel; None when demoted or environment-disabled.
     pub(crate) gdn_decode_prework_kernel: Option<MlxMetalKernel>,
+    /// Opt-in engine for linear-attention output gates during prefill; `None`
+    /// keeps them on the GPU.
+    pub(crate) output_gate_engine: Option<
+        Box<dyn crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine>,
+    >,
     pub(crate) sorted_expert_weighted_sum_kernel: Option<MlxMetalKernel>,
     pub(crate) compiled_swiglu: MlxCompiledSwiGlu,
     pub(crate) compiled_elementwise_graphs: MlxCompiledElementwiseGraphs,

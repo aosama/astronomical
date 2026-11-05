@@ -321,7 +321,7 @@
                     <section class="panel configuration-neural-engine">
                         <h3>Neural Engine prefill</h3>
                         <p id="configuration-neural-engine-status" class="panel-note">Off for the loaded model, or no model is loaded.</p>
-                        <p class="panel-note">Experimental, dense models only. Turn on <em>Experimental neural engine MLP prefill enabled</em> under Chunking or for one model. Prompt processing measured 1.13× to 1.2× faster on a 9B model; generation speed does not change. It holds up to about twice the model's MLP weights in memory, adds a minute or more to model load, and computes part of each prompt in fp16, so output can differ slightly from the GPU alone.</p>
+                        <p class="panel-note">Experimental, dense models only. Turn on <em>Experimental neural engine prefill enabled</em> under Chunking or for one model. Prompt processing measured 1.13× to 1.2× faster on a 9B model with the prompt cache on; generation speed does not change. It holds up to about twice the programs' weights in memory. A model's first load takes a minute or two longer and keeps about 10 GB of compiled programs on disk; later loads take seconds. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone.</p>
                     </section>
                     <div id="configuration-sections"></div>
                     <details class="panel configuration-preview-panel">

@@ -45,9 +45,7 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_quantized_kv_cache_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) experimental_fused_moe_decode_enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) experimental_neural_engine_mlp_prefill_enabled: Option<bool>,
+    pub(crate) experimental_neural_engine_prefill_enabled: Option<bool>,
 }
 
 /// Presence map for advanced chunking fields after global/model inheritance.
@@ -65,8 +63,7 @@ pub struct ConfiguredChunkingFields {
     pub experimental_prefill_stage_attribution_enabled: bool,
     pub experimental_in_memory_prefix_adoption_enabled: bool,
     pub experimental_quantized_kv_cache_enabled: bool,
-    pub experimental_fused_moe_decode_enabled: bool,
-    pub experimental_neural_engine_mlp_prefill_enabled: bool,
+    pub experimental_neural_engine_prefill_enabled: bool,
 }
 
 fn deserialize_present_nullable_u32<'de, Deserializer>(
@@ -124,11 +121,8 @@ impl ChunkingConfigFile {
             experimental_quantized_kv_cache_enabled: self
                 .experimental_quantized_kv_cache_enabled
                 .is_some(),
-            experimental_fused_moe_decode_enabled: self
-                .experimental_fused_moe_decode_enabled
-                .is_some(),
-            experimental_neural_engine_mlp_prefill_enabled: self
-                .experimental_neural_engine_mlp_prefill_enabled
+            experimental_neural_engine_prefill_enabled: self
+                .experimental_neural_engine_prefill_enabled
                 .is_some(),
         }
     }
@@ -178,12 +172,9 @@ impl ChunkingConfigFile {
             experimental_quantized_kv_cache_enabled: model
                 .experimental_quantized_kv_cache_enabled
                 .or(global.experimental_quantized_kv_cache_enabled),
-            experimental_fused_moe_decode_enabled: model
-                .experimental_fused_moe_decode_enabled
-                .or(global.experimental_fused_moe_decode_enabled),
-            experimental_neural_engine_mlp_prefill_enabled: model
-                .experimental_neural_engine_mlp_prefill_enabled
-                .or(global.experimental_neural_engine_mlp_prefill_enabled),
+            experimental_neural_engine_prefill_enabled: model
+                .experimental_neural_engine_prefill_enabled
+                .or(global.experimental_neural_engine_prefill_enabled),
         }
     }
 }
@@ -251,8 +242,7 @@ pub struct ChunkingConfig {
     experimental_prefill_stage_attribution_enabled: bool,
     experimental_in_memory_prefix_adoption_enabled: bool,
     experimental_quantized_kv_cache_enabled: bool,
-    experimental_fused_moe_decode_enabled: bool,
-    experimental_neural_engine_mlp_prefill_enabled: bool,
+    experimental_neural_engine_prefill_enabled: bool,
 }
 
 impl ChunkingConfig {
@@ -308,11 +298,8 @@ impl ChunkingConfig {
             experimental_quantized_kv_cache_enabled: configured
                 .experimental_quantized_kv_cache_enabled
                 .unwrap_or(false),
-            experimental_fused_moe_decode_enabled: configured
-                .experimental_fused_moe_decode_enabled
-                .unwrap_or(false),
-            experimental_neural_engine_mlp_prefill_enabled: configured
-                .experimental_neural_engine_mlp_prefill_enabled
+            experimental_neural_engine_prefill_enabled: configured
+                .experimental_neural_engine_prefill_enabled
                 .unwrap_or(false),
         };
         resolved.validate()?;
@@ -444,20 +431,12 @@ impl ChunkingConfig {
         self.experimental_quantized_kv_cache_enabled
     }
 
-    /// Returns whether single-token decode uses the fused quantized expert
-    /// Metal kernels. Changes expert numerics slightly; quality-gated and
-    /// capability-probed.
-    #[must_use]
-    pub const fn experimental_fused_moe_decode_enabled(&self) -> bool {
-        self.experimental_fused_moe_decode_enabled
-    }
-
     /// Returns whether dense prefill may run a slice of each chunk's tokens
     /// through whole MLP programs on the Neural Engine. Off by default because
     /// it holds roughly twice the model's fp16 MLP weights in memory.
     #[must_use]
-    pub const fn experimental_neural_engine_mlp_prefill_enabled(&self) -> bool {
-        self.experimental_neural_engine_mlp_prefill_enabled
+    pub const fn experimental_neural_engine_prefill_enabled(&self) -> bool {
+        self.experimental_neural_engine_prefill_enabled
     }
 }
 
@@ -468,8 +447,7 @@ impl Default for ChunkingConfig {
             experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: true,
             experimental_quantized_kv_cache_enabled: false,
-            experimental_fused_moe_decode_enabled: false,
-            experimental_neural_engine_mlp_prefill_enabled: false,
+            experimental_neural_engine_prefill_enabled: false,
             fixed_prompt_processing_chunk_size_tokens:
                 DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,
             fixed_ssd_streaming_prompt_processing_chunk_size_tokens:

@@ -49,6 +49,13 @@ unsafe extern "C" {
         error_capacity: u32,
     ) -> *mut NativeCoreMlProjection;
 
+    pub fn astronomical_core_ml_compile_model_to(
+        package_path: *const c_char,
+        destination_path: *const c_char,
+        error_message: *mut c_char,
+        error_capacity: u32,
+    ) -> i32;
+
     pub fn astronomical_core_ml_projection_placement(
         projection: *const NativeCoreMlProjection,
     ) -> NativeLayerPlacement;
@@ -90,6 +97,17 @@ unsafe extern "C" {
         elapsed_nanoseconds: *mut u64,
     ) -> i32;
 
+    pub fn astronomical_core_ml_projection_model_load_seconds(
+        projection: *const NativeCoreMlProjection,
+    ) -> f64;
+    pub fn astronomical_core_ml_projection_placement_seconds(
+        projection: *const NativeCoreMlProjection,
+    ) -> f64;
+    pub fn astronomical_core_ml_projection_compiled_model_path(
+        projection: *mut NativeCoreMlProjection,
+        path_buffer: *mut c_char,
+        path_capacity: u32,
+    ) -> i32;
     pub fn astronomical_core_ml_projection_discard_compiled_model(
         projection: *mut NativeCoreMlProjection,
     );

@@ -41,6 +41,7 @@ impl Qwen3_5ModelBase {
                 hidden_states,
                 linear_attention_weights,
                 token_count,
+                decoder_layer_index,
                 performance_attribution,
             )?;
         let completed_prefill_chunk_tokens = boundary_checkpoint_collector
@@ -134,6 +135,7 @@ impl Qwen3_5ModelBase {
         hidden_states: &MlxArray,
         linear_attention_weights: &Qwen3_5LinearAttentionWeights,
         token_count: i32,
+        decoder_layer_index: usize,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(MlxArray, MlxArray, MlxArray, MlxArray), Qwen3_5ExecutionError> {
         let linear_value_head_count = self.config.linear_value_head_count() as i32;
@@ -142,9 +144,20 @@ impl Qwen3_5ModelBase {
             hidden_states,
             &linear_attention_weights.input_queries_keys_values_projection,
         )?;
-        let output_gate = self.quantized_linear(
+        let update_logits = self.quantized_linear(
             hidden_states,
-            &linear_attention_weights.output_gate_projection,
+            &linear_attention_weights.update_rate_projection,
+        )?;
+        let decay_inputs = self.quantized_linear(
+            hidden_states,
+            &linear_attention_weights.decay_interval_projection,
+        )?;
+        let output_gate = self.project_output_gate(
+            hidden_states,
+            linear_attention_weights,
+            token_count,
+            decoder_layer_index,
+            &[&mixed_queries_keys_values, &update_logits, &decay_inputs],
         )?;
         let output_gate = self.runtime.reshape(
             &output_gate,
@@ -154,14 +167,6 @@ impl Qwen3_5ModelBase {
                 linear_value_head_count,
                 linear_head_dimension,
             ],
-        )?;
-        let update_logits = self.quantized_linear(
-            hidden_states,
-            &linear_attention_weights.update_rate_projection,
-        )?;
-        let decay_inputs = self.quantized_linear(
-            hidden_states,
-            &linear_attention_weights.decay_interval_projection,
         )?;
         evaluate_linear_attention_section(
             &self.runtime,
@@ -181,6 +186,39 @@ impl Qwen3_5ModelBase {
             update_logits,
             decay_inputs,
         ))
+    }
+
+    /// The output gate on another engine when one takes this chunk. A failure there
+    /// costs speed, never the request, so it falls back to the GPU.
+    fn project_output_gate(
+        &self,
+        hidden_states: &MlxArray,
+        linear_attention_weights: &Qwen3_5LinearAttentionWeights,
+        token_count: i32,
+        decoder_layer_index: usize,
+        gpu_work: &[&MlxArray],
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        if let Some(output_gate_engine) = self.output_gate_engine.as_ref()
+            && output_gate_engine.handles(token_count)
+        {
+            match output_gate_engine.project_beside_gpu_work(
+                &self.runtime,
+                hidden_states,
+                decoder_layer_index,
+                gpu_work,
+            ) {
+                Ok(output_gate) => return Ok(output_gate),
+                Err(engine_error) => tracing::warn!(
+                    decoder_layer_index,
+                    error = engine_error.as_str(),
+                    "the output gate engine failed; remaining prefill stays on the GPU"
+                ),
+            }
+        }
+        self.quantized_linear(
+            hidden_states,
+            &linear_attention_weights.output_gate_projection,
+        )
     }
 
     /// Runs the convolution phase: the checkpoint path updates the rolling

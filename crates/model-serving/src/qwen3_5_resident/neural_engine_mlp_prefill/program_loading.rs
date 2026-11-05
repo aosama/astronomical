@@ -2,7 +2,7 @@
 //! and decides whether they may run at all.
 
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
@@ -10,9 +10,7 @@ use astronomical_memory_policy::neural_engine_admission::{
     NeuralEnginePrefillAdmission, NeuralEnginePrefillMemoryRequirements,
 };
 use astronomical_neural_engine::compute_device_report::report_compute_devices;
-use astronomical_neural_engine::core_ml_projection::{
-    ComputePlacement, CoreMlComputeUnits, CoreMlProjection,
-};
+use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::ml_program_mlp_document::MlpFp16Weights;
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 use astronomical_runtime_integration::MlxRuntime;
@@ -24,6 +22,10 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5DecoderFeedForwardWeights,
 };
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
+use crate::qwen3_5_resident::neural_engine_output_gate_prefill::output_gate_fp16_weight_bytes;
+use crate::qwen3_5_resident::neural_engine_program_cache::{
+    ProgramSetCache, ProgramSource, load_verified_program,
+};
 
 // A 2,048-deep contraction runs at 18.6 TFLOP/s on the Neural Engine and a
 // 4,096-deep one at 9.7 (shape sweep, issue #161).
@@ -34,16 +36,20 @@ const WEIGHT_READ_FAILURE: &str = "a model weight could not be read as fp16";
 const BYTES_PER_GIGABYTE: u64 = 1_073_741_824;
 // gate + up + down: `[2 · intermediate][hidden]` and `[hidden][intermediate]`.
 const INTERMEDIATE_BY_HIDDEN_BLOCKS_PER_LAYER: u64 = 3;
+const PROGRAM_FAMILY: &str = "mlp";
+// Names the kept programs' set. Raise it whenever the encoded program changes, so
+// a load never runs a program compiled from an older encoding.
+const PROGRAM_FORMAT_VERSION: u32 = 1;
 
 /// Rounded up so the figure a user reads is one they can set the ceiling to.
 const fn whole_gigabytes_rounded_up(byte_count: u64) -> u64 {
     byte_count.div_ceil(BYTES_PER_GIGABYTE)
 }
 
-fn unavailable(reason: &str) -> NeuralEnginePrefillStatus {
+pub(crate) fn unavailable(reason: &str) -> NeuralEnginePrefillStatus {
     tracing::warn!(
         reason,
-        "Neural Engine MLP prefill is unavailable; prefill stays on the GPU"
+        "Neural Engine prefill is unavailable; prefill stays on the GPU"
     );
     NeuralEnginePrefillStatus::Unavailable {
         reason: reason.to_owned(),
@@ -51,13 +57,15 @@ fn unavailable(reason: &str) -> NeuralEnginePrefillStatus {
 }
 
 /// Whatever goes wrong here leaves the model serving on the GPU, because an
-/// opt-in speedup must never stop a model from loading.
+/// opt-in speedup must never stop a model from loading. Compiled programs are kept
+/// in `program_cache_directory` when there is one.
 pub(crate) fn prepare_neural_engine_mlp_prefill(
     model: &mut Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
     maximum_context_tokens: u32,
+    program_cache_directory: Option<&Path>,
 ) -> NeuralEnginePrefillStatus {
-    if !chunking.experimental_neural_engine_mlp_prefill_enabled {
+    if !chunking.experimental_neural_engine_prefill_enabled {
         return NeuralEnginePrefillStatus::Off;
     }
     if !report_compute_devices().has_neural_engine() {
@@ -87,8 +95,17 @@ pub(crate) fn prepare_neural_engine_mlp_prefill(
             ));
         }
     };
-    let layer_programs = match load_layer_programs(model, &layer_weights, neural_engine_token_count)
-    {
+    let program_cache = open_program_cache(
+        program_cache_directory,
+        neural_engine_token_count,
+        chunk_token_count,
+    );
+    let layer_programs = match load_layer_programs(
+        model,
+        &layer_weights,
+        neural_engine_token_count,
+        program_cache.as_ref(),
+    ) {
         Ok(layer_programs) => layer_programs,
         Err(reason) => return unavailable(reason),
     };
@@ -98,6 +115,7 @@ pub(crate) fn prepare_neural_engine_mlp_prefill(
         chunk_token_count,
         neural_engine_token_count,
         has_failed: Cell::new(false),
+        is_paused: Cell::new(false),
     });
     NeuralEnginePrefillStatus::Active {
         layer_program_count,
@@ -107,7 +125,20 @@ pub(crate) fn prepare_neural_engine_mlp_prefill(
     }
 }
 
-/// Each layer's MLP weights, or `None` for any non-dense layer.
+/// The set is named by everything a compiled program's contents depend on besides
+/// the model revision, which names the folder above it.
+fn open_program_cache(
+    program_cache_directory: Option<&Path>,
+    neural_engine_token_count: u32,
+    chunk_token_count: u32,
+) -> Option<ProgramSetCache> {
+    ProgramSetCache::open(
+        program_cache_directory?,
+        PROGRAM_FAMILY,
+        &format!("v{PROGRAM_FORMAT_VERSION}-{neural_engine_token_count}-of-{chunk_token_count}"),
+    )
+}
+
 fn dense_mlp_layer_weights(model: &Qwen3_5ResidentModel) -> Option<Vec<&Qwen3_5DenseMlpWeights>> {
     let mut layer_weights = Vec::with_capacity(model.base.weights.decoder_layer_weights.len());
     for decoder_layer_weights in &model.base.weights.decoder_layer_weights {
@@ -136,11 +167,12 @@ fn admit_programs(
         maximum_context_state_bytes: u64::try_from(context_state_bytes_per_token)
             .unwrap_or(u64::MAX)
             .saturating_mul(u64::from(maximum_context_tokens)),
-        fp16_mlp_weight_bytes: u64::from(config.layer_count())
+        fp16_program_weight_bytes: u64::from(config.layer_count())
             .saturating_mul(INTERMEDIATE_BY_HIDDEN_BLOCKS_PER_LAYER)
             .saturating_mul(u64::from(config.dense_intermediate_size()))
             .saturating_mul(u64::from(config.hidden_size()))
-            .saturating_mul(FP16_BYTES_PER_WEIGHT),
+            .saturating_mul(FP16_BYTES_PER_WEIGHT)
+            .saturating_add(output_gate_fp16_weight_bytes(model)),
         active_memory_ceiling_bytes: u64::try_from(
             model.runtime().memory_limits().active_memory_limit_bytes(),
         )
@@ -152,7 +184,7 @@ fn admit_programs(
 /// The weight as fp16 bit patterns, row-major `[output][input]`. Dequantizing to
 /// fp16 is why this mode is opt-in: it rounds the artifact's values to within
 /// 0.3 percent of the weight RMS.
-fn weight_as_fp16_bits(
+pub(crate) fn weight_as_fp16_bits(
     runtime: &MlxRuntime,
     affine_weights: &Qwen3_5AffineWeights,
 ) -> Result<Vec<u16>, &'static str> {
@@ -191,12 +223,12 @@ fn read_failure(_mlx_error: mlx_c_rust::MlxCError) -> &'static str {
 
 /// Compile input for one program, removed as soon as Core ML holds its own compiled
 /// copy, because each one is nearly a whole layer's weights on disk.
-struct ProgramPackageDirectory {
-    path: PathBuf,
+pub(crate) struct ProgramPackageDirectory {
+    pub(crate) path: PathBuf,
 }
 
 impl ProgramPackageDirectory {
-    fn create(layer_index: usize) -> Option<Self> {
+    pub(crate) fn create(layer_index: usize) -> Option<Self> {
         let path = std::env::temp_dir().join(format!(
             "astronomical-neural-engine-{}-{layer_index}",
             std::process::id()
@@ -214,20 +246,77 @@ impl Drop for ProgramPackageDirectory {
     }
 }
 
-fn load_layer_program(
+/// One decoder layer's whole MLP, read from the model as fp16 when it is compiled.
+struct MlpProgramSource<'model> {
+    runtime: &'model MlxRuntime,
+    dense_mlp_weights: &'model Qwen3_5DenseMlpWeights,
+    shape: ProjectionShape,
+    intermediate_channels: usize,
+}
+
+impl MlpProgramSource<'_> {
+    /// `(gate then up, down)`, the two blocks the encoder takes.
+    fn fp16_weights(&self) -> Result<(Vec<u16>, Vec<u16>), &'static str> {
+        let mut gate_and_up =
+            weight_as_fp16_bits(self.runtime, &self.dense_mlp_weights.gate_projection)?;
+        gate_and_up.extend(weight_as_fp16_bits(
+            self.runtime,
+            &self.dense_mlp_weights.up_projection,
+        )?);
+        let down = weight_as_fp16_bits(self.runtime, &self.dense_mlp_weights.down_projection)?;
+        Ok((gate_and_up, down))
+    }
+}
+
+impl ProgramSource for MlpProgramSource<'_> {
+    fn shape(&self) -> ProjectionShape {
+        self.shape
+    }
+
+    fn compile_to(&self, package_directory: &Path, destination: &Path) -> Result<(), &'static str> {
+        let (gate_and_up, down) = self.fp16_weights()?;
+        match CoreMlProjection::compile_ml_program_mlp_to(
+            self.shape,
+            self.intermediate_channels,
+            MlpFp16Weights {
+                gate_and_up: &gate_and_up,
+                down: &down,
+            },
+            CONTRACTION_PART_WIDTH as usize,
+            package_directory,
+            destination,
+        ) {
+            Ok(()) => Ok(()),
+            Err(_) => Err("Core ML could not compile the MLP program on this macOS"),
+        }
+    }
+
+    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProjection, &'static str> {
+        let (gate_and_up, down) = self.fp16_weights()?;
+        match CoreMlProjection::load_ml_program_mlp(
+            self.shape,
+            self.intermediate_channels,
+            MlpFp16Weights {
+                gate_and_up: &gate_and_up,
+                down: &down,
+            },
+            CONTRACTION_PART_WIDTH as usize,
+            CoreMlComputeUnits::CpuAndNeuralEngine,
+            package_directory,
+        ) {
+            Ok(program) => Ok(program),
+            Err(_) => Err("Core ML could not load the MLP program on this macOS"),
+        }
+    }
+}
+
+fn load_layer_programs(
     model: &Qwen3_5ResidentModel,
-    dense_mlp_weights: &Qwen3_5DenseMlpWeights,
-    layer_index: usize,
+    layer_weights: &[&Qwen3_5DenseMlpWeights],
     neural_engine_token_count: u32,
-) -> Result<CoreMlProjection, &'static str> {
-    let runtime = model.runtime();
+    program_cache: Option<&ProgramSetCache>,
+) -> Result<Vec<CoreMlProjection>, &'static str> {
     let hidden_channels = model.base.config().hidden_size() as usize;
-    let mut gate_and_up = weight_as_fp16_bits(runtime, &dense_mlp_weights.gate_projection)?;
-    gate_and_up.extend(weight_as_fp16_bits(
-        runtime,
-        &dense_mlp_weights.up_projection,
-    )?);
-    let down = weight_as_fp16_bits(runtime, &dense_mlp_weights.down_projection)?;
     let Ok(shape) = ProjectionShape::new(
         hidden_channels,
         hidden_channels,
@@ -235,56 +324,17 @@ fn load_layer_program(
     ) else {
         return Err("the model's MLP shape is not supported");
     };
-    let Some(package_directory) = ProgramPackageDirectory::create(layer_index) else {
-        return Err("no scratch directory for the Core ML program");
-    };
-    let Ok(mut program) = CoreMlProjection::load_ml_program_mlp(
-        shape,
-        model.base.config().dense_intermediate_size() as usize,
-        MlpFp16Weights {
-            gate_and_up: &gate_and_up,
-            down: &down,
-        },
-        CONTRACTION_PART_WIDTH as usize,
-        CoreMlComputeUnits::CpuAndNeuralEngine,
-        &package_directory.path,
-    ) else {
-        return Err("Core ML could not load the MLP program on this macOS");
-    };
-    let placement = program.placement();
-    if placement.preferred != ComputePlacement::NeuralEngine
-        || placement.operations_off_neural_engine != 0
-    {
-        return Err("Core ML did not place the whole MLP on the Neural Engine");
-    }
-    // A program's first prediction wires its weights and is far slower than the
-    // rest, so running it here keeps that cost out of a user's first long prompt,
-    // and a program that cannot run fails the load instead of a request.
-    if program.predict().is_err() {
-        return Err("the Neural Engine could not run the MLP program");
-    }
-    // The daemon stops a worker with SIGKILL on a swap or shutdown, so the
-    // bridge's release never runs there; left to it, every load wrote a whole
-    // layer's weights per program into the temporary directory for good.
-    program.discard_compiled_model_files();
-    Ok(program)
-}
-
-fn load_layer_programs(
-    model: &Qwen3_5ResidentModel,
-    layer_weights: &[&Qwen3_5DenseMlpWeights],
-    neural_engine_token_count: u32,
-) -> Result<Vec<CoreMlProjection>, &'static str> {
     let started_at = Instant::now();
     let mut layer_programs = Vec::with_capacity(layer_weights.len());
     for (layer_index, dense_mlp_weights) in layer_weights.iter().enumerate() {
-        layer_programs.push(load_layer_program(
-            model,
+        let source = MlpProgramSource {
+            runtime: model.runtime(),
             dense_mlp_weights,
-            layer_index,
-            neural_engine_token_count,
-        )?);
-        // Loading takes over a minute on a large model, so the wait stays visible.
+            shape,
+            intermediate_channels: model.base.config().dense_intermediate_size() as usize,
+        };
+        layer_programs.push(load_verified_program(&source, program_cache, layer_index)?);
+        // A first load takes over a minute on a large model, so the wait stays visible.
         let completed_layers = layer_index + 1;
         let elapsed_seconds = started_at.elapsed().as_secs_f64();
         let remaining_seconds = elapsed_seconds / completed_layers as f64

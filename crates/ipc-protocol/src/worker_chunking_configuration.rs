@@ -48,13 +48,10 @@ pub struct WorkerChunkingConfiguration {
     /// Diagnostic/quality-gated mode that stores the KV slab quantized.
     #[serde(default)]
     pub experimental_quantized_kv_cache_enabled: bool,
-    /// Fused single-token quantized expert decode kernels for capable MoE families.
+    /// Dense MLP and linear-attention output gate programs on the Neural Engine
+    /// during prefill; costs memory beyond the MLX ceiling's own accounting.
     #[serde(default)]
-    pub experimental_fused_moe_decode_enabled: bool,
-    /// Whole dense MLP programs on the Neural Engine for a slice of prefill
-    /// tokens; costs memory beyond the MLX ceiling's own accounting.
-    #[serde(default)]
-    pub experimental_neural_engine_mlp_prefill_enabled: bool,
+    pub experimental_neural_engine_prefill_enabled: bool,
 }
 
 /// Returns the command-buffer submission interval for one forward.

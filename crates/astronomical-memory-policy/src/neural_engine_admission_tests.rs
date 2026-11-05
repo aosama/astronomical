@@ -6,7 +6,7 @@ fn requirements(active_memory_ceiling_bytes: u64) -> NeuralEnginePrefillMemoryRe
     NeuralEnginePrefillMemoryRequirements {
         resident_model_payload_bytes: 5 * GIBIBYTE,
         maximum_context_state_bytes: 4 * GIBIBYTE,
-        fp16_mlp_weight_bytes: 10 * GIBIBYTE,
+        fp16_program_weight_bytes: 10 * GIBIBYTE,
         active_memory_ceiling_bytes,
     }
 }
@@ -50,7 +50,7 @@ fn should_refuse_instead_of_wrapping_when_the_inputs_overflow() {
     let overflowing = NeuralEnginePrefillMemoryRequirements {
         resident_model_payload_bytes: u64::MAX,
         maximum_context_state_bytes: u64::MAX,
-        fp16_mlp_weight_bytes: u64::MAX,
+        fp16_program_weight_bytes: u64::MAX,
         active_memory_ceiling_bytes: u64::MAX - 1,
     };
 

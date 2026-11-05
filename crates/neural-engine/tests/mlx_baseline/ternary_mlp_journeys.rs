@@ -55,21 +55,21 @@ use crate::hello::measured_projection::{
 };
 
 // A middle layer, so neither the first nor the last layer's scale spread decides.
-const PROBED_LAYER_INDEX: usize = 31;
+pub(super) const PROBED_LAYER_INDEX: usize = 31;
 pub(super) const HIDDEN_CHANNELS: usize = 5120;
-const INTERMEDIATE_CHANNELS: usize = 17_408;
+pub(super) const INTERMEDIATE_CHANNELS: usize = 17_408;
 // The deepest width dividing both 5,120 and 17,408.
-const CONTRACTION_PART_WIDTH: usize = 1024;
-const ROTATION_BLOCK_SIZE: usize = 1024;
+pub(super) const CONTRACTION_PART_WIDTH: usize = 1024;
+pub(super) const ROTATION_BLOCK_SIZE: usize = 1024;
 pub(super) const ROWS_PER_LOOKUP_TABLE: usize = 16;
-const CHUNK_TOKEN_COUNT: usize = 2048;
+pub(super) const CHUNK_TOKEN_COUNT: usize = 2048;
 // The share serving uses on the 9B, and a multiple of 64 so MLX can read the
 // surface directly. The journey prints enough to choose a better balance.
 pub(super) const NEURAL_ENGINE_TOKEN_COUNT: usize = 960;
 pub(super) const LAYER_COUNT: f64 = 64.0;
 const QUANTIZATION_BITS: i32 = 2;
-const ACTIVATION_SEED: u64 = 0x5eed_2700;
-const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(30);
+pub(super) const ACTIVATION_SEED: u64 = 0x5eed_2700;
+pub(super) const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(30);
 const STEP_COUNT: usize = 6;
 
 const MINIMUM_NEURAL_ENGINE_TFLOPS: f64 = 13.0;
@@ -97,21 +97,21 @@ impl JourneyProgress {
 }
 
 /// The GPU's copy of one packed projection.
-struct PackedArrays {
-    packed_codes: MlxArray,
-    scales: MlxArray,
-    biases: MlxArray,
+pub(super) struct PackedArrays {
+    pub(super) packed_codes: MlxArray,
+    pub(super) scales: MlxArray,
+    pub(super) biases: MlxArray,
 }
 
-struct GpuMlp {
+pub(super) struct GpuMlp {
     gate_and_up: PackedArrays,
-    down: PackedArrays,
-    hidden_signs: MlxArray,
-    intermediate_signs: MlxArray,
-    compiled_swiglu: MlxCompiledSwiGlu,
+    pub(super) down: PackedArrays,
+    pub(super) hidden_signs: MlxArray,
+    pub(super) intermediate_signs: MlxArray,
+    pub(super) compiled_swiglu: MlxCompiledSwiGlu,
 }
 
-fn fp16_array(runtime: &MlxRuntime, fp16_values: &[u16], shape: &[i32]) -> MlxArray {
+pub(super) fn fp16_array(runtime: &MlxRuntime, fp16_values: &[u16], shape: &[i32]) -> MlxArray {
     upload(
         runtime,
         &f16_bits_slice_to_f32(fp16_values),
@@ -149,7 +149,7 @@ fn packed_arrays(runtime: &MlxRuntime, members: &[&TernaryProjection]) -> Packed
     }
 }
 
-fn gpu_mlp(runtime: &MlxRuntime, layer: &TernaryMlpLayer) -> GpuMlp {
+pub(super) fn gpu_mlp(runtime: &MlxRuntime, layer: &TernaryMlpLayer) -> GpuMlp {
     let hidden_signs = runtime
         .array_from_f32(&layer.gate.signs, &[HIDDEN_CHANNELS as i32])
         .expect("the signs upload");
@@ -167,7 +167,7 @@ fn gpu_mlp(runtime: &MlxRuntime, layer: &TernaryMlpLayer) -> GpuMlp {
 
 /// Signs in fp32, the normalized block Hadamard, and the cast back, mirroring
 /// the reference's arithmetic (`fwht.rs` in model serving).
-fn rotate(runtime: &MlxRuntime, activations: &MlxArray, signs: &MlxArray) -> MlxArray {
+pub(super) fn rotate(runtime: &MlxRuntime, activations: &MlxArray, signs: &MlxArray) -> MlxArray {
     let activation_shape = activations.shape();
     let width = activation_shape[activation_shape.len() - 1];
     let token_count = activation_shape[1];
@@ -192,7 +192,7 @@ fn rotate(runtime: &MlxRuntime, activations: &MlxArray, signs: &MlxArray) -> Mlx
         .expect("the cast back builds")
 }
 
-fn packed_projection(
+pub(super) fn packed_projection(
     runtime: &MlxRuntime,
     activations: &MlxArray,
     packed: &PackedArrays,
@@ -259,7 +259,11 @@ fn token_range(
         .expect("the tokens slice")
 }
 
-fn time_gpu_alone(runtime: &MlxRuntime, mlp: &GpuMlp, input: &MlxArray) -> TimingSummary {
+pub(super) fn time_gpu_alone(
+    runtime: &MlxRuntime,
+    mlp: &GpuMlp,
+    input: &MlxArray,
+) -> TimingSummary {
     let warm_up_started_at = Instant::now();
     while warm_up_started_at.elapsed() < MINIMUM_WARM_UP_DURATION {
         run_gpu_alone(runtime, mlp, input);
@@ -273,7 +277,7 @@ fn time_gpu_alone(runtime: &MlxRuntime, mlp: &GpuMlp, input: &MlxArray) -> Timin
     TimingSummary::from_samples(&call_durations).expect("calls were timed")
 }
 
-fn run_gpu_alone(runtime: &MlxRuntime, mlp: &GpuMlp, input: &MlxArray) -> MlxArray {
+pub(super) fn run_gpu_alone(runtime: &MlxRuntime, mlp: &GpuMlp, input: &MlxArray) -> MlxArray {
     let rotated_input = rotate(runtime, input, &mlp.hidden_signs);
     let projected = gpu_chain_from_rotated(runtime, mlp, &rotated_input);
     runtime

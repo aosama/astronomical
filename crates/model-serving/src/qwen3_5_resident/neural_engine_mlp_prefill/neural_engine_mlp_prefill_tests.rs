@@ -8,6 +8,7 @@ fn prefill_for_chunk(chunk_token_count: u32) -> NeuralEngineMlpPrefill {
         chunk_token_count,
         neural_engine_token_count: 896,
         has_failed: Cell::new(false),
+        is_paused: Cell::new(false),
     }
 }
 

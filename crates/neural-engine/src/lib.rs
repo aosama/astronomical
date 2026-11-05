@@ -4,7 +4,7 @@
 //! projection can be placed on the Neural Engine through public Core ML, that
 //! its numbers match an fp32 reference, and how fast it runs next to the GPU.
 //! Serving reaches it only through the opt-in
-//! `experimental_neural_engine_mlp_prefill_enabled` setting, by way of the whole
+//! `experimental_neural_engine_prefill_enabled` setting, by way of the whole
 //! MLP program and [`mlx_hand_off`]; everything else is research evidence.
 //!
 //! The pieces, bottom to top:
