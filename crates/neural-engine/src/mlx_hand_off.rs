@@ -77,12 +77,15 @@ pub fn channel_major_fp16(
     context.concatenate_axis(&[&first_half, &second_half], 0)
 }
 
+/// Strides are signed: a reversed view reports a negative stride (-1 on the last axis,
+/// minus the row length on the first), so neither equality below holds and the view is
+/// refused instead of being copied in the wrong order.
 fn is_row_contiguous_fp16(prepared: &MlxArray) -> bool {
     let strides = prepared.strides();
     prepared.dtype() == MlxDtype::Float16
         && strides.len() == 2
         && strides[1] == 1
-        && strides[0] == prepared.shape()[1] as usize
+        && strides[0] == i64::from(prepared.shape()[1])
 }
 
 /// Copies evaluated [`channel_major_fp16`] activations into the input surface.

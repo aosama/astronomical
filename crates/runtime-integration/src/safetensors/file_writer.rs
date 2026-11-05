@@ -308,7 +308,7 @@ fn writer_seek_position(writer_state: &mut FileWriterState, offset: i64, whence:
 }
 
 unsafe extern "C" fn writer_seek(descriptor: *mut c_void, offset: i64, whence: c_int) -> c_int {
-    // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    // mlx-c treats a negative seek return as the seek-failure signal.
     let seek_succeeded = unsafe {
         with_writer_state(descriptor, |writer_state| {
             writer_seek_position(writer_state, offset, whence)
@@ -319,7 +319,7 @@ unsafe extern "C" fn writer_seek(descriptor: *mut c_void, offset: i64, whence: c
 }
 
 /// Reads on the write-only output descriptor are rejected outright rather
-/// than acknowledged: the v0.7.0 C++ wrapper fails the call on a zero count,
+/// than acknowledged: the mlx-c C++ wrapper fails the call on a zero count,
 /// which is the loud outcome a caller mixing up descriptors needs.
 unsafe extern "C" fn writer_read_is_unsupported(
     descriptor: *mut c_void,
@@ -337,7 +337,7 @@ unsafe extern "C" fn writer_read_is_unsupported(
             )
         });
     }
-    // Reporting zero processed bytes makes the v0.7.0 C++ wrapper reject the
+    // Reporting zero processed bytes makes the mlx-c C++ wrapper reject the
     // read outright instead of proceeding with an unfilled destination.
     0
 }
@@ -367,7 +367,7 @@ unsafe extern "C" fn writer_write(
     source: *const c_char,
     byte_count: usize,
 ) -> usize {
-    // The v0.7.0 wrapper compares the returned count against the requested
+    // The mlx-c wrapper compares the returned count against the requested
     // byte_count and fails the write on any shortfall, so each path must
     // return exactly what reached the descriptor.
     unsafe {
@@ -382,7 +382,7 @@ unsafe extern "C" fn writer_write(
 /// Writes one caller-owned buffer at the current writer position and
 /// advances the position by exactly what reached the descriptor.
 ///
-/// The byte count reports success to MLX (the v0.7.0 wrapper fails the
+/// The byte count reports success to MLX (the mlx-c wrapper fails the
 /// write on any shortfall, so the count must be exact); `None` reports
 /// failure. Every failure latches the first error on the writer state, and
 /// when the bytes are already on disk but a count cannot be represented,
@@ -483,7 +483,7 @@ unsafe fn with_writer_state<Output>(
 /// Loops a positional write to completion.
 ///
 /// `write_at` may legally perform a short write. Looping until this
-/// callback's complete byte range reaches disk keeps the v0.7.0
+/// callback's complete byte range reaches disk keeps the mlx-c
 /// returned-count contract honest, and rejecting zero progress avoids a
 /// spin on a descriptor that can never advance.
 fn write_all_at(

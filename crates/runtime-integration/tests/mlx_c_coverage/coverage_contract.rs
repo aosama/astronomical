@@ -13,7 +13,7 @@ use crate::mlx_c_coverage::coverage_engine::{
 /// The documented coverage exceptions.
 ///
 /// The platform audit that justified the current emptiness of the
-/// platform-absent category: every symbol declared in the pinned MLX-C 0.7.0
+/// platform-absent category: every symbol declared in the pinned MLX-C
 /// headers — including the CUDA and distributed families — is defined in the
 /// Apple Silicon native image, so no symbol is platform-absent.
 /// Backends that are unavailable at runtime still bridge and return MLX

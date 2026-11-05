@@ -5969,7 +5969,7 @@ Used by:
 - jni 0.22.4
 - libc 0.2.191
 - miniz_oxide 0.8.9
-- mlx-c-rust 0.32.4-alpha.3
+- mlx-c-rust 0.32.4-alpha.4
 - monostate-impl 0.1.18
 - monostate 0.1.18
 - num-conv 0.2.2

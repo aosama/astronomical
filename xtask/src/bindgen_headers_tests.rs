@@ -109,7 +109,7 @@ fn should_refuse_unknown_dangling_or_conflicting_flags() {
 fn should_select_mlx_and_mlx_c_even_though_one_name_prefixes_the_other() {
     let manifest_text = format!(
         "{}{}{}",
-        manifest_line("mlx-c.tar.gz", &"b".repeat(64), "MLX C 0.7.0"),
+        manifest_line("mlx-c.tar.gz", &"b".repeat(64), "MLX C fixture"),
         manifest_line("fmt.tar.gz", &"c".repeat(64), "fmt 12.1.0"),
         manifest_line("mlx.tar.gz", &"a".repeat(64), "MLX 0.32.4"),
     );
@@ -126,7 +126,7 @@ fn should_refuse_a_manifest_missing_duplicating_or_corrupting_an_archive() {
     let mlx_only = manifest_line("mlx.tar.gz", &"a".repeat(64), "MLX 0.32.4");
     let duplicated_mlx = format!(
         "{mlx_only}{mlx_only}{}",
-        manifest_line("c.tar.gz", &"b".repeat(64), "MLX C 0.7.0")
+        manifest_line("c.tar.gz", &"b".repeat(64), "MLX C fixture")
     );
     let uppercase_digest = manifest_line("mlx.tar.gz", &"A".repeat(64), "MLX 0.32.4");
 
@@ -245,7 +245,7 @@ fn should_write_the_completion_marker_in_the_shell_layout() {
     let pinned_archives = select_pinned_header_archives(&format!(
         "{}{}",
         manifest_line("mlx.tar.gz", &"a".repeat(64), "MLX 0.32.4"),
-        manifest_line("mlx-c.tar.gz", &"b".repeat(64), "MLX C 0.7.0")
+        manifest_line("mlx-c.tar.gz", &"b".repeat(64), "MLX C fixture")
     ))
     .expect("both archives are declared");
 

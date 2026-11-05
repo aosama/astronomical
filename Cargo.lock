@@ -1386,9 +1386,9 @@ dependencies = [
 
 [[package]]
 name = "mlx-c-rust"
-version = "0.32.4-alpha.3"
+version = "0.32.4-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b3edb8efb1385cf0cc28990d48297bb4d43eaa76e2445c420f90f1cc5b856cd"
+checksum = "ad1d0c639f4dbefe22dece80ea803570d98ed66211b9b743d6a9187206953cfd"
 dependencies = [
  "bindgen",
  "pkg-config",

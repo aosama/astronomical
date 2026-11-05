@@ -156,7 +156,7 @@ unsafe extern "C" fn reader_tell(descriptor: *mut c_void) -> usize {
 }
 
 unsafe extern "C" fn reader_seek(descriptor: *mut c_void, offset: i64, whence: c_int) -> c_int {
-    // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    // mlx-c treats a negative seek return as the seek-failure signal.
     let seek_succeeded = unsafe {
         with_reader_cursor(descriptor, |reader_state, reader_cursor| {
             reader_seek_position(reader_state, reader_cursor, offset, whence)
@@ -237,7 +237,7 @@ unsafe extern "C" fn reader_read(
 /// Reads one caller-owned buffer at the cursor and advances the cursor by
 /// exactly what was consumed.
 ///
-/// Zero reports the read as failed to MLX — the v0.7.0 wrapper compares the
+/// Zero reports the read as failed to MLX — the mlx-c wrapper compares the
 /// returned count against the request, so an exact read reports the full
 /// count. Every failure flips the shared good flag.
 fn reader_read_bytes(
@@ -329,7 +329,7 @@ unsafe extern "C" fn reader_write_is_unsupported(
             reader_state.is_good.store(false, Ordering::Release);
         });
     }
-    // Zero processed bytes makes the v0.7.0 C++ wrapper reject the write.
+    // Zero processed bytes makes the mlx-c C++ wrapper reject the write.
     0
 }
 
@@ -379,7 +379,7 @@ unsafe fn with_reader_cursor<Output>(
 /// Performs one exact positional read into MLX-provided storage.
 ///
 /// `read_exact_at` (not `read_at`) so a short read fails the callback — the
-/// v0.7.0 wrapper validates returned counts, and handing MLX a partially
+/// mlx-c wrapper validates returned counts, and handing MLX a partially
 /// filled buffer would be memory-unsafe, not merely incorrect.
 fn read_exact_at(
     file: &File,

@@ -192,7 +192,7 @@ unsafe extern "C" fn memory_writer_seek(
     offset: i64,
     whence: c_int,
 ) -> c_int {
-    // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    // mlx-c treats a negative seek return as the seek-failure signal.
     // MLX seeks during serialization layout passes; SEEK_END anchors at the
     // bytes written so far, which is this writer's whole "file".
     let seek_succeeded = unsafe {
@@ -223,7 +223,7 @@ unsafe extern "C" fn memory_writer_seek(
 }
 
 /// Reads on the output sink are structurally unsupported; a zero count makes
-/// the v0.7.0 C++ wrapper fail the call loudly.
+/// the mlx-c C++ wrapper fail the call loudly.
 unsafe extern "C" fn memory_writer_read_is_unsupported(
     descriptor: *mut c_void,
     _destination: *mut c_char,

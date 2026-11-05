@@ -262,3 +262,117 @@ fn should_merge_the_program_output_before_a_gpu_slice_along_channels() {
         [1, ALIGNED_TOKEN_COUNT as i32, CHANNEL_COUNT as i32 + 1]
     );
 }
+
+const REVERSED_STRIDE: i64 = -1;
+
+/// A `[channels, tokens]` fp16 array in one row-major buffer, evaluated so its strides
+/// are final. Every view below is cut from it.
+fn evaluated_fp16_base(runtime: &MlxRuntime) -> MlxArray {
+    let single_precision = upload(
+        runtime,
+        &counting_values(ALIGNED_TOKEN_COUNT),
+        &[CHANNEL_COUNT as i32, ALIGNED_TOKEN_COUNT as i32],
+        MlxDtype::Float32,
+    );
+    let half_precision = runtime
+        .astype(&single_precision, MlxDtype::Float16)
+        .expect("the base converts to fp16");
+    evaluate_one(runtime, &half_precision);
+    half_precision
+}
+
+fn evaluate_one(runtime: &MlxRuntime, array: &MlxArray) {
+    runtime
+        .evaluate_arrays(&[array])
+        .expect("the array evaluates");
+}
+
+/// Each view must read in a different order than its storage, so each is refused
+/// instead of being copied byte for byte.
+fn assert_refused_as_not_contiguous(runtime: &MlxRuntime, view: &MlxArray) {
+    evaluate_one(runtime, view);
+    let model_directory = tempfile::tempdir().expect("a scratch directory");
+    let mut program = load_identity_program(ALIGNED_TOKEN_COUNT, model_directory.path());
+
+    let write_result = write_prepared_input(view, &mut program);
+
+    assert!(matches!(
+        write_result,
+        Err(MlxHandOffError::PreparedActivationsNotContiguous)
+    ));
+}
+
+#[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
+#[serial]
+fn should_accept_a_row_contiguous_fp16_array() {
+    let runtime = initialize_runtime();
+    let model_directory = tempfile::tempdir().expect("a scratch directory");
+    let mut program = load_identity_program(ALIGNED_TOKEN_COUNT, model_directory.path());
+    let base = evaluated_fp16_base(&runtime);
+
+    assert_eq!(base.strides(), [ALIGNED_TOKEN_COUNT as i64, 1]);
+    assert!(write_prepared_input(&base, &mut program).is_ok());
+}
+
+#[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
+#[serial]
+fn should_refuse_a_transposed_fp16_view() {
+    let runtime = initialize_runtime();
+    let transposed = runtime
+        .transpose_axes(&evaluated_fp16_base(&runtime), &[1, 0])
+        .expect("the transpose builds");
+    evaluate_one(&runtime, &transposed);
+
+    assert_eq!(transposed.strides(), [1, ALIGNED_TOKEN_COUNT as i64]);
+    assert_refused_as_not_contiguous(&runtime, &transposed);
+}
+
+#[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
+#[serial]
+fn should_refuse_a_column_slice_of_a_wider_fp16_array() {
+    let runtime = initialize_runtime();
+    let left_half = runtime
+        .slice(
+            &evaluated_fp16_base(&runtime),
+            &[0, 0],
+            &[CHANNEL_COUNT as i32, ALIGNED_TOKEN_COUNT as i32 / 2],
+            &[1, 1],
+        )
+        .expect("the slice builds");
+    evaluate_one(&runtime, &left_half);
+
+    // The rows are half as wide as the buffer's, so the row stride no longer matches.
+    assert_eq!(left_half.strides(), [ALIGNED_TOKEN_COUNT as i64, 1]);
+    assert_refused_as_not_contiguous(&runtime, &left_half);
+}
+
+#[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
+#[serial]
+fn should_refuse_an_fp16_view_reversed_along_its_last_axis() {
+    let runtime = initialize_runtime();
+    let reversed = runtime
+        .flip_axes(&evaluated_fp16_base(&runtime), &[1])
+        .expect("the flip builds");
+    evaluate_one(&runtime, &reversed);
+
+    assert_eq!(reversed.strides()[1], REVERSED_STRIDE);
+    assert_refused_as_not_contiguous(&runtime, &reversed);
+}
+
+#[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
+#[serial]
+fn should_refuse_an_fp16_view_reversed_along_its_first_axis() {
+    let runtime = initialize_runtime();
+    let reversed = runtime
+        .flip_axes(&evaluated_fp16_base(&runtime), &[0])
+        .expect("the flip builds");
+    evaluate_one(&runtime, &reversed);
+
+    assert_eq!(reversed.strides(), [-(ALIGNED_TOKEN_COUNT as i64), 1]);
+    assert_refused_as_not_contiguous(&runtime, &reversed);
+}

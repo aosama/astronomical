@@ -229,7 +229,7 @@ unsafe extern "C" fn bounded_reader_seek(
     offset: i64,
     whence: c_int,
 ) -> c_int {
-    // mlx-c v0.7.0 treats a negative seek return as the seek-failure signal.
+    // mlx-c treats a negative seek return as the seek-failure signal.
     let seek_succeeded = unsafe {
         with_bounded_reader_state(descriptor, |reader_state| {
             let mut reader_cursor = reader_state
@@ -292,7 +292,7 @@ unsafe extern "C" fn bounded_reader_read(
             let consumed_byte_count =
                 read_virtual_bytes(reader_state, destination, byte_count, read_position_bytes);
             reader_cursor.position_bytes += consumed_byte_count as u64;
-            // The v0.7.0 wrapper rejects any count short of the request, so a
+            // The mlx-c wrapper rejects any count short of the request, so a
             // read past the virtual payload now fails loudly instead of
             // handing MLX an unfilled tail.
             consumed_byte_count
@@ -397,7 +397,7 @@ unsafe extern "C" fn bounded_reader_write_is_unsupported(
             reader_state.is_good.store(false, Ordering::Release);
         });
     }
-    // Zero processed bytes makes the v0.7.0 C++ wrapper reject the write.
+    // Zero processed bytes makes the mlx-c C++ wrapper reject the write.
     0
 }
 
