@@ -74,7 +74,7 @@ fn set_line(
     if let Some(installed_model_ids) = installed_model_ids
         && !installed_model_ids.contains(&program_set.model_id)
     {
-        line.push_str(" [model not found by this instance]");
+        line.push_str(" [model not found]");
     }
     line
 }

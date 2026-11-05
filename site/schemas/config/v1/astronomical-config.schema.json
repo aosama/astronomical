@@ -83,7 +83,7 @@
           "type": "string",
           "minLength": 1,
           "pattern": "^/",
-          "description": "Optional absolute directory for compiled Neural Engine programs, about 10 GB for a dense 9B model; omission uses neural-engine-programs in the Stable instance's folder, shared by this Mac's instances. Programs left in the old directory are not moved, and programs in the new one are compiled again on first use.",
+          "description": "Optional absolute directory for compiled Neural Engine programs, about 10 GB for a dense 9B model; omission uses neural-engine-programs in this instance's folder. Programs left in the old directory are not moved, and programs in the new one are compiled again on first use.",
           "x-astronomical-apply-mode": "application-restart"
         },
         "metal_residency_refresh_enabled": {

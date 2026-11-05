@@ -1,11 +1,10 @@
 //! Where compiled Neural Engine programs live, and what is there.
 //!
-//! The folder is one declared home, `runtime.neural_engine_program_directory`,
-//! shared by a Mac's instances. macOS caches its Neural Engine compilation by a
-//! program's path, so one path lets every instance reuse the first one's work, and a
-//! set is about 10 GB for a dense 9B model, which is too much to keep twice. It sits
-//! apart from the prompt cache, because that cache trims everything under its root
-//! against the user's size limit, and compiled programs are not prompt state.
+//! The folder is one declared home, `runtime.neural_engine_program_directory`, in the
+//! instance's own folder by default. A set is about 10 GB for a dense 9B model, so it
+//! should be easy to find. It sits apart from the prompt cache, because that cache trims
+//! everything under its root against the user's size limit, and compiled programs are not
+//! prompt state.
 //!
 //! Layout: `<directory>/<model id>/<revision>/<set name>/layer-N.mlmodelc`, with a
 //! `programs.json` manifest beside the programs once a set is complete.

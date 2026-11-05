@@ -8,7 +8,7 @@
 //! the slow first load, which is why these are built where they will stay and are not
 //! shipped.
 
-use std::fs::{self, File, TryLockError};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use astronomical_config::{
@@ -19,48 +19,28 @@ use astronomical_neural_engine::program_shape::ProgramShape;
 
 use super::neural_engine_mlp_prefill::ProgramPackageDirectory;
 
-const SET_LOCK_FILE_NAME: &str = ".lock";
 const MANIFEST_TEMPORARY_FILE_NAME: &str = ".programs.json.incomplete";
 const BUILT_WITH: &str = concat!("Astronomical ", env!("CARGO_PKG_VERSION"));
 
 /// One family's programs for one model revision, in the shape they run at.
-///
-/// Instances share these folders, so this holds a lock for as long as it lives:
-/// compiling, loading, and removing a damaged program all happen under it, and two
-/// instances can never compile one program at once. The lock is the operating
-/// system's, so a worker stopped with SIGKILL cannot leave it held.
 pub(crate) struct ProgramSetCache {
     set_directory: PathBuf,
-    _set_lock: File,
 }
 
 impl ProgramSetCache {
-    /// Opens `model_cache_directory/<family>-<set_detail>`, waiting if another instance
-    /// is working on the same set. Other sets are left alone, even of the same family:
-    /// a set from another chunk size or program format may belong to another instance
-    /// running a different build. `astronomical models programs` shows what is kept.
+    /// Opens `model_cache_directory/<family>-<set_detail>` and removes the same
+    /// family's other sets. A set is several gigabytes, and one left behind by an
+    /// older chunk size or program format would otherwise stay on disk for good.
     pub(crate) fn open(
         model_cache_directory: &Path,
         family: &str,
         set_detail: &str,
     ) -> Option<Self> {
-        let set_directory = model_cache_directory.join(format!("{family}-{set_detail}"));
+        let set_directory_name = format!("{family}-{set_detail}");
+        let set_directory = model_cache_directory.join(&set_directory_name);
         fs::create_dir_all(&set_directory).ok()?;
-        let set_lock = File::create(set_directory.join(SET_LOCK_FILE_NAME)).ok()?;
-        match set_lock.try_lock() {
-            Ok(()) => {}
-            Err(TryLockError::WouldBlock) => {
-                tracing::info!(
-                    "waiting for another instance to finish these Neural Engine programs"
-                );
-                set_lock.lock().ok()?;
-            }
-            Err(TryLockError::Error(_)) => return None,
-        }
-        Some(Self {
-            set_directory,
-            _set_lock: set_lock,
-        })
+        remove_other_sets_of_family(model_cache_directory, family, &set_directory_name);
+        Some(Self { set_directory })
     }
 
     pub(crate) fn program_path(&self, layer_index: usize) -> PathBuf {
@@ -118,6 +98,23 @@ impl ProgramSetCache {
     }
 }
 
+fn remove_other_sets_of_family(model_cache_directory: &Path, family: &str, kept_set_name: &str) {
+    let Ok(directory_entries) = fs::read_dir(model_cache_directory) else {
+        return;
+    };
+    let family_prefix = format!("{family}-");
+    for directory_entry in directory_entries.flatten() {
+        let entry_name = directory_entry.file_name();
+        let entry_name = entry_name.to_string_lossy();
+        if !entry_name.starts_with(&family_prefix) || entry_name == kept_set_name {
+            continue;
+        }
+        if let Err(removal_error) = fs::remove_dir_all(directory_entry.path()) {
+            tracing::warn!(error = %removal_error, "could not remove an outdated Neural Engine program set");
+        }
+    }
+}
+
 /// macOS may redo its compilation after an update, so the version helps explain a
 /// slow load later.
 fn macos_product_version() -> Option<String> {
@@ -159,6 +156,24 @@ fn verify_program(program: &mut CoreMlProgram) -> Result<(), &'static str> {
     Ok(())
 }
 
+fn load_and_verify_kept_program(
+    source: &dyn ProgramSource,
+    kept_program_path: &Path,
+) -> Result<CoreMlProgram, String> {
+    let mut program = match CoreMlProgram::load_from_path(
+        kept_program_path,
+        source.shape(),
+        CoreMlComputeUnits::CpuAndNeuralEngine,
+    ) {
+        Ok(program) => program,
+        Err(load_error) => return Err(load_error.to_string()),
+    };
+    match verify_program(&mut program) {
+        Ok(()) => Ok(program),
+        Err(verification_failure) => Err(verification_failure.to_owned()),
+    }
+}
+
 /// The program at its kept path, compiled there first when it is missing. `None`
 /// sends the caller to the uncached path, so a cache that cannot be used costs a
 /// slower load and nothing else.
@@ -173,17 +188,20 @@ fn load_kept_program(
             .compile_to(&package_directory.path, kept_program_path)
             .ok()?;
     }
-    if let Ok(mut program) = CoreMlProgram::load_from_path(
-        kept_program_path,
-        source.shape(),
-        CoreMlComputeUnits::CpuAndNeuralEngine,
-    ) && verify_program(&mut program).is_ok()
-    {
-        return Some(program);
-    }
-    // A kept program that will not load or run is damaged or from another macOS,
-    // and removing it lets the next load compile a fresh one.
-    if let Err(removal_error) = std::fs::remove_dir_all(kept_program_path) {
+    let failure_reason = match load_and_verify_kept_program(source, kept_program_path) {
+        Ok(program) => return Some(program),
+        Err(failure_reason) => failure_reason,
+    };
+    // Removing it lets the next load compile a fresh one, which has been stable. On one
+    // Mac 4 to 6 of a small model's 42 programs failed this way on the first reload after
+    // they were compiled, and the same ones failed again if kept, so waiting does not help.
+    // Logged, because the recompile costs the next load time that nothing else explains.
+    tracing::warn!(
+        layer_index,
+        reason = %failure_reason,
+        "removing a kept Neural Engine program that could not be used"
+    );
+    if let Err(removal_error) = fs::remove_dir_all(kept_program_path) {
         tracing::warn!(error = %removal_error, "could not remove an unusable kept Neural Engine program");
     }
     None

@@ -65,10 +65,7 @@ fn should_flag_a_set_whose_model_is_gone_or_that_never_finished() {
     let root = fresh_test_directory("model-programs", "flagged");
     write_set(&root, "removed-model", false);
     let text = report_text(&root, Some(&BTreeSet::new()));
-    assert!(
-        text.contains("[model not found by this instance]"),
-        "{text}"
-    );
+    assert!(text.contains("[model not found]"), "{text}");
     assert!(text.contains("[incomplete]"), "{text}");
 }
 

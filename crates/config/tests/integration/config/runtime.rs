@@ -286,7 +286,7 @@ fn should_use_a_configured_neural_engine_program_directory() {
 }
 
 #[test]
-fn should_share_one_default_program_directory_across_standard_instances() {
+fn should_keep_each_instances_default_programs_in_its_own_folder() {
     let home_directory = Path::new("/fictional-home");
     let stable = AstronomicalInstancePaths::for_home_directory(
         home_directory,
@@ -303,38 +303,7 @@ fn should_share_one_default_program_directory_across_standard_instances() {
     );
     assert_eq!(
         development.default_neural_engine_program_directory(),
-        stable.default_neural_engine_program_directory()
-    );
-}
-
-#[test]
-fn should_share_one_default_program_directory_in_the_app_store_layout() {
-    let support_directory = Path::new("/fictional-support");
-    let stable = AstronomicalInstancePaths::for_application_support_directory(
-        support_directory,
-        AstronomicalRuntimeInstance::Stable,
-    );
-    let development = AstronomicalInstancePaths::for_application_support_directory(
-        support_directory,
-        AstronomicalRuntimeInstance::Development,
-    );
-
-    assert_eq!(
-        development.default_neural_engine_program_directory(),
-        stable.default_neural_engine_program_directory()
-    );
-}
-
-#[test]
-fn should_keep_a_custom_state_directorys_programs_to_itself() {
-    let custom_paths = AstronomicalInstancePaths::for_explicit_state_directory(
-        PathBuf::from("/fictional/custom-state"),
-        "127.0.0.1:6000".parse().expect("the address parses"),
-    );
-
-    assert_eq!(
-        custom_paths.default_neural_engine_program_directory(),
-        PathBuf::from("/fictional/custom-state/neural-engine-programs")
+        PathBuf::from("/fictional-home/.astronomical-dev/neural-engine-programs")
     );
 }
 

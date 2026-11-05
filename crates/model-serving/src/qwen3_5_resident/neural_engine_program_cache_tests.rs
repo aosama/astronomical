@@ -25,37 +25,18 @@ fn should_name_each_layers_program_inside_the_set() {
 }
 
 #[test]
-fn should_leave_other_sets_alone_because_another_instance_may_use_them() {
+fn should_remove_outdated_sets_of_the_same_family_only() {
     let model_cache_directory = tempfile::tempdir().expect("a scratch directory");
-    let other_size_set = model_cache_directory.path().join("mlp-v1-448-of-1024");
+    let outdated_set = model_cache_directory.path().join("mlp-v1-448-of-1024");
     let other_family_set = model_cache_directory.path().join("output-gate-v1-2048");
-    fs::create_dir_all(other_size_set.join("layer-0.mlmodelc")).expect("the other set exists");
+    fs::create_dir_all(outdated_set.join("layer-0.mlmodelc")).expect("the outdated set exists");
     fs::create_dir_all(&other_family_set).expect("the other family's set exists");
 
     ProgramSetCache::open(model_cache_directory.path(), "mlp", "v1-960-of-2048")
         .expect("the set opens");
 
-    assert!(other_size_set.join("layer-0.mlmodelc").is_dir());
+    assert!(!outdated_set.exists());
     assert!(other_family_set.is_dir());
-}
-
-#[test]
-fn should_hold_the_set_lock_until_the_cache_is_dropped() {
-    let model_cache_directory = tempfile::tempdir().expect("a scratch directory");
-    let cache = ProgramSetCache::open(model_cache_directory.path(), "mlp", "v1-960-of-2048")
-        .expect("the set opens");
-    let lock_path = model_cache_directory
-        .path()
-        .join("mlp-v1-960-of-2048/.lock");
-    let second_handle = fs::File::open(&lock_path).expect("the lock file exists");
-
-    assert!(matches!(
-        second_handle.try_lock(),
-        Err(fs::TryLockError::WouldBlock)
-    ));
-
-    drop(cache);
-    assert!(second_handle.try_lock().is_ok());
 }
 
 #[test]
@@ -133,7 +114,6 @@ fn should_keep_the_current_set_and_its_programs_when_reopened() {
     let first_open = ProgramSetCache::open(model_cache_directory.path(), "mlp", "v1-960-of-2048")
         .expect("the set opens");
     fs::create_dir_all(first_open.program_path(0)).expect("a kept program exists");
-    drop(first_open);
 
     let reopened = ProgramSetCache::open(model_cache_directory.path(), "mlp", "v1-960-of-2048")
         .expect("the set reopens");

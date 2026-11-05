@@ -60,7 +60,7 @@ fn should_ignore_stray_files_at_every_level() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join(".DS_Store"), "x").unwrap();
     let set_directory = write_set(root.path(), "model", "rev", "set", 0);
-    fs::write(set_directory.join(".lock"), "").unwrap();
+    fs::write(set_directory.join("notes.txt"), "").unwrap();
     let sets = list_neural_engine_program_sets(root.path());
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].program_count, 0);
