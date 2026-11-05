@@ -22369,15 +22369,6 @@
     },
     {
       "file": "crates/config/src/chunking_config.rs",
-      "function": "ChunkingConfig::experimental_quantized_kv_cache_enabled",
-      "line": 403,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-config"
-    },
-    {
-      "file": "crates/config/src/chunking_config.rs",
       "function": "ChunkingConfig::experimental_ssd_paging_generation_graph_submission_layer_interval",
       "line": 354,
       "cyclomatic": 1.0,
@@ -27031,24 +27022,6 @@
     },
     {
       "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
-      "function": "QuantizedFullAttentionKeyValueState::growth_headroom_tokens",
-      "line": 99,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
-      "function": "QuantizedFullAttentionKeyValueState::restore_from_bf16_block_slices",
-      "line": 67,
-      "cyclomatic": 12.0,
-      "coverage": null,
-      "crap": 156.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
       "function": "concatenated_block_slab",
       "line": 106,
       "cyclomatic": 5.0,
@@ -27081,15 +27054,6 @@
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/incremental_block_restore.rs",
-      "function": "zero_padded_slab",
-      "line": 153,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -27441,141 +27405,6 @@
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::bits",
-      "line": 125,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::dequantized_token_range",
-      "line": 195,
-      "cyclomatic": 7.0,
-      "coverage": null,
-      "crap": 56.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::empty_with_growth_tokens",
-      "line": 51,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::group_size",
-      "line": 120,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::offset_tokens",
-      "line": 83,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::payload_byte_count",
-      "line": 179,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::quantized_keys_state",
-      "line": 109,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::quantized_values_state",
-      "line": 115,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::truncate_to_offset",
-      "line": 89,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "QuantizedFullAttentionKeyValueState::update_and_fetch",
-      "line": 131,
-      "cyclomatic": 7.0,
-      "coverage": null,
-      "crap": 56.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "active_slab_views",
-      "line": 302,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "grow_slab",
-      "line": 263,
-      "cyclomatic": 7.0,
-      "coverage": null,
-      "crap": 56.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "quantized_state_error",
-      "line": 341,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "slice_token_range",
-      "line": 326,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/decoder_cache/quantized_full_attention_state.rs",
-      "function": "validate_and_quantize_update",
-      "line": 215,
-      "cyclomatic": 8.0,
-      "coverage": null,
-      "crap": 72.0,
       "crate": "astronomical-model-serving"
     },
     {

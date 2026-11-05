@@ -43,8 +43,6 @@ pub(crate) struct ChunkingConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_in_memory_prefix_adoption_enabled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) experimental_quantized_kv_cache_enabled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) experimental_neural_engine_prefill_enabled: Option<bool>,
 }
 
@@ -62,7 +60,6 @@ pub struct ConfiguredChunkingFields {
     pub experimental_decode_stage_attribution_enabled: bool,
     pub experimental_prefill_stage_attribution_enabled: bool,
     pub experimental_in_memory_prefix_adoption_enabled: bool,
-    pub experimental_quantized_kv_cache_enabled: bool,
     pub experimental_neural_engine_prefill_enabled: bool,
 }
 
@@ -118,9 +115,6 @@ impl ChunkingConfigFile {
             experimental_in_memory_prefix_adoption_enabled: self
                 .experimental_in_memory_prefix_adoption_enabled
                 .is_some(),
-            experimental_quantized_kv_cache_enabled: self
-                .experimental_quantized_kv_cache_enabled
-                .is_some(),
             experimental_neural_engine_prefill_enabled: self
                 .experimental_neural_engine_prefill_enabled
                 .is_some(),
@@ -169,9 +163,6 @@ impl ChunkingConfigFile {
             experimental_in_memory_prefix_adoption_enabled: model
                 .experimental_in_memory_prefix_adoption_enabled
                 .or(global.experimental_in_memory_prefix_adoption_enabled),
-            experimental_quantized_kv_cache_enabled: model
-                .experimental_quantized_kv_cache_enabled
-                .or(global.experimental_quantized_kv_cache_enabled),
             experimental_neural_engine_prefill_enabled: model
                 .experimental_neural_engine_prefill_enabled
                 .or(global.experimental_neural_engine_prefill_enabled),
@@ -241,7 +232,6 @@ pub struct ChunkingConfig {
     experimental_decode_stage_attribution_enabled: bool,
     experimental_prefill_stage_attribution_enabled: bool,
     experimental_in_memory_prefix_adoption_enabled: bool,
-    experimental_quantized_kv_cache_enabled: bool,
     experimental_neural_engine_prefill_enabled: bool,
 }
 
@@ -295,9 +285,6 @@ impl ChunkingConfig {
             experimental_in_memory_prefix_adoption_enabled: configured
                 .experimental_in_memory_prefix_adoption_enabled
                 .unwrap_or(true),
-            experimental_quantized_kv_cache_enabled: configured
-                .experimental_quantized_kv_cache_enabled
-                .unwrap_or(false),
             experimental_neural_engine_prefill_enabled: configured
                 .experimental_neural_engine_prefill_enabled
                 .unwrap_or(false),
@@ -424,13 +411,6 @@ impl ChunkingConfig {
         self.experimental_in_memory_prefix_adoption_enabled
     }
 
-    /// Returns whether the KV cache stores quantized slabs for long-context
-    /// decode bandwidth. Changes attention numerics; quality-gated.
-    #[must_use]
-    pub const fn experimental_quantized_kv_cache_enabled(&self) -> bool {
-        self.experimental_quantized_kv_cache_enabled
-    }
-
     /// Returns whether dense prefill may run a slice of each chunk's tokens
     /// through whole MLP programs on the Neural Engine. Off by default because
     /// it holds roughly twice the model's fp16 MLP weights in memory.
@@ -446,7 +426,6 @@ impl Default for ChunkingConfig {
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: true,
-            experimental_quantized_kv_cache_enabled: false,
             experimental_neural_engine_prefill_enabled: false,
             fixed_prompt_processing_chunk_size_tokens:
                 DEFAULT_FIXED_PROMPT_PROCESSING_CHUNK_SIZE_TOKENS,

@@ -74,7 +74,6 @@ pub(crate) fn worker_chunking_configuration(
             .experimental_prefill_stage_attribution_enabled(),
         experimental_in_memory_prefix_adoption_enabled: chunking
             .experimental_in_memory_prefix_adoption_enabled(),
-        experimental_quantized_kv_cache_enabled: chunking.experimental_quantized_kv_cache_enabled(),
         experimental_neural_engine_prefill_enabled: chunking
             .experimental_neural_engine_prefill_enabled(),
     }

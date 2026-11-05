@@ -104,10 +104,6 @@ fn should_default_the_decode_levers_off_so_the_measured_fast_path_serves() {
         .expect("chunking configuration should resolve");
 
     assert!(
-        !chunking.experimental_quantized_kv_cache_enabled(),
-        "the 8-bit KV slab measured slower than bfloat16 and must stay opt-in"
-    );
-    assert!(
         !chunking.experimental_neural_engine_prefill_enabled(),
         "Neural Engine prefill holds about twice its programs' weights in memory and must stay opt-in"
     );

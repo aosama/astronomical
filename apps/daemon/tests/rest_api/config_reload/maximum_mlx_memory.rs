@@ -327,7 +327,6 @@ fn delayed_memory_model_policy(model_root: &std::path::Path) -> RuntimeModelPoli
                     experimental_decode_stage_attribution_enabled: false,
                     experimental_prefill_stage_attribution_enabled: false,
                     experimental_in_memory_prefix_adoption_enabled: false,
-                    experimental_quantized_kv_cache_enabled: false,
                     experimental_neural_engine_prefill_enabled: false,
                 },
             },

@@ -447,7 +447,6 @@ fn default_worker_model_configuration(model_id: &str) -> WorkerModelConfiguratio
             experimental_decode_stage_attribution_enabled: false,
             experimental_prefill_stage_attribution_enabled: false,
             experimental_in_memory_prefix_adoption_enabled: false,
-            experimental_quantized_kv_cache_enabled: false,
             experimental_neural_engine_prefill_enabled: false,
         },
     })
