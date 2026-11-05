@@ -6,7 +6,7 @@
 //! are repeated entry messages with the key in field 1 and the value in
 //! field 2, which is how [`append_map_entry`] writes them.
 
-use crate::protobuf_wire::{
+use crate::wire::protobuf::{
     append_bytes_field, append_string_field, append_varint, append_varint_field,
 };
 
@@ -219,5 +219,5 @@ impl MilOperation {
 }
 
 #[cfg(test)]
-#[path = "mil_program_wire_tests.rs"]
+#[path = "mil_program_tests.rs"]
 mod tests;

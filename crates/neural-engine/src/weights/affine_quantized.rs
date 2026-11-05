@@ -19,8 +19,8 @@
 
 use thiserror::Error;
 
-use crate::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
-use crate::row_major_block::row_block;
+use crate::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
+use crate::weights::row_major_block::row_block;
 
 const SMALLEST_NORMAL_FP16_BITS: u16 = 0x0400;
 
@@ -334,5 +334,5 @@ fn shift_scale_offset(fp16_scale: u16, fp16_bias: u16) -> u16 {
 }
 
 #[cfg(test)]
-#[path = "affine_quantized_weights_tests.rs"]
+#[path = "affine_quantized_tests.rs"]
 mod tests;

@@ -4,8 +4,8 @@
 use astronomical_neural_engine::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
-use astronomical_neural_engine::half_precision::f32_slice_to_f16_bits;
 use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::weights::half_precision::f32_slice_to_f16_bits;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype};
 

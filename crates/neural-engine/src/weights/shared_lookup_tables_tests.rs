@@ -1,6 +1,6 @@
 use super::{LOOKUP_TABLE_ENTRY_COUNT, SharedLookupTables};
-use crate::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
-use crate::projection_model_interface::ProjectionDocumentError;
+use crate::documents::model_interface::ProjectionDocumentError;
+use crate::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
 
 fn fp16_ramp(value_count: usize) -> Vec<u16> {
     let mut fp16_values = Vec::with_capacity(value_count);

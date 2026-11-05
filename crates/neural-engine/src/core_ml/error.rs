@@ -5,15 +5,11 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::projection_model_interface::ProjectionDocumentError;
-
 pub(super) const NATIVE_ERROR_CAPACITY: usize = 512;
 
 #[derive(Debug, Error)]
 pub enum CoreMlProjectionError {
-    #[error(transparent)]
-    Document(#[from] ProjectionDocumentError),
-    #[error("could not write the Core ML model document: {0}")]
+    #[error("could not place the compiled model files: {0}")]
     ModelFile(#[from] std::io::Error),
     #[error("the model path contains an interior NUL byte")]
     ModelPath,

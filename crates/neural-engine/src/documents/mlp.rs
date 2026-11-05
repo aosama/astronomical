@@ -10,22 +10,24 @@
 //! `silu` is written as `gate · sigmoid(gate)`: MIL also has a `silu`
 //! operation, but this two-operation form is the one whose Neural Engine
 //! placement was proven here, and `silu` has not been tried. Each projection is
-//! cut into contraction parts ([`crate::ml_program_mlp_stages`]) because the
+//! cut into contraction parts ([`crate::documents::mlp_stages`]) because the
 //! Neural Engine runs a 2,048-deep contraction at 18.6 TFLOP/s and a 4,096-deep
 //! one at 9.7 (shape sweep, issue #161).
 
-use crate::mil_operations::{SPECIFICATION_VERSION, convolution_parameter_constants, program};
-use crate::ml_package_layout::MlProgramPackageContents;
-use crate::ml_program_mlp_stages::{
+use crate::documents::mil_operations::{
+    SPECIFICATION_VERSION, convolution_parameter_constants, program,
+};
+use crate::documents::mlp_stages::{
     GATE_AND_UP_NAME, GATED_NAME, ProjectionStage, StageWeightEncoding,
     projection_stage_operations, silu_gating_operations, validated_stage_shape,
 };
-use crate::ml_program_weight_blob::WeightBlobFile;
-use crate::projection_model_interface::{
+use crate::documents::model_interface::{
     ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
 };
+use crate::documents::package_layout::MlProgramPackageContents;
 use crate::projection_shape::ProjectionShape;
-use crate::protobuf_wire::{append_bytes_field, append_varint_field};
+use crate::wire::protobuf::{append_bytes_field, append_varint_field};
+use crate::wire::weight_blob::WeightBlobFile;
 
 /// The fp16 weights of one MLP, row-major `[output][input]`.
 #[derive(Clone, Copy, Debug)]
@@ -101,5 +103,5 @@ pub fn encode_ml_program_mlp(
 }
 
 #[cfg(test)]
-#[path = "ml_program_mlp_document_tests.rs"]
+#[path = "mlp_tests.rs"]
 mod tests;

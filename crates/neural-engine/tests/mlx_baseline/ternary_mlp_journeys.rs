@@ -24,8 +24,7 @@ use std::time::{Duration, Instant};
 
 use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlProjection};
 use astronomical_neural_engine::deterministic_values::bell_shaped_values;
-use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
-use astronomical_neural_engine::ml_program_mlp_stages::StageWeightEncoding;
+use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     write_prepared_input,
@@ -33,6 +32,7 @@ use astronomical_neural_engine::mlx_hand_off::{
 use astronomical_neural_engine::numerical_comparison::{NumericalComparison, compare_values};
 use astronomical_neural_engine::process_memory::{MemoryGrowth, MemorySnapshot, mebibytes};
 use astronomical_neural_engine::timing_summary::TimingSummary;
+use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 use serial_test::serial;

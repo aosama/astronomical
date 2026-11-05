@@ -19,24 +19,24 @@
 //! so this program is an approximation of the checkpoint's arithmetic. The
 //! journeys measure how close it comes against the GPU.
 
-use crate::half_precision::f32_to_f16_bits;
-use crate::mil_operations::{
+use crate::documents::mil_operations::{
     SPECIFICATION_VERSION, activation_type, constant_operation, convolution_operation,
     convolution_parameter_constants, program, split_axis_constant, split_count_constant,
     weight_blob_value,
 };
-use crate::mil_program_wire::{MilDataType, MilOperation, bool_scalar_value};
-use crate::ml_package_layout::MlProgramPackageContents;
-use crate::ml_program_mlp_stages::{
+use crate::documents::mlp_stages::{
     GATE_AND_UP_NAME, GATED_NAME, ProjectionStage, StageWeightEncoding,
     projection_stage_operations, silu_gating_operations, validated_stage_shape,
 };
-use crate::ml_program_weight_blob::WeightBlobFile;
-use crate::projection_model_interface::{
+use crate::documents::model_interface::{
     ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
 };
+use crate::documents::package_layout::MlProgramPackageContents;
 use crate::projection_shape::ProjectionShape;
-use crate::protobuf_wire::{append_bytes_field, append_varint_field};
+use crate::weights::half_precision::f32_to_f16_bits;
+use crate::wire::mil_program::{MilDataType, MilOperation, bool_scalar_value};
+use crate::wire::protobuf::{append_bytes_field, append_varint_field};
+use crate::wire::weight_blob::WeightBlobFile;
 
 const SIGNS_NAME: &str = "rotation_signs";
 const SIGNED_NAME: &str = "signed_gated";
@@ -268,5 +268,5 @@ fn rotation_constant_operations(
 }
 
 #[cfg(test)]
-#[path = "ml_program_rotated_mlp_document_tests.rs"]
+#[path = "rotated_mlp_tests.rs"]
 mod tests;

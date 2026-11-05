@@ -1,5 +1,6 @@
 pub mod journey_constants;
 pub mod measured_projection;
+pub mod program_loading;
 pub mod projection_fixture;
 
 #[cfg(feature = "mlx-baseline")]

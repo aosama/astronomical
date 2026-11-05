@@ -101,7 +101,7 @@ fn load_kept_program(
             .compile_to(&package_directory.path, kept_program_path)
             .ok()?;
     }
-    if let Ok(mut program) = CoreMlProjection::load_compiled_model(
+    if let Ok(mut program) = CoreMlProjection::load_from_path(
         kept_program_path,
         source.shape(),
         CoreMlComputeUnits::CpuAndNeuralEngine,

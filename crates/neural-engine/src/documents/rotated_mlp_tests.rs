@@ -1,11 +1,11 @@
 use super::{
     RotatedMlpLayout, RotatedMlpWeights, encode_ml_program_rotated_mlp, normalized_hadamard_fp16,
 };
-use crate::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
-use crate::ml_program_mlp_stages::StageWeightEncoding;
-use crate::projection_model_interface::ProjectionDocumentError;
+use crate::documents::mlp_stages::StageWeightEncoding;
+use crate::documents::model_interface::ProjectionDocumentError;
 use crate::projection_shape::ProjectionShape;
-use crate::shared_lookup_tables::LOOKUP_TABLE_ENTRY_COUNT;
+use crate::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
+use crate::weights::shared_lookup_tables::LOOKUP_TABLE_ENTRY_COUNT;
 
 const HIDDEN_CHANNELS: usize = 8;
 const INTERMEDIATE_CHANNELS: usize = 16;

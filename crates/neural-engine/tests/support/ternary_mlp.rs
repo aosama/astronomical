@@ -2,14 +2,13 @@
 //! memory journeys.
 
 use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
-use astronomical_neural_engine::half_precision::f32_to_f16_bits;
-use astronomical_neural_engine::ml_program_mlp_stages::StageWeightEncoding;
-use astronomical_neural_engine::ml_program_rotated_mlp_document::{
-    RotatedMlpLayout, RotatedMlpWeights,
-};
+use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
+use astronomical_neural_engine::documents::rotated_mlp::{RotatedMlpLayout, RotatedMlpWeights};
 use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::weights::half_precision::f32_to_f16_bits;
 
 use super::ternary_checkpoint::TernaryMlpLayer;
+use crate::support::program_loading::load_ml_program_rotated_mlp;
 
 pub(crate) const HIDDEN_CHANNELS: usize = 5120;
 pub(crate) const INTERMEDIATE_CHANNELS: usize = 17_408;
@@ -39,7 +38,7 @@ pub(crate) fn load_program(
     let shape = ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, NEURAL_ENGINE_TOKEN_COUNT)
         .expect("valid shape");
     let weight_count = gate_and_up_weights.len() + down_weights.len();
-    let projection = CoreMlProjection::load_ml_program_rotated_mlp(
+    let projection = load_ml_program_rotated_mlp(
         RotatedMlpLayout {
             shape,
             intermediate_channels: INTERMEDIATE_CHANNELS,

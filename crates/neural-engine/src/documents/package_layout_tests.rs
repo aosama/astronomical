@@ -1,7 +1,7 @@
 use std::fs;
 
 use super::{package_manifest_json, write_ml_package};
-use crate::ml_package_layout::MlProgramPackageContents;
+use crate::documents::package_layout::MlProgramPackageContents;
 
 #[test]
 fn should_name_the_model_item_as_the_root() {

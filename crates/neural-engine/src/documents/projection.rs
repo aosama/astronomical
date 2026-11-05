@@ -4,7 +4,7 @@
 //! Each weight is an fp16 `const`, a `constexpr_blockwise_shift_scale`, or a
 //! `constexpr_lut_to_dense` over affine-quantized codes; the projection itself
 //! is the same 1 × 1 convolution, with the same optional contraction split, as
-//! the legacy fp16 document ([`crate::core_ml_projection_document`]).
+//! the legacy fp16 document ([`crate::documents::neural_network`]).
 //!
 //! Measured on the MLP gate and up projection (100.7 million weights, issue
 //! #161): the ML Program format alone cuts the process-footprint growth of a
@@ -15,20 +15,20 @@
 //! rows (one table per row runs about 14 times slower), so the 4-bit
 //! checkpoint's own 64-input blocks cannot stay 4-bit on the Neural Engine.
 
-use crate::affine_quantized_weights::AffineQuantizedWeights;
-use crate::mil_operations::{
+use crate::documents::mil_operations::{
     SPECIFICATION_VERSION, activation_type, constant_operation, contraction_sum_operations,
     convolution_operation, convolution_parameter_constants, program, weight_blob_value,
 };
-use crate::mil_program_wire::{MilDataType, MilOperation, int32_tensor_value, tensor_value_type};
-use crate::ml_package_layout::MlProgramPackageContents;
-use crate::ml_program_weight_blob::WeightBlobFile;
-use crate::projection_model_interface::{
+use crate::documents::model_interface::{
     ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
 };
+use crate::documents::package_layout::MlProgramPackageContents;
 use crate::projection_shape::ProjectionShape;
-use crate::protobuf_wire::{append_bytes_field, append_varint_field};
-use crate::row_major_block::row_block;
+use crate::weights::affine_quantized::AffineQuantizedWeights;
+use crate::weights::row_major_block::row_block;
+use crate::wire::mil_program::{MilDataType, MilOperation, int32_tensor_value, tensor_value_type};
+use crate::wire::protobuf::{append_bytes_field, append_varint_field};
+use crate::wire::weight_blob::WeightBlobFile;
 
 /// The weights an ML Program projection is built from.
 #[derive(Clone, Copy, Debug)]
@@ -370,5 +370,5 @@ fn blockwise_shift_scale_operation(
 }
 
 #[cfg(test)]
-#[path = "ml_program_projection_document_tests.rs"]
+#[path = "projection_tests.rs"]
 mod tests;

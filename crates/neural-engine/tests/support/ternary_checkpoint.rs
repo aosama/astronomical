@@ -6,7 +6,7 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
-use astronomical_neural_engine::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
+use astronomical_neural_engine::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
 use astronomical_test_harness::test_run::TestRunContext;
 use serde_json::Value;
 

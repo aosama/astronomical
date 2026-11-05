@@ -14,13 +14,16 @@ use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
-use astronomical_neural_engine::half_precision::{f16_bits_slice_to_f32, f32_slice_to_f16_bits};
-use astronomical_neural_engine::ml_program_projection_document::MlProgramWeights;
+use astronomical_neural_engine::documents::projection::MlProgramWeights;
 use astronomical_neural_engine::numerical_comparison::compare_values;
 use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::weights::half_precision::{
+    f16_bits_slice_to_f32, f32_slice_to_f16_bits,
+};
 use serial_test::serial;
 
 use crate::support::journey_constants::MINIMUM_COSINE_SIMILARITY;
+use crate::support::program_loading::{compile_ml_program_to, load_ml_program};
 use crate::support::projection_fixture::ProjectionFixture;
 
 // Small, because the journey is about files, not speed.
@@ -68,7 +71,7 @@ fn should_keep_predicting_after_discarding_the_compiled_model() {
     let package_directory = tempfile::tempdir().expect("a scratch directory for the model");
     let count_before_load = compiled_model_count(&temporary_directory);
 
-    let mut projection = CoreMlProjection::load_ml_program(
+    let mut projection = load_ml_program(
         shape,
         MlProgramWeights::Fp16(&fixture.fp16_weights),
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -133,7 +136,7 @@ fn should_predict_the_same_values_from_a_kept_compiled_model() {
     let package_directory = tempfile::tempdir().expect("a scratch directory for the model");
     let cache_directory = tempfile::tempdir().expect("a scratch directory for the cache");
     let kept_model_path = cache_directory.path().join("kept.mlmodelc");
-    let mut projection = CoreMlProjection::load_ml_program(
+    let mut projection = load_ml_program(
         shape,
         MlProgramWeights::Fp16(&fixture.fp16_weights),
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -161,7 +164,7 @@ fn should_predict_the_same_values_from_a_kept_compiled_model() {
     assert!(kept_model_path.is_dir(), "release leaves a kept copy alone");
 
     drop(package_directory);
-    let mut reloaded = CoreMlProjection::load_compiled_model(
+    let mut reloaded = CoreMlProjection::load_from_path(
         &kept_model_path,
         shape,
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -190,7 +193,7 @@ fn should_predict_the_same_values_from_a_program_compiled_to_its_final_path() {
     // A parent that does not exist yet, as a cache folder is on its first use.
     let kept_model_path = kept_directory.path().join("nested").join("kept.mlmodelc");
 
-    CoreMlProjection::compile_ml_program_to(
+    compile_ml_program_to(
         shape,
         MlProgramWeights::Fp16(&fixture.fp16_weights),
         SINGLE_CONTRACTION_PART,
@@ -198,7 +201,7 @@ fn should_predict_the_same_values_from_a_program_compiled_to_its_final_path() {
         &kept_model_path,
     )
     .expect("the program compiles to its final path");
-    let mut kept_program = CoreMlProjection::load_compiled_model(
+    let mut kept_program = CoreMlProjection::load_from_path(
         &kept_model_path,
         shape,
         CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -227,7 +230,7 @@ fn should_refuse_to_load_a_kept_program_that_was_never_compiled() {
     let kept_directory = tempfile::tempdir().expect("a directory for the kept program");
     let kept_model_path = kept_directory.path().join("kept.mlmodelc");
 
-    let loaded = CoreMlProjection::load_compiled_model(
+    let loaded = CoreMlProjection::load_from_path(
         &kept_model_path,
         shape,
         CoreMlComputeUnits::CpuAndNeuralEngine,

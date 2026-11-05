@@ -10,7 +10,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
-use astronomical_neural_engine::ml_program_mlp_stages::StageWeightEncoding;
+use astronomical_neural_engine::documents::mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine::process_memory::{MemoryGrowth, MemorySnapshot, mebibytes};
 use astronomical_neural_engine::timing_summary::TimingSummary;
 use serial_test::serial;
@@ -383,7 +383,7 @@ fn should_measure_where_a_program_load_spends_its_time() {
 
     for warm_repeat in 0..LOAD_PHASE_WARM_REPEATS {
         let warm_started_at = Instant::now();
-        let mut warm_program = CoreMlProjection::load_compiled_model(
+        let mut warm_program = CoreMlProjection::load_from_path(
             &kept_model_path,
             shape,
             CoreMlComputeUnits::CpuAndNeuralEngine,

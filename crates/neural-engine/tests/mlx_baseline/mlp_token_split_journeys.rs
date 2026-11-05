@@ -15,8 +15,7 @@ use std::time::{Duration, Instant};
 
 use astronomical_neural_engine::accelerate_reference::reference_projection;
 use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProjection};
-use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
-use astronomical_neural_engine::ml_program_mlp_document::MlpFp16Weights;
+use astronomical_neural_engine::documents::mlp::MlpFp16Weights;
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     write_prepared_input,
@@ -27,6 +26,7 @@ use astronomical_neural_engine::process_memory::{
 };
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 use astronomical_neural_engine::timing_summary::TimingSummary;
+use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 use serial_test::serial;
@@ -40,6 +40,7 @@ use crate::support::measured_projection::{
 use crate::support::mlx_projection::{
     build_projection, initialize_runtime, token_major, token_range, upload,
 };
+use crate::support::program_loading::load_ml_program_mlp;
 use crate::support::projection_fixture::ProjectionFixture;
 use crate::support::quantized_operation::{
     channel_major_values, quantize_and_round_trip, quantized_form,
@@ -235,7 +236,7 @@ fn load_mlp_program(
 ) -> CoreMlProjection {
     let shape = ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, neural_engine_tokens)
         .expect("valid shape");
-    CoreMlProjection::load_ml_program_mlp(
+    load_ml_program_mlp(
         shape,
         INTERMEDIATE_CHANNELS,
         MlpFp16Weights {
@@ -458,7 +459,7 @@ fn load_distinct_layer(
 ) -> CoreMlProjection {
     let shape = ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, LAYER_PROGRAM_TOKEN_COUNT)
         .expect("valid shape");
-    CoreMlProjection::load_ml_program_mlp(
+    load_ml_program_mlp(
         shape,
         INTERMEDIATE_CHANNELS,
         MlpFp16Weights {

@@ -35,5 +35,5 @@ pub fn append_string_field(document: &mut Vec<u8>, field_number: u32, text: &str
 }
 
 #[cfg(test)]
-#[path = "protobuf_wire_tests.rs"]
+#[path = "protobuf_tests.rs"]
 mod tests;
