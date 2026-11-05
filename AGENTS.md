@@ -1,5 +1,9 @@
 # Instructions for the Astronomical Project
 
+## Project Aim
+
+- This project exists to support the opensource and openweight community aiming to make artifical intelligence accessible and affordable for the widest user base possible. 
+
 ## General Instructions
 
 - Production lane methods and functions must not exceed 100 lines of code.

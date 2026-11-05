@@ -12,6 +12,7 @@ use crate::verbs::quantize::QuantizeCommand;
 use crate::verbs::respond::RespondArguments;
 use crate::verbs::schema::SchemaArguments;
 use crate::verbs::validate_config::ValidateConfigArguments;
+use crate::verbs::vision::VisionCommand;
 
 const HELP_TEXT: &str = concat!(
     "Astronomical\n\n",
@@ -30,6 +31,9 @@ const HELP_TEXT: &str = concat!(
     "       astronomical doctor\n",
     "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
     "       astronomical validate config [--instance stable|development] [--json]\n",
+    "       astronomical vision inspect MODEL [--json]\n",
+    "       astronomical vision match TEXT_MODEL TOWER_MODEL [--json]\n",
+    "       astronomical vision add TEXT_MODEL --tower TOWER_MODEL --output DIR [--json]\n",
     "       astronomical quantize plan --sensitivity FILE --target-bits-per-weight N [--candidate-bits LIST]\n",
     "                                  [--floor-components-per-block N] [--maximum-low-bit-block-run N] [--json]\n",
     "       astronomical quantize inspect ARTIFACT_DIR [--json]\n",
@@ -65,6 +69,11 @@ const HELP_TEXT: &str = concat!(
     "  doctor           This binary's channel binding plus both channels' daemon liveness\n",
     "  schema object    Build a strict JSON object schema for structured output\n",
     "  validate config  Report effective values of an instance configuration\n",
+    "  vision inspect   Show whether a model has a vision tower, reading headers only\n",
+    "  vision match     Prove whether a tower shares a text model's base, reading a few small\n",
+    "                   tensors; MODEL is organization/name[@revision] or a local directory\n",
+    "  vision add       Build a new model from a local text model and a tower, keeping the text\n",
+    "                   weights unchanged; refuses a tower that does not share their base\n",
     "  quantize plan    Allocate per-module bit widths from a measured sensitivity document\n",
     "  quantize inspect Show an artifact's quantization method, reference, and bit map summary\n",
     "  quantize convert Build a mixed-precision artifact from a local bf16 source (in-process;\n",
@@ -82,7 +91,7 @@ const HELP_TEXT: &str = concat!(
     "  --seed N             Reproducibility seed for image; the run reports the seed it used\n",
     "  --output PATH        Where image saves the PNG; must end in .png and not exist yet\n",
     "  --instance NAME      Which instance to inspect for validate config (default: development)\n",
-    "  --json               Render the validate config report as JSON\n",
+    "  --json               Render the report as JSON\n",
     "  -v, --verbose        Print launch timings on stderr\n",
     "  -h, --help           Show this help\n",
     "  --version            Show the CLI version\n",
@@ -103,6 +112,7 @@ pub enum CliCommand {
     Schema(SchemaArguments),
     ValidateConfig(ValidateConfigArguments),
     Quantize(QuantizeCommand),
+    Vision(VisionCommand),
 }
 
 /// Launch-specific arguments after `astronomical launch`.
@@ -144,29 +154,29 @@ pub fn parse_command(
         "embed" => parse_embed_arguments(&remaining_arguments[1..]).map(CliCommand::Embed),
         "image" => parse_image_arguments(&remaining_arguments[1..]).map(CliCommand::Image),
         "models" => parse_models_command(&remaining_arguments[1..]).map(CliCommand::Models),
-        "status" => {
-            if remaining_arguments.len() > 1 {
-                return Err(UsageError::UnknownArgument(
-                    remaining_arguments[1].to_string_lossy().into_owned(),
-                ));
-            }
-            Ok(CliCommand::Status)
-        }
-        "doctor" => {
-            if remaining_arguments.len() > 1 {
-                return Err(UsageError::UnknownArgument(
-                    remaining_arguments[1].to_string_lossy().into_owned(),
-                ));
-            }
-            Ok(CliCommand::Doctor)
-        }
+        "status" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Status),
+        "doctor" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Doctor),
         "schema" => parse_schema_command(&remaining_arguments[1..]).map(CliCommand::Schema),
         "validate" => {
             parse_validate_command(&remaining_arguments[1..]).map(CliCommand::ValidateConfig)
         }
         "quantize" => crate::verbs::quantize::parse_quantize_command(&remaining_arguments[1..])
             .map(CliCommand::Quantize),
+        "vision" => crate::verbs::vision::parse_vision_command(&remaining_arguments[1..])
+            .map(CliCommand::Vision),
         other => Err(UsageError::UnknownCommand(other.to_owned())),
+    }
+}
+
+fn command_taking_no_arguments(
+    verb_arguments: &[OsString],
+    command: CliCommand,
+) -> Result<CliCommand, UsageError> {
+    match verb_arguments.first() {
+        Some(unexpected_argument) => Err(UsageError::UnknownArgument(
+            unexpected_argument.to_string_lossy().into_owned(),
+        )),
+        None => Ok(command),
     }
 }
 
@@ -632,6 +642,8 @@ pub enum UsageError {
     UnknownValidateTarget(String),
     #[error("unknown quantize target: {0}. Supported targets: plan, inspect, convert")]
     UnknownQuantizeTarget(String),
+    #[error("unknown vision target: {0}. Supported targets: inspect, match, add")]
+    UnknownVisionTarget(String),
     #[error("invalid value for {flag}: {reason}")]
     InvalidQuantizeValue { flag: &'static str, reason: String },
     #[error("unknown instance {0}: expected stable or development")]

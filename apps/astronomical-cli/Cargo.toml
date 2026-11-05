@@ -46,6 +46,7 @@ astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"], optional = true }
 astronomical-quantization = { path = "../../crates/quantization" }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"], optional = true }
+astronomical-vision-tower = { path = "../../crates/vision-tower" }
 serde.workspace = true
 serde_json.workspace = true
 tempfile = "=3.27.0"
