@@ -1,8 +1,6 @@
-//! "Hello, Neural Engine": which compute devices Core ML can see.
+//! Which compute devices Core ML can see.
 
-use crate::native_bridge::{
-    NativeComputeDeviceReport, astronomical_core_ml_report_compute_devices,
-};
+use crate::core_ml::ffi::{NativeComputeDeviceReport, astronomical_core_ml_report_compute_devices};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ComputeDeviceReport {

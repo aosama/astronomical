@@ -1,6 +1,6 @@
 //! Which devices Core ML may use, and where it reports having placed a model.
 
-use crate::native_bridge::NativeLayerPlacement;
+use crate::core_ml::ffi::NativeLayerPlacement;
 
 /// The devices Core ML may schedule on (`MLComputeUnits`). There is no
 /// "Neural Engine only" setting; excluding the GPU is how a GPU fallback is

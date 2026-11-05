@@ -1,8 +1,10 @@
 use super::{MlProgramWeights, encode_ml_program_projection};
-use crate::deterministic_values::{PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values};
 use crate::documents::model_interface::ProjectionDocumentError;
 use crate::projection_shape::ProjectionShape;
 use crate::weights::affine_quantized::{AffineQuantizedWeights, QuantizationLayout};
+use astronomical_test_harness::deterministic_values::{
+    PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
+};
 
 const SINGLE_CONVOLUTION: usize = 1;
 

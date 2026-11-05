@@ -1,11 +1,10 @@
-//! Apple Neural Engine support for prompt prefill (issue #161).
+//! Apple Neural Engine support for prompt prefill (issue #161), through public
+//! Core ML only.
 //!
-//! This crate proves, from the lowest level upward, that a dense prefill
-//! projection can be placed on the Neural Engine through public Core ML, that
-//! its numbers match an fp32 reference, and how fast it runs next to the GPU.
-//! Serving reaches it only through the opt-in
-//! `experimental_neural_engine_prefill_enabled` setting, by way of the whole
-//! MLP program and `mlx_hand_off`; everything else is research evidence.
+//! Serving reaches this crate only through the opt-in
+//! `experimental_neural_engine_prefill_enabled` setting. The evidence that these
+//! programs are correct and worth running lives in the research crate beside the
+//! acceptance tests, `verification/neural-engine`.
 //!
 //! The pieces, bottom to top:
 //!
@@ -17,22 +16,13 @@
 //!   `MLComputePlan`'s placement verdict, predictions, and which compute devices
 //!   Core ML can see. It takes a path and knows nothing of how a document is
 //!   encoded.
-//! - `mlx_hand_off`: activations into a program's input surface and its
-//!   output surface back into MLX.
-//! - [`accelerate_reference`]: the fp32 numerical oracle.
-//! - [`numerical_comparison`], [`timing_summary`], and [`process_memory`]:
-//!   the evidence format.
+//! - `mlx_hand_off`: activations into a program's input surface and its output
+//!   surface back into MLX.
 
-pub mod accelerate_reference;
 pub mod core_ml;
-pub mod deterministic_values;
 pub mod documents;
 #[cfg(feature = "mlx-hand-off")]
 pub mod mlx_hand_off;
-mod native_bridge;
-pub mod numerical_comparison;
-pub mod process_memory;
 pub mod projection_shape;
-pub mod timing_summary;
 pub mod weights;
 mod wire;

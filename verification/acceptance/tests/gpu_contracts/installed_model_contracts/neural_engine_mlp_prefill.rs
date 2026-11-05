@@ -19,7 +19,7 @@ use astronomical_memory_policy::serving_ceiling::machine_ceiling_from_physical_r
 use astronomical_model_serving::{
     Qwen3_5ArtifactValidator, Qwen3_5ResidentModel, Qwen3_5Tokenizer,
 };
-use astronomical_neural_engine::process_memory::{
+use astronomical_neural_engine_research::process_memory::{
     MemoryGrowth, MemorySnapshot, mebibytes, physical_memory_bytes,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};

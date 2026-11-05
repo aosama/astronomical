@@ -20,19 +20,7 @@ fn main() {
         .flag("-mmacosx-version-min=14.0")
         .warnings_into_errors(true)
         .compile("astronomical_core_ml_bridge");
-    println!("cargo:rerun-if-changed=native/process_memory.c");
-    cc::Build::new()
-        .file("native/process_memory.c")
-        .flag("-mmacosx-version-min=14.0")
-        .warnings_into_errors(true)
-        .compile("astronomical_process_memory");
-    for framework in [
-        "CoreML",
-        "Foundation",
-        "CoreVideo",
-        "IOSurface",
-        "Accelerate",
-    ] {
+    for framework in ["CoreML", "Foundation", "CoreVideo", "IOSurface"] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
 }

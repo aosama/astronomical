@@ -19,6 +19,7 @@ members = [
     "crates/runtime-integration",
     "verification/e2e",
     "verification/acceptance",
+    "verification/neural-engine",
     "xtask",
 ]
 default-members = [

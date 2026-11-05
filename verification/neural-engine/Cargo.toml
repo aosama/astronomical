@@ -1,0 +1,45 @@
+[package]
+name = "astronomical-neural-engine-research"
+build = "build.rs"
+description = "The Neural Engine research bench (issue #161): the fp32 reference, the evidence format, and the hardware journeys that measure placement, numerics, memory, and speed."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[package.metadata.cargo-machete]
+# cargo-machete reports this build dependency as unused, but build.rs uses it.
+ignored = ["cc"]
+
+[lints.rust]
+# This crate contains the Accelerate and process-memory foreign surface for the
+# research; every unsafe block carries a SAFETY argument.
+unsafe_code = "allow"
+unused_must_use = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+too_many_lines = "deny"
+
+[dependencies]
+astronomical-neural-engine = { path = "../../crates/neural-engine" }
+thiserror.workspace = true
+
+[build-dependencies]
+cc = "1.2"
+
+[dev-dependencies]
+astronomical-neural-engine = { path = "../../crates/neural-engine", features = ["mlx-hand-off"] }
+astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
+astronomical-test-harness = { path = "../../crates/test-harness" }
+mlx-c-rust.workspace = true
+serde_json.workspace = true
+serial_test.workspace = true
+tempfile = "=3.27.0"
+
+# Real-hardware journeys, `#[ignore]`d. `cargo test-neural-engine-journeys` runs
+# each in its own process. CI compiles them and runs only what is not ignored.
+[[test]]
+name = "hardware_journeys"
