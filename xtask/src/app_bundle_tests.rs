@@ -11,7 +11,9 @@ use super::command::{AppCommand, parse_app_command};
 use super::dev_pipeline::DevPipelinePaths;
 use super::icon_cache::cached_icon_file_name;
 use super::info_plist::{escape_xml_text, render_info_plist};
-use super::instance_control::{InstanceAction, status_report_lines};
+use super::instance_control::{
+    InstanceAction, reopen_menu_app_if_it_was_running, status_report_lines,
+};
 use super::native_metallib::metallib_store_path;
 use super::running_instance::menu_process_pattern;
 use super::step_reporter::estimate_remaining_seconds;
@@ -589,4 +591,49 @@ fn should_not_render_the_stable_chat_scheme_into_a_development_info_plist() {
     );
 
     assert!(!plist_text.contains("<string>astronomical</string>"));
+}
+
+fn open_menu_app_succeeds(_bundle_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+fn open_menu_app_fails(_bundle_path: &Path) -> Result<(), String> {
+    Err("open refused".to_owned())
+}
+
+#[test]
+fn should_reopen_a_menu_app_that_was_running() {
+    let reopen_outcome = reopen_menu_app_if_it_was_running(
+        true,
+        Path::new("/fictional/Fictional.app"),
+        open_menu_app_succeeds,
+    );
+
+    assert_eq!(reopen_outcome, Ok(()));
+}
+
+#[test]
+fn should_not_open_a_menu_app_that_was_not_running() {
+    // The opener always fails, so an Ok here proves it was never called.
+    let reopen_outcome = reopen_menu_app_if_it_was_running(
+        false,
+        Path::new("/fictional/Fictional.app"),
+        open_menu_app_fails,
+    );
+
+    assert_eq!(reopen_outcome, Ok(()));
+}
+
+#[test]
+fn should_say_the_daemon_is_running_when_the_menu_app_cannot_reopen() {
+    let reopen_outcome = reopen_menu_app_if_it_was_running(
+        true,
+        Path::new("/fictional/Fictional.app"),
+        open_menu_app_fails,
+    );
+
+    assert_eq!(
+        reopen_outcome,
+        Err("the daemon is running, but the menu app did not reopen: open refused".to_owned())
+    );
 }

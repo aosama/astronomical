@@ -4,7 +4,9 @@
 //! `start` runs the bundled daemon headless from the caller's shell, so
 //! exported `ASTRONOMICAL_*` experiment flags reach it; opening the app
 //! through LaunchServices would drop them. `stop` quits the menu app first,
-//! because a running menu app restarts a daemon it sees disappear.
+//! because a running menu app restarts a daemon it sees disappear. `restart`
+//! reopens a menu app it quit, once the daemon is healthy, so the menu app
+//! attaches to that daemon and the person keeps their menu bar icon.
 
 use std::fs::File;
 use std::os::unix::process::CommandExt;
@@ -14,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use super::channel_profile::{Channel, ChannelProfile};
 use super::dev_pipeline::DevPipelinePaths;
-use super::running_instance::{quit_menu_app, wait_for_daemon_exit};
+use super::running_instance::{open_bundle, quit_menu_app, wait_for_daemon_exit};
 
 const HEALTH_WAIT: Duration = Duration::from_secs(30);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -52,20 +54,48 @@ pub(crate) fn run_instance_action(
     match instance_action {
         InstanceAction::Status => print_status(repository_root, &channel_profile),
         InstanceAction::Start => start_instance(&bundle_path, &channel_profile),
-        InstanceAction::Stop => stop_instance(&channel_profile),
+        InstanceAction::Stop => stop_instance(&channel_profile).map(drop),
         InstanceAction::Restart => {
-            stop_instance(&channel_profile)?;
-            start_instance(&bundle_path, &channel_profile)?;
+            restart_instance(&bundle_path, &channel_profile)?;
             print_status(repository_root, &channel_profile)
         }
     }
 }
 
-fn stop_instance(channel_profile: &ChannelProfile) -> Result<(), String> {
-    quit_menu_app(channel_profile)?;
+fn restart_instance(bundle_path: &Path, channel_profile: &ChannelProfile) -> Result<(), String> {
+    let was_menu_app_running = stop_instance(channel_profile)?;
+    start_instance(bundle_path, channel_profile)?;
+    reopen_menu_app_if_it_was_running(was_menu_app_running, bundle_path, open_bundle)
+}
+
+/// Returns whether a menu app was running, which `restart` needs to put it back.
+fn stop_instance(channel_profile: &ChannelProfile) -> Result<bool, String> {
+    let was_menu_app_running = quit_menu_app(channel_profile)?;
     wait_for_daemon_exit(channel_profile)?;
     println!("[app-instance] {} is stopped", channel_profile.bundle_name);
-    Ok(())
+    Ok(was_menu_app_running)
+}
+
+/// Runs after the daemon is healthy, because a menu app that opens first would
+/// start its own daemon, without the caller's exported flags. A headless session
+/// stays headless: a menu app that was not running is not opened.
+pub(crate) fn reopen_menu_app_if_it_was_running(
+    was_menu_app_running: bool,
+    bundle_path: &Path,
+    open_menu_app: fn(&Path) -> Result<(), String>,
+) -> Result<(), String> {
+    if !was_menu_app_running {
+        return Ok(());
+    }
+    match open_menu_app(bundle_path) {
+        Ok(()) => {
+            println!("[app-instance] reopened the menu app");
+            Ok(())
+        }
+        Err(open_error) => Err(format!(
+            "the daemon is running, but the menu app did not reopen: {open_error}"
+        )),
+    }
 }
 
 fn start_instance(bundle_path: &Path, channel_profile: &ChannelProfile) -> Result<(), String> {
