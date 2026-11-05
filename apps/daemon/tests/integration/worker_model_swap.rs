@@ -366,6 +366,7 @@ pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
             ),
         ])),
         WorkerStartupConfiguration {
+            neural_engine_program_directory: "neural-engine-programs".into(),
             configuration_generation: "test-configuration-generation".to_owned(),
             global_prompt_cache_root_directory: temporary_log_directory.path().join("prompt-cache"),
             global_prompt_cache_maximum_size_bytes: 50_000_000_000,

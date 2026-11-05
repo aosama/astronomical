@@ -24,6 +24,7 @@ const REFRESHED_CONFIGURATION_GENERATION: &str = "same-bytes-new-generation";
 
 fn boot_startup_configuration() -> WorkerStartupConfiguration {
     WorkerStartupConfiguration {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: BOOT_CONFIGURATION_GENERATION.to_owned(),
         global_prompt_cache_root_directory: PathBuf::from("prompt-cache"),
         global_prompt_cache_maximum_size_bytes: 50_000_000_000,

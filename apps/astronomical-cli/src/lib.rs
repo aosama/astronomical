@@ -18,6 +18,7 @@ pub use verbs::doctor::{DoctorDependencies, DoctorError, run_doctor};
 pub use verbs::embed::{EmbedArguments, EmbedDependencies, EmbedError, run_embed};
 pub use verbs::image::{ImageArguments, ImageDependencies, ImageError, run_image};
 pub use verbs::launch::{LaunchDependencies, LaunchError, PreparedLaunch, prepare_launch};
+pub use verbs::model_programs::{ModelProgramsReport, render_model_programs};
 pub use verbs::models::{ModelsCommand, ModelsDependencies, ModelsError, run_models};
 pub use verbs::quantize::{
     QuantizeCommand, QuantizeConvertArguments, QuantizeDependencies, QuantizeError,

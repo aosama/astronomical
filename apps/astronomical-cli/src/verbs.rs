@@ -8,6 +8,7 @@ pub mod doctor;
 pub mod embed;
 pub mod image;
 pub mod launch;
+pub mod model_programs;
 pub mod models;
 pub mod quantize;
 pub mod respond;

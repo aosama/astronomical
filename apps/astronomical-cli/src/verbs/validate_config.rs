@@ -85,6 +85,7 @@ struct EffectiveConfigurationValues {
     logging_retained_files: usize,
     logging_directory: PathBuf,
     performance_attribution_enabled: bool,
+    neural_engine_program_directory: PathBuf,
 }
 
 fn effective_values_from_loaded_config(
@@ -120,6 +121,7 @@ fn effective_values_from_loaded_config(
         logging_retained_files: logging_values.retained_files(),
         logging_directory: logging_values.directory().to_owned(),
         performance_attribution_enabled: loaded_config.performance_attribution_enabled(),
+        neural_engine_program_directory: loaded_config.neural_engine_program_directory(),
     })
 }
 
@@ -170,6 +172,10 @@ fn render_text_report(
         effective_values.logging_directory.display()
     ));
     report_lines.push(format!(
+        "Neural Engine programs: {}",
+        effective_values.neural_engine_program_directory.display()
+    ));
+    report_lines.push(format!(
         "Performance attribution: {}",
         enabled_word(effective_values.performance_attribution_enabled)
     ));
@@ -199,6 +205,10 @@ fn render_json_report(
             "retained_files": effective_values.logging_retained_files,
             "directory": effective_values.logging_directory.display().to_string(),
         },
+        "neural_engine_program_directory": effective_values
+            .neural_engine_program_directory
+            .display()
+            .to_string(),
         "performance_attribution_enabled": effective_values.performance_attribution_enabled,
     });
     let rendered_text =

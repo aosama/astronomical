@@ -254,6 +254,7 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
     wait_for_ready_worker(&worker_handle).await;
 
     let resolved_runtime_config = ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: worker_executable_path.clone(),

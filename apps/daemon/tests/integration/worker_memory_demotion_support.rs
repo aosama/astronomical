@@ -149,6 +149,7 @@ pub(super) fn startup_configuration(
     configured_maximum_mlx_memory_bytes: Option<u64>,
 ) -> WorkerStartupConfiguration {
     WorkerStartupConfiguration {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: configuration_generation.to_owned(),
         global_prompt_cache_root_directory: temporary_directory.join("cache"),
         global_prompt_cache_maximum_size_bytes: 1_000_000_000,

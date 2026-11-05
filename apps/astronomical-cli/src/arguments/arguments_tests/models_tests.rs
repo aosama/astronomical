@@ -8,6 +8,15 @@ use crate::verbs::models::ModelsCommand;
 use super::parse;
 
 #[test]
+fn should_parse_models_programs_and_refuse_extra_arguments() {
+    assert_eq!(
+        parse(&["models", "programs"]),
+        Ok(CliCommand::ModelPrograms)
+    );
+    assert!(parse(&["models", "programs", "extra"]).is_err());
+}
+
+#[test]
 fn should_parse_models_subcommands() {
     assert_eq!(
         parse(&["models", "list"]),

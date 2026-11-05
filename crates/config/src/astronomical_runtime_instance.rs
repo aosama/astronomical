@@ -290,6 +290,15 @@ impl AstronomicalInstancePaths {
         self.state_directory.join("cache")
     }
 
+    /// Where this instance keeps compiled Neural Engine programs unless the config says
+    /// otherwise. Each instance keeps its own, so one instance's builds can never affect
+    /// another's.
+    #[must_use]
+    pub fn default_neural_engine_program_directory(&self) -> PathBuf {
+        self.state_directory
+            .join(crate::NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME)
+    }
+
     #[must_use]
     pub fn models_directory(&self) -> PathBuf {
         self.state_directory.join("models")

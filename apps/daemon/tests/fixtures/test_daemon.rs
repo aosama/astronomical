@@ -140,6 +140,7 @@ fn fixture_resolved_runtime_config(
     discovered_models: &[DiscoveredModel],
 ) -> ResolvedRuntimeConfig {
     ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: "fixture-static-configuration-generation".to_owned(),
         worker_executable_path,
         discovered_models: discovered_models.to_vec(),

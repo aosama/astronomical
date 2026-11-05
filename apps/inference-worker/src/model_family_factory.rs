@@ -40,6 +40,8 @@ pub struct ModelFamilyFactory {
     effective_mlx_memory_ceiling_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
+    /// `None` leaves programs uncached, which costs a slower load and nothing else.
+    neural_engine_program_directory: Option<PathBuf>,
     performance_attribution_enabled: bool,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     performance_attribution_log_path: PathBuf,
@@ -57,6 +59,15 @@ pub(crate) type InferenceWorker = EngineBackedWorker<
 >;
 
 impl ModelFamilyFactory {
+    #[must_use]
+    pub(crate) fn with_neural_engine_program_directory(
+        mut self,
+        neural_engine_program_directory: PathBuf,
+    ) -> Self {
+        self.neural_engine_program_directory = Some(neural_engine_program_directory);
+        self
+    }
+
     #[doc(hidden)]
     #[must_use]
     pub fn new(
@@ -72,6 +83,7 @@ impl ModelFamilyFactory {
             effective_mlx_memory_ceiling_bytes,
             allocator_cache_memory_limit_bytes,
             prompt_cache_config,
+            neural_engine_program_directory: None,
             performance_attribution_enabled,
             decode_expert_cache_policy,
             performance_attribution_log_path,
@@ -122,6 +134,7 @@ impl ModelFamilyFactory {
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
         let prompt_cache_config = self.prompt_cache_config.clone();
+        let neural_engine_program_directory = self.neural_engine_program_directory.clone();
         let performance_attribution_enabled = self.performance_attribution_enabled;
         let decode_expert_cache_policy = self.decode_expert_cache_policy;
         let performance_attribution_log_path = self.performance_attribution_log_path.clone();
@@ -135,6 +148,7 @@ impl ModelFamilyFactory {
                 effective_mlx_memory_ceiling_bytes,
                 allocator_cache_memory_limit_bytes,
                 prompt_cache_config,
+                neural_engine_program_directory,
                 model_configuration.model_id,
                 model_configuration.maximum_context_tokens,
                 model_configuration.maximum_output_tokens,

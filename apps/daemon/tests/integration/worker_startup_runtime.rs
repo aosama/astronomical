@@ -39,6 +39,7 @@ async fn should_complete_generation_when_startup_runtime_acknowledgement_is_stil
             ),
         )])),
         WorkerStartupConfiguration {
+            neural_engine_program_directory: "neural-engine-programs".into(),
             configuration_generation: DELAYED_STARTUP_RUNTIME_CONFIGURATION_GENERATION.to_owned(),
             global_prompt_cache_root_directory: temporary_log_directory.path().join("prompt-cache"),
             global_prompt_cache_maximum_size_bytes: 50_000_000_000,

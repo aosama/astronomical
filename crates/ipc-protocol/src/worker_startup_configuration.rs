@@ -65,6 +65,8 @@ pub struct WorkerStartupConfiguration {
     pub configuration_generation: String,
     pub global_prompt_cache_root_directory: PathBuf,
     pub global_prompt_cache_maximum_size_bytes: u64,
+    /// The declared home of compiled Neural Engine programs.
+    pub neural_engine_program_directory: PathBuf,
     pub persistent_prompt_cache_enabled: bool,
     pub configured_maximum_mlx_memory_bytes: Option<u64>,
     pub performance_attribution_enabled: bool,

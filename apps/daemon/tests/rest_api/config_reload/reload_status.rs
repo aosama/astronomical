@@ -133,6 +133,7 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         }"#,
     );
     let reloadable_config = Arc::new(RwLock::new(ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),

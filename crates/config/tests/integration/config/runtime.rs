@@ -1,5 +1,9 @@
 //! Acceptance coverage for the first-run v1 document and instance policy.
 
+use std::path::Path;
+
+use astronomical_config::{AstronomicalInstancePaths, AstronomicalRuntimeInstance};
+
 use super::*;
 
 struct FirstRunDocuments {
@@ -246,6 +250,60 @@ fn should_expose_configured_v1_model_download_directory_override() {
     assert_eq!(
         astronomical_config.model_download_directory(),
         Some(&PathBuf::from("/opt/shared-models"))
+    );
+}
+
+#[test]
+fn should_reject_a_relative_neural_engine_program_directory() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"neural_engine_program_directory":"relative/programs"}}"#,
+    );
+
+    assert!(matches!(
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+        Err(AstronomicalConfigError::PathMustBeAbsolute { .. })
+    ));
+}
+
+#[test]
+fn should_use_a_configured_neural_engine_program_directory() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[],"neural_engine_program_directory":"/opt/shared-programs"}}"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("configuration with a program directory should load");
+
+    assert_eq!(
+        astronomical_config.neural_engine_program_directory(),
+        PathBuf::from("/opt/shared-programs")
+    );
+}
+
+#[test]
+fn should_keep_each_instances_default_programs_in_its_own_folder() {
+    let home_directory = Path::new("/fictional-home");
+    let stable = AstronomicalInstancePaths::for_home_directory(
+        home_directory,
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let development = AstronomicalInstancePaths::for_home_directory(
+        home_directory,
+        AstronomicalRuntimeInstance::Development,
+    );
+
+    assert_eq!(
+        stable.default_neural_engine_program_directory(),
+        PathBuf::from("/fictional-home/.astronomical/neural-engine-programs")
+    );
+    assert_eq!(
+        development.default_neural_engine_program_directory(),
+        PathBuf::from("/fictional-home/.astronomical-dev/neural-engine-programs")
     );
 }
 

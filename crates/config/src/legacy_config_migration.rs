@@ -210,6 +210,7 @@ fn build_migrated_config(
             maximum_mlx_memory_gb: legacy_config.maximum_mlx_memory_gb,
             default_model: None,
             model_download_directory: None,
+            neural_engine_program_directory: None,
             metal_residency_refresh_enabled: None,
         },
         prompt_cache: Some(PromptCacheConfigFile {

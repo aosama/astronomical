@@ -81,6 +81,7 @@ async fn should_report_the_standard_development_state_directory_required_by_the_
 
 fn development_resolved_config() -> ResolvedRuntimeConfig {
     ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation:
             "1111111111111111111111111111111111111111111111111111111111111111".to_owned(),
         worker_executable_path: PathBuf::from("/fictional/astronomical-inference-worker"),

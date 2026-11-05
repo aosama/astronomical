@@ -110,6 +110,9 @@ pub(crate) fn prepare_neural_engine_mlp_prefill(
         Ok(layer_programs) => layer_programs,
         Err(reason) => return unavailable(reason),
     };
+    if let Some(program_cache) = &program_cache {
+        program_cache.record_finished_set(layer_programs.len() as u64);
+    }
     let layer_program_count = u32::try_from(layer_programs.len()).unwrap_or(u32::MAX);
     model.neural_engine_mlp_prefill = Some(NeuralEngineMlpPrefill {
         layer_programs: RefCell::new(layer_programs),

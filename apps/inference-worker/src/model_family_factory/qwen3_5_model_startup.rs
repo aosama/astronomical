@@ -37,12 +37,26 @@ enum Qwen3_5SelectedEngine {
     Streaming,
 }
 
+fn model_program_cache_directory(
+    neural_engine_program_directory: Option<&std::path::Path>,
+    model_id: &str,
+    model_revision: &str,
+) -> Option<PathBuf> {
+    let program_directory = neural_engine_program_directory?;
+    Some(neural_engine_program_cache_directory_for_model(
+        program_directory,
+        model_id,
+        model_revision,
+    ))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn initialize_qwen3_5_model(
     model_directory_path: PathBuf,
     active_memory_limit_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     prompt_cache_config: PromptCacheConfig,
+    neural_engine_program_directory: Option<PathBuf>,
     requested_model_id: String,
     maximum_context_tokens: u32,
     max_output_tokens: u32,
@@ -134,8 +148,8 @@ pub(crate) fn initialize_qwen3_5_model(
             per_model_prompt_cache_config.global_prompt_cache_maximum_size_bytes(),
         )
     });
-    let neural_engine_program_cache_directory = neural_engine_program_cache_directory_for_model(
-        prompt_cache_config.global_prompt_cache_root_directory(),
+    let neural_engine_program_cache_directory = model_program_cache_directory(
+        neural_engine_program_directory.as_deref(),
         &model_id,
         &model_revision,
     );

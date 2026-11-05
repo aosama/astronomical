@@ -106,6 +106,7 @@ fn resolved_runtime_config_with_penalty(
             .map(|repetition_penalty| (repetition_penalty * 1_000.0).round() as u16),
     };
     let resolved_runtime_config = ResolvedRuntimeConfig {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: "751".repeat(8),
         worker_executable_path: PathBuf::from("/tmp/astronomical-inference-worker"),
         discovered_models: Vec::new(),

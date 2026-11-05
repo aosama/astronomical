@@ -11,6 +11,7 @@ use super::{MLX_RESIDENCY_REFRESH_VARIABLE, apply_metal_residency_refresh_policy
 
 fn startup_configuration(is_refresh_enabled: bool) -> WorkerStartupConfiguration {
     WorkerStartupConfiguration {
+        neural_engine_program_directory: "neural-engine-programs".into(),
         configuration_generation: "generation".to_owned(),
         global_prompt_cache_root_directory: PathBuf::from("prompt-cache"),
         global_prompt_cache_maximum_size_bytes: 1,
