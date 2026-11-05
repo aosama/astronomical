@@ -50,7 +50,7 @@ dependencies = [
  "astronomical-mlx-c-fork",
  "astronomical-model-serving",
  "astronomical-native-identity",
- "astronomical-neural-engine",
+ "astronomical-neural-engine-research",
  "astronomical-quantization",
  "astronomical-rest-contract",
  "astronomical-runtime-integration",
@@ -276,6 +276,18 @@ dependencies = [
 name = "astronomical-neural-engine"
 version = "0.2.90"
 dependencies = [
+ "astronomical-test-harness",
+ "cc",
+ "mlx-c-rust",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "astronomical-neural-engine-research"
+version = "0.2.90"
+dependencies = [
+ "astronomical-neural-engine",
  "astronomical-runtime-integration",
  "astronomical-test-harness",
  "cc",

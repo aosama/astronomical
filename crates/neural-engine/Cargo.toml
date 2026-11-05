@@ -1,7 +1,7 @@
 [package]
 name = "astronomical-neural-engine"
 build = "build.rs"
-description = "Prefill math on the Apple Neural Engine through public Core ML: the opt-in serving path and the research journeys that measure its placement, numerics, and speed (issue #161)."
+description = "Prefill math on the Apple Neural Engine through public Core ML: the opt-in serving path (issue #161). Its hardware evidence lives in verification/neural-engine."
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
@@ -15,33 +15,22 @@ ignored = ["cc"]
 
 [features]
 default = []
-# Adds the MLX graphics-processor baseline to the hardware measurement. Off by
-# default because it links the pinned native MLX build, which the pure
-# Neural Engine path does not need.
-mlx-baseline = ["mlx-hand-off", "dep:astronomical-runtime-integration"]
-# Passes data between MLX and a loaded projection. Serving enables this without
-# the baseline's native MLX build, which its own graph already links.
+# Passes data between MLX and a loaded program. Serving enables this; its own
+# graph already links the native MLX build this needs.
 mlx-hand-off = ["dep:mlx-c-rust"]
 
 [lints.rust]
-# This crate exists to contain the Core ML, Accelerate, and IOSurface foreign
-# surface for the Neural Engine research; every unsafe block carries a SAFETY
-# argument and every native handle has exactly one RAII owner.
+# This crate exists to contain the Core ML and IOSurface foreign surface for the
+# Neural Engine; every unsafe block carries a SAFETY argument and every native
+# handle has exactly one RAII owner.
 unsafe_code = "allow"
 unused_must_use = "deny"
-
-# The MLX baseline dependencies are consumed only by the feature-gated
-# hardware test target; Cargo cannot express an optional dev-dependency, so
-# the manifest lint stays allowed here as it is in runtime-integration.
-[lints.cargo]
-unused_dependencies = "allow"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 too_many_lines = "deny"
 
 [dependencies]
-astronomical-runtime-integration = { path = "../runtime-integration", features = ["mlx"], optional = true }
 mlx-c-rust = { workspace = true, optional = true }
 thiserror.workspace = true
 
@@ -50,11 +39,4 @@ cc = "1.2"
 
 [dev-dependencies]
 astronomical-test-harness = { path = "../test-harness" }
-serde_json.workspace = true
-serial_test.workspace = true
 tempfile = "=3.27.0"
-
-# Real-hardware journeys: Neural Engine placement, numerics, and timing.
-# `#[ignore]`d; `cargo test-neural-engine-hello` runs each in its own process.
-[[test]]
-name = "neural_engine_hello"

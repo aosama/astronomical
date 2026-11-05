@@ -1,5 +1,5 @@
 use super::{ComputeDeviceReport, from_native_report};
-use crate::native_bridge::NativeComputeDeviceReport;
+use crate::core_ml::ffi::NativeComputeDeviceReport;
 
 #[test]
 fn should_recognize_a_neural_engine_with_cores() {

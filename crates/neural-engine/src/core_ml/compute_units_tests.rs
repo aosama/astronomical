@@ -1,7 +1,7 @@
 use super::{
     ComputePlacement, CoreMlComputeUnits, layer_placement_from_native, placement_from_native_code,
 };
-use crate::native_bridge::NativeLayerPlacement;
+use crate::core_ml::ffi::NativeLayerPlacement;
 
 #[test]
 fn should_map_every_compute_unit_choice_to_the_bridge_code() {

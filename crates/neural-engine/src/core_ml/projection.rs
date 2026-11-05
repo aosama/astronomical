@@ -7,7 +7,7 @@ use std::ptr::NonNull;
 
 use super::compute_units::{CoreMlComputeUnits, LayerPlacement, layer_placement_from_native};
 use super::error::{CoreMlProjectionError, NATIVE_ERROR_CAPACITY, native_error_text};
-use crate::native_bridge::{
+use crate::core_ml::ffi::{
     NativeCoreMlProjection, astronomical_core_ml_projection_load,
     astronomical_core_ml_projection_model_load_seconds, astronomical_core_ml_projection_placement,
     astronomical_core_ml_projection_placement_seconds, astronomical_core_ml_projection_release,

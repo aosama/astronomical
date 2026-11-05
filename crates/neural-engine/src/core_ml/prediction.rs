@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use super::error::{CoreMlProjectionError, NATIVE_ERROR_CAPACITY, native_error_text};
 use super::projection::CoreMlProjection;
-use crate::native_bridge::{
+use crate::core_ml::ffi::{
     astronomical_core_ml_projection_begin_predict, astronomical_core_ml_projection_finish_predict,
     astronomical_core_ml_projection_predict,
 };

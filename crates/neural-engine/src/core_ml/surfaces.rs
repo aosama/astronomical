@@ -5,7 +5,7 @@ use std::ffi::c_void;
 
 use super::error::CoreMlProjectionError;
 use super::projection::CoreMlProjection;
-use crate::native_bridge::{
+use crate::core_ml::ffi::{
     astronomical_core_ml_projection_lock_output, astronomical_core_ml_projection_read_output,
     astronomical_core_ml_projection_unlock_output, astronomical_core_ml_projection_write_input,
 };

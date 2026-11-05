@@ -1,5 +1,6 @@
-//! Shared test harness: deterministic-time and timeout scaffolding, plus
-//! workspace binary resolution, for the repository's test tiers.
+//! Shared test harness: deterministic-time and timeout scaffolding, reproducible
+//! bell-shaped values, plus workspace binary resolution, for the repository's test
+//! tiers.
 //!
 //! Vocabulary (issue #1208): the lane that runs every unit and integration
 //! test is the **integration** lane: scripted and deterministic, no real
@@ -14,6 +15,7 @@
 //! run_with_timeout for explicit bounded waits, and workspace binary
 //! resolution.
 
+pub mod deterministic_values;
 pub mod sparse_decode_full_fit;
 pub mod test_run;
 pub mod timeout;

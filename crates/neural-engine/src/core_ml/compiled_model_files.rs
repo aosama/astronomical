@@ -8,7 +8,7 @@ use std::path::Path;
 
 use super::error::{CoreMlProjectionError, NATIVE_ERROR_CAPACITY, native_error_text};
 use super::projection::CoreMlProjection;
-use crate::native_bridge::{
+use crate::core_ml::ffi::{
     astronomical_core_ml_compile_model_to, astronomical_core_ml_projection_compiled_model_path,
     astronomical_core_ml_projection_discard_compiled_model,
 };
