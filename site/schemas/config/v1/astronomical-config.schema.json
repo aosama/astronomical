@@ -78,6 +78,12 @@
           "pattern": "^/",
           "description": "Optional absolute directory that Library downloads are published into; omission publishes into this instance's own models directory.",
           "x-astronomical-apply-mode": "application-restart"
+        },
+        "metal_residency_refresh_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the inference worker re-requests Metal residency for its wired memory once per second, because macOS can release residency while the GPU is idle. Meant to avoid a slow first prompt after idle, and can keep that memory wired through long idle periods.",
+          "x-astronomical-apply-mode": "worker-replacement"
         }
       }
     },

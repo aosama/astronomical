@@ -134,6 +134,7 @@ fn resolved_runtime_config_with_penalty(
         maximum_mlx_memory_bytes: None,
         persistent_prompt_cache_enabled: false,
         configured_persistent_prompt_cache_enabled: None,
+        metal_residency_refresh_enabled: false,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         prompt_cache_config: PromptCacheConfig::new(PathBuf::from("/tmp/prompt-cache"), 1),

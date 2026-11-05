@@ -367,6 +367,18 @@ impl AstronomicalConfig {
     pub fn default_model(&self) -> Option<&str> {
         self.user_config_file.runtime.default_model.as_deref()
     }
+
+    /// Whether workers keep re-requesting Metal residency for wired memory.
+    ///
+    /// Off unless authored, because the renewal can keep memory wired through
+    /// long idle periods that macOS would otherwise reclaim.
+    #[must_use]
+    pub fn metal_residency_refresh_enabled(&self) -> bool {
+        self.user_config_file
+            .runtime
+            .metal_residency_refresh_enabled
+            .unwrap_or(false)
+    }
 }
 
 fn parse_loopback_bind_address(

@@ -379,6 +379,7 @@ pub(super) async fn launch_idle_worker_fixture() -> WorkerHandle {
             logging_directory: temporary_log_directory.path().to_path_buf(),
             logging_level: WorkerLogLevel::Warn,
             retained_log_file_count: 7,
+            metal_residency_refresh_enabled: false,
         },
     )
     .await

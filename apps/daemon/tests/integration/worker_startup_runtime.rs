@@ -52,6 +52,7 @@ async fn should_complete_generation_when_startup_runtime_acknowledgement_is_stil
             logging_directory: temporary_log_directory.path().to_path_buf(),
             logging_level: WorkerLogLevel::Warn,
             retained_log_file_count: 7,
+            metal_residency_refresh_enabled: false,
         },
     )
     .await

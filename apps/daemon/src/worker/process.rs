@@ -5,6 +5,7 @@ pub(crate) mod containment;
 pub(crate) mod crash_loop_guard;
 pub(crate) mod exit_description;
 pub(crate) mod failure_relaunch;
+pub(crate) mod metal_residency_refresh;
 pub(crate) mod model_swap;
 pub(crate) mod relaunch_memory;
 pub(crate) mod replacement;

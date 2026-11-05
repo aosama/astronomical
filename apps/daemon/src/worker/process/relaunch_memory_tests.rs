@@ -36,6 +36,7 @@ fn boot_startup_configuration() -> WorkerStartupConfiguration {
         logging_directory: PathBuf::from("logs"),
         logging_level: WorkerLogLevel::Debug,
         retained_log_file_count: 4,
+        metal_residency_refresh_enabled: false,
     }
 }
 
