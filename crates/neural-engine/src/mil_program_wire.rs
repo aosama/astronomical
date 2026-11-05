@@ -10,25 +10,22 @@ use crate::protobuf_wire::{
     append_bytes_field, append_string_field, append_varint, append_varint_field,
 };
 
-/// `MILSpec.DataType` codes for the element types the projection uses.
+/// The element types the projection uses, each holding its `MILSpec.DataType`
+/// code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u64)]
 pub enum MilDataType {
-    String,
-    Float16,
-    Int32,
-    UnsignedInt8,
-    UnsignedInt4,
+    Bool = 1,
+    String = 2,
+    Float16 = 10,
+    Int32 = 23,
+    UnsignedInt8 = 31,
+    UnsignedInt4 = 35,
 }
 
 impl MilDataType {
     fn proto_code(self) -> u64 {
-        match self {
-            Self::String => 2,
-            Self::Float16 => 10,
-            Self::Int32 => 23,
-            Self::UnsignedInt8 => 31,
-            Self::UnsignedInt4 => 35,
-        }
+        self as u64
     }
 }
 
@@ -73,6 +70,18 @@ pub fn int32_tensor_value(int32_values: &[i32], dimensions: &[usize]) -> Vec<u8>
     let mut tensor_value = Vec::new();
     append_bytes_field(&mut tensor_value, 2, &repeated_ints);
     immediate_tensor_value(MilDataType::Int32, dimensions, &tensor_value)
+}
+
+/// An immediate scalar bool.
+#[must_use]
+pub fn bool_scalar_value(bool_value: bool) -> Vec<u8> {
+    let mut packed_varints = Vec::new();
+    append_varint(&mut packed_varints, u64::from(bool_value));
+    let mut repeated_bools = Vec::new();
+    append_bytes_field(&mut repeated_bools, 1, &packed_varints);
+    let mut tensor_value = Vec::new();
+    append_bytes_field(&mut tensor_value, 3, &repeated_bools);
+    immediate_tensor_value(MilDataType::Bool, &[], &tensor_value)
 }
 
 /// An immediate scalar string.
@@ -149,6 +158,20 @@ impl MilOperation {
         let mut binding = Vec::new();
         append_string_field(&mut binding, 1, bound_value_name);
         self.append_argument(parameter_name, &binding);
+        self
+    }
+
+    /// Binds `parameter_name` to several values produced earlier, which is how
+    /// variadic operations such as `concat` take their inputs.
+    #[must_use]
+    pub fn input_named_list(mut self, parameter_name: &str, bound_value_names: &[String]) -> Self {
+        let mut argument = Vec::new();
+        for bound_value_name in bound_value_names {
+            let mut binding = Vec::new();
+            append_string_field(&mut binding, 1, bound_value_name);
+            append_bytes_field(&mut argument, 1, &binding);
+        }
+        append_map_entry(&mut self.encoded_operation, 2, parameter_name, &argument);
         self
     }
 

@@ -14,6 +14,9 @@ use crate::core_ml_projection_document::encode_projection_document;
 use crate::ml_package_layout::write_ml_package;
 use crate::ml_program_mlp_document::{MlpFp16Weights, encode_ml_program_mlp};
 use crate::ml_program_projection_document::{MlProgramWeights, encode_ml_program_projection};
+use crate::ml_program_rotated_mlp_document::{
+    RotatedMlpLayout, RotatedMlpWeights, encode_ml_program_rotated_mlp,
+};
 use crate::native_bridge::{
     NativeCoreMlProjection, NativeLayerPlacement, astronomical_core_ml_projection_begin_predict,
     astronomical_core_ml_projection_discard_compiled_model,
@@ -281,6 +284,19 @@ impl CoreMlProjection {
         )?;
         let package_path = write_ml_package(model_directory, &package_contents)?;
         Self::load_model_at(&package_path, shape, compute_units)
+    }
+
+    /// Loads one whole rotated ternary MLP. See
+    /// [`crate::ml_program_rotated_mlp_document`].
+    pub fn load_ml_program_rotated_mlp(
+        layout: RotatedMlpLayout,
+        weights: RotatedMlpWeights<'_>,
+        compute_units: CoreMlComputeUnits,
+        model_directory: &Path,
+    ) -> Result<Self, CoreMlProjectionError> {
+        let package_contents = encode_ml_program_rotated_mlp(layout, weights)?;
+        let package_path = write_ml_package(model_directory, &package_contents)?;
+        Self::load_model_at(&package_path, layout.shape, compute_units)
     }
 
     fn load_model_at(

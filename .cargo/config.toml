@@ -228,9 +228,17 @@ test-jangtq2-serving-throughput = "run -p xtask -- test-run --package astronomic
 # minute), and `cargo test-neural-engine-hello one_mlp_program_per_layer` alone
 # for memory and cycling speed across one distinct program per layer (about 90
 # seconds; it holds roughly 18 GiB at its peak and stops loading at half of the
-# Mac's memory). Real hardware, optimized build, serial; about eight minutes in
-# all. The crate's pure unit
-# tests run with `cargo test-neural-engine` (below).
+# Mac's memory). The ternary journeys need the Ternary-Bonsai-2-27B checkpoint in
+# the Hugging Face cache and run its real weights:
+# `cargo test-neural-engine-hello one_real_ternary_mlp_layer` for one layer's
+# placement, speed, and accuracy against the GPU (about 15 seconds per weight
+# form), and `cargo test-neural-engine-hello memory_of_real_ternary_mlp_programs`
+# for eight programs' memory growth and cycling speed (about 80 seconds per form;
+# run each form alone). `cargo test-neural-engine-hello
+# load_every_real_ternary_mlp_program` loads all 64 layers (about 11 minutes and
+# over 20 GiB of memory; it stops early if memory or disk runs low). Real
+# hardware, optimized build, serial; about twenty minutes in all. The crate's
+# pure unit tests run with `cargo test-neural-engine` (below).
 test-neural-engine-hello = "test --release --no-fail-fast -p astronomical-neural-engine --features mlx-baseline --test neural_engine_hello -- --ignored --nocapture --test-threads=1"
 
 # The opt-in Neural Engine prefill on a real dense artifact: the same loaded

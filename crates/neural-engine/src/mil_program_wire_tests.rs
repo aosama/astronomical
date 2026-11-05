@@ -1,6 +1,6 @@
 use super::{
-    MilDataType, MilOperation, append_map_entry, blob_file_tensor_value, int32_tensor_value,
-    named_value_type, string_scalar_value, tensor_value_type,
+    MilDataType, MilOperation, append_map_entry, blob_file_tensor_value, bool_scalar_value,
+    int32_tensor_value, named_value_type, string_scalar_value, tensor_value_type,
 };
 
 fn contains_subsequence(encoded: &[u8], expected_bytes: &[u8]) -> bool {
@@ -67,6 +67,26 @@ fn should_encode_a_string_scalar_in_the_strings_field() {
 }
 
 #[test]
+fn should_encode_a_bool_scalar_in_the_bools_field_with_its_own_type() {
+    let true_value = bool_scalar_value(true);
+    let false_value = bool_scalar_value(false);
+
+    // RepeatedBools{values: packed [v]} inside TensorValue field 3.
+    assert!(contains_subsequence(
+        &true_value,
+        &[0x1a, 0x03, 0x0a, 0x01, 0x01]
+    ));
+    assert!(contains_subsequence(
+        &false_value,
+        &[0x1a, 0x03, 0x0a, 0x01, 0x00]
+    ));
+    assert!(
+        contains_subsequence(&true_value, &[0x08, 0x01]),
+        "BOOL data type"
+    );
+}
+
+#[test]
 fn should_point_a_blob_value_at_its_metadata_offset() {
     let value = blob_file_tensor_value(
         MilDataType::UnsignedInt4,
@@ -121,4 +141,28 @@ fn should_carry_type_name_inputs_and_outputs_in_an_operation() {
         &operation,
         &[0x0a, 0x06, 0x0a, 0x04, b'l', b'e', b'f', b't']
     ));
+}
+
+#[test]
+fn should_bind_every_named_value_under_one_list_argument() {
+    let operation = MilOperation::new("concat", "joined")
+        .input_named_list("values", &["a".to_owned(), "bc".to_owned()])
+        .into_bytes();
+
+    // Argument{Binding{name "a"}, Binding{name "bc"}} under the "values" key.
+    assert!(contains_subsequence(
+        &operation,
+        &[
+            0x0a, 0x03, 0x0a, 0x01, b'a', 0x0a, 0x04, 0x0a, 0x02, b'b', b'c'
+        ]
+    ));
+}
+
+#[test]
+fn should_keep_the_key_of_an_empty_named_list() {
+    let operation = MilOperation::new("concat", "joined")
+        .input_named_list("values", &[])
+        .into_bytes();
+
+    assert!(contains_subsequence(&operation, b"values"));
 }
