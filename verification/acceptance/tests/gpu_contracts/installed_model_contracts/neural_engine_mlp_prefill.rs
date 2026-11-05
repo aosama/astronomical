@@ -28,7 +28,7 @@ use serial_test::serial;
 use tokio::time::timeout;
 
 const JOURNEY_NAME: &str = "neural-engine-real-model";
-pub(super) const DENSE_MODEL_ID: &str = "Ornith-1.5-9B-vision-OptiQ-static-4.5bpw";
+pub(super) const DENSE_MODEL_ID: &str = "Ornith-1.5-9B-MLX-4bit-vision";
 pub(super) const ROMEO_AND_JULIET_SOURCE: &str =
     include_str!("../../fixtures/model_metrics_50000_romeo_and_juliet_words.txt");
 
