@@ -34,16 +34,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(CliCommand::Launch(launch_arguments)) => run_launch(launch_arguments),
-        Ok(CliCommand::Schema(schema_arguments)) => {
-            let mut stdout = io::stdout();
-            match run_schema(&schema_arguments, &mut stdout) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(stdout_error) => {
-                    eprintln!("astronomical: {stdout_error}");
-                    ExitCode::FAILURE
-                }
-            }
-        }
+        Ok(CliCommand::Schema(schema_arguments)) => run_schema_verb(&schema_arguments),
         Ok(CliCommand::ValidateConfig(validate_arguments)) => {
             run_validate_config_verb(validate_arguments)
         }
@@ -54,6 +45,7 @@ fn main() -> ExitCode {
         Ok(CliCommand::Status) => run_status_verb(),
         Ok(CliCommand::Doctor) => run_doctor_verb(),
         Ok(CliCommand::Quantize(quantize_command)) => run_quantize_verb(quantize_command),
+        Ok(CliCommand::Vision(vision_command)) => run_vision_verb(&vision_command),
         Err(usage_error) => {
             eprint!("astronomical: {usage_error}\n\n{}", help_text());
             ExitCode::from(2)
@@ -90,6 +82,17 @@ fn run_validate_config_verb(
     }
 }
 
+fn run_schema_verb(schema_arguments: &astronomical_cli::SchemaArguments) -> ExitCode {
+    let mut stdout = io::stdout();
+    match run_schema(schema_arguments, &mut stdout) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(stdout_error) => {
+            eprintln!("astronomical: {stdout_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 /// The quantize verb is synchronous and in-process: no daemon, no socket,
 /// no async runtime. Progress goes to standard error, the report to standard
 /// output.
@@ -118,6 +121,70 @@ fn run_quantize_verb(quantize_command: astronomical_cli::QuantizeCommand) -> Exi
             eprintln!("astronomical: {quantize_error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// In-process like quantize, but it needs a runtime for its HTTPS reads. An
+/// inspection always exits successfully, because "no tower" is an answer; a match
+/// exits with failure unless adding the tower could proceed, so scripts can gate on
+/// it; and an add fails whenever it refuses, having written nothing.
+fn run_vision_verb(vision_command: &astronomical_cli::VisionCommand) -> ExitCode {
+    let vision_runtime = match build_current_thread_runtime() {
+        Ok(vision_runtime) => vision_runtime,
+        Err(runtime_error) => {
+            eprintln!("astronomical: could not start the async runtime: {runtime_error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut stdout = io::stdout();
+    let mut stderr = io::stderr();
+    let mut vision_dependencies = astronomical_cli::VisionDependencies {
+        stdout: &mut stdout,
+        stderr: &mut stderr,
+        progress_interval: std::time::Duration::from_secs(5),
+    };
+    let outcome = match vision_command {
+        astronomical_cli::VisionCommand::Inspect(inspect_arguments) => vision_runtime
+            .block_on(astronomical_cli::run_vision_inspect(
+                inspect_arguments,
+                &mut vision_dependencies,
+            ))
+            .map(exit_code_for_inspection),
+        astronomical_cli::VisionCommand::Match(match_arguments) => vision_runtime
+            .block_on(astronomical_cli::run_vision_match(
+                match_arguments,
+                &mut vision_dependencies,
+            ))
+            .map(exit_code_for_match),
+        astronomical_cli::VisionCommand::Add(add_arguments) => vision_runtime
+            .block_on(astronomical_cli::run_vision_add(
+                add_arguments,
+                &mut vision_dependencies,
+            ))
+            .map(exit_code_for_addition),
+    };
+    match outcome {
+        Ok(exit_code) => exit_code,
+        Err(vision_error) => {
+            eprintln!("astronomical: {vision_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn exit_code_for_inspection(_status: astronomical_vision_tower::TowerStatus) -> ExitCode {
+    ExitCode::SUCCESS
+}
+
+fn exit_code_for_addition(_report: astronomical_vision_tower::TowerAdditionReport) -> ExitCode {
+    ExitCode::SUCCESS
+}
+
+fn exit_code_for_match(verdict: astronomical_vision_tower::BaseMatchVerdict) -> ExitCode {
+    if verdict.allows_adding() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
 

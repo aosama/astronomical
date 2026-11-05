@@ -14,3 +14,4 @@ pub mod respond;
 pub mod schema;
 pub mod status;
 pub mod validate_config;
+pub mod vision;

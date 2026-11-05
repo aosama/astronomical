@@ -15,3 +15,4 @@ mod respond;
 mod status;
 mod support;
 mod validate_config;
+mod vision;

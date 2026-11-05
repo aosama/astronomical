@@ -32,3 +32,7 @@ pub use verbs::status::{StatusDependencies, StatusError, run_status};
 pub use verbs::validate_config::{
     ValidateConfigArguments, ValidateConfigDependencies, ValidateConfigError, run_validate_config,
 };
+pub use verbs::vision::{
+    VisionAddArguments, VisionCommand, VisionDependencies, VisionError, VisionInspectArguments,
+    VisionMatchArguments, run_vision_add, run_vision_inspect, run_vision_match,
+};
