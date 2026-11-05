@@ -6,15 +6,18 @@
 //! Core ML and records where `MLComputePlan` placed it, how far its numbers sit
 //! from the Accelerate fp32 reference, and how long one prediction takes.
 //!
-//! - `integration`: Core ML and MLX contracts on the CPU, with no Neural Engine and
-//!   no real model. These are not ignored, so the integration lane runs them.
-//! - `acceptance`: `#[ignore]`d contracts on real hardware that serving relies on.
+//! - `integration`: Core ML contracts on the CPU, with no Neural Engine, no MLX
+//!   runtime, and no real model. These are not ignored, so the integration lane
+//!   runs them.
+//! - `acceptance`: `#[ignore]`d contracts that serving relies on, on real hardware
+//!   or needing the MLX runtime.
 //! - `measurement`: `#[ignore]`d journeys whose main output is the numbers they print.
 //!
 //! Run the ignored ones with `cargo test-neural-engine-journeys`, which gives each
 //! its own process so an earlier load cannot blur a memory reading. Narrow with
 //! `--filter`:
 //!
+//! - `mlx_hand_off`: passing data between MLX and a loaded program; seconds.
 //! - `deltanet`: the split journeys on the DeltaNet projections, running one
 //!   projection's output channels on both engines at once.
 //! - `compressed_weight`: the probe matrix (shift-scale and lookup-table weights, 4

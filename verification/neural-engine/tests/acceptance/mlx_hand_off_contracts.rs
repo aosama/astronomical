@@ -4,6 +4,10 @@
 //! The program runs on the CPU, because the hand-off's layout and ownership rules
 //! do not depend on which engine produced the output. Tokens stay at a multiple of
 //! 64, the alignment that lets MLX read the surface as one array.
+//!
+//! These are ignored because the MLX runtime needs its compiled Metal library
+//! beside the test executable, and the archive CI runs tests from does not carry
+//! it. Run them with `cargo test-neural-engine-journeys --filter mlx_hand_off`.
 
 use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine::documents::projection::MlProgramWeights;
@@ -83,6 +87,7 @@ fn values_of(runtime: &MlxRuntime, values: &MlxArray) -> Vec<f32> {
 }
 
 #[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
 #[serial]
 fn should_reorder_token_major_activations_into_channel_major_fp16() {
     let runtime = initialize_runtime();
@@ -104,6 +109,7 @@ fn should_reorder_token_major_activations_into_channel_major_fp16() {
 }
 
 #[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
 #[serial]
 fn should_refuse_activations_that_are_not_fp16() {
     let runtime = initialize_runtime();
@@ -125,6 +131,7 @@ fn should_refuse_activations_that_are_not_fp16() {
 }
 
 #[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
 #[serial]
 fn should_refuse_prepared_activations_of_the_wrong_size() {
     let runtime = initialize_runtime();
@@ -146,6 +153,7 @@ fn should_refuse_prepared_activations_of_the_wrong_size() {
 }
 
 #[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
 #[serial]
 fn should_return_the_program_output_as_token_major_in_both_hand_off_forms() {
     let runtime = initialize_runtime();
@@ -170,6 +178,7 @@ fn should_return_the_program_output_as_token_major_in_both_hand_off_forms() {
 }
 
 #[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
 #[serial]
 fn should_refuse_a_surface_whose_rows_are_padded() {
     let runtime = initialize_runtime();
@@ -192,6 +201,7 @@ fn should_refuse_a_surface_whose_rows_are_padded() {
 }
 
 #[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
 #[serial]
 fn should_merge_the_program_output_before_a_gpu_slice_along_tokens() {
     let runtime = initialize_runtime();
@@ -224,6 +234,7 @@ fn should_merge_the_program_output_before_a_gpu_slice_along_tokens() {
 }
 
 #[test]
+#[ignore = "needs the MLX runtime; run through cargo test-neural-engine-journeys"]
 #[serial]
 fn should_merge_the_program_output_before_a_gpu_slice_along_channels() {
     let runtime = initialize_runtime();
