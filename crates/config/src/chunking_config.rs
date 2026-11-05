@@ -208,7 +208,21 @@ pub const fn should_materialize_ssd_streaming_chunk_default(
         }
     }
 }
+/// Multi-token prefill submits every decoder layer while experts stream from
+/// SSD because that was the fastest setting measured, not because it saves
+/// memory: on the 4-bit sparse model (10,240-token prompt, 4,096-token
+/// chunks) an interval of 1 gave about 2,190 tok/s against 2,050 for 2 at a
+/// 14 GiB ceiling and matched 2 at 20 GiB, and peak memory was the same for
+/// both. Re-measure with `cargo measure-paging-submission-intervals` before
+/// changing it.
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 1;
+/// One-token decode submits every third layer while experts stream from SSD.
+/// The exact value is not sensitive on the 4-bit sparse model: 1, 2, 3, 4
+/// and 6 decoded within two percent of each other at a 14 GiB ceiling (about
+/// 33.6 tok/s), as did 1, 3 and 6 at 20 GiB (about 60). Submitting inside the
+/// forward at all is what matters: with no intermediate submission decode
+/// fell six percent at 20 GiB (56.8 against 60.3 tok/s). Three keeps that
+/// gain with a third of the hand-offs of submitting every layer.
 pub const DEFAULT_EXPERIMENTAL_SSD_PAGING_GENERATION_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 3;
 /// Resident multi-token prefill keeps one lazy tape unless the user raises this.
 pub const DEFAULT_PREFILL_GRAPH_SUBMISSION_LAYER_INTERVAL: u32 = 0;
