@@ -5,14 +5,9 @@ use astronomical_neural_engine::compute_device_report::report_compute_devices;
 use astronomical_neural_engine::core_ml_projection::{ComputePlacement, CoreMlComputeUnits};
 use serial_test::serial;
 
-use super::measured_projection::{ProjectionEvidence, measure_projection, print_evidence};
-use super::projection_fixture::ProjectionFixture;
-
-// An fp16 product of unit-variance activations and 0.02-spread weights over
-// 4,096 terms lands within this cosine of the fp32 result when the engine
-// accumulates in at least fp16; anything lower means wrong arithmetic, not
-// rounding.
-const MINIMUM_COSINE_SIMILARITY: f64 = 0.9999;
+use crate::support::journey_constants::MINIMUM_COSINE_SIMILARITY;
+use crate::support::measured_projection::{ProjectionEvidence, measure_projection, print_evidence};
+use crate::support::projection_fixture::ProjectionFixture;
 
 fn assert_numerically_sound(evidence: &ProjectionEvidence) {
     assert_eq!(evidence.comparison.non_finite_candidate_count, 0);

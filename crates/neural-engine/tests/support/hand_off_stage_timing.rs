@@ -6,23 +6,23 @@ use std::time::Duration;
 
 use astronomical_neural_engine::timing_summary::TimingSummary;
 
-pub(super) struct StageDurations {
-    pub(super) input_preparation: Duration,
-    pub(super) surface_write: Duration,
-    pub(super) engines_after_write: Duration,
-    pub(super) merge: Duration,
-    pub(super) total: Duration,
+pub(crate) struct StageDurations {
+    pub(crate) input_preparation: Duration,
+    pub(crate) surface_write: Duration,
+    pub(crate) engines_after_write: Duration,
+    pub(crate) merge: Duration,
+    pub(crate) total: Duration,
 }
 
-pub(super) struct StageSummaries {
-    pub(super) input_preparation: TimingSummary,
-    pub(super) surface_write: TimingSummary,
-    pub(super) engines_after_write: TimingSummary,
-    pub(super) merge: TimingSummary,
-    pub(super) total: TimingSummary,
+pub(crate) struct StageSummaries {
+    pub(crate) input_preparation: TimingSummary,
+    pub(crate) surface_write: TimingSummary,
+    pub(crate) engines_after_write: TimingSummary,
+    pub(crate) merge: TimingSummary,
+    pub(crate) total: TimingSummary,
 }
 
-pub(super) fn summarize_stages(stage_samples: &[StageDurations]) -> StageSummaries {
+pub(crate) fn summarize_stages(stage_samples: &[StageDurations]) -> StageSummaries {
     let mut input_preparation = Vec::with_capacity(stage_samples.len());
     let mut surface_write = Vec::with_capacity(stage_samples.len());
     let mut engines_after_write = Vec::with_capacity(stage_samples.len());

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use super::{TestRunRequest, TestTarget};
 
 fn arguments(command_line: &str) -> Vec<String> {
@@ -89,4 +91,48 @@ fn should_keep_exact_case_selection_when_listing_ignored_tests() {
             .listing_arguments(false)
             .contains(&"--ignored".to_owned())
     );
+}
+
+#[test]
+fn should_keep_the_default_case_budget_unless_one_is_requested() {
+    let default_request = TestRunRequest::parse(&arguments("--package journeys --tests"))
+        .expect("the default budget should parse");
+    assert_eq!(
+        default_request.effective_case_budget(Duration::from_secs(120)),
+        Duration::from_secs(120)
+    );
+    let long_request = TestRunRequest::parse(&arguments(
+        "--package journeys --tests --case-budget-seconds 900",
+    ))
+    .expect("a long budget should parse");
+    assert_eq!(
+        long_request.effective_case_budget(Duration::from_secs(120)),
+        Duration::from_secs(900)
+    );
+}
+
+#[test]
+fn should_accept_the_shortest_case_budget() {
+    let shortest_request = TestRunRequest::parse(&arguments(
+        "--package journeys --tests --case-budget-seconds 1",
+    ))
+    .expect("one second is a positive budget");
+    assert_eq!(shortest_request.case_budget, Some(Duration::from_secs(1)));
+}
+
+#[test]
+fn should_reject_a_zero_negative_fractional_or_repeated_case_budget() {
+    for command_line in [
+        "--package journeys --tests --case-budget-seconds 0",
+        "--package journeys --tests --case-budget-seconds -5",
+        "--package journeys --tests --case-budget-seconds 1.5",
+        "--package journeys --tests --case-budget-seconds soon",
+        "--package journeys --tests --case-budget-seconds",
+        "--package journeys --tests --case-budget-seconds 5 --case-budget-seconds 6",
+    ] {
+        assert!(
+            TestRunRequest::parse(&arguments(command_line)).is_err(),
+            "{command_line} should be rejected"
+        );
+    }
 }

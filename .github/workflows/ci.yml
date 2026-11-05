@@ -360,6 +360,10 @@ jobs:
           cargo test-test-harness-fixtures --no-run
           cargo test --timings --no-fail-fast --no-run -p astronomical-daemon --test rest_api_tests
           cargo test --timings --no-fail-fast --no-run -p astronomical-e2e --test e2e
+          # The Neural Engine MLX journeys never run in CI, but they are compiled
+          # here because this job already links native MLX and nothing else would
+          # notice a change that stops them building.
+          cargo test --timings --no-fail-fast --no-run -p astronomical-neural-engine --features mlx-baseline --test neural_engine_hello
           # The root E2E journeys spawn the real daemon and fixture worker
           # binaries from outside their package, so they must be built before
           # the lane runs; workspace_binary fails loudly otherwise.

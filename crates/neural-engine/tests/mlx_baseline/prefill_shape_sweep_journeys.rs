@@ -10,9 +10,9 @@ use astronomical_neural_engine::core_ml_projection::CoreMlComputeUnits;
 use mlx_c_rust::MlxDtype;
 use serial_test::serial;
 
-use super::mlx_projection_journeys::{initialize_runtime, measure_dense};
-use crate::hello::measured_projection::{measure_projection, print_evidence};
-use crate::hello::projection_fixture::ProjectionFixture;
+use crate::support::measured_projection::{measure_projection, print_evidence};
+use crate::support::mlx_projection::{initialize_runtime, measure_dense};
+use crate::support::projection_fixture::ProjectionFixture;
 
 struct CandidateShape {
     label: &'static str,

@@ -62,6 +62,7 @@ pub(crate) fn refresh_coverage_inventory(repository_root: &Path, arguments: &[St
         filter: Some("should_keep_the_committed_coverage_inventory_current".to_owned()),
         exact: false,
         ignored: false,
+        case_budget: None,
     };
     let configuration = TestRunConfiguration {
         coverage_inventory_output: Some(inventory_path.clone()),
@@ -303,7 +304,7 @@ fn run_selected_cases(
             &mut test_command,
             &case_directory.join("test.log"),
             test_name,
-            TEST_BUDGET,
+            request.effective_case_budget(TEST_BUDGET),
             OutputStyle::Test,
             &prepared.signals,
         )?;

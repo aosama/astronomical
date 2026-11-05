@@ -14,23 +14,22 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml_projection::{
-    ComputePlacement, CoreMlComputeUnits, CoreMlProjection,
-};
 use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
-use astronomical_neural_engine::numerical_comparison::compare_values;
 use astronomical_neural_engine::timing_summary::TimingSummary;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;
 
-use super::mlx_projection_journeys::{
+use crate::support::engine_split::{
+    MeasuredEngines, assert_slice_matches_reference, evaluate_gpu_slice, load_neural_engine_slice,
+    milliseconds, summarize, time_split,
+};
+use crate::support::journey_constants::PREFILL_CHUNK_TOKEN_COUNT;
+use crate::support::measured_projection::{MEASURED_CALL_COUNT, MINIMUM_WARM_UP_DURATION};
+use crate::support::mlx_projection::{
     MlxProjectionForm, build_projection, initialize_runtime, upload,
 };
-use crate::hello::measured_projection::{
-    MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
-};
-use crate::hello::projection_fixture::ProjectionFixture;
+use crate::support::projection_fixture::ProjectionFixture;
 
 // Neural Engine shares of the mixer output's 2,048 output channels. The
 // alone-timings (3.60 ms Neural Engine, 1.53 ms MLX for all 2,048) put the
@@ -42,8 +41,6 @@ const MIXER_OUTPUT_NEURAL_ENGINE_SHARES: [usize; 6] = [256, 384, 512, 640, 768, 
 const DELTANET_INPUT_NEURAL_ENGINE_SHARES: [usize; 5] = [3072, 4096, 4608, 5120, 5632];
 const DELTANET_INPUT_CHANNELS: usize = 2048;
 const DELTANET_FUSED_OUTPUT_CHANNELS: usize = 12_352;
-const PREFILL_CHUNK_TOKEN_COUNT: usize = 2048;
-const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(5);
 
 struct SplitTimings {
     gpu_alone: TimingSummary,
@@ -51,133 +48,6 @@ struct SplitTimings {
     together_total: TimingSummary,
     together_gpu: TimingSummary,
     together_neural_engine: TimingSummary,
-}
-
-pub(super) enum MeasuredEngines {
-    GpuAlone,
-    NeuralEngineAlone,
-    Together,
-}
-
-/// One call of the chosen engines; returns (total, GPU part, Neural Engine part).
-fn run_split_call(
-    runtime: &MlxRuntime,
-    gpu_form: &MlxProjectionForm<'_>,
-    neural_engine_projection: &mut CoreMlProjection,
-    measured_engines: &MeasuredEngines,
-) -> (Duration, Duration, Duration) {
-    let call_started_at = Instant::now();
-    match measured_engines {
-        MeasuredEngines::GpuAlone => {
-            evaluate_gpu_slice(runtime, gpu_form);
-            let gpu_duration = call_started_at.elapsed();
-            (gpu_duration, gpu_duration, Duration::ZERO)
-        }
-        MeasuredEngines::NeuralEngineAlone => {
-            let neural_engine_duration = neural_engine_projection
-                .predict()
-                .expect("the Neural Engine slice runs");
-            (
-                call_started_at.elapsed(),
-                Duration::ZERO,
-                neural_engine_duration,
-            )
-        }
-        MeasuredEngines::Together => {
-            let pending = neural_engine_projection
-                .begin_prediction()
-                .expect("the Neural Engine slice starts");
-            evaluate_gpu_slice(runtime, gpu_form);
-            let gpu_duration = call_started_at.elapsed();
-            let neural_engine_duration = pending
-                .finish(NEURAL_ENGINE_FINISH_TIMEOUT)
-                .expect("the Neural Engine slice finishes");
-            (
-                call_started_at.elapsed(),
-                gpu_duration,
-                neural_engine_duration,
-            )
-        }
-    }
-}
-
-fn evaluate_gpu_slice(runtime: &MlxRuntime, gpu_form: &MlxProjectionForm<'_>) {
-    let projected = build_projection(runtime, gpu_form);
-    runtime
-        .evaluate_arrays(&[&projected])
-        .expect("the GPU slice evaluates");
-}
-
-fn summarize(durations: &[Duration]) -> TimingSummary {
-    TimingSummary::from_samples(durations).expect("calls were timed")
-}
-
-pub(super) fn time_split(
-    runtime: &MlxRuntime,
-    gpu_form: &MlxProjectionForm<'_>,
-    neural_engine_projection: &mut CoreMlProjection,
-    measured_engines: &MeasuredEngines,
-    engine_label: &str,
-) -> [TimingSummary; 3] {
-    let warm_up_started_at = Instant::now();
-    let mut warm_up_call_count = 0;
-    while warm_up_call_count < MINIMUM_WARM_UP_CALL_COUNT
-        || warm_up_started_at.elapsed() < MINIMUM_WARM_UP_DURATION
-    {
-        run_split_call(
-            runtime,
-            gpu_form,
-            neural_engine_projection,
-            measured_engines,
-        );
-        warm_up_call_count += 1;
-    }
-    let mut totals = Vec::with_capacity(MEASURED_CALL_COUNT);
-    let mut gpu_parts = Vec::with_capacity(MEASURED_CALL_COUNT);
-    let mut neural_engine_parts = Vec::with_capacity(MEASURED_CALL_COUNT);
-    let measuring_started_at = Instant::now();
-    let mut last_progress_at = measuring_started_at;
-    for call_index in 0..MEASURED_CALL_COUNT {
-        let (total, gpu_part, neural_engine_part) = run_split_call(
-            runtime,
-            gpu_form,
-            neural_engine_projection,
-            measured_engines,
-        );
-        totals.push(total);
-        gpu_parts.push(gpu_part);
-        neural_engine_parts.push(neural_engine_part);
-        if last_progress_at.elapsed() >= Duration::from_secs(5) {
-            report_progress(engine_label, call_index + 1, measuring_started_at.elapsed());
-            last_progress_at = Instant::now();
-        }
-    }
-    [
-        summarize(&totals),
-        summarize(&gpu_parts),
-        summarize(&neural_engine_parts),
-    ]
-}
-
-pub(super) fn milliseconds(duration: Duration) -> f64 {
-    duration.as_secs_f64() * 1000.0
-}
-
-pub(super) fn assert_slice_matches_reference(
-    slice_fixture: &ProjectionFixture,
-    candidate: &[f32],
-    label: &str,
-) {
-    let comparison =
-        compare_values(&slice_fixture.reference_projected, candidate).expect("same length");
-    eprintln!(
-        "    {label} slice vs fp32 reference: max abs {:.3e}, cosine {:.8}, non-finite {}",
-        comparison.maximum_absolute_error,
-        comparison.cosine_similarity,
-        comparison.non_finite_candidate_count
-    );
-    assert_eq!(comparison.non_finite_candidate_count, 0);
-    assert!(comparison.cosine_similarity >= 0.9999, "{label} cosine");
 }
 
 fn read_gpu_slice(runtime: &MlxRuntime, gpu_form: &MlxProjectionForm<'_>) -> Vec<f32> {
@@ -214,29 +84,6 @@ fn upload_gpu_slice(runtime: &MlxRuntime, gpu_fixture: &ProjectionFixture) -> Gp
             MlxDtype::Float16,
         ),
     }
-}
-
-pub(super) fn load_neural_engine_slice(
-    neural_engine_fixture: &ProjectionFixture,
-    contraction_part_count: usize,
-    model_directory: &std::path::Path,
-) -> CoreMlProjection {
-    let mut projection = CoreMlProjection::load(
-        neural_engine_fixture.shape,
-        &neural_engine_fixture.fp16_weights,
-        CoreMlComputeUnits::CpuAndNeuralEngine,
-        contraction_part_count,
-        model_directory,
-    )
-    .expect("the Neural Engine slice loads");
-    assert_eq!(
-        projection.placement().preferred,
-        ComputePlacement::NeuralEngine
-    );
-    projection
-        .write_activations(&neural_engine_fixture.fp16_activations)
-        .expect("the activations fit");
-    projection
 }
 
 fn measure_split(
@@ -325,7 +172,7 @@ fn print_split(
     );
 }
 
-pub(super) fn percent_change(alone: Duration, side_by_side: Duration) -> f64 {
+fn percent_change(alone: Duration, side_by_side: Duration) -> f64 {
     100.0 * (side_by_side.as_secs_f64() / alone.as_secs_f64() - 1.0)
 }
 

@@ -15,9 +15,9 @@ use astronomical_neural_engine::process_memory::{MemoryGrowth, MemorySnapshot, m
 use astronomical_neural_engine::timing_summary::TimingSummary;
 use serial_test::serial;
 
-use super::concurrent_split_journeys::milliseconds;
-use super::ternary_checkpoint::{TernaryCheckpoint, TernaryMlpLayer};
-use super::ternary_mlp_journeys::{
+use crate::support::engine_split::milliseconds;
+use crate::support::ternary_checkpoint::{TernaryCheckpoint, TernaryMlpLayer};
+use crate::support::ternary_mlp::{
     HIDDEN_CHANNELS, LAYER_COUNT, NEURAL_ENGINE_TOKEN_COUNT, ROWS_PER_LOOKUP_TABLE, gate_verdict,
     load_program,
 };
@@ -37,7 +37,7 @@ const MINIMUM_PROGRAMS_FOR_GROWTH: usize = 2;
 
 /// Prefill visits every layer once per chunk, so this cycles through distinct
 /// programs to expose any switching cost that one program in a loop would hide.
-pub(super) fn time_program_cycles(programs: &mut [CoreMlProjection]) -> TimingSummary {
+fn time_program_cycles(programs: &mut [CoreMlProjection]) -> TimingSummary {
     let activations = vec![ONE_AS_FP16; HIDDEN_CHANNELS * NEURAL_ENGINE_TOKEN_COUNT];
     for projection in programs.iter_mut() {
         projection
@@ -104,7 +104,7 @@ fn stop_reason(volume_path: &Path) -> Option<String> {
 
 /// One program that stays usable with neither its package nor its compiled copy
 /// on disk, which proves the temporary files can go right after the first run.
-pub(super) fn load_program_without_files(
+fn load_program_without_files(
     layer: &TernaryMlpLayer,
     weight_encoding: StageWeightEncoding,
 ) -> CoreMlProjection {

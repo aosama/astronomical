@@ -20,7 +20,8 @@ use astronomical_neural_engine::numerical_comparison::compare_values;
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 use serial_test::serial;
 
-use super::projection_fixture::ProjectionFixture;
+use crate::support::journey_constants::MINIMUM_COSINE_SIMILARITY;
+use crate::support::projection_fixture::ProjectionFixture;
 
 // Small, because the journey is about files, not speed.
 const INPUT_CHANNELS: usize = 512;
@@ -28,7 +29,6 @@ const OUTPUT_CHANNELS: usize = 256;
 const TOKEN_COUNT: usize = 64;
 const SINGLE_CONTRACTION_PART: usize = 1;
 const WEIGHT_SEED: u64 = 0x5eed_d15c;
-const MINIMUM_COSINE_SIMILARITY: f64 = 0.9999;
 /// What Core ML names the compiled copy of `projection.mlpackage`.
 const COMPILED_MODEL_PREFIX: &str = "projection_";
 const COMPILED_MODEL_EXTENSION: &str = "mlmodelc";
