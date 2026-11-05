@@ -22,6 +22,14 @@ function requireElement<T extends Element>(selector: string): T {
   return element;
 }
 
+function showApplicationTitle(config: AppConfig): void {
+  document.title = config.applicationTitle;
+  const sidebarAppName = document.querySelector(".sidebar__app-name");
+  if (sidebarAppName) {
+    sidebarAppName.textContent = config.applicationTitle;
+  }
+}
+
 /**
  * Wires every client component to the page's elements and starts the shell.
  * Both the production entry (main.ts) and the test harness call this, so there
@@ -29,6 +37,7 @@ function requireElement<T extends Element>(selector: string): T {
  */
 export function bootChatClient(): AppShell {
   const config = AppConfig.fromWindow(window.__thintalkConfig);
+  showApplicationTitle(config);
   const host = new HostChannel();
   const bridge = new SessionBridge((request) => host.postSessionCall(request));
   const store = new SessionStore(bridge);

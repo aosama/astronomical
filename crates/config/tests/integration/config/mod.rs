@@ -12,6 +12,7 @@ mod default_model;
 mod local_api_base_urls;
 mod logging;
 mod maximum_mlx_memory;
+mod metal_residency_refresh;
 mod migration;
 mod model_config;
 mod prompt_cache;

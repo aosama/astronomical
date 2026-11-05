@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ThinTalkCanvas
 import ThinTalkCore
 import ThinTalkUI
 
@@ -17,6 +18,7 @@ final class ChatWindowController: NSObject, NSWindowDelegate {
   private var chatWindow: NSWindow?
   private let thinTalkIdentity: ThinTalkCore.ThinTalkApplicationIdentity
   private var handleClose: (() -> Void)?
+  private let zoomController = CanvasZoomController()
 
   init(thinTalkIdentity: ThinTalkCore.ThinTalkApplicationIdentity) {
     self.thinTalkIdentity = thinTalkIdentity
@@ -43,14 +45,15 @@ final class ChatWindowController: NSObject, NSWindowDelegate {
       styleMask: [.titled, .closable, .miniaturizable, .resizable],
       backing: .buffered,
       defer: false)
-    window.title = "Thin Talk"
+    window.title = thinTalkIdentity.windowTitle
     window.isReleasedWhenClosed = false
     window.delegate = self
     // The chat surface is the HTML client hosted by ThinTalkCanvas; the window
     // only supplies chrome and the channel identity the client configures
     // itself from.
     window.contentView = NSHostingView(
-      rootView: ThinTalkUI.RootView(applicationIdentity: thinTalkIdentity))
+      rootView: ThinTalkUI.RootView(
+        applicationIdentity: thinTalkIdentity, zoomController: zoomController))
     return window
   }
 

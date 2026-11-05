@@ -559,3 +559,34 @@ fn should_not_match_the_daemon_or_worker_inside_the_same_bundle() {
         );
     }
 }
+
+#[test]
+fn should_render_each_channels_own_chat_scheme_into_the_info_plist() {
+    for (channel, chat_scheme_entry) in [
+        (Channel::Development, "<string>astronomical-dev</string>"),
+        (Channel::Stable, "<string>astronomical</string>"),
+        (Channel::AppStore, "<string>astronomical</string>"),
+    ] {
+        let plist_text = render_info_plist(
+            &ChannelProfile::for_channel(channel),
+            &sample_build_identity(false),
+            "https://example-owner.github.io/astronomical/appcast.xml",
+        );
+
+        assert!(
+            plist_text.contains(chat_scheme_entry),
+            "{chat_scheme_entry} missing for {channel:?}"
+        );
+    }
+}
+
+#[test]
+fn should_not_render_the_stable_chat_scheme_into_a_development_info_plist() {
+    let plist_text = render_info_plist(
+        &ChannelProfile::for_channel(Channel::Development),
+        &sample_build_identity(true),
+        "https://example-owner.github.io/astronomical/appcast.xml",
+    );
+
+    assert!(!plist_text.contains("<string>astronomical</string>"));
+}

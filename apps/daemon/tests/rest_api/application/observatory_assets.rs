@@ -7,7 +7,7 @@ use tower::ServiceExt;
 use crate::support::ScriptedExecutor;
 
 const EXPECTED_HTML_TITLE_MARKER: &str = "<title>Astronomical Observatory</title>";
-const EXPECTED_THIN_TALK_HANDOFF_MARKER: &str = "href=\"astronomical://chat\"";
+const EXPECTED_THIN_TALK_HANDOFF_MARKER: &str = "id=\"open-thin-talk\"";
 const EXPECTED_THIN_TALK_FALLBACK_MARKER: &str = "choose Chat";
 const EXPECTED_NAVIGATION_LABEL_MARKER: &str = "aria-label=\"Observatory sections\"";
 const EXPECTED_OVERVIEW_REGION_MARKER: &str =
@@ -175,7 +175,11 @@ async fn should_expose_the_thin_talk_handoff_with_a_menu_bar_fallback() {
 
     assert!(
         shell_text.contains(EXPECTED_THIN_TALK_HANDOFF_MARKER),
-        "the observatory shell must hand chat over to Thin Talk through the astronomical link"
+        "the observatory shell must offer the Thin Talk handoff"
+    );
+    assert!(
+        !shell_text.contains("astronomical://"),
+        "the shell must not hardcode a link, because each channel opens its own Thin Talk"
     );
     assert!(
         shell_text.contains(EXPECTED_THIN_TALK_FALLBACK_MARKER),

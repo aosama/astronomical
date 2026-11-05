@@ -16,6 +16,7 @@ use tokio::{
 };
 
 use crate::worker::process::exit_description::worker_exit_status_description;
+use crate::worker::process::metal_residency_refresh::apply_metal_residency_refresh_policy;
 use crate::worker::process::relaunch_memory::startup_configuration_carrying_applied_memory_ceiling;
 use crate::{WorkerControlError, worker::process::stderr_tail::WorkerStderrTail};
 
@@ -133,6 +134,7 @@ impl WorkerProcess {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
+        apply_metal_residency_refresh_policy(&mut command, worker_startup_configuration.as_ref());
         let worker_launch_started_at = Instant::now();
         tracing::info!("starting local inference worker process");
         let mut worker_process = command.spawn().map_err(WorkerControlError::StartWorker)?;

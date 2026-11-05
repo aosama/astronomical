@@ -57,6 +57,10 @@ pub(crate) struct ChannelProfile {
     /// `None` for the App Store, whose state derives from Application Support.
     pub(crate) state_directory_name: Option<&'static str>,
     pub(crate) icon_channel: &'static str,
+    /// The scheme the Observatory opens chat through. Development's is its own,
+    /// because macOS hands a scheme shared by installed apps to whichever it
+    /// prefers, which let Development's Observatory open Stable's chat window.
+    pub(crate) chat_url_scheme: &'static str,
     pub(crate) menu_swift_product: &'static str,
     pub(crate) daemon_cargo_features: Option<&'static str>,
     /// Sparkle is structurally absent from the App Store build.
@@ -90,6 +94,7 @@ fn development_profile() -> ChannelProfile {
         daemon_port: 6733,
         state_directory_name: Some(".astronomical-dev"),
         icon_channel: "development",
+        chat_url_scheme: "astronomical-dev",
         menu_swift_product: "astronomical-menu",
         daemon_cargo_features: None,
         ships_sparkle: true,
@@ -107,6 +112,7 @@ fn stable_profile() -> ChannelProfile {
         daemon_port: 6732,
         state_directory_name: Some(".astronomical"),
         icon_channel: "stable",
+        chat_url_scheme: "astronomical",
         menu_swift_product: "astronomical-menu",
         daemon_cargo_features: None,
         ships_sparkle: true,
@@ -126,6 +132,7 @@ fn app_store_profile() -> ChannelProfile {
         daemon_port: 6732,
         state_directory_name: None,
         icon_channel: "stable",
+        chat_url_scheme: "astronomical",
         menu_swift_product: "astronomical-menu-app-store",
         daemon_cargo_features: Some("astronomical-daemon/app-store-state-root"),
         ships_sparkle: false,

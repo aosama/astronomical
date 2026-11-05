@@ -82,4 +82,7 @@ pub struct WorkerStartupConfiguration {
     pub logging_directory: PathBuf,
     pub logging_level: WorkerLogLevel,
     pub retained_log_file_count: usize,
+    /// Read by the daemon when it launches this worker, because MLX takes the
+    /// setting from the environment when the Metal device is first created.
+    pub metal_residency_refresh_enabled: bool,
 }

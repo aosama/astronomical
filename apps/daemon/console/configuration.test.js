@@ -65,6 +65,16 @@ test("should_expose_the_neural_engine_opt_in_as_a_boolean_that_defaults_off", ()
     assert.equal(call("configurationDefaultDescription", descriptor), "Default: off");
 });
 
+test("should_expose_metal_residency_refresh_as_a_switch_that_restarts_the_worker", () => {
+    const descriptor = descriptorAt(["runtime", "metal_residency_refresh_enabled"]);
+    assert.equal(descriptor.kind, "boolean");
+    assert.equal(descriptor.defaultValue, false);
+    assert.equal(descriptor.isRequired, false);
+    assert.equal(call("configurationDefaultDescription", descriptor), "Default: off");
+    assert.equal(call("configurationApplyModeDescription", descriptor.applyMode),
+        "Restarts the inference worker");
+});
+
 test("should_keep_model_directories_required_so_it_cannot_be_removed", () => {
     assert.equal(descriptorAt(["runtime", "model_directories"]).isRequired, true);
     assert.equal(descriptorAt(["runtime", "default_model"]).isRequired, false);

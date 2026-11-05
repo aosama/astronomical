@@ -12,7 +12,7 @@
 .doc-body ul, .doc-body ol { padding-left: 20px; }
 .doc-body strong { color: var(--silver); }
 .doc-body code { color: var(--silver); }
-.doc-body a:not(.button) { color: var(--safelight-bright); }
+.doc-body a:not(.button) { color: var(--nebula-bright); }
 .doc-body a:not(.button):hover { color: var(--silver); }
 .doc-meta { color: var(--mist); font-size: 1rem; }
 
@@ -26,7 +26,7 @@
   border-radius: 10px;
   background: var(--ground-raised);
 }
-.doc-snippet:focus-visible { outline: 2px solid var(--safelight-bright); outline-offset: 2px; }
+.doc-snippet:focus-visible { outline: 2px solid var(--nebula-bright); outline-offset: 2px; }
 .doc-snippet code {
   font-family: var(--mono);
   font-size: 0.9375rem;

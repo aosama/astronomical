@@ -30,6 +30,7 @@ async fn should_round_trip_worker_startup_configuration() {
         logging_directory: PathBuf::from("/tmp/fictional-logs"),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,
+        metal_residency_refresh_enabled: false,
     });
     let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
     let mut daemon_writer = ProtocolWriter::new(daemon_transport);

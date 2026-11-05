@@ -47,10 +47,10 @@ h2 em {
   line-height: 1;
 }
 
-/* The one place the safelight touches type: the hero's italic half. Used
-   once per page so the red stays a signature, not a highlighter. */
+/* The one place the brand colour touches type: the hero's italic half. Used
+   once per page so it stays a signature, not a highlighter. */
 .hero h1 em {
-  color: var(--safelight-bright);
+  color: var(--nebula-bright);
 }
 
 .hero-deck {
@@ -99,13 +99,13 @@ h2 em {
   bottom: -1240px;
   width: 260%;
   height: 1400px;
-  border-top: 1.5px solid var(--safelight);
+  border-top: 1.5px solid var(--nebula-rim);
   border-radius: 50%;
-  background: var(--ember);
+  background: var(--nebula-dim);
 }
 
 .fact-band {
-  background: var(--ember);
+  background: var(--nebula-dim);
 }
 
 .fact-grid {

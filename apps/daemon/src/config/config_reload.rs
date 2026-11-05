@@ -43,6 +43,8 @@ pub struct ResolvedRuntimeConfig {
     pub unmatched_model_config_ids: Vec<String>,
     /// Optional user-configured MLX memory ceiling in exact bytes.
     pub maximum_mlx_memory_bytes: Option<u64>,
+    /// Whether workers renew Metal residency; fixed for each worker's lifetime.
+    pub metal_residency_refresh_enabled: bool,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
     /// Whether the worker may read and write the persistent prompt cache.
@@ -175,6 +177,7 @@ impl ResolvedRuntimeConfigResolver {
             model_policy_catalog,
             unmatched_model_config_ids,
             maximum_mlx_memory_bytes: user_config.maximum_mlx_memory_bytes()?,
+            metal_residency_refresh_enabled: user_config.metal_residency_refresh_enabled(),
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
             configured_persistent_prompt_cache_enabled: user_config
@@ -244,6 +247,7 @@ impl ResolvedRuntimeConfig {
                 LogLevel::Trace => WorkerLogLevel::Trace,
             },
             retained_log_file_count: self.logging_config.retained_files(),
+            metal_residency_refresh_enabled: self.metal_residency_refresh_enabled,
         }
     }
 }
@@ -338,28 +342,9 @@ impl ConfigReloadDiff {
         candidate: &ResolvedRuntimeConfig,
     ) -> ConfigReloadDecision {
         let mut in_place_reloaded_fields = Vec::new();
-        let mut worker_restart_reloaded_fields = Vec::new();
+        let mut worker_restart_reloaded_fields = worker_restart_field_changes(current, candidate);
         let mut restart_required_fields = Vec::new();
-        let mut worker_restart_required = false;
 
-        if current.configured_model_directories != candidate.configured_model_directories {
-            worker_restart_reloaded_fields.push("model_directories".to_owned());
-            worker_restart_required = true;
-        }
-        if current.discovered_models != candidate.discovered_models {
-            worker_restart_reloaded_fields.push("discovered_model_artifacts".to_owned());
-            worker_restart_required = true;
-        }
-        if current.model_policy_catalog != candidate.model_policy_catalog {
-            worker_restart_reloaded_fields.push("model_policies".to_owned());
-            worker_restart_required = true;
-        }
-        if current.unmatched_model_config_ids != candidate.unmatched_model_config_ids {
-            // Replacement keeps the worker acknowledgement aligned with the complete resolved
-            // generation while the unmatched policy itself remains dormant and non-blocking.
-            worker_restart_reloaded_fields.push("dormant_model_policies".to_owned());
-            worker_restart_required = true;
-        }
         if current.maximum_mlx_memory_bytes != candidate.maximum_mlx_memory_bytes {
             in_place_reloaded_fields.push("maximum_mlx_memory_gb".to_owned());
         }
@@ -367,14 +352,6 @@ impl ConfigReloadDiff {
             // Daemon and worker attribution share one setting, while the daemon writer is
             // opened before the listener binds. An application restart keeps both owners aligned.
             restart_required_fields.push("diagnostics.performance_attribution_enabled".to_owned());
-        }
-        if current.persistent_prompt_cache_enabled != candidate.persistent_prompt_cache_enabled {
-            worker_restart_reloaded_fields.push("persistent_prompt_cache_enabled".to_owned());
-            worker_restart_required = true;
-        }
-        if current.prompt_cache_config != candidate.prompt_cache_config {
-            worker_restart_reloaded_fields.push("prompt_cache".to_owned());
-            worker_restart_required = true;
         }
         if current.bind_address != candidate.bind_address {
             restart_required_fields.push("daemon.bind_address".to_owned());
@@ -388,7 +365,6 @@ impl ConfigReloadDiff {
             && restart_required_fields.is_empty()
         {
             worker_restart_reloaded_fields.push("resolved_configuration".to_owned());
-            worker_restart_required = true;
         }
 
         let discovered_model_count = candidate.discovered_models.len();
@@ -400,7 +376,7 @@ impl ConfigReloadDiff {
                 discovered_model_count,
             };
         }
-        if worker_restart_required {
+        if !worker_restart_reloaded_fields.is_empty() {
             in_place_reloaded_fields.extend(worker_restart_reloaded_fields);
             return ConfigReloadDecision::RestartWorker {
                 reloaded_fields: in_place_reloaded_fields,
@@ -412,6 +388,40 @@ impl ConfigReloadDiff {
             discovered_model_count,
         }
     }
+}
+
+/// The changed settings only a replacement worker can pick up, in report order.
+fn worker_restart_field_changes(
+    current: &ResolvedRuntimeConfig,
+    candidate: &ResolvedRuntimeConfig,
+) -> Vec<String> {
+    let mut changed_fields = Vec::new();
+    if current.configured_model_directories != candidate.configured_model_directories {
+        changed_fields.push("model_directories".to_owned());
+    }
+    if current.discovered_models != candidate.discovered_models {
+        changed_fields.push("discovered_model_artifacts".to_owned());
+    }
+    if current.model_policy_catalog != candidate.model_policy_catalog {
+        changed_fields.push("model_policies".to_owned());
+    }
+    if current.unmatched_model_config_ids != candidate.unmatched_model_config_ids {
+        // Replacement keeps the worker acknowledgement aligned with the complete resolved
+        // generation while the unmatched policy itself remains dormant and non-blocking.
+        changed_fields.push("dormant_model_policies".to_owned());
+    }
+    if current.metal_residency_refresh_enabled != candidate.metal_residency_refresh_enabled {
+        // MLX reads this once when the worker creates its Metal device, so only a
+        // new worker process can pick up the change.
+        changed_fields.push("metal_residency_refresh_enabled".to_owned());
+    }
+    if current.persistent_prompt_cache_enabled != candidate.persistent_prompt_cache_enabled {
+        changed_fields.push("persistent_prompt_cache_enabled".to_owned());
+    }
+    if current.prompt_cache_config != candidate.prompt_cache_config {
+        changed_fields.push("prompt_cache".to_owned());
+    }
+    changed_fields
 }
 
 fn apply_effective_model_limits(

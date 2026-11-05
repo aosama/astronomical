@@ -531,3 +531,145 @@ test("maps every macOS memory pressure state and unknown input to a safe present
         { state: "unavailable", title: "Unavailable" }
     ]);
 });
+
+function nowStripContext() {
+    const scriptContext = createConsoleContext();
+    const elementsById = new Map();
+    scriptContext.document.getElementById = function (elementId) {
+        if (!elementsById.has(elementId)) {
+            const classNames = new Set();
+            elementsById.set(elementId, {
+                textContent: "",
+                style: {},
+                classNames,
+                classList: {
+                    add(className) { classNames.add(className); },
+                    remove(className) { classNames.delete(className); },
+                },
+            });
+        }
+        return elementsById.get(elementId);
+    };
+    return { scriptContext, elementsById };
+}
+
+function renderNowStripWith(scriptContext, statusPayload) {
+    scriptContext.__statusPayload = statusPayload;
+    vm.runInContext("renderNowStrip(__statusPayload)", scriptContext);
+}
+
+test("should_mark_the_phase_live_while_generating", () => {
+    const { scriptContext, elementsById } = nowStripContext();
+
+    renderNowStripWith(scriptContext, { progress: { phase: "generation", processed_tokens: 5, total_tokens: 10, elapsed_ms: 100 } });
+
+    assert.equal(elementsById.get("phase-label").textContent, "Generating");
+    assert.equal(elementsById.get("phase-label").classNames.has("phase-live"), true);
+});
+
+test("should_mark_an_unnamed_phase_live_because_work_is_still_running", () => {
+    const { scriptContext, elementsById } = nowStripContext();
+
+    renderNowStripWith(scriptContext, { progress: { processed_tokens: 0, total_tokens: 0, elapsed_ms: 0 } });
+
+    assert.equal(elementsById.get("phase-label").textContent, "Active");
+    assert.equal(elementsById.get("phase-label").classNames.has("phase-live"), true);
+});
+
+test("should_stop_marking_the_phase_live_when_the_request_ends", () => {
+    const { scriptContext, elementsById } = nowStripContext();
+    renderNowStripWith(scriptContext, { progress: { phase: "target", processed_tokens: 1, total_tokens: 2, elapsed_ms: 1 } });
+
+    renderNowStripWith(scriptContext, {});
+
+    assert.equal(elementsById.get("phase-label").textContent, "Idle");
+    assert.equal(elementsById.get("phase-label").classNames.has("phase-live"), false);
+});
+
+test("should_show_a_readable_label_for_every_phase_the_server_reports", () => {
+    const expectedLabels = [
+        ["target", "Prefilling"],
+        ["generation_preparation", "Preparing output"],
+        ["generation", "Generating"],
+        ["preparing", "Preparing"],
+        ["encoding_prompt", "Encoding prompt"],
+        ["denoising", "Denoising"],
+        ["decoding", "Decoding"],
+        ["encoding_image", "Encoding image"],
+    ];
+    for (const [phase, expectedLabel] of expectedLabels) {
+        const { scriptContext, elementsById } = nowStripContext();
+
+        renderNowStripWith(scriptContext, { progress: { phase, processed_tokens: 0, total_tokens: 1, elapsed_ms: 1 } });
+
+        assert.equal(elementsById.get("phase-label").textContent, expectedLabel, phase);
+    }
+});
+
+test("should_never_show_an_unknown_phase_name_on_the_page", () => {
+    for (const unknownPhase of ["speculative_draft", "constructor"]) {
+        const { scriptContext, elementsById } = nowStripContext();
+
+        renderNowStripWith(scriptContext, { progress: { phase: unknownPhase, processed_tokens: 0, total_tokens: 1, elapsed_ms: 1 } });
+
+        assert.equal(elementsById.get("phase-label").textContent, "Active", unknownPhase);
+    }
+});
+
+test("should_drop_the_generating_style_when_the_next_prompt_starts", () => {
+    const { scriptContext, elementsById } = nowStripContext();
+    renderNowStripWith(scriptContext, { progress: { phase: "generation", processed_tokens: 1, total_tokens: 2, elapsed_ms: 1 } });
+    assert.equal(elementsById.get("phase-fill").classNames.has("generating"), true);
+
+    renderNowStripWith(scriptContext, { progress: { phase: "target", processed_tokens: 1, total_tokens: 2, elapsed_ms: 1 } });
+
+    assert.equal(elementsById.get("phase-fill").classNames.has("generating"), false);
+});
+
+function thinTalkLinkContext() {
+    const scriptContext = createConsoleContext();
+    const linkAttributes = new Map();
+    scriptContext.document.getElementById = function () {
+        return {
+            setAttribute(attributeName, attributeValue) { linkAttributes.set(attributeName, attributeValue); },
+            removeAttribute(attributeName) { linkAttributes.delete(attributeName); },
+        };
+    };
+    return { scriptContext, linkAttributes };
+}
+
+test("should_open_thin_talk_through_the_development_scheme_in_development", () => {
+    const { scriptContext, linkAttributes } = thinTalkLinkContext();
+
+    vm.runInContext('renderThinTalkLink("development")', scriptContext);
+
+    assert.equal(linkAttributes.get("href"), "astronomical-dev://chat");
+});
+
+test("should_open_thin_talk_through_the_stable_scheme_in_stable", () => {
+    const { scriptContext, linkAttributes } = thinTalkLinkContext();
+
+    vm.runInContext('renderThinTalkLink("stable")', scriptContext);
+
+    assert.equal(linkAttributes.get("href"), "astronomical://chat");
+});
+
+test("should_offer_no_thin_talk_link_for_an_unknown_channel", () => {
+    for (const unknownChannel of ["unknown", "", "constructor"]) {
+        const { scriptContext, linkAttributes } = thinTalkLinkContext();
+        linkAttributes.set("href", "astronomical://chat");
+
+        vm.runInContext(`renderThinTalkLink("${unknownChannel}")`, scriptContext);
+
+        assert.equal(linkAttributes.has("href"), false, unknownChannel);
+    }
+});
+
+test("should_keep_every_chat_link_out_of_the_library_and_the_shell", () => {
+    const libraryScript = fs.readFileSync(path.join(__dirname, "library-render.js"), "utf8");
+    const consoleShell = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+    for (const hardcodingSource of [libraryScript, consoleShell]) {
+        assert.equal(hardcodingSource.includes("astronomical://"), false);
+        assert.equal(hardcodingSource.includes("astronomical-dev://"), false);
+    }
+});

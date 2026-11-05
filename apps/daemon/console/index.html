@@ -148,7 +148,7 @@
                             Thin Talk is the home for conversations with your models — sessions,
                             formatting, math, and diagrams, all in one window.
                         </p>
-                        <a id="open-thin-talk" class="button button-primary chat-redirect-open" href="astronomical://chat">Open Thin Talk</a>
+                        <a id="open-thin-talk" class="button button-primary chat-redirect-open">Open Thin Talk</a>
                         <p class="chat-redirect-fallback">
                             If the button does nothing, open it from the menu bar instead: click the
                             Astronomical item and choose Chat.
@@ -372,8 +372,8 @@
     <script src="/configuration.js" defer></script>
     <script src="/console.js" defer></script>
     <script src="/overview-compact.js" defer></script>
-    <!-- Chat opens in Thin Talk through the astronomical:// link the
-         #open-thin-talk entry point uses; the Observatory itself renders no
+    <!-- Chat opens in Thin Talk through the link console.js gives #open-thin-talk
+         once the daemon reports its channel; the Observatory itself renders no
          model output, so it loads no render stack. -->
 </body>
 </html>

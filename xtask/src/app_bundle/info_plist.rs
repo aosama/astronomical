@@ -25,14 +25,14 @@ pub(crate) fn render_info_plist(
         push_sparkle_keys(&mut plist_text, update_feed_url);
     }
     push_astronomical_keys(&mut plist_text, channel_profile, build_identity);
-    // The Observatory console hands chat over through astronomical://chat, so
-    // every channel registers the scheme.
-    plist_text.push_str(
+    // The Observatory console hands chat over through this channel's own scheme.
+    plist_text.push_str(&format!(
         "  <key>CFBundleURLTypes</key>\n  <array>\n    <dict>\n      \
          <key>CFBundleURLName</key><string>Astronomical Thin Talk</string>\n      \
          <key>CFBundleURLSchemes</key>\n      <array>\n        \
-         <string>astronomical</string>\n      </array>\n    </dict>\n  </array>\n",
-    );
+         <string>{}</string>\n      </array>\n    </dict>\n  </array>\n",
+        channel_profile.chat_url_scheme,
+    ));
     push_string(&mut plist_text, "CFBundlePackageType", "APPL");
     push_boolean(&mut plist_text, "LSUIElement", true);
     plist_text.push_str("</dict>\n</plist>\n");

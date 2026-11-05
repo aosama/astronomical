@@ -75,6 +75,35 @@ final class CanvasZoomControllerTests: XCTestCase {
     XCTAssertFalse(withControl)
   }
 
+  func test_should_accept_command_minus_as_zoom_out() {
+    XCTAssertTrue(CanvasZoomController.isZoomOutKey(keyCharacters: "-", modifierFlags: [.command]))
+  }
+
+  func test_should_accept_command_zero_as_reset_zoom() {
+    XCTAssertTrue(CanvasZoomController.isResetZoomKey(keyCharacters: "0", modifierFlags: [.command]))
+  }
+
+  func test_should_reject_zoom_out_and_reset_without_command_or_with_other_modifiers() {
+    for rejectedFlags: NSEvent.ModifierFlags in [
+      [], [.command, .shift], [.command, .option], [.command, .control],
+    ] {
+      XCTAssertFalse(CanvasZoomController.isZoomOutKey(keyCharacters: "-", modifierFlags: rejectedFlags))
+      XCTAssertFalse(CanvasZoomController.isResetZoomKey(keyCharacters: "0", modifierFlags: rejectedFlags))
+    }
+  }
+
+  func test_should_answer_each_zoom_key_and_leave_other_keys_alone() {
+    let controller = CanvasZoomController()
+
+    for zoomKey in ["=", "+", "-", "0"] {
+      XCTAssertTrue(
+        controller.performZoomKey(keyCharacters: zoomKey, modifierFlags: [.command]), zoomKey)
+    }
+    XCTAssertFalse(controller.performZoomKey(keyCharacters: "c", modifierFlags: [.command]))
+    XCTAssertFalse(controller.performZoomKey(keyCharacters: nil, modifierFlags: [.command]))
+    XCTAssertFalse(controller.performZoomKey(keyCharacters: "-", modifierFlags: []))
+  }
+
   func test_should_reject_other_keys_and_missing_command_modifier() {
     let zoomOutKey = CanvasZoomController.isZoomInKeyAlias(
       keyCharacters: "-", modifierFlags: .command)

@@ -32,6 +32,25 @@ final class ChatLaunchIdentityTests: XCTestCase {
     XCTAssertEqual(mapped.commit, "test-commit")
   }
 
+  /// A Development identity must never reach Stable's directory, even when the
+  /// bundle names no directory at all.
+  func test_should_keep_development_on_its_own_directory_without_a_bundled_name() {
+    let unnamedDevelopmentIdentity = ApplicationIdentity(
+      channel: .development,
+      daemonPort: ApplicationChannel.development.defaultDaemonPort,
+      stateDirectoryName: nil,
+      version: "9.9",
+      buildNumber: "999",
+      commit: "test-commit",
+      isDirty: false)
+
+    let mapped = ChatLaunchIdentity.chatIdentity(from: unnamedDevelopmentIdentity)
+
+    XCTAssertEqual(mapped.channel, .development)
+    XCTAssertEqual(mapped.daemonPort, 6733)
+    XCTAssertEqual(mapped.stateDirectoryName, ".astronomical-dev")
+  }
+
   func test_stable_channel_maps_to_the_stable_conversation_identity() {
     let mapped = ChatLaunchIdentity.chatIdentity(from: menuIdentity(channel: .stable))
 

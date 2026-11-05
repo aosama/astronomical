@@ -416,6 +416,7 @@ fn startup_configuration(
         logging_directory: temporary_directory.to_path_buf(),
         logging_level: WorkerLogLevel::Warn,
         retained_log_file_count: 1,
+        metal_residency_refresh_enabled: false,
     }
 }
 

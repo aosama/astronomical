@@ -155,6 +155,30 @@ function renderModelDiscoveryDiagnostic(configurationDocument) {
     warningElement.hidden = false;
 }
 
+// Each channel opens Thin Talk through its own scheme, because macOS hands a shared
+// one to whichever installed app it prefers. There is deliberately no default: a
+// channel missing here gets no link rather than a link to another instance.
+// The daemon reports only these two channels, and an App Store build reports stable.
+// Mirrors ApplicationChannel.chatURLScheme and xtask's channel profiles.
+const THIN_TALK_CHAT_LINKS = new Map([
+    ["development", "astronomical-dev://chat"],
+    ["stable", "astronomical://chat"],
+]);
+
+function thinTalkChatLink(applicationChannel) {
+    return THIN_TALK_CHAT_LINKS.get(applicationChannel) || null;
+}
+
+function renderThinTalkLink(applicationChannel) {
+    const openThinTalkLink = document.getElementById("open-thin-talk");
+    const chatLink = thinTalkChatLink(applicationChannel);
+    if (chatLink) {
+        openThinTalkLink.setAttribute("href", chatLink);
+    } else {
+        openThinTalkLink.removeAttribute("href");
+    }
+}
+
 function renderApplicationIdentity(applicationIdentity) {
     const identityTitle = applicationIdentityTitle(applicationIdentity);
     document.getElementById("application-build-identity").textContent = identityTitle;
@@ -165,6 +189,7 @@ function renderApplicationIdentity(applicationIdentity) {
     document.getElementById("about-instance-note").textContent =
         `Single-user local console. Served by astronomicald on this machine. Config: ${applicationIdentity.state_directory}/config.json`;
     document.body.dataset.applicationChannel = applicationIdentity.channel || "unknown";
+    renderThinTalkLink(applicationIdentity.channel);
 }
 
 async function pollSystemTelemetry() {
@@ -249,6 +274,20 @@ function selectAdvertisedModel(advertisedModels, preferredModelId) {
         || null;
 }
 
+// The phases /v1/status reports. "target" is prompt processing: the worker names
+// the model doing the work rather than the stage. A phase missing from this table
+// shows as "Active", because an internal name means nothing on this page.
+const PHASE_LABELS = new Map([
+    ["target", "Prefilling"],
+    ["generation_preparation", "Preparing output"],
+    ["generation", "Generating"],
+    ["preparing", "Preparing"],
+    ["encoding_prompt", "Encoding prompt"],
+    ["denoising", "Denoising"],
+    ["decoding", "Decoding"],
+    ["encoding_image", "Encoding image"],
+]);
+
 function renderNowStrip(data) {
     const phaseLabel = document.getElementById("phase-label");
     const phaseFill = document.getElementById("phase-fill");
@@ -262,14 +301,12 @@ function renderNowStrip(data) {
     const elapsedMs = progress.elapsed_ms || 0;
     const fillPercent = totalTokens > 0 ? Math.min(100, (processedTokens / totalTokens) * 100) : 0;
     const tokPerSecond = elapsedMs > 0 ? (processedTokens / elapsedMs) * 1000 : 0;
-    if (progress.phase === "prefill") {
-        phaseLabel.textContent = "Prefilling";
-        phaseFill.classList.remove("generating");
-    } else if (progress.phase === "generation") {
-        phaseLabel.textContent = "Generating";
+    phaseLabel.classList.add("phase-live");
+    phaseLabel.textContent = PHASE_LABELS.get(progress.phase) || "Active";
+    if (progress.phase === "generation") {
         phaseFill.classList.add("generating");
     } else {
-        phaseLabel.textContent = progress.phase || "Active";
+        phaseFill.classList.remove("generating");
     }
     phaseFill.style.width = fillPercent.toFixed(1) + "%";
     phaseTokens.textContent = processedTokens.toLocaleString() + " / " + totalTokens.toLocaleString();
@@ -279,6 +316,7 @@ function renderNowStrip(data) {
 
 function resetNowStrip() {
     document.getElementById("phase-label").textContent = "Idle";
+    document.getElementById("phase-label").classList.remove("phase-live");
     document.getElementById("phase-fill").style.width = "0%";
     document.getElementById("phase-fill").classList.remove("generating");
     document.getElementById("phase-tokens").textContent = "—";

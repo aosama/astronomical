@@ -112,6 +112,10 @@ The memory value uses the gigabyte Apple uses to market the Mac: 1 GB = 1,073,74
 
 Observatory's **Configuration** page edits every setting in that instance's `config.json`: set or change a value, remove it to return to its default, add settings for one model, or reset everything. The page is generated from the version 1 schema. Saving validates the whole document, refuses to overwrite a file that changed since the page loaded it, and reports whether the change applied, is waiting for a running request, or needs a restart. Reset keeps the old file beside the new one as `config.previous.json`.
 
+## Metal residency refresh
+
+macOS can release the Metal residency of wired memory while the GPU is idle, so model weights may have to be made resident again before the next prompt. Set `metal_residency_refresh_enabled` under `runtime`, or use the switch on Observatory's **Configuration** page, to have the inference worker re-request residency once per second. It is off by default, changing it restarts the worker, and the renewal can keep that memory wired through long idle periods.
+
 ## Neural Engine prefill (experimental)
 
 Dense models can run part of each full prompt chunk on the Apple Neural Engine next to the GPU. Set `experimental_neural_engine_mlp_prefill_enabled` under `chunking`, globally or for one model; it is off by default.

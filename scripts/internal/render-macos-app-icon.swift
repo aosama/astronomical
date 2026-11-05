@@ -1,6 +1,6 @@
 #!/usr/bin/env swift
 
-// Renders the Darkroom mark for Stable and a hatched-disc Development variant.
+// Renders the nebula mark for Stable and a hatched-disc Development variant.
 
 import AppKit
 import Foundation
@@ -141,9 +141,9 @@ private func renderIcon(
   return pngData
 }
 
-// Darkroom palette, shared with site/styles.css so the Dock, the menu bar
-// and the public site show one identity: a safelight plate and silver marks.
-private let safelightRed = NSColor(srgbRed: 0xA8 / 255, green: 0x32 / 255, blue: 0x1F / 255, alpha: 1)
+// Nebula palette, shared with site/assets/mark.svg so the Dock, the menu bar
+// and the public site show one identity: a violet plate and silver marks.
+private let nebulaViolet = NSColor(srgbRed: 0x6A / 255, green: 0x3F / 255, blue: 0xC4 / 255, alpha: 1)
 private let printSilver = NSColor(srgbRed: 0xE4 / 255, green: 0xE0 / 255, blue: 0xD6 / 255, alpha: 1)
 
 // The mark is specified on a 64-unit plate with a top-left origin, matching
@@ -189,7 +189,7 @@ private func drawAstronomicalMark(canvasSize: CGFloat, applicationChannel: Appli
   tileShadow.shadowBlurRadius = canvasSize * 0.045
   tileShadow.shadowOffset = NSSize(width: 0, height: -canvasSize * 0.018)
   tileShadow.set()
-  safelightRed.setFill()
+  nebulaViolet.setFill()
   tilePath.fill()
   NSGraphicsContext.restoreGraphicsState()
 

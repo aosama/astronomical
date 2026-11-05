@@ -242,6 +242,61 @@ fn should_restart_worker_when_any_per_model_execution_policy_changes() {
 }
 
 #[test]
+fn should_restart_worker_when_metal_residency_refresh_is_switched_on() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.metal_residency_refresh_enabled = true;
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields == &["metal_residency_refresh_enabled".to_owned()]
+    ));
+}
+
+#[test]
+fn should_restart_worker_when_metal_residency_refresh_is_switched_off() {
+    let mut current = sample_resolved_config();
+    current.metal_residency_refresh_enabled = true;
+    let candidate = sample_resolved_config();
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields == &["metal_residency_refresh_enabled".to_owned()]
+    ));
+}
+
+#[test]
+fn should_not_restart_worker_when_metal_residency_refresh_is_unchanged() {
+    let mut current = sample_resolved_config();
+    current.metal_residency_refresh_enabled = true;
+    let mut candidate = sample_resolved_config();
+    candidate.metal_residency_refresh_enabled = true;
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::NoWorkerRestart { .. }
+    ));
+}
+
+#[test]
+fn should_carry_metal_residency_refresh_into_the_worker_startup_configuration() {
+    let mut resolved_config = sample_resolved_config();
+    resolved_config.metal_residency_refresh_enabled = true;
+
+    let startup_configuration = resolved_config.worker_startup_configuration();
+
+    assert!(startup_configuration.metal_residency_refresh_enabled);
+}
+
+#[test]
 fn should_require_an_application_restart_when_performance_attribution_changes() {
     let mut current = sample_resolved_config();
     current.performance_attribution_enabled = false;
@@ -344,6 +399,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         maximum_mlx_memory_bytes: None,
         persistent_prompt_cache_enabled: true,
         configured_persistent_prompt_cache_enabled: None,
+        metal_residency_refresh_enabled: false,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         prompt_cache_config: PromptCacheConfig::new(

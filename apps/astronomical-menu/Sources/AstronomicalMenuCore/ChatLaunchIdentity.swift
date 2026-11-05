@@ -17,15 +17,19 @@ enum ChatLaunchIdentity {
       channel: channel,
       daemonPort: applicationIdentity.daemonPort,
       stateDirectoryName: chatStateDirectoryName(
-        channelOverride: applicationIdentity.stateDirectoryName),
+        channel: channel, channelOverride: applicationIdentity.stateDirectoryName),
       version: applicationIdentity.version,
       buildNumber: applicationIdentity.buildNumber,
       commit: applicationIdentity.commit,
       isDirty: applicationIdentity.isDirty)
   }
 
-  private static func chatStateDirectoryName(channelOverride: String?) -> String {
-    guard let channelOverride else { return ThinTalkCore.ThinTalkChannel.stable.stateDirectoryName }
+  /// Only the App Store build has no bundled name. The fallback follows the chat
+  /// channel, so a Development identity can never resolve to Stable's directory.
+  private static func chatStateDirectoryName(
+    channel: ThinTalkCore.ThinTalkChannel, channelOverride: String?
+  ) -> String {
+    guard let channelOverride else { return channel.stateDirectoryName }
     return channelOverride
   }
 }

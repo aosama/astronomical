@@ -265,6 +265,7 @@ async fn launch_cache_clear_application() -> CacheClearTestContext {
         maximum_mlx_memory_bytes: None,
         persistent_prompt_cache_enabled: true,
         configured_persistent_prompt_cache_enabled: None,
+        metal_residency_refresh_enabled: false,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(

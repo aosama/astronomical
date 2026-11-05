@@ -144,6 +144,11 @@ public struct ThinTalkApplicationIdentity: Equatable, Sendable {
     return endpointURL
   }
 
+  /// Names the channel on screen, because the two channels' windows otherwise look
+  /// identical and it was impossible to tell which instance a chat was talking to.
+  /// Stable keeps the plain name, since it is the product people install.
+  public var windowTitle: String { channel == .development ? "Thin Talk Development" : "Thin Talk" }
+
   /// A privacy-safe, home-relative label for the connected channel's state
   /// directory, never the caller's absolute home directory.
   public var expectedServerStateDirectory: String { "~/\(stateDirectoryName)" }

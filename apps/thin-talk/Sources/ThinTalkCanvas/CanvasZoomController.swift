@@ -1,8 +1,9 @@
 import Foundation
 import WebKit
 
-/// Routes the View menu's zoom commands to the live canvas web view. The app
-/// scene owns one controller for its lifetime; the canvas registers itself when
+/// Routes zoom commands and zoom keys to the live canvas web view. Whatever hosts
+/// the canvas owns one controller for its lifetime: the standalone app's scene or
+/// the menu application's chat window. The canvas registers itself when
 /// the hosting view layer hands the controller over, and every zoom intent is a
 /// no-op until the canvas has installed its web view.
 @MainActor
@@ -41,6 +42,42 @@ public final class CanvasZoomController {
   /// Pure arithmetic so the bounds are unit-testable without a web view.
   static func clampedPageZoom(current: CGFloat, factor: CGFloat) -> CGFloat {
     return min(maximumPageZoom, max(minimumPageZoom, current * factor))
+  }
+
+  /// Runs the zoom a key-down asks for and says whether it was one. The canvas
+  /// answers these itself because the chat window hosted by the menu application
+  /// has no View menu to fall back on.
+  func performZoomKey(keyCharacters: String?, modifierFlags: NSEvent.ModifierFlags) -> Bool {
+    if Self.isZoomInKeyAlias(keyCharacters: keyCharacters, modifierFlags: modifierFlags) {
+      zoomIn()
+      return true
+    }
+    if Self.isZoomOutKey(keyCharacters: keyCharacters, modifierFlags: modifierFlags) {
+      zoomOut()
+      return true
+    }
+    if Self.isResetZoomKey(keyCharacters: keyCharacters, modifierFlags: modifierFlags) {
+      resetZoom()
+      return true
+    }
+    return false
+  }
+
+  /// True for ⌘- and the numpad minus. Shift is rejected because ⇧⌘- is a
+  /// different keystroke that the web page may want.
+  static func isZoomOutKey(keyCharacters: String?, modifierFlags: NSEvent.ModifierFlags) -> Bool {
+    return keyCharacters == "-" && isPlainCommand(modifierFlags)
+  }
+
+  /// True for ⌘0, the browser convention for returning to actual size.
+  static func isResetZoomKey(keyCharacters: String?, modifierFlags: NSEvent.ModifierFlags) -> Bool {
+    return keyCharacters == "0" && isPlainCommand(modifierFlags)
+  }
+
+  private static func isPlainCommand(_ modifierFlags: NSEvent.ModifierFlags) -> Bool {
+    guard modifierFlags.contains(.command) else { return false }
+    let rejectedFlags: NSEvent.ModifierFlags = [.option, .control, .shift]
+    return modifierFlags.isDisjoint(with: rejectedFlags)
   }
 
   /// True when a key-down is one of the Command-only zoom-in spellings: bare
