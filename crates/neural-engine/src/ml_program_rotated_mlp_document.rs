@@ -20,15 +20,16 @@
 //! journeys measure how close it comes against the GPU.
 
 use crate::half_precision::f32_to_f16_bits;
-use crate::mil_program_wire::{MilDataType, MilOperation, bool_scalar_value};
-use crate::ml_program_mlp_document::{
-    GATE_AND_UP_NAME, GATED_NAME, ProjectionStage, StageWeightEncoding,
-    projection_stage_operations, silu_gating_operations, split_axis_constant, split_count_constant,
-    validated_stage_shape,
+use crate::mil_operations::{
+    SPECIFICATION_VERSION, activation_type, constant_operation, convolution_operation,
+    convolution_parameter_constants, program, split_axis_constant, split_count_constant,
+    weight_blob_value,
 };
-use crate::ml_program_projection_document::{
-    MlProgramPackageContents, SPECIFICATION_VERSION, activation_type, constant_operation,
-    convolution_operation, convolution_parameter_constants, program, weight_blob_value,
+use crate::mil_program_wire::{MilDataType, MilOperation, bool_scalar_value};
+use crate::ml_package_layout::MlProgramPackageContents;
+use crate::ml_program_mlp_stages::{
+    GATE_AND_UP_NAME, GATED_NAME, ProjectionStage, StageWeightEncoding,
+    projection_stage_operations, silu_gating_operations, validated_stage_shape,
 };
 use crate::ml_program_weight_blob::WeightBlobFile;
 use crate::projection_model_interface::{

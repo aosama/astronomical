@@ -9,9 +9,7 @@
 
 use std::path::{Path, PathBuf};
 
-use astronomical_neural_engine::core_ml_projection::{
-    ComputePlacement, CoreMlComputeUnits, CoreMlProjection,
-};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 
 use super::neural_engine_mlp_prefill::ProgramPackageDirectory;

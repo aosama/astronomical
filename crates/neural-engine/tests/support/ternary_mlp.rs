@@ -1,9 +1,9 @@
 //! The real ternary MLP's shape and program loading, shared by its accuracy and
 //! memory journeys.
 
-use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::half_precision::f32_to_f16_bits;
-use astronomical_neural_engine::ml_program_mlp_document::StageWeightEncoding;
+use astronomical_neural_engine::ml_program_mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine::ml_program_rotated_mlp_document::{
     RotatedMlpLayout, RotatedMlpWeights,
 };

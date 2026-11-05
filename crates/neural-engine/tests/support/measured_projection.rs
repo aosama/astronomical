@@ -3,9 +3,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml_projection::{
-    CoreMlComputeUnits, CoreMlProjection, LayerPlacement,
-};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection, LayerPlacement};
 use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine::ml_program_projection_document::MlProgramWeights;
 use astronomical_neural_engine::numerical_comparison::{NumericalComparison, compare_values};

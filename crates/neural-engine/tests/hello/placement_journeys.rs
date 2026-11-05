@@ -1,8 +1,8 @@
 //! One journey per allowed-device set, so each placement verdict and timing
 //! is recorded on its own.
 
-use astronomical_neural_engine::compute_device_report::report_compute_devices;
-use astronomical_neural_engine::core_ml_projection::{ComputePlacement, CoreMlComputeUnits};
+use astronomical_neural_engine::core_ml::compute_device_report::report_compute_devices;
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits};
 use serial_test::serial;
 
 use crate::support::journey_constants::MINIMUM_COSINE_SIMILARITY;

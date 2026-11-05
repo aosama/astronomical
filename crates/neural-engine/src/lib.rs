@@ -9,7 +9,6 @@
 //!
 //! The pieces, bottom to top:
 //!
-//! - [`compute_device_report`]: which compute devices Core ML can see.
 //! - [`projection_model_interface`]: the input, output, and errors every
 //!   projection model document shares.
 //! - [`core_ml_projection_document`]: a projection written as a Core ML
@@ -18,9 +17,11 @@
 //!   Program whose weights can stay 4-bit ([`affine_quantized_weights`]),
 //!   packaged by [`ml_package_layout`].
 //! - [`ml_program_mlp_document`]: a whole `silu(gate) · up → down` MLP as one
-//!   ML Program, so token-split prefill needs no hand-off inside the chain.
-//! - [`core_ml_projection`]: any of these models loaded for chosen compute units,
-//!   with `MLComputePlan`'s placement verdict and per-prediction timing.
+//!   ML Program, so token-split prefill needs no hand-off inside the chain,
+//!   built from the projections in [`ml_program_mlp_stages`].
+//! - [`core_ml`]: any of these models loaded for chosen compute units, with
+//!   `MLComputePlan`'s placement verdict and per-prediction timing, plus which
+//!   compute devices Core ML can see.
 //! - [`mlx_hand_off`]: activations into a program's input surface and its
 //!   output surface back into MLX.
 //! - [`accelerate_reference`]: the fp32 numerical oracle.
@@ -29,14 +30,15 @@
 
 pub mod accelerate_reference;
 pub mod affine_quantized_weights;
-pub mod compute_device_report;
-pub mod core_ml_projection;
+pub mod core_ml;
 pub mod core_ml_projection_document;
 pub mod deterministic_values;
 pub mod half_precision;
+mod mil_operations;
 mod mil_program_wire;
 pub mod ml_package_layout;
 pub mod ml_program_mlp_document;
+pub mod ml_program_mlp_stages;
 pub mod ml_program_projection_document;
 pub mod ml_program_rotated_mlp_document;
 mod ml_program_weight_blob;

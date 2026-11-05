@@ -22,10 +22,10 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml_projection::{ComputePlacement, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlProjection};
 use astronomical_neural_engine::deterministic_values::bell_shaped_values;
 use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
-use astronomical_neural_engine::ml_program_mlp_document::StageWeightEncoding;
+use astronomical_neural_engine::ml_program_mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     write_prepared_input,

@@ -17,7 +17,7 @@ pub(crate) use program_loading::{ProgramPackageDirectory, weight_as_fp16_bits};
 
 use std::cell::{Cell, RefCell};
 
-use astronomical_neural_engine::core_ml_projection::CoreMlProjection;
+use astronomical_neural_engine::core_ml::CoreMlProjection;
 
 // 47 percent: on a real mixed-bit artifact at 44 percent the GPU finished last in
 // 88 percent of layers (18.6 ms against 16.5 ms), and each 64 tokens moves about

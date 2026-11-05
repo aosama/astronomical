@@ -20,7 +20,7 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice, surface_as_array,
     write_prepared_input,

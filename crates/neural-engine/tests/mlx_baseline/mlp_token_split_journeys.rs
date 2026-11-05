@@ -14,9 +14,7 @@
 use std::time::{Duration, Instant};
 
 use astronomical_neural_engine::accelerate_reference::reference_projection;
-use astronomical_neural_engine::core_ml_projection::{
-    ComputePlacement, CoreMlComputeUnits, CoreMlProjection,
-};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine::ml_program_mlp_document::MlpFp16Weights;
 use astronomical_neural_engine::mlx_hand_off::{

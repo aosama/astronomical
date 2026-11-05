@@ -10,7 +10,7 @@
 use std::fs;
 use std::path::Path;
 
-use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
 use astronomical_neural_engine::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };

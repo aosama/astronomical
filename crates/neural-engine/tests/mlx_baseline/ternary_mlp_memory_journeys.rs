@@ -9,8 +9,8 @@ use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml_projection::{CoreMlComputeUnits, CoreMlProjection};
-use astronomical_neural_engine::ml_program_mlp_document::StageWeightEncoding;
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::ml_program_mlp_stages::StageWeightEncoding;
 use astronomical_neural_engine::process_memory::{MemoryGrowth, MemorySnapshot, mebibytes};
 use astronomical_neural_engine::timing_summary::TimingSummary;
 use serial_test::serial;

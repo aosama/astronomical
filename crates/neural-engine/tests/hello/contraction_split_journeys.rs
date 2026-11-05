@@ -6,7 +6,7 @@
 //! MLP intermediate size of Ornith-1.5-9B), so this decides whether they can
 //! use the Neural Engine at all.
 
-use astronomical_neural_engine::core_ml_projection::{ComputePlacement, CoreMlComputeUnits};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits};
 use serial_test::serial;
 
 use crate::support::journey_constants::PREFILL_CHUNK_TOKEN_COUNT;

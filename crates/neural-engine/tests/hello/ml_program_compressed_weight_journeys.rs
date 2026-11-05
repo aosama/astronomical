@@ -17,7 +17,7 @@
 use astronomical_neural_engine::affine_quantized_weights::{
     AffineQuantizedWeights, QuantizationLayout,
 };
-use astronomical_neural_engine::core_ml_projection::{ComputePlacement, CoreMlComputeUnits};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits};
 use astronomical_neural_engine::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
 };
