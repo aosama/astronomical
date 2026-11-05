@@ -6,35 +6,35 @@ use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use super::error::{CoreMlProjectionError, NATIVE_ERROR_CAPACITY, native_error_text};
-use super::projection::CoreMlProjection;
+use super::error::{CoreMlProgramError, NATIVE_ERROR_CAPACITY, native_error_text};
+use super::program::CoreMlProgram;
 use crate::core_ml::ffi::{
-    astronomical_core_ml_compile_model_to, astronomical_core_ml_projection_compiled_model_path,
-    astronomical_core_ml_projection_discard_compiled_model,
+    astronomical_core_ml_compile_model_to, astronomical_core_ml_program_compiled_model_path,
+    astronomical_core_ml_program_discard_compiled_model,
 };
 
 // macOS's PATH_MAX.
 const COMPILED_MODEL_PATH_CAPACITY: usize = 1024;
 
-impl CoreMlProjection {
+impl CoreMlProgram {
     /// Moves the compiled model out of the temporary directory to `destination` for
     /// later loads. The loaded program stays usable and no longer owns the files.
     pub fn keep_compiled_model_files_at(
         &mut self,
         destination: &Path,
-    ) -> Result<(), CoreMlProjectionError> {
+    ) -> Result<(), CoreMlProgramError> {
         let mut path_buffer = [0 as c_char; COMPILED_MODEL_PATH_CAPACITY];
         // SAFETY: the handle is valid for this borrow and the buffer is writable for
         // its full stated capacity.
         let path_status = unsafe {
-            astronomical_core_ml_projection_compiled_model_path(
-                self.native_projection.as_ptr(),
+            astronomical_core_ml_program_compiled_model_path(
+                self.native_program.as_ptr(),
                 path_buffer.as_mut_ptr(),
                 COMPILED_MODEL_PATH_CAPACITY as u32,
             )
         };
         if path_status != 0 {
-            return Err(CoreMlProjectionError::NoCompiledModelFiles);
+            return Err(CoreMlProgramError::NoCompiledModelFiles);
         }
         // SAFETY: the bridge wrote a NUL-terminated path into the buffer on success.
         let compiled_path = unsafe { CStr::from_ptr(path_buffer.as_ptr()) };
@@ -57,7 +57,7 @@ impl CoreMlProjection {
         // SAFETY: the handle is valid for this borrow, and the bridge clears its
         // stored path so release cannot remove the directory a second time.
         unsafe {
-            astronomical_core_ml_projection_discard_compiled_model(self.native_projection.as_ptr());
+            astronomical_core_ml_program_discard_compiled_model(self.native_program.as_ptr());
         }
     }
 }
@@ -66,17 +66,14 @@ impl CoreMlProjection {
 /// loading it, for a program that will be kept and loaded from there. See the
 /// bridge's `astronomical_core_ml_compile_model_to` for why the first load must
 /// happen at the final path.
-pub fn compile_model_to(
-    package_path: &Path,
-    destination: &Path,
-) -> Result<(), CoreMlProjectionError> {
+pub fn compile_model_to(package_path: &Path, destination: &Path) -> Result<(), CoreMlProgramError> {
     if let Some(parent_directory) = destination.parent() {
         fs::create_dir_all(parent_directory)?;
     }
     let package_path_text = CString::new(package_path.to_string_lossy().as_bytes())
-        .map_err(CoreMlProjectionError::from_interior_nul)?;
+        .map_err(CoreMlProgramError::from_interior_nul)?;
     let destination_text = CString::new(destination.to_string_lossy().as_bytes())
-        .map_err(CoreMlProjectionError::from_interior_nul)?;
+        .map_err(CoreMlProgramError::from_interior_nul)?;
     let mut native_error = [0 as c_char; NATIVE_ERROR_CAPACITY];
     // SAFETY: both paths are valid NUL-terminated strings that outlive the call,
     // and the error buffer is writable for its full stated capacity.
@@ -89,9 +86,7 @@ pub fn compile_model_to(
         )
     };
     if status != 0 {
-        return Err(CoreMlProjectionError::Load(native_error_text(
-            &native_error,
-        )));
+        return Err(CoreMlProgramError::Load(native_error_text(&native_error)));
     }
     Ok(())
 }

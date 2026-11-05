@@ -172,3 +172,7 @@ fn little_endian_f32s(tensor_bytes: &[u8]) -> Vec<f32> {
     }
     decoded_values
 }
+
+#[cfg(test)]
+#[path = "ternary_checkpoint_tests.rs"]
+mod tests;

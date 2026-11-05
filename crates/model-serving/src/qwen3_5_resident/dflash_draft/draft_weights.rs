@@ -73,7 +73,7 @@ impl DFlashDraftWeights {
 
     /// Expected weight matrix shape helper shared with the loader's checks.
     #[must_use]
-    pub fn expected_projection_shape(configuration: &DFlashDraftConfiguration) -> (i32, i32, i32) {
+    pub fn expected_program_shape(configuration: &DFlashDraftConfiguration) -> (i32, i32, i32) {
         (
             configuration.attention_head_count() * configuration.head_dimension(),
             configuration.key_value_head_count() * configuration.head_dimension(),

@@ -1,5 +1,5 @@
 use super::{ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, model_description};
-use crate::projection_shape::ProjectionShape;
+use crate::program_shape::ProgramShape;
 
 fn contains_subsequence(encoded: &[u8], expected_bytes: &[u8]) -> bool {
     for window in encoded.windows(expected_bytes.len()) {
@@ -12,7 +12,7 @@ fn contains_subsequence(encoded: &[u8], expected_bytes: &[u8]) -> bool {
 
 #[test]
 fn should_declare_both_features_by_the_names_the_bridge_binds() {
-    let description = model_description(ProjectionShape::new(2, 3, 4).expect("valid shape"));
+    let description = model_description(ProgramShape::new(2, 3, 4).expect("valid shape"));
 
     assert!(contains_subsequence(
         &description,
@@ -26,7 +26,7 @@ fn should_declare_both_features_by_the_names_the_bridge_binds() {
 
 #[test]
 fn should_shape_the_input_by_input_channels_and_the_output_by_output_channels() {
-    let description = model_description(ProjectionShape::new(5, 3, 7).expect("valid shape"));
+    let description = model_description(ProgramShape::new(5, 3, 7).expect("valid shape"));
 
     // ArrayFeatureType shape [1, C, 1, T] then dataType FLOAT16 (65552).
     let input_array_type = [
@@ -41,7 +41,7 @@ fn should_shape_the_input_by_input_channels_and_the_output_by_output_channels() 
 
 #[test]
 fn should_describe_a_single_token_single_channel_projection() {
-    let description = model_description(ProjectionShape::new(1, 1, 1).expect("valid shape"));
+    let description = model_description(ProgramShape::new(1, 1, 1).expect("valid shape"));
 
     assert!(contains_subsequence(
         &description,

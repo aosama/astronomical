@@ -8,14 +8,14 @@ use thiserror::Error;
 /// that is the 1 × 1-convolution layout the Neural Engine consumes, and the
 /// same layout lets the fp32 reference and MLX use one plain matrix product.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProjectionShape {
+pub struct ProgramShape {
     input_channels: usize,
     output_channels: usize,
     token_count: usize,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
-pub enum ProjectionShapeError {
+pub enum ProgramShapeError {
     #[error(
         "every projection dimension must be positive, got {input_channels} → {output_channels} over {token_count} tokens"
     )]
@@ -28,14 +28,14 @@ pub enum ProjectionShapeError {
     DimensionTooLarge { dimension: usize },
 }
 
-impl ProjectionShape {
+impl ProgramShape {
     pub fn new(
         input_channels: usize,
         output_channels: usize,
         token_count: usize,
-    ) -> Result<Self, ProjectionShapeError> {
+    ) -> Result<Self, ProgramShapeError> {
         if input_channels == 0 || output_channels == 0 || token_count == 0 {
-            return Err(ProjectionShapeError::EmptyDimension {
+            return Err(ProgramShapeError::EmptyDimension {
                 input_channels,
                 output_channels,
                 token_count,
@@ -43,7 +43,7 @@ impl ProjectionShape {
         }
         for dimension in [input_channels, output_channels, token_count] {
             if i32::try_from(dimension).is_err() {
-                return Err(ProjectionShapeError::DimensionTooLarge { dimension });
+                return Err(ProgramShapeError::DimensionTooLarge { dimension });
             }
         }
         Ok(Self {
@@ -92,5 +92,5 @@ impl ProjectionShape {
 }
 
 #[cfg(test)]
-#[path = "projection_shape_tests.rs"]
+#[path = "program_shape_tests.rs"]
 mod tests;

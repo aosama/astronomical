@@ -8,14 +8,14 @@ use thiserror::Error;
 pub(super) const NATIVE_ERROR_CAPACITY: usize = 512;
 
 #[derive(Debug, Error)]
-pub enum CoreMlProjectionError {
+pub enum CoreMlProgramError {
     #[error("could not place the compiled model files: {0}")]
     ModelFile(#[from] std::io::Error),
     #[error("the model path contains an interior NUL byte")]
     ModelPath,
     #[error("this program has no compiled model files to keep")]
     NoCompiledModelFiles,
-    #[error("Core ML could not load the projection: {0}")]
+    #[error("Core ML could not load the program: {0}")]
     Load(String),
     #[error("expected {expected} fp16 values, got {actual}")]
     ElementCountMismatch { expected: usize, actual: usize },
@@ -31,7 +31,7 @@ pub enum CoreMlProjectionError {
     PredictionTimeout(Duration),
 }
 
-impl CoreMlProjectionError {
+impl CoreMlProgramError {
     pub(super) fn from_interior_nul(_interior_nul: std::ffi::NulError) -> Self {
         Self::ModelPath
     }

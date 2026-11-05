@@ -10,10 +10,10 @@ use astronomical_memory_policy::neural_engine_admission::{
     NeuralEnginePrefillAdmission, NeuralEnginePrefillMemoryRequirements,
 };
 use astronomical_neural_engine::core_ml::compute_device_report::report_compute_devices;
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection, compile_model_to};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, compile_model_to};
 use astronomical_neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp};
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::MlxDtype;
 
@@ -251,7 +251,7 @@ impl Drop for ProgramPackageDirectory {
 struct MlpProgramSource<'model> {
     runtime: &'model MlxRuntime,
     dense_mlp_weights: &'model Qwen3_5DenseMlpWeights,
-    shape: ProjectionShape,
+    shape: ProgramShape,
     intermediate_channels: usize,
 }
 
@@ -289,7 +289,7 @@ impl MlpProgramSource<'_> {
 }
 
 impl ProgramSource for MlpProgramSource<'_> {
-    fn shape(&self) -> ProjectionShape {
+    fn shape(&self) -> ProgramShape {
         self.shape
     }
 
@@ -301,9 +301,9 @@ impl ProgramSource for MlpProgramSource<'_> {
         }
     }
 
-    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProjection, &'static str> {
+    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProgram, &'static str> {
         let package_path = self.write_package(package_directory)?;
-        match CoreMlProjection::load_from_path(
+        match CoreMlProgram::load_from_path(
             &package_path,
             self.shape,
             CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -319,9 +319,9 @@ fn load_layer_programs(
     layer_weights: &[&Qwen3_5DenseMlpWeights],
     neural_engine_token_count: u32,
     program_cache: Option<&ProgramSetCache>,
-) -> Result<Vec<CoreMlProjection>, &'static str> {
+) -> Result<Vec<CoreMlProgram>, &'static str> {
     let hidden_channels = model.base.config().hidden_size() as usize;
-    let Ok(shape) = ProjectionShape::new(
+    let Ok(shape) = ProgramShape::new(
         hidden_channels,
         hidden_channels,
         neural_engine_token_count as usize,

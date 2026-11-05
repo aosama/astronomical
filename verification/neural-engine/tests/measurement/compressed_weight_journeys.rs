@@ -16,7 +16,7 @@
 
 use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits};
 use astronomical_neural_engine::documents::projection::MlProgramWeights;
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_neural_engine::weights::affine_quantized::{
     AffineQuantizedWeights, QuantizationLayout,
 };
@@ -178,7 +178,7 @@ fn encode_checkpoint(
     input_channels: usize,
     layout: QuantizationLayout,
 ) -> EncodedProjection {
-    let shape = ProjectionShape::new(input_channels, output_channels, PREFILL_CHUNK_TOKEN_COUNT)
+    let shape = ProgramShape::new(input_channels, output_channels, PREFILL_CHUNK_TOKEN_COUNT)
         .expect("the projection shape is valid");
     let encoded_weights = AffineQuantizedWeights::quantize(
         checkpoint_weights,

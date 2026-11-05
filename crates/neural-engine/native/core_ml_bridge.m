@@ -43,7 +43,7 @@ typedef struct {
   int32_t operations_off_neural_engine;
 } AstronomicalLayerPlacement;
 
-typedef struct AstronomicalCoreMlProjection {
+typedef struct AstronomicalCoreMlProgram {
   MLModel *model;
   NSURL *compiled_model_url;
   double model_load_seconds;
@@ -65,7 +65,7 @@ typedef struct AstronomicalCoreMlProjection {
   int32_t prediction_in_flight;
   int32_t asynchronous_status;
   uint64_t asynchronous_elapsed_nanoseconds;
-} AstronomicalCoreMlProjection;
+} AstronomicalCoreMlProgram;
 
 static uint64_t astronomical_monotonic_nanoseconds(void) {
   return clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
@@ -249,7 +249,7 @@ static MLMultiArray *astronomical_channels_by_tokens_array(CVPixelBufferRef pixe
                                              shape:@[ @1, @(channel_count), @1, @(token_count) ]];
 }
 
-static int32_t astronomical_bind_surfaces(AstronomicalCoreMlProjection *projection, NSError **error_out) {
+static int32_t astronomical_bind_surfaces(AstronomicalCoreMlProgram *projection, NSError **error_out) {
   projection->input_pixel_buffer =
       astronomical_create_fp16_surface(projection->input_channels, projection->token_count);
   projection->output_pixel_buffer =
@@ -269,18 +269,18 @@ static int32_t astronomical_bind_surfaces(AstronomicalCoreMlProjection *projecti
   return projection->input_features == nil ? -1 : 0;
 }
 
-double astronomical_core_ml_projection_model_load_seconds(
-    const AstronomicalCoreMlProjection *projection) {
+double astronomical_core_ml_program_model_load_seconds(
+    const AstronomicalCoreMlProgram *projection) {
   return projection == NULL ? 0.0 : projection->model_load_seconds;
 }
 
-double astronomical_core_ml_projection_placement_seconds(
-    const AstronomicalCoreMlProjection *projection) {
+double astronomical_core_ml_program_placement_seconds(
+    const AstronomicalCoreMlProgram *projection) {
   return projection == NULL ? 0.0 : projection->placement_seconds;
 }
 
-int32_t astronomical_core_ml_projection_compiled_model_path(
-    AstronomicalCoreMlProjection *projection, char *path_buffer, uint32_t path_capacity) {
+int32_t astronomical_core_ml_program_compiled_model_path(
+    AstronomicalCoreMlProgram *projection, char *path_buffer, uint32_t path_capacity) {
   if (projection == NULL || projection->compiled_model_url == nil || path_capacity == 0) {
     return -1;
   }
@@ -292,8 +292,8 @@ int32_t astronomical_core_ml_projection_compiled_model_path(
   return 0;
 }
 
-void astronomical_core_ml_projection_discard_compiled_model(
-    AstronomicalCoreMlProjection *projection) {
+void astronomical_core_ml_program_discard_compiled_model(
+    AstronomicalCoreMlProgram *projection) {
   if (projection == NULL || projection->compiled_model_url == nil) {
     return;
   }
@@ -301,7 +301,7 @@ void astronomical_core_ml_projection_discard_compiled_model(
   projection->compiled_model_url = nil;
 }
 
-void astronomical_core_ml_projection_release(AstronomicalCoreMlProjection *projection) {
+void astronomical_core_ml_program_release(AstronomicalCoreMlProgram *projection) {
   if (projection == NULL) {
     return;
   }
@@ -328,7 +328,7 @@ void astronomical_core_ml_projection_release(AstronomicalCoreMlProjection *proje
   free(projection);
 }
 
-static int32_t astronomical_load_model(AstronomicalCoreMlProjection *projection, NSURL *model_url,
+static int32_t astronomical_load_model(AstronomicalCoreMlProgram *projection, NSURL *model_url,
                                        int32_t compute_units_code, NSError **error_out) {
   // An already compiled program belongs to whoever kept it, so it is loaded where it
   // is and `compiled_model_url` stays nil: release must not remove a cached copy.
@@ -362,7 +362,7 @@ static int32_t astronomical_load_model(AstronomicalCoreMlProjection *projection,
   return 0;
 }
 
-AstronomicalCoreMlProjection *astronomical_core_ml_projection_load(
+AstronomicalCoreMlProgram *astronomical_core_ml_program_load(
     const char *model_path, int32_t compute_units_code, int32_t input_channels,
     int32_t output_channels, int32_t token_count, char *error_message, uint32_t error_capacity) {
   if (model_path == NULL || input_channels <= 0 || output_channels <= 0 || token_count <= 0) {
@@ -370,7 +370,7 @@ AstronomicalCoreMlProjection *astronomical_core_ml_projection_load(
     return NULL;
   }
   @autoreleasepool {
-    AstronomicalCoreMlProjection *projection = calloc(1, sizeof(AstronomicalCoreMlProjection));
+    AstronomicalCoreMlProgram *projection = calloc(1, sizeof(AstronomicalCoreMlProgram));
     if (projection == NULL) {
       astronomical_copy_error(error_message, error_capacity, @"out of memory");
       return NULL;
@@ -387,15 +387,15 @@ AstronomicalCoreMlProjection *astronomical_core_ml_projection_load(
         || astronomical_bind_surfaces(projection, &error) != 0) {
       astronomical_copy_error(error_message, error_capacity,
                               error.localizedDescription ?: @"failed to prepare the Core ML projection");
-      astronomical_core_ml_projection_release(projection);
+      astronomical_core_ml_program_release(projection);
       return NULL;
     }
     return projection;
   }
 }
 
-AstronomicalLayerPlacement astronomical_core_ml_projection_placement(
-    const AstronomicalCoreMlProjection *projection) {
+AstronomicalLayerPlacement astronomical_core_ml_program_placement(
+    const AstronomicalCoreMlProgram *projection) {
   AstronomicalLayerPlacement unknown_placement = {0, 0, 0, 0, 0};
   return projection == NULL ? unknown_placement : projection->placement;
 }
@@ -425,7 +425,7 @@ static int32_t astronomical_copy_surface_rows(CVPixelBufferRef pixel_buffer, uin
   return 0;
 }
 
-int32_t astronomical_core_ml_projection_write_input(AstronomicalCoreMlProjection *projection,
+int32_t astronomical_core_ml_program_write_input(AstronomicalCoreMlProgram *projection,
                                                     const uint16_t *fp16_activations,
                                                     uint64_t element_count) {
   if (projection == NULL || fp16_activations == NULL || projection->prediction_in_flight
@@ -436,7 +436,7 @@ int32_t astronomical_core_ml_projection_write_input(AstronomicalCoreMlProjection
                                         projection->input_channels, projection->token_count, 1);
 }
 
-int32_t astronomical_core_ml_projection_read_output(const AstronomicalCoreMlProjection *projection,
+int32_t astronomical_core_ml_program_read_output(const AstronomicalCoreMlProgram *projection,
                                                     uint16_t *fp16_projected,
                                                     uint64_t element_count) {
   if (projection == NULL || fp16_projected == NULL || projection->prediction_in_flight
@@ -447,7 +447,7 @@ int32_t astronomical_core_ml_projection_read_output(const AstronomicalCoreMlProj
                                         projection->output_channels, projection->token_count, 0);
 }
 
-int32_t astronomical_core_ml_projection_lock_output(const AstronomicalCoreMlProjection *projection,
+int32_t astronomical_core_ml_program_lock_output(const AstronomicalCoreMlProgram *projection,
                                                     const void **base_address,
                                                     uint64_t *bytes_per_row) {
   if (projection == NULL || base_address == NULL || bytes_per_row == NULL
@@ -463,14 +463,14 @@ int32_t astronomical_core_ml_projection_lock_output(const AstronomicalCoreMlProj
   return 0;
 }
 
-void astronomical_core_ml_projection_unlock_output(const AstronomicalCoreMlProjection *projection) {
+void astronomical_core_ml_program_unlock_output(const AstronomicalCoreMlProgram *projection) {
   if (projection == NULL) {
     return;
   }
   CVPixelBufferUnlockBaseAddress(projection->output_pixel_buffer, kCVPixelBufferLock_ReadOnly);
 }
 
-static int32_t astronomical_run_prediction(AstronomicalCoreMlProjection *projection,
+static int32_t astronomical_run_prediction(AstronomicalCoreMlProgram *projection,
                                            uint64_t *elapsed_nanoseconds, NSError **error_out) {
   uint64_t started_at = astronomical_monotonic_nanoseconds();
   id<MLFeatureProvider> prediction = [projection->model predictionFromFeatures:projection->input_features
@@ -480,7 +480,7 @@ static int32_t astronomical_run_prediction(AstronomicalCoreMlProjection *project
   return prediction == nil ? -1 : 0;
 }
 
-int32_t astronomical_core_ml_projection_predict(AstronomicalCoreMlProjection *projection,
+int32_t astronomical_core_ml_program_predict(AstronomicalCoreMlProgram *projection,
                                                 uint64_t *elapsed_nanoseconds,
                                                 char *error_message, uint32_t error_capacity) {
   if (projection == NULL || elapsed_nanoseconds == NULL || projection->prediction_in_flight) {
@@ -501,7 +501,7 @@ int32_t astronomical_core_ml_projection_predict(AstronomicalCoreMlProjection *pr
 // Runs on the projection's serial queue; dispatch_async_f takes a plain C
 // function and a context pointer, so no block is needed here.
 static void astronomical_run_asynchronous_prediction(void *context) {
-  AstronomicalCoreMlProjection *projection = context;
+  AstronomicalCoreMlProgram *projection = context;
   @autoreleasepool {
     NSError *error = nil;
     projection->asynchronous_status =
@@ -510,7 +510,7 @@ static void astronomical_run_asynchronous_prediction(void *context) {
   dispatch_semaphore_signal(projection->prediction_finished);
 }
 
-int32_t astronomical_core_ml_projection_begin_predict(AstronomicalCoreMlProjection *projection) {
+int32_t astronomical_core_ml_program_begin_predict(AstronomicalCoreMlProgram *projection) {
   if (projection == NULL || projection->prediction_in_flight) {
     return -1;
   }
@@ -521,7 +521,7 @@ int32_t astronomical_core_ml_projection_begin_predict(AstronomicalCoreMlProjecti
 
 // Returns 0 when the started prediction succeeded, -1 when it failed, and -2
 // when it is still running after the timeout (it stays in flight).
-int32_t astronomical_core_ml_projection_finish_predict(AstronomicalCoreMlProjection *projection,
+int32_t astronomical_core_ml_program_finish_predict(AstronomicalCoreMlProgram *projection,
                                                        uint64_t timeout_nanoseconds,
                                                        uint64_t *elapsed_nanoseconds) {
   if (projection == NULL || elapsed_nanoseconds == NULL || !projection->prediction_in_flight) {

@@ -1,6 +1,6 @@
 //! A projection's inputs and its fp32 reference result.
 
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_neural_engine::weights::half_precision::{
     f16_bits_slice_to_f32, f32_slice_to_f16_bits,
 };
@@ -17,7 +17,7 @@ const WEIGHT_SEED: u64 = 0x5eed_0161;
 const ACTIVATION_SEED: u64 = 0x5eed_0162;
 
 pub struct ProjectionFixture {
-    pub shape: ProjectionShape,
+    pub shape: ProgramShape,
     pub fp16_weights: Vec<u16>,
     pub fp16_activations: Vec<u16>,
     /// Accelerate's fp32 product of the fp16-rounded inputs, so the measured
@@ -35,7 +35,7 @@ impl ProjectionFixture {
     }
 
     pub fn with_shape(input_channels: usize, output_channels: usize, token_count: usize) -> Self {
-        let shape = ProjectionShape::new(input_channels, output_channels, token_count)
+        let shape = ProgramShape::new(input_channels, output_channels, token_count)
             .expect("the fixture shape is valid");
         let fp16_weights = f32_slice_to_f16_bits(&bell_shaped_values(
             WEIGHT_SEED,
@@ -47,7 +47,7 @@ impl ProjectionFixture {
 
     /// Fresh activations and the reference for caller-chosen weights, such as
     /// weights rounded through a quantized format first.
-    pub fn with_fp16_weights(shape: ProjectionShape, fp16_weights: Vec<u16>) -> Self {
+    pub fn with_fp16_weights(shape: ProgramShape, fp16_weights: Vec<u16>) -> Self {
         let fp16_activations = f32_slice_to_f16_bits(&bell_shaped_values(
             ACTIVATION_SEED,
             shape.activation_element_count(),
@@ -77,7 +77,7 @@ impl ProjectionFixture {
         first_output_channel: usize,
         output_channel_count: usize,
     ) -> Self {
-        let shape = ProjectionShape::new(
+        let shape = ProgramShape::new(
             self.shape.input_channels(),
             output_channel_count,
             self.shape.token_count(),

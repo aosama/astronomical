@@ -25,9 +25,9 @@ pub struct NativeLayerPlacement {
     pub operations_off_neural_engine: i32,
 }
 
-/// Opaque owner of a loaded Core ML projection and its IOSurfaces.
+/// Opaque owner of a loaded Core ML program and its IOSurfaces.
 #[repr(C)]
-pub struct NativeCoreMlProjection {
+pub struct NativeCoreMlProgram {
     _opaque: [u8; 0],
 }
 
@@ -36,7 +36,7 @@ unsafe extern "C" {
         report: *mut NativeComputeDeviceReport,
     ) -> i32;
 
-    pub fn astronomical_core_ml_projection_load(
+    pub fn astronomical_core_ml_program_load(
         model_path: *const c_char,
         compute_units_code: i32,
         input_channels: i32,
@@ -44,7 +44,7 @@ unsafe extern "C" {
         token_count: i32,
         error_message: *mut c_char,
         error_capacity: u32,
-    ) -> *mut NativeCoreMlProjection;
+    ) -> *mut NativeCoreMlProgram;
 
     pub fn astronomical_core_ml_compile_model_to(
         package_path: *const c_char,
@@ -53,60 +53,56 @@ unsafe extern "C" {
         error_capacity: u32,
     ) -> i32;
 
-    pub fn astronomical_core_ml_projection_placement(
-        projection: *const NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_placement(
+        program: *const NativeCoreMlProgram,
     ) -> NativeLayerPlacement;
 
-    pub fn astronomical_core_ml_projection_write_input(
-        projection: *mut NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_write_input(
+        program: *mut NativeCoreMlProgram,
         fp16_activations: *const u16,
         element_count: u64,
     ) -> i32;
 
-    pub fn astronomical_core_ml_projection_read_output(
-        projection: *const NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_read_output(
+        program: *const NativeCoreMlProgram,
         fp16_projected: *mut u16,
         element_count: u64,
     ) -> i32;
 
-    pub fn astronomical_core_ml_projection_lock_output(
-        projection: *const NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_lock_output(
+        program: *const NativeCoreMlProgram,
         base_address: *mut *const c_void,
         bytes_per_row: *mut u64,
     ) -> i32;
 
-    pub fn astronomical_core_ml_projection_unlock_output(projection: *const NativeCoreMlProjection);
+    pub fn astronomical_core_ml_program_unlock_output(program: *const NativeCoreMlProgram);
 
-    pub fn astronomical_core_ml_projection_predict(
-        projection: *mut NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_predict(
+        program: *mut NativeCoreMlProgram,
         elapsed_nanoseconds: *mut u64,
         error_message: *mut c_char,
         error_capacity: u32,
     ) -> i32;
 
-    pub fn astronomical_core_ml_projection_begin_predict(
-        projection: *mut NativeCoreMlProjection,
-    ) -> i32;
+    pub fn astronomical_core_ml_program_begin_predict(program: *mut NativeCoreMlProgram) -> i32;
 
-    pub fn astronomical_core_ml_projection_finish_predict(
-        projection: *mut NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_finish_predict(
+        program: *mut NativeCoreMlProgram,
         timeout_nanoseconds: u64,
         elapsed_nanoseconds: *mut u64,
     ) -> i32;
 
-    pub fn astronomical_core_ml_projection_model_load_seconds(
-        projection: *const NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_model_load_seconds(
+        program: *const NativeCoreMlProgram,
     ) -> f64;
-    pub fn astronomical_core_ml_projection_placement_seconds(
-        projection: *const NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_placement_seconds(
+        program: *const NativeCoreMlProgram,
     ) -> f64;
-    pub fn astronomical_core_ml_projection_compiled_model_path(
-        projection: *mut NativeCoreMlProjection,
+    pub fn astronomical_core_ml_program_compiled_model_path(
+        program: *mut NativeCoreMlProgram,
         path_buffer: *mut c_char,
         path_capacity: u32,
     ) -> i32;
-    pub fn astronomical_core_ml_projection_discard_compiled_model(
-        projection: *mut NativeCoreMlProjection,
-    );
-    pub fn astronomical_core_ml_projection_release(projection: *mut NativeCoreMlProjection);
+    pub fn astronomical_core_ml_program_discard_compiled_model(program: *mut NativeCoreMlProgram);
+    pub fn astronomical_core_ml_program_release(program: *mut NativeCoreMlProgram);
 }

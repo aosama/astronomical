@@ -1,6 +1,6 @@
 use super::{MlProgramWeights, encode_ml_program_projection};
-use crate::documents::model_interface::ProjectionDocumentError;
-use crate::projection_shape::ProjectionShape;
+use crate::documents::model_interface::ModelDocumentError;
+use crate::program_shape::ProgramShape;
 use crate::weights::affine_quantized::{AffineQuantizedWeights, QuantizationLayout};
 use astronomical_test_harness::deterministic_values::{
     PROJECTION_WEIGHT_STANDARD_DEVIATION, bell_shaped_values,
@@ -41,7 +41,7 @@ fn quantized_weights_in_layout(
 
 #[test]
 fn should_store_eight_bit_codes_with_a_256_entry_table_per_row_block() {
-    let shape = ProjectionShape::new(128, 4, 2).expect("valid shape");
+    let shape = ProgramShape::new(128, 4, 2).expect("valid shape");
     let weights = quantized_weights_in_layout(
         4,
         128,
@@ -73,7 +73,7 @@ fn should_store_eight_bit_codes_with_a_256_entry_table_per_row_block() {
 
 #[test]
 fn should_start_with_the_block_wise_capable_specification_version() {
-    let shape = ProjectionShape::new(2, 3, 4).expect("valid shape");
+    let shape = ProgramShape::new(2, 3, 4).expect("valid shape");
 
     let contents = encode_ml_program_projection(
         shape,
@@ -88,7 +88,7 @@ fn should_start_with_the_block_wise_capable_specification_version() {
 
 #[test]
 fn should_bind_the_features_the_native_bridge_expects() {
-    let shape = ProjectionShape::new(2, 3, 4).expect("valid shape");
+    let shape = ProgramShape::new(2, 3, 4).expect("valid shape");
 
     let contents =
         encode_ml_program_projection(shape, MlProgramWeights::Fp16(&[0; 6]), SINGLE_CONVOLUTION)
@@ -104,7 +104,7 @@ fn should_bind_the_features_the_native_bridge_expects() {
 
 #[test]
 fn should_keep_fp16_weights_in_the_blob_file_not_the_document() {
-    let shape = ProjectionShape::new(2, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(2, 1, 1).expect("valid shape");
 
     let contents = encode_ml_program_projection(
         shape,
@@ -129,7 +129,7 @@ fn should_keep_fp16_weights_in_the_blob_file_not_the_document() {
 
 #[test]
 fn should_store_four_bit_codes_with_one_scale_and_offset_per_group() {
-    let shape = ProjectionShape::new(128, 8, 4).expect("valid shape");
+    let shape = ProgramShape::new(128, 8, 4).expect("valid shape");
     let weights = quantized_weights(8, 128);
 
     let contents = encode_ml_program_projection(
@@ -153,7 +153,7 @@ fn should_store_four_bit_codes_with_one_scale_and_offset_per_group() {
 
 #[test]
 fn should_store_four_bit_indices_with_one_sixteen_entry_table_per_group() {
-    let shape = ProjectionShape::new(128, 8, 4).expect("valid shape");
+    let shape = ProgramShape::new(128, 8, 4).expect("valid shape");
     let weights = quantized_weights(8, 128);
 
     let contents = encode_ml_program_projection(
@@ -176,7 +176,7 @@ fn should_store_four_bit_indices_with_one_sixteen_entry_table_per_group() {
 
 #[test]
 fn should_make_a_four_bit_program_about_a_quarter_the_fp16_size() {
-    let shape = ProjectionShape::new(1024, 256, 4).expect("valid shape");
+    let shape = ProgramShape::new(1024, 256, 4).expect("valid shape");
     let weights = quantized_weights(256, 1024);
     let fp16_weights = weights.dequantized_fp16();
 
@@ -201,7 +201,7 @@ fn should_make_a_four_bit_program_about_a_quarter_the_fp16_size() {
 
 #[test]
 fn should_split_the_contraction_into_summed_part_convolutions() {
-    let shape = ProjectionShape::new(256, 4, 2).expect("valid shape");
+    let shape = ProgramShape::new(256, 4, 2).expect("valid shape");
     let weights = quantized_weights(4, 256);
 
     let contents =
@@ -228,7 +228,7 @@ fn should_split_the_contraction_into_summed_part_convolutions() {
 
 #[test]
 fn should_leave_out_the_split_for_a_single_convolution() {
-    let shape = ProjectionShape::new(64, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(64, 1, 1).expect("valid shape");
     let weights = quantized_weights(1, 64);
 
     let contents = encode_ml_program_projection(
@@ -250,24 +250,22 @@ fn should_leave_out_the_split_for_a_single_convolution() {
 
 #[test]
 fn should_reject_a_part_that_would_cut_a_quantization_block() {
-    let shape = ProjectionShape::new(128, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(128, 1, 1).expect("valid shape");
     let weights = quantized_weights(1, 128);
 
     assert!(matches!(
         encode_ml_program_projection(shape, MlProgramWeights::BlockwiseShiftScale(&weights), 4),
-        Err(
-            ProjectionDocumentError::ContractionPartCutsQuantizationBlock {
-                part_width: 32,
-                block_input_columns: 64
-            }
-        )
+        Err(ModelDocumentError::ContractionPartCutsQuantizationBlock {
+            part_width: 32,
+            block_input_columns: 64
+        })
     ));
 }
 
 #[test]
 fn should_store_each_parts_fp16_columns_in_part_order() {
     // One row of four weights, 1.0 2.0 3.0 4.0, split into two parts.
-    let shape = ProjectionShape::new(4, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(4, 1, 1).expect("valid shape");
 
     let contents = encode_ml_program_projection(
         shape,
@@ -294,7 +292,7 @@ fn should_store_each_parts_fp16_columns_in_part_order() {
 
 #[test]
 fn should_split_a_lookup_table_program_into_one_table_set_per_part() {
-    let shape = ProjectionShape::new(256, 2, 2).expect("valid shape");
+    let shape = ProgramShape::new(256, 2, 2).expect("valid shape");
     let weights = quantized_weights(2, 256);
 
     let contents = encode_ml_program_projection(shape, MlProgramWeights::LookupTable(&weights), 2)
@@ -314,7 +312,7 @@ fn should_split_a_lookup_table_program_into_one_table_set_per_part() {
 
 #[test]
 fn should_declare_eight_bit_shift_scale_codes_as_uint8() {
-    let shape = ProjectionShape::new(64, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(64, 1, 1).expect("valid shape");
     let weights = quantized_weights_in_layout(
         1,
         64,
@@ -345,7 +343,7 @@ fn should_declare_eight_bit_shift_scale_codes_as_uint8() {
 
 #[test]
 fn should_reject_quantized_weights_of_another_shape() {
-    let shape = ProjectionShape::new(128, 2, 1).expect("valid shape");
+    let shape = ProgramShape::new(128, 2, 1).expect("valid shape");
     let weights = quantized_weights(1, 128);
 
     assert!(matches!(
@@ -354,7 +352,7 @@ fn should_reject_quantized_weights_of_another_shape() {
             MlProgramWeights::BlockwiseShiftScale(&weights),
             SINGLE_CONVOLUTION
         ),
-        Err(ProjectionDocumentError::QuantizedShapeMismatch {
+        Err(ModelDocumentError::QuantizedShapeMismatch {
             output_channels: 1,
             input_channels: 128
         })
@@ -363,18 +361,18 @@ fn should_reject_quantized_weights_of_another_shape() {
 
 #[test]
 fn should_reject_fp16_weights_of_the_wrong_count_and_an_uneven_split() {
-    let shape = ProjectionShape::new(6, 1, 1).expect("valid shape");
+    let shape = ProgramShape::new(6, 1, 1).expect("valid shape");
 
     assert!(matches!(
         encode_ml_program_projection(shape, MlProgramWeights::Fp16(&[0; 5]), SINGLE_CONVOLUTION),
-        Err(ProjectionDocumentError::WeightCountMismatch {
+        Err(ModelDocumentError::WeightCountMismatch {
             expected: 6,
             actual: 5
         })
     ));
     assert!(matches!(
         encode_ml_program_projection(shape, MlProgramWeights::Fp16(&[0; 6]), 4),
-        Err(ProjectionDocumentError::UnevenContractionSplit { .. })
+        Err(ModelDocumentError::UnevenContractionSplit { .. })
     ));
     assert!(encode_ml_program_projection(shape, MlProgramWeights::Fp16(&[0; 6]), 0).is_err());
 }

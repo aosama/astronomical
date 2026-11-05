@@ -53,7 +53,7 @@ fn should_plan_native_expert_layers_from_unquantized_module_profiles() {
         QuantizationMode::NativeBfloat16
     );
     for projection_name in PROJECTION_NAMES {
-        assert_native_projection(&native_layer_plan, projection_name);
+        assert_native_program(&native_layer_plan, projection_name);
     }
 }
 
@@ -98,7 +98,7 @@ fn should_plan_mixed_native_and_affine_expert_layers_in_one_artifact() {
     .expect("the affine expert layer in a mixed pack should load");
 
     for projection_name in PROJECTION_NAMES {
-        assert_native_projection(&native_layer_plan, projection_name);
+        assert_native_program(&native_layer_plan, projection_name);
         assert_affine_projection(&affine_layer_plan, projection_name);
     }
 }
@@ -150,7 +150,7 @@ fn should_plan_mixed_native_and_affine_projections_in_one_layer() {
     )
     .expect("gate native and up/down affine in one layer should plan");
 
-    assert_native_projection(&mixed_layer_plan, "gate_proj");
+    assert_native_program(&mixed_layer_plan, "gate_proj");
     assert_affine_projection(&mixed_layer_plan, "up_proj");
     assert_affine_projection(&mixed_layer_plan, "down_proj");
 }
@@ -302,7 +302,7 @@ fn should_reject_affine_profiles_when_companion_tensors_are_absent() {
     );
 }
 
-fn assert_native_projection(layer_plan: &QuantizedExpertLayerPlan, projection_name: &str) {
+fn assert_native_program(layer_plan: &QuantizedExpertLayerPlan, projection_name: &str) {
     assert_eq!(
         layer_plan.quantization_mode_for_projection(projection_name),
         QuantizationMode::NativeBfloat16
@@ -360,7 +360,7 @@ fn write_mixed_projections_in_one_layer() -> MixedExpertArtifact {
     write_expert_artifact(
         &[LayerStorage::MixedProjections {
             layer_prefix: MIXED_PROJECTION_LAYER_PREFIX,
-            native_projection_names: &["gate_proj"],
+            native_program_names: &["gate_proj"],
         }],
         true,
     )
@@ -469,7 +469,7 @@ enum LayerStorage<'layer> {
     },
     MixedProjections {
         layer_prefix: &'layer str,
-        native_projection_names: &'layer [&'layer str],
+        native_program_names: &'layer [&'layer str],
     },
 }
 
@@ -498,11 +498,11 @@ fn write_expert_artifact(
             }
             LayerStorage::MixedProjections {
                 layer_prefix,
-                native_projection_names,
+                native_program_names,
             } => {
                 for projection_name in PROJECTION_NAMES {
-                    if native_projection_names.contains(&projection_name) {
-                        append_native_projection(
+                    if native_program_names.contains(&projection_name) {
+                        append_native_program(
                             &mut tensors,
                             &mut weight_map,
                             layer_prefix,
@@ -547,7 +547,7 @@ fn append_native_layer(
     layer_prefix: &str,
 ) {
     for projection_name in PROJECTION_NAMES {
-        append_native_projection(tensors, weight_map, layer_prefix, projection_name);
+        append_native_program(tensors, weight_map, layer_prefix, projection_name);
     }
 }
 
@@ -579,7 +579,7 @@ fn append_affine_weight_without_companions(
     }
 }
 
-fn append_native_projection(
+fn append_native_program(
     tensors: &mut Vec<ShardTensor>,
     weight_map: &mut HashMap<String, String>,
     layer_prefix: &str,

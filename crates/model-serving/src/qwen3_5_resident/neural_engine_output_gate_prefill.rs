@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use astronomical_ipc_protocol::WorkerChunkingConfiguration;
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection, compile_model_to};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, compile_model_to};
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::documents::projection::{
     MlProgramWeights, encode_ml_program_projection,
@@ -17,7 +17,7 @@ use astronomical_neural_engine::documents::projection::{
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, channel_major_fp16, surface_as_token_major, write_prepared_input,
 };
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::MlxArray;
 
@@ -42,7 +42,7 @@ const PROGRAM_FORMAT_VERSION: u32 = 1;
 
 pub(crate) struct NeuralEngineOutputGatePrefill {
     /// Indexed by decoder layer; full-attention layers have no gate program.
-    layer_programs: RefCell<Vec<Option<CoreMlProjection>>>,
+    layer_programs: RefCell<Vec<Option<CoreMlProgram>>>,
     chunk_token_count: u32,
     has_failed: Cell<bool>,
     is_paused: Cell<bool>,
@@ -126,7 +126,7 @@ fn chunk_fits_surface_rows(chunk_token_count: u32) -> bool {
 struct OutputGateProgramSource<'model> {
     runtime: &'model MlxRuntime,
     output_gate_projection: &'model Qwen3_5AffineWeights,
-    shape: ProjectionShape,
+    shape: ProgramShape,
 }
 
 impl OutputGateProgramSource<'_> {
@@ -147,7 +147,7 @@ impl OutputGateProgramSource<'_> {
 }
 
 impl ProgramSource for OutputGateProgramSource<'_> {
-    fn shape(&self) -> ProjectionShape {
+    fn shape(&self) -> ProgramShape {
         self.shape
     }
 
@@ -159,9 +159,9 @@ impl ProgramSource for OutputGateProgramSource<'_> {
         }
     }
 
-    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProjection, &'static str> {
+    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProgram, &'static str> {
         let package_path = self.write_package(package_directory)?;
-        match CoreMlProjection::load_from_path(
+        match CoreMlProgram::load_from_path(
             &package_path,
             self.shape,
             CoreMlComputeUnits::CpuAndNeuralEngine,
@@ -207,7 +207,7 @@ pub(crate) fn prepare_neural_engine_output_gate_prefill(
         return Err("the prompt-processing chunk is not a multiple of the surface alignment");
     }
     let config = model.base.config();
-    let Ok(shape) = ProjectionShape::new(
+    let Ok(shape) = ProgramShape::new(
         config.hidden_size() as usize,
         config.linear_value_dimension() as usize,
         chunk_token_count as usize,

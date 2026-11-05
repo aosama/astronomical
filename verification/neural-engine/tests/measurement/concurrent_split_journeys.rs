@@ -233,3 +233,25 @@ fn sweep_splits(full_fixture: &ProjectionFixture, neural_engine_shares: &[usize]
         print_split(*neural_engine_channels, &timings, &gpu_only_full);
     }
 }
+
+#[test]
+fn should_report_side_by_side_slowdown_as_a_positive_percent() {
+    let slowdown_percent = percent_change(Duration::from_millis(100), Duration::from_millis(150));
+
+    assert!((slowdown_percent - 50.0).abs() < 1e-9, "{slowdown_percent}");
+}
+
+#[test]
+fn should_report_side_by_side_speedup_as_a_negative_percent() {
+    let speedup_percent = percent_change(Duration::from_millis(100), Duration::from_millis(50));
+
+    assert!((speedup_percent + 50.0).abs() < 1e-9, "{speedup_percent}");
+}
+
+#[test]
+fn should_report_no_change_for_equal_durations() {
+    assert_eq!(
+        percent_change(Duration::from_millis(100), Duration::from_millis(100)),
+        0.0
+    );
+}

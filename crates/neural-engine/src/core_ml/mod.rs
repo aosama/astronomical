@@ -8,12 +8,12 @@ mod compute_units;
 mod error;
 pub(crate) mod ffi;
 mod prediction;
-mod projection;
+mod program;
 mod surfaces;
 
 pub use compiled_model_files::compile_model_to;
 pub use compute_units::{ComputePlacement, CoreMlComputeUnits, LayerPlacement};
-pub use error::CoreMlProjectionError;
+pub use error::CoreMlProgramError;
 pub use prediction::PendingPrediction;
-pub use projection::CoreMlProjection;
+pub use program::CoreMlProgram;
 pub use surfaces::LockedOutputSurface;

@@ -43,3 +43,7 @@ pub(crate) fn summarize_stages(stage_samples: &[StageDurations]) -> StageSummari
         total: TimingSummary::from_samples(&total).expect("timed"),
     }
 }
+
+#[cfg(test)]
+#[path = "hand_off_stage_timing_tests.rs"]
+mod tests;

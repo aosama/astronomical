@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::compile_model_to;
-use crate::core_ml::CoreMlProjectionError;
+use crate::core_ml::CoreMlProgramError;
 
 #[test]
 fn should_refuse_a_package_path_with_an_interior_nul() {
@@ -12,10 +12,7 @@ fn should_refuse_a_package_path_with_an_interior_nul() {
         &scratch_directory.path().join("compiled.mlmodelc"),
     );
 
-    assert!(matches!(
-        compile_result,
-        Err(CoreMlProjectionError::ModelPath)
-    ));
+    assert!(matches!(compile_result, Err(CoreMlProgramError::ModelPath)));
 }
 
 #[test]
@@ -28,10 +25,7 @@ fn should_report_core_ml_failure_and_leave_no_compiled_model_for_an_absent_packa
         &destination,
     );
 
-    assert!(matches!(
-        compile_result,
-        Err(CoreMlProjectionError::Load(_))
-    ));
+    assert!(matches!(compile_result, Err(CoreMlProgramError::Load(_))));
     assert!(!destination.exists());
 }
 

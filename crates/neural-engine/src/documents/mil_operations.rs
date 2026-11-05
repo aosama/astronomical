@@ -4,7 +4,7 @@
 //! reuse them without depending on another shape's encoder.
 
 use crate::documents::model_interface::{ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME};
-use crate::projection_shape::ProjectionShape;
+use crate::program_shape::ProgramShape;
 use crate::wire::mil_program::{
     MilDataType, MilOperation, append_map_entry, blob_file_tensor_value, int32_tensor_value,
     named_value_type, string_scalar_value, tensor_value_type,
@@ -87,7 +87,7 @@ pub(crate) fn weight_blob_value(
 }
 
 pub(crate) fn convolution_operation(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     input_name: &str,
     weight_name: &str,
     output_name: &str,
@@ -112,7 +112,7 @@ pub(crate) fn convolution_operation(
 /// `partial_0 + partial_1 + …` as a chain of binary adds ending in
 /// `final_output_name`; MIL's `add` takes exactly two operands.
 pub(crate) fn contraction_sum_operations(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     partial_projection_names: &[String],
     sum_name_prefix: &str,
     final_output_name: &str,
@@ -143,7 +143,7 @@ pub(crate) fn activation_type(channel_count: usize, token_count: usize) -> Vec<u
     tensor_value_type(MilDataType::Float16, &[1, channel_count, 1, token_count])
 }
 
-pub(crate) fn program(shape: ProjectionShape, operations: &[Vec<u8>]) -> Vec<u8> {
+pub(crate) fn program(shape: ProgramShape, operations: &[Vec<u8>]) -> Vec<u8> {
     let mut block = Vec::new();
     append_string_field(&mut block, 2, PROJECTED_FEATURE_NAME);
     for operation in operations {
@@ -183,3 +183,7 @@ pub(crate) fn split_count_constant(count_name: &str, split_count: usize) -> Vec<
         &[],
     )
 }
+
+#[cfg(test)]
+#[path = "mil_operations_tests.rs"]
+mod tests;

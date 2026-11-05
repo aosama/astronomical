@@ -20,7 +20,7 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice, surface_as_array,
     write_prepared_input,
@@ -61,7 +61,7 @@ struct HandOffArrays<'arrays> {
 /// Whether MLX kept the surface's own memory rather than silently copying,
 /// which it does when Metal refuses to map the pointer. Timing alone could
 /// not tell these apart, and the zero-copy arm would report a copy's cost.
-fn surface_stays_mapped(runtime: &MlxRuntime, projection: &CoreMlProjection) -> bool {
+fn surface_stays_mapped(runtime: &MlxRuntime, projection: &CoreMlProgram) -> bool {
     let token_count = projection.token_count() as i32;
     let surface = projection.lock_output_surface().expect("the surface locks");
     let fp16_values = surface
@@ -88,7 +88,7 @@ fn surface_stays_mapped(runtime: &MlxRuntime, projection: &CoreMlProjection) -> 
 fn run_hand_off_call(
     runtime: &MlxRuntime,
     arrays: &HandOffArrays<'_>,
-    projection: &mut CoreMlProjection,
+    projection: &mut CoreMlProgram,
     output_hand_off: OutputHandOff,
 ) -> (StageDurations, MlxArray) {
     let call_started_at = Instant::now();
@@ -143,7 +143,7 @@ fn run_hand_off_call(
 fn time_hand_off(
     runtime: &MlxRuntime,
     arrays: &HandOffArrays<'_>,
-    projection: &mut CoreMlProjection,
+    projection: &mut CoreMlProgram,
     output_hand_off: OutputHandOff,
     label: &str,
 ) -> (StageSummaries, MlxArray) {
@@ -440,10 +440,7 @@ fn should_measure_the_mixture_of_experts_model_hand_off() {
     );
 }
 
-fn cpu_only_projection(
-    fixture: &ProjectionFixture,
-    directory: &std::path::Path,
-) -> CoreMlProjection {
+fn cpu_only_projection(fixture: &ProjectionFixture, directory: &std::path::Path) -> CoreMlProgram {
     let mut projection = load_neural_network(
         fixture.shape,
         &fixture.fp16_weights,

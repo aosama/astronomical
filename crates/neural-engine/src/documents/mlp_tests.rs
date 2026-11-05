@@ -1,6 +1,6 @@
 use super::{MlpFp16Weights, encode_ml_program_mlp};
-use crate::documents::model_interface::ProjectionDocumentError;
-use crate::projection_shape::ProjectionShape;
+use crate::documents::model_interface::ModelDocumentError;
+use crate::program_shape::ProgramShape;
 
 const HIDDEN_CHANNELS: usize = 8;
 const INTERMEDIATE_CHANNELS: usize = 16;
@@ -16,8 +16,8 @@ fn contains_subsequence(encoded: &[u8], expected_bytes: &[u8]) -> bool {
     false
 }
 
-fn mlp_shape() -> ProjectionShape {
-    ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, TOKEN_COUNT).expect("valid shape")
+fn mlp_shape() -> ProgramShape {
+    ProgramShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, TOKEN_COUNT).expect("valid shape")
 }
 
 fn gate_and_up_weights() -> Vec<u16> {
@@ -77,7 +77,7 @@ fn should_store_every_weight_as_fp16_in_the_blob_file() {
 #[test]
 fn should_write_one_convolution_per_stage_when_a_part_spans_the_whole_contraction() {
     let package = encode_ml_program_mlp(
-        ProjectionShape::new(4, 4, TOKEN_COUNT).expect("valid shape"),
+        ProgramShape::new(4, 4, TOKEN_COUNT).expect("valid shape"),
         4,
         MlpFp16Weights {
             gate_and_up: &[0; 2 * 4 * 4],
@@ -108,7 +108,7 @@ fn should_refuse_a_part_width_that_does_not_divide_the_hidden_channels() {
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::UnevenContractionPartWidth {
+        Some(ModelDocumentError::UnevenContractionPartWidth {
             input_channels: HIDDEN_CHANNELS,
             contraction_part_width: 3,
         })
@@ -129,7 +129,7 @@ fn should_refuse_a_part_width_that_divides_the_hidden_but_not_the_intermediate_c
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::UnevenContractionPartWidth {
+        Some(ModelDocumentError::UnevenContractionPartWidth {
             input_channels: 12,
             contraction_part_width: HIDDEN_CHANNELS,
         })
@@ -150,7 +150,7 @@ fn should_refuse_a_part_width_of_zero() {
 
     assert!(matches!(
         encoding_result,
-        Err(ProjectionDocumentError::UnevenContractionPartWidth { .. })
+        Err(ModelDocumentError::UnevenContractionPartWidth { .. })
     ));
 }
 
@@ -168,7 +168,7 @@ fn should_refuse_gate_and_up_weights_of_the_wrong_length() {
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::WeightCountMismatch {
+        Some(ModelDocumentError::WeightCountMismatch {
             expected: 2 * INTERMEDIATE_CHANNELS * HIDDEN_CHANNELS,
             actual: 5,
         })
@@ -189,7 +189,7 @@ fn should_refuse_down_weights_of_the_wrong_length() {
 
     assert_eq!(
         encoding_result.err(),
-        Some(ProjectionDocumentError::WeightCountMismatch {
+        Some(ModelDocumentError::WeightCountMismatch {
             expected: HIDDEN_CHANNELS * INTERMEDIATE_CHANNELS,
             actual: 3,
         })

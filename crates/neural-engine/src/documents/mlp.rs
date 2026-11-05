@@ -22,10 +22,10 @@ use crate::documents::mlp_stages::{
     projection_stage_operations, silu_gating_operations, validated_stage_shape,
 };
 use crate::documents::model_interface::{
-    ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
+    ACTIVATIONS_FEATURE_NAME, ModelDocumentError, PROJECTED_FEATURE_NAME, model_description,
 };
 use crate::documents::package_layout::MlProgramPackageContents;
-use crate::projection_shape::ProjectionShape;
+use crate::program_shape::ProgramShape;
 use crate::wire::protobuf::{append_bytes_field, append_varint_field};
 use crate::wire::weight_blob::WeightBlobFile;
 
@@ -42,11 +42,11 @@ pub struct MlpFp16Weights<'weights> {
 /// Encodes the chain. `shape` is the whole program's `hidden → hidden` over its
 /// tokens; `contraction_part_width` must divide both contraction depths.
 pub fn encode_ml_program_mlp(
-    shape: ProjectionShape,
+    shape: ProgramShape,
     intermediate_channels: usize,
     weights: MlpFp16Weights<'_>,
     contraction_part_width: usize,
-) -> Result<MlProgramPackageContents, ProjectionDocumentError> {
+) -> Result<MlProgramPackageContents, ModelDocumentError> {
     let hidden_channels = shape.input_channels();
     let gate_and_up_shape = validated_stage_shape(
         hidden_channels,

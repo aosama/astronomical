@@ -13,13 +13,13 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProjection};
+use astronomical_neural_engine::core_ml::{ComputePlacement, CoreMlComputeUnits, CoreMlProgram};
 use astronomical_neural_engine::documents::mlp::MlpFp16Weights;
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     write_prepared_input,
 };
-use astronomical_neural_engine::projection_shape::ProjectionShape;
+use astronomical_neural_engine::program_shape::ProgramShape;
 use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine_research::accelerate_reference::reference_projection;
 use astronomical_neural_engine_research::numerical_comparison::compare_values;
@@ -79,7 +79,7 @@ struct MlpFixture {
 /// dtype real artifacts declare (see `Bf16Operation` in the hand-off journeys).
 fn quantized_projection(
     runtime: &MlxRuntime,
-    shape: ProjectionShape,
+    shape: ProgramShape,
 ) -> (QuantizedProjection, Vec<u16>) {
     let (packed_weights, fp16_scales, fp16_biases, fp16_weights) =
         quantize_and_round_trip(runtime, shape);
@@ -115,13 +115,13 @@ fn gated_reference(gate_and_up_channel_major: &[f32], token_count: usize) -> Vec
 }
 
 fn mlp_fixture(runtime: &MlxRuntime) -> MlpFixture {
-    let gate_and_up_shape = ProjectionShape::new(
+    let gate_and_up_shape = ProgramShape::new(
         HIDDEN_CHANNELS,
         2 * INTERMEDIATE_CHANNELS,
         PREFILL_CHUNK_TOKEN_COUNT,
     )
     .expect("valid shape");
-    let down_shape = ProjectionShape::new(
+    let down_shape = ProgramShape::new(
         INTERMEDIATE_CHANNELS,
         HIDDEN_CHANNELS,
         PREFILL_CHUNK_TOKEN_COUNT,
@@ -233,8 +233,8 @@ fn load_mlp_program(
     fixture: &MlpFixture,
     neural_engine_tokens: usize,
     directory: &std::path::Path,
-) -> CoreMlProjection {
-    let shape = ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, neural_engine_tokens)
+) -> CoreMlProgram {
+    let shape = ProgramShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, neural_engine_tokens)
         .expect("valid shape");
     load_ml_program_mlp(
         shape,
@@ -254,7 +254,7 @@ fn run_token_split_call(
     runtime: &MlxRuntime,
     compiled_swiglu: &MlxCompiledSwiGlu,
     fixture: &MlpFixture,
-    projection: &mut CoreMlProjection,
+    projection: &mut CoreMlProgram,
 ) -> (StageDurations, MlxArray) {
     let neural_engine_tokens = projection.token_count();
     let call_started_at = Instant::now();
@@ -456,8 +456,8 @@ fn load_distinct_layer(
     down_weights: &[u16],
     layer_index: usize,
     directory: &std::path::Path,
-) -> CoreMlProjection {
-    let shape = ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, LAYER_PROGRAM_TOKEN_COUNT)
+) -> CoreMlProgram {
+    let shape = ProgramShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, LAYER_PROGRAM_TOKEN_COUNT)
         .expect("valid shape");
     load_ml_program_mlp(
         shape,
@@ -476,7 +476,7 @@ fn load_distinct_layer(
 /// Prefill visits every layer once per chunk, so each prediction follows a
 /// different program. Timing one program in a loop could hide a switching cost
 /// that this pattern pays on every call.
-fn time_layer_cycles(layers: &mut [(CoreMlProjection, tempfile::TempDir)]) -> TimingSummary {
+fn time_layer_cycles(layers: &mut [(CoreMlProgram, tempfile::TempDir)]) -> TimingSummary {
     // fp16 1.0 everywhere: the cycle times the engine, not the numbers, which
     // the speed journey checks against the reference.
     let activations = vec![0x3c00_u16; HIDDEN_CHANNELS * LAYER_PROGRAM_TOKEN_COUNT];
