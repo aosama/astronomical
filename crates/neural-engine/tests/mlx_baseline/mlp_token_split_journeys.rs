@@ -33,23 +33,24 @@ use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 use serial_test::serial;
 
-use super::concurrent_split_journeys::milliseconds;
-use super::dense_model_ab_journeys::{
-    channel_major_values, quantize_and_round_trip, quantized_form,
-};
-use super::hand_off_stage_timing::{StageDurations, summarize_stages};
-use super::mlx_projection_journeys::{build_projection, initialize_runtime, token_major, upload};
-use crate::hello::measured_projection::{
+use crate::support::engine_split::milliseconds;
+use crate::support::hand_off_stage_timing::{StageDurations, summarize_stages};
+use crate::support::journey_constants::{NEURAL_ENGINE_FINISH_TIMEOUT, PREFILL_CHUNK_TOKEN_COUNT};
+use crate::support::measured_projection::{
     MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
 };
-use crate::hello::projection_fixture::ProjectionFixture;
+use crate::support::mlx_projection::{
+    build_projection, initialize_runtime, token_major, token_range, upload,
+};
+use crate::support::projection_fixture::ProjectionFixture;
+use crate::support::quantized_operation::{
+    channel_major_values, quantize_and_round_trip, quantized_form,
+};
 
 const HIDDEN_CHANNELS: usize = 4096;
 const INTERMEDIATE_CHANNELS: usize = 12_288;
 const CONTRACTION_PART_WIDTH: usize = 2048;
-const CHUNK_TOKEN_COUNT: usize = 2048;
 const MLP_LAYER_COUNT: usize = 32;
-const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(5);
 const MINIMUM_MERGED_COSINE: f64 = 0.999;
 // A surface row must fill its alignment exactly for MLX to read it as one
 // array, and multiples of 64 fp16 tokens do. The chain's balance should sit
@@ -118,17 +119,23 @@ fn mlp_fixture(runtime: &MlxRuntime) -> MlpFixture {
     let gate_and_up_shape = ProjectionShape::new(
         HIDDEN_CHANNELS,
         2 * INTERMEDIATE_CHANNELS,
-        CHUNK_TOKEN_COUNT,
+        PREFILL_CHUNK_TOKEN_COUNT,
     )
     .expect("valid shape");
-    let down_shape =
-        ProjectionShape::new(INTERMEDIATE_CHANNELS, HIDDEN_CHANNELS, CHUNK_TOKEN_COUNT)
-            .expect("valid shape");
+    let down_shape = ProjectionShape::new(
+        INTERMEDIATE_CHANNELS,
+        HIDDEN_CHANNELS,
+        PREFILL_CHUNK_TOKEN_COUNT,
+    )
+    .expect("valid shape");
     let (gate_and_up, gate_and_up_fp16_weights) = quantized_projection(runtime, gate_and_up_shape);
     let (down, down_fp16_weights) = quantized_projection(runtime, down_shape);
     let gate_and_up_fixture =
         ProjectionFixture::with_fp16_weights(gate_and_up_shape, gate_and_up_fp16_weights.clone());
-    let gated_values = gated_reference(&gate_and_up_fixture.reference_projected, CHUNK_TOKEN_COUNT);
+    let gated_values = gated_reference(
+        &gate_and_up_fixture.reference_projected,
+        PREFILL_CHUNK_TOKEN_COUNT,
+    );
     let reference_channel_major = reference_projection(
         down_shape,
         &f16_bits_slice_to_f32(&down_fp16_weights),
@@ -138,7 +145,7 @@ fn mlp_fixture(runtime: &MlxRuntime) -> MlpFixture {
     let token_major_bf16 = upload(
         runtime,
         &token_major(&gate_and_up_fixture),
-        &[1, CHUNK_TOKEN_COUNT as i32, HIDDEN_CHANNELS as i32],
+        &[1, PREFILL_CHUNK_TOKEN_COUNT as i32, HIDDEN_CHANNELS as i32],
         MlxDtype::BFloat16,
     );
     MlpFixture {
@@ -149,22 +156,6 @@ fn mlp_fixture(runtime: &MlxRuntime) -> MlpFixture {
         token_major_bf16,
         reference_channel_major,
     }
-}
-
-fn token_range(
-    runtime: &MlxRuntime,
-    token_major_activations: &MlxArray,
-    first_token: usize,
-    end_token: usize,
-) -> MlxArray {
-    runtime
-        .slice(
-            token_major_activations,
-            &[0, first_token as i32, 0],
-            &[1, end_token as i32, HIDDEN_CHANNELS as i32],
-            &[1, 1, 1],
-        )
-        .expect("the tokens slice")
 }
 
 /// The whole chain on the GPU in the artifact's 4-bit form, as one lazy graph.
@@ -268,8 +259,13 @@ fn run_token_split_call(
 ) -> (StageDurations, MlxArray) {
     let neural_engine_tokens = projection.token_count();
     let call_started_at = Instant::now();
-    let neural_engine_input =
-        token_range(runtime, &fixture.token_major_bf16, 0, neural_engine_tokens);
+    let neural_engine_input = token_range(
+        runtime,
+        &fixture.token_major_bf16,
+        0,
+        neural_engine_tokens,
+        HIDDEN_CHANNELS,
+    );
     let prepared = channel_major_fp16(runtime, &neural_engine_input).expect("the reorder builds");
     runtime
         .evaluate_arrays(&[&prepared])
@@ -279,7 +275,8 @@ fn run_token_split_call(
         runtime,
         &fixture.token_major_bf16,
         neural_engine_tokens,
-        CHUNK_TOKEN_COUNT,
+        PREFILL_CHUNK_TOKEN_COUNT,
+        HIDDEN_CHANNELS,
     );
     let gpu_slice = gpu_mlp(runtime, compiled_swiglu, fixture, &gpu_input);
     runtime
@@ -373,7 +370,7 @@ fn measure_token_share(
     eprintln!(
         "[token-split] {neural_engine_tokens} NE tokens ({:.0}%), {} ops off the NE | prepare {:.3} \
          + write {:.3} + engines {:.3} + merge {:.3} = {:.3} ms (p90 {:.3}) | baseline {:.3} ms → {:.3}×",
-        100.0 * neural_engine_tokens as f64 / CHUNK_TOKEN_COUNT as f64,
+        100.0 * neural_engine_tokens as f64 / PREFILL_CHUNK_TOKEN_COUNT as f64,
         placement.operations_off_neural_engine,
         milliseconds(summaries.input_preparation.median),
         milliseconds(summaries.surface_write.median),

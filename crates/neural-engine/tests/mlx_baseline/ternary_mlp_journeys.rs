@@ -22,58 +22,46 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::core_ml_projection::{
-    ComputePlacement, CoreMlComputeUnits, CoreMlProjection,
-};
+use astronomical_neural_engine::core_ml_projection::{ComputePlacement, CoreMlProjection};
 use astronomical_neural_engine::deterministic_values::bell_shaped_values;
-use astronomical_neural_engine::half_precision::{f16_bits_slice_to_f32, f32_to_f16_bits};
+use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine::ml_program_mlp_document::StageWeightEncoding;
-use astronomical_neural_engine::ml_program_rotated_mlp_document::{
-    RotatedMlpLayout, RotatedMlpWeights,
-};
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     write_prepared_input,
 };
 use astronomical_neural_engine::numerical_comparison::{NumericalComparison, compare_values};
 use astronomical_neural_engine::process_memory::{MemoryGrowth, MemorySnapshot, mebibytes};
-use astronomical_neural_engine::projection_shape::ProjectionShape;
 use astronomical_neural_engine::timing_summary::TimingSummary;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxCompiledSwiGlu, MlxDtype};
 use serial_test::serial;
 
-use super::concurrent_split_journeys::milliseconds;
-use super::dense_model_ab_journeys::channel_major_values;
-use super::hand_off_stage_timing::{StageDurations, summarize_stages};
-use super::mlx_projection_journeys::{initialize_runtime, upload};
-use super::ternary_checkpoint::{
+use crate::support::engine_split::milliseconds;
+use crate::support::hand_off_stage_timing::{StageDurations, summarize_stages};
+use crate::support::journey_constants::{MINIMUM_COSINE_SIMILARITY, PREFILL_CHUNK_TOKEN_COUNT};
+use crate::support::measured_projection::{
+    MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION,
+};
+use crate::support::mlx_projection::{initialize_runtime, token_range, upload};
+use crate::support::quantized_operation::channel_major_values;
+use crate::support::ternary_checkpoint::{
     BLOCK_INPUT_COLUMNS, TernaryCheckpoint, TernaryMlpLayer, TernaryProjection,
 };
-use crate::hello::measured_projection::{
-    MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION,
+use crate::support::ternary_mlp::{
+    HIDDEN_CHANNELS, INTERMEDIATE_CHANNELS, LAYER_COUNT, NEURAL_ENGINE_TOKEN_COUNT,
+    ROTATION_BLOCK_SIZE, ROWS_PER_LOOKUP_TABLE, gate_verdict, load_program,
 };
 
 // A middle layer, so neither the first nor the last layer's scale spread decides.
-pub(super) const PROBED_LAYER_INDEX: usize = 31;
-pub(super) const HIDDEN_CHANNELS: usize = 5120;
-pub(super) const INTERMEDIATE_CHANNELS: usize = 17_408;
-// The deepest width dividing both 5,120 and 17,408.
-pub(super) const CONTRACTION_PART_WIDTH: usize = 1024;
-pub(super) const ROTATION_BLOCK_SIZE: usize = 1024;
-pub(super) const ROWS_PER_LOOKUP_TABLE: usize = 16;
-pub(super) const CHUNK_TOKEN_COUNT: usize = 2048;
-// The share serving uses on the 9B, and a multiple of 64 so MLX can read the
-// surface directly. The journey prints enough to choose a better balance.
-pub(super) const NEURAL_ENGINE_TOKEN_COUNT: usize = 960;
-pub(super) const LAYER_COUNT: f64 = 64.0;
+const PROBED_LAYER_INDEX: usize = 31;
 const QUANTIZATION_BITS: i32 = 2;
-pub(super) const ACTIVATION_SEED: u64 = 0x5eed_2700;
-pub(super) const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(30);
+const ACTIVATION_SEED: u64 = 0x5eed_2700;
+/// Real weights in a whole MLP take far longer than a synthetic projection.
+const TERNARY_NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(30);
 const STEP_COUNT: usize = 6;
 
 const MINIMUM_NEURAL_ENGINE_TFLOPS: f64 = 13.0;
-const MINIMUM_COSINE_SIMILARITY: f64 = 0.9999;
 
 /// Reports a numbered step with elapsed time, since the journey loads real
 /// weights and compiles a large program between its measurements.
@@ -97,21 +85,21 @@ impl JourneyProgress {
 }
 
 /// The GPU's copy of one packed projection.
-pub(super) struct PackedArrays {
-    pub(super) packed_codes: MlxArray,
-    pub(super) scales: MlxArray,
-    pub(super) biases: MlxArray,
+struct PackedArrays {
+    packed_codes: MlxArray,
+    scales: MlxArray,
+    biases: MlxArray,
 }
 
-pub(super) struct GpuMlp {
+struct GpuMlp {
     gate_and_up: PackedArrays,
-    pub(super) down: PackedArrays,
-    pub(super) hidden_signs: MlxArray,
-    pub(super) intermediate_signs: MlxArray,
-    pub(super) compiled_swiglu: MlxCompiledSwiGlu,
+    down: PackedArrays,
+    hidden_signs: MlxArray,
+    intermediate_signs: MlxArray,
+    compiled_swiglu: MlxCompiledSwiGlu,
 }
 
-pub(super) fn fp16_array(runtime: &MlxRuntime, fp16_values: &[u16], shape: &[i32]) -> MlxArray {
+fn fp16_array(runtime: &MlxRuntime, fp16_values: &[u16], shape: &[i32]) -> MlxArray {
     upload(
         runtime,
         &f16_bits_slice_to_f32(fp16_values),
@@ -149,7 +137,7 @@ fn packed_arrays(runtime: &MlxRuntime, members: &[&TernaryProjection]) -> Packed
     }
 }
 
-pub(super) fn gpu_mlp(runtime: &MlxRuntime, layer: &TernaryMlpLayer) -> GpuMlp {
+fn gpu_mlp(runtime: &MlxRuntime, layer: &TernaryMlpLayer) -> GpuMlp {
     let hidden_signs = runtime
         .array_from_f32(&layer.gate.signs, &[HIDDEN_CHANNELS as i32])
         .expect("the signs upload");
@@ -167,7 +155,7 @@ pub(super) fn gpu_mlp(runtime: &MlxRuntime, layer: &TernaryMlpLayer) -> GpuMlp {
 
 /// Signs in fp32, the normalized block Hadamard, and the cast back, mirroring
 /// the reference's arithmetic (`fwht.rs` in model serving).
-pub(super) fn rotate(runtime: &MlxRuntime, activations: &MlxArray, signs: &MlxArray) -> MlxArray {
+fn rotate(runtime: &MlxRuntime, activations: &MlxArray, signs: &MlxArray) -> MlxArray {
     let activation_shape = activations.shape();
     let width = activation_shape[activation_shape.len() - 1];
     let token_count = activation_shape[1];
@@ -192,7 +180,7 @@ pub(super) fn rotate(runtime: &MlxRuntime, activations: &MlxArray, signs: &MlxAr
         .expect("the cast back builds")
 }
 
-pub(super) fn packed_projection(
+fn packed_projection(
     runtime: &MlxRuntime,
     activations: &MlxArray,
     packed: &PackedArrays,
@@ -242,28 +230,7 @@ fn gpu_chain_from_rotated(
     packed_projection(runtime, &rotated_gated, &mlp.down)
 }
 
-fn token_range(
-    runtime: &MlxRuntime,
-    token_major_values: &MlxArray,
-    first_token: usize,
-    end_token: usize,
-    channel_count: usize,
-) -> MlxArray {
-    runtime
-        .slice(
-            token_major_values,
-            &[0, first_token as i32, 0],
-            &[1, end_token as i32, channel_count as i32],
-            &[1, 1, 1],
-        )
-        .expect("the tokens slice")
-}
-
-pub(super) fn time_gpu_alone(
-    runtime: &MlxRuntime,
-    mlp: &GpuMlp,
-    input: &MlxArray,
-) -> TimingSummary {
+fn time_gpu_alone(runtime: &MlxRuntime, mlp: &GpuMlp, input: &MlxArray) -> TimingSummary {
     let warm_up_started_at = Instant::now();
     while warm_up_started_at.elapsed() < MINIMUM_WARM_UP_DURATION {
         run_gpu_alone(runtime, mlp, input);
@@ -277,48 +244,13 @@ pub(super) fn time_gpu_alone(
     TimingSummary::from_samples(&call_durations).expect("calls were timed")
 }
 
-pub(super) fn run_gpu_alone(runtime: &MlxRuntime, mlp: &GpuMlp, input: &MlxArray) -> MlxArray {
+fn run_gpu_alone(runtime: &MlxRuntime, mlp: &GpuMlp, input: &MlxArray) -> MlxArray {
     let rotated_input = rotate(runtime, input, &mlp.hidden_signs);
     let projected = gpu_chain_from_rotated(runtime, mlp, &rotated_input);
     runtime
         .evaluate_arrays(&[&projected])
         .expect("the GPU chain evaluates");
     projected
-}
-
-pub(super) fn load_program(
-    layer: &TernaryMlpLayer,
-    weight_encoding: StageWeightEncoding,
-    directory: &std::path::Path,
-) -> (CoreMlProjection, usize) {
-    let mut gate_and_up_weights = layer.gate.fp16_weights();
-    gate_and_up_weights.extend(layer.up.fp16_weights());
-    let down_weights = layer.down.fp16_weights();
-    let mut fp16_signs = Vec::with_capacity(layer.down.signs.len());
-    for sign in &layer.down.signs {
-        fp16_signs.push(f32_to_f16_bits(*sign));
-    }
-    let shape = ProjectionShape::new(HIDDEN_CHANNELS, HIDDEN_CHANNELS, NEURAL_ENGINE_TOKEN_COUNT)
-        .expect("valid shape");
-    let weight_count = gate_and_up_weights.len() + down_weights.len();
-    let projection = CoreMlProjection::load_ml_program_rotated_mlp(
-        RotatedMlpLayout {
-            shape,
-            intermediate_channels: INTERMEDIATE_CHANNELS,
-            contraction_part_width: CONTRACTION_PART_WIDTH,
-            rotation_block_size: ROTATION_BLOCK_SIZE,
-            weight_encoding,
-        },
-        RotatedMlpWeights {
-            gate_and_up: &gate_and_up_weights,
-            down: &down_weights,
-            intermediate_signs: &fp16_signs,
-        },
-        CoreMlComputeUnits::CpuAndNeuralEngine,
-        directory,
-    )
-    .expect("the rotated MLP program loads");
-    (projection, weight_count)
 }
 
 fn write_rotated_tokens(
@@ -382,7 +314,7 @@ fn run_token_split_call(
         runtime,
         &rotated_input,
         NEURAL_ENGINE_TOKEN_COUNT,
-        CHUNK_TOKEN_COUNT,
+        PREFILL_CHUNK_TOKEN_COUNT,
         HIDDEN_CHANNELS,
     );
     let gpu_slice = gpu_chain_from_rotated(runtime, mlp, &gpu_tokens);
@@ -398,7 +330,7 @@ fn run_token_split_call(
         .evaluate_arrays(&[&gpu_slice])
         .expect("the GPU slice evaluates");
     pending
-        .finish(NEURAL_ENGINE_FINISH_TIMEOUT)
+        .finish(TERNARY_NEURAL_ENGINE_FINISH_TIMEOUT)
         .expect("the program finishes");
     let engines_after_write = engines_started_at.elapsed();
     let merge_started_at = Instant::now();
@@ -444,10 +376,6 @@ fn compare_neural_engine_tokens(
     let reference_values = channel_major_values(runtime, &reference_tokens, HIDDEN_CHANNELS);
     let candidate_values = channel_major_values(runtime, &candidate_tokens, HIDDEN_CHANNELS);
     compare_values(&reference_values, &candidate_values).expect("same length")
-}
-
-pub(super) fn gate_verdict(has_passed: bool) -> &'static str {
-    if has_passed { "PASS" } else { "STOP" }
 }
 
 fn print_stop_gates(
@@ -552,11 +480,15 @@ fn measure_ternary_mlp_layer(weight_encoding: StageWeightEncoding) {
     );
     let runtime = initialize_runtime();
     let mlp = gpu_mlp(&runtime, &layer);
-    let activations = bell_shaped_values(ACTIVATION_SEED, HIDDEN_CHANNELS * CHUNK_TOKEN_COUNT, 1.0);
+    let activations = bell_shaped_values(
+        ACTIVATION_SEED,
+        HIDDEN_CHANNELS * PREFILL_CHUNK_TOKEN_COUNT,
+        1.0,
+    );
     let input = upload(
         &runtime,
         &activations,
-        &[1, CHUNK_TOKEN_COUNT as i32, HIDDEN_CHANNELS as i32],
+        &[1, PREFILL_CHUNK_TOKEN_COUNT as i32, HIDDEN_CHANNELS as i32],
         MlxDtype::Float16,
     );
     progress.finished("real weights read");
@@ -564,7 +496,7 @@ fn measure_ternary_mlp_layer(weight_encoding: StageWeightEncoding) {
     let gpu_alone_timing = time_gpu_alone(&runtime, &mlp, &input);
     let gpu_alone = run_gpu_alone(&runtime, &mlp, &input);
     eprintln!(
-        "[ternary-mlp] GPU alone, {CHUNK_TOKEN_COUNT} tokens: median {:.1} ms (p90 {:.1}), {:.1} ms per chunk across {LAYER_COUNT} layers",
+        "[ternary-mlp] GPU alone, {PREFILL_CHUNK_TOKEN_COUNT} tokens: median {:.1} ms (p90 {:.1}), {:.1} ms per chunk across {LAYER_COUNT} layers",
         milliseconds(gpu_alone_timing.median),
         milliseconds(gpu_alone_timing.ninetieth_percentile),
         milliseconds(gpu_alone_timing.median) * LAYER_COUNT,
@@ -582,7 +514,7 @@ fn measure_ternary_mlp_layer(weight_encoding: StageWeightEncoding) {
 
     let (split_timing, merged) = measure_token_split(&runtime, &mlp, &input, &mut projection);
     eprintln!(
-        "[ternary-mlp] both engines, {CHUNK_TOKEN_COUNT} tokens: median {:.1} ms against {:.1} ms alone, {:.3}× on this layer's MLP",
+        "[ternary-mlp] both engines, {PREFILL_CHUNK_TOKEN_COUNT} tokens: median {:.1} ms against {:.1} ms alone, {:.3}× on this layer's MLP",
         milliseconds(split_timing.median),
         milliseconds(gpu_alone_timing.median),
         gpu_alone_timing.median.as_secs_f64() / split_timing.median.as_secs_f64(),

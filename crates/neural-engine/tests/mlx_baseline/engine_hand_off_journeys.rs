@@ -29,21 +29,21 @@ use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype, raw};
 use serial_test::serial;
 
-use super::concurrent_split_journeys::{
+use crate::support::engine_split::{
     assert_slice_matches_reference, load_neural_engine_slice, milliseconds,
 };
-use super::dense_model_ab_journeys::{
+use crate::support::hand_off_stage_timing::{StageDurations, StageSummaries, summarize_stages};
+use crate::support::journey_constants::NEURAL_ENGINE_FINISH_TIMEOUT;
+use crate::support::measured_projection::{
+    MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
+};
+use crate::support::mlx_projection::{build_projection, initialize_runtime, time_projection};
+use crate::support::projection_fixture::ProjectionFixture;
+use crate::support::quantized_operation::{
     DenseOperation, QuantizedOperation, channel_major_values, prepare_quantized_operation,
     quantized_form, trailing_rows,
 };
-use super::hand_off_stage_timing::{StageDurations, StageSummaries, summarize_stages};
-use super::mlx_projection_journeys::{build_projection, initialize_runtime, time_projection};
-use crate::hello::measured_projection::{
-    MEASURED_CALL_COUNT, MINIMUM_WARM_UP_CALL_COUNT, MINIMUM_WARM_UP_DURATION, report_progress,
-};
-use crate::hello::projection_fixture::ProjectionFixture;
 
-const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(5);
 const CONTRACTION_PART_WIDTH: usize = 2048;
 // Shares in sixteenths of the output channels, bracketing the 44 percent the
 // dense A/B found and the shift toward the Neural Engine or away from it that

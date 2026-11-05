@@ -9,10 +9,11 @@
 use astronomical_neural_engine::core_ml_projection::{ComputePlacement, CoreMlComputeUnits};
 use serial_test::serial;
 
-use super::measured_projection::{measure_projection_with_contraction_split, print_evidence};
-use super::projection_fixture::ProjectionFixture;
-
-const PREFILL_CHUNK_TOKEN_COUNT: usize = 2048;
+use crate::support::journey_constants::PREFILL_CHUNK_TOKEN_COUNT;
+use crate::support::measured_projection::{
+    measure_projection_with_contraction_split, print_evidence,
+};
+use crate::support::projection_fixture::ProjectionFixture;
 
 fn sweep_contraction_splits(input_channels: usize, output_channels: usize, part_counts: &[usize]) {
     let fixture =

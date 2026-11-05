@@ -11,9 +11,8 @@
 //! of a row) and re-encodes the checkpoint's weights into the probed form, so
 //! "fidelity" is how far that form sits from the checkpoint and "accuracy" is
 //! how far the engine's result sits from an fp32 product of that form's own
-//! weights. Run the footprint journeys one at a time
-//! (`cargo test-neural-engine-hello footprint_of_mlp_gate_and_up_as_<form>`),
-//! because loads earlier in the same process blur later deltas.
+//! weights. The footprint journeys rely on the runner giving each one its own
+//! process, because loads earlier in the same process blur later deltas.
 
 use astronomical_neural_engine::affine_quantized_weights::{
     AffineQuantizedWeights, QuantizationLayout,
@@ -28,12 +27,12 @@ use astronomical_neural_engine::numerical_comparison::{NumericalComparison, comp
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 use serial_test::serial;
 
-use super::measured_projection::{
+use crate::support::journey_constants::{MINIMUM_COSINE_SIMILARITY, PREFILL_CHUNK_TOKEN_COUNT};
+use crate::support::measured_projection::{
     ProjectionEvidence, ProjectionModel, measure_projection_model, print_evidence,
 };
-use super::projection_fixture::ProjectionFixture;
+use crate::support::projection_fixture::ProjectionFixture;
 
-const PREFILL_CHUNK_TOKEN_COUNT: usize = 2048;
 const QUANTIZED_WEIGHT_SEED: u64 = 0x5eed_0163;
 // 2,048-deep parts run at the Neural Engine's full rate (contraction-split
 // journeys), so every 4,096-deep projection here is cut in two.
@@ -43,7 +42,6 @@ const HIDDEN_SIZE: usize = 4096;
 const MIXER_OUTPUT_CHANNELS: usize = 2048;
 // Ornith-1.5-9B's fused MLP gate and up projection, its largest per layer.
 const MLP_GATE_AND_UP_CHANNELS: usize = 24_576;
-const MINIMUM_COSINE_SIMILARITY: f64 = 0.9999;
 
 /// One candidate encoding of the checkpoint for the Neural Engine.
 #[derive(Clone, Copy)]

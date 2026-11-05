@@ -7,9 +7,10 @@ use astronomical_neural_engine::deterministic_values::{
 use astronomical_neural_engine::half_precision::{f16_bits_slice_to_f32, f32_slice_to_f16_bits};
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 
+use crate::support::journey_constants::PREFILL_CHUNK_TOKEN_COUNT;
+
 const MIXER_OUTPUT_INPUT_CHANNELS: usize = 4096;
 const MIXER_OUTPUT_OUTPUT_CHANNELS: usize = 2048;
-const PREFILL_CHUNK_TOKEN_COUNT: usize = 2048;
 const WEIGHT_SEED: u64 = 0x5eed_0161;
 const ACTIVATION_SEED: u64 = 0x5eed_0162;
 

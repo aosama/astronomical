@@ -7,7 +7,10 @@
 //! pieces of evidence: where `MLComputePlan` placed it, how far its numbers
 //! sit from the Accelerate fp32 reference, and how long one prediction takes.
 //!
-//! Run with `cargo test-neural-engine-hello` (optimized build, serial).
+//! Run with `cargo test-neural-engine-hello` (optimized build, one process per
+//! journey); the ternary journeys also need `--configuration PATH`.
+
+mod support;
 
 mod hello;
 

@@ -277,6 +277,7 @@ name = "astronomical-neural-engine"
 version = "0.2.90"
 dependencies = [
  "astronomical-runtime-integration",
+ "astronomical-test-harness",
  "cc",
  "mlx-c-rust",
  "serde_json",
