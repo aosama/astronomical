@@ -8,7 +8,7 @@
 use thiserror::Error;
 
 use crate::projection_shape::ProjectionShape;
-use crate::protobuf_wire::{append_bytes_field, append_string_field, append_varint_field};
+use crate::wire::protobuf::{append_bytes_field, append_string_field, append_varint_field};
 
 /// The input feature name the Objective-C bridge binds to.
 pub const ACTIVATIONS_FEATURE_NAME: &str = "activations";
@@ -103,5 +103,5 @@ fn fp16_feature(feature_name: &str, channel_count: usize, token_count: usize) ->
 }
 
 #[cfg(test)]
-#[path = "projection_model_interface_tests.rs"]
+#[path = "model_interface_tests.rs"]
 mod tests;

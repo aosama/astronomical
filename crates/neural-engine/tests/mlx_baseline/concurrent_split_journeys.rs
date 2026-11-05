@@ -14,8 +14,8 @@
 
 use std::time::{Duration, Instant};
 
-use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
 use astronomical_neural_engine::timing_summary::TimingSummary;
+use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;

@@ -5,12 +5,15 @@
 //! [`LinearAttentionOutputGateEngine`] for why only these rows are offered.
 
 use std::cell::{Cell, RefCell};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use astronomical_ipc_protocol::WorkerChunkingConfiguration;
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
-use astronomical_neural_engine::ml_program_projection_document::MlProgramWeights;
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection, compile_model_to};
+use astronomical_neural_engine::documents::package_layout::write_ml_package;
+use astronomical_neural_engine::documents::projection::{
+    MlProgramWeights, encode_ml_program_projection,
+};
 use astronomical_neural_engine::mlx_hand_off::{
     OutputHandOff, channel_major_fp16, surface_as_token_major, write_prepared_input,
 };
@@ -126,33 +129,42 @@ struct OutputGateProgramSource<'model> {
     shape: ProjectionShape,
 }
 
+impl OutputGateProgramSource<'_> {
+    fn write_package(&self, package_directory: &Path) -> Result<PathBuf, &'static str> {
+        let fp16_weights = weight_as_fp16_bits(self.runtime, self.output_gate_projection)?;
+        let Ok(package_contents) = encode_ml_program_projection(
+            self.shape,
+            MlProgramWeights::Fp16(&fp16_weights),
+            CONTRACTION_PART_COUNT,
+        ) else {
+            return Err("the model's output gate weights do not fit a Neural Engine program");
+        };
+        match write_ml_package(package_directory, &package_contents) {
+            Ok(package_path) => Ok(package_path),
+            Err(_) => Err("could not write the output gate program package"),
+        }
+    }
+}
+
 impl ProgramSource for OutputGateProgramSource<'_> {
     fn shape(&self) -> ProjectionShape {
         self.shape
     }
 
     fn compile_to(&self, package_directory: &Path, destination: &Path) -> Result<(), &'static str> {
-        let fp16_weights = weight_as_fp16_bits(self.runtime, self.output_gate_projection)?;
-        match CoreMlProjection::compile_ml_program_to(
-            self.shape,
-            MlProgramWeights::Fp16(&fp16_weights),
-            CONTRACTION_PART_COUNT,
-            package_directory,
-            destination,
-        ) {
+        let package_path = self.write_package(package_directory)?;
+        match compile_model_to(&package_path, destination) {
             Ok(()) => Ok(()),
             Err(_) => Err("Core ML could not compile the output gate program"),
         }
     }
 
     fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProjection, &'static str> {
-        let fp16_weights = weight_as_fp16_bits(self.runtime, self.output_gate_projection)?;
-        match CoreMlProjection::load_ml_program(
+        let package_path = self.write_package(package_directory)?;
+        match CoreMlProjection::load_from_path(
+            &package_path,
             self.shape,
-            MlProgramWeights::Fp16(&fp16_weights),
             CoreMlComputeUnits::CpuAndNeuralEngine,
-            CONTRACTION_PART_COUNT,
-            package_directory,
         ) {
             Ok(program) => Ok(program),
             Err(_) => Err("Core ML could not load the output gate program"),

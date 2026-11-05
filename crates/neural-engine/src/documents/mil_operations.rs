@@ -3,13 +3,13 @@
 //! around it. Keeping them apart from any one document lets a new model shape
 //! reuse them without depending on another shape's encoder.
 
-use crate::mil_program_wire::{
+use crate::documents::model_interface::{ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME};
+use crate::projection_shape::ProjectionShape;
+use crate::wire::mil_program::{
     MilDataType, MilOperation, append_map_entry, blob_file_tensor_value, int32_tensor_value,
     named_value_type, string_scalar_value, tensor_value_type,
 };
-use crate::projection_model_interface::{ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME};
-use crate::projection_shape::ProjectionShape;
-use crate::protobuf_wire::{append_bytes_field, append_string_field, append_varint_field};
+use crate::wire::protobuf::{append_bytes_field, append_string_field, append_varint_field};
 
 // Specification version 9 is iOS 18 / macOS 15, the first with block-wise
 // 4-bit weights; its MIL opset is "CoreML8".

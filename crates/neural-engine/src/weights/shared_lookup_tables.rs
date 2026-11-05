@@ -9,8 +9,8 @@
 //! with many blocks sharing them. Where a table would overflow, the two closest
 //! values merge, so the error lands where it is smallest.
 
-use crate::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
-use crate::projection_model_interface::ProjectionDocumentError;
+use crate::documents::model_interface::ProjectionDocumentError;
+use crate::weights::half_precision::{f16_bits_to_f32, f32_to_f16_bits};
 
 /// Entries in every table, the only size an 8-bit code can address.
 pub const LOOKUP_TABLE_ENTRY_COUNT: usize = 256;

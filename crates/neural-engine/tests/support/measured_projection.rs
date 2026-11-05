@@ -4,13 +4,14 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection, LayerPlacement};
-use astronomical_neural_engine::half_precision::f16_bits_slice_to_f32;
-use astronomical_neural_engine::ml_program_projection_document::MlProgramWeights;
+use astronomical_neural_engine::documents::projection::MlProgramWeights;
 use astronomical_neural_engine::numerical_comparison::{NumericalComparison, compare_values};
 use astronomical_neural_engine::process_memory::{MemoryGrowth, MemorySnapshot, mebibytes};
 use astronomical_neural_engine::timing_summary::TimingSummary;
+use astronomical_neural_engine::weights::half_precision::f16_bits_slice_to_f32;
 
 use super::projection_fixture::ProjectionFixture;
+use crate::support::program_loading::{load_ml_program, load_neural_network};
 
 // The first predictions pay for program loading and clock ramp-up. Warm-up
 // runs for at least three calls and at least 1.2 seconds, the GPU clock-ramp
@@ -127,14 +128,14 @@ fn load_projection_model(
     model_directory: &Path,
 ) -> CoreMlProjection {
     match projection_model {
-        ProjectionModel::NeuralNetworkFp16 => CoreMlProjection::load(
+        ProjectionModel::NeuralNetworkFp16 => load_neural_network(
             fixture.shape,
             &fixture.fp16_weights,
             compute_units,
             contraction_part_count,
             model_directory,
         ),
-        ProjectionModel::MlProgram(weights) => CoreMlProjection::load_ml_program(
+        ProjectionModel::MlProgram(weights) => load_ml_program(
             fixture.shape,
             weights,
             compute_units,

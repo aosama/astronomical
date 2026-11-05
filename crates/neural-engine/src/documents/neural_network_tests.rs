@@ -1,4 +1,4 @@
-use super::{ProjectionDocumentError, encode_projection_document};
+use super::{ProjectionDocumentError, encode_projection_document, write_model_document};
 use crate::projection_shape::ProjectionShape;
 
 const SINGLE_CONVOLUTION: usize = 1;
@@ -114,4 +114,44 @@ fn should_reject_a_contraction_split_that_does_not_divide_the_input_channels() {
         })
     );
     assert!(encode_projection_document(shape, &[0; 6], 0).is_err());
+}
+
+#[test]
+fn should_write_the_model_document_and_return_its_path() {
+    let model_directory = tempfile::tempdir().expect("a scratch directory");
+
+    let model_path = write_model_document(model_directory.path(), &[1, 2, 3])
+        .expect("the document should be written");
+
+    assert_eq!(
+        model_path,
+        model_directory.path().join("projection.mlmodel")
+    );
+    assert_eq!(
+        std::fs::read(&model_path).expect("the document should be readable"),
+        [1, 2, 3]
+    );
+}
+
+#[test]
+fn should_write_an_empty_model_document() {
+    let model_directory = tempfile::tempdir().expect("a scratch directory");
+
+    let model_path =
+        write_model_document(model_directory.path(), &[]).expect("the document should be written");
+
+    assert!(
+        std::fs::read(&model_path)
+            .expect("the document should be readable")
+            .is_empty()
+    );
+}
+
+#[test]
+fn should_report_a_model_directory_that_does_not_exist() {
+    let model_directory = tempfile::tempdir().expect("a scratch directory");
+
+    let write_result = write_model_document(&model_directory.path().join("absent"), &[1]);
+
+    assert!(write_result.is_err());
 }

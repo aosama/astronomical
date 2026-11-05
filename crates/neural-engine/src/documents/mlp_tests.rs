@@ -1,5 +1,5 @@
 use super::{MlpFp16Weights, encode_ml_program_mlp};
-use crate::projection_model_interface::ProjectionDocumentError;
+use crate::documents::model_interface::ProjectionDocumentError;
 use crate::projection_shape::ProjectionShape;
 
 const HIDDEN_CHANNELS: usize = 8;

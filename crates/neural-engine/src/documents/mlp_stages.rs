@@ -1,16 +1,16 @@
 //! One projection of an MLP chain, cut into contraction parts, and the `silu`
 //! gating between projections. Both whole-MLP documents are built from these.
 
-use crate::mil_operations::{
+use crate::documents::mil_operations::{
     activation_type, constant_operation, contraction_sum_operations, convolution_operation,
     split_axis_constant, split_count_constant, weight_blob_value,
 };
-use crate::mil_program_wire::{MilDataType, MilOperation, tensor_value_type};
-use crate::ml_program_weight_blob::WeightBlobFile;
-use crate::projection_model_interface::ProjectionDocumentError;
+use crate::documents::model_interface::ProjectionDocumentError;
 use crate::projection_shape::ProjectionShape;
-use crate::row_major_block::row_block;
-use crate::shared_lookup_tables::{LOOKUP_TABLE_ENTRY_COUNT, SharedLookupTables};
+use crate::weights::row_major_block::row_block;
+use crate::weights::shared_lookup_tables::{LOOKUP_TABLE_ENTRY_COUNT, SharedLookupTables};
+use crate::wire::mil_program::{MilDataType, MilOperation, tensor_value_type};
+use crate::wire::weight_blob::WeightBlobFile;
 
 pub(crate) const GATE_AND_UP_NAME: &str = "gate_and_up";
 const GATE_NAME: &str = "gate";

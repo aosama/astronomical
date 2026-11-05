@@ -68,5 +68,5 @@ pub struct MlProgramPackageContents {
 }
 
 #[cfg(test)]
-#[path = "ml_package_layout_tests.rs"]
+#[path = "package_layout_tests.rs"]
 mod tests;

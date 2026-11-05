@@ -11,12 +11,16 @@
 //! fp16 so IOSurface-backed half-precision buffers can be handed to Core ML
 //! without a conversion inside every prediction.
 
-use crate::projection_model_interface::{
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+
+use crate::documents::model_interface::{
     ACTIVATIONS_FEATURE_NAME, PROJECTED_FEATURE_NAME, ProjectionDocumentError, model_description,
 };
 use crate::projection_shape::ProjectionShape;
-use crate::protobuf_wire::{append_bytes_field, append_string_field, append_varint_field};
-use crate::row_major_block::row_block;
+use crate::weights::row_major_block::row_block;
+use crate::wire::protobuf::{append_bytes_field, append_string_field, append_varint_field};
 
 // Core ML 6 (specification version 7) is the first to accept fp16 multi-array
 // inputs and outputs.
@@ -173,6 +177,13 @@ fn fp16_weight_parameters(fp16_weights: &[u16]) -> Vec<u8> {
     weight_parameters
 }
 
+/// Writes `projection.mlmodel` inside `model_directory` and returns its path.
+pub fn write_model_document(model_directory: &Path, model_document: &[u8]) -> io::Result<PathBuf> {
+    let model_path = model_directory.join("projection.mlmodel");
+    fs::write(&model_path, model_document)?;
+    Ok(model_path)
+}
+
 #[cfg(test)]
-#[path = "core_ml_projection_document_tests.rs"]
+#[path = "neural_network_tests.rs"]
 mod tests;

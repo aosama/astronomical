@@ -5,51 +5,34 @@
 //! its numbers match an fp32 reference, and how fast it runs next to the GPU.
 //! Serving reaches it only through the opt-in
 //! `experimental_neural_engine_prefill_enabled` setting, by way of the whole
-//! MLP program and [`mlx_hand_off`]; everything else is research evidence.
+//! MLP program and `mlx_hand_off`; everything else is research evidence.
 //!
 //! The pieces, bottom to top:
 //!
-//! - [`projection_model_interface`]: the input, output, and errors every
-//!   projection model document shares.
-//! - [`core_ml_projection_document`]: a projection written as a Core ML
-//!   model document directly from Rust.
-//! - [`ml_program_projection_document`]: the same projection as an ML
-//!   Program whose weights can stay 4-bit ([`affine_quantized_weights`]),
-//!   packaged by [`ml_package_layout`].
-//! - [`ml_program_mlp_document`]: a whole `silu(gate) · up → down` MLP as one
-//!   ML Program, so token-split prefill needs no hand-off inside the chain,
-//!   built from the projections in [`ml_program_mlp_stages`].
-//! - [`core_ml`]: any of these models loaded for chosen compute units, with
-//!   `MLComputePlan`'s placement verdict and per-prediction timing, plus which
-//!   compute devices Core ML can see.
-//! - [`mlx_hand_off`]: activations into a program's input surface and its
+//! - [`weights`]: fp16 conversion and the compressed forms weights can take.
+//! - `wire`: protobuf, MIL messages, and the weight blob file.
+//! - [`documents`]: a projection or a whole MLP as a Core ML model document,
+//!   and the `.mlpackage` directory it ships in.
+//! - [`core_ml`]: a written model loaded for chosen compute units, with
+//!   `MLComputePlan`'s placement verdict, predictions, and which compute devices
+//!   Core ML can see. It takes a path and knows nothing of how a document is
+//!   encoded.
+//! - `mlx_hand_off`: activations into a program's input surface and its
 //!   output surface back into MLX.
 //! - [`accelerate_reference`]: the fp32 numerical oracle.
 //! - [`numerical_comparison`], [`timing_summary`], and [`process_memory`]:
 //!   the evidence format.
 
 pub mod accelerate_reference;
-pub mod affine_quantized_weights;
 pub mod core_ml;
-pub mod core_ml_projection_document;
 pub mod deterministic_values;
-pub mod half_precision;
-mod mil_operations;
-mod mil_program_wire;
-pub mod ml_package_layout;
-pub mod ml_program_mlp_document;
-pub mod ml_program_mlp_stages;
-pub mod ml_program_projection_document;
-pub mod ml_program_rotated_mlp_document;
-mod ml_program_weight_blob;
+pub mod documents;
 #[cfg(feature = "mlx-hand-off")]
 pub mod mlx_hand_off;
 mod native_bridge;
 pub mod numerical_comparison;
 pub mod process_memory;
-pub mod projection_model_interface;
 pub mod projection_shape;
-mod protobuf_wire;
-mod row_major_block;
-pub mod shared_lookup_tables;
 pub mod timing_summary;
+pub mod weights;
+mod wire;

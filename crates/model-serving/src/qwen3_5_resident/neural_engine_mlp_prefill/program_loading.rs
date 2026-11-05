@@ -10,8 +10,9 @@ use astronomical_memory_policy::neural_engine_admission::{
     NeuralEnginePrefillAdmission, NeuralEnginePrefillMemoryRequirements,
 };
 use astronomical_neural_engine::core_ml::compute_device_report::report_compute_devices;
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection};
-use astronomical_neural_engine::ml_program_mlp_document::MlpFp16Weights;
+use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProjection, compile_model_to};
+use astronomical_neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp};
+use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::projection_shape::ProjectionShape;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::MlxDtype;
@@ -266,6 +267,25 @@ impl MlpProgramSource<'_> {
         let down = weight_as_fp16_bits(self.runtime, &self.dense_mlp_weights.down_projection)?;
         Ok((gate_and_up, down))
     }
+
+    fn write_package(&self, package_directory: &Path) -> Result<PathBuf, &'static str> {
+        let (gate_and_up, down) = self.fp16_weights()?;
+        let Ok(package_contents) = encode_ml_program_mlp(
+            self.shape,
+            self.intermediate_channels,
+            MlpFp16Weights {
+                gate_and_up: &gate_and_up,
+                down: &down,
+            },
+            CONTRACTION_PART_WIDTH as usize,
+        ) else {
+            return Err("the model's MLP weights do not fit a Neural Engine program");
+        };
+        match write_ml_package(package_directory, &package_contents) {
+            Ok(package_path) => Ok(package_path),
+            Err(_) => Err("could not write the MLP program package"),
+        }
+    }
 }
 
 impl ProgramSource for MlpProgramSource<'_> {
@@ -274,35 +294,19 @@ impl ProgramSource for MlpProgramSource<'_> {
     }
 
     fn compile_to(&self, package_directory: &Path, destination: &Path) -> Result<(), &'static str> {
-        let (gate_and_up, down) = self.fp16_weights()?;
-        match CoreMlProjection::compile_ml_program_mlp_to(
-            self.shape,
-            self.intermediate_channels,
-            MlpFp16Weights {
-                gate_and_up: &gate_and_up,
-                down: &down,
-            },
-            CONTRACTION_PART_WIDTH as usize,
-            package_directory,
-            destination,
-        ) {
+        let package_path = self.write_package(package_directory)?;
+        match compile_model_to(&package_path, destination) {
             Ok(()) => Ok(()),
             Err(_) => Err("Core ML could not compile the MLP program on this macOS"),
         }
     }
 
     fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProjection, &'static str> {
-        let (gate_and_up, down) = self.fp16_weights()?;
-        match CoreMlProjection::load_ml_program_mlp(
+        let package_path = self.write_package(package_directory)?;
+        match CoreMlProjection::load_from_path(
+            &package_path,
             self.shape,
-            self.intermediate_channels,
-            MlpFp16Weights {
-                gate_and_up: &gate_and_up,
-                down: &down,
-            },
-            CONTRACTION_PART_WIDTH as usize,
             CoreMlComputeUnits::CpuAndNeuralEngine,
-            package_directory,
         ) {
             Ok(program) => Ok(program),
             Err(_) => Err("Core ML could not load the MLP program on this macOS"),

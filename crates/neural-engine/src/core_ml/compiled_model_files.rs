@@ -6,68 +6,17 @@ use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
-use super::compute_units::CoreMlComputeUnits;
 use super::error::{CoreMlProjectionError, NATIVE_ERROR_CAPACITY, native_error_text};
 use super::projection::CoreMlProjection;
-use crate::ml_package_layout::write_ml_package;
-use crate::ml_program_mlp_document::{MlpFp16Weights, encode_ml_program_mlp};
-use crate::ml_program_projection_document::{MlProgramWeights, encode_ml_program_projection};
 use crate::native_bridge::{
     astronomical_core_ml_compile_model_to, astronomical_core_ml_projection_compiled_model_path,
     astronomical_core_ml_projection_discard_compiled_model,
 };
-use crate::projection_shape::ProjectionShape;
 
 // macOS's PATH_MAX.
 const COMPILED_MODEL_PATH_CAPACITY: usize = 1024;
 
 impl CoreMlProjection {
-    /// Compiles a whole MLP chain and leaves the compiled model at `destination`
-    /// without loading it, for a program that will be kept and loaded from there.
-    /// See the bridge's `astronomical_core_ml_compile_model_to` for why the first
-    /// load must happen at the final path.
-    pub fn compile_ml_program_mlp_to(
-        shape: ProjectionShape,
-        intermediate_channels: usize,
-        weights: MlpFp16Weights<'_>,
-        contraction_part_width: usize,
-        model_directory: &Path,
-        destination: &Path,
-    ) -> Result<(), CoreMlProjectionError> {
-        let package_contents = encode_ml_program_mlp(
-            shape,
-            intermediate_channels,
-            weights,
-            contraction_part_width,
-        )?;
-        let package_path = write_ml_package(model_directory, &package_contents)?;
-        compile_package_to(&package_path, destination)
-    }
-
-    /// As [`Self::compile_ml_program_mlp_to`] for one projection.
-    pub fn compile_ml_program_to(
-        shape: ProjectionShape,
-        weights: MlProgramWeights<'_>,
-        contraction_part_count: usize,
-        model_directory: &Path,
-        destination: &Path,
-    ) -> Result<(), CoreMlProjectionError> {
-        let package_contents =
-            encode_ml_program_projection(shape, weights, contraction_part_count)?;
-        let package_path = write_ml_package(model_directory, &package_contents)?;
-        compile_package_to(&package_path, destination)
-    }
-
-    /// Loads a program compiled earlier, skipping the weights and the compiler. The
-    /// files stay where they are when this program is released.
-    pub fn load_compiled_model(
-        compiled_model_path: &Path,
-        shape: ProjectionShape,
-        compute_units: CoreMlComputeUnits,
-    ) -> Result<Self, CoreMlProjectionError> {
-        Self::load_model_at(compiled_model_path, shape, compute_units)
-    }
-
     /// Moves the compiled model out of the temporary directory to `destination` for
     /// later loads. The loaded program stays usable and no longer owns the files.
     pub fn keep_compiled_model_files_at(
@@ -113,7 +62,11 @@ impl CoreMlProjection {
     }
 }
 
-fn compile_package_to(
+/// Compiles a written model and leaves the compiled model at `destination` without
+/// loading it, for a program that will be kept and loaded from there. See the
+/// bridge's `astronomical_core_ml_compile_model_to` for why the first load must
+/// happen at the final path.
+pub fn compile_model_to(
     package_path: &Path,
     destination: &Path,
 ) -> Result<(), CoreMlProjectionError> {
@@ -142,3 +95,7 @@ fn compile_package_to(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "compiled_model_files_tests.rs"]
+mod tests;

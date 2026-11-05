@@ -126,5 +126,5 @@ pub fn pack_uint4_low_nibble_first(codes: &[u8]) -> Vec<u8> {
 }
 
 #[cfg(test)]
-#[path = "ml_program_weight_blob_tests.rs"]
+#[path = "weight_blob_tests.rs"]
 mod tests;
