@@ -23,6 +23,7 @@ mod image_generation;
 #[cfg(test)]
 mod image_generation_tests;
 mod message_codec;
+mod model_load_in_flight;
 mod neural_engine_prefill_status;
 mod persistent_prompt_cache_diagnostics;
 #[cfg(test)]
@@ -55,7 +56,7 @@ pub use chat_generation::{
 };
 pub use chat_generation_validation::ChatGenerationValidationError;
 pub use daemon_client::DaemonIpcClient;
-pub use daemon_listener::{DaemonIpcListener, StreamingResponseWriter};
+pub use daemon_listener::{AcceptedDaemonConnection, DaemonIpcListener, StreamingResponseWriter};
 pub use daemon_protocol::{
     DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob,
     DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ImageGenerateRequest,
@@ -75,6 +76,7 @@ pub use message_codec::{
     decode_command, decode_daemon_request, decode_daemon_response, decode_event, encode_command,
     encode_daemon_request, encode_daemon_response, encode_event,
 };
+pub use model_load_in_flight::ModelLoadInFlight;
 pub use neural_engine_prefill_status::NeuralEnginePrefillStatus;
 pub use persistent_prompt_cache_diagnostics::{
     WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheExpectedBlockHashPrefix,

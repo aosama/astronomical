@@ -1,9 +1,7 @@
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 use astronomical_ipc_protocol::{
-    WorkerEvent, WorkerLoadedModelRuntimeConfiguration, WorkerModelConfiguration,
-    WorkerRuntimeFeatureConfiguration,
+    WorkerEvent, WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
 
 use crate::worker::event_handler;
@@ -44,29 +42,6 @@ enum ModelSwapEventReaction {
     AwaitNextWorkerEvent,
     /// The worker rejected the swap; the wait ends with this outcome.
     SwapFailed(ModelSwapWaitOutcome),
-}
-
-/// Extra load time for a model opted into Neural Engine prefill: its programs took
-/// about 100 seconds for 32 layers on an M5-class Mac, already past the 60-second
-/// budget, and scale with layer count and weight size. Only opted-in models get
-/// it, so every other load keeps the tight budget that catches a hung worker.
-const NEURAL_ENGINE_PROGRAM_LOAD_ALLOWANCE: Duration = Duration::from_secs(600);
-
-/// How long one model may take to load before its worker counts as hung.
-pub(in crate::worker) fn model_load_budget(
-    model_load_timeout: Duration,
-    worker_model_configuration: &WorkerModelConfiguration,
-) -> Duration {
-    match worker_model_configuration.autoregressive() {
-        Some(model_configuration)
-            if model_configuration
-                .chunking
-                .experimental_neural_engine_prefill_enabled =>
-        {
-            model_load_timeout + NEURAL_ENGINE_PROGRAM_LOAD_ALLOWANCE
-        }
-        _ => model_load_timeout,
-    }
 }
 
 /// Drains worker events until the model swap succeeds or is rejected.
@@ -183,6 +158,9 @@ fn reject_model_swap(
     loaded_model_remains_ready: bool,
     model_load_failure_reason: String,
 ) -> ModelSwapWaitOutcome {
+    // The load that was reporting progress has ended, so a prior model that
+    // stays ready must not keep showing it as still preparing.
+    health::publish_model_load_in_flight(worker_loop_state.health_snapshot, None);
     // A failed first load leaves a healthy model-less worker. A
     // failed replacement may leave the prior model ready; its
     // existing health snapshot must remain intact in that case.

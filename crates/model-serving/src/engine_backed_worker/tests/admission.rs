@@ -194,11 +194,7 @@ async fn next_event<ReadTransport>(daemon_reader: &mut ProtocolReader<ReadTransp
 where
     ReadTransport: tokio::io::AsyncRead + Unpin,
 {
-    daemon_reader
-        .next_event()
-        .await
-        .expect("the worker should write a valid event")
-        .expect("the worker transport should remain open")
+    super::next_event_skipping_load_progress(daemon_reader).await
 }
 
 struct PassthroughProcessor;

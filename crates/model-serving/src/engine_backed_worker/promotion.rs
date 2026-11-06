@@ -94,6 +94,8 @@ where
             });
         };
         let mut replacement_model = LoadedModel { processor, engine };
+        // Not announced: a generation is active here, and the daemon's cancellation
+        // wait fails on any event it does not expect.
         let engine_load_result = replacement_model
             .engine
             .load()
@@ -103,6 +105,9 @@ where
             })?;
         self.minimum_mlx_memory_ceiling_bytes =
             engine_load_result.minimum_mlx_memory_ceiling_bytes();
+        self.is_neural_engine_preparation_running =
+            engine_load_result.is_neural_engine_preparation_running();
+        self.unsent_neural_engine_prefill_event = engine_load_result.neural_engine_prefill_event();
         self.loaded_runtime = Some(LoadedRuntime::Autoregressive(replacement_model));
         // The gate already proved complete residency fits at the effective
         // ceiling, and the promotion runtime was built by the resident

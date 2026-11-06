@@ -1,3 +1,5 @@
+use astronomical_ipc_protocol::WorkerEvent;
+
 use crate::{EmbeddingUnavailableEngine, ImageGenerationUnavailableEngine};
 
 pub struct EngineBackedWorker<
@@ -30,6 +32,11 @@ pub struct EngineBackedWorker<
     /// re-promotion gate replays them against the current effective
     /// ceiling. `None` while a resident engine (or no engine) is loaded.
     pub(crate) startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
+    /// Programs are still being prepared beside the serving model.
+    pub(crate) is_neural_engine_preparation_running: bool,
+    /// A status from a load made during a generation, which has no event stream to
+    /// hand, held so the idle loop remains the one place these reports leave from.
+    pub(crate) unsent_neural_engine_prefill_event: Option<WorkerEvent>,
 }
 
 pub(crate) enum LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingEngine> {
@@ -51,8 +58,10 @@ mod generation_advance_prefill;
 mod generation_start;
 mod idle_command;
 mod image_generation;
+mod load_announcement;
 mod memory_limit;
 mod model_swap;
+mod neural_engine_preparation_relay;
 mod output;
 mod promotion;
 mod protocol;

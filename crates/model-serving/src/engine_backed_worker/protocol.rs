@@ -7,6 +7,7 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::{AsyncRead, AsyncWrite};
 
+use super::load_announcement::announce_load_started;
 use super::support::{
     ActiveEngineGeneration, ActiveImageGeneration, ActiveWorkerRequest, ModelFactory,
     WorkerRuntimeError,
@@ -14,6 +15,30 @@ use super::support::{
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::model_generation_processor::ModelGenerationProcessor;
 use crate::{ImageGenerationEngine, InferenceEngine};
+
+/// Loads the engine for the model the coming readiness event will announce.
+async fn load_engine_before_readiness<Engine, WriteTransport>(
+    engine: &mut Engine,
+    ready_event: &WorkerEvent,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<crate::EngineLoadResult, WorkerRuntimeError>
+where
+    Engine: InferenceEngine,
+    WriteTransport: AsyncWrite + Unpin,
+{
+    let loading_model_id = match ready_event {
+        WorkerEvent::Ready { model_id, .. } => Some(model_id.as_str()),
+        _ => None,
+    };
+    announce_load_started(loading_model_id, event_writer).await?;
+    engine.load().await.map_err(initialization_failure)
+}
+
+fn initialization_failure(engine_error: crate::InferenceEngineError) -> WorkerRuntimeError {
+    WorkerRuntimeError::InferenceEngineInitializationFailed {
+        reason: engine_error.to_string(),
+    }
+}
 
 impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
     EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
@@ -84,16 +109,13 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        let engine_load_result = loaded_model.engine.load().await.map_err(|engine_error| {
-            WorkerRuntimeError::InferenceEngineInitializationFailed {
-                reason: engine_error.to_string(),
-            }
-        })?;
+        let ready_event = loaded_model.processor.ready_event();
+        let engine_load_result =
+            load_engine_before_readiness(&mut loaded_model.engine, &ready_event, event_writer)
+                .await?;
         self.minimum_mlx_memory_ceiling_bytes =
             engine_load_result.minimum_mlx_memory_ceiling_bytes();
-        event_writer
-            .send_event(&loaded_model.processor.ready_event())
-            .await?;
+        event_writer.send_event(&ready_event).await?;
         // The menu's expert-mode label must be reported fact from the moment readiness
         // is published. Without this event the label stays a daemon-side fallback
         // guess until the first generation starts, which mislabels paged loads.
@@ -226,7 +248,13 @@ where
         let mut active_request = None;
         loop {
             let Some(current_request) = active_request.take() else {
-                let Some(worker_command) = command_reader.next_command().await? else {
+                let Some(worker_command) = self
+                    .next_idle_command_preparing_neural_engine(
+                        &mut command_reader,
+                        &mut event_writer,
+                    )
+                    .await?
+                else {
                     return Ok(());
                 };
                 active_request = self

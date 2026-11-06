@@ -1,6 +1,7 @@
 use astronomical_ipc_protocol::{
     ChatGenerationCompletionReason, ChatGenerationFailureReason, ChatGenerationOutput,
-    MlxMemorySnapshotSource, ProtocolWriter, RequestId, WorkerEvent, WorkerMlxMemorySnapshot,
+    MlxMemorySnapshotSource, NeuralEnginePrefillStatus, ProtocolWriter, RequestId, WorkerEvent,
+    WorkerMlxMemorySnapshot,
 };
 use tokio::io::AsyncWrite;
 
@@ -391,7 +392,7 @@ where
     /// runtime configuration because the daemon clears it when it completes a swap,
     /// which happens on that configuration.
     pub(crate) async fn emit_cache_stats_then_neural_engine_status<WriteTransport>(
-        &self,
+        &mut self,
         event_writer: &mut ProtocolWriter<WriteTransport>,
         neural_engine_prefill_event: Option<&WorkerEvent>,
     ) -> Result<(), WorkerRuntimeError>
@@ -400,6 +401,12 @@ where
     {
         self.emit_persistent_prompt_cache_stats(event_writer)
             .await?;
+        self.is_neural_engine_preparation_running = matches!(
+            neural_engine_prefill_event,
+            Some(WorkerEvent::NeuralEnginePrefillChanged {
+                neural_engine_prefill: NeuralEnginePrefillStatus::Preparing { .. },
+            })
+        );
         if let Some(neural_engine_prefill_event) = neural_engine_prefill_event {
             event_writer.send_event(neural_engine_prefill_event).await?;
         }

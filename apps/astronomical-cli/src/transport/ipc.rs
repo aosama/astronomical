@@ -8,7 +8,7 @@ use std::{path::PathBuf, time::Duration};
 use astronomical_config::AstronomicalRuntimeInstance;
 use astronomical_ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonIpcClient, DaemonListedModel, DaemonRequest,
-    DaemonResponse, DaemonWorkerStatus,
+    DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight, NeuralEnginePrefillStatus,
 };
 use tokio::time::timeout;
 
@@ -67,6 +67,11 @@ pub struct DaemonStatusSnapshot {
     pub ready_model_id: Option<String>,
     /// Effective default model: the persisted value, else the built-in.
     pub default_model_id: Option<String>,
+    /// Which model is loading; `None` when nothing is.
+    pub model_load_in_flight: Option<ModelLoadInFlight>,
+    /// What the Neural Engine is doing for the loaded model; `None` before any model
+    /// has reported.
+    pub neural_engine_prefill: Option<NeuralEnginePrefillStatus>,
 }
 
 /// Socket candidates plus the per-stage bound both verbs share.
@@ -93,10 +98,14 @@ impl DaemonProbe {
                 worker_status,
                 ready_model_id,
                 default_model_id,
+                model_load_in_flight,
+                neural_engine_prefill,
             } => Ok(DaemonStatusSnapshot {
                 worker_status,
                 ready_model_id,
                 default_model_id,
+                model_load_in_flight,
+                neural_engine_prefill,
             }),
             _ => Err(DaemonProbeError::DaemonStoppedResponding),
         }

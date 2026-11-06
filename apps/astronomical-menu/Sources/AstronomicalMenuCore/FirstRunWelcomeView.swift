@@ -46,7 +46,10 @@ struct FirstRunWelcomeView: View {
 
       VStack(alignment: .leading, spacing: 4) {
         Text("Model").font(.caption).foregroundStyle(.secondary)
-        if let readyModelIdentifier = statusDocument.readyModelIdentifier {
+        if let modelLoadInFlight = statusDocument.modelLoadInFlight {
+          Text(modelLoadInFlight.headlineTitle)
+            .font(PopoverTypography.monospacedBody).lineLimit(1)
+        } else if let readyModelIdentifier = statusDocument.readyModelIdentifier {
           Text(readyModelIdentifier)
             .font(PopoverTypography.monospacedBody).lineLimit(1)
         } else {

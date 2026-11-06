@@ -1,6 +1,15 @@
 use std::fs;
 
-use super::ProgramSetCache;
+use astronomical_neural_engine::program_shape::ProgramShape;
+
+use super::{CoreMlProgramBuilder, ProgramSetCache};
+use crate::qwen3_5_resident::neural_engine_program_placement_record::{
+    PlacementCheck, placement_check_for, record_placement_verified,
+};
+use crate::qwen3_5_resident::neural_engine_program_preparation::{
+    NeuralEngineProgramFamily, ProgramBuildJob, ProgramBuildOutcome, ProgramBuilder,
+    ProgramIdentity,
+};
 
 #[test]
 fn should_name_each_layers_program_inside_the_set() {
@@ -128,4 +137,68 @@ fn should_refuse_a_cache_directory_that_cannot_be_created() {
     fs::write(&blocking_file, b"a file where a folder is needed").expect("the file writes");
 
     assert!(ProgramSetCache::open(&blocking_file, "mlp", "v1-960-of-2048").is_none());
+}
+
+const PLACEMENT_ENVIRONMENT: &str = "macOS 27.0.1 (26A434) on Mac99,1";
+
+fn kept_build_job_without_a_package(kept_program_path: &std::path::Path) -> ProgramBuildJob {
+    ProgramBuildJob {
+        identity: ProgramIdentity {
+            family: NeuralEngineProgramFamily::Mlp,
+            decoder_layer_index: 7,
+        },
+        shape: ProgramShape::new(64, 64, 64).expect("a valid shape"),
+        kept_program_path: Some(kept_program_path.to_path_buf()),
+        package: None,
+    }
+}
+
+#[test]
+fn should_ask_for_a_package_when_the_kept_program_is_missing() {
+    let set_directory = tempfile::tempdir().expect("a scratch directory");
+    let kept_program_path = set_directory.path().join("layer-7.mlmodelc");
+
+    let build_outcome =
+        CoreMlProgramBuilder.build(&kept_build_job_without_a_package(&kept_program_path));
+
+    assert!(matches!(
+        build_outcome,
+        ProgramBuildOutcome::NeedsUncachedPackage
+    ));
+}
+
+#[test]
+fn should_forget_a_record_left_by_a_program_that_is_gone_before_compiling_again() {
+    let set_directory = tempfile::tempdir().expect("a scratch directory");
+    let kept_program_path = set_directory.path().join("layer-7.mlmodelc");
+    record_placement_verified(&kept_program_path, PLACEMENT_ENVIRONMENT);
+
+    let _build_outcome =
+        CoreMlProgramBuilder.build(&kept_build_job_without_a_package(&kept_program_path));
+
+    assert_eq!(
+        placement_check_for(&kept_program_path, Some(PLACEMENT_ENVIRONMENT)),
+        PlacementCheck::Required
+    );
+}
+
+#[test]
+fn should_remove_a_kept_program_that_cannot_load_together_with_its_record() {
+    let set_directory = tempfile::tempdir().expect("a scratch directory");
+    let kept_program_path = set_directory.path().join("layer-7.mlmodelc");
+    fs::create_dir_all(&kept_program_path).expect("an empty program folder");
+    record_placement_verified(&kept_program_path, PLACEMENT_ENVIRONMENT);
+
+    let build_outcome =
+        CoreMlProgramBuilder.build(&kept_build_job_without_a_package(&kept_program_path));
+
+    assert!(matches!(
+        build_outcome,
+        ProgramBuildOutcome::NeedsUncachedPackage
+    ));
+    assert!(!kept_program_path.exists());
+    assert_eq!(
+        placement_check_for(&kept_program_path, Some(PLACEMENT_ENVIRONMENT)),
+        PlacementCheck::Required
+    );
 }

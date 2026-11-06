@@ -16,6 +16,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     daemonClient: daemonClient, applicationIdentity: applicationIdentity)
   private lazy var firstRunWelcomeWindowController = FirstRunWelcomeWindowController()
+  private let neuralEngineBannerPresenter = NeuralEngineBannerPresenter()
   private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
   private lazy var loginItemRegistrar: any LoginItemRegistering = SystemLoginItemRegistrar()
   private lazy var chatWindowController = ChatWindowController(
@@ -98,6 +99,9 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     )
     telemetryPopover = popover
     applicationUpdateController.start()
+    telemetryStore.onNeuralEngineBannerDue = { [weak self] neuralEngineBanner in
+      self?.neuralEngineBannerPresenter.present(neuralEngineBanner)
+    }
     telemetryStore.onMenuBarTitleChanged = { [weak self] menuBarTitle in
       guard let self else { return }
       let channelAwareMenuBarTitle =

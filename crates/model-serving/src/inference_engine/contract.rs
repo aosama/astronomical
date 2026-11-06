@@ -2,7 +2,7 @@ use std::future::Future;
 
 use crate::InferenceEngineError;
 use astronomical_ipc_protocol::{
-    ExpertLayerSeatingCounts, ExpertMemoryMode, RequestId, WorkerEvent,
+    ExpertLayerSeatingCounts, ExpertMemoryMode, NeuralEnginePrefillStatus, RequestId, WorkerEvent,
     WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptProcessingPhase,
     WorkerPromptWorkReuse,
 };
@@ -45,6 +45,15 @@ pub trait InferenceEngine {
         &mut self,
         request_id: RequestId,
     ) -> impl Future<Output = Result<GenerationFinalization, InferenceEngineError>> + Send;
+
+    /// Moves work that continues after readiness one step along, returning a status
+    /// a reader has not yet seen. The worker calls this only between requests.
+    fn advance_neural_engine_preparation(
+        &mut self,
+    ) -> impl Future<Output = Result<Option<NeuralEnginePrefillStatus>, InferenceEngineError>> + Send
+    {
+        async move { Ok(None) }
+    }
 
     /// Collects persistent prompt-cache observability stats for IPC emission.
     ///
@@ -147,6 +156,11 @@ pub trait MlxInferenceExecution: 'static {
         &mut self,
         request_id: RequestId,
     ) -> Result<GenerationFinalization, InferenceEngineError>;
+
+    /// Moves work that continues after readiness one step along.
+    fn advance_neural_engine_preparation(&mut self) -> Option<NeuralEnginePrefillStatus> {
+        None
+    }
 
     /// Reports optional persistent prompt-cache state.
     fn collect_persistent_prompt_cache_stats(

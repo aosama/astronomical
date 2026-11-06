@@ -116,6 +116,12 @@ pub enum DaemonResponse {
         /// Effective default model id: the persisted value, falling back to
         /// the built-in default when the config sets none.
         default_model_id: Option<String>,
+        /// Which model is loading; absent when nothing is.
+        /// Lets a waiting caller tell a slow load from a stuck daemon.
+        model_load_in_flight: Option<crate::ModelLoadInFlight>,
+        /// What the Neural Engine is doing for the loaded model; `None` before any
+        /// model has reported.
+        neural_engine_prefill: Option<crate::NeuralEnginePrefillStatus>,
     },
     /// Answer to [`DaemonRequest::ModelsList`].
     ModelsList { models: Vec<DaemonListedModel> },

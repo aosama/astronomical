@@ -6,7 +6,7 @@ use std::{io::Write, path::PathBuf};
 
 use astronomical_cli::StatusDependencies;
 use astronomical_config::AstronomicalRuntimeInstance;
-use astronomical_ipc_protocol::DaemonWorkerStatus;
+use astronomical_ipc_protocol::{DaemonWorkerStatus, ModelLoadInFlight, NeuralEnginePrefillStatus};
 use tokio::time::timeout;
 
 use crate::integration::support::environment;
@@ -224,4 +224,126 @@ async fn should_report_a_missing_daemon_as_not_running_for_status() {
         "a missing daemon must fail with the not-running error: {status_outcome:?}"
     );
     let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+#[tokio::test]
+async fn should_show_a_load_in_flight_on_its_own_line() {
+    let test_directory = environment::fresh_test_directory("status", "load-progress");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            installed_models: vec![StubInstalledModel::chat("test/old-model", true)],
+            model_load_reports: vec![ModelLoadInFlight::for_model("test/new-model")],
+            ..Default::default()
+        },
+    );
+    let mut stdout = Vec::new();
+    let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
+
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
+    status_outcome.expect("the status journey should complete against the stub daemon");
+    let rendered_stdout = String::from_utf8_lossy(&stdout);
+    assert!(
+        rendered_stdout.contains("loading:  test/new-model: Loading the model"),
+        "a load in flight should say what it is doing: {rendered_stdout:?}"
+    );
+    assert!(
+        !rendered_stdout.contains("test/old-model"),
+        "the model being replaced is no longer resident: {rendered_stdout:?}"
+    );
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+#[tokio::test]
+async fn should_show_no_loading_line_when_nothing_is_loading() {
+    let test_directory = environment::fresh_test_directory("status", "no-load-progress");
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let stub_daemon_task = spawn_stub_daemon(socket_path.clone(), StubDaemonConfig::default());
+    let mut stdout = Vec::new();
+    let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
+
+    let status_outcome = timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout");
+    status_outcome.expect("the status journey should complete against the stub daemon");
+    let rendered_stdout = String::from_utf8_lossy(&stdout);
+    assert!(
+        !rendered_stdout.contains("loading:"),
+        "an idle status keeps its usual lines: {rendered_stdout:?}"
+    );
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+}
+
+async fn status_report_with_neural_engine(
+    test_name: &str,
+    neural_engine_prefill: Option<NeuralEnginePrefillStatus>,
+) -> String {
+    let test_directory = environment::fresh_test_directory("status", test_name);
+    let socket_path = test_directory.join(SOCKET_FILE_NAME);
+    let stub_daemon_task = spawn_stub_daemon(
+        socket_path.clone(),
+        StubDaemonConfig {
+            installed_models: vec![StubInstalledModel::chat("test/model", true)],
+            neural_engine_prefill,
+            ..Default::default()
+        },
+    );
+    let mut stdout = Vec::new();
+    let mut status_dependencies = status_dependencies(vec![socket_path], &mut stdout);
+    timeout(
+        TEST_TIMEOUT,
+        astronomical_cli::run_status(&mut status_dependencies),
+    )
+    .await
+    .expect("the status journey should finish inside the test timeout")
+    .expect("the status journey should complete against the stub daemon");
+    stub_daemon_task.abort();
+    let _ = std::fs::remove_dir_all(&test_directory);
+    String::from_utf8(stdout).expect("the report is text")
+}
+
+#[tokio::test]
+async fn should_show_programs_being_prepared_beside_the_serving_model() {
+    let report = status_report_with_neural_engine(
+        "ne-preparing",
+        Some(NeuralEnginePrefillStatus::Preparing {
+            completed_program_count: 12,
+            total_program_count: 56,
+            elapsed_ms: 12_000,
+            estimated_remaining_ms: None,
+        }),
+    )
+    .await;
+
+    assert!(
+        report.contains("neural engine:  preparing, 12/56 programs"),
+        "{report}"
+    );
+}
+
+#[tokio::test]
+async fn should_add_no_neural_engine_line_when_the_setting_is_off() {
+    let report_when_off =
+        status_report_with_neural_engine("ne-off", Some(NeuralEnginePrefillStatus::Off)).await;
+    let report_before_any_model = status_report_with_neural_engine("ne-none", None).await;
+
+    assert!(
+        !report_when_off.contains("neural engine"),
+        "{report_when_off}"
+    );
+    assert!(
+        !report_before_any_model.contains("neural engine"),
+        "{report_before_any_model}"
+    );
 }

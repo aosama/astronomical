@@ -72,8 +72,29 @@ final class MenuBarGlyphTests: XCTestCase {
     XCTAssertEqual(DaemonStatusDocument.unavailable.menuBarGlyphState, .idle)
   }
 
-  func test_should_render_four_distinct_template_glyphs() throws {
-    let glyphStates: [MenuBarGlyphState] = [.idle, .resident, .streaming, .generating]
+  // A model swap reports "ready" with no resident model until the load ends, so the glyph has to
+  // read the load itself rather than the status beside it.
+  func test_should_show_loading_over_every_status_while_a_load_is_in_flight() throws {
+    let modelLoadInFlight = DaemonStatusDocument.ModelLoadInFlight(modelIdentifier: "second-model")
+    for status in ["ready", "loading"] {
+      let statusDocument = DaemonStatusDocument(
+        status: status, activity: "idle", readyModelIdentifier: nil, progress: nil,
+        modelLoadInFlight: modelLoadInFlight, expertMemoryMode: nil,
+        mlxMemoryCeilingBytes: 0, servingSession: .empty)
+      XCTAssertEqual(statusDocument.menuBarGlyphState, .loadingModel, status)
+    }
+  }
+
+  func test_should_describe_the_loading_glyph_for_accessibility() {
+    XCTAssertEqual(
+      makeMenuBarGlyphImage(state: .loadingModel).accessibilityDescription,
+      "Astronomical, loading a model")
+  }
+
+  func test_should_render_five_distinct_template_glyphs() throws {
+    let glyphStates: [MenuBarGlyphState] = [
+      .idle, .resident, .streaming, .generating, .loadingModel,
+    ]
     var renderedAlphaSamples: [[UInt8]] = []
     for glyphState in glyphStates {
       let glyphImage = makeMenuBarGlyphImage(state: glyphState)

@@ -15,6 +15,9 @@ enum MenuBarGlyphState: Equatable {
   /// A request is live; the reticle fills, and the status title beside the
   /// glyph says what is running, so the state never depends on colour.
   case generating
+  /// A model is loading: the disc is hatched like streaming, but the filled reticle
+  /// marks work in progress, and the title beside the glyph says what.
+  case loadingModel
 
   var accessibilityTitle: String {
     switch self {
@@ -22,12 +25,15 @@ enum MenuBarGlyphState: Equatable {
     case .resident: return "model in memory"
     case .streaming: return "streaming experts from SSD"
     case .generating: return "generating"
+    case .loadingModel: return "loading a model"
     }
   }
 }
 
 extension DaemonStatusDocument {
   var menuBarGlyphState: MenuBarGlyphState {
+    // Checked first because the status can read "ready" throughout a model swap.
+    if modelLoadInFlight != nil { return .loadingModel }
     guard status == "ready", readyModelIdentifier != nil else { return .idle }
     if isActive { return .generating }
     // "paged" and "hybrid" both stream some experts from the SSD; dense
@@ -90,7 +96,7 @@ private func drawMenuBarGlyph(state: MenuBarGlyphState, in glyphBounds: NSRect) 
     break
   case .resident, .generating:
     plate.circle(markX: 8, markY: 92, markRadius: 62).fill()
-  case .streaming:
+  case .streaming, .loadingModel:
     drawHatchedDisc(plate: plate)
   }
   NSGraphicsContext.restoreGraphicsState()
@@ -99,7 +105,7 @@ private func drawMenuBarGlyph(state: MenuBarGlyphState, in glyphBounds: NSRect) 
   platePath.stroke()
 
   let reticlePath = plate.circle(markX: 44, markY: 20, markRadius: 9)
-  if state == .generating {
+  if state == .generating || state == .loadingModel {
     reticlePath.fill()
   } else {
     reticlePath.lineWidth = 1.1

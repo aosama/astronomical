@@ -348,7 +348,7 @@ async fn read_candidate_acknowledgement(
     let mut deferred_process_events = Vec::new();
     loop {
         let candidate_event = candidate_worker_process
-            .next_event()
+            .next_event_without_load_progress()
             .await?
             .ok_or(WorkerControlError::WorkerEventStreamClosed)?;
         match candidate_event {

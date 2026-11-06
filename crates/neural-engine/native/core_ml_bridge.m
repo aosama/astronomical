@@ -24,8 +24,8 @@ enum {
   ASTRONOMICAL_PLACEMENT_NEURAL_ENGINE = 3,
 };
 
-// Compilation of a multi-megabyte model and compute-plan analysis each finish
-// in well under a second on Apple silicon; a minute is a hang, not a slow Mac.
+// Compiling one program, or building its compute plan, takes up to a few seconds
+// for a large layer on Apple silicon; a minute is a hang, not a slow Mac.
 static const int64_t ASTRONOMICAL_NATIVE_WAIT_SECONDS = 60;
 
 typedef struct {
@@ -133,6 +133,12 @@ static MLComputeUnits astronomical_compute_units(int32_t compute_units_code) {
   }
 }
 
+static NSError *astronomical_bridge_error(NSString *description) {
+  return [NSError errorWithDomain:@"AstronomicalCoreMl"
+                             code:1
+                         userInfo:@{NSLocalizedDescriptionKey : description}];
+}
+
 static NSURL *astronomical_compile_model(NSURL *model_url, NSError **error_out) {
   dispatch_semaphore_t completion = dispatch_semaphore_create(0);
   __block NSURL *compiled_url = nil;
@@ -146,9 +152,7 @@ static NSURL *astronomical_compile_model(NSURL *model_url, NSError **error_out) 
   long timed_out = dispatch_semaphore_wait(
       completion, dispatch_time(DISPATCH_TIME_NOW, ASTRONOMICAL_NATIVE_WAIT_SECONDS * NSEC_PER_SEC));
   if (timed_out != 0) {
-    *error_out = [NSError errorWithDomain:@"AstronomicalCoreMl"
-                                     code:1
-                                 userInfo:@{NSLocalizedDescriptionKey : @"model compilation timed out"}];
+    *error_out = astronomical_bridge_error(@"model compilation timed out");
     return nil;
   }
   *error_out = compile_error;
@@ -206,19 +210,29 @@ static void astronomical_record_layer_placement(MLComputePlan *plan, Astronomica
 API_AVAILABLE(macos(14.4))
 static int32_t astronomical_load_layer_placement(NSURL *compiled_url,
                                                  MLModelConfiguration *configuration,
-                                                 AstronomicalLayerPlacement *placement) {
+                                                 AstronomicalLayerPlacement *placement,
+                                                 NSError **error_out) {
   dispatch_semaphore_t completion = dispatch_semaphore_create(0);
   __block MLComputePlan *loaded_plan = nil;
+  __block NSError *plan_error = nil;
   [MLComputePlan loadContentsOfURL:compiled_url
                      configuration:configuration
                  completionHandler:^(MLComputePlan *_Nullable plan, NSError *_Nullable error) {
-                   (void)error;
+                   plan_error = error;
                    loaded_plan = plan;
                    dispatch_semaphore_signal(completion);
                  }];
   long timed_out = dispatch_semaphore_wait(
       completion, dispatch_time(DISPATCH_TIME_NOW, ASTRONOMICAL_NATIVE_WAIT_SECONDS * NSEC_PER_SEC));
-  if (timed_out != 0 || loaded_plan == nil) {
+  // The model itself has already loaded by now. The reason is kept because programs
+  // are discarded on this failure, and without it the log cannot tell a failed check
+  // from a failed load.
+  if (timed_out != 0) {
+    *error_out = astronomical_bridge_error(@"the compute plan timed out");
+    return -1;
+  }
+  if (loaded_plan == nil) {
+    *error_out = plan_error ?: astronomical_bridge_error(@"the compute plan gave no plan and no error");
     return -1;
   }
   astronomical_record_layer_placement(loaded_plan, placement);
@@ -249,6 +263,7 @@ static int32_t astronomical_bind_surfaces(AstronomicalCoreMlProgram *projection,
   projection->output_pixel_buffer =
       astronomical_create_fp16_surface(projection->output_channels, projection->token_count);
   if (projection->input_pixel_buffer == NULL || projection->output_pixel_buffer == NULL) {
+    *error_out = astronomical_bridge_error(@"could not create the program's memory surfaces");
     return -1;
   }
   projection->input_array = astronomical_channels_by_tokens_array(
@@ -323,7 +338,8 @@ void astronomical_core_ml_program_release(AstronomicalCoreMlProgram *projection)
 }
 
 static int32_t astronomical_load_model(AstronomicalCoreMlProgram *projection, NSURL *model_url,
-                                       int32_t compute_units_code, NSError **error_out) {
+                                       int32_t compute_units_code, int32_t checks_placement,
+                                       NSError **error_out) {
   // An already compiled program belongs to whoever kept it, so it is loaded where it
   // is and `compiled_model_url` stays nil: release must not remove a cached copy.
   NSURL *compiled_url = model_url;
@@ -344,12 +360,18 @@ static int32_t astronomical_load_model(AstronomicalCoreMlProgram *projection, NS
   if (projection->model == nil) {
     return -1;
   }
+  // The compute plan compiles the program a second time, about a second for a large
+  // layer, and on programs macOS already held it failed or came back empty for 17 of
+  // 56 on one reload. A caller that proved placement on an earlier load skips it.
+  if (checks_placement == 0) {
+    return 0;
+  }
   // Before 14.4 there is no compute plan, so placement stays unknown; callers
   // that need proof of Neural Engine placement refuse an unknown verdict.
   if (@available(macOS 14.4, *)) {
     CFAbsoluteTime placement_started_at = CFAbsoluteTimeGetCurrent();
     int32_t placement_status =
-        astronomical_load_layer_placement(compiled_url, configuration, &projection->placement);
+        astronomical_load_layer_placement(compiled_url, configuration, &projection->placement, error_out);
     projection->placement_seconds = CFAbsoluteTimeGetCurrent() - placement_started_at;
     return placement_status;
   }
@@ -357,8 +379,9 @@ static int32_t astronomical_load_model(AstronomicalCoreMlProgram *projection, NS
 }
 
 AstronomicalCoreMlProgram *astronomical_core_ml_program_load(
-    const char *model_path, int32_t compute_units_code, int32_t input_channels,
-    int32_t output_channels, int32_t token_count, char *error_message, uint32_t error_capacity) {
+    const char *model_path, int32_t compute_units_code, int32_t checks_placement,
+    int32_t input_channels, int32_t output_channels, int32_t token_count, char *error_message,
+    uint32_t error_capacity) {
   if (model_path == NULL || input_channels <= 0 || output_channels <= 0 || token_count <= 0) {
     astronomical_copy_error(error_message, error_capacity, @"invalid projection arguments");
     return NULL;
@@ -377,7 +400,7 @@ AstronomicalCoreMlProgram *astronomical_core_ml_program_load(
     projection->prediction_finished = dispatch_semaphore_create(0);
     NSError *error = nil;
     NSURL *model_url = [NSURL fileURLWithPath:[NSString stringWithUTF8String:model_path]];
-    if (astronomical_load_model(projection, model_url, compute_units_code, &error) != 0
+    if (astronomical_load_model(projection, model_url, compute_units_code, checks_placement, &error) != 0
         || astronomical_bind_surfaces(projection, &error) != 0) {
       astronomical_copy_error(error_message, error_capacity,
                               error.localizedDescription ?: @"failed to prepare the Core ML projection");

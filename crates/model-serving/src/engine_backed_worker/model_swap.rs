@@ -6,10 +6,34 @@ use astronomical_ipc_protocol::{
 };
 use tokio::io::AsyncWrite;
 
+use super::load_announcement::announce_load_started;
 use super::support::{ModelFactory, ModelFactoryRuntime, SelectedModel, WorkerRuntimeError};
 use super::{EngineBackedWorker, LoadedModel, LoadedRuntime};
 use crate::model_generation_processor::ModelGenerationProcessor;
 use crate::{EnginePlacement, ImageGenerationEngine, InferenceEngine};
+
+/// Loads the replacement engine, keeping the daemon informed. The failure text stays
+/// generic on the wire; the specific cause goes to the log.
+async fn load_replacement_engine<Engine, WriteTransport>(
+    engine: &mut Engine,
+    model_configuration: &WorkerModelConfiguration,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<crate::EngineLoadResult, WorkerRuntimeError>
+where
+    Engine: InferenceEngine,
+    WriteTransport: AsyncWrite + Unpin,
+{
+    announce_load_started(Some(model_configuration.model_id()), event_writer).await?;
+    match engine.load().await {
+        Ok(engine_load_result) => Ok(engine_load_result),
+        Err(engine_error) => {
+            tracing::error!(model_directory = ?model_configuration.model_id(), error = %engine_error, "model engine load failed after swap creation");
+            Err(WorkerRuntimeError::ModelSwapFailed {
+                model_load_failure_reason: "model engine initialization failed".to_owned(),
+            })
+        }
+    }
+}
 
 /// Emits paired timing boundaries for one model-swap phase only when the
 /// factory has performance attribution enabled, mirroring the prompt-cache
@@ -157,7 +181,7 @@ where
             startup_residency_facts,
             neural_engine_prefill_event,
         } = self
-            .load_replacement_runtime(factory_runtime, &model_configuration)
+            .load_replacement_runtime(factory_runtime, &model_configuration, event_writer)
             .await?;
 
         self.loaded_runtime = Some(replacement_runtime);
@@ -199,14 +223,18 @@ where
     /// Loads whichever replacement runtime the factory produced: the
     /// autoregressive engine loads under attribution while the image and
     /// embedding engines load synchronously with identity verification.
-    async fn load_replacement_runtime(
+    async fn load_replacement_runtime<WriteTransport>(
         &self,
         factory_runtime: ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
         model_configuration: &WorkerModelConfiguration,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
         LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine>,
         WorkerRuntimeError,
-    > {
+    >
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
         match factory_runtime {
             ModelFactoryRuntime::Autoregressive {
                 processor,
@@ -218,6 +246,7 @@ where
                     engine,
                     engine_placement,
                     model_configuration,
+                    event_writer,
                 )
                 .await
             }
@@ -235,23 +264,27 @@ where
     /// Loads the autoregressive replacement: the engine load is attributed, its
     /// ready event is derived from the processor, and the startup residency
     /// facts carry into the worker state.
-    async fn load_autoregressive_replacement(
+    async fn load_autoregressive_replacement<WriteTransport>(
         &self,
         processor: Processor,
         engine: Engine,
         engine_placement: Option<EnginePlacement>,
         model_configuration: &WorkerModelConfiguration,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
         LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine>,
         WorkerRuntimeError,
-    > {
+    >
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
         let mut replacement_model = LoadedModel { processor, engine };
-        let engine_load_result = replacement_model.engine.load().await.map_err(|engine_error| {
-                tracing::error!(model_directory = ?model_configuration.model_id(), error = %engine_error, "model engine load failed after swap creation");
-                WorkerRuntimeError::ModelSwapFailed {
-                    model_load_failure_reason: "model engine initialization failed".to_owned(),
-                }
-            })?;
+        let engine_load_result = load_replacement_engine(
+            &mut replacement_model.engine,
+            model_configuration,
+            event_writer,
+        )
+        .await?;
         let minimum = engine_load_result.minimum_mlx_memory_ceiling_bytes();
         let event = model_swapped_from_ready_event(
             replacement_model.processor.ready_event(),

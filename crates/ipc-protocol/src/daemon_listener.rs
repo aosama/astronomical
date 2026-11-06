@@ -88,10 +88,23 @@ impl DaemonIpcListener {
         Ok(())
     }
 
-    /// Accepts one connection and hands the request plus the open write half
-    /// to the handler, which streams every response frame before the
-    /// connection closes. Like [`Self::serve_next_request`], a peer that
-    /// disconnects before sending a request is not an error.
+    /// Accepts one connection without reading from it, so the caller can serve it
+    /// on its own task. Reading here would let a client that connects and stays
+    /// silent hold up every client behind it.
+    pub async fn accept_connection(
+        &mut self,
+    ) -> Result<AcceptedDaemonConnection, DaemonTransportError> {
+        let (connection_stream, _peer_address) = self
+            .unix_listener
+            .accept()
+            .await
+            .map_err(|source| DaemonTransportError::AcceptFailed { source })?;
+        Ok(AcceptedDaemonConnection { connection_stream })
+    }
+
+    /// Accepts one connection and serves it to completion before returning. For a
+    /// caller that wants strictly one exchange; a long-lived service accepts with
+    /// [`Self::accept_connection`] and serves each connection on its own task.
     pub async fn serve_streaming_request<StreamingHandler, StreamingHandlerFuture>(
         &mut self,
         handle_request: StreamingHandler,
@@ -100,20 +113,39 @@ impl DaemonIpcListener {
         StreamingHandler: FnOnce(DaemonRequest, StreamingResponseWriter) -> StreamingHandlerFuture,
         StreamingHandlerFuture: Future<Output = Result<(), DaemonTransportError>> + Send,
     {
-        let (connection_stream, _peer_address) = self
-            .unix_listener
-            .accept()
-            .await
-            .map_err(|source| DaemonTransportError::AcceptFailed { source })?;
-        let (read_half, write_half) = connection_stream.into_split();
+        let accepted_connection = self.accept_connection().await?;
+        let Some((daemon_request, streaming_response_writer)) =
+            accepted_connection.read_request().await?
+        else {
+            return Ok(());
+        };
+        handle_request(daemon_request, streaming_response_writer).await
+    }
+}
+
+/// One accepted connection whose request has not been read yet.
+pub struct AcceptedDaemonConnection {
+    connection_stream: UnixStream,
+}
+
+impl AcceptedDaemonConnection {
+    /// Reads the connection's one request and returns it with the open write half,
+    /// which streams every response frame before the connection closes. `None`
+    /// means the peer disconnected before sending a request, which is not an error,
+    /// like [`DaemonIpcListener::serve_next_request`].
+    pub async fn read_request(
+        self,
+    ) -> Result<Option<(DaemonRequest, StreamingResponseWriter)>, DaemonTransportError> {
+        let (read_half, write_half) = self.connection_stream.into_split();
         let mut protocol_reader = ProtocolReader::new(read_half);
         let protocol_writer = ProtocolWriter::new(write_half);
         let Some(daemon_request) = protocol_reader.next_daemon_request().await? else {
-            return Ok(());
+            return Ok(None);
         };
-        let streaming_response_writer =
-            StreamingResponseWriter::from_protocol_writer(protocol_writer);
-        handle_request(daemon_request, streaming_response_writer).await
+        Ok(Some((
+            daemon_request,
+            StreamingResponseWriter::from_protocol_writer(protocol_writer),
+        )))
     }
 }
 

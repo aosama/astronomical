@@ -3,6 +3,7 @@
 //! protocol over a real unix socket. The structured-output journeys for
 //! `--schema` live in the `schema` child module.
 
+mod model_load;
 mod schema;
 
 use std::{io::Write, path::PathBuf};
@@ -34,6 +35,8 @@ fn respond_dependencies<'a>(
         request_timeout: TEST_TIMEOUT,
         download_stall_bound: TEST_TIMEOUT,
         download_poll_interval: DOWNLOAD_POLL_INTERVAL,
+        model_load_poll_interval: DOWNLOAD_POLL_INTERVAL,
+        model_load_stall_bound: TEST_TIMEOUT,
     }
 }
 

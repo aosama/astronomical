@@ -52,6 +52,12 @@ impl MlxInferenceExecution for Qwen3_5InferenceExecution {
         Qwen3_5EngineState::cancel_generation(self, request_id)
     }
 
+    fn advance_neural_engine_preparation(
+        &mut self,
+    ) -> Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus> {
+        Qwen3_5EngineState::advance_neural_engine_preparation(self)
+    }
+
     fn collect_persistent_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {

@@ -337,6 +337,11 @@ pub enum WorkerEvent {
     NeuralEnginePrefillChanged {
         neural_engine_prefill: crate::NeuralEnginePrefillStatus,
     },
+    /// Announces a model load, before readiness. The daemon keeps it and clears it
+    /// when the load ends, however it ends.
+    ModelLoadInFlight {
+        model_load_in_flight: crate::ModelLoadInFlight,
+    },
     /// Reports final engine residency and MLX memory after request cleanup.
     ///
     /// This is separate from prompt-progress telemetry because automatic expert

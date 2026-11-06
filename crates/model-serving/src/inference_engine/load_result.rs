@@ -84,6 +84,15 @@ impl EngineLoadResult {
         }
     }
 
+    /// Whether this load left programs being prepared beside the serving model.
+    #[must_use]
+    pub const fn is_neural_engine_preparation_running(&self) -> bool {
+        matches!(
+            self.neural_engine_prefill_status,
+            NeuralEnginePrefillStatus::Preparing { .. }
+        )
+    }
+
     /// The event announcing a setting that was on, or `None` when it was off,
     /// so workers that never opt in publish exactly what they always did.
     #[must_use]

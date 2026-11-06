@@ -67,9 +67,14 @@ pub struct Qwen3_5InferenceExecution {
     /// between loads; `None` compiles them again on every load.
     pub(in crate::qwen3_5_resident::inference_execution) neural_engine_program_cache_directory:
         Option<std::path::PathBuf>,
-    /// What the opt-in Neural Engine prefill ended up doing at load.
+    /// What the opt-in Neural Engine prefill is doing for the loaded model.
     pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_status:
         astronomical_ipc_protocol::NeuralEnginePrefillStatus,
+    /// The programs still on their way to the loaded model, which serves on the GPU
+    /// until they arrive.
+    pub(in crate::qwen3_5_resident::inference_execution) neural_engine_prefill_preparation: Option<
+        crate::qwen3_5_resident::neural_engine_prefill_loading::NeuralEnginePrefillPreparation,
+    >,
     /// The last completed generation's live decoder state, retained for
     /// in-memory prefix adoption (issue #1167). Dropped when the next request
     /// fails to adopt it or when the retention policy says so at completion.

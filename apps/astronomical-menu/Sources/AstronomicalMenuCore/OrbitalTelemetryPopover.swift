@@ -53,7 +53,11 @@ struct OrbitalTelemetryPopover: View {
                 in: Capsule())
           }
           HStack(alignment: .center, spacing: 6) {
-            if let readyModelIdentifier = statusDocument.readyModelIdentifier {
+            if let modelLoadInFlight = statusDocument.modelLoadInFlight {
+              Text(modelLoadInFlight.headlineTitle)
+                .font(PopoverTypography.headline)
+                .lineLimit(1)
+            } else if let readyModelIdentifier = statusDocument.readyModelIdentifier {
               Text(readyModelIdentifier)
                 .font(PopoverTypography.headline)
                 .lineLimit(1)
@@ -69,7 +73,8 @@ struct OrbitalTelemetryPopover: View {
           .font(PopoverTypography.semiboldCaption)
           .padding(.horizontal, 8).padding(.vertical, 4)
           .background(
-            statusDocument.isActive ? .cyan.opacity(0.2) : .secondary.opacity(0.15), in: Capsule())
+            statusDocument.isActive || statusDocument.isLoadingModel
+              ? .cyan.opacity(0.2) : .secondary.opacity(0.15), in: Capsule())
       }
       HStack(alignment: .top, spacing: 16) {
         summaryMetric("Size on disk", statusDocument.modelDiskSizeTitle)
@@ -92,6 +97,11 @@ struct OrbitalTelemetryPopover: View {
       }
       metricRow("Progress", statusDocument.progressTitle)
       metricRow(statusDocument.elapsedTimeMetricTitle, statusDocument.elapsedTimeTitle)
+      if let neuralEngineTitle = statusDocument.neuralEnginePrefill?.metricTitle(
+        showsEstimate: !statusDocument.isActive)
+      {
+        metricRow("Neural Engine", neuralEngineTitle)
+      }
       Divider()
       GPUUtilizationBar(
         gpuUtilizationPercentage: telemetryStore.systemTelemetrySnapshot.gpuUtilizationPercentage

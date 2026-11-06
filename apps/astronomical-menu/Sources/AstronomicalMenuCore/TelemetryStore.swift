@@ -50,6 +50,8 @@ final class TelemetryStore: ObservableObject {
   private let systemTelemetryClock = ContinuousClock()
   private var pollingTask: Task<Void, Never>?
   private var latestStatusRefreshTask: Task<DaemonStatusDocument, Never>?
+  private var neuralEngineBannerPolicy = NeuralEngineBannerPolicy()
+  var onNeuralEngineBannerDue: ((NeuralEngineBanner) -> Void)?
   private var latestStatusRefreshSequence = 0
   private var controlActionFeedbackDismissalTask: Task<Void, Never>?
   private var controlActionFeedbackGeneration = 0
@@ -287,6 +289,11 @@ final class TelemetryStore: ObservableObject {
     }
     onMenuBarTitleChanged?(nextStatusDocument.menuBarTitle)
     onMenuBarGlyphStateChanged?(nextStatusDocument.menuBarGlyphState)
+    if let neuralEngineBanner = neuralEngineBannerPolicy.banner(
+      for: nextStatusDocument, at: Date())
+    {
+      onNeuralEngineBannerDue?(neuralEngineBanner)
+    }
     resolveMaximumMlxMemoryFeedbackIfReady()
   }
 

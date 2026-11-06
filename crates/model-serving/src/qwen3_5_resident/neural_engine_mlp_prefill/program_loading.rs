@@ -1,16 +1,15 @@
-//! Builds one Neural Engine MLP program per decoder layer when a model loads,
-//! and decides whether they may run at all.
+//! Plans one Neural Engine MLP program per decoder layer when a model loads, decides
+//! whether they may run at all, and writes the compile input for each.
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 
 use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, WorkerChunkingConfiguration};
 use astronomical_memory_policy::neural_engine_admission::{
     NeuralEnginePrefillAdmission, NeuralEnginePrefillMemoryRequirements,
 };
+use astronomical_neural_engine::core_ml::CoreMlProgram;
 use astronomical_neural_engine::core_ml::compute_device_report::report_compute_devices;
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, compile_model_to};
 use astronomical_neural_engine::documents::mlp::{MlpFp16Weights, encode_ml_program_mlp};
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::program_shape::ProgramShape;
@@ -24,8 +23,9 @@ use crate::qwen3_5_core::model_math::decoder_layer_weights::{
 };
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::neural_engine_output_gate_prefill::output_gate_fp16_weight_bytes;
-use crate::qwen3_5_resident::neural_engine_program_cache::{
-    ProgramSetCache, ProgramSource, load_verified_program,
+use crate::qwen3_5_resident::neural_engine_program_cache::{ProgramSetCache, kept_program_path};
+use crate::qwen3_5_resident::neural_engine_program_preparation::{
+    NeuralEngineProgramFamily, PlannedProgram, ProgramIdentity,
 };
 
 // A 2,048-deep contraction runs at 18.6 TFLOP/s on the Neural Engine and a
@@ -57,75 +57,167 @@ pub(crate) fn unavailable(reason: &str) -> NeuralEnginePrefillStatus {
     }
 }
 
-/// Whatever goes wrong here leaves the model serving on the GPU, because an
-/// opt-in speedup must never stop a model from loading. Compiled programs are kept
-/// in `program_cache_directory` when there is one.
-pub(crate) fn prepare_neural_engine_mlp_prefill(
-    model: &mut Qwen3_5ResidentModel,
+/// The MLP programs a model will get, once it has been decided they may run.
+pub(crate) struct MlpProgramPlan {
+    shape: ProgramShape,
+    intermediate_channels: usize,
+    chunk_token_count: u32,
+    neural_engine_token_count: u32,
+    estimated_memory_bytes: u64,
+    maximum_context_tokens: u32,
+    decoder_layer_count: usize,
+    program_cache: Option<ProgramSetCache>,
+}
+
+/// Everything that can refuse the programs is decided here, before any is built, so
+/// the status is settled immediately for a model that will never use them. The error
+/// is the status to report. Whatever goes wrong leaves the model serving on the GPU,
+/// because an opt-in speedup must never stop a model from loading.
+pub(crate) fn plan_neural_engine_mlp_programs(
+    model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
     maximum_context_tokens: u32,
     program_cache_directory: Option<&Path>,
-) -> NeuralEnginePrefillStatus {
+) -> Result<MlpProgramPlan, NeuralEnginePrefillStatus> {
     if !chunking.experimental_neural_engine_prefill_enabled {
-        return NeuralEnginePrefillStatus::Off;
+        return Err(NeuralEnginePrefillStatus::Off);
     }
     if !report_compute_devices().has_neural_engine() {
-        return unavailable("this Mac reports no Neural Engine");
+        return Err(unavailable("this Mac reports no Neural Engine"));
     }
     let chunk_token_count = chunking.fixed_prompt_processing_chunk_size_tokens;
     let Some(neural_engine_token_count) = neural_engine_tokens_for_chunk(chunk_token_count) else {
-        return unavailable("the prompt-processing chunk is too small");
+        return Err(unavailable("the prompt-processing chunk is too small"));
     };
     let Some(layer_weights) = dense_mlp_layer_weights(model) else {
-        return unavailable("only dense models are supported");
+        return Err(unavailable("only dense models are supported"));
     };
-    let estimated_memory_bytes = match admit_programs(model, maximum_context_tokens) {
+    let estimated_memory_bytes = admitted_program_bytes(model, maximum_context_tokens)?;
+    let hidden_channels = model.base.config().hidden_size() as usize;
+    let Ok(shape) = ProgramShape::new(
+        hidden_channels,
+        hidden_channels,
+        neural_engine_token_count as usize,
+    ) else {
+        return Err(unavailable("the model's MLP shape is not supported"));
+    };
+    Ok(MlpProgramPlan {
+        shape,
+        intermediate_channels: model.base.config().dense_intermediate_size() as usize,
+        chunk_token_count,
+        neural_engine_token_count,
+        estimated_memory_bytes,
+        maximum_context_tokens,
+        decoder_layer_count: layer_weights.len(),
+        program_cache: open_program_cache(
+            program_cache_directory,
+            neural_engine_token_count,
+            chunk_token_count,
+        ),
+    })
+}
+
+/// What the programs will hold, or the status to report when they do not fit.
+fn admitted_program_bytes(
+    model: &Qwen3_5ResidentModel,
+    maximum_context_tokens: u32,
+) -> Result<u64, NeuralEnginePrefillStatus> {
+    match admit_programs(model, maximum_context_tokens) {
         NeuralEnginePrefillAdmission::Admitted {
             estimated_neural_engine_bytes,
-        } => estimated_neural_engine_bytes,
+        } => Ok(estimated_neural_engine_bytes),
         NeuralEnginePrefillAdmission::Refused {
             estimated_neural_engine_bytes,
             required_bytes,
             active_memory_ceiling_bytes,
-        } => {
-            return unavailable(&format!(
-                "the programs need about {} GB of memory including {} GB for themselves, but the MLX memory ceiling is {} GB",
-                whole_gigabytes_rounded_up(required_bytes),
-                whole_gigabytes_rounded_up(estimated_neural_engine_bytes),
-                active_memory_ceiling_bytes / BYTES_PER_GIGABYTE,
-            ));
-        }
-    };
-    let program_cache = open_program_cache(
-        program_cache_directory,
-        neural_engine_token_count,
-        chunk_token_count,
-    );
-    let layer_programs = match load_layer_programs(
-        model,
-        &layer_weights,
-        neural_engine_token_count,
-        program_cache.as_ref(),
-    ) {
-        Ok(layer_programs) => layer_programs,
-        Err(reason) => return unavailable(reason),
-    };
-    if let Some(program_cache) = &program_cache {
-        program_cache.record_finished_set(layer_programs.len() as u64);
+        } => Err(unavailable(&format!(
+            "the programs need about {} GB of memory including {} GB for themselves, but the MLX memory ceiling is {} GB",
+            whole_gigabytes_rounded_up(required_bytes),
+            whole_gigabytes_rounded_up(estimated_neural_engine_bytes),
+            active_memory_ceiling_bytes / BYTES_PER_GIGABYTE,
+        ))),
     }
-    let layer_program_count = u32::try_from(layer_programs.len()).unwrap_or(u32::MAX);
-    model.neural_engine_mlp_prefill = Some(NeuralEngineMlpPrefill {
-        layer_programs: RefCell::new(layer_programs),
-        chunk_token_count,
-        neural_engine_token_count,
-        has_failed: Cell::new(false),
-        is_paused: Cell::new(false),
-    });
-    NeuralEnginePrefillStatus::Active {
-        layer_program_count,
-        neural_engine_tokens_per_chunk: neural_engine_token_count,
-        chunk_token_count,
-        estimated_memory_bytes,
+}
+
+impl MlpProgramPlan {
+    /// Asks again just before the programs attach, because the memory ceiling can be
+    /// lowered during the minute or more they take to build.
+    pub(crate) fn refusal_at_current_ceiling(
+        &self,
+        model: &Qwen3_5ResidentModel,
+    ) -> Option<NeuralEnginePrefillStatus> {
+        admitted_program_bytes(model, self.maximum_context_tokens).err()
+    }
+
+    pub(crate) fn planned_programs(&self) -> Vec<PlannedProgram> {
+        let mut planned_programs = Vec::with_capacity(self.decoder_layer_count);
+        for decoder_layer_index in 0..self.decoder_layer_count {
+            planned_programs.push(PlannedProgram {
+                identity: ProgramIdentity {
+                    family: NeuralEngineProgramFamily::Mlp,
+                    decoder_layer_index,
+                },
+                shape: self.shape,
+                kept_program_path: kept_program_path(
+                    self.program_cache.as_ref(),
+                    decoder_layer_index,
+                ),
+            });
+        }
+        planned_programs
+    }
+
+    /// One layer's compile input, read from the model as fp16.
+    pub(crate) fn write_package(
+        &self,
+        model: &Qwen3_5ResidentModel,
+        decoder_layer_index: usize,
+        package_directory: &Path,
+    ) -> Result<PathBuf, &'static str> {
+        let decoder_layer_weights = model
+            .base
+            .weights
+            .decoder_layer_weights
+            .get(decoder_layer_index)
+            .ok_or(WEIGHT_READ_FAILURE)?;
+        let Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) =
+            &decoder_layer_weights.mlp_weights
+        else {
+            return Err(WEIGHT_READ_FAILURE);
+        };
+        MlpProgramSource {
+            runtime: model.runtime(),
+            dense_mlp_weights,
+            shape: self.shape,
+            intermediate_channels: self.intermediate_channels,
+        }
+        .write_package(package_directory)
+    }
+
+    /// Puts the finished programs in the model's path, which takes effect at the next
+    /// chunk, and reports the status a reader should now see.
+    pub(crate) fn attach(
+        self,
+        model: &mut Qwen3_5ResidentModel,
+        layer_programs: Vec<CoreMlProgram>,
+    ) -> NeuralEnginePrefillStatus {
+        if let Some(program_cache) = &self.program_cache {
+            program_cache.record_finished_set(layer_programs.len() as u64);
+        }
+        let layer_program_count = u32::try_from(layer_programs.len()).unwrap_or(u32::MAX);
+        model.neural_engine_mlp_prefill = Some(NeuralEngineMlpPrefill {
+            layer_programs: RefCell::new(layer_programs),
+            chunk_token_count: self.chunk_token_count,
+            neural_engine_token_count: self.neural_engine_token_count,
+            has_failed: Cell::new(false),
+            is_paused: Cell::new(false),
+        });
+        NeuralEnginePrefillStatus::Active {
+            layer_program_count,
+            neural_engine_tokens_per_chunk: self.neural_engine_token_count,
+            chunk_token_count: self.chunk_token_count,
+            estimated_memory_bytes: self.estimated_memory_bytes,
+        }
     }
 }
 
@@ -225,31 +317,6 @@ fn read_failure(_mlx_error: mlx_c_rust::MlxCError) -> &'static str {
     WEIGHT_READ_FAILURE
 }
 
-/// Compile input for one program, removed as soon as Core ML holds its own compiled
-/// copy, because each one is nearly a whole layer's weights on disk.
-pub(crate) struct ProgramPackageDirectory {
-    pub(crate) path: PathBuf,
-}
-
-impl ProgramPackageDirectory {
-    pub(crate) fn create(layer_index: usize) -> Option<Self> {
-        let path = std::env::temp_dir().join(format!(
-            "astronomical-neural-engine-{}-{layer_index}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&path).ok()?;
-        Some(Self { path })
-    }
-}
-
-impl Drop for ProgramPackageDirectory {
-    fn drop(&mut self) {
-        if let Err(removal_error) = std::fs::remove_dir_all(&self.path) {
-            tracing::warn!(error = %removal_error, "could not remove a Neural Engine program package");
-        }
-    }
-}
-
 /// One decoder layer's whole MLP, read from the model as fp16 when it is compiled.
 struct MlpProgramSource<'model> {
     runtime: &'model MlxRuntime,
@@ -289,78 +356,4 @@ impl MlpProgramSource<'_> {
             Err(_) => Err("could not write the MLP program package"),
         }
     }
-}
-
-impl ProgramSource for MlpProgramSource<'_> {
-    fn shape(&self) -> ProgramShape {
-        self.shape
-    }
-
-    fn compile_to(&self, package_directory: &Path, destination: &Path) -> Result<(), &'static str> {
-        let package_path = self.write_package(package_directory)?;
-        match compile_model_to(&package_path, destination) {
-            Ok(()) => Ok(()),
-            Err(_) => Err("Core ML could not compile the MLP program on this macOS"),
-        }
-    }
-
-    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProgram, &'static str> {
-        let package_path = self.write_package(package_directory)?;
-        match CoreMlProgram::load_from_path(
-            &package_path,
-            self.shape,
-            CoreMlComputeUnits::CpuAndNeuralEngine,
-        ) {
-            Ok(program) => Ok(program),
-            Err(_) => Err("Core ML could not load the MLP program on this macOS"),
-        }
-    }
-}
-
-fn load_layer_programs(
-    model: &Qwen3_5ResidentModel,
-    layer_weights: &[&Qwen3_5DenseMlpWeights],
-    neural_engine_token_count: u32,
-    program_cache: Option<&ProgramSetCache>,
-) -> Result<Vec<CoreMlProgram>, &'static str> {
-    let hidden_channels = model.base.config().hidden_size() as usize;
-    let Ok(shape) = ProgramShape::new(
-        hidden_channels,
-        hidden_channels,
-        neural_engine_token_count as usize,
-    ) else {
-        return Err("the model's MLP shape is not supported");
-    };
-    let started_at = Instant::now();
-    let mut layer_programs = Vec::with_capacity(layer_weights.len());
-    for (layer_index, dense_mlp_weights) in layer_weights.iter().enumerate() {
-        let source = MlpProgramSource {
-            runtime: model.runtime(),
-            dense_mlp_weights,
-            shape,
-            intermediate_channels: model.base.config().dense_intermediate_size() as usize,
-        };
-        layer_programs.push(load_verified_program(&source, program_cache, layer_index)?);
-        // A first load takes over a minute on a large model, so the wait stays visible.
-        let completed_layers = layer_index + 1;
-        let elapsed_seconds = started_at.elapsed().as_secs_f64();
-        let remaining_seconds = elapsed_seconds / completed_layers as f64
-            * (layer_weights.len() - completed_layers) as f64;
-        tracing::info!(
-            completed_layers,
-            total_layers = layer_weights.len(),
-            percent_complete = 100 * completed_layers / layer_weights.len(),
-            elapsed_seconds,
-            eta_seconds = remaining_seconds,
-            "Neural Engine MLP programs loading"
-        );
-    }
-    if model
-        .runtime()
-        .synchronize_gpu_stream_and_clear_allocator_cache()
-        .is_err()
-    {
-        return Err("the MLX allocator could not settle after reading the weights");
-    }
-    Ok(layer_programs)
 }

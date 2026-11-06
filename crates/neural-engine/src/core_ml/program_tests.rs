@@ -29,3 +29,17 @@ fn should_report_core_ml_load_failure_for_a_model_that_does_not_exist() {
 
     assert!(matches!(load_result, Err(CoreMlProgramError::Load(_))));
 }
+
+#[test]
+fn should_report_core_ml_load_failure_without_a_placement_check_for_a_model_that_does_not_exist() {
+    let model_directory = tempfile::tempdir().expect("a scratch directory");
+    let shape = ProgramShape::new(4, 2, 1).expect("valid shape");
+
+    let load_result = CoreMlProgram::load_from_path_without_placement_check(
+        &model_directory.path().join("absent.mlmodelc"),
+        shape,
+        CoreMlComputeUnits::CpuOnly,
+    );
+
+    assert!(matches!(load_result, Err(CoreMlProgramError::Load(_))));
+}
