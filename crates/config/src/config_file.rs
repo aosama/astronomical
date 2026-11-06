@@ -37,12 +37,12 @@ pub(crate) fn read_user_config_file(
         persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config, false)?;
         return Ok(migrated_user_config);
     }
-    let removed_retired_speculative_prefill_fields = strip_retired_config_fields(&mut config_json);
+    let removed_retired_fields = strip_retired_config_fields(&mut config_json);
     let mut user_config_file = parse_and_validate_v1(&config_file_path, config_json)?;
     persist_mandatory_chunking_fields(
         &config_file_path,
         &mut user_config_file,
-        removed_retired_speculative_prefill_fields,
+        removed_retired_fields,
     )?;
     Ok(user_config_file)
 }
@@ -63,6 +63,12 @@ pub(crate) fn parse_and_validate_v1(
     Ok(user_config_file)
 }
 
+const RETIRED_CHUNKING_FIELD_NAMES: [&str; 3] = [
+    "speculative_prefill_draft_forward_tokens",
+    "experimental_quantized_kv_cache_enabled",
+    "experimental_fused_moe_decode_enabled",
+];
+
 pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -> bool {
     let mut removed_field_names = Vec::new();
     if let Some(root_object) = config_json.as_object_mut() {
@@ -72,14 +78,7 @@ pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -
         if remove_field_from_object(root_object, "mtp_enabled") {
             removed_field_names.push("mtp_enabled".to_owned());
         }
-        if remove_nested_field(
-            root_object,
-            "chunking",
-            "speculative_prefill_draft_forward_tokens",
-        ) {
-            removed_field_names
-                .push("chunking.speculative_prefill_draft_forward_tokens".to_owned());
-        }
+        strip_retired_chunking_fields(root_object, "chunking", &mut removed_field_names);
         if remove_nested_field(
             root_object,
             "runtime",
@@ -96,15 +95,11 @@ pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -
                 let Some(model_object) = model_config.as_object_mut() else {
                     continue;
                 };
-                if remove_nested_field(
+                strip_retired_chunking_fields(
                     model_object,
-                    "chunking",
-                    "speculative_prefill_draft_forward_tokens",
-                ) {
-                    removed_field_names.push(format!(
-                        "models.{model_id}.chunking.speculative_prefill_draft_forward_tokens"
-                    ));
-                }
+                    &format!("models.{model_id}.chunking"),
+                    &mut removed_field_names,
+                );
                 // The whole acceleration container was retired: speculative prefill
                 // first, then multi-token prediction. Strip every retired member and
                 // drop the emptied container so strict parsing accepts the document.
@@ -138,6 +133,20 @@ pub(crate) fn strip_retired_config_fields(config_json: &mut serde_json::Value) -
         );
     }
     !removed_field_names.is_empty()
+}
+
+/// One list for the global section and each model's, because a setting can be saved in
+/// either, and strict parsing refuses a file holding one in the place this list missed.
+fn strip_retired_chunking_fields(
+    parent_object: &mut serde_json::Map<String, serde_json::Value>,
+    chunking_path: &str,
+    removed_field_names: &mut Vec<String>,
+) {
+    for retired_field_name in RETIRED_CHUNKING_FIELD_NAMES {
+        if remove_nested_field(parent_object, "chunking", retired_field_name) {
+            removed_field_names.push(format!("{chunking_path}.{retired_field_name}"));
+        }
+    }
 }
 
 fn remove_nested_field(

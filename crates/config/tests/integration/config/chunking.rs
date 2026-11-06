@@ -241,6 +241,123 @@ fn should_reject_zero_for_chunking_boundaries_that_cannot_be_disabled() {
     }
 }
 
+/// A file saved by 0.2.90 can hold these, and refusing it would stop the daemon on update.
+#[test]
+fn should_load_a_config_holding_settings_retired_after_0_2_90() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "$schema": "./astronomical-config.schema.json",
+          "schema_version": 1,
+          "runtime": {"model_directories": []},
+          "chunking": {
+            "fixed_prompt_processing_chunk_size_tokens": 6144,
+            "experimental_quantized_kv_cache_enabled": true,
+            "experimental_fused_moe_decode_enabled": true
+          },
+          "models": {
+            "target": {
+              "chunking": {
+                "full_attention_key_value_growth_tokens": 512,
+                "experimental_quantized_kv_cache_enabled": false,
+                "experimental_fused_moe_decode_enabled": false
+              }
+            }
+          }
+        }"#,
+    );
+
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("retired settings must never stop a config from loading");
+
+    let model_config = astronomical_config
+        .resolved_model_config("target", 65_536)
+        .expect("the model policy should resolve");
+    assert_eq!(
+        model_config
+            .chunking()
+            .fixed_prompt_processing_chunk_size_tokens(),
+        6144,
+        "the settings beside the retired ones must survive"
+    );
+    assert_eq!(
+        model_config
+            .chunking()
+            .full_attention_key_value_growth_tokens(),
+        512
+    );
+    // Rewriting the file is what stops the warning repeating on every load.
+    let rewritten_config = std::fs::read_to_string(
+        temporary_home_directory
+            .path()
+            .join(".astronomical/config.json"),
+    )
+    .expect("the rewritten config should be readable");
+    assert!(!rewritten_config.contains("experimental_quantized_kv_cache_enabled"));
+    assert!(!rewritten_config.contains("experimental_fused_moe_decode_enabled"));
+}
+
+#[test]
+fn should_load_a_config_holding_retired_settings_in_only_one_model() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "$schema": "./astronomical-config.schema.json",
+          "schema_version": 1,
+          "runtime": {"model_directories": []},
+          "models": {
+            "first": {"chunking": {"experimental_fused_moe_decode_enabled": true}},
+            "second": {}
+          }
+        }"#,
+    );
+
+    assert!(AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()).is_ok());
+}
+
+#[test]
+fn should_still_reject_an_unknown_chunking_field_beside_a_retired_one() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "$schema": "./astronomical-config.schema.json",
+          "schema_version": 1,
+          "runtime": {"model_directories": []},
+          "chunking": {
+            "experimental_quantized_kv_cache_enabled": true,
+            "experimental_quantized_kv_cache_enable": true
+          }
+        }"#,
+    );
+
+    assert!(matches!(
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()),
+        Err(AstronomicalConfigError::ParseConfigFile { .. })
+    ));
+}
+
+#[test]
+fn should_migrate_a_legacy_config_holding_settings_retired_after_0_2_90() {
+    let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{
+          "model_directories": [],
+          "maximum_mlx_memory_gb": 16,
+          "chunking": {
+            "experimental_quantized_kv_cache_enabled": true,
+            "experimental_fused_moe_decode_enabled": true
+          }
+        }"#,
+    );
+
+    assert!(AstronomicalConfig::load_from_home_directory(temporary_home_directory.path()).is_ok());
+}
+
 #[test]
 fn should_reject_unknown_nested_chunking_fields() {
     let temporary_home_directory = tempfile::tempdir().expect("temp home should be created");
