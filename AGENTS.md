@@ -41,6 +41,7 @@
 ## Release Scripts Folder
 
 - All **Release-related scripts** must live under "<repo-root>/scripts/release", they will help you through the release process.
+- Follow the `release-stable` skill (`.claude/skills/release-stable/SKILL.md`) for every Stable release, and read all of it before the first step.
 
 ## Repository Tooling Lives In xtask
 

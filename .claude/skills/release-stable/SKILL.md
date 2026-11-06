@@ -1,12 +1,11 @@
 ---
-description: Prepare, sign, notarize, publish, and activate one Astronomical Stable release.
-agent: build
-subtask: false
+name: release-stable
+description: Prepare, sign, notarize, publish and activate one Astronomical Stable release. Use when asked to make, cut or ship a release or a new version of Astronomical, and read it before tagging or running any `cargo xtask release` step. Not for ordinary builds, commits or pull requests.
 ---
 
 # Release Astronomical Stable
 
-Release version `$1`. If it is empty, ask the user for a numeric `MAJOR.MINOR.PATCH`; never infer it. Then use the confirmed value as `VERSION` and `TAG="v${VERSION}"`, and require it to be newer than the latest semantic release tag. This command authorizes the release work, but you must stop once after local artifact review and obtain the user's explicit approval before pushing the tag or publishing.
+Release the version the user named. If they named none, ask for a numeric `MAJOR.MINOR.PATCH`; never infer it. Then use the confirmed value as `VERSION` and `TAG="v${VERSION}"`, and require it to be newer than the latest semantic release tag. Asking for a release authorizes the release work, but you must stop once after local artifact review and obtain the user's explicit approval before pushing the tag or publishing. Approval the user gave in advance for this release counts; the review itself still happens, and its results still go in your report.
 
 ## Non-negotiable rules
 
@@ -16,6 +15,7 @@ Release version `$1`. If it is empty, ask the user for a numeric `MAJOR.MINOR.PA
 - Use only `cargo xtask release prepare-and-publish` (or its credential-resolving front door `cargo xtask release prepare-signed`) to prepare or publish distribution artifacts.
 - Never manually edit `site/appcast.xml`; it is a signed generated artifact.
 - Never move or replace a pushed release tag. Fix forward with a new patch version.
+- Read this whole procedure before the first step. Do not push the tag before section 4 passes, even when approval was given in advance: a pushed tag can never move, so anything section 3 or 4 finds afterwards costs a patch version.
 - Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `cargo xtask release validate-dmg`, and installation and launch of the fictional fixture under `target/` by `cargo xtask release accept-sparkle-update`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
 - Every test must use its built-in timeout of at most 120 seconds. The Sparkle acceptance's 120-second budget covers the acceptance itself; resolving its Swift and Xcode tools beforehand reports its own progress. The notarization operation is not a test and uses `cargo xtask release notarize-dmg`'s 180-second default, overridable with `--timeout-seconds N`.
 - Keep commands live and unfiltered. Never pipe long-running commands through `head`, `tail`, or another buffering filter.
@@ -43,6 +43,8 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 2. Set `PREVIOUS_TAG` to the highest existing semantic release tag and review `git log` and `git diff` from it to `main`.
 3. Create one public issue titled `Release Astronomical ${VERSION}`. State the exact user-visible changes, compatibility, signing requirements, digest-bound publication, signed-feed activation, and public verification. Do not include private environment details.
 4. Save the returned issue number as `ISSUE_NUMBER`. Both release pull requests must link only this issue.
+5. Compare `site/schemas/config/v1/astronomical-config.schema.json` at `PREVIOUS_TAG` with `main`, and require every removed property to be in `strip_retired_config_fields` (`RETIRED_CHUNKING_FIELD_NAMES` for chunking fields).
+6. Merge any fix the release needs on its own branch and pull request before starting section 2, so the bump stays version-only.
 
 ## 2. Merge the version bump
 
@@ -108,7 +110,7 @@ Validate `target/releases/${TAG}` without changing it:
 - Appcast XML is valid and contains `$VERSION`, a build number greater than the previous release, macOS `14.0` and above, `arm64`, the exact GitHub release URL, an enclosure Ed25519 signature, and a signed-feed envelope.
 - The prepared directory contains exactly the DMG, copied Markdown notes, `appcast.xml`, and `release-manifest.json`.
 
-Report only the version, commit, artifact names, sizes, digests, and validation outcomes. Ask the user to approve publication. Do not push the tag or mutate GitHub release state until approved.
+Report only the version, commit, artifact names, sizes, digests, and validation outcomes. Ask the user to approve publication, unless they already approved this release in advance; either way, report these results. Do not push the tag or mutate GitHub release state until approved.
 
 ## 5. Publish the reviewed bytes
 
@@ -182,6 +184,8 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - Before 0.2.89, `cargo xtask app package` (and so `prepare-signed`) had two latent failures that only a clean machine or the pinned toolchain exposed, both fixed in #1807 and now exercised weekly by the macOS packaging workflow (dispatch it before cutting a release: `gh workflow run macos-packaging.yml`): it only verified the pinned native archives and never downloaded them, so a fresh Mac must run `cargo xtask bootstrap-native-dependencies` first (the missing-archive error names that command); and it read the Thin Talk canvas resource bundle from `.build/out/Products/Release`, a layout only the swiftbuild backend creates, so a release built with the pinned Xcode's native SwiftPM failed at assembly. If a release build fails at a step the last weekly packaging run passed, compare the local Xcode and Swift versions with the pin before suspecting the release change.
 - The version bump PR runs only the static, configuration-contract, and notices lanes. The change classifier (`xtask/src/version_only_bump.rs`) reads the base and head texts and recognises a bump only when `Cargo.toml` differs solely in the `[workspace.package]` version, `Cargo.lock` solely in workspace packages' versions, and no file changes beyond those two and the notices digest; anything else, or any read failure, runs the full matrix. The macOS lanes therefore show `skipping` on the bump PR and on its merge to `main`, and the CI verdict accepts that. The consequence is that step 5's local suite is the only full run on the bumped commit, so never skip it: a test that hard-codes the version string would pass CI and fail there. The previous `main` commit's full CI is the proof for everything else.
 - Removing a config field from the Rust structs is not enough: add the removed field name to `strip_retired_config_fields` in `crates/config/src/config_file.rs` and drop any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change, or upgraded installs fail strict parsing and the daemon exits before readiness (hit live in the 0.2.66 release run, fixed by #1116).
+- Section 1's schema comparison exists because two settings removed during 0.2.91 were missing from the retired list, and every config holding them would have stopped loading on update.
+- A fix that must ship in the release belongs on its own branch and pull request before the bump. Mixed into the bump branch, it fails the version-only classifier, so the bump pays for the full macOS lanes (hit live in the 0.2.91 release run).
 
 ## FAQ
 
