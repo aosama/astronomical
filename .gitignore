@@ -13,7 +13,6 @@
 
 # Agent harness local state
 .opencode/*
-!.opencode/command/
 AGENTS.override.md
 
 private/
