@@ -12,7 +12,6 @@
 *~
 
 # Agent harness local state
-.opencode/*
 AGENTS.override.md
 
 private/
