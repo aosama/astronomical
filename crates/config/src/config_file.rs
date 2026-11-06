@@ -37,12 +37,12 @@ pub(crate) fn read_user_config_file(
         persist_mandatory_chunking_fields(&config_file_path, &mut migrated_user_config, false)?;
         return Ok(migrated_user_config);
     }
-    let removed_retired_speculative_prefill_fields = strip_retired_config_fields(&mut config_json);
+    let removed_retired_fields = strip_retired_config_fields(&mut config_json);
     let mut user_config_file = parse_and_validate_v1(&config_file_path, config_json)?;
     persist_mandatory_chunking_fields(
         &config_file_path,
         &mut user_config_file,
-        removed_retired_speculative_prefill_fields,
+        removed_retired_fields,
     )?;
     Ok(user_config_file)
 }
