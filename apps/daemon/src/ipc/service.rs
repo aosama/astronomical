@@ -112,9 +112,10 @@ pub async fn start_daemon_ipc_service(
 
 /// Serves every connection on its own task. A generation holds its connection for
 /// as long as it streams, and that includes the minutes a first model load can take,
-/// so serving them in turn would leave `status`, and the load report a waiting
-/// `respond` polls for, unanswered until the generation ended. The executor behind
-/// these handlers is the one the REST surface already calls concurrently.
+/// so serving them in turn would leave `status`, and the load report and progress
+/// count a waiting `respond` or `embed` polls for, unanswered until the generation
+/// ended. The executor behind these handlers is the one the REST surface already calls
+/// concurrently.
 async fn serve_connections_until_shutdown(
     mut daemon_listener: DaemonIpcListener,
     mut shutdown_receiver: watch::Receiver<bool>,
@@ -350,6 +351,7 @@ async fn answer_status(
             &generation_context.instance_paths,
         )),
         model_load_in_flight: health_snapshot.model_load_in_flight,
+        request_progress_count: health_snapshot.request_progress_count,
         neural_engine_prefill: health_snapshot.neural_engine_prefill,
     };
     send_attributed_streaming_response(

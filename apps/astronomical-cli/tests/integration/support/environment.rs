@@ -18,6 +18,25 @@ pub const TEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// snappy against the stub daemon.
 pub const DOWNLOAD_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
+/// Short enough that a wait outlasting it proves the bound is on silence, and long
+/// enough for a journey's own model and catalog reads on a loaded machine.
+pub const SILENCE_BOUND: Duration = Duration::from_millis(500);
+pub const DAEMON_WORK_POLL_INTERVAL: Duration = Duration::from_millis(50);
+/// Several silence bounds long, so an answer arriving proves the wait was extended.
+pub const FIRST_FRAME_DELAY_PAST_THE_BOUND: Duration = Duration::from_millis(1600);
+/// Far longer than any test waits, standing in for a first frame that never comes.
+pub const FIRST_FRAME_THAT_NEVER_ARRIVES: Duration = Duration::from_secs(60);
+
+/// A progress count that moves on every status poll, for a scripted stub to report.
+/// At one count per poll, 400 rises for longer than any journey waits.
+pub fn rising_progress_counts() -> Vec<u64> {
+    let mut rising_counts = Vec::new();
+    for scripted_count in 1..=400 {
+        rising_counts.push(scripted_count);
+    }
+    rising_counts
+}
+
 /// Socket file name the stub daemon binds inside its test directory.
 pub const SOCKET_FILE_NAME: &str = "ipc.sock";
 

@@ -2,6 +2,8 @@
 //! JSON vector document on stdout, process exits. The daemon side is a stub
 //! speaking the real framed protocol over a real unix socket.
 
+mod daemon_wait;
+
 use std::{
     io::{Read, Write},
     path::PathBuf,
@@ -47,6 +49,8 @@ fn embed_dependencies<'a>(
         request_timeout: TEST_TIMEOUT,
         download_stall_bound: TEST_TIMEOUT,
         download_poll_interval: DOWNLOAD_POLL_INTERVAL,
+        daemon_work_poll_interval: DOWNLOAD_POLL_INTERVAL,
+        model_load_stall_bound: TEST_TIMEOUT,
     }
 }
 

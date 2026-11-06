@@ -71,6 +71,9 @@ pub(crate) fn publish_active_request_progress(
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.active_request_progress = Some(progress);
+        worker_health_snapshot.request_progress_count = worker_health_snapshot
+            .request_progress_count
+            .wrapping_add(1);
     }
 }
 

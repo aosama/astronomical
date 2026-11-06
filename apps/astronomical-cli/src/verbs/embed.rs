@@ -20,6 +20,9 @@ use tokio::time::timeout;
 
 use std::path::PathBuf;
 
+use crate::daemon_frame_wait::{
+    DaemonWaitBounds, DaemonWentSilent, DaemonWorkWatch, await_frame_watching_daemon_work,
+};
 use crate::transport::ipc::DaemonProbeError;
 use crate::{DaemonProbe, ModelLifecycle, RequiredCapability};
 use thiserror::Error;
@@ -35,14 +38,18 @@ pub struct EmbedDependencies<'a> {
     pub stdin: &'a mut dyn Read,
     /// Where the JSON vector document goes.
     pub stdout: &'a mut dyn Write,
-    /// Where download progress goes.
+    /// Where download progress and the model load line go.
     pub stderr: &'a mut dyn Write,
-    /// Bound for each protocol stage of the journey.
+    /// How long each protocol stage may go with nothing heard from the daemon.
     pub request_timeout: Duration,
     /// How long a download may go without any change before the wait gives up.
     pub download_stall_bound: Duration,
     /// Wait between download status polls.
     pub download_poll_interval: Duration,
+    /// Wait between asking what the daemon is doing while no answer has come.
+    pub daemon_work_poll_interval: Duration,
+    /// How long one load may stay reported before the wait gives up.
+    pub model_load_stall_bound: Duration,
 }
 
 /// Runs the whole embed journey against the resident daemon: resolve the
@@ -140,21 +147,38 @@ async fn embed_input_text(
     .map_err(|_elapsed| EmbedError::DaemonStoppedResponding)?
     .map_err(|_transport_error| EmbedError::DaemonStoppedResponding)?;
 
-    let embeddings_response = timeout(
-        embed_dependencies.request_timeout,
+    // The request can wait behind a generation or a model load with nothing on this
+    // connection, so the bound is on hearing nothing at all, not on the answer's time.
+    let wait_bounds = DaemonWaitBounds {
+        silence_bound: embed_dependencies.request_timeout,
+        load_stall_bound: embed_dependencies.model_load_stall_bound,
+        work_poll_interval: embed_dependencies.daemon_work_poll_interval,
+    };
+    let embeddings_response = await_frame_watching_daemon_work(
         daemon_client.next_response(),
+        daemon_probe,
+        wait_bounds,
+        &mut DaemonWorkWatch::default(),
+        &mut *embed_dependencies.stderr,
     )
-    .await
-    .map_err(|_elapsed| EmbedError::DaemonStoppedResponding)?
+    .await?
     .map_err(|_transport_error| EmbedError::DaemonStoppedResponding)?
     .ok_or(EmbedError::DaemonStoppedResponding)?;
+    write_embeddings_outcome(embeddings_response, embed_dependencies.stdout)
+}
+
+/// Writes the one frame that ends an embeddings request.
+fn write_embeddings_outcome(
+    embeddings_response: DaemonResponse,
+    stdout: &mut dyn Write,
+) -> Result<(), EmbedError> {
     match embeddings_response {
         DaemonResponse::EmbeddingsCompleted {
             model,
             vectors,
             input_token_counts,
         } => write_vector_document(
-            embed_dependencies.stdout,
+            stdout,
             &model,
             vectors.first().map(Vec::as_slice).unwrap_or(&[]),
             input_token_counts.first().copied().unwrap_or(0),
@@ -249,6 +273,12 @@ pub enum EmbedError {
     DaemonStoppedResponding,
     #[error("Could not write the vector document to standard output: {cause}")]
     StdoutUnwritable { cause: String },
+}
+
+impl From<DaemonWentSilent> for EmbedError {
+    fn from(_daemon_went_silent: DaemonWentSilent) -> Self {
+        EmbedError::DaemonStoppedResponding
+    }
 }
 
 impl From<DaemonProbeError> for EmbedError {

@@ -4,6 +4,8 @@
 #![forbid(unsafe_code)]
 
 pub mod arguments;
+/// The wait `respond` and `embed` share, kept outside both so neither verb owns it.
+mod daemon_frame_wait;
 pub mod formatting;
 pub mod instance;
 pub mod model_lifecycle;

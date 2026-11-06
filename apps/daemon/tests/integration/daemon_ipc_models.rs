@@ -320,6 +320,7 @@ async fn should_set_and_report_the_default_model_over_daemon_ipc() {
             ready_model_id: Some("test/local-chatter".to_owned()),
             default_model_id: Some(requestable_model_id),
             model_load_in_flight: None,
+            request_progress_count: 0,
             neural_engine_prefill: None,
         }
     );

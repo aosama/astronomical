@@ -234,7 +234,7 @@ async fn should_show_a_load_in_flight_on_its_own_line() {
         socket_path.clone(),
         StubDaemonConfig {
             installed_models: vec![StubInstalledModel::chat("test/old-model", true)],
-            model_load_reports: vec![ModelLoadInFlight::for_model("test/new-model")],
+            model_load_reports: vec![Some(ModelLoadInFlight::for_model("test/new-model"))],
             ..Default::default()
         },
     );
