@@ -83,6 +83,32 @@ fn should_not_change_when_a_request_finishes() {
 }
 
 #[test]
+fn should_forget_the_last_chunk_placement_when_a_request_ends_however_it_ended() {
+    let health_snapshot = fresh_snapshot();
+    crate::worker::health::record_neural_engine_chunk(
+        &health_snapshot,
+        astronomical_ipc_protocol::NeuralEngineChunkReport {
+            placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::GpuMemoryTight,
+            chunk_token_count: 2_048,
+            neural_engine_token_count: 0,
+            elapsed_millis: 350,
+            is_prompt_warm: true,
+        },
+    );
+
+    clear_active_request_progress(&health_snapshot);
+
+    let totals = health_snapshot
+        .read()
+        .expect("the snapshot reads")
+        .serving_session
+        .neural_engine
+        .clone();
+    assert_eq!(totals.last_chunk_placement, None);
+    assert_eq!(totals.prompt_token_count, 2_048);
+}
+
+#[test]
 fn should_restart_the_count_on_a_health_replacement() {
     let health_snapshot = fresh_snapshot();
     publish_active_request_progress(&health_snapshot, generation_progress(1));

@@ -52,6 +52,7 @@ pub(super) fn handle_worker_event(
         }
         model_state_event @ (WorkerEvent::ExpertMemoryModeChanged { .. }
         | WorkerEvent::NeuralEnginePrefillChanged { .. }
+        | WorkerEvent::NeuralEngineChunkFinished { .. }
         | WorkerEvent::ModelLoadInFlight { .. }) => {
             apply_model_state_event(model_state_event, health_snapshot)
         }
@@ -216,7 +217,7 @@ fn apply_memory_limit_event(
         restart_required_event @ WorkerEvent::MlxMemoryLimitRestartRequired { .. } => {
             apply_mlx_memory_limit_restart_required(restart_required_event, health_snapshot);
         }
-        // The dispatch match routes only the three events above here.
+        // The dispatch match routes only the four events above here.
         _ => {}
     }
 }
@@ -233,6 +234,9 @@ fn apply_model_state_event(
         WorkerEvent::NeuralEnginePrefillChanged {
             neural_engine_prefill,
         } => publish_neural_engine_prefill(health_snapshot, Some(neural_engine_prefill)),
+        WorkerEvent::NeuralEngineChunkFinished { report } => {
+            crate::worker::health::record_neural_engine_chunk(health_snapshot, report);
+        }
         WorkerEvent::ModelLoadInFlight {
             model_load_in_flight,
         } => {

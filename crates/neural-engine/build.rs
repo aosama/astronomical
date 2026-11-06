@@ -9,8 +9,10 @@
 
 fn main() {
     println!("cargo:rerun-if-changed=native/core_ml_bridge.m");
+    println!("cargo:rerun-if-changed=native/system_wired_memory.c");
     cc::Build::new()
         .file("native/core_ml_bridge.m")
+        .file("native/system_wired_memory.c")
         .flag("-fobjc-arc")
         .flag("-fmodules")
         // The worker links this bridge and supports macOS 14.0, so anything

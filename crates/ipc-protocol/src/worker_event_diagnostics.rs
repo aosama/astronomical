@@ -19,6 +19,7 @@ impl WorkerEvent {
             }
             Self::ExpertMemoryModeChanged { .. }
             | Self::NeuralEnginePrefillChanged { .. }
+            | Self::NeuralEngineChunkFinished { .. }
             | Self::ModelLoadInFlight { .. } => model_state_event_diagnostic_summary(self),
             Self::GenerationFinalized { request_id, .. } => {
                 format!("generation_finalized request_id={}", request_id.value())
@@ -88,6 +89,7 @@ impl WorkerEvent {
 fn model_state_event_diagnostic_summary(worker_event: &WorkerEvent) -> String {
     match worker_event {
         WorkerEvent::NeuralEnginePrefillChanged { .. } => "neural_engine_prefill_changed",
+        WorkerEvent::NeuralEngineChunkFinished { .. } => "neural_engine_chunk_finished",
         WorkerEvent::ModelLoadInFlight { .. } => "model_load_in_flight",
         _ => "expert_memory_mode_changed",
     }

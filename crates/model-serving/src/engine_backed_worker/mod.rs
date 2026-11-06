@@ -34,6 +34,9 @@ pub struct EngineBackedWorker<
     pub(crate) startup_residency_facts: Option<crate::StreamingStartupResidencyFacts>,
     /// Programs are still being prepared beside the serving model.
     pub(crate) is_neural_engine_preparation_running: bool,
+    /// Only a request can teach anything about running programs, so an idle worker
+    /// that has served none never crosses to the owner thread to ask.
+    pub(crate) has_request_run_since_settling: bool,
     /// A status from a load made during a generation, which has no event stream to
     /// hand, held so the idle loop remains the one place these reports leave from.
     pub(crate) unsent_neural_engine_prefill_event: Option<WorkerEvent>,

@@ -13,18 +13,27 @@ extension DaemonStatusDocument.NeuralEnginePrefill {
     return "\(completedProgramCount)/\(totalProgramCount)"
   }
 
+  /// Why the speedup is off, for the line under the popover's row, which the banner points to.
+  var unavailableReasonTitle: String? { isUnavailable ? reason : nil }
+
   /// Short enough to sit beside the menu bar icon.
   var menuBarTitle: String? {
     guard isPreparing, let programCountTitle else { return nil }
+    if isWaitingToMeasure == true { return "Neural Engine measuring" }
     return "Neural Engine \(programCountTitle)"
   }
 
   /// The popover's row; `nil` hides it for a user who never enabled the setting. No status arrives
   /// during a request, so an estimate would sit frozen on screen for as long as a reply takes.
   func metricTitle(showsEstimate: Bool) -> String? {
-    if isEngaged { return "Engaged" }
+    if isEngaged {
+      guard let measuredSpeedPercent else { return "Engaged" }
+      let measuredSpeed = String(format: "%.2f", Double(measuredSpeedPercent) / 100)
+      return "Engaged · \(measuredSpeed)×"
+    }
     if isUnavailable { return "On the GPU" }
     guard isPreparing, let programCountTitle else { return nil }
+    if isWaitingToMeasure == true { return "Measuring at the next pause" }
     guard showsEstimate, let estimatedRemainingMilliseconds, estimatedRemainingMilliseconds > 0
     else {
       return "Preparing \(programCountTitle)"

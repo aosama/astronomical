@@ -2,6 +2,7 @@
 //! weights to bytes, all in the ML Program format. Serving uses `projection` and
 //! `mlp`; `rotated_mlp` belongs to the ternary research.
 
+pub mod contraction_split;
 mod mil_operations;
 pub mod mlp;
 pub mod mlp_stages;

@@ -74,6 +74,7 @@ impl Qwen3_5EngineState {
         additional_persistent_state_growth_bytes: usize,
         exact_temporary_workspace_bytes: usize,
     ) -> Result<AdaptiveRamGrowthAdmissionBaseline, AdaptiveRamGrowthMemoryAdmissionError> {
+        self.tell_neural_engine_preparation_the_gpu_is_in_use();
         if !self.adaptive_ram_growth_guard_enabled {
             return Ok(AdaptiveRamGrowthAdmissionBaseline::disabled_guard_sentinel());
         }
@@ -191,6 +192,11 @@ impl Qwen3_5EngineState {
                 rejection: forward_admission_rejection,
             });
         }
+        decide_neural_engine_for_prefill_chunk(
+            model,
+            adaptive_ram_growth_context,
+            &forward_projection,
+        );
         model
             .runtime()
             .reset_peak_memory()
@@ -209,6 +215,25 @@ impl Qwen3_5EngineState {
             ),
             transient_reserve_source: Some(forward_projection.transient_reserve_source()),
         })
+    }
+}
+
+/// Decode's one token never reaches a program, so only prefill needs the decision.
+fn decide_neural_engine_for_prefill_chunk(
+    model: &crate::qwen3_5_resident::model::Qwen3_5ResidentModel,
+    adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+    forward_projection: &AdaptiveRamGrowthProjection,
+) {
+    if matches!(
+        adaptive_ram_growth_context.memory_phase(),
+        MemoryPhase::Prefill
+    ) {
+        let forward_memory_equation = forward_projection.memory_equation();
+        model.decide_neural_engine_for_chunk(
+            adaptive_ram_growth_context.forward_token_count(),
+            forward_memory_equation.peak_projected_bytes() as u64,
+            forward_memory_equation.active_memory_ceiling_bytes() as u64,
+        );
     }
 }
 

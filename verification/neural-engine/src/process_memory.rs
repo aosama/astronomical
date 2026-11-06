@@ -8,8 +8,8 @@
 unsafe extern "C" {
     // native/process_memory.c: zero when the kernel query fails.
     fn astronomical_process_physical_footprint_bytes() -> u64;
-    fn astronomical_system_wired_bytes() -> u64;
     fn astronomical_physical_memory_bytes() -> u64;
+    fn astronomical_system_reclaimable_bytes() -> u64;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,11 +21,11 @@ pub struct MemorySnapshot {
 impl MemorySnapshot {
     #[must_use]
     pub fn capture() -> Self {
-        // SAFETY: both readers take no arguments and only query the kernel.
+        // SAFETY: the reader takes no arguments and only queries the kernel.
         unsafe {
             Self {
                 process_physical_footprint_bytes: astronomical_process_physical_footprint_bytes(),
-                system_wired_bytes: astronomical_system_wired_bytes(),
+                system_wired_bytes: astronomical_neural_engine::core_ml::system_wired_bytes(),
             }
         }
     }
@@ -37,6 +37,13 @@ impl MemorySnapshot {
 pub fn physical_memory_bytes() -> u64 {
     // SAFETY: the reader takes no arguments and only queries the kernel.
     unsafe { astronomical_physical_memory_bytes() }
+}
+
+/// Memory the system could hand out without paging; zero when the kernel query fails.
+#[must_use]
+pub fn system_reclaimable_bytes() -> u64 {
+    // SAFETY: the reader takes no arguments and only queries the kernel.
+    unsafe { astronomical_system_reclaimable_bytes() }
 }
 
 /// Signed growth between two snapshots; memory can also be returned.

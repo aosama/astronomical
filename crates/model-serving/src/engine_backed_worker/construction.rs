@@ -27,6 +27,7 @@ where
             engine_placement: Some(crate::EnginePlacement::CompleteResidencyFits),
             startup_residency_facts: None,
             is_neural_engine_preparation_running: false,
+            has_request_run_since_settling: false,
             unsent_neural_engine_prefill_event: None,
         }
     }
@@ -67,6 +68,7 @@ where
             engine_placement: None,
             startup_residency_facts: None,
             is_neural_engine_preparation_running: false,
+            has_request_run_since_settling: false,
             unsent_neural_engine_prefill_event: None,
         }
     }

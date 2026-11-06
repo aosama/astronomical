@@ -207,13 +207,19 @@ pub(super) fn greedy_continuation(
 
 pub(super) fn load_dense_model(
     development_config: &AstronomicalConfig,
-) -> (Qwen3_5ResidentModel, Vec<u32>, u32) {
+) -> (Qwen3_5ResidentModel, Vec<u32>) {
+    load_named_dense_model(development_config, DENSE_MODEL_ID)
+}
+
+pub(super) fn load_named_dense_model(
+    development_config: &AstronomicalConfig,
+    dense_model_id: &str,
+) -> (Qwen3_5ResidentModel, Vec<u32>) {
     let discovered_model =
-        crate::common::configured_discovered_model_by_id(development_config, DENSE_MODEL_ID);
-    let ModelCapabilities::Chat(chat_capabilities) = &discovered_model.capabilities else {
-        panic!("{DENSE_MODEL_ID} must be a chat model");
+        crate::common::configured_discovered_model_by_id(development_config, dense_model_id);
+    let ModelCapabilities::Chat(_) = &discovered_model.capabilities else {
+        panic!("{dense_model_id} must be a chat model");
     };
-    let maximum_context_tokens = chat_capabilities.context_window;
     let model_directory = discovered_model.model_directory.clone();
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, MAXIMUM_OUTPUT_TOKENS)
@@ -241,7 +247,7 @@ pub(super) fn load_dense_model(
     model
         .materialize_complete_weights_matching_production()
         .expect("the dense weights materialize");
-    (model, prompt_token_ids, maximum_context_tokens)
+    (model, prompt_token_ids)
 }
 
 fn has_only_finite_values(values: &[f32]) -> bool {
@@ -379,31 +385,25 @@ fn report_comparison(gpu_evidence: &[ArmEvidence], both_engines_evidence: &[ArmE
 
 /// Builds the programs through serving's own steps and waits, keeping compiled ones in
 /// `program_cache_directory` when given.
-fn prepare_programs(
+pub(super) fn prepare_programs(
     model: &mut Qwen3_5ResidentModel,
-    maximum_context_tokens: u32,
     program_cache_directory: Option<&std::path::Path>,
 ) -> NeuralEnginePrefillStatus {
     let mut chunking = crate::common::standard_worker_chunking_configuration();
     chunking.experimental_neural_engine_prefill_enabled = true;
-    model.prepare_neural_engine_prefill_matching_production(
-        &chunking,
-        maximum_context_tokens,
-        program_cache_directory,
-    )
+    model.prepare_neural_engine_prefill_matching_production(&chunking, program_cache_directory)
 }
 
 async fn compare_prefill_arms() {
     let _gpu_exclusive = crate::common::direct_mlx_test_guard().await;
     let development_config =
         AstronomicalConfig::load_from_development_location().expect("the config loads");
-    let (mut model, prompt_token_ids, maximum_context_tokens) =
-        load_dense_model(&development_config);
+    let (mut model, prompt_token_ids) = load_dense_model(&development_config);
     eprintln!("[{JOURNEY_NAME}] status=progress phase=model_loaded model={DENSE_MODEL_ID}");
 
     let before_load = MemorySnapshot::capture();
     let load_started_at = Instant::now();
-    let status = prepare_programs(&mut model, maximum_context_tokens, None);
+    let status = prepare_programs(&mut model, None);
     eprintln!(
         "[{JOURNEY_NAME}] MEASURED program_load_s={:.1} status={status:?}",
         load_started_at.elapsed().as_secs_f64()
@@ -425,7 +425,10 @@ async fn compare_prefill_arms() {
 
 /// Prefill alone, for a change that cannot affect decode. A 500-token decode in
 /// every arm would more than double a run that asks nothing about decode.
-fn prefill_only_tokens_per_second(model: &Qwen3_5ResidentModel, prompt_token_ids: &[u32]) -> f64 {
+pub(super) fn prefill_only_tokens_per_second(
+    model: &Qwen3_5ResidentModel,
+    prompt_token_ids: &[u32],
+) -> f64 {
     let mut decoder_state = model
         .empty_request_decoder_state_matching_loaded_weights(FULL_ATTENTION_KV_GROWTH_TOKENS)
         .expect("the measured state allocates");
@@ -483,19 +486,14 @@ async fn compare_prefill_with_kept_programs() {
     let _gpu_exclusive = crate::common::direct_mlx_test_guard().await;
     let development_config =
         AstronomicalConfig::load_from_development_location().expect("the config loads");
-    let (mut model, prompt_token_ids, maximum_context_tokens) =
-        load_dense_model(&development_config);
+    let (mut model, prompt_token_ids) = load_dense_model(&development_config);
     let program_cache_directory = std::env::temp_dir().join(PROGRAM_CACHE_DIRECTORY_NAME);
     eprintln!(
         "[{JOURNEY_NAME}] MEASURED cache_existed_at_start={}",
         program_cache_directory.is_dir()
     );
     let load_started_at = Instant::now();
-    let status = prepare_programs(
-        &mut model,
-        maximum_context_tokens,
-        Some(&program_cache_directory),
-    );
+    let status = prepare_programs(&mut model, Some(&program_cache_directory));
     eprintln!(
         "[{JOURNEY_NAME}] MEASURED program_load_s={:.1} cache_gib={:.1} status={status:?}",
         load_started_at.elapsed().as_secs_f64(),
@@ -514,7 +512,7 @@ async fn should_serve_real_dense_prefill_from_kept_programs() {
         .expect("the kept-program journey must finish inside its bound");
 }
 
-fn directory_size_gibibytes(directory: &std::path::Path) -> f64 {
+pub(super) fn directory_size_gibibytes(directory: &std::path::Path) -> f64 {
     let report = std::process::Command::new("du")
         .arg("-sk")
         .arg(directory)

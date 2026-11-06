@@ -250,3 +250,42 @@ fn should_forget_the_previous_models_neural_engine_status_when_a_load_starts() {
         None
     );
 }
+
+#[test]
+fn should_count_a_neural_engine_chunk_with_no_request_active() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
+        WorkerHealthStatus::Loading,
+    )));
+    let mut active_request = None;
+    let temporary_log_directory = tempfile::tempdir().expect("a temporary directory");
+    let mut performance_log =
+        GenerationPerformanceLog::open(temporary_log_directory.path()).expect("performance log");
+
+    handle_worker_event(
+        WorkerEvent::NeuralEngineChunkFinished {
+            report: astronomical_ipc_protocol::NeuralEngineChunkReport {
+                placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::GpuWakingPrograms,
+                chunk_token_count: 2_048,
+                neural_engine_token_count: 0,
+                elapsed_millis: 350,
+                is_prompt_warm: false,
+            },
+        },
+        &health_snapshot,
+        &mut true,
+        &mut None,
+        &mut active_request,
+        &mut performance_log,
+        &mut CompletionAttributionLog::disabled(),
+    )
+    .expect("a chunk report belongs to no request");
+
+    let totals = health_snapshot
+        .read()
+        .expect("the snapshot reads")
+        .serving_session
+        .neural_engine
+        .clone();
+    assert_eq!(totals.prompt_token_count, 2_048);
+    assert_eq!(totals.neural_engine_token_count, 0);
+}

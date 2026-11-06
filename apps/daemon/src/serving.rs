@@ -4,6 +4,7 @@ pub(crate) mod chat_generation_executor;
 pub(crate) mod embeddings_executor;
 pub(crate) mod image_generation_executor;
 pub(crate) mod image_seed;
+pub(crate) mod neural_engine_session_totals;
 pub(crate) mod serving_session_snapshot;
 pub(crate) mod structured_output;
 

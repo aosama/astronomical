@@ -345,6 +345,15 @@ async fn should_report_ready_status_idle_activity_and_model_id_for_a_ready_worke
         0.0
     );
     assert_eq!(
+        status_document["serving_session"]["neural_engine"],
+        serde_json::json!({
+            "prompt_token_count": 0,
+            "neural_engine_token_count": 0,
+            "estimated_saved_ms": 0,
+            "last_chunk_placement": null,
+        })
+    );
+    assert_eq!(
         status_document["serving_session"]["average_generation_tok_per_second"],
         0.0
     );

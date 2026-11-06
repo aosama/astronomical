@@ -71,7 +71,8 @@ pub use model_identity::{
 pub use neural_engine_program_cache::{
     ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
     NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME, NeuralEngineProgramSetManifest, directory_byte_count,
-    list_neural_engine_program_sets, neural_engine_program_cache_directory_for_model,
+    list_neural_engine_program_sets, model_weights_fingerprint,
+    neural_engine_program_cache_directory_for_model, remove_other_weights_of_model,
 };
 pub use prompt_cache_config::PromptCacheConfig;
 pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConfig};

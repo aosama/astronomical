@@ -43,3 +43,35 @@ fn should_label_every_expert_memory_mode() {
     assert_eq!(expert_memory_mode_label(ExpertMemoryMode::Hybrid), "hybrid");
     assert_eq!(expert_memory_mode_label(ExpertMemoryMode::Paged), "paged");
 }
+
+#[test]
+fn should_report_neural_engine_totals_under_their_public_names() {
+    let mut totals =
+        crate::serving::neural_engine_session_totals::NeuralEngineSessionTotals::empty();
+    totals.note_prefill_status(Some(
+        &astronomical_ipc_protocol::NeuralEnginePrefillStatus::Active {
+            layer_program_count: 28,
+            neural_engine_tokens_per_chunk: 960,
+            chunk_token_count: 2_048,
+            measured_memory_bytes: 1,
+            measured_speed_percent: Some(128),
+        },
+    ));
+    totals.record_chunk(astronomical_ipc_protocol::NeuralEngineChunkReport {
+        placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::BothEngines,
+        chunk_token_count: 2_048,
+        neural_engine_token_count: 960,
+        elapsed_millis: 1_000,
+        is_prompt_warm: true,
+    });
+
+    assert_eq!(
+        super::neural_engine_session_facts(&totals),
+        serde_json::json!({
+            "prompt_token_count": 2_048,
+            "neural_engine_token_count": 960,
+            "estimated_saved_ms": 280,
+            "last_chunk_placement": "both_engines",
+        })
+    );
+}

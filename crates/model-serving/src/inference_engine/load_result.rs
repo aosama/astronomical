@@ -77,7 +77,7 @@ impl EngineLoadResult {
     ) -> NeuralEnginePrefillStatus {
         if is_enabled {
             NeuralEnginePrefillStatus::Unavailable {
-                reason: "this model's engine does not support it".to_owned(),
+                reason: "this model is running on an engine without Neural Engine programs, either its architecture's or the low-memory one".to_owned(),
             }
         } else {
             NeuralEnginePrefillStatus::Off

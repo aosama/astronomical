@@ -61,6 +61,43 @@ Apple's own 3B dense model runs on the Neural Engine alone, so it shows what tha
 - **Per parameter:** the 9B does about three times the work per token, so the GPU path is roughly three times faster per parameter than Apple's Neural Engine path, for both prefill and decode. This is a rough comparison across two architectures.
 - **What Apple has that a conversion lacks:** the model was trained for 2-bit weights, it ships precompiled in a private format, and its shapes and context are fixed.
 
+## What programs cost in memory
+
+Sampled every 50 ms with nothing else running on the Neural Engine. "Alone" cycles the programs with the GPU idle; "both minus GPU" compares peak wired memory across prefill with the programs running and paused. Both read system wired memory, because this memory appears in neither MLX's accounting nor the process footprint.
+
+| Model | Programs' weights | Alone | Both minus GPU | Wired at load | Surfaces | Whole cost | Against weights |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0.8B | 0.56 GiB | 1.52 GiB | 1.31 GiB | 1.52 GiB | 0.30 GiB | 1.82 GiB | 3.3× |
+| 2B | 1.83 GiB | 3.13 GiB | 3.04 GiB | 3.11 GiB | 0.46 GiB | 3.57 GiB | 2.0× |
+| 9B | 9.75 GiB | 13.83 GiB | 13.63 GiB | 13.65 GiB | 1.22 GiB | 14.87 GiB | 1.5× |
+
+- **No ratio fits.** The cost against the weights changes with the model, which is why serving measures it rather than assuming one. A fixed 1.8× reserved too much for the 9B and about half of what the 0.8B needs.
+- **Surfaces are wired at load, before any reading starts,** and appear in both arms of the comparison, so neither reading sees them. They are computed from each program's shape instead: 1,257 MiB of wired growth was read across a 9B load, against 1,249 MiB computed.
+- **The driver wires with a delay.** Wired memory holds still for up to a second of running programs, then rises in steps and settles within about 2 seconds.
+- **MLX's own wired memory falls after its last work,** by 2 GB or more. Measured sooner than 30 seconds after the GPU's last use, this hid most of a small model's programs: 0.37× and 0.59× of the true cost on the 0.8B and 2B.
+- **The whole cost held up through the app.** On the 9B, measured at 15.02 GiB, wired memory grew 15.0 to 15.2 GiB under a 10,000-token prompt. A ceiling of 21 GB moved a long prompt to the GPU part way through with no further rise in wired memory, so the programs' 10 to 20 seconds of release did not carry it past the ceiling.
+- **A reading taken after a run says nothing.** After a 10-second decode the programs had already been released, so a reading then shows only MLX's memory.
+
+Prefill speed in the same runs, direct model forwards with the programs running against paused: 0.89× on the 0.8B, 1.12× on the 2B and 1.29× on the 9B.
+
+## How much of a chunk to give the Neural Engine
+
+The same loaded model at each share of a 2,048-token chunk, MLP programs and output gates running, against the GPU alone. One 0.8B row and one 9B row were disturbed by other work on the Mac and are left out.
+
+| Tokens | 0.8B | 2B | 9B |
+| ---: | ---: | ---: | ---: |
+| 128 | 0.80× | | |
+| 256 | 0.83× | | |
+| 448 | 0.71× | 1.02× | |
+| 704 | 0.95× | 1.12× | 1.18× |
+| 960 | | 1.11× | about 1.3× |
+| 1,216 | 0.80× | 0.98× | Core ML refused it |
+
+- **The 47 percent share is right where a gain exists.** 960 tokens is at or near the best on both models that gain.
+- **No share helps a 0.8B model.** A chunk split costs a hand-off and a forced GPU evaluation per layer, which outweighs the little work its small MLP moves. Serving now finds this out on each Mac and turns the programs off.
+- **Timing a model at load did not work reliably.** A check that timed chunks of made-up tokens against the GPU read 1.31 on the 9B (1.20× through the app) and 0.85 on the 0.8B (0.89× direct), but 1.06, 0.68, 1.07 and 0.95 on repeats of the 2B, which gains 1.09× to 1.12×. So it was taken out in favour of comparing real chunks during real prompts, below.
+- **The output gates added nothing measurable on the 2B, and at 704 tokens on the 9B,** and cost the 0.8B a further 3 to 15 percent. A later run at 960 tokens on the 9B, at the end of this file, found no gain there either.
+
 ## Through the app
 
 The kept results, wired into the serving path behind `experimental_neural_engine_prefill_enabled`: the MLP split, the `z` rows, and the program cache. Ornith 9B in the Development app, a 34 GB ceiling, the prompt cache on, about 10,300-token prompts each with a unique first line, median of three requests per run.
@@ -72,3 +109,33 @@ The kept results, wired into the serving path behind `experimental_neural_engine
 | On, after a reload of 3.9 s | 1,362 TPS | 1.13× |
 
 Direct model runs of the same programs measured 1.27× to 1.28×. The first long prompt after a load was the slowest of each run (1,296 and 1,362 TPS). Off ran between the two on runs, so heat does not explain the gap between them, and it remains unexplained with three requests per run.
+
+## Comparing neighbouring chunks of real prompts
+
+`should_compare_real_chunks_on_*` runs one prompt's chunks in turn on the GPU alone and on both engines, 12 chunks of 2,048 tokens per prompt. Each chunk is compared with the mean of its two neighbours, which cancels the steady growth in chunk time as the prompt's position advances. Figures are the median gain of one prompt's ten comparisons.
+
+| Prompt | 0.8B | 2B | 9B |
+| --- | ---: | ---: | ---: |
+| Right after the programs load | 0.83 | 0.92 | 1.17 |
+| Warm, starting on the GPU | 0.92, 0.92 | 1.03, 1.08 | 1.18, 1.19 |
+| Warm, starting on both engines | 0.91, 0.91, 0.92 | 1.07, 1.06, 1.09 | 1.18, 1.19, 1.19 |
+| After 25 s idle, starting on the GPU | 0.90 | 0.94 | 1.12 |
+
+- **Real chunks separate the models where made-up ones did not.** Warm prompts vary by about 3 percent on one model, against about 40 percent for the load-time check.
+- **Cold programs read low for several seconds,** enough to look like a 0.8B model on a 2B model, so one prompt never decides. Serving wants 15 comparisons across at least 3 runs of chunks.
+- **A cold first chunk is the costly one.** Against a warm chunk of the same position, a cold chunk on both engines took about 380, 490 and 600 ms longer on the 0.8B, 2B and 9B when it was the prompt's first, and about 140, 180 and 170 ms longer when one chunk on the GPU came before it. So a prompt after 10 seconds of idle starts on the GPU.
+
+Through the app with the rule in place, 20,000-token Shakespeare prompts, the median of three prompts per arm against the Neural Engine off:
+
+| Model | The rule's reading | In quick succession | After 25 s idle |
+| --- | ---: | ---: | ---: |
+| 0.8B | 0.98, then 0.90 on a second comparison: turned off | 0.97× once turned off, the noise of this measurement | |
+| 2B | 1.03 to 1.11, across four comparisons | 1.11× | 0.94× |
+| 9B | 1.28 | 1.24× | 1.11× |
+
+- **Waking cold programs still costs a small model its gain.** Leading with the GPU made the stall smaller, not zero. Waking the programs during that first GPU chunk is the untested next idea.
+- **A 0.97 cutoff kept the 0.8B on.** It read 0.98 and really ran 0.98×, and one prompt after 25 s idle ran 0.62×, so the line moved to 1.02.
+
+The output gates at the production share on the 9B, twice on one loaded model: the MLP programs alone ran 1.11× and 1.16× the GPU alone, and with the gates 1.13× and 1.13×. With the 2B and the 704-token 9B rows above, no model shows a gain from them.
+
+The Overview's time saved, checked against one warm 10,200-token prompt on the 9B: the panel credited 1.4 to 1.5 s. That prompt ran at 1,355 to 1,433 tokens per second against 1,151 to 1,319 with the Neural Engine off, which works out to between 0.2 and 1.7 s. The off runs were earlier the same day, so this is a sanity check and not a measurement of the estimate's accuracy.

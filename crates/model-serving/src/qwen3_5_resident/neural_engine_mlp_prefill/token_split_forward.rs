@@ -1,7 +1,5 @@
 //! One dense MLP layer split by token between the Neural Engine and the GPU.
 
-use std::time::Duration;
-
 use astronomical_neural_engine::mlx_hand_off::{
     MlxHandOffError, OutputHandOff, SplitAxis, channel_major_fp16, merge_surface_with_gpu_slice,
     write_prepared_input,
@@ -9,13 +7,10 @@ use astronomical_neural_engine::mlx_hand_off::{
 use mlx_c_rust::MlxArray;
 use thiserror::Error;
 
-use super::NeuralEngineMlpPrefill;
+use super::{NEURAL_ENGINE_FINISH_TIMEOUT, NeuralEngineMlpPrefill};
 use crate::qwen3_5_core::dense::mlp::Qwen3_5DenseMlpWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
-
-// A prediction takes milliseconds, so this only bounds a wedged Neural Engine.
-const NEURAL_ENGINE_FINISH_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Error)]
 enum TokenSplitForwardError {
@@ -29,6 +24,16 @@ enum TokenSplitForwardError {
     Program(#[from] astronomical_neural_engine::core_ml::CoreMlProgramError),
     #[error("no Neural Engine program exists for decoder layer {layer_index}")]
     MissingLayerProgram { layer_index: usize },
+}
+
+impl TokenSplitForwardError {
+    const fn is_about_the_programs(&self) -> bool {
+        match self {
+            Self::HandOff(hand_off_error) => !hand_off_error.is_from_mlx(),
+            Self::Program(_) | Self::MissingLayerProgram { .. } => true,
+            Self::Gpu(_) | Self::Mlx(_) => false,
+        }
+    }
 }
 
 impl Qwen3_5ResidentModel {
@@ -46,24 +51,29 @@ impl Qwen3_5ResidentModel {
         if let Some(prefill) = self.neural_engine_mlp_prefill.as_ref()
             && prefill.handles(token_count)
         {
-            let forward_outcome = match self.forward_dense_mlp_split_by_token(
+            match self.forward_dense_mlp_split_by_token(
                 normalized_attention,
                 dense_mlp_weights,
                 layer_index,
                 prefill,
             ) {
-                Ok(merged) => Ok(merged),
-                Err(token_split_error) => Err(token_split_error.to_string()),
-            };
-            match forward_outcome {
                 Ok(merged) => return Ok(merged),
-                Err(forward_error) => {
+                // An MLX error says nothing about the programs, and is left to surface
+                // from the GPU path below, where memory failures are handled.
+                Err(token_split_error) if token_split_error.is_about_the_programs() => {
                     tracing::warn!(
                         layer_index,
-                        error = forward_error.as_str(),
+                        error = %token_split_error,
                         "Neural Engine MLP prefill failed; remaining prefill stays on the GPU"
                     );
                     prefill.has_failed.set(true);
+                }
+                Err(token_split_error) => {
+                    tracing::warn!(
+                        layer_index,
+                        error = %token_split_error,
+                        "this layer stays on the GPU after an error outside the Neural Engine"
+                    );
                 }
             }
         }
@@ -117,3 +127,7 @@ impl Qwen3_5ResidentModel {
         )?)
     }
 }
+
+#[cfg(test)]
+#[path = "token_split_forward_tests.rs"]
+mod tests;

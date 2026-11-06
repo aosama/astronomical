@@ -216,11 +216,18 @@ function configurationSaveOutcomeMessage(saveOutcome) {
 function neuralEnginePrefillStatusMessage(neuralEnginePrefill) {
     if (!neuralEnginePrefill) { return "Off for the loaded model, or no model is loaded."; }
     if (neuralEnginePrefill.state === "active") {
-        const memoryGigabytes = neuralEnginePrefill.estimated_memory_bytes / 1073741824;
+        const memoryGigabytes = neuralEnginePrefill.measured_memory_bytes / 1073741824;
         return `Active: ${neuralEnginePrefill.neural_engine_tokens_per_chunk} of every `
             + `${neuralEnginePrefill.chunk_token_count} prompt tokens run on the Neural Engine, across `
             + `${neuralEnginePrefill.layer_program_count} layers, using about `
-            + `${Math.ceil(memoryGigabytes)} GB.`;
+            + `${Math.ceil(memoryGigabytes)} GB. `
+            + (neuralEnginePrefill.measured_speed_percent
+                ? `Measured ${(neuralEnginePrefill.measured_speed_percent / 100).toFixed(2)} times the speed of the GPU alone.`
+                : "Comparing with the GPU alone during long prompts.");
+    }
+    if (neuralEnginePrefill.state === "preparing" && neuralEnginePrefill.is_waiting_to_measure) {
+        return `${neuralEnginePrefill.total_program_count} programs built. Their memory is measured at the next pause in requests, `
+            + "and the model serves on the GPU until then.";
     }
     if (neuralEnginePrefill.state === "preparing") {
         return `Preparing: ${neuralEnginePrefill.completed_program_count} of `

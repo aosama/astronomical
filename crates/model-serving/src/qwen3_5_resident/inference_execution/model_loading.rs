@@ -18,6 +18,7 @@ use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::qwen3_5_resident::neural_engine_prefill_loading::{
     NeuralEnginePreparationStep, begin_neural_engine_prefill_preparation,
 };
+use crate::qwen3_5_resident::neural_engine_program_settlement::settle_neural_engine_programs;
 
 impl Qwen3_5EngineState {
     /// The model's last parts, once its core weights are in place. Programs come
@@ -35,29 +36,39 @@ impl Qwen3_5EngineState {
         ) = begin_neural_engine_prefill_preparation(
             model,
             &self.chunking,
-            u32::try_from(self.hard_maximum_position_count).unwrap_or(u32::MAX),
             self.neural_engine_program_cache_directory.as_deref(),
+            None,
         );
         Ok(())
     }
 
-    /// Moves the programs one step along and returns a status a reader has not yet
-    /// seen. Only ever called while no request is active.
+    /// A request's start and every forward call this on the owner thread, which together
+    /// cover the GPU work a waiting measurement must not read through.
+    pub(super) fn tell_neural_engine_preparation_the_gpu_is_in_use(&mut self) {
+        if let Some(preparation) = self.neural_engine_prefill_preparation.as_mut() {
+            preparation.note_gpu_used();
+        }
+    }
+
+    /// Moves the programs one step along, or settles what the last request learned about
+    /// programs already running, and returns a status a reader has not yet seen. Only
+    /// ever called while no request is active, which is when programs can be released.
     pub(super) fn advance_neural_engine_preparation(
         &mut self,
     ) -> Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus> {
-        let (Some(preparation), Some(model)) = (
-            self.neural_engine_prefill_preparation.as_mut(),
-            self.model.as_mut(),
-        ) else {
-            return None;
+        let model = self.model.as_mut()?;
+        let Some(preparation) = self.neural_engine_prefill_preparation.as_mut() else {
+            let settled_status =
+                settle_neural_engine_programs(model, &self.neural_engine_prefill_status)?;
+            self.neural_engine_prefill_status = settled_status.clone();
+            return Some(settled_status);
         };
         let reported_status = match preparation.advance(model) {
             NeuralEnginePreparationStep::Unchanged => return None,
             NeuralEnginePreparationStep::Progressed(status) => status,
             NeuralEnginePreparationStep::ReadyToFinish => {
                 let finished_preparation = self.neural_engine_prefill_preparation.take()?;
-                finished_preparation.finish(model)
+                finished_preparation.finish()
             }
         };
         self.neural_engine_prefill_status = reported_status.clone();

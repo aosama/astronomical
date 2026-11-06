@@ -2,9 +2,9 @@
 //! tells the daemon how they are getting on.
 //!
 //! This happens only between requests, because a step may read a layer's weights on
-//! the MLX owner thread, which a generation needs for itself. Programs that need no
-//! weights keep building on their own thread during a generation regardless, so a
-//! long reply slows the set down without stopping it.
+//! the MLX owner thread, which a generation needs for itself, and because a program's
+//! first run wires memory beside it. A few programs already started finish during a
+//! generation, and the rest wait for it to end.
 
 use std::time::Duration;
 
@@ -48,6 +48,10 @@ where
                 event_writer.send_event(&unsent_event).await?;
             }
             if !self.is_neural_engine_preparation_running {
+                if std::mem::take(&mut self.has_request_run_since_settling) {
+                    self.report_what_the_last_request_settled(event_writer)
+                        .await?;
+                }
                 return Ok(command_reader.next_command().await?);
             }
             tokio::select! {
@@ -58,6 +62,33 @@ where
                 }
             }
         }
+    }
+
+    /// A request can find that running programs failed or slow the model down, and they
+    /// can only be released with no request active. An error here means the owner thread
+    /// is gone, which the next command will report.
+    async fn report_what_the_last_request_settled<WriteTransport>(
+        &mut self,
+        event_writer: &mut ProtocolWriter<WriteTransport>,
+    ) -> Result<(), WorkerRuntimeError>
+    where
+        WriteTransport: AsyncWrite + Unpin,
+    {
+        let Some(LoadedRuntime::Autoregressive(loaded_model)) = self.loaded_runtime.as_mut() else {
+            return Ok(());
+        };
+        if let Ok(Some(neural_engine_prefill)) = loaded_model
+            .engine
+            .advance_neural_engine_preparation()
+            .await
+        {
+            event_writer
+                .send_event(&WorkerEvent::NeuralEnginePrefillChanged {
+                    neural_engine_prefill,
+                })
+                .await?;
+        }
+        Ok(())
     }
 
     async fn step_neural_engine_preparation<WriteTransport>(

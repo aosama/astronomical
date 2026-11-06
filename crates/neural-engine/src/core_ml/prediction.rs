@@ -6,8 +6,9 @@ use std::time::Duration;
 use super::error::{CoreMlProgramError, NATIVE_ERROR_CAPACITY, native_error_text};
 use super::program::CoreMlProgram;
 use crate::core_ml::ffi::{
-    astronomical_core_ml_program_begin_predict, astronomical_core_ml_program_finish_predict,
-    astronomical_core_ml_program_predict,
+    astronomical_core_ml_program_begin_predict,
+    astronomical_core_ml_program_copy_asynchronous_error,
+    astronomical_core_ml_program_finish_predict, astronomical_core_ml_program_predict,
 };
 
 /// A prediction running on the program's own dispatch queue while the
@@ -40,12 +41,28 @@ impl PendingPrediction<'_> {
                 self.is_finished = true;
                 Ok(Duration::from_nanos(elapsed_nanoseconds))
             }
-            -2 => Err(CoreMlProgramError::PredictionTimeout(timeout)),
+            // Waiting on would hang the request forever, which is what the timeout is for.
+            // The program is still in flight, so it is abandoned rather than released.
+            -2 => {
+                self.is_finished = true;
+                self.program.is_abandoned = true;
+                Err(CoreMlProgramError::PredictionTimeout(timeout))
+            }
             _ => {
                 self.is_finished = true;
-                Err(CoreMlProgramError::Prediction(
-                    "the asynchronous prediction failed".to_owned(),
-                ))
+                let mut native_error = [0 as c_char; NATIVE_ERROR_CAPACITY];
+                // SAFETY: the prediction has finished, so nothing else writes the error
+                // it copies, and the buffer is writable for its full stated capacity.
+                unsafe {
+                    astronomical_core_ml_program_copy_asynchronous_error(
+                        self.program.native_program.as_ptr().cast_const(),
+                        native_error.as_mut_ptr(),
+                        NATIVE_ERROR_CAPACITY as u32,
+                    );
+                }
+                Err(CoreMlProgramError::Prediction(native_error_text(
+                    &native_error,
+                )))
             }
         }
     }
@@ -91,6 +108,21 @@ impl CoreMlProgram {
                 &native_error,
             )))
         }
+    }
+
+    /// One prediction that gives up after `timeout`, for a thread something else will
+    /// eventually wait on. A plain [`Self::predict`] on a wedged Neural Engine never
+    /// returns, which would hang whatever joins that thread.
+    pub fn predict_within(&mut self, timeout: Duration) -> Result<Duration, CoreMlProgramError> {
+        self.begin_prediction()?.finish(timeout)
+    }
+
+    /// Runs the program once on zeros, which wires its weights like any other input.
+    pub fn run_once_on_zeros(&mut self, timeout: Duration) -> Result<(), CoreMlProgramError> {
+        let zero_activations = vec![0_u16; self.shape().activation_element_count()];
+        self.write_activations(&zero_activations)?;
+        self.predict_within(timeout)?;
+        Ok(())
     }
 
     /// Starts a prediction on the program's dispatch queue and returns at

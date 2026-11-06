@@ -11,6 +11,7 @@ fn preparing(
         total_program_count: 56,
         elapsed_ms: 1_000,
         estimated_remaining_ms,
+        is_waiting_to_measure: false,
     }
 }
 
@@ -61,10 +62,11 @@ fn should_say_when_the_programs_are_engaged() {
             layer_program_count: 32,
             neural_engine_tokens_per_chunk: 960,
             chunk_token_count: 2048,
-            estimated_memory_bytes: 1,
+            measured_memory_bytes: 1,
+            measured_speed_percent: None,
         })
         .as_deref(),
-        Some("engaged, 32 layer programs")
+        Some("engaged, 32 layer programs; comparing with the GPU alone during long prompts")
     );
 }
 
@@ -76,5 +78,37 @@ fn should_give_the_reason_when_the_programs_are_unavailable() {
         })
         .as_deref(),
         Some("unavailable, prefill stays on the GPU: the chunk is too small")
+    );
+}
+
+#[test]
+fn should_say_when_built_programs_are_waiting_to_be_measured() {
+    let waiting = NeuralEnginePrefillStatus::Preparing {
+        completed_program_count: 56,
+        total_program_count: 56,
+        elapsed_ms: 1_000,
+        estimated_remaining_ms: None,
+        is_waiting_to_measure: true,
+    };
+    assert_eq!(
+        render_neural_engine_prefill(&waiting).as_deref(),
+        Some(
+            "56 programs built, measuring their memory at the next pause in requests; prefill on the GPU until then"
+        )
+    );
+}
+
+#[test]
+fn should_show_the_measured_speed_once_it_is_known() {
+    let engaged = NeuralEnginePrefillStatus::Active {
+        layer_program_count: 32,
+        neural_engine_tokens_per_chunk: 960,
+        chunk_token_count: 2_048,
+        measured_memory_bytes: 1,
+        measured_speed_percent: Some(118),
+    };
+    assert_eq!(
+        render_neural_engine_prefill(&engaged).as_deref(),
+        Some("engaged, 32 layer programs, measured 1.18x the GPU alone")
     );
 }

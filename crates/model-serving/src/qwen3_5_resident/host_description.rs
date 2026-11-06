@@ -8,6 +8,33 @@ use std::sync::OnceLock;
 const SW_VERS_PATH: &str = "/usr/bin/sw_vers";
 const SYSCTL_PATH: &str = "/usr/sbin/sysctl";
 
+/// The macOS build and Mac a proof or a reading holds for. An update or a move to another
+/// Mac, by a migration or a restored backup, can change what the Neural Engine does.
+pub(crate) fn host_environment_of(
+    macos_product_version: &str,
+    macos_build_version: &str,
+    mac_hardware_model: &str,
+) -> String {
+    format!("macOS {macos_product_version} ({macos_build_version}) on {mac_hardware_model}")
+}
+
+/// This process's environment, or `None` when the system would not describe itself, in
+/// which case nothing that depends on it is recorded.
+pub(crate) fn current_host_environment() -> Option<&'static str> {
+    static HOST_ENVIRONMENT: OnceLock<Option<String>> = OnceLock::new();
+    HOST_ENVIRONMENT
+        .get_or_init(describe_current_host_environment)
+        .as_deref()
+}
+
+fn describe_current_host_environment() -> Option<String> {
+    Some(host_environment_of(
+        macos_product_version()?,
+        macos_build_version()?,
+        mac_hardware_model()?,
+    ))
+}
+
 /// For example `27.0.1`.
 pub(crate) fn macos_product_version() -> Option<&'static str> {
     static PRODUCT_VERSION: OnceLock<Option<String>> = OnceLock::new();

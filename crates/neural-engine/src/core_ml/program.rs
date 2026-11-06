@@ -17,6 +17,9 @@ use crate::program_shape::ProgramShape;
 pub struct CoreMlProgram {
     pub(super) native_program: NonNull<NativeCoreMlProgram>,
     pub(super) shape: ProgramShape,
+    /// A prediction never returned, so the native program is still in use and must never
+    /// be freed. It leaks, which is far cheaper than a request that hangs for good.
+    pub(super) is_abandoned: bool,
 }
 
 // SAFETY: the handle has one owner and moves between threads with it; Core ML
@@ -86,6 +89,7 @@ impl CoreMlProgram {
             Some(native_program) => Ok(Self {
                 native_program,
                 shape,
+                is_abandoned: false,
             }),
             None => Err(CoreMlProgramError::Load(native_error_text(&native_error))),
         }
@@ -130,6 +134,9 @@ impl CoreMlProgram {
 
 impl Drop for CoreMlProgram {
     fn drop(&mut self) {
+        if self.is_abandoned {
+            return;
+        }
         // SAFETY: the handle came from the bridge's load function and is
         // released exactly once, here.
         unsafe { astronomical_core_ml_program_release(self.native_program.as_ptr()) }

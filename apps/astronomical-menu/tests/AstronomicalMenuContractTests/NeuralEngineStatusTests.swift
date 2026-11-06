@@ -9,7 +9,7 @@ final class NeuralEngineStatusTests: XCTestCase {
     """
   private let activeJSON = """
     {"state":"active","layer_program_count":32,"neural_engine_tokens_per_chunk":960,\
-    "chunk_token_count":2048,"estimated_memory_bytes":1}
+    "chunk_token_count":2048,"measured_memory_bytes":1}
     """
   private let unavailableJSON = #"{"state":"unavailable","reason":"too small"}"#
   private let offJSON = #"{"state":"off"}"#
@@ -33,6 +33,30 @@ final class NeuralEngineStatusTests: XCTestCase {
 
     XCTAssertEqual(statusDocument.menuBarTitle, "Neural Engine 12/56")
     XCTAssertEqual(statusDocument.neuralEnginePrefill?.metricTitle(showsEstimate: true), "Preparing 12/56 · about 44 s")
+  }
+
+  func test_should_say_built_programs_are_waiting_to_be_measured() throws {
+    let statusDocument = try statusDocument(
+      prefillJSON: """
+        {"state":"preparing","completed_program_count":56,"total_program_count":56,\
+        "elapsed_ms":12000,"estimated_remaining_ms":33000,"is_waiting_to_measure":true}
+        """)
+
+    XCTAssertEqual(statusDocument.menuBarTitle, "Neural Engine measuring")
+    XCTAssertEqual(
+      statusDocument.neuralEnginePrefill?.metricTitle(showsEstimate: true),
+      "Measuring at the next pause")
+  }
+
+  func test_should_show_the_measured_speed_once_it_is_known() throws {
+    let statusDocument = try statusDocument(
+      prefillJSON: """
+        {"state":"active","layer_program_count":32,"neural_engine_tokens_per_chunk":960,\
+        "chunk_token_count":2048,"measured_memory_bytes":1,"measured_speed_percent":118}
+        """)
+
+    XCTAssertEqual(
+      statusDocument.neuralEnginePrefill?.metricTitle(showsEstimate: true), "Engaged · 1.18×")
   }
 
   func test_should_leave_the_menu_bar_to_a_running_generation() throws {

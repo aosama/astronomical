@@ -113,6 +113,7 @@ async function pollStatus() {
         renderCompactMlxMemory(data);
         renderMemoryLimitControl(data);
         renderConfigurationNeuralEngineStatus(data);
+        renderNeuralEnginePanel(data);
         renderModelDiscoveryDiagnostic(data.configuration);
         renderSession(data);
         renderAboutEnhanced(data);
@@ -302,7 +303,8 @@ function renderNowStrip(data) {
     const fillPercent = totalTokens > 0 ? Math.min(100, (processedTokens / totalTokens) * 100) : 0;
     const tokPerSecond = elapsedMs > 0 ? (processedTokens / elapsedMs) * 1000 : 0;
     phaseLabel.classList.add("phase-live");
-    phaseLabel.textContent = PHASE_LABELS.get(progress.phase) || "Active";
+    phaseLabel.textContent = (PHASE_LABELS.get(progress.phase) || "Active")
+        + (progress.phase === "target" ? neuralEnginePhaseSuffix(data) : "");
     if (progress.phase === "generation") {
         phaseFill.classList.add("generating");
     } else {

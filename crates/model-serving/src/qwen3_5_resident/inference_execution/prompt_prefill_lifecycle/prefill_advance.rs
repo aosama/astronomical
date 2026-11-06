@@ -18,7 +18,7 @@
 //! every per-chunk fixed cost, so throughput collapsed exactly when memory
 //! was tight; the configured chunk size is the only prefill chunk size.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::{
     GeneratedToken, InferenceEngineError, MemoryPhase, PerformanceCounter, PerformanceOperation,
@@ -81,6 +81,11 @@ impl Qwen3_5EngineState {
             };
         let forward_chunk_elapsed_millis =
             prompt_prefill_chunk_outcome.forward_chunk_elapsed_millis;
+        let neural_engine_chunk = self.note_neural_engine_chunk_finished(
+            prefill_start,
+            prefill_end,
+            forward_chunk_elapsed_millis,
+        );
         let boundary_checkpoints = prompt_prefill_chunk_outcome.boundary_checkpoints;
         self.publish_and_advance_durable_prefill_state(
             active_request,
@@ -109,7 +114,21 @@ impl Qwen3_5EngineState {
             prefill_end,
             forward_chunk_started_at,
             forward_chunk_elapsed_millis,
+            neural_engine_chunk,
         )?))
+    }
+
+    fn note_neural_engine_chunk_finished(
+        &self,
+        prefill_start: usize,
+        prefill_end: usize,
+        forward_chunk_elapsed_millis: u64,
+    ) -> Option<astronomical_ipc_protocol::NeuralEngineChunkReport> {
+        self.model.as_ref()?.note_neural_engine_chunk_finished(
+            prefill_start,
+            prefill_end - prefill_start,
+            Duration::from_millis(forward_chunk_elapsed_millis),
+        )
     }
 
     /// Resolves the next prompt-prefill chunk span through the shared pure
@@ -513,6 +532,7 @@ impl Qwen3_5EngineState {
         prefill_end: usize,
         forward_chunk_started_at: Instant,
         forward_chunk_elapsed_millis: u64,
+        neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
     ) -> Result<GeneratedToken, InferenceEngineError> {
         let model = self
             .model
@@ -558,6 +578,7 @@ impl Qwen3_5EngineState {
             persistent_prompt_cache_diagnostics: active_request
                 .persistent_prompt_cache_diagnostics
                 .clone(),
+            neural_engine_chunk,
         })
     }
 }

@@ -262,6 +262,22 @@ async fn should_serve_the_embedded_observatory_javascript_with_correct_content_t
 }
 
 #[tokio::test]
+async fn should_serve_the_embedded_neural_engine_panel_javascript() {
+    let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/neural-engine-panel.js")
+                .body(Body::empty())
+                .expect("the panel script request should be valid"),
+        )
+        .await
+        .expect("the application should return the panel script");
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
 async fn should_serve_the_embedded_compact_overview_javascript() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application

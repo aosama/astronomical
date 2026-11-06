@@ -93,6 +93,12 @@ unsafe extern "C" {
         elapsed_nanoseconds: *mut u64,
     ) -> i32;
 
+    pub fn astronomical_core_ml_program_copy_asynchronous_error(
+        program: *const NativeCoreMlProgram,
+        error_buffer: *mut std::ffi::c_char,
+        error_capacity: u32,
+    );
+
     pub fn astronomical_core_ml_program_model_load_seconds(
         program: *const NativeCoreMlProgram,
     ) -> f64;

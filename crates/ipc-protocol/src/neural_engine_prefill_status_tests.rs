@@ -6,7 +6,8 @@ fn should_serialize_the_active_state_with_its_tag() {
         layer_program_count: 32,
         neural_engine_tokens_per_chunk: 896,
         chunk_token_count: 2048,
-        estimated_memory_bytes: 7,
+        measured_memory_bytes: 7,
+        measured_speed_percent: None,
     };
 
     assert_eq!(
@@ -16,7 +17,7 @@ fn should_serialize_the_active_state_with_its_tag() {
             "layer_program_count": 32,
             "neural_engine_tokens_per_chunk": 896,
             "chunk_token_count": 2048,
-            "estimated_memory_bytes": 7
+            "measured_memory_bytes": 7
         })
     );
 }

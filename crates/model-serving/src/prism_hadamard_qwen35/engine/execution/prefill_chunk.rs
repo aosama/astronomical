@@ -191,6 +191,7 @@ pub(super) fn prefill_progress_token(
         expert_memory_mode: Some(ExpertMemoryMode::Resident),
         prompt_work_reuse,
         persistent_prompt_cache_diagnostics: None,
+        neural_engine_chunk: None,
     }
 }
 

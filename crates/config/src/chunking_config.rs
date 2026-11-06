@@ -427,7 +427,8 @@ impl ChunkingConfig {
 
     /// Returns whether dense prefill may run a slice of each chunk's tokens
     /// through whole MLP programs on the Neural Engine. Off by default because
-    /// it holds roughly twice the model's fp16 MLP weights in memory.
+    /// the programs hold more memory than the model's own fp16 MLP weights, by an amount
+    /// measured for each model.
     #[must_use]
     pub const fn experimental_neural_engine_prefill_enabled(&self) -> bool {
         self.experimental_neural_engine_prefill_enabled

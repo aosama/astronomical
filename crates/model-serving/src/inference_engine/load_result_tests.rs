@@ -31,7 +31,8 @@ fn should_announce_an_active_status() {
         layer_program_count: 32,
         neural_engine_tokens_per_chunk: 960,
         chunk_token_count: 2048,
-        estimated_memory_bytes: 1,
+        measured_memory_bytes: 1,
+        measured_speed_percent: None,
     };
 
     let event = EngineLoadResult::new()

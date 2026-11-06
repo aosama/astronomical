@@ -260,6 +260,7 @@ where
                 active_request = self
                     .serve_idle_command(worker_command, &mut event_writer)
                     .await?;
+                self.has_request_run_since_settling |= active_request.is_some();
                 continue;
             };
             active_request = match current_request {

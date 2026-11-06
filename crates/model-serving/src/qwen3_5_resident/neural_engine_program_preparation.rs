@@ -17,6 +17,10 @@ use std::time::{Duration, Instant};
 
 use astronomical_neural_engine::program_shape::ProgramShape;
 
+/// A program's first run wires its weights outside the memory ceiling, and this only
+/// tops up between requests. So this also bounds what a request starting now can find
+/// wired beside it: a few programs, rather than a whole set of 15 GB.
+const MOST_PROGRAMS_AT_BUILD_THREAD: usize = 4;
 const BUILD_THREAD_STOPPED: &str = "the Neural Engine program thread stopped";
 const PACKAGE_DIRECTORY_PREFIX: &str = "astronomical-neural-engine-";
 const NO_SCRATCH_DIRECTORY: &str = "no scratch directory for the Core ML program";
@@ -350,6 +354,9 @@ impl<Program: Send + 'static> ProgramPreparation<Program> {
     fn send_ready_builds(&mut self, package_writer: &dyn ProgramPackageWriter) {
         while let Some(next_program) = self.waiting_programs.front() {
             if next_program.needs_package() && self.package_in_flight.is_some() {
+                return;
+            }
+            if self.programs_at_build_thread.len() >= MOST_PROGRAMS_AT_BUILD_THREAD {
                 return;
             }
             let Some(planned_program) = self.waiting_programs.pop_front() else {

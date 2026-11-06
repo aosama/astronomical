@@ -235,6 +235,15 @@ body[data-application-channel="development"] #application-channel { color: var(-
 .overview-intro { max-width: 660px; margin: 10px 0 0; color: var(--text-dim); font-size: var(--text-lg); }
 .overview-grid { display: flex; flex-direction: column; gap: 14px; }
 .now-strip { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
+.neural-engine-panel { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
+.neural-engine-scope { color: var(--text-dim); font-size: var(--text-sm); }
+.neural-engine-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.neural-engine-tile { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.neural-engine-tile dt { color: var(--text-dim); font-size: var(--text-md); }
+.neural-engine-tile dd { margin: 0; }
+.neural-engine-value { margin-top: 2px; color: var(--text); font-family: var(--font-mono); font-size: var(--text-xl); font-variant-numeric: tabular-nums; line-height: 1.4; }
+.neural-engine-detail { color: var(--text-dim); font-size: var(--text-sm); line-height: 1.4; overflow-wrap: anywhere; }
+.neural-engine-note { margin: 0; color: var(--text-dim); font-size: var(--text-md); line-height: 1.5; }
 .overview-summary { padding: 0; overflow: hidden; }
 .overview-summary-heading { padding: 16px 20px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border); }
 .overview-summary-heading h3 { margin: 0; font-size: var(--text-xl); letter-spacing: -0.01em; }

@@ -137,6 +137,12 @@
   "resolved_generation": null,
   "serving_session": {
     "average_generation_tok_per_second": 0.0,
+    "neural_engine": {
+      "estimated_saved_ms": 0,
+      "last_chunk_placement": null,
+      "neural_engine_token_count": 0,
+      "prompt_token_count": 0
+    },
     "average_prefill_tok_per_second": 0.0,
     "completed_request_count": 0,
     "target_prompt_work_token_count": 0,
