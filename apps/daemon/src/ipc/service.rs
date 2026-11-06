@@ -4,14 +4,15 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
     sync::{Arc, RwLock, atomic::AtomicU64},
+    time::Duration,
 };
 
 use astronomical_config::{AstronomicalConfig, AstronomicalInstancePaths};
 use astronomical_ipc_protocol::{
-    DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcListener, DaemonRequest,
-    DaemonResponse, DaemonTransportError, StreamingResponseWriter,
+    AcceptedDaemonConnection, DAEMON_APPLICATION_NAME, DAEMON_PROTOCOL_VERSION, DaemonIpcListener,
+    DaemonRequest, DaemonResponse, DaemonTransportError, StreamingResponseWriter,
 };
-use tokio::sync::watch;
+use tokio::{sync::watch, task::JoinSet};
 
 use crate::{
     GenerationStartError, ImageGenerationExecutor,
@@ -26,9 +27,15 @@ use crate::{
 /// configured no default; single source of truth lives in the config crate.
 use astronomical_config::BUILTIN_DEFAULT_MODEL_ID;
 
+/// Long enough to ride out a brief shortage, short enough that clients barely notice.
+const ACCEPT_RETRY_DELAY: Duration = Duration::from_millis(100);
+/// CLI verbs send their request straight after connecting, so this only ever ends a
+/// connection that was never going to ask anything.
+const FIRST_REQUEST_WAIT: Duration = Duration::from_secs(30);
+
 /// One running daemon IPC service bound to the instance socket.
 pub struct DaemonIpcService {
-    service_task: tokio::task::JoinHandle<Result<(), DaemonTransportError>>,
+    service_task: tokio::task::JoinHandle<()>,
     shutdown_sender: watch::Sender<bool>,
     socket_path: PathBuf,
 }
@@ -44,15 +51,10 @@ impl DaemonIpcService {
     /// socket file so clients cannot discover a dead endpoint.
     pub async fn shutdown(self) -> Result<(), DaemonTransportError> {
         let _ = self.shutdown_sender.send(true);
-        // Two failure layers: awaiting the join handle fails only when the
-        // service task panicked or was aborted; the inner Result is the
-        // outcome the service loop itself returned.
-        let service_task_join = self.service_task.await;
-        let service_loop_outcome = match service_task_join {
-            Ok(service_loop_outcome) => service_loop_outcome,
-            Err(join_error) => return Err(DaemonTransportError::ServiceTaskFailed(join_error)),
-        };
-        service_loop_outcome?;
+        // Awaiting the join handle fails only when the service task panicked or was aborted.
+        if let Err(join_error) = self.service_task.await {
+            return Err(DaemonTransportError::ServiceTaskFailed(join_error));
+        }
         remove_socket_file_ignoring_missing(&self.socket_path)?;
         Ok(())
     }
@@ -90,52 +92,124 @@ pub async fn start_daemon_ipc_service(
     daemon_attribution_log: &DaemonPerformanceAttributionLog,
 ) -> Result<DaemonIpcService, DaemonTransportError> {
     let socket_path = instance_paths.ipc_socket_file_path();
-    let mut daemon_listener = DaemonIpcListener::bind(socket_path.clone()).await?;
+    let daemon_listener = DaemonIpcListener::bind(socket_path.clone()).await?;
     let (shutdown_sender, shutdown_receiver) = watch::channel(false);
     // The spawned task must own the log: the service loop runs far longer
     // than this function's borrow of the application state.
     let service_attribution_log = daemon_attribution_log.clone();
-    let service_task = tokio::spawn(async move {
-        let mut shutdown_receiver = shutdown_receiver;
-        loop {
-            let generation_context = generation_context.clone();
-            let daemon_attribution_log = service_attribution_log.clone();
-            tokio::select! {
-                _ = shutdown_receiver.changed() => break,
-                serve_outcome = daemon_listener.serve_streaming_request(
-                    move |daemon_request, streaming_response_writer| {
-                        handle_streaming_daemon_request(
-                            generation_context,
-                            daemon_attribution_log,
-                            daemon_request,
-                            streaming_response_writer,
-                        )
-                    }
-                ) =>
-                {
-                    // One misbehaving local client must not take the endpoint down.
-                    match serve_outcome {
-                        Err(accept_error @ DaemonTransportError::AcceptFailed { .. }) => {
-                            return Err(accept_error);
-                        }
-                        Err(request_error) => {
-                            tracing::warn!(
-                                error = %request_error,
-                                "daemon IPC request failed; listener stays available"
-                            );
-                        }
-                        Ok(()) => {}
-                    }
-                }
-            }
-        }
-        Ok(())
-    });
+    let service_task = tokio::spawn(serve_connections_until_shutdown(
+        daemon_listener,
+        shutdown_receiver,
+        generation_context,
+        service_attribution_log,
+    ));
     Ok(DaemonIpcService {
         service_task,
         shutdown_sender,
         socket_path,
     })
+}
+
+/// Serves every connection on its own task. A generation holds its connection for
+/// as long as it streams, and that includes the minutes a first model load can take,
+/// so serving them in turn would leave `status`, and the load report a waiting
+/// `respond` polls for, unanswered until the generation ended. The executor behind
+/// these handlers is the one the REST surface already calls concurrently.
+async fn serve_connections_until_shutdown(
+    mut daemon_listener: DaemonIpcListener,
+    mut shutdown_receiver: watch::Receiver<bool>,
+    generation_context: DaemonIpcGenerationContext,
+    daemon_attribution_log: DaemonPerformanceAttributionLog,
+) {
+    // Dropping the set at shutdown aborts connections still being served, which is
+    // what shutting down always did to the one connection in flight.
+    let mut connection_tasks = JoinSet::new();
+    loop {
+        tokio::select! {
+            _ = shutdown_receiver.changed() => return,
+            accepted_connection = accept_next_connection(&mut daemon_listener) => {
+                connection_tasks.spawn(serve_connection(
+                    accepted_connection,
+                    generation_context.clone(),
+                    daemon_attribution_log.clone(),
+                ));
+            }
+            // Reaps finished connections so the set does not grow with every request.
+            Some(finished_connection) = connection_tasks.join_next() => {
+                log_connection_panic(finished_connection);
+            }
+        }
+    }
+}
+
+/// Keeps trying through accept failures. Leaving the loop would abort every live
+/// generation in the set and strand new clients on a socket nobody accepts from, and
+/// the failures that happen in practice pass: out of file descriptors, or a client
+/// that hung up during the handshake. The delay stops a lasting failure from spinning.
+async fn accept_next_connection(
+    daemon_listener: &mut DaemonIpcListener,
+) -> AcceptedDaemonConnection {
+    loop {
+        match daemon_listener.accept_connection().await {
+            Ok(accepted_connection) => return accepted_connection,
+            Err(accept_error) => {
+                tracing::warn!(
+                    error = %accept_error,
+                    "daemon IPC could not accept a connection; retrying"
+                );
+                tokio::time::sleep(ACCEPT_RETRY_DELAY).await;
+            }
+        }
+    }
+}
+
+/// A panic stays inside its own connection, so the client sees only a closed socket;
+/// this line is the one record of why.
+fn log_connection_panic(finished_connection: Result<(), tokio::task::JoinError>) {
+    if let Err(join_error) = finished_connection
+        && join_error.is_panic()
+    {
+        tracing::error!(error = %join_error, "daemon IPC connection panicked");
+    }
+}
+
+/// One misbehaving local client must not take the endpoint down, so a failed
+/// connection is logged and goes no further.
+async fn serve_connection(
+    accepted_connection: AcceptedDaemonConnection,
+    generation_context: DaemonIpcGenerationContext,
+    daemon_attribution_log: DaemonPerformanceAttributionLog,
+) {
+    let serve_outcome = match read_first_request(accepted_connection).await {
+        Ok(Some((daemon_request, streaming_response_writer))) => {
+            handle_streaming_daemon_request(
+                generation_context,
+                daemon_attribution_log,
+                daemon_request,
+                streaming_response_writer,
+            )
+            .await
+        }
+        Ok(None) => Ok(()),
+        Err(request_read_error) => Err(request_read_error),
+    };
+    if let Err(request_error) = serve_outcome {
+        tracing::warn!(
+            error = %request_error,
+            "daemon IPC request failed; listener stays available"
+        );
+    }
+}
+
+/// A client that connects and never asks anything is treated as having hung up, so
+/// it cannot hold a file descriptor and a task until the daemon exits.
+async fn read_first_request(
+    accepted_connection: AcceptedDaemonConnection,
+) -> Result<Option<(DaemonRequest, StreamingResponseWriter)>, DaemonTransportError> {
+    match tokio::time::timeout(FIRST_REQUEST_WAIT, accepted_connection.read_request()).await {
+        Ok(request_read) => request_read,
+        Err(_elapsed) => Ok(None),
+    }
 }
 
 async fn handle_streaming_daemon_request(
@@ -275,6 +349,8 @@ async fn answer_status(
         default_model_id: Some(effective_default_model_id(
             &generation_context.instance_paths,
         )),
+        model_load_in_flight: health_snapshot.model_load_in_flight,
+        neural_engine_prefill: health_snapshot.neural_engine_prefill,
     };
     send_attributed_streaming_response(
         daemon_attribution_log,

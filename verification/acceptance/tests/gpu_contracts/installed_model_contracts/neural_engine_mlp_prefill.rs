@@ -377,7 +377,7 @@ fn report_comparison(gpu_evidence: &[ArmEvidence], both_engines_evidence: &[ArmE
     assert!(final_logit_cosine >= MINIMUM_FINAL_LOGIT_COSINE);
 }
 
-/// Loads the programs as production does, keeping compiled ones in
+/// Builds the programs through serving's own steps and waits, keeping compiled ones in
 /// `program_cache_directory` when given.
 fn prepare_programs(
     model: &mut Qwen3_5ResidentModel,

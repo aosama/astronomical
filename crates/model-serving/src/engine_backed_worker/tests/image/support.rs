@@ -328,11 +328,7 @@ pub(super) async fn next_event<ReadTransport>(
 where
     ReadTransport: tokio::io::AsyncRead + Unpin,
 {
-    reader
-        .next_event()
-        .await
-        .expect("valid event")
-        .expect("open worker")
+    super::super::next_event_skipping_load_progress(reader).await
 }
 
 pub(super) async fn close_worker<WriteTransport>(

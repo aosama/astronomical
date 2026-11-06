@@ -98,16 +98,22 @@ fn should_round_trip_daemon_responses_through_the_wire_codec() {
             worker_status: DaemonWorkerStatus::Ready,
             ready_model_id: Some("example/local-model".to_owned()),
             default_model_id: Some("Qwen3.5-2B-4bit".to_owned()),
+            model_load_in_flight: None,
+            neural_engine_prefill: None,
         },
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Loading,
             ready_model_id: None,
             default_model_id: None,
+            model_load_in_flight: Some(crate::ModelLoadInFlight::unnamed()),
+            neural_engine_prefill: None,
         },
         DaemonResponse::Status {
             worker_status: DaemonWorkerStatus::Unavailable,
             ready_model_id: None,
             default_model_id: None,
+            model_load_in_flight: None,
+            neural_engine_prefill: None,
         },
         DaemonResponse::ModelsList {
             models: vec![DaemonListedModel {

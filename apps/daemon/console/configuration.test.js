@@ -186,6 +186,9 @@ test("should_describe_each_neural_engine_state_in_words", () => {
     assert.match(call("neuralEnginePrefillStatusMessage", { state: "active",
         neural_engine_tokens_per_chunk: 960, chunk_token_count: 2048, layer_program_count: 32,
         estimated_memory_bytes: 20293720473 }), /960 of every 2048.*32 layers.*19 GB/);
+    assert.match(call("neuralEnginePrefillStatusMessage", { state: "preparing",
+        completed_program_count: 12, total_program_count: 56, elapsed_ms: 1000,
+        estimated_remaining_ms: null }), /Preparing: 12 of 56 programs ready.*GPU/);
     assert.match(call("neuralEnginePrefillStatusMessage", { state: "unavailable", reason: "only dense models are supported" }),
         /Enabled but not running: only dense models are supported/);
 });

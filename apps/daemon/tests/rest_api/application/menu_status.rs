@@ -11,7 +11,7 @@ use astronomical_daemon::{
     ResolvedRuntimeConfig, build_application, build_development_application_with_reload,
 };
 use astronomical_ipc_protocol::{
-    WorkerChunkingConfiguration, WorkerFlux2KleinModelConfiguration,
+    ModelLoadInFlight, WorkerChunkingConfiguration, WorkerFlux2KleinModelConfiguration,
     WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
     WorkerLoadedModelRuntimeConfiguration, WorkerRuntimeFeatureConfiguration,
 };
@@ -107,6 +107,22 @@ fn development_resolved_config() -> ResolvedRuntimeConfig {
             7,
         ),
     }
+}
+
+/// A swap reports `ready` throughout, so this field is all the menu has to go on.
+#[tokio::test]
+async fn should_report_a_load_in_flight_on_the_status_endpoint() {
+    let mut scripted_executor = ScriptedExecutor::ready(Vec::new());
+    scripted_executor.health_snapshot.model_load_in_flight =
+        Some(ModelLoadInFlight::for_model("fictional/next-model"));
+
+    let status_document = request_status_document(build_application(scripted_executor)).await;
+
+    assert_eq!(status_document["status"], "ready");
+    assert_eq!(
+        status_document["model_load_in_flight"],
+        serde_json::json!({ "model_id": "fictional/next-model" })
+    );
 }
 
 async fn production_status_document(

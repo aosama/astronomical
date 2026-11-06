@@ -20,12 +20,17 @@ use crate::transport::ipc::DaemonProbeError;
 use std::path::PathBuf;
 use thiserror::Error;
 
+mod frame_wait;
 mod image;
 mod schema;
 
 use crate::{DaemonProbe, ModelLifecycle, RequiredCapability};
 
-use self::{image::read_image_inputs, schema::read_schema_input};
+use self::{
+    frame_wait::{DaemonWaitBounds, ModelLoadWatch, await_frame_watching_model_load},
+    image::read_image_inputs,
+    schema::read_schema_input,
+};
 
 /// Collaborators the respond journey needs, injected so tests can stub them.
 pub struct RespondDependencies<'a> {
@@ -38,12 +43,16 @@ pub struct RespondDependencies<'a> {
     pub stdout: &'a mut dyn Write,
     /// Where progress, reasoning, and errors go.
     pub stderr: &'a mut dyn Write,
-    /// Bound for each protocol stage of the journey.
+    /// How long each protocol stage may go with nothing heard from the daemon.
     pub request_timeout: Duration,
     /// How long a download may go without any change before the wait gives up.
     pub download_stall_bound: Duration,
     /// Wait between download status polls.
     pub download_poll_interval: Duration,
+    /// Wait between asking whether a model is still loading while no answer has come.
+    pub model_load_poll_interval: Duration,
+    /// How long one load may stay reported before the wait gives up.
+    pub model_load_stall_bound: Duration,
 }
 
 /// Runs the whole respond journey against the resident daemon: resolve the
@@ -146,6 +155,7 @@ async fn stream_answer(
     let mut buffered_answer = String::new();
     relay_generation_frames(
         respond_arguments,
+        daemon_probe,
         respond_dependencies,
         &mut daemon_client,
         &mut buffered_answer,
@@ -156,21 +166,33 @@ async fn stream_answer(
 /// Relays frames until a terminal frame; writes the answer per stream mode.
 async fn relay_generation_frames(
     respond_arguments: &RespondArguments,
+    daemon_probe: &DaemonProbe,
     respond_dependencies: &mut RespondDependencies<'_>,
     daemon_client: &mut DaemonIpcClient,
     buffered_answer: &mut String,
 ) -> Result<(), RespondError> {
+    let wait_bounds = DaemonWaitBounds {
+        silence_bound: respond_dependencies.request_timeout,
+        load_stall_bound: respond_dependencies.model_load_stall_bound,
+        load_poll_interval: respond_dependencies.model_load_poll_interval,
+    };
+    let mut model_load_watch = ModelLoadWatch::default();
     loop {
-        // The timeout is an idle guard per frame, not a cap on the whole
-        // generation: a healthy stream may run arbitrarily long, but silence
-        // beyond the window means the daemon is gone.
-        let next_daemon_response = tokio::time::timeout(
-            respond_dependencies.request_timeout,
+        // The bound is an idle guard per frame, not a cap on the whole
+        // generation: a healthy stream may run arbitrarily long, and a model load
+        // counts as hearing from the daemon. Silence beyond the window with neither
+        // means the daemon is gone.
+        let next_frame_read = await_frame_watching_model_load(
             daemon_client.next_response(),
+            daemon_probe,
+            wait_bounds,
+            &mut model_load_watch,
+            &mut *respond_dependencies.stderr,
         )
-        .await
-        .map_err(|_elapsed| RespondError::DaemonStoppedResponding)?
-        .map_err(|_transport_error| RespondError::DaemonStoppedResponding)?;
+        .await?;
+        let Ok(next_daemon_response) = next_frame_read else {
+            return Err(RespondError::DaemonStoppedResponding);
+        };
         let Some(daemon_response) = next_daemon_response else {
             // EOF before a terminal frame: the daemon went away mid-answer.
             return Err(RespondError::DaemonStoppedResponding);

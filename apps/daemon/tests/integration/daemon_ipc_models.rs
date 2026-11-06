@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 
 use astronomical_daemon::DownloadCatalog;
 use astronomical_ipc_protocol::{
-    DaemonIpcClient, DaemonRequest, DaemonResponse, DaemonWorkerStatus,
+    DaemonIpcClient, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ModelLoadInFlight,
 };
 use tokio::time::timeout;
 
@@ -65,6 +65,55 @@ async fn should_list_discovered_models_over_daemon_ipc() {
         }
     );
 
+    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
+        .await
+        .expect("the daemon IPC service shutdown should finish inside the test timeout")
+        .expect("the daemon IPC service should shut down cleanly");
+    let _ = std::fs::remove_dir_all(&state_directory);
+}
+
+/// The worker has already dropped the previous model by the time a swap reports, so
+/// the listing must not call it resident just because the snapshot still names it.
+#[tokio::test]
+async fn should_list_nothing_as_resident_during_a_model_load() {
+    let state_directory = fresh_instance_state_directory("models-load");
+    let reloadable_config = Arc::new(RwLock::new(ipc_runtime_config(
+        vec![ipc_chat_discovered_model("test/local-chatter")],
+        &["test/local-chatter"],
+    )));
+    let mut stub_executor = ready_stub_executor("test/local-chatter");
+    Arc::get_mut(&mut stub_executor)
+        .expect("the stub executor should be uniquely owned here")
+        .health_snapshot
+        .model_load_in_flight = Some(ModelLoadInFlight::for_model("test/next"));
+    let daemon_ipc_service = start_stub_daemon_ipc_service_with_runtime_config(
+        &state_directory,
+        stub_executor,
+        Some(reloadable_config),
+    )
+    .await;
+    let mut daemon_client =
+        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
+            .await
+            .expect("the client should connect to the running daemon IPC service");
+
+    daemon_client
+        .send_request(&DaemonRequest::ModelsList)
+        .await
+        .expect("the models list request should transmit");
+    let list_response = timeout(HANDSHAKE_TEST_TIMEOUT, daemon_client.next_response())
+        .await
+        .expect("the models list response should arrive inside the test timeout")
+        .expect("the models list read should not fail at the transport layer")
+        .expect("the daemon should answer the models list request");
+
+    match list_response {
+        DaemonResponse::ModelsList { models } => {
+            assert_eq!(models.len(), 1);
+            assert!(!models[0].is_resident);
+        }
+        unexpected_response => panic!("expected a model list: {unexpected_response:?}"),
+    }
     timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
         .await
         .expect("the daemon IPC service shutdown should finish inside the test timeout")
@@ -270,6 +319,8 @@ async fn should_set_and_report_the_default_model_over_daemon_ipc() {
             worker_status: DaemonWorkerStatus::Ready,
             ready_model_id: Some("test/local-chatter".to_owned()),
             default_model_id: Some(requestable_model_id),
+            model_load_in_flight: None,
+            neural_engine_prefill: None,
         }
     );
 

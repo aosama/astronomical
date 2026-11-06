@@ -12,6 +12,7 @@ use crate::worker::event_handler::dispatch_observability_worker_event;
 use crate::worker::health::{
     clear_active_request_progress, clear_latest_mlx_memory_snapshot, publish_activity,
     publish_expert_memory_mode, publish_health, publish_latest_mlx_memory_snapshot,
+    publish_model_load_in_flight,
 };
 use crate::worker::loop_types::ActiveWorkerRequest;
 use crate::{
@@ -110,7 +111,11 @@ async fn relaunch_and_acknowledge_worker(
     // deadline elapses; the inner Result is the read outcome itself.
     let acknowledgement_wait_outcome = timeout(
         recovery_acknowledgement_timeout,
-        read_recovery_acknowledgement(worker_process, expected_configuration_generation.as_deref()),
+        read_recovery_acknowledgement(
+            worker_process,
+            health_snapshot,
+            expected_configuration_generation.as_deref(),
+        ),
     )
     .await;
     let acknowledgement_read_outcome = match acknowledgement_wait_outcome {
@@ -125,15 +130,32 @@ async fn relaunch_and_acknowledge_worker(
     publish_recovery_acknowledgement(health_snapshot, readiness_event, runtime_configuration)
 }
 
+/// Nothing else is serving during a recovery, so this load is the one a waiting caller
+/// wants to hear about. Both ways out of recovery replace the whole health snapshot,
+/// which clears the report.
+async fn next_event_publishing_load_progress(
+    worker_process: &mut WorkerProcess,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+) -> Result<Option<WorkerEvent>, WorkerControlError> {
+    loop {
+        match worker_process.next_event().await? {
+            Some(WorkerEvent::ModelLoadInFlight {
+                model_load_in_flight,
+            }) => publish_model_load_in_flight(health_snapshot, Some(model_load_in_flight)),
+            other_event => return Ok(other_event),
+        }
+    }
+}
+
 async fn read_recovery_acknowledgement(
     worker_process: &mut WorkerProcess,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     expected_configuration_generation: Option<&str>,
 ) -> Result<(WorkerEvent, Option<WorkerRuntimeFeatureConfiguration>), WorkerControlError> {
     let mut readiness_event = None;
     let mut runtime_configuration = None;
     loop {
-        let worker_event = worker_process
-            .next_event()
+        let worker_event = next_event_publishing_load_progress(worker_process, health_snapshot)
             .await?
             .ok_or(WorkerControlError::WorkerEventStreamClosed)?;
         match worker_event {
@@ -296,6 +318,20 @@ fn publish_observed_memory_facts(
     }
 }
 
+/// A chat request's own progress, which simply stops mattering once it is cancelled.
+fn is_progress_of_request(worker_event: &WorkerEvent, request_id: RequestId) -> bool {
+    let event_request_id = match worker_event {
+        WorkerEvent::Output { request_id, .. }
+        | WorkerEvent::PrefillProgress { request_id, .. }
+        | WorkerEvent::GenerationPreparationStarted { request_id, .. }
+        | WorkerEvent::GenerationProgress { request_id, .. }
+        | WorkerEvent::FirstDecodeCompleted { request_id, .. }
+        | WorkerEvent::PromptWorkReuse { request_id, .. } => *request_id,
+        _ => return false,
+    };
+    event_request_id == request_id
+}
+
 /// Classifies one worker event during the cancellation drain: request-scoped
 /// progress events are drained silently, health-bearing events publish their
 /// facts, the request's terminal/finalization event acknowledges the
@@ -307,30 +343,19 @@ fn react_to_cancellation_event(
     expects_image_finalization: bool,
 ) -> Result<CancellationEventReaction, WorkerControlError> {
     match worker_event {
-        WorkerEvent::Output {
-            request_id: output_request_id,
-            ..
-        } if output_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
-        WorkerEvent::PrefillProgress {
-            request_id: prefill_request_id,
-            ..
-        } if prefill_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
-        WorkerEvent::GenerationPreparationStarted {
-            request_id: preparation_request_id,
-            ..
-        } if preparation_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
-        WorkerEvent::GenerationProgress {
-            request_id: progress_request_id,
-            ..
-        } if progress_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
-        WorkerEvent::FirstDecodeCompleted {
-            request_id: decode_request_id,
-            ..
-        } if decode_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
-        WorkerEvent::PromptWorkReuse {
-            request_id: reuse_request_id,
-            ..
-        } if reuse_request_id == request_id => Ok(CancellationEventReaction::KeepDraining),
+        // Sent while the worker was idle and still unread when this request started.
+        WorkerEvent::NeuralEnginePrefillChanged {
+            neural_engine_prefill,
+        } => {
+            crate::worker::health::publish_neural_engine_prefill(
+                health_snapshot,
+                Some(neural_engine_prefill),
+            );
+            Ok(CancellationEventReaction::KeepDraining)
+        }
+        progress_event if is_progress_of_request(&progress_event, request_id) => {
+            Ok(CancellationEventReaction::KeepDraining)
+        }
         WorkerEvent::ImageGenerationProgress {
             request_id: image_request_id,
             ..
@@ -509,3 +534,7 @@ pub(in crate::worker) async fn shutdown_worker(
         })
     }
 }
+
+#[cfg(test)]
+#[path = "containment_tests.rs"]
+mod containment_tests;

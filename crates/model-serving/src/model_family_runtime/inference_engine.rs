@@ -26,6 +26,16 @@ impl InferenceEngine for ModelFamilyInferenceEngine {
         }
     }
 
+    async fn advance_neural_engine_preparation(
+        &mut self,
+    ) -> Result<Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>, InferenceEngineError>
+    {
+        match self {
+            Self::Qwen3_5(engine) => engine.advance_neural_engine_preparation().await,
+            Self::Qwen3_5Streaming(_) | Self::PrismHadamardQwen35(_) => Ok(None),
+        }
+    }
+
     async fn start_generation(
         &mut self,
         inference_request: Self::Request,

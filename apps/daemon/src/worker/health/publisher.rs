@@ -89,6 +89,15 @@ pub(crate) fn publish_neural_engine_prefill(
     }
 }
 
+pub(crate) fn publish_model_load_in_flight(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    model_load_in_flight: Option<astronomical_ipc_protocol::ModelLoadInFlight>,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot.model_load_in_flight = model_load_in_flight;
+    }
+}
+
 pub(crate) fn publish_expert_memory_mode(
     health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
     expert_memory_mode: ExpertMemoryMode,

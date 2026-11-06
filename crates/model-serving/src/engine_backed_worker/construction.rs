@@ -26,6 +26,8 @@ where
             // engine owns all of its weights.
             engine_placement: Some(crate::EnginePlacement::CompleteResidencyFits),
             startup_residency_facts: None,
+            is_neural_engine_preparation_running: false,
+            unsent_neural_engine_prefill_event: None,
         }
     }
 }
@@ -64,6 +66,8 @@ where
             // No autoregressive engine is loaded, so there is no placement.
             engine_placement: None,
             startup_residency_facts: None,
+            is_neural_engine_preparation_running: false,
+            unsent_neural_engine_prefill_event: None,
         }
     }
 

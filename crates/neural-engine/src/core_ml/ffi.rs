@@ -39,6 +39,7 @@ unsafe extern "C" {
     pub fn astronomical_core_ml_program_load(
         model_path: *const c_char,
         compute_units_code: i32,
+        checks_placement: i32,
         input_channels: i32,
         output_channels: i32,
         token_count: i32,

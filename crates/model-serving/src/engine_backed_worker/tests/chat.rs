@@ -6,6 +6,7 @@ mod expert_memory_mode;
 mod generation_lifecycle;
 mod live_memory_limit_wired_budget;
 mod model_visible_correction;
+mod neural_engine_preparation;
 mod prefill_progress;
 mod prompt_cache_stats;
 mod ready_and_model_lifecycle;

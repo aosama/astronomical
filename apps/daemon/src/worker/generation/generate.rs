@@ -148,17 +148,13 @@ pub(in crate::worker) async fn handle_generate_command(
     Ok(())
 }
 
-/// Waits for the worker to finish the swap inside this model's load budget.
+/// Waits for the worker to finish the swap inside the load budget.
 async fn wait_for_model_swap_within_budget(
     worker_loop_state: &mut WorkerLoopState<'_>,
-    worker_model_configuration: &astronomical_ipc_protocol::WorkerModelConfiguration,
     expected_configuration_generation: Option<&str>,
     expected_model_runtime_configuration: &astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
 ) -> Result<ModelSwapWaitOutcome, WorkerControlError> {
-    let model_load_budget = crate::worker::process::model_swap::model_load_budget(
-        worker_loop_state.model_load_timeout,
-        worker_model_configuration,
-    );
+    let model_load_budget = worker_loop_state.model_load_timeout;
     let timed_swap_wait = timeout(
         model_load_budget,
         wait_for_model_swap(
@@ -252,7 +248,6 @@ async fn ensure_requested_model_loaded(
     }
     let model_swap_outcome = wait_for_model_swap_within_budget(
         worker_loop_state,
-        &model_policy.worker_model_configuration,
         expected_configuration_generation.as_deref(),
         &expected_model_runtime_configuration,
     )

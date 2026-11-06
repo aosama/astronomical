@@ -139,7 +139,8 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             .expect("the worker should report model loading before closing");
         match model_loaded_event {
             WorkerEvent::ModelSwapped { model_id, .. } => break model_id,
-            WorkerEvent::RuntimeFeatureConfigurationApplied { .. } => {}
+            WorkerEvent::RuntimeFeatureConfigurationApplied { .. }
+            | WorkerEvent::ModelLoadInFlight { .. } => {}
             unexpected_event => {
                 panic!("the worker should load the benchmark model, got {unexpected_event:?}");
             }
@@ -226,6 +227,7 @@ async fn run_model_with_prefill_chunk_tokens(prefill_chunk_tokens: u32) -> Prefi
             | WorkerEvent::GenerationFinalized { .. }
             | WorkerEvent::ExpertMemoryModeChanged { .. }
             | WorkerEvent::NeuralEnginePrefillChanged { .. }
+            | WorkerEvent::ModelLoadInFlight { .. }
             | WorkerEvent::PersistentPromptCacheStats { .. }
             | WorkerEvent::ExpertStreamingStats { .. }
             | WorkerEvent::PromptCacheCleared { .. }

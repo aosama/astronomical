@@ -352,6 +352,19 @@ impl WorkerProcess {
         .await
     }
 
+    /// For a loop waiting on a candidate worker: its load is not the one a status
+    /// reader asked about.
+    pub(crate) async fn next_event_without_load_progress(
+        &mut self,
+    ) -> Result<Option<WorkerEvent>, WorkerControlError> {
+        loop {
+            let worker_event = self.next_event().await?;
+            if !matches!(worker_event, Some(WorkerEvent::ModelLoadInFlight { .. })) {
+                return Ok(worker_event);
+            }
+        }
+    }
+
     pub async fn next_event(&mut self) -> Result<Option<WorkerEvent>, WorkerControlError> {
         match self
             .event_reader

@@ -12,8 +12,9 @@
 mod program_loading;
 mod token_split_forward;
 
-pub(crate) use program_loading::prepare_neural_engine_mlp_prefill;
-pub(crate) use program_loading::{ProgramPackageDirectory, weight_as_fp16_bits};
+pub(crate) use program_loading::{
+    MlpProgramPlan, plan_neural_engine_mlp_programs, unavailable, weight_as_fp16_bits,
+};
 
 use std::cell::{Cell, RefCell};
 

@@ -222,6 +222,10 @@ function neuralEnginePrefillStatusMessage(neuralEnginePrefill) {
             + `${neuralEnginePrefill.layer_program_count} layers, using about `
             + `${Math.ceil(memoryGigabytes)} GB.`;
     }
+    if (neuralEnginePrefill.state === "preparing") {
+        return `Preparing: ${neuralEnginePrefill.completed_program_count} of `
+            + `${neuralEnginePrefill.total_program_count} programs ready. The model serves on the GPU until then.`;
+    }
     if (neuralEnginePrefill.state === "unavailable") {
         return `Enabled but not running: ${neuralEnginePrefill.reason}.`;
     }

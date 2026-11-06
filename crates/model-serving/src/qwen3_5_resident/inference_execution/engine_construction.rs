@@ -162,6 +162,7 @@ impl MlxInferenceEngine<Qwen3_5InferenceExecution> {
             prompt_processing_chunk_sizer,
             chunking,
             neural_engine_prefill_status: astronomical_ipc_protocol::NeuralEnginePrefillStatus::Off,
+            neural_engine_prefill_preparation: None,
             neural_engine_program_cache_directory,
             retained_live_prefix: None,
             validated_artifact: Some(validated_artifact),

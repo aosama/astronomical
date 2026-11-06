@@ -178,6 +178,11 @@ struct DaemonStatusDocument: Codable, Equatable {
   let readyModelIdentifier: String?
   let readyModelSizeBytes: UInt64?
   let progress: Progress?
+  // Which model is loading. Separate from `progress` because a load runs while
+  // no request is active, and the status can read "ready" throughout a model swap.
+  let modelLoadInFlight: ModelLoadInFlight?
+  // Separate from the load because the model is already serving while its programs are prepared.
+  let neuralEnginePrefill: NeuralEnginePrefill?
   let expertMemoryMode: String?
   let expertResidency: ExpertResidencySnapshot?
   let expertPlacement: ExpertPlacementCopy?
@@ -214,6 +219,8 @@ struct DaemonStatusDocument: Codable, Equatable {
     case application, status, activity, progress, configuration
     case readyModelIdentifier = "ready_model_id"
     case readyModelSizeBytes = "ready_model_size_bytes"
+    case modelLoadInFlight = "model_load_in_flight"
+    case neuralEnginePrefill = "neural_engine_prefill"
     case expertMemoryMode = "expert_memory_mode"
     case expertResidency = "expert_residency"
     case expertPlacement = "expert_placement"
@@ -242,6 +249,10 @@ struct DaemonStatusDocument: Codable, Equatable {
     readyModelIdentifier = try container.decodeIfPresent(String.self, forKey: .readyModelIdentifier)
     readyModelSizeBytes = try container.decodeIfPresent(UInt64.self, forKey: .readyModelSizeBytes)
     progress = try container.decodeIfPresent(Progress.self, forKey: .progress)
+    modelLoadInFlight = try container.decodeIfPresent(
+      ModelLoadInFlight.self, forKey: .modelLoadInFlight)
+    neuralEnginePrefill = try container.decodeIfPresent(
+      NeuralEnginePrefill.self, forKey: .neuralEnginePrefill)
     expertMemoryMode = try container.decodeIfPresent(String.self, forKey: .expertMemoryMode)
     expertResidency = try container.decodeIfPresent(
       ExpertResidencySnapshot.self, forKey: .expertResidency)
@@ -302,6 +313,8 @@ struct DaemonStatusDocument: Codable, Equatable {
     readyModelIdentifier: String?,
     readyModelSizeBytes: UInt64? = nil,
     progress: Progress?,
+    modelLoadInFlight: ModelLoadInFlight? = nil,
+    neuralEnginePrefill: NeuralEnginePrefill? = nil,
     expertMemoryMode: String?,
     expertResidency: ExpertResidencySnapshot? = nil,
     expertPlacement: ExpertPlacementCopy? = nil,
@@ -324,6 +337,8 @@ struct DaemonStatusDocument: Codable, Equatable {
     self.readyModelIdentifier = readyModelIdentifier
     self.readyModelSizeBytes = readyModelSizeBytes
     self.progress = progress
+    self.modelLoadInFlight = modelLoadInFlight
+    self.neuralEnginePrefill = neuralEnginePrefill
     self.expertMemoryMode = expertMemoryMode
     self.expertResidency = expertResidency
     self.expertPlacement = expertPlacement

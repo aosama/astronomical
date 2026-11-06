@@ -1,7 +1,9 @@
 use super::scripted_model_factory_test_doubles::{
     FirstCreationFailsScriptedModelFactory, LazyScriptedModelFactory,
 };
-use super::support::{close_worker_transport, next_event, worker_model_configuration};
+use super::support::{
+    close_worker_transport, next_event, next_raw_event, worker_model_configuration,
+};
 use crate::{
     EngineBackedWorker, MemoryCeilingUtilization, MlxActiveMemoryBreakdown, MlxMemoryTelemetry,
 };
@@ -542,6 +544,62 @@ async fn should_report_restart_required_without_building_a_replacement_runtime()
             effective_mlx_memory_ceiling_bytes: 38_000_000_000,
             ..
         }
+    ));
+
+    close_worker_transport(daemon_writer, worker_task).await;
+}
+
+/// The daemon's status relies on the opening report arriving before the swap's
+/// acknowledgement, so the report can never outlive the load it describes.
+#[tokio::test]
+async fn should_open_a_requested_swap_by_naming_the_model() {
+    let engine_worker = EngineBackedWorker::idle_with_model_factory(
+        LazyScriptedModelFactory {
+            model_factory_call_count: Arc::new(AtomicUsize::new(0)),
+            mlx_memory_limits: (0, 0),
+            model_creation_memory_limits: Arc::new(Mutex::new(Vec::new())),
+            model_configurations: Arc::new(Mutex::new(Vec::new())),
+            expert_memory_mode: Some(ExpertMemoryMode::Resident),
+            created_engine_idle_mlx_memory_telemetry: None,
+            scripted_replacement_required_reason: None,
+        },
+        0,
+    );
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
+    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
+    let worker_task = tokio::spawn(async move {
+        engine_worker
+            .run(worker_reader_transport, worker_writer_transport)
+            .await
+    });
+    assert!(matches!(
+        next_raw_event(&mut daemon_reader).await,
+        WorkerEvent::Idle { .. }
+    ));
+
+    daemon_writer
+        .send_command(&WorkerCommand::SwapModel {
+            model_directory: "/models/requested-model".to_owned(),
+            model_configuration: worker_model_configuration("requested-model"),
+        })
+        .await
+        .expect("the worker should receive the requested model");
+
+    match next_raw_event(&mut daemon_reader).await {
+        WorkerEvent::ModelLoadInFlight {
+            model_load_in_flight,
+        } => assert_eq!(
+            model_load_in_flight.model_id.as_deref(),
+            Some("requested-model")
+        ),
+        unexpected_event => panic!("the load should open with a report: {unexpected_event:?}"),
+    }
+    assert!(matches!(
+        next_event(&mut daemon_reader).await,
+        WorkerEvent::ModelSwapped { .. }
     ));
 
     close_worker_transport(daemon_writer, worker_task).await;

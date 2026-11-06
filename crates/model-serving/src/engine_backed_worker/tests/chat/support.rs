@@ -78,6 +78,15 @@ pub(super) async fn next_event<ReadTransport>(
 where
     ReadTransport: tokio::io::AsyncRead + Unpin,
 {
+    super::super::next_event_skipping_load_progress(daemon_reader).await
+}
+
+pub(super) async fn next_raw_event<ReadTransport>(
+    daemon_reader: &mut ProtocolReader<ReadTransport>,
+) -> WorkerEvent
+where
+    ReadTransport: tokio::io::AsyncRead + Unpin,
+{
     daemon_reader
         .next_event()
         .await

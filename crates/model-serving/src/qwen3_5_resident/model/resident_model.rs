@@ -118,8 +118,8 @@ impl Qwen3_5ResidentModel {
             )
     }
 
-    /// Loads the opt-in Neural Engine programs exactly as production loading does,
-    /// so a journey can measure one loaded model with and without them.
+    /// Builds the opt-in Neural Engine programs through the same steps serving does,
+    /// and waits for them, so a journey can measure one loaded model with and without.
     #[cfg(feature = "direct-mlx")]
     pub fn prepare_neural_engine_prefill_matching_production(
         &mut self,

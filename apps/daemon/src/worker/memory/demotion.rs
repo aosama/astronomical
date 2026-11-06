@@ -294,10 +294,7 @@ impl MemoryDemotionRestart {
                 model_policy.worker_model_configuration.clone(),
             )
             .await?;
-        let model_load_budget = crate::worker::process::model_swap::model_load_budget(
-            self.acknowledgement_timeout,
-            &model_policy.worker_model_configuration,
-        );
+        let model_load_budget = self.acknowledgement_timeout;
         let swap_wait_outcome = timeout(
             model_load_budget,
             crate::worker::process::model_swap::wait_for_model_swap(
@@ -437,8 +434,10 @@ async fn read_candidate_acknowledgement(
     let mut runtime_feature_configuration = None;
     let mut deferred_process_events = Vec::new();
     loop {
+        // The model restore that follows goes through the swap wait, which does publish
+        // progress; this candidate's own startup has nothing a reader asked about.
         let candidate_event = candidate_worker_process
-            .next_event()
+            .next_event_without_load_progress()
             .await?
             .ok_or(WorkerControlError::WorkerEventStreamClosed)?;
         match candidate_event {

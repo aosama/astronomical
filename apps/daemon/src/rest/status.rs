@@ -147,6 +147,8 @@ fn attach_worker_memory_and_session_facts(
     );
     status_json["neural_engine_prefill"] =
         serde_json::json!(worker_health_snapshot.neural_engine_prefill);
+    status_json["model_load_in_flight"] =
+        serde_json::json!(worker_health_snapshot.model_load_in_flight);
     super::expert_placement::attach_expert_placement_and_residency(
         status_json,
         worker_health_snapshot,

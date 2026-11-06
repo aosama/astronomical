@@ -1,7 +1,7 @@
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::thread::{self, JoinHandle};
 
-use astronomical_ipc_protocol::{RequestId, WorkerEvent};
+use astronomical_ipc_protocol::{NeuralEnginePrefillStatus, RequestId, WorkerEvent};
 use tokio::sync::oneshot;
 
 use super::{
@@ -132,6 +132,16 @@ where
         receive_owner_result(completion_receiver).await
     }
 
+    async fn advance_neural_engine_preparation(
+        &mut self,
+    ) -> Result<Option<NeuralEnginePrefillStatus>, InferenceEngineError> {
+        let (completion_sender, completion_receiver) = oneshot::channel();
+        self.send_command(MlxInferenceCommand::AdvanceNeuralEnginePreparation(
+            completion_sender,
+        ))?;
+        receive_owner_result(completion_receiver).await
+    }
+
     async fn collect_persistent_prompt_cache_stats(
         &self,
     ) -> Result<Option<WorkerEvent>, InferenceEngineError> {
@@ -214,6 +224,7 @@ where
         request_id: RequestId,
         completion_sender: OwnerResultSender<GenerationFinalization>,
     },
+    AdvanceNeuralEnginePreparation(OwnerResultSender<Option<NeuralEnginePrefillStatus>>),
     CollectPersistentPromptCacheStats(OwnerResultSender<Option<WorkerEvent>>),
     ClearPersistentPromptCache {
         model_id: Option<String>,
@@ -283,32 +294,6 @@ fn run_mlx_owner<Execution>(
                     .send(execution.cancel_generation(request_id))
                     .is_err();
             }
-            MlxInferenceCommand::CollectPersistentPromptCacheStats(completion_sender) => {
-                let _receiver_was_dropped = completion_sender
-                    .send(execution.collect_persistent_prompt_cache_stats())
-                    .is_err();
-            }
-            MlxInferenceCommand::ClearPersistentPromptCache {
-                model_id,
-                completion_sender,
-            } => {
-                let _receiver_was_dropped = completion_sender
-                    .send(execution.clear_persistent_prompt_cache(model_id))
-                    .is_err();
-            }
-            MlxInferenceCommand::CollectMlxMemoryTelemetry(completion_sender) => {
-                let _receiver_was_dropped = completion_sender
-                    .send(execution.collect_mlx_memory_telemetry())
-                    .is_err();
-            }
-            MlxInferenceCommand::UpdateMlxMemoryLimit {
-                requested_mlx_memory_ceiling_bytes,
-                completion_sender,
-            } => {
-                let _receiver_was_dropped = completion_sender
-                    .send(execution.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes))
-                    .is_err();
-            }
             #[cfg(feature = "direct-mlx")]
             MlxInferenceCommand::RunOwnerTestOperation {
                 owner_test_operation,
@@ -319,7 +304,60 @@ fn run_mlx_owner<Execution>(
                     .is_err();
             }
             MlxInferenceCommand::Shutdown => return,
+            maintenance_command => serve_maintenance_command(&mut execution, maintenance_command),
         }
+    }
+}
+
+/// Everything that happens to a loaded model between requests.
+fn serve_maintenance_command<Execution>(
+    execution: &mut Execution,
+    maintenance_command: MlxInferenceCommand<Execution>,
+) where
+    Execution: MlxInferenceExecution,
+{
+    match maintenance_command {
+        MlxInferenceCommand::AdvanceNeuralEnginePreparation(completion_sender) => {
+            let _receiver_was_dropped = completion_sender
+                .send(Ok(execution.advance_neural_engine_preparation()))
+                .is_err();
+        }
+        MlxInferenceCommand::CollectPersistentPromptCacheStats(completion_sender) => {
+            let _receiver_was_dropped = completion_sender
+                .send(execution.collect_persistent_prompt_cache_stats())
+                .is_err();
+        }
+        MlxInferenceCommand::ClearPersistentPromptCache {
+            model_id,
+            completion_sender,
+        } => {
+            let _receiver_was_dropped = completion_sender
+                .send(execution.clear_persistent_prompt_cache(model_id))
+                .is_err();
+        }
+        MlxInferenceCommand::CollectMlxMemoryTelemetry(completion_sender) => {
+            let _receiver_was_dropped = completion_sender
+                .send(execution.collect_mlx_memory_telemetry())
+                .is_err();
+        }
+        MlxInferenceCommand::UpdateMlxMemoryLimit {
+            requested_mlx_memory_ceiling_bytes,
+            completion_sender,
+        } => {
+            let _receiver_was_dropped = completion_sender
+                .send(execution.update_mlx_memory_limit(requested_mlx_memory_ceiling_bytes))
+                .is_err();
+        }
+        // `run_mlx_owner` serves these itself. Named rather than a catch-all, so a new
+        // command cannot be silently ignored here.
+        MlxInferenceCommand::Load(_)
+        | MlxInferenceCommand::StartGeneration { .. }
+        | MlxInferenceCommand::DecodeNextToken { .. }
+        | MlxInferenceCommand::InjectInputTokens { .. }
+        | MlxInferenceCommand::CancelGeneration { .. }
+        | MlxInferenceCommand::Shutdown => {}
+        #[cfg(feature = "direct-mlx")]
+        MlxInferenceCommand::RunOwnerTestOperation { .. } => {}
     }
 }
 

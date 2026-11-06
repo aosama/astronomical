@@ -88,11 +88,17 @@ fn build_listed_models(
                 ModelCapabilities::ImageGeneration(image_capabilities)
                     if image_capabilities.supports_text_to_image
             ),
-            is_resident: health_snapshot.ready_model_id.as_deref()
-                == Some(discovered_model.model_id.as_str()),
+            is_resident: is_resident_model(health_snapshot, &discovered_model.model_id),
             size_bytes: discovered_model.model_size_bytes,
         })
         .collect()
+}
+
+/// The worker drops the previous model before loading the next, while the snapshot
+/// still names it until the swap ends, so nothing is resident during a load.
+fn is_resident_model(health_snapshot: &WorkerHealthSnapshot, model_id: &str) -> bool {
+    health_snapshot.model_load_in_flight.is_none()
+        && health_snapshot.ready_model_id.as_deref() == Some(model_id)
 }
 
 /// Lists the release download catalog with local readiness per entry.

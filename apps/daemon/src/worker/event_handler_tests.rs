@@ -171,3 +171,82 @@ fn should_report_the_violation_for_a_cache_clear_acknowledgement_outside_wait() 
         "a cache-clear acknowledgement outside cache-clear wait carries its own message"
     );
 }
+
+/// A load reports before readiness and with no request active, so neither may read
+/// as a protocol violation.
+#[test]
+fn should_publish_a_load_in_flight_with_no_request_active() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
+        WorkerHealthStatus::Loading,
+    )));
+    let model_load_in_flight =
+        astronomical_ipc_protocol::ModelLoadInFlight::for_model("next-model");
+    let mut is_ready = false;
+    let mut model_load_deadline = None;
+    let mut active_request = None;
+    let temporary_log_directory = tempfile::tempdir().expect("temporary log directory");
+    let mut performance_log =
+        GenerationPerformanceLog::open(temporary_log_directory.path()).expect("performance log");
+
+    handle_worker_event(
+        WorkerEvent::ModelLoadInFlight {
+            model_load_in_flight: model_load_in_flight.clone(),
+        },
+        &health_snapshot,
+        &mut is_ready,
+        &mut model_load_deadline,
+        &mut active_request,
+        &mut performance_log,
+        &mut CompletionAttributionLog::disabled(),
+    )
+    .expect("a load report is valid before readiness");
+
+    assert_eq!(
+        health_snapshot
+            .read()
+            .expect("the snapshot reads")
+            .model_load_in_flight,
+        Some(model_load_in_flight)
+    );
+    assert!(!is_ready, "a load report must not read as readiness");
+}
+
+/// The worker drops the previous model before it announces the next, so its programs
+/// must not keep being described during the load.
+#[test]
+fn should_forget_the_previous_models_neural_engine_status_when_a_load_starts() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::ready_without_model(1)));
+    health_snapshot
+        .write()
+        .expect("the snapshot writes")
+        .neural_engine_prefill = Some(astronomical_ipc_protocol::NeuralEnginePrefillStatus::Off);
+    let mut is_ready = true;
+    let mut model_load_deadline = None;
+    let mut active_request = None;
+    let temporary_log_directory = tempfile::tempdir().expect("temporary log directory");
+    let mut performance_log =
+        GenerationPerformanceLog::open(temporary_log_directory.path()).expect("performance log");
+
+    handle_worker_event(
+        WorkerEvent::ModelLoadInFlight {
+            model_load_in_flight: astronomical_ipc_protocol::ModelLoadInFlight::for_model(
+                "next-model",
+            ),
+        },
+        &health_snapshot,
+        &mut is_ready,
+        &mut model_load_deadline,
+        &mut active_request,
+        &mut performance_log,
+        &mut CompletionAttributionLog::disabled(),
+    )
+    .expect("a load report is valid at any idle moment");
+
+    assert_eq!(
+        health_snapshot
+            .read()
+            .expect("the snapshot reads")
+            .neural_engine_prefill,
+        None
+    );
+}

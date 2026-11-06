@@ -9,6 +9,7 @@
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use astronomical_ipc_protocol::{
@@ -16,7 +17,7 @@ use astronomical_ipc_protocol::{
     DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel,
     DaemonRequest, DaemonResponse, DaemonWorkerStatus, EmbeddingsFailureReason, GeneratedImage,
     ImageGenerateRequest, ImageGenerationFailureReason, ImageGenerationResultMetadata,
-    ProtocolReader, ProtocolWriter,
+    ModelLoadInFlight, ProtocolReader, ProtocolWriter,
 };
 
 /// One installed model the stub reports for `ModelsList`.
@@ -152,6 +153,13 @@ pub struct StubDaemonConfig {
     pub catalog_entries_after_download: Option<Vec<StubCatalogEntry>>,
     pub default_model_id: Option<String>,
     pub chat_fragments: Vec<String>,
+    /// How long a `ChatGenerate` stays silent before its first frame, standing in
+    /// for a model load inside the real daemon.
+    pub chat_first_frame_delay: Duration,
+    /// FIFO of load reports for `Status` requests; the last entry repeats once
+    /// the scripted list is exhausted. Empty means nothing is loading.
+    pub model_load_reports: Vec<ModelLoadInFlight>,
+    pub neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
     pub embeddings_outcome: StubEmbeddingsOutcome,
     pub embedding_vector: Vec<f32>,
     /// What the daemon does with an `ImageGenerate` request.
@@ -185,6 +193,9 @@ impl Default for StubDaemonConfig {
             catalog_entries_after_download: None,
             default_model_id: None,
             chat_fragments: Vec::new(),
+            chat_first_frame_delay: Duration::ZERO,
+            model_load_reports: Vec::new(),
+            neural_engine_prefill: None,
             embeddings_outcome: StubEmbeddingsOutcome::Completed,
             embedding_vector: vec![0.25, -0.5],
             image_outcome: StubImageOutcome::Completed(Vec::new()),
@@ -209,6 +220,23 @@ impl StubDaemonConfig {
     }
 }
 
+/// The next scripted load report across every connection, repeating the last one
+/// the way a stuck load stays reported.
+fn next_scripted_load_report(
+    model_load_reports: &[ModelLoadInFlight],
+    model_load_report_index: &Mutex<usize>,
+) -> Option<ModelLoadInFlight> {
+    let mut report_index = model_load_report_index
+        .lock()
+        .expect("the stub report index lock should stay live");
+    let scripted_report = model_load_reports
+        .get(*report_index)
+        .or(model_load_reports.last())
+        .cloned();
+    *report_index += 1;
+    scripted_report
+}
+
 /// Binds the socket and serves scripted exchanges until aborted.
 #[expect(clippy::too_many_lines)]
 pub fn spawn_stub_daemon(
@@ -220,6 +248,7 @@ pub fn spawn_stub_daemon(
     let default_model_id = Arc::new(Mutex::new(config.default_model_id.clone()));
     let download_job_index = Arc::new(Mutex::new(0usize));
     let download_started = Arc::new(Mutex::new(false));
+    let model_load_report_index = Arc::new(Mutex::new(0usize));
     // Bind before spawning so the client can never race an unbound socket.
     let std_listener = std::os::unix::net::UnixListener::bind(&socket_path)
         .expect("the stub daemon should bind the test socket");
@@ -240,6 +269,7 @@ pub fn spawn_stub_daemon(
             let default_model_id = Arc::clone(&default_model_id);
             let download_job_index = Arc::clone(&download_job_index);
             let download_started = Arc::clone(&download_started);
+            let model_load_report_index = Arc::clone(&model_load_report_index);
             tokio::spawn(async move {
                 let (read_half, write_half) = connection_stream.into_split();
                 let mut protocol_reader = ProtocolReader::new(read_half);
@@ -265,11 +295,17 @@ pub fn spawn_stub_daemon(
                                 .lock()
                                 .expect("the stub default lock should stay live")
                                 .clone();
+                            let model_load_in_flight = next_scripted_load_report(
+                                &config.model_load_reports,
+                                &model_load_report_index,
+                            );
                             protocol_writer
                                 .send_daemon_response(&DaemonResponse::Status {
                                     worker_status: config.worker_status,
                                     ready_model_id: resident_model_id.clone(),
                                     default_model_id: current_default_model_id,
+                                    model_load_in_flight,
+                                    neural_engine_prefill: config.neural_engine_prefill.clone(),
                                 })
                                 .await
                                 .expect("the stub status should transmit");
@@ -411,6 +447,7 @@ pub fn spawn_stub_daemon(
                             {
                                 *guard = Some(user_images);
                             }
+                            tokio::time::sleep(config.chat_first_frame_delay).await;
                             for chat_fragment in config.chat_fragments.iter() {
                                 protocol_writer
                                     .send_daemon_response(&DaemonResponse::ChatGenerationText {

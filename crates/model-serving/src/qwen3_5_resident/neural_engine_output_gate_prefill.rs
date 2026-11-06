@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use astronomical_ipc_protocol::WorkerChunkingConfiguration;
-use astronomical_neural_engine::core_ml::{CoreMlComputeUnits, CoreMlProgram, compile_model_to};
+use astronomical_neural_engine::core_ml::CoreMlProgram;
 use astronomical_neural_engine::documents::package_layout::write_ml_package;
 use astronomical_neural_engine::documents::projection::{
     MlProgramWeights, encode_ml_program_projection,
@@ -23,7 +23,10 @@ use mlx_c_rust::MlxArray;
 
 use super::model::Qwen3_5ResidentModel;
 use super::neural_engine_mlp_prefill::{NEURAL_ENGINE_TOKEN_GRANULARITY, weight_as_fp16_bits};
-use super::neural_engine_program_cache::{ProgramSetCache, ProgramSource, load_verified_program};
+use super::neural_engine_program_cache::{ProgramSetCache, kept_program_path};
+use super::neural_engine_program_preparation::{
+    NeuralEngineProgramFamily, PlannedProgram, ProgramIdentity,
+};
 use crate::qwen3_5_core::model::output_gate_engine::LinearAttentionOutputGateEngine;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights,
@@ -146,32 +149,6 @@ impl OutputGateProgramSource<'_> {
     }
 }
 
-impl ProgramSource for OutputGateProgramSource<'_> {
-    fn shape(&self) -> ProgramShape {
-        self.shape
-    }
-
-    fn compile_to(&self, package_directory: &Path, destination: &Path) -> Result<(), &'static str> {
-        let package_path = self.write_package(package_directory)?;
-        match compile_model_to(&package_path, destination) {
-            Ok(()) => Ok(()),
-            Err(_) => Err("Core ML could not compile the output gate program"),
-        }
-    }
-
-    fn compile_and_load(&self, package_directory: &Path) -> Result<CoreMlProgram, &'static str> {
-        let package_path = self.write_package(package_directory)?;
-        match CoreMlProgram::load_from_path(
-            &package_path,
-            self.shape,
-            CoreMlComputeUnits::CpuAndNeuralEngine,
-        ) {
-            Ok(program) => Ok(program),
-            Err(_) => Err("Core ML could not load the output gate program"),
-        }
-    }
-}
-
 fn linear_attention_layer_count(model: &Qwen3_5ResidentModel) -> u64 {
     let mut layer_count = 0;
     for decoder_layer_weights in &model.base.weights.decoder_layer_weights {
@@ -195,13 +172,36 @@ pub(crate) fn output_gate_fp16_weight_bytes(model: &Qwen3_5ResidentModel) -> u64
         .saturating_mul(FP16_BYTES_PER_WEIGHT)
 }
 
-/// Loads a gate program for every linear-attention layer and returns how many.
-/// Called only after the MLP programs were admitted, which already counted these.
-pub(crate) fn prepare_neural_engine_output_gate_prefill(
-    model: &mut Qwen3_5ResidentModel,
+/// Other layers have no output gate and get no program.
+fn linear_attention_layer_indices(model: &Qwen3_5ResidentModel) -> Vec<usize> {
+    let mut layer_indices = Vec::new();
+    let decoder_layer_weights = &model.base.weights.decoder_layer_weights;
+    for (decoder_layer_index, layer_weights) in decoder_layer_weights.iter().enumerate() {
+        if matches!(
+            layer_weights.attention_weights,
+            Qwen3_5AttentionWeights::Linear(_)
+        ) {
+            layer_indices.push(decoder_layer_index);
+        }
+    }
+    layer_indices
+}
+
+/// The output gate programs a model will get. Made only after the MLP programs were
+/// admitted, which already counted these.
+pub(crate) struct OutputGateProgramPlan {
+    shape: ProgramShape,
+    chunk_token_count: u32,
+    decoder_layer_count: usize,
+    linear_attention_layer_indices: Vec<usize>,
+    program_cache: Option<ProgramSetCache>,
+}
+
+pub(crate) fn plan_neural_engine_output_gate_programs(
+    model: &Qwen3_5ResidentModel,
     chunking: &WorkerChunkingConfiguration,
     program_cache_directory: Option<&Path>,
-) -> Result<u32, &'static str> {
+) -> Result<OutputGateProgramPlan, &'static str> {
     let chunk_token_count = chunking.fixed_prompt_processing_chunk_size_tokens;
     if !chunk_fits_surface_rows(chunk_token_count) {
         return Err("the prompt-processing chunk is not a multiple of the surface alignment");
@@ -214,6 +214,10 @@ pub(crate) fn prepare_neural_engine_output_gate_prefill(
     ) else {
         return Err("the output gate shape is not supported");
     };
+    let linear_attention_layer_indices = linear_attention_layer_indices(model);
+    if linear_attention_layer_indices.is_empty() {
+        return Err("the model has no linear-attention layers");
+    }
     let mut program_cache = None;
     if let Some(program_cache_directory) = program_cache_directory {
         program_cache = ProgramSetCache::open(
@@ -222,42 +226,87 @@ pub(crate) fn prepare_neural_engine_output_gate_prefill(
             &format!("v{PROGRAM_FORMAT_VERSION}-{chunk_token_count}"),
         );
     }
-    let decoder_layer_count = model.base.weights.decoder_layer_weights.len();
-    let mut layer_programs = Vec::with_capacity(decoder_layer_count);
-    let mut layer_program_count = 0_u32;
-    for decoder_layer_index in 0..decoder_layer_count {
-        let decoder_layer_weights = &model.base.weights.decoder_layer_weights[decoder_layer_index];
+    Ok(OutputGateProgramPlan {
+        shape,
+        chunk_token_count,
+        decoder_layer_count: model.base.weights.decoder_layer_weights.len(),
+        linear_attention_layer_indices,
+        program_cache,
+    })
+}
+
+impl OutputGateProgramPlan {
+    pub(crate) fn planned_programs(&self) -> Vec<PlannedProgram> {
+        let mut planned_programs = Vec::with_capacity(self.linear_attention_layer_indices.len());
+        for &decoder_layer_index in &self.linear_attention_layer_indices {
+            planned_programs.push(PlannedProgram {
+                identity: ProgramIdentity {
+                    family: NeuralEngineProgramFamily::OutputGate,
+                    decoder_layer_index,
+                },
+                shape: self.shape,
+                kept_program_path: kept_program_path(
+                    self.program_cache.as_ref(),
+                    decoder_layer_index,
+                ),
+            });
+        }
+        planned_programs
+    }
+
+    /// One layer's compile input, read from the model as fp16.
+    pub(crate) fn write_package(
+        &self,
+        model: &Qwen3_5ResidentModel,
+        decoder_layer_index: usize,
+        package_directory: &Path,
+    ) -> Result<PathBuf, &'static str> {
+        let decoder_layer_weights = model
+            .base
+            .weights
+            .decoder_layer_weights
+            .get(decoder_layer_index)
+            .ok_or("the model has no such decoder layer")?;
         let Qwen3_5AttentionWeights::Linear(linear_attention_weights) =
             &decoder_layer_weights.attention_weights
         else {
-            layer_programs.push(None);
-            continue;
+            return Err("the decoder layer has no output gate");
         };
-        let source = OutputGateProgramSource {
+        OutputGateProgramSource {
             runtime: model.runtime(),
             output_gate_projection: &linear_attention_weights.output_gate_projection,
-            shape,
-        };
-        layer_programs.push(Some(load_verified_program(
-            &source,
-            program_cache.as_ref(),
-            decoder_layer_index,
-        )?));
-        layer_program_count += 1;
+            shape: self.shape,
+        }
+        .write_package(package_directory)
     }
-    if layer_program_count == 0 {
-        return Err("the model has no linear-attention layers");
+
+    /// Puts the finished programs in the model's path and returns how many there are.
+    pub(crate) fn attach(
+        self,
+        model: &mut Qwen3_5ResidentModel,
+        built_programs: Vec<(usize, CoreMlProgram)>,
+    ) -> u32 {
+        let layer_program_count = u32::try_from(built_programs.len()).unwrap_or(u32::MAX);
+        if let Some(program_cache) = &self.program_cache {
+            program_cache.record_finished_set(u64::from(layer_program_count));
+        }
+        let mut layer_programs = Vec::with_capacity(self.decoder_layer_count);
+        layer_programs.resize_with(self.decoder_layer_count, none_program);
+        for (decoder_layer_index, program) in built_programs {
+            layer_programs[decoder_layer_index] = Some(program);
+        }
+        model.base.output_gate_engine = Some(Box::new(NeuralEngineOutputGatePrefill {
+            layer_programs: RefCell::new(layer_programs),
+            chunk_token_count: self.chunk_token_count,
+            has_failed: Cell::new(false),
+            is_paused: Cell::new(false),
+        }));
+        layer_program_count
     }
-    if let Some(program_cache) = &program_cache {
-        program_cache.record_finished_set(u64::from(layer_program_count));
-    }
-    model.base.output_gate_engine = Some(Box::new(NeuralEngineOutputGatePrefill {
-        layer_programs: RefCell::new(layer_programs),
-        chunk_token_count,
-        has_failed: Cell::new(false),
-        is_paused: Cell::new(false),
-    }));
-    Ok(layer_program_count)
+}
+
+const fn none_program() -> Option<CoreMlProgram> {
+    None
 }
 
 #[cfg(test)]

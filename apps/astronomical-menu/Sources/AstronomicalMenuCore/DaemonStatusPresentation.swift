@@ -4,6 +4,10 @@
 import Foundation
 
 extension DaemonStatusDocument {
+  // The worker drops the previous model before loading the next while the daemon still names it,
+  // so every fact about "the model" below defers to the load rather than describe one that is gone.
+  var isLoadingModel: Bool { modelLoadInFlight != nil }
+
   var isActive: Bool {
     activity == "prompt_processing" || activity == "generation_preparation"
       || activity == "generating" || activity == "image_generation"
@@ -29,6 +33,7 @@ extension DaemonStatusDocument {
   }
 
   var menuBarTitle: String {
+    if let modelLoadInFlight { return modelLoadInFlight.menuBarTitle }
     guard status == "ready" else { return status == "loading" ? " Loading" : "" }
     if activity == "generating", let currentPhaseTokensPerSecond {
       return String(format: "GEN %.1f tok/s", currentPhaseTokensPerSecond)
@@ -41,13 +46,17 @@ extension DaemonStatusDocument {
     }
     if activity == "generation_preparation" { return "Preparing…" }
     if isRestoringPromptCache { return "Restoring…" }
-    guard activity == "prompt_processing", let progress else { return "" }
+    guard activity == "prompt_processing", let progress else {
+      // Only when idle: a generation's own title always says more than a background count.
+      return activity == "idle" ? neuralEnginePrefill?.menuBarTitle ?? "" : ""
+    }
     let completionPercentageTitle = progress.completionPercentageTitle
     guard let currentPhaseTokensPerSecond else { return "Prompt \(completionPercentageTitle)" }
     return "Prompt \(completionPercentageTitle) · \(Int(currentPhaseTokensPerSecond.rounded())) avg tok/s"
   }
 
   var flightTitle: String {
+    if let modelLoadInFlight { return modelLoadInFlight.flightTitle }
     guard isActive else { return "Standing by" }
     if activity == "generating" {
       if let currentPhaseTokensPerSecond {
@@ -71,6 +80,7 @@ extension DaemonStatusDocument {
   }
 
   var phaseTitle: String {
+    if let modelLoadInFlight { return modelLoadInFlight.phaseTitle }
     switch activity {
     case "generating": return "Generating"
     case "generation_preparation": return "Preparing generation"
@@ -91,6 +101,7 @@ extension DaemonStatusDocument {
   }
 
   var modelFootprintTitle: String {
+    if isLoadingModel { return "Being prepared" }
     // The daemon owns this sentence so the menu and Observatory cannot drift.
     // An older daemon omits expert_placement. A loaded model then stays fully
     // in memory, and an unloaded one names the empty library.
@@ -104,10 +115,12 @@ extension DaemonStatusDocument {
   }
 
   var replyReadTitle: String {
-    expertPlacement?.replySentence ?? ""
+    if isLoadingModel { return "" }
+    return expertPlacement?.replySentence ?? ""
   }
 
   var modelDiskSizeTitle: String {
+    if isLoadingModel { return "Being prepared" }
     if let readyModelSizeBytes {
       return gigabyteText(byteCount: readyModelSizeBytes)
     }
@@ -115,6 +128,7 @@ extension DaemonStatusDocument {
   }
 
   var progressTitle: String {
+    if let modelLoadInFlight { return modelLoadInFlight.progressTitle }
     guard let progress else {
       return isRestoringPromptCache ? "Restoring prompt cache" : "Standing by"
     }
@@ -140,12 +154,14 @@ extension DaemonStatusDocument {
   }
 
   var elapsedTimeMetricTitle: String {
-    progress?.unit == .steps || progress?.phase == "generation"
+    if let modelLoadInFlight { return modelLoadInFlight.elapsedTimeMetricTitle }
+    return progress?.unit == .steps || progress?.phase == "generation"
       || progress?.phase == "generation_preparation"
       ? "Elapsed" : "Elapsed / ETA"
   }
 
   var elapsedTimeTitle: String {
+    if let modelLoadInFlight { return modelLoadInFlight.elapsedTimeTitle }
     if isRestoringPromptCache { return "Calculating" }
     guard let progress else { return "Not active" }
     let elapsedSeconds = Double(progress.elapsedMilliseconds) / 1_000
@@ -166,6 +182,7 @@ extension DaemonStatusDocument {
   }
 
   var hasDeterminateProgress: Bool {
+    if isLoadingModel { return false }
     if isRestoringPromptCache { return false }
     guard let progress else { return true }
     // A generation against the endpoint's default budget has no meaningful

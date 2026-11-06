@@ -44,6 +44,26 @@ impl CoreMlProgram {
         shape: ProgramShape,
         compute_units: CoreMlComputeUnits,
     ) -> Result<Self, CoreMlProgramError> {
+        Self::load(model_path, shape, compute_units, true)
+    }
+
+    /// Loads a program whose placement the caller proved on an earlier load, without
+    /// asking Core ML for a compute plan again. [`Self::placement`] then reports an
+    /// unknown placement, so this is only for a program with a record of that proof.
+    pub fn load_from_path_without_placement_check(
+        model_path: &Path,
+        shape: ProgramShape,
+        compute_units: CoreMlComputeUnits,
+    ) -> Result<Self, CoreMlProgramError> {
+        Self::load(model_path, shape, compute_units, false)
+    }
+
+    fn load(
+        model_path: &Path,
+        shape: ProgramShape,
+        compute_units: CoreMlComputeUnits,
+        checks_placement: bool,
+    ) -> Result<Self, CoreMlProgramError> {
         let model_path_text = CString::new(model_path.to_string_lossy().as_bytes())
             .map_err(CoreMlProgramError::from_interior_nul)?;
         let mut native_error = [0 as c_char; NATIVE_ERROR_CAPACITY];
@@ -54,6 +74,7 @@ impl CoreMlProgram {
             astronomical_core_ml_program_load(
                 model_path_text.as_ptr(),
                 compute_units.native_code(),
+                i32::from(checks_placement),
                 shape.input_channels() as i32,
                 shape.output_channels() as i32,
                 shape.token_count() as i32,

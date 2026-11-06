@@ -8,7 +8,11 @@ use astronomical_config::AstronomicalRuntimeInstance;
 use astronomical_ipc_protocol::{DaemonDownloadJob, DaemonWorkerStatus};
 
 use crate::transport::ipc::DaemonProbeError;
-use crate::{DaemonProbe, formatting::format_gigabytes, transport::ipc::DaemonStatusSnapshot};
+use crate::{
+    DaemonProbe,
+    formatting::{MODEL_LOAD_LINE, format_gigabytes, render_neural_engine_prefill},
+    transport::ipc::DaemonStatusSnapshot,
+};
 use thiserror::Error;
 
 /// Collaborators the status verb needs, injected so tests can stub them.
@@ -41,6 +45,8 @@ pub async fn run_status(
         "worker:   {}",
         render_worker_status(&status_snapshot)
     );
+    write_model_load_line(&mut report, &status_snapshot);
+    write_neural_engine_line(&mut report, &status_snapshot);
     let _ = writeln!(
         report,
         "default:  {}",
@@ -68,9 +74,43 @@ fn render_worker_status(status_snapshot: &DaemonStatusSnapshot) -> String {
         DaemonWorkerStatus::Loading => "loading",
         DaemonWorkerStatus::Unavailable => "unavailable",
     };
-    match &status_snapshot.ready_model_id {
+    match resident_model_id(status_snapshot) {
         Some(ready_model_id) => format!("{worker_state} (resident: {ready_model_id})"),
         None => worker_state.to_owned(),
+    }
+}
+
+/// The worker drops the previous model before loading the next, while the daemon
+/// still names it until the swap ends, so naming it during a load would be false.
+fn resident_model_id(status_snapshot: &DaemonStatusSnapshot) -> Option<&str> {
+    if status_snapshot.model_load_in_flight.is_some() {
+        return None;
+    }
+    status_snapshot.ready_model_id.as_deref()
+}
+
+/// Only while a load runs, so an idle status keeps its usual three lines.
+fn write_model_load_line(report: &mut String, status_snapshot: &DaemonStatusSnapshot) {
+    let Some(model_load_in_flight) = &status_snapshot.model_load_in_flight else {
+        return;
+    };
+    match &model_load_in_flight.model_id {
+        Some(loading_model_id) => {
+            let _ = writeln!(report, "loading:  {loading_model_id}: {MODEL_LOAD_LINE}");
+        }
+        None => {
+            let _ = writeln!(report, "loading:  {MODEL_LOAD_LINE}");
+        }
+    }
+}
+
+/// Only for a user who enabled the setting, so everyone else keeps the usual lines.
+fn write_neural_engine_line(report: &mut String, status_snapshot: &DaemonStatusSnapshot) {
+    let Some(neural_engine_prefill) = &status_snapshot.neural_engine_prefill else {
+        return;
+    };
+    if let Some(neural_engine_line) = render_neural_engine_prefill(neural_engine_prefill) {
+        let _ = writeln!(report, "neural engine:  {neural_engine_line}");
     }
 }
 
