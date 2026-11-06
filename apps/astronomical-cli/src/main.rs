@@ -284,12 +284,14 @@ fn run_launch(launch_arguments: astronomical_cli::LaunchArguments) -> ExitCode {
 
 /// How long a one-shot daemon verb waits on one protocol stage with nothing heard.
 /// Short enough that a wedged daemon cannot hang the calling script forever. A model
-/// load counts as hearing from the daemon, so `respond` can outlast this.
+/// load or a request making progress counts as hearing from the daemon, so `respond`
+/// and `embed` can outlast this through a long prefill or a queue.
 const DAEMON_VERB_STAGE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
-/// Wait between asking whether a model is still loading. Rare enough that a status
-/// request per interval costs the daemon nothing noticeable.
-const MODEL_LOAD_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
-/// How long one load may stay reported before `respond` gives up. Set above the
+/// Wait between asking what the daemon is doing. Only a silent wait polls, so a steady
+/// token stream sends none of these, and one status request per interval costs the
+/// daemon nothing noticeable during prefill.
+const DAEMON_WORK_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+/// How long one load may stay reported before a waiting verb gives up. Set above the
 /// daemon's own 60-second budget for a load, because the daemon owns deciding that a
 /// load has hung; this only ends the wait if the daemon itself wedges while still
 /// answering status.
@@ -349,7 +351,7 @@ fn run_respond_verb(respond_arguments: astronomical_cli::RespondArguments) -> Ex
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
         download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
         download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
-        model_load_poll_interval: MODEL_LOAD_POLL_INTERVAL,
+        daemon_work_poll_interval: DAEMON_WORK_POLL_INTERVAL,
         model_load_stall_bound: MODEL_LOAD_STALL_BOUND,
     };
     match respond_runtime.block_on(astronomical_cli::run_respond(
@@ -392,6 +394,8 @@ fn run_embed_verb(embed_arguments: astronomical_cli::EmbedArguments) -> ExitCode
         request_timeout: DAEMON_VERB_STAGE_TIMEOUT,
         download_stall_bound: astronomical_cli::model_lifecycle::DOWNLOAD_STALL_BOUND,
         download_poll_interval: astronomical_cli::model_lifecycle::DOWNLOAD_POLL_INTERVAL,
+        daemon_work_poll_interval: DAEMON_WORK_POLL_INTERVAL,
+        model_load_stall_bound: MODEL_LOAD_STALL_BOUND,
     };
     match embed_runtime.block_on(astronomical_cli::run_embed(
         &embed_arguments,

@@ -69,6 +69,9 @@ pub struct DaemonStatusSnapshot {
     pub default_model_id: Option<String>,
     /// Which model is loading; `None` when nothing is.
     pub model_load_in_flight: Option<ModelLoadInFlight>,
+    /// Changes each time a chat or image request makes progress; only a change means
+    /// anything.
+    pub request_progress_count: u64,
     /// What the Neural Engine is doing for the loaded model; `None` before any model
     /// has reported.
     pub neural_engine_prefill: Option<NeuralEnginePrefillStatus>,
@@ -99,12 +102,14 @@ impl DaemonProbe {
                 ready_model_id,
                 default_model_id,
                 model_load_in_flight,
+                request_progress_count,
                 neural_engine_prefill,
             } => Ok(DaemonStatusSnapshot {
                 worker_status,
                 ready_model_id,
                 default_model_id,
                 model_load_in_flight,
+                request_progress_count,
                 neural_engine_prefill,
             }),
             _ => Err(DaemonProbeError::DaemonStoppedResponding),

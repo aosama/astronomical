@@ -119,6 +119,11 @@ pub enum DaemonResponse {
         /// Which model is loading; absent when nothing is.
         /// Lets a waiting caller tell a slow load from a stuck daemon.
         model_load_in_flight: Option<crate::ModelLoadInFlight>,
+        /// Changes each time a chat or image request makes progress, this caller's or
+        /// another's. Embeddings report no progress, so they do not move it.
+        /// Lets a waiting caller tell a long prefill or a queue from a stuck worker.
+        /// Only a change means anything; the value itself can restart.
+        request_progress_count: u64,
         /// What the Neural Engine is doing for the loaded model; `None` before any
         /// model has reported.
         neural_engine_prefill: Option<crate::NeuralEnginePrefillStatus>,

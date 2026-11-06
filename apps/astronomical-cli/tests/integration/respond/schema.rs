@@ -35,7 +35,7 @@ fn respond_dependencies<'a>(
         request_timeout: TEST_TIMEOUT,
         download_stall_bound: TEST_TIMEOUT,
         download_poll_interval: DOWNLOAD_POLL_INTERVAL,
-        model_load_poll_interval: DOWNLOAD_POLL_INTERVAL,
+        daemon_work_poll_interval: DOWNLOAD_POLL_INTERVAL,
         model_load_stall_bound: TEST_TIMEOUT,
     }
 }

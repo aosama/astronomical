@@ -20,17 +20,15 @@ use crate::transport::ipc::DaemonProbeError;
 use std::path::PathBuf;
 use thiserror::Error;
 
-mod frame_wait;
 mod image;
 mod schema;
 
+use crate::daemon_frame_wait::{
+    DaemonWaitBounds, DaemonWentSilent, DaemonWorkWatch, await_frame_watching_daemon_work,
+};
 use crate::{DaemonProbe, ModelLifecycle, RequiredCapability};
 
-use self::{
-    frame_wait::{DaemonWaitBounds, ModelLoadWatch, await_frame_watching_model_load},
-    image::read_image_inputs,
-    schema::read_schema_input,
-};
+use self::{image::read_image_inputs, schema::read_schema_input};
 
 /// Collaborators the respond journey needs, injected so tests can stub them.
 pub struct RespondDependencies<'a> {
@@ -49,8 +47,8 @@ pub struct RespondDependencies<'a> {
     pub download_stall_bound: Duration,
     /// Wait between download status polls.
     pub download_poll_interval: Duration,
-    /// Wait between asking whether a model is still loading while no answer has come.
-    pub model_load_poll_interval: Duration,
+    /// Wait between asking what the daemon is doing while no answer has come.
+    pub daemon_work_poll_interval: Duration,
     /// How long one load may stay reported before the wait gives up.
     pub model_load_stall_bound: Duration,
 }
@@ -174,19 +172,19 @@ async fn relay_generation_frames(
     let wait_bounds = DaemonWaitBounds {
         silence_bound: respond_dependencies.request_timeout,
         load_stall_bound: respond_dependencies.model_load_stall_bound,
-        load_poll_interval: respond_dependencies.model_load_poll_interval,
+        work_poll_interval: respond_dependencies.daemon_work_poll_interval,
     };
-    let mut model_load_watch = ModelLoadWatch::default();
+    let mut daemon_work_watch = DaemonWorkWatch::default();
     loop {
         // The bound is an idle guard per frame, not a cap on the whole
-        // generation: a healthy stream may run arbitrarily long, and a model load
-        // counts as hearing from the daemon. Silence beyond the window with neither
-        // means the daemon is gone.
-        let next_frame_read = await_frame_watching_model_load(
+        // generation: a healthy stream may run arbitrarily long, and a model load or a
+        // request making progress counts as hearing from the daemon. Silence beyond
+        // the window with none of these means the daemon is gone.
+        let next_frame_read = await_frame_watching_daemon_work(
             daemon_client.next_response(),
             daemon_probe,
             wait_bounds,
-            &mut model_load_watch,
+            &mut daemon_work_watch,
             &mut *respond_dependencies.stderr,
         )
         .await?;
@@ -326,6 +324,12 @@ pub enum RespondError {
         actual_bytes: usize,
         maximum_bytes: usize,
     },
+}
+
+impl From<DaemonWentSilent> for RespondError {
+    fn from(_daemon_went_silent: DaemonWentSilent) -> Self {
+        RespondError::DaemonStoppedResponding
+    }
 }
 
 impl From<DaemonProbeError> for RespondError {

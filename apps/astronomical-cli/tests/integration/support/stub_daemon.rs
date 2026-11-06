@@ -156,11 +156,21 @@ pub struct StubDaemonConfig {
     /// How long a `ChatGenerate` stays silent before its first frame, standing in
     /// for a model load inside the real daemon.
     pub chat_first_frame_delay: Duration,
-    /// FIFO of load reports for `Status` requests; the last entry repeats once
-    /// the scripted list is exhausted. Empty means nothing is loading.
-    pub model_load_reports: Vec<ModelLoadInFlight>,
+    /// FIFO of load reports for `Status` requests, where `None` means the load has
+    /// ended; the last entry repeats once the scripted list is exhausted. Empty means
+    /// nothing is loading.
+    pub model_load_reports: Vec<Option<ModelLoadInFlight>>,
+    /// FIFO of progress counts for `Status` requests; the last entry repeats the way
+    /// a stuck worker's count stays put. Empty reports zero.
+    pub request_progress_counts: Vec<u64>,
+    /// Which `Status` requests, counted from zero across every connection, are read
+    /// and never answered.
+    pub hung_status_requests: std::ops::Range<usize>,
     pub neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
     pub embeddings_outcome: StubEmbeddingsOutcome,
+    /// How long an `EmbedGenerate` stays silent before its one frame, standing in for
+    /// a queue or a model load inside the real daemon.
+    pub embeddings_first_frame_delay: Duration,
     pub embedding_vector: Vec<f32>,
     /// What the daemon does with an `ImageGenerate` request.
     pub image_outcome: StubImageOutcome,
@@ -195,8 +205,11 @@ impl Default for StubDaemonConfig {
             chat_fragments: Vec::new(),
             chat_first_frame_delay: Duration::ZERO,
             model_load_reports: Vec::new(),
+            request_progress_counts: Vec::new(),
+            hung_status_requests: 0..0,
             neural_engine_prefill: None,
             embeddings_outcome: StubEmbeddingsOutcome::Completed,
+            embeddings_first_frame_delay: Duration::ZERO,
             embedding_vector: vec![0.25, -0.5],
             image_outcome: StubImageOutcome::Completed(Vec::new()),
             image_request_capture: Arc::new(std::sync::Mutex::new(None)),
@@ -223,7 +236,7 @@ impl StubDaemonConfig {
 /// The next scripted load report across every connection, repeating the last one
 /// the way a stuck load stays reported.
 fn next_scripted_load_report(
-    model_load_reports: &[ModelLoadInFlight],
+    model_load_reports: &[Option<ModelLoadInFlight>],
     model_load_report_index: &Mutex<usize>,
 ) -> Option<ModelLoadInFlight> {
     let mut report_index = model_load_report_index
@@ -232,9 +245,46 @@ fn next_scripted_load_report(
     let scripted_report = model_load_reports
         .get(*report_index)
         .or(model_load_reports.last())
-        .cloned();
+        .cloned()
+        .flatten();
     *report_index += 1;
     scripted_report
+}
+
+/// The next scripted progress count across every connection.
+fn next_scripted_progress_count(
+    request_progress_counts: &[u64],
+    request_progress_count_index: &Mutex<usize>,
+) -> u64 {
+    let mut count_index = request_progress_count_index
+        .lock()
+        .expect("the stub count index lock should stay live");
+    let scripted_count = request_progress_counts
+        .get(*count_index)
+        .or(request_progress_counts.last())
+        .copied()
+        .unwrap_or(0);
+    *count_index += 1;
+    scripted_count
+}
+
+/// Numbers this `Status` request across every connection and, when it is scripted to
+/// hang, outlasts any test bound so the client's own deadline is what ends the wait.
+async fn wait_out_hung_status_request(
+    hung_status_requests: &std::ops::Range<usize>,
+    status_request_count: &Mutex<usize>,
+) {
+    let status_request_index = {
+        let mut request_count = status_request_count
+            .lock()
+            .expect("the stub status count lock should stay live");
+        let status_request_index = *request_count;
+        *request_count += 1;
+        status_request_index
+    };
+    if hung_status_requests.contains(&status_request_index) {
+        tokio::time::sleep(Duration::from_secs(3_600)).await;
+    }
 }
 
 /// Binds the socket and serves scripted exchanges until aborted.
@@ -249,6 +299,8 @@ pub fn spawn_stub_daemon(
     let download_job_index = Arc::new(Mutex::new(0usize));
     let download_started = Arc::new(Mutex::new(false));
     let model_load_report_index = Arc::new(Mutex::new(0usize));
+    let request_progress_count_index = Arc::new(Mutex::new(0usize));
+    let status_request_count = Arc::new(Mutex::new(0usize));
     // Bind before spawning so the client can never race an unbound socket.
     let std_listener = std::os::unix::net::UnixListener::bind(&socket_path)
         .expect("the stub daemon should bind the test socket");
@@ -270,6 +322,8 @@ pub fn spawn_stub_daemon(
             let download_job_index = Arc::clone(&download_job_index);
             let download_started = Arc::clone(&download_started);
             let model_load_report_index = Arc::clone(&model_load_report_index);
+            let request_progress_count_index = Arc::clone(&request_progress_count_index);
+            let status_request_count = Arc::clone(&status_request_count);
             tokio::spawn(async move {
                 let (read_half, write_half) = connection_stream.into_split();
                 let mut protocol_reader = ProtocolReader::new(read_half);
@@ -291,6 +345,11 @@ pub fn spawn_stub_daemon(
                                 .expect("the stub handshake should transmit");
                         }
                         DaemonRequest::Status => {
+                            wait_out_hung_status_request(
+                                &config.hung_status_requests,
+                                &status_request_count,
+                            )
+                            .await;
                             let current_default_model_id = default_model_id
                                 .lock()
                                 .expect("the stub default lock should stay live")
@@ -305,6 +364,10 @@ pub fn spawn_stub_daemon(
                                     ready_model_id: resident_model_id.clone(),
                                     default_model_id: current_default_model_id,
                                     model_load_in_flight,
+                                    request_progress_count: next_scripted_progress_count(
+                                        &config.request_progress_counts,
+                                        &request_progress_count_index,
+                                    ),
                                     neural_engine_prefill: config.neural_engine_prefill.clone(),
                                 })
                                 .await
@@ -473,6 +536,7 @@ pub fn spawn_stub_daemon(
                             return;
                         }
                         DaemonRequest::EmbedGenerate { model, .. } => {
+                            tokio::time::sleep(config.embeddings_first_frame_delay).await;
                             let embeddings_response = match config.embeddings_outcome {
                                 StubEmbeddingsOutcome::Completed => {
                                     DaemonResponse::EmbeddingsCompleted {

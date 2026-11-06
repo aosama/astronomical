@@ -70,6 +70,7 @@ async fn should_report_the_loaded_model_identity_for_status_requests() {
             ready_model_id: Some("test/local-chatter".to_owned()),
             default_model_id: Some("Qwen3.5-2B-4bit".to_owned()),
             model_load_in_flight: None,
+            request_progress_count: 0,
             neural_engine_prefill: None,
         }
     );
@@ -151,6 +152,44 @@ async fn should_report_a_load_in_flight_on_the_status_answer() {
             model_load_in_flight,
             ..
         } => assert_eq!(model_load_in_flight, Some(load_report)),
+        unexpected_response => panic!("expected a status answer: {unexpected_response:?}"),
+    }
+    timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())
+        .await
+        .expect("the daemon IPC service shutdown should finish inside the test timeout")
+        .expect("the daemon IPC service should shut down cleanly");
+    let _ = std::fs::remove_dir_all(&state_directory);
+}
+
+#[tokio::test]
+async fn should_report_the_request_progress_count_on_the_status_answer() {
+    let state_directory = fresh_instance_state_directory("progresscount");
+    let mut stub_executor = ready_stub_executor("test/local-chatter");
+    Arc::get_mut(&mut stub_executor)
+        .expect("the stub executor should be uniquely owned here")
+        .health_snapshot
+        .request_progress_count = 41;
+    let daemon_ipc_service = start_stub_daemon_ipc_service(&state_directory, stub_executor).await;
+    let mut status_client =
+        DaemonIpcClient::connect(daemon_ipc_service.socket_path().to_path_buf())
+            .await
+            .expect("the status client should connect");
+
+    status_client
+        .send_request(&DaemonRequest::Status)
+        .await
+        .expect("the status request should transmit");
+    let status_response = timeout(HANDSHAKE_TEST_TIMEOUT, status_client.next_response())
+        .await
+        .expect("the status response should arrive inside the test timeout")
+        .expect("the status response read should not fail at the transport layer")
+        .expect("the daemon should answer the status request");
+
+    match status_response {
+        DaemonResponse::Status {
+            request_progress_count,
+            ..
+        } => assert_eq!(request_progress_count, 41),
         unexpected_response => panic!("expected a status answer: {unexpected_response:?}"),
     }
     timeout(HANDSHAKE_TEST_TIMEOUT, daemon_ipc_service.shutdown())

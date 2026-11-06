@@ -16,6 +16,9 @@ mod expert_streaming_tests;
 mod model_load_in_flight_tests;
 #[cfg(test)]
 mod neural_engine_prefill_tests;
+#[cfg(test)]
+#[path = "health/request_progress_count_tests.rs"]
+mod request_progress_count_tests;
 
 pub(crate) mod expert_streaming;
 
@@ -256,6 +259,10 @@ pub struct WorkerHealthSnapshot {
     /// unavailable) rebuilds this as `None`, so a finished or failed load never leaves
     /// a stale report behind.
     pub model_load_in_flight: Option<astronomical_ipc_protocol::ModelLoadInFlight>,
+    /// Advances with every progress report from a chat or image request, so a caller
+    /// waiting on its own silent connection can see that the worker is still moving. A
+    /// wholesale health replacement restarts it, which reads as one more change.
+    pub request_progress_count: u64,
     /// Concrete topology retained independently of transient request progress.
     pub expert_residency: Option<ExpertResidencySnapshot>,
     /// Feature settings explicitly acknowledged by the currently running worker.
@@ -309,6 +316,7 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             neural_engine_prefill: None,
             model_load_in_flight: None,
+            request_progress_count: 0,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
@@ -383,6 +391,7 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             neural_engine_prefill: None,
             model_load_in_flight: None,
+            request_progress_count: 0,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
@@ -413,6 +422,7 @@ impl WorkerHealthSnapshot {
             expert_memory_mode: None,
             neural_engine_prefill: None,
             model_load_in_flight: None,
+            request_progress_count: 0,
             expert_residency: None,
             worker_runtime_feature_configuration: None,
             persistent_prompt_cache_stats: None,
