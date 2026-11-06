@@ -31,7 +31,7 @@ pub(crate) use publisher::{
     publish_model_load_in_flight, publish_neural_engine_prefill,
     publish_pending_mlx_memory_ceiling, publish_pending_prompt_cache_clear,
     publish_persistent_prompt_cache_stats, publish_worker_expert_residency,
-    record_prompt_work_reuse, record_serving_session,
+    record_neural_engine_chunk, record_prompt_work_reuse, record_serving_session,
 };
 
 /// Coarse worker availability state exposed by the daemon readiness endpoint.

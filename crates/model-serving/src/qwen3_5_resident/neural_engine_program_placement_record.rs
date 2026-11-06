@@ -10,9 +10,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
-
-use super::host_description::{mac_hardware_model, macos_build_version, macos_product_version};
 
 const PLACEMENT_RECORD_EXTENSION: &str = "placement-verified";
 
@@ -27,33 +24,6 @@ pub(crate) enum PlacementCheck {
 /// to the program's folder and that folder must stay as it was compiled.
 fn placement_record_path(kept_program_path: &Path) -> PathBuf {
     kept_program_path.with_extension(PLACEMENT_RECORD_EXTENSION)
-}
-
-/// The macOS build and Mac a proof holds for. An update or a move to another Mac,
-/// by a migration or a restored backup, can change what the Neural Engine accepts.
-pub(crate) fn placement_environment_of(
-    macos_product_version: &str,
-    macos_build_version: &str,
-    mac_hardware_model: &str,
-) -> String {
-    format!("macOS {macos_product_version} ({macos_build_version}) on {mac_hardware_model}")
-}
-
-/// This process's environment, or `None` when the system would not describe itself,
-/// in which case nothing is recorded and every load proves placement.
-pub(crate) fn current_placement_environment() -> Option<&'static str> {
-    static PLACEMENT_ENVIRONMENT: OnceLock<Option<String>> = OnceLock::new();
-    PLACEMENT_ENVIRONMENT
-        .get_or_init(describe_current_placement_environment)
-        .as_deref()
-}
-
-fn describe_current_placement_environment() -> Option<String> {
-    Some(placement_environment_of(
-        macos_product_version()?,
-        macos_build_version()?,
-        mac_hardware_model()?,
-    ))
 }
 
 /// A record counts only when it names exactly this environment.

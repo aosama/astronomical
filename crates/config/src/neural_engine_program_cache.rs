@@ -6,28 +6,126 @@
 //! everything under its root against the user's size limit, and compiled programs are not
 //! prompt state.
 //!
-//! Layout: `<directory>/<model id>/<revision>/<set name>/layer-N.mlmodelc`, with a
-//! `programs.json` manifest beside the programs once a set is complete.
+//! Layout: `<directory>/<model id>/<revision>-<weights fingerprint>/<set name>/layer-N.mlmodelc`,
+//! with a `programs.json` manifest beside the programs once a set is complete.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 pub const NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME: &str = "neural-engine-programs";
 pub const NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME: &str = "programs.json";
 const COMPILED_PROGRAM_SUFFIX: &str = ".mlmodelc";
+const WEIGHTS_FINGERPRINT_BYTES: usize = 8;
 
-/// One model revision's folder of compiled programs.
+/// One model revision's folder of compiled programs, for these exact weights.
+///
+/// The revision only hashes `config.json`, and the model id is a folder name, so two
+/// models or two quantizations can share both. A compiled program holds its weights, so
+/// sharing a folder would silently run one model's weights in the other.
 #[must_use]
 pub fn neural_engine_program_cache_directory_for_model(
     neural_engine_program_directory: &Path,
     model_id: &str,
     model_revision: &str,
+    weights_fingerprint: &str,
 ) -> PathBuf {
     neural_engine_program_directory
         .join(model_id)
-        .join(model_revision)
+        .join(format!("{model_revision}-{weights_fingerprint}"))
+}
+
+/// Removes this model's program folders for any other revision or weights, because copying
+/// or replacing a model changes its fingerprint and a set is about 10 GB for a dense 9B
+/// model. Two models that share an id replace each other's folders, which costs a rebuild
+/// and nothing else. Only folders holding program sets go, so anything else someone keeps
+/// here is left alone, and a failure costs disk and nothing else.
+pub fn remove_other_weights_of_model(
+    neural_engine_program_directory: &Path,
+    model_id: &str,
+    kept_folder: &Path,
+) {
+    if !is_one_folder_name(model_id) {
+        return;
+    }
+    let model_directory = neural_engine_program_directory.join(model_id);
+    let Ok(directory_entries) = fs::read_dir(&model_directory) else {
+        return;
+    };
+    for directory_entry in directory_entries.flatten() {
+        let weights_folder = directory_entry.path();
+        if weights_folder != kept_folder
+            && holds_program_sets(&weights_folder)
+            && let Err(removal_error) = fs::remove_dir_all(&weights_folder)
+        {
+            tracing::warn!(error = %removal_error, "could not remove outdated Neural Engine programs");
+        }
+    }
+}
+
+/// An id such as `..` or an absolute path would point this removal outside the model's own
+/// folder, so nothing but a plain name is ever acted on.
+fn is_one_folder_name(model_id: &str) -> bool {
+    let mut components = Path::new(model_id).components();
+    matches!(components.next(), Some(std::path::Component::Normal(_)))
+        && components.next().is_none()
+}
+
+fn holds_program_sets(weights_folder: &Path) -> bool {
+    let Ok(directory_entries) = fs::read_dir(weights_folder) else {
+        return false;
+    };
+    for directory_entry in directory_entries.flatten() {
+        let set_directory = directory_entry.path();
+        if set_directory
+            .join(NEURAL_ENGINE_PROGRAM_MANIFEST_FILE_NAME)
+            .is_file()
+            || set_directory
+                .join(format!("layer-0{COMPILED_PROGRAM_SUFFIX}"))
+                .exists()
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Identifies a model folder's weights from each shard's name, size and modification
+/// time, or `None` when there are none to read. Hashing the contents would take a minute
+/// on every load of a large model, and these change whenever the weights are replaced.
+#[must_use]
+pub fn model_weights_fingerprint(model_directory: &Path) -> Option<String> {
+    let mut shard_descriptions = Vec::new();
+    for directory_entry in std::fs::read_dir(model_directory).ok()?.flatten() {
+        let shard_name = directory_entry.file_name().to_string_lossy().into_owned();
+        if !shard_name.ends_with(".safetensors") {
+            continue;
+        }
+        // Through the entry's path, because a Hugging Face snapshot links to its blobs.
+        let shard_metadata = std::fs::metadata(directory_entry.path()).ok()?;
+        let modified_seconds = shard_metadata
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_secs();
+        shard_descriptions.push(format!(
+            "{shard_name}:{}:{modified_seconds}",
+            shard_metadata.len()
+        ));
+    }
+    if shard_descriptions.is_empty() {
+        return None;
+    }
+    shard_descriptions.sort_unstable();
+    let digest = Sha256::digest(shard_descriptions.join("\n").as_bytes());
+    let mut fingerprint = String::with_capacity(WEIGHTS_FINGERPRINT_BYTES * 2);
+    for digest_byte in digest.iter().take(WEIGHTS_FINGERPRINT_BYTES) {
+        fingerprint.push_str(&format!("{digest_byte:02x}"));
+    }
+    Some(fingerprint)
 }
 
 /// Describes one finished set, so a person can tell what a folder is without running

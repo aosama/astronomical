@@ -9,6 +9,8 @@ extension DaemonStatusDocument {
     let completedProgramCount: UInt32?
     let totalProgramCount: UInt32?
     let estimatedRemainingMilliseconds: UInt64?
+    let isWaitingToMeasure: Bool?
+    let measuredSpeedPercent: UInt32?
     let reason: String?
 
     enum CodingKeys: String, CodingKey {
@@ -16,6 +18,8 @@ extension DaemonStatusDocument {
       case completedProgramCount = "completed_program_count"
       case totalProgramCount = "total_program_count"
       case estimatedRemainingMilliseconds = "estimated_remaining_ms"
+      case isWaitingToMeasure = "is_waiting_to_measure"
+      case measuredSpeedPercent = "measured_speed_percent"
     }
   }
 }

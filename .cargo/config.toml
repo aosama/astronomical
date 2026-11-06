@@ -236,6 +236,15 @@ test-neural-engine-journeys = "run -p xtask -- test-run --package astronomical-n
 # minutes, and the second takes about one), and
 # `should_compare_real_answers_across_neural_engine_arms` checks exact answers per
 # engine setup (about eight minutes).
+#
+# `should_measure_peak_program_memory_of_the_smallest_model`, and its `two_billion`
+# and `nine_billion` siblings in `neural_engine_program_memory.rs`, check that what
+# programs measure at load matches what they really hold, on three model sizes. About
+# four to six minutes each, under the same filter form with `--ignored --nocapture`.
+# `should_sweep_the_token_share_of_the_smallest_model`, and its `two_billion` and
+# `nine_billion` siblings, compare shares of a chunk, about ten minutes each.
+# `should_compare_real_chunks_on_the_smallest_model`, and the same two siblings, time
+# neighbouring chunks of real prompts on each engine, two to six minutes each.
 test-neural-engine-real-model = "test --release --no-fail-fast -p astronomical-acceptance --features direct-mlx --test installed_model_contracts should_compare_real_dense_prefill_with_and_without_the_neural_engine -- --ignored --nocapture --test-threads=1"
 
 # The Neural Engine CI lane (job `neural-engine`): the production crate's unit

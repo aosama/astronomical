@@ -26,6 +26,15 @@ pub enum MlxHandOffError {
     SurfaceArrayRejected,
 }
 
+impl MlxHandOffError {
+    /// Whether this came from MLX rather than the program. An allocation can fail near
+    /// the memory ceiling with every program healthy.
+    #[must_use]
+    pub const fn is_from_mlx(&self) -> bool {
+        matches!(self, Self::Mlx(_))
+    }
+}
+
 /// How the output surface reaches MLX; the journeys compare the two.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutputHandOff {

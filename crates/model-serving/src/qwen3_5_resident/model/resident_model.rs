@@ -124,14 +124,28 @@ impl Qwen3_5ResidentModel {
     pub fn prepare_neural_engine_prefill_matching_production(
         &mut self,
         chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
-        maximum_context_tokens: u32,
         program_cache_directory: Option<&std::path::Path>,
     ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
         crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
             self,
             chunking,
-            maximum_context_tokens,
             program_cache_directory,
+            None,
+        )
+    }
+
+    /// The same steps with a chosen token split, so a journey can sweep it.
+    #[cfg(feature = "direct-mlx")]
+    pub fn prepare_neural_engine_prefill_with_token_count(
+        &mut self,
+        chunking: &astronomical_ipc_protocol::WorkerChunkingConfiguration,
+        neural_engine_token_count: u32,
+    ) -> astronomical_ipc_protocol::NeuralEnginePrefillStatus {
+        crate::qwen3_5_resident::neural_engine_prefill_loading::prepare_neural_engine_prefill(
+            self,
+            chunking,
+            None,
+            Some(neural_engine_token_count),
         )
     }
 

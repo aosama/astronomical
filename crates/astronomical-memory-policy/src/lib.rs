@@ -61,6 +61,7 @@ pub mod forward_admission;
 pub mod geometry_floor;
 pub mod memory_equation;
 pub mod neural_engine_admission;
+pub mod neural_engine_program_memory_watch;
 pub mod phase;
 pub mod placement;
 pub mod reclamation;

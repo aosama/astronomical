@@ -1,8 +1,7 @@
 use std::fs;
 
 use super::{
-    PlacementCheck, current_placement_environment, forget_placement_verified, placement_check_for,
-    placement_environment_of, record_placement_verified,
+    PlacementCheck, forget_placement_verified, placement_check_for, record_placement_verified,
 };
 
 const PLACEMENT_ENVIRONMENT: &str = "macOS 27.0.1 (26A434) on Mac99,1";
@@ -169,16 +168,23 @@ fn should_forget_a_record_and_tolerate_a_missing_one() {
 #[test]
 fn should_name_the_macos_build_and_the_mac_in_an_environment() {
     assert_eq!(
-        placement_environment_of("27.0.1", "26A434", "Mac99,1"),
+        crate::qwen3_5_resident::host_description::host_environment_of(
+            "27.0.1", "26A434", "Mac99,1"
+        ),
         PLACEMENT_ENVIRONMENT
     );
 }
 
 #[test]
 fn should_describe_this_process_environment_once() {
-    let placement_environment = current_placement_environment().expect("macOS describes itself");
+    let placement_environment =
+        crate::qwen3_5_resident::host_description::current_host_environment()
+            .expect("macOS describes itself");
 
     assert!(placement_environment.starts_with("macOS "));
     assert!(placement_environment.contains(" on "));
-    assert_eq!(current_placement_environment(), Some(placement_environment));
+    assert_eq!(
+        crate::qwen3_5_resident::host_description::current_host_environment(),
+        Some(placement_environment)
+    );
 }

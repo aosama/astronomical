@@ -322,6 +322,7 @@ async fn should_show_programs_being_prepared_beside_the_serving_model() {
             total_program_count: 56,
             elapsed_ms: 12_000,
             estimated_remaining_ms: None,
+            is_waiting_to_measure: false,
         }),
     )
     .await;

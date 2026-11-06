@@ -80,6 +80,10 @@ pub(crate) fn publish_active_request_progress(
 pub(crate) fn clear_active_request_progress(health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
         worker_health_snapshot.active_request_progress = None;
+        worker_health_snapshot
+            .serving_session
+            .neural_engine
+            .clear_last_chunk_placement();
     }
 }
 
@@ -88,7 +92,23 @@ pub(crate) fn publish_neural_engine_prefill(
     neural_engine_prefill: Option<astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
 ) {
     if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot
+            .serving_session
+            .neural_engine
+            .note_prefill_status(neural_engine_prefill.as_ref());
         worker_health_snapshot.neural_engine_prefill = neural_engine_prefill;
+    }
+}
+
+pub(crate) fn record_neural_engine_chunk(
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    report: astronomical_ipc_protocol::NeuralEngineChunkReport,
+) {
+    if let Ok(mut worker_health_snapshot) = health_snapshot.write() {
+        worker_health_snapshot
+            .serving_session
+            .neural_engine
+            .record_chunk(report);
     }
 }
 

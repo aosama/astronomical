@@ -48,7 +48,8 @@ fn should_clear_the_status_when_a_replacement_model_is_ready() {
         layer_program_count: 32,
         neural_engine_tokens_per_chunk: 960,
         chunk_token_count: 2048,
-        estimated_memory_bytes: 1,
+        measured_memory_bytes: 1,
+        measured_speed_percent: None,
     });
 
     let replacement_snapshot = WorkerHealthSnapshot::ready_with_replacement_model(

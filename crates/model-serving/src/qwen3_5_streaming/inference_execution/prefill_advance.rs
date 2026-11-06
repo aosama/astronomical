@@ -517,6 +517,7 @@ impl Qwen3_5EngineState {
             persistent_prompt_cache_diagnostics: active_request
                 .persistent_prompt_cache_diagnostics
                 .clone(),
+            neural_engine_chunk: None,
         })
     }
 }

@@ -65,6 +65,7 @@ fn should_report_only_the_chunk_own_token_count_as_progress() {
                 target_restored_token_count: 64,
             },
             persistent_prompt_cache_diagnostics: None,
+            neural_engine_chunk: None,
         }
     );
 }

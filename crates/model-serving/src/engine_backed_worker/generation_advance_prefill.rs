@@ -49,6 +49,7 @@ where
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
         persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+        neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
         Option<ActiveEngineGeneration<Processor::RequestOutput, Processor::InferenceRequest>>,
@@ -69,20 +70,13 @@ where
             active_generation.persistent_prompt_cache_diagnostics =
                 persistent_prompt_cache_diagnostics;
         }
-        if let Some(expert_memory_mode) = expert_memory_mode
-            && active_generation.last_reported_expert_memory_mode != Some(expert_memory_mode)
-        {
-            tracing::info!(
-                request_id = active_generation.request_id.value(),
-                expert_memory_mode = ?expert_memory_mode,
-                generation_phase = "prefill",
-                "emitting expert-memory mode event"
-            );
-            event_writer
-                .send_event(&WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode })
-                .await?;
-            active_generation.last_reported_expert_memory_mode = Some(expert_memory_mode);
-        }
+        emit_expert_memory_mode_if_changed(
+            &mut active_generation,
+            expert_memory_mode,
+            event_writer,
+        )
+        .await?;
+        emit_neural_engine_chunk(neural_engine_chunk, event_writer).await?;
         active_generation.prefill_processed_tokens = active_generation
             .prefill_processed_tokens
             .saturating_add(processed_token_count);
@@ -117,6 +111,46 @@ where
             .await?;
         Ok(Some(active_generation))
     }
+}
+
+async fn emit_expert_memory_mode_if_changed<RequestOutput, InferenceRequest, WriteTransport>(
+    active_generation: &mut ActiveEngineGeneration<RequestOutput, InferenceRequest>,
+    expert_memory_mode: Option<ExpertMemoryMode>,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<(), WorkerRuntimeError>
+where
+    WriteTransport: AsyncWrite + Unpin,
+{
+    if let Some(expert_memory_mode) = expert_memory_mode
+        && active_generation.last_reported_expert_memory_mode != Some(expert_memory_mode)
+    {
+        tracing::info!(
+            request_id = active_generation.request_id.value(),
+            expert_memory_mode = ?expert_memory_mode,
+            generation_phase = "prefill",
+            "emitting expert-memory mode event"
+        );
+        event_writer
+            .send_event(&WorkerEvent::ExpertMemoryModeChanged { expert_memory_mode })
+            .await?;
+        active_generation.last_reported_expert_memory_mode = Some(expert_memory_mode);
+    }
+    Ok(())
+}
+
+async fn emit_neural_engine_chunk<WriteTransport>(
+    neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<(), WorkerRuntimeError>
+where
+    WriteTransport: AsyncWrite + Unpin,
+{
+    if let Some(report) = neural_engine_chunk {
+        event_writer
+            .send_event(&WorkerEvent::NeuralEngineChunkFinished { report })
+            .await?;
+    }
+    Ok(())
 }
 
 /// Emits the phase-started prefill progress event. Mirrors the inlined

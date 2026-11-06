@@ -4,7 +4,10 @@
 
 use std::path::PathBuf;
 
-use astronomical_config::{PromptCacheConfig, neural_engine_program_cache_directory_for_model};
+use astronomical_config::{
+    PromptCacheConfig, model_weights_fingerprint, neural_engine_program_cache_directory_for_model,
+    remove_other_weights_of_model,
+};
 use astronomical_ipc_protocol::{
     WorkerChunkingConfiguration, WorkerDecodeExpertCachePolicy,
     WorkerDiagnosticQwen3_5EngineOverride,
@@ -37,17 +40,23 @@ enum Qwen3_5SelectedEngine {
     Streaming,
 }
 
+/// `None` keeps nothing between loads, which also covers weights that cannot be
+/// identified: rebuilding is slow, and reusing another model's programs would be wrong.
 fn model_program_cache_directory(
     neural_engine_program_directory: Option<&std::path::Path>,
+    model_directory: &std::path::Path,
     model_id: &str,
     model_revision: &str,
 ) -> Option<PathBuf> {
     let program_directory = neural_engine_program_directory?;
-    Some(neural_engine_program_cache_directory_for_model(
+    let model_program_directory = neural_engine_program_cache_directory_for_model(
         program_directory,
         model_id,
         model_revision,
-    ))
+        &model_weights_fingerprint(model_directory)?,
+    );
+    remove_other_weights_of_model(program_directory, model_id, &model_program_directory);
+    Some(model_program_directory)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -150,6 +159,7 @@ pub(crate) fn initialize_qwen3_5_model(
     });
     let neural_engine_program_cache_directory = model_program_cache_directory(
         neural_engine_program_directory.as_deref(),
+        &model_directory_path,
         &model_id,
         &model_revision,
     );

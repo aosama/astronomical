@@ -288,14 +288,10 @@ fn load_tokenizer(development_config: &AstronomicalConfig) -> Qwen3_5Tokenizer {
     Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact).expect("the tokenizer loads")
 }
 
-fn prepare_both_program_families(model: &mut Qwen3_5ResidentModel, maximum_context_tokens: u32) {
+fn prepare_both_program_families(model: &mut Qwen3_5ResidentModel) {
     let mut chunking = crate::common::standard_worker_chunking_configuration();
     chunking.experimental_neural_engine_prefill_enabled = true;
-    let status = model.prepare_neural_engine_prefill_matching_production(
-        &chunking,
-        maximum_context_tokens,
-        None,
-    );
+    let status = model.prepare_neural_engine_prefill_matching_production(&chunking, None);
     assert!(matches!(status, NeuralEnginePrefillStatus::Active { .. }));
 }
 
@@ -304,8 +300,8 @@ async fn compare_answers_across_arms() {
     let development_config =
         AstronomicalConfig::load_from_development_location().expect("the config loads");
     let tokenizer = load_tokenizer(&development_config);
-    let (mut model, _, maximum_context_tokens) = load_dense_model(&development_config);
-    prepare_both_program_families(&mut model, maximum_context_tokens);
+    let (mut model, _) = load_dense_model(&development_config);
+    prepare_both_program_families(&mut model);
     let mut task_run = TaskRun {
         model: &model,
         tokenizer: &tokenizer,

@@ -28,11 +28,18 @@ pub(crate) fn render_neural_engine_prefill(
             completed_program_count,
             total_program_count,
             estimated_remaining_ms,
+            is_waiting_to_measure,
             ..
         } => {
-            let count_line = format!(
-                "preparing, {completed_program_count}/{total_program_count} programs; prefill on the GPU until ready"
-            );
+            let count_line = if *is_waiting_to_measure {
+                format!(
+                    "{total_program_count} programs built, measuring their memory at the next pause in requests; prefill on the GPU until then"
+                )
+            } else {
+                format!(
+                    "preparing, {completed_program_count}/{total_program_count} programs; prefill on the GPU until ready"
+                )
+            };
             Some(match estimated_remaining_ms {
                 Some(estimated_remaining_ms) if *estimated_remaining_ms > 0 => format!(
                     "{count_line} (about {} left)",
@@ -43,8 +50,17 @@ pub(crate) fn render_neural_engine_prefill(
         }
         NeuralEnginePrefillStatus::Active {
             layer_program_count,
+            measured_speed_percent,
             ..
-        } => Some(format!("engaged, {layer_program_count} layer programs")),
+        } => Some(match measured_speed_percent {
+            Some(measured_speed_percent) => format!(
+                "engaged, {layer_program_count} layer programs, measured {:.2}x the GPU alone",
+                f64::from(*measured_speed_percent) / 100.0
+            ),
+            None => format!(
+                "engaged, {layer_program_count} layer programs; comparing with the GPU alone during long prompts"
+            ),
+        }),
         NeuralEnginePrefillStatus::Unavailable { reason } => {
             Some(format!("unavailable, prefill stays on the GPU: {reason}"))
         }

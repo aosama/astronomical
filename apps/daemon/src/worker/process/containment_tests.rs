@@ -47,6 +47,7 @@ fn should_publish_a_neural_engine_status_found_during_a_cancellation() {
         total_program_count: 2,
         elapsed_ms: 1,
         estimated_remaining_ms: None,
+        is_waiting_to_measure: false,
     };
 
     let reaction = react_to_cancellation_event(
@@ -67,6 +68,39 @@ fn should_publish_a_neural_engine_status_found_during_a_cancellation() {
             .neural_engine_prefill,
         Some(preparing)
     );
+}
+
+#[test]
+fn should_count_a_chunk_that_finishes_during_a_cancellation() {
+    let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
+        WorkerHealthStatus::Loading,
+    )));
+
+    let reaction = react_to_cancellation_event(
+        &health_snapshot,
+        WorkerEvent::NeuralEngineChunkFinished {
+            report: astronomical_ipc_protocol::NeuralEngineChunkReport {
+                placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::BothEngines,
+                chunk_token_count: 2_048,
+                neural_engine_token_count: 960,
+                elapsed_millis: 350,
+                is_prompt_warm: true,
+            },
+        },
+        RequestId::new(7),
+        false,
+    )
+    .expect("this event is expected during a cancellation");
+
+    assert!(matches!(reaction, CancellationEventReaction::KeepDraining));
+    let totals = health_snapshot
+        .read()
+        .expect("the snapshot reads")
+        .serving_session
+        .neural_engine
+        .clone();
+    assert_eq!(totals.neural_engine_token_count, 960);
+    assert_eq!(totals.prompt_token_count, 2_048);
 }
 
 #[test]

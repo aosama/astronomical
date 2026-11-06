@@ -1,5 +1,7 @@
 use astronomical_ipc_protocol::WorkerPromptWorkReuse;
 
+use super::neural_engine_session_totals::NeuralEngineSessionTotals;
+
 /// Compact lifetime-of-daemon serving summary rendered by local interfaces.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ServingSessionSnapshot {
@@ -10,6 +12,7 @@ pub struct ServingSessionSnapshot {
     pub target_reused_prompt_work_token_count: u64,
     pub average_prefill_tok_per_second: f64,
     pub average_generation_tok_per_second: f64,
+    pub neural_engine: NeuralEngineSessionTotals,
     prefill_measurement_count: u64,
     generation_measurement_count: u64,
 }
@@ -24,6 +27,7 @@ impl ServingSessionSnapshot {
             target_reused_prompt_work_token_count: 0,
             average_prefill_tok_per_second: 0.0,
             average_generation_tok_per_second: 0.0,
+            neural_engine: NeuralEngineSessionTotals::empty(),
             prefill_measurement_count: 0,
             generation_measurement_count: 0,
         }

@@ -24,6 +24,7 @@ mod image_generation;
 mod image_generation_tests;
 mod message_codec;
 mod model_load_in_flight;
+mod neural_engine_chunk_report;
 mod neural_engine_prefill_status;
 mod persistent_prompt_cache_diagnostics;
 #[cfg(test)]
@@ -77,6 +78,7 @@ pub use message_codec::{
     encode_daemon_request, encode_daemon_response, encode_event,
 };
 pub use model_load_in_flight::ModelLoadInFlight;
+pub use neural_engine_chunk_report::{NeuralEngineChunkPlacement, NeuralEngineChunkReport};
 pub use neural_engine_prefill_status::NeuralEnginePrefillStatus;
 pub use persistent_prompt_cache_diagnostics::{
     WorkerInMemoryPrefixAdoptionOutcome, WorkerPersistentPromptCacheExpectedBlockHashPrefix,

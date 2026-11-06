@@ -63,6 +63,8 @@ impl Qwen3_5EngineState {
         &mut self,
         mut inference_request: Qwen3_5InferenceRequest,
     ) -> Result<EngineGenerationStart, InferenceEngineError> {
+        // A prompt cache restore or the vision encoder uses the GPU before any forward.
+        self.tell_neural_engine_preparation_the_gpu_is_in_use();
         let request_id = inference_request.request_id();
         let configured_maximum_output_tokens = inference_request.max_output_tokens();
         // Per-request performance measurement (timings and counters) travels

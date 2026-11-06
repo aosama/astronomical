@@ -1,7 +1,10 @@
 mod config;
 #[cfg(feature = "direct-mlx")]
 mod neural_engine_answer_tasks;
+mod neural_engine_chunk_comparison;
 mod neural_engine_mlp_prefill;
+mod neural_engine_program_memory;
+mod neural_engine_token_share_sweep;
 mod ornith_load;
 mod qwen_image_21_conditioning;
 #[cfg(feature = "direct-mlx")]

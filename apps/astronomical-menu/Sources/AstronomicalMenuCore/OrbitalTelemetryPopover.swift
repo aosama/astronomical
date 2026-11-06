@@ -101,6 +101,12 @@ struct OrbitalTelemetryPopover: View {
         showsEstimate: !statusDocument.isActive)
       {
         metricRow("Neural Engine", neuralEngineTitle)
+        if let neuralEngineReason = statusDocument.neuralEnginePrefill?.unavailableReasonTitle {
+          Text(neuralEngineReason)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
       }
       Divider()
       GPUUtilizationBar(

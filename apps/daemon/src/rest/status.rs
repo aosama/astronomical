@@ -187,7 +187,19 @@ fn attach_worker_memory_and_session_facts(
         "target_reused_prompt_work_token_count": worker_health_snapshot.serving_session.target_reused_prompt_work_token_count,
         "average_prefill_tok_per_second": worker_health_snapshot.serving_session.average_prefill_tok_per_second,
         "average_generation_tok_per_second": worker_health_snapshot.serving_session.average_generation_tok_per_second,
+        "neural_engine": neural_engine_session_facts(&worker_health_snapshot.serving_session.neural_engine),
     });
+}
+
+fn neural_engine_session_facts(
+    totals: &crate::serving::neural_engine_session_totals::NeuralEngineSessionTotals,
+) -> serde_json::Value {
+    serde_json::json!({
+        "prompt_token_count": totals.prompt_token_count,
+        "neural_engine_token_count": totals.neural_engine_token_count,
+        "estimated_saved_ms": totals.estimated_saved_millis,
+        "last_chunk_placement": totals.last_chunk_placement,
+    })
 }
 
 /// Attaches the prompt-cache hit summary derived from the worker's stats

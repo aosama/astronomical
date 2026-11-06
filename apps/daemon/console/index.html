@@ -72,6 +72,18 @@
                                 <span id="phase-elapsed" class="phase-stat-value">— ms</span>
                             </div>
                         </section>
+                        <section id="neural-engine-panel" class="panel neural-engine-panel" aria-labelledby="neural-engine-panel-title" hidden>
+                            <div class="panel-heading-row">
+                                <h3 id="neural-engine-panel-title">Neural Engine</h3>
+                                <span class="neural-engine-scope">Work and time since launch</span>
+                            </div>
+                            <dl id="neural-engine-tiles" class="neural-engine-tiles" hidden>
+                                <div class="neural-engine-tile"><dt>Prompt speed</dt><dd id="neural-engine-speed" class="neural-engine-value">—</dd><dd id="neural-engine-speed-detail" class="neural-engine-detail"></dd></div>
+                                <div class="neural-engine-tile"><dt>Work done</dt><dd id="neural-engine-work" class="neural-engine-value">—</dd><dd id="neural-engine-work-detail" class="neural-engine-detail"></dd></div>
+                                <div class="neural-engine-tile"><dt>Time saved</dt><dd id="neural-engine-saved" class="neural-engine-value">—</dd><dd id="neural-engine-saved-detail" class="neural-engine-detail"></dd></div>
+                            </dl>
+                            <p id="neural-engine-note" class="neural-engine-note"></p>
+                        </section>
                         <section class="panel overview-summary">
                             <div class="overview-summary-heading">
                                 <div>
@@ -321,7 +333,7 @@
                     <section class="panel configuration-neural-engine">
                         <h3>Neural Engine prefill</h3>
                         <p id="configuration-neural-engine-status" class="panel-note">Off for the loaded model, or no model is loaded.</p>
-                        <p class="panel-note">Experimental, dense models only. Turn on <em>Experimental neural engine prefill enabled</em> under Chunking or for one model. Prompt processing measured 1.13× to 1.2× faster on a 9B model with the prompt cache on; generation speed does not change. It holds up to about twice the programs' weights in memory. A model serves on the GPU as soon as it loads, while its programs are prepared in the background; this takes a minute or two the first time and keeps about 10 GB of compiled programs on disk. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone.</p>
+                        <p class="panel-note">Experimental, dense models only. Turn on <em>Experimental neural engine prefill enabled</em> under Chunking or for one model. Prompt processing measured 1.13× to 1.2× faster on a 9B model with the prompt cache on; generation speed does not change. Its memory is measured for each model and checked against the MLX memory ceiling for each prompt chunk. A model serves on the GPU as soon as it loads, while its programs are prepared in the background; this takes a minute or two the first time and keeps about 10 GB of compiled programs on disk. Part of each prompt computes in fp16, so output can differ slightly from the GPU alone.</p>
                     </section>
                     <div id="configuration-sections"></div>
                     <details class="panel configuration-preview-panel">
@@ -370,6 +382,7 @@
     <script src="/library-render.js" defer></script>
     <script src="/configuration-model.js" defer></script>
     <script src="/configuration.js" defer></script>
+    <script src="/neural-engine-panel.js" defer></script>
     <script src="/console.js" defer></script>
     <script src="/overview-compact.js" defer></script>
     <!-- Chat opens in Thin Talk through the link console.js gives #open-thin-talk

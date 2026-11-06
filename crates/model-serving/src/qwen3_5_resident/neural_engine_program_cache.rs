@@ -25,10 +25,10 @@ use astronomical_neural_engine::core_ml::{
 };
 use astronomical_neural_engine::program_shape::ProgramShape;
 
-use super::host_description::macos_product_version;
+use super::host_description::{current_host_environment, macos_product_version};
+use super::neural_engine_mlp_prefill::NEURAL_ENGINE_FINISH_TIMEOUT;
 use super::neural_engine_program_placement_record::{
-    PlacementCheck, current_placement_environment, forget_placement_verified, placement_check_for,
-    record_placement_verified,
+    PlacementCheck, forget_placement_verified, placement_check_for, record_placement_verified,
 };
 use super::neural_engine_program_preparation::{
     ProgramBuildJob, ProgramBuildOutcome, ProgramBuilder,
@@ -56,6 +56,10 @@ impl ProgramSetCache {
         fs::create_dir_all(&set_directory).ok()?;
         remove_other_sets_of_family(model_cache_directory, family, &set_directory_name);
         Some(Self { set_directory })
+    }
+
+    pub(crate) fn set_directory(&self) -> &Path {
+        &self.set_directory
     }
 
     pub(crate) fn program_path(&self, layer_index: usize) -> PathBuf {
@@ -160,7 +164,10 @@ fn verify_placement(program: &CoreMlProgram) -> Result<(), &'static str> {
 /// long that prediction took.
 fn run_first_prediction(program: &mut CoreMlProgram) -> Result<Duration, &'static str> {
     let first_prediction_started_at = Instant::now();
-    if program.predict().is_err() {
+    if program
+        .predict_within(NEURAL_ENGINE_FINISH_TIMEOUT)
+        .is_err()
+    {
         return Err("the Neural Engine could not run the program");
     }
     Ok(first_prediction_started_at.elapsed())
@@ -196,7 +203,7 @@ fn load_and_verify_kept_program(
     build_job: &ProgramBuildJob,
     kept_program_path: &Path,
 ) -> Result<CoreMlProgram, String> {
-    let placement_environment = current_placement_environment();
+    let placement_environment = current_host_environment();
     let placement_check = placement_check_for(kept_program_path, placement_environment);
     let load_started_at = Instant::now();
     let load_outcome = match placement_check {

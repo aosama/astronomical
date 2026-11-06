@@ -43,6 +43,8 @@ typedef struct {
   int32_t operations_off_neural_engine;
 } AstronomicalLayerPlacement;
 
+enum { ASTRONOMICAL_ASYNCHRONOUS_ERROR_CAPACITY = 256 };
+
 typedef struct AstronomicalCoreMlProgram {
   MLModel *model;
   NSURL *compiled_model_url;
@@ -63,6 +65,8 @@ typedef struct AstronomicalCoreMlProgram {
   dispatch_queue_t prediction_queue;
   dispatch_semaphore_t prediction_finished;
   int32_t prediction_in_flight;
+  // Written on the prediction queue and read after its semaphore, so never at once.
+  char asynchronous_error[ASTRONOMICAL_ASYNCHRONOUS_ERROR_CAPACITY];
   int32_t asynchronous_status;
   uint64_t asynchronous_elapsed_nanoseconds;
 } AstronomicalCoreMlProgram;
@@ -523,8 +527,20 @@ static void astronomical_run_asynchronous_prediction(void *context) {
     NSError *error = nil;
     projection->asynchronous_status =
         astronomical_run_prediction(projection, &projection->asynchronous_elapsed_nanoseconds, &error);
+    if (projection->asynchronous_status != 0 && error != nil) {
+      NSString *description = error.localizedDescription ?: @"Core ML prediction failed";
+      strlcpy(projection->asynchronous_error, description.UTF8String,
+              sizeof(projection->asynchronous_error));
+    }
   }
   dispatch_semaphore_signal(projection->prediction_finished);
+}
+
+void astronomical_core_ml_program_copy_asynchronous_error(
+    const AstronomicalCoreMlProgram *projection, char *error_buffer, uint32_t error_capacity) {
+  if (projection != NULL && error_buffer != NULL && error_capacity > 0) {
+    strlcpy(error_buffer, projection->asynchronous_error, error_capacity);
+  }
 }
 
 int32_t astronomical_core_ml_program_begin_predict(AstronomicalCoreMlProgram *projection) {

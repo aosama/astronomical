@@ -208,6 +208,7 @@ where
                 expert_memory_mode,
                 prompt_work_reuse,
                 persistent_prompt_cache_diagnostics,
+                neural_engine_chunk,
             } => {
                 self.advance_prefill_progress(
                     active_generation,
@@ -220,6 +221,7 @@ where
                     expert_memory_mode,
                     prompt_work_reuse,
                     persistent_prompt_cache_diagnostics,
+                    neural_engine_chunk,
                     event_writer,
                 )
                 .await

@@ -353,6 +353,11 @@ fn react_to_cancellation_event(
             );
             Ok(CancellationEventReaction::KeepDraining)
         }
+        // The chunk did run, so it counts even though its request was cancelled.
+        WorkerEvent::NeuralEngineChunkFinished { report } => {
+            crate::worker::health::record_neural_engine_chunk(health_snapshot, report);
+            Ok(CancellationEventReaction::KeepDraining)
+        }
         progress_event if is_progress_of_request(&progress_event, request_id) => {
             Ok(CancellationEventReaction::KeepDraining)
         }

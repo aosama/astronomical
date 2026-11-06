@@ -26,4 +26,15 @@ pub(crate) trait LinearAttentionOutputGateEngine: Send + std::fmt::Debug {
     /// Sends full chunks to the GPU alone while paused, so one loaded model can
     /// alternate between the arms of a measurement.
     fn set_paused(&self, is_paused: bool);
+
+    /// Sends the coming chunk to the GPU alone when it should not use the programs,
+    /// because its memory would not fit beside them or to compare the engines.
+    fn set_chunk_uses_programs(&self, uses_programs: bool);
+
+    /// Whether a program failed, which leaves the gates on the GPU for good.
+    fn has_failed(&self) -> bool;
+
+    /// Runs every program once, for a measurement of what they hold alone.
+    #[cfg(feature = "direct-mlx")]
+    fn run_every_program_once(&self) -> Result<(), String>;
 }

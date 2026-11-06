@@ -337,6 +337,11 @@ pub enum WorkerEvent {
     NeuralEnginePrefillChanged {
         neural_engine_prefill: crate::NeuralEnginePrefillStatus,
     },
+    /// Says where one prompt chunk ran. A fact about the model's programs rather than
+    /// the request, so it stays meaningful if that request has since been cancelled.
+    NeuralEngineChunkFinished {
+        report: crate::NeuralEngineChunkReport,
+    },
     /// Announces a model load, before readiness. The daemon keeps it and clears it
     /// when the load ends, however it ends.
     ModelLoadInFlight {

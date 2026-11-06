@@ -21,6 +21,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             vec![
                 GeneratedToken::PrefillProgress {
                     persistent_prompt_cache_diagnostics: None,
+                    neural_engine_chunk: None,
                     processed_token_count: 2,
                     elapsed_millis: 400,
                     forward_prefill_chunk_elapsed_millis: 350,
@@ -52,6 +53,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                 },
                 GeneratedToken::PrefillProgress {
                     persistent_prompt_cache_diagnostics: None,
+                    neural_engine_chunk: None,
                     processed_token_count: 3,
                     elapsed_millis: 600,
                     forward_prefill_chunk_elapsed_millis: 525,
@@ -211,4 +213,66 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
     ));
 
     close_worker_transport(daemon_writer, worker_task).await;
+}
+
+#[tokio::test]
+async fn should_report_where_a_chunk_ran_when_the_model_has_programs() {
+    let chunk_report = astronomical_ipc_protocol::NeuralEngineChunkReport {
+        placement: astronomical_ipc_protocol::NeuralEngineChunkPlacement::BothEngines,
+        chunk_token_count: 2_048,
+        neural_engine_token_count: 960,
+        elapsed_millis: 350,
+        is_prompt_warm: true,
+    };
+    let engine_worker = EngineBackedWorker::new(
+        ScriptedChatProcessor::with_prompt_token_count(15),
+        ScriptedChatEngine::with_cached_token_count_and_generated_tokens(
+            0,
+            vec![GeneratedToken::PrefillProgress {
+                persistent_prompt_cache_diagnostics: None,
+                neural_engine_chunk: Some(chunk_report),
+                processed_token_count: 15,
+                elapsed_millis: 400,
+                forward_prefill_chunk_elapsed_millis: 350,
+                completed_prefill_chunk_tokens: 2_048,
+                expert_residency_telemetry: None,
+                mlx_memory_telemetry: None,
+                expert_memory_mode: None,
+                prompt_work_reuse: WorkerPromptWorkReuse {
+                    target_eligible_token_count: 0,
+                    target_restored_token_count: 0,
+                },
+            }],
+        ),
+    );
+    let (daemon_transport, worker_transport) = duplex(MAX_IPC_FRAME_BYTES * 2);
+    let (daemon_reader_transport, daemon_writer_transport) = split(daemon_transport);
+    let (worker_reader_transport, worker_writer_transport) = split(worker_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_reader_transport);
+    let mut daemon_writer = ProtocolWriter::new(daemon_writer_transport);
+    let worker_task = tokio::spawn(async move {
+        engine_worker
+            .run(worker_reader_transport, worker_writer_transport)
+            .await
+    });
+
+    assert_eq!(next_event(&mut daemon_reader).await, ready_event());
+    daemon_writer
+        .send_command(&WorkerCommand::Generate(chat_command(743, 12)))
+        .await
+        .expect("the worker should receive a chat request");
+
+    loop {
+        match next_event(&mut daemon_reader).await {
+            WorkerEvent::NeuralEngineChunkFinished { report } => {
+                assert_eq!(report, chunk_report);
+                break;
+            }
+            WorkerEvent::Completed { .. } | WorkerEvent::GenerationFinalized { .. } => {
+                panic!("the request ended without reporting its chunk");
+            }
+            _ => {}
+        }
+    }
+    worker_task.abort();
 }

@@ -510,6 +510,8 @@ pub enum GeneratedToken {
         expert_memory_mode: Option<ExpertMemoryMode>,
         prompt_work_reuse: WorkerPromptWorkReuse,
         persistent_prompt_cache_diagnostics: Option<WorkerPersistentPromptCacheRequestDiagnostics>,
+        /// Where this chunk ran, when the model has Neural Engine programs attached.
+        neural_engine_chunk: Option<astronomical_ipc_protocol::NeuralEngineChunkReport>,
     },
     /// A confirmed prompt phase is about to begin before its blocking model work.
     PromptProcessingPhaseStarted {
