@@ -23,8 +23,10 @@ const OUTPUT_TOKEN_COUNT: u16 = 32;
 const COLD_REQUEST_ID: RequestId = RequestId::new(96_100);
 const WARM_REQUEST_ID: RequestId = RequestId::new(96_101);
 
+/// The smaller model: the 8-bit one swaps heavily under its paging ceiling and misses the
+/// journey's deadline before it can compare anything.
 fn model_id() -> &'static str {
-    crate::common::large_sparse_moe_streaming_model_id()
+    crate::common::resident_sparse_moe_model_id()
 }
 
 #[tokio::test]

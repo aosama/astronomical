@@ -23,5 +23,6 @@ mod persistent_prompt_cache_visual_embeddings;
 mod qwen3_5;
 mod qwen3_5_moe;
 mod sparse_expert_projection;
+mod sparse_expert_projection_page_independence;
 mod sparse_expert_projection_sorted_stride;
 mod sparse_experts;

@@ -19,26 +19,48 @@ use mlx_c_rust::{MlxArray, MlxCError};
 /// Tells MLX whether the supplied expert-ID array is sorted in ascending order.
 ///
 /// This is a semantic type instead of a bare `bool` so a call site says what it
-/// believes about the indices. `SortedByExpert` is an explicit assertion, not a
-/// request to sort. This function never rearranges IDs. Callers must select that
-/// variant only after applying the permutation produced by
-/// [`super::sort_expert_assignments`] to both IDs and activation rows.
+/// believes about the indices. Both sorted variants are explicit assertions, not
+/// requests to sort. This function never rearranges IDs. Callers must select a
+/// sorted variant only after applying the permutation produced by
+/// [`super::sort_expert_assignments`] to both IDs and activation rows, and
+/// should let [`super::expert_assignment_order`] choose between the two.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ExpertAssignmentOrder {
     /// IDs retain router order and may jump between experts arbitrarily.
     Original,
-    /// IDs and matching activation rows are already grouped by expert ID.
+    /// IDs and matching activation rows are grouped by expert ID, but there
+    /// are fewer than four assignments per expert of the whole layer. MLX's
+    /// quantized gather would then choose its kernel by the size of the page
+    /// it multiplies, so that gather is not told the IDs are sorted (see
+    /// `assignment_sort_policy`).
+    SortedByExpertBelowTiledFloor,
+    /// IDs and matching activation rows are grouped by expert ID, with at
+    /// least four assignments per expert of the whole layer, so every page
+    /// the layer can produce meets MLX's tiled-kernel rule.
     SortedByExpert,
 }
 
 impl ExpertAssignmentOrder {
-    /// Converts the readable Rust contract to MLX's `sorted_indices` flag.
+    /// Converts the readable Rust contract to MLX's `sorted_indices` flag for
+    /// the dense `gather_mm`.
     ///
     /// MLX uses this promise to choose a gathered kernel that can exploit
     /// contiguous expert reads. Giving MLX `true` for unsorted IDs is therefore
     /// a correctness-contract violation even if a small example appears to work.
+    /// The dense gather picks its sorted kernel from this flag alone, never
+    /// from the page size, so both sorted variants claim it.
     #[must_use]
     pub const fn uses_sorted_indices(self) -> bool {
+        matches!(
+            self,
+            Self::SortedByExpert | Self::SortedByExpertBelowTiledFloor
+        )
+    }
+
+    /// MLX's `sorted_indices` flag for the affine-quantized `gather_qmm`,
+    /// claimed only where the kernel it selects cannot depend on the page.
+    #[must_use]
+    pub const fn uses_sorted_indices_for_quantized_gather(self) -> bool {
         matches!(self, Self::SortedByExpert)
     }
 }
@@ -184,6 +206,6 @@ fn gather_affine_projection(
         true,
         affine_projection_inputs.group_size,
         affine_projection_inputs.bits,
-        assignment_order.uses_sorted_indices(),
+        assignment_order.uses_sorted_indices_for_quantized_gather(),
     )
 }

@@ -273,7 +273,13 @@ impl Qwen3_5Model {
         // Streamed pages and resident layers intentionally converge here on the
         // same canonical operation. Paging decides which arrays are alive; this
         // adapter only describes their matrix layout and assignment ordering.
-        let assignment_order = expert_assignment_order(are_expert_indices_sorted);
+        // The layer's full expert count, not this page's, so the quantized
+        // gather picks the same kernel whichever page it multiplies.
+        let assignment_order = sparse_experts::expert_assignment_order(
+            are_expert_indices_sorted,
+            selected_expert_indices.element_count(),
+            self.config.expert_count() as usize,
+        );
         let rotated_activation_owner = self.hadamard32_rotated_activations(
             activations,
             activation_rotation,
@@ -588,19 +594,6 @@ struct QuantizedProjectionSlices<'a> {
     quantization_biases: &'a MlxArray,
     quantization_group_size: i32,
     quantization_bits: i32,
-}
-
-/// Converts the sorted-assignments assertion into the semantic ordering the
-/// gathered projection kernel expects. The flag is a caller's claim about
-/// the indices, and the resulting order is a kernel-contract choice: handing
-/// MLX `SortedByExpert` for unsorted IDs would be a correctness violation,
-/// so the two must never be conflated into a bare `bool` at this boundary.
-pub(super) fn expert_assignment_order(are_expert_indices_sorted: bool) -> ExpertAssignmentOrder {
-    if are_expert_indices_sorted {
-        ExpertAssignmentOrder::SortedByExpert
-    } else {
-        ExpertAssignmentOrder::Original
-    }
 }
 
 /// Returns the activation rows a single decode token presents to the fused

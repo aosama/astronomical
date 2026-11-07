@@ -13,7 +13,7 @@ use crate::qwen3_5_resident::experts::{
 };
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
 use crate::sparse_experts::{
-    ExpertAssignmentOrder, StackedExpertProjection, gather_expert_projection,
+    StackedExpertProjection, gather_expert_projection,
 };
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -225,11 +225,11 @@ impl Qwen3_5ResidentModel {
         // storage and sort policy, while sparse_experts owns the shared matmul.
         // The order enum is a promise about work already done by the caller; it
         // never asks the neutral operation to sort IDs behind Qwen's back.
-        let assignment_order = if are_expert_indices_sorted {
-            ExpertAssignmentOrder::SortedByExpert
-        } else {
-            ExpertAssignmentOrder::Original
-        };
+        let assignment_order = sparse_experts::expert_assignment_order(
+            are_expert_indices_sorted,
+            selected_expert_indices.element_count(),
+            self.config.expert_count() as usize,
+        );
         match affine_weights {
             Qwen3_5AffineWeights::Jangtq2Codebook { .. } => {
                 Err(Qwen3_5ExecutionError::InvalidInput {

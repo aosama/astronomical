@@ -7,7 +7,33 @@ use astronomical_model_serving::{
 use std::time::Instant;
 use tokio::time::{MissedTickBehavior, interval};
 
-#[expect(clippy::too_many_lines)]
+/// How a journey's request picks each token. Shared so a journey can ask another engine
+/// the same question with the same draws.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum GenerationSampling {
+    /// Temperature 0: the top token, so a changed token means changed logits.
+    Greedy,
+    /// Temperature 1.0 with a fixed seed, like a default chat request. A seeded draw
+    /// flips on logit changes far smaller than greedy ever sees.
+    Seeded,
+}
+
+impl GenerationSampling {
+    pub(crate) const fn temperature_thousandths(self) -> u16 {
+        match self {
+            Self::Greedy => 0,
+            Self::Seeded => 1_000,
+        }
+    }
+
+    pub(crate) const fn seed(self) -> Option<u64> {
+        match self {
+            Self::Greedy => None,
+            Self::Seeded => Some(1_234),
+        }
+    }
+}
+
 pub(crate) async fn run_attributed_generation(
     qwen3_5_engine: &mut Qwen3_5StreamingEngine,
     request_id: RequestId,
@@ -16,6 +42,28 @@ pub(crate) async fn run_attributed_generation(
     output_token_count: u16,
     end_of_sequence_token_ids: &[u32],
 ) -> Vec<u32> {
+    run_generation_with_sampling(
+        qwen3_5_engine,
+        request_id,
+        prompt_token_ids,
+        phase_name,
+        output_token_count,
+        end_of_sequence_token_ids,
+        GenerationSampling::Seeded,
+    )
+    .await
+}
+
+#[expect(clippy::too_many_lines)]
+pub(crate) async fn run_generation_with_sampling(
+    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    request_id: RequestId,
+    prompt_token_ids: &[u32],
+    phase_name: &str,
+    output_token_count: u16,
+    end_of_sequence_token_ids: &[u32],
+    generation_sampling: GenerationSampling,
+) -> Vec<u32> {
     let request_started_at = Instant::now();
     qwen3_5_engine
         .start_generation(
@@ -23,9 +71,9 @@ pub(crate) async fn run_attributed_generation(
                 request_id,
                 prompt_token_ids.to_vec(),
                 output_token_count,
+                generation_sampling.temperature_thousandths(),
                 1_000,
-                1_000,
-                Some(1_234),
+                generation_sampling.seed(),
             )
             .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID)
             .with_performance_attribution(PerformanceAttribution::enabled()),
