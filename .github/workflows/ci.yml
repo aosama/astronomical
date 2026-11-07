@@ -39,11 +39,17 @@ jobs:
     # pinned toolchain makes rustup download it before that compile; the cap
     # covers both plus the policy contracts, with margin for a cold registry.
     timeout-minutes: 5
+    # Job permissions replace the workflow-level set: reading whether this exact
+    # tree already passed needs actions:read.
+    permissions:
+      contents: read
+      actions: read
     outputs:
       code_changed: ${{ steps.classify.outputs.code_changed }}
       native_inputs_changed: ${{ steps.classify.outputs.native_inputs_changed }}
       macos_verification_required: ${{ steps.classify.outputs.macos_verification_required }}
       notices_inputs_changed: ${{ steps.classify.outputs.notices_inputs_changed }}
+      head_tree_id: ${{ steps.head-tree.outputs.tree_id }}
     steps:
       - name: Check out source history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,7 +65,12 @@ jobs:
           PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: cargo run --quiet -p xtask -- classify-scope
+      # The same github.sha every lane checks out, so this names what they test.
+      - name: Name the tree under test
+        id: head-tree
+        run: printf 'tree_id=%s\n' "$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
       - name: Run pull request policy contracts
         run: node --test --test-reporter=spec .github/scripts/pull-request-issue-compliance.test.js .github/scripts/pull-request-issue-compliance-publish.test.js
         timeout-minutes: 2
@@ -858,6 +869,10 @@ jobs:
           cargo test --locked -p xtask --test workflow_cache_owner_contract
           cargo test --locked -p xtask --test workflow_xcode_pin_contract
           cargo test --locked -p xtask --test workflow_macos_packaging_contract
+          cargo test --locked -p xtask --test workflow_verified_work_contract
+          # The decision to skip the macOS lanes on a merge, through real git
+          # history and a shimmed gh, so a mistake here cannot pass quietly.
+          cargo test --locked -p xtask --test integration_classify_scope_journeys
           scripts/ci/tests/test-ci-native-cache-coordination.sh
         timeout-minutes: 5
       # The pyramid count over this repository is local-only (cargo xtask
@@ -1171,8 +1186,9 @@ jobs:
   # every lane's terminal result and decides.
   #
   # Skip legitimacy: the macOS lanes legitimately skip when the
-  # classifier marked macOS verification not required (site-only changes, or
-  # a version-only bump proven from the file contents), and the
+  # classifier marked macOS verification not required (site-only changes, a
+  # version-only bump proven from the file contents, or a default-branch push
+  # whose exact tree already passed them with no cache to publish), and the
   # notices-freshness lane when no notices input changed; the
   # verdict accepts a skip only under that classifier decision, so a lane
   # skipped for any other reason fails the gate.
@@ -1247,3 +1263,46 @@ jobs:
             *) fail "lane=notices-freshness result=$notices_freshness_result" ;;
           esac
           printf '[ci-verdict] status=pass\n'
+
+  # What a later default-branch push reads back so it need not repeat the macOS
+  # lanes (xtask/src/verified_tree.rs). Deliberately not in the verdict's needs and
+  # not a required check: a job's setup or timeout can fail regardless of
+  # continue-on-error, and losing a record only costs the next merge its full run.
+  # Only a passed verdict over macOS lanes that really ran may leave a record.
+  record-verified-work:
+    name: Record verified work
+    needs: [detect-changes, verdict]
+    if: ${{ needs.verdict.result == 'success' && needs.detect-changes.outputs.macos_verification_required == 'true' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Write the record
+        env:
+          VERIFIED_TREE_ID: ${{ needs.detect-changes.outputs.head_tree_id }}
+        run: printf '%s\n' "$VERIFIED_TREE_ID" > "$RUNNER_TEMP/verified-work"
+      - name: Record that this tree passed
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-tree-${{ needs.detect-changes.outputs.head_tree_id }}
+          path: ${{ runner.temp }}/verified-work
+          # Longer than most pull requests wait to merge once green; a record
+          # that has expired only costs the merge its full run.
+          retention-days: 7
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+      - name: Record that the default branch ran the macOS lanes
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: default-branch-macos-run
+          path: ${{ runner.temp }}/verified-work
+          # Sets how stale the default branch's caches may get: GitHub evicts a
+          # cache left unused for seven days, and pull requests can only restore
+          # what this branch saved, so once this expires the next merge runs in
+          # full and publishes whatever has gone missing.
+          retention-days: 5
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true

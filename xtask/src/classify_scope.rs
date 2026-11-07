@@ -7,6 +7,7 @@
 use std::path::Path;
 use std::process::Command;
 
+use crate::verified_tree::{is_tree_already_verified, last_default_branch_run_commit};
 use crate::version_only_bump::{VersionBumpTexts, is_version_only_bump};
 
 const ZERO_GIT_SHA: &str = "0000000000000000000000000000000000000000";
@@ -49,6 +50,23 @@ const NOTICES_FRESHNESS_INPUT_PATHS: &[&str] = &[
     "third-party/RUST_DEPENDENCY_NOTICES.digest",
 ];
 
+/// Paths whose change gives a default-branch run something to publish: the
+/// compiler, download and Swift caches are keyed on these, and pull requests can
+/// only restore what the default branch saved. Code-only merges saved nothing in
+/// every default-branch run measured, so only these still need that run. The
+/// workflow and cache action join them because they define the cache keys.
+const CACHE_INPUT_PATH_PREFIXES: &[&str] = &[
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "third-party/tool-pins/",
+    "third-party/native-dependency-manifest.cmake",
+    "third-party/pins/",
+    ".github/workflows/ci.yml",
+    ".github/actions/",
+    "apps/astronomical-menu/",
+    "apps/thin-talk/",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiEvent {
     PullRequest,
@@ -80,10 +98,63 @@ pub struct ChangeScopeVerdict {
 /// Classifies one page/site artifact change as static-only. POSIX `case`
 /// pattern semantics: `*` spans `/`, so `site/*` covers nested paths.
 pub fn is_static_only_path(changed_path: &str) -> bool {
+    is_published_content_path(changed_path) || is_repository_housekeeping_path(changed_path)
+}
+
+fn is_published_content_path(changed_path: &str) -> bool {
     changed_path.starts_with("site/")
         || changed_path.ends_with(".md")
         || changed_path.starts_with(".github/assets/")
         || changed_path == ".github/workflows/pages.yml"
+}
+
+/// None of these reach a build or a test: a fresh checkout has nothing to ignore.
+fn is_repository_housekeeping_path(changed_path: &str) -> bool {
+    changed_path == ".github/dependabot.yml"
+        || changed_path == ".gitignore"
+        || changed_path.ends_with("/.gitignore")
+}
+
+/// True when a change to this path gives a default-branch run a cache to save.
+pub fn is_cache_input_path(changed_path: &str) -> bool {
+    for cache_input_prefix in CACHE_INPUT_PATH_PREFIXES {
+        if changed_path.starts_with(cache_input_prefix) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Whether a default-branch push could skip the macOS lanes if its exact tree
+/// already passed them, judged from what it changed. Asked first because the other
+/// questions cost network calls.
+pub fn may_reuse_verified_tree(
+    event: CiEvent,
+    verdict: &ChangeScopeVerdict,
+    changed_paths: &[String],
+) -> bool {
+    if event != CiEvent::Push || !verdict.macos_verification_required {
+        return false;
+    }
+    if verdict.native_inputs_changed {
+        return false;
+    }
+    for changed_path in changed_paths {
+        if is_cache_input_path(changed_path) {
+            return false;
+        }
+    }
+    true
+}
+
+/// The verdict for a push whose exact tree already passed every macOS lane on its
+/// pull request. Those lanes would only repeat that proof on identical bytes.
+pub fn verdict_for_verified_tree(verdict: ChangeScopeVerdict) -> ChangeScopeVerdict {
+    ChangeScopeVerdict {
+        macos_verification_required: false,
+        classification: "already_verified_tree".to_owned(),
+        ..verdict
+    }
 }
 
 /// True when the changed path can make the committed dependency notices
@@ -102,9 +173,8 @@ fn any_notices_freshness_input(changed_paths: &[String]) -> bool {
 }
 
 /// The pure verdict: identical inputs give identical outputs, no environment
-/// access. PRs and pushes (PR merges) both gate on code changes so that
-/// default-branch pushes save native-build and sccache caches for future PRs
-/// to restore; static-only changes still skip.
+/// access. PRs and pushes (PR merges) both gate on code changes; static-only
+/// changes still skip, and `verdict_for_verified_tree` narrows a push further.
 ///
 /// `is_version_only_bump` is a content proof made by the git edge (see
 /// `version_only_bump`), never a path guess: a proven bump is identical to
@@ -194,7 +264,7 @@ pub fn run(repository_root: &Path) -> Result<(), String> {
                     optional_environment_value("CURRENT_SHA"),
                 ),
             };
-            match resolve_verdict_from_history(repository_root, base_sha, head_sha) {
+            match resolve_verdict_from_history(repository_root, event, base_sha, head_sha) {
                 Some(history_verdict) => history_verdict,
                 None => fail_safe_verdict(),
             }
@@ -209,6 +279,7 @@ type HistoryVerdict = Option<ChangeScopeVerdict>;
 
 fn resolve_verdict_from_history(
     repository_root: &Path,
+    event: CiEvent,
     base_sha: Option<String>,
     head_sha: Option<String>,
 ) -> HistoryVerdict {
@@ -225,12 +296,62 @@ fn resolve_verdict_from_history(
         native_inputs_changed_between(repository_root, &base_sha, &head_sha)?;
     let is_version_only_bump =
         version_only_bump_between(repository_root, &base_sha, &head_sha, &changed_paths);
-    Some(classify_change_scope(
+    let verdict = classify_change_scope(
         CiEvent::PullRequest,
         &changed_paths,
         native_inputs_changed,
         is_version_only_bump,
+    );
+    Some(reuse_verified_tree_when_proven(
+        repository_root,
+        event,
+        verdict,
+        &changed_paths,
+        &head_sha,
     ))
+}
+
+fn reuse_verified_tree_when_proven(
+    repository_root: &Path,
+    event: CiEvent,
+    verdict: ChangeScopeVerdict,
+    changed_paths: &[String],
+    head_sha: &str,
+) -> ChangeScopeVerdict {
+    if may_reuse_verified_tree(event, &verdict, changed_paths)
+        && is_tree_already_verified(repository_root, head_sha)
+        && are_default_branch_caches_current(repository_root, head_sha)
+    {
+        return verdict_for_verified_tree(verdict);
+    }
+    verdict
+}
+
+/// Whether the last default-branch run that really ran the macOS lanes published
+/// caches for this commit's inputs. The range starts at that run rather than the
+/// last push, because a push that skipped those lanes published nothing: a version
+/// bump changes `Cargo.lock` and skips them, and the merge after it must publish.
+fn are_default_branch_caches_current(repository_root: &Path, head_sha: &str) -> bool {
+    let Some(last_run_commit) = last_default_branch_run_commit() else {
+        return false;
+    };
+    let is_current = commit_exists(repository_root, &last_run_commit)
+        && !has_cache_input_change(repository_root, &last_run_commit, head_sha);
+    eprintln!("[ci-change-scope] default_branch_caches_current={is_current}");
+    is_current
+}
+
+/// Anything unreadable counts as a change, which only costs a full run.
+fn has_cache_input_change(repository_root: &Path, base_sha: &str, head_sha: &str) -> bool {
+    let Some(changed_paths) = changed_paths_between(repository_root, base_sha, head_sha) else {
+        return true;
+    };
+    for changed_path in &changed_paths {
+        if is_cache_input_path(changed_path) {
+            return true;
+        }
+    }
+    native_inputs_changed_between(repository_root, base_sha, head_sha) != Some(false)
 }
 
 /// Reads the base and head texts a version bump rewrites and asks the pure
