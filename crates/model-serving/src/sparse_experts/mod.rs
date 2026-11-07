@@ -27,6 +27,8 @@ pub use assignment_sort::{
     SortedExpertAssignments, restore_expert_assignment_order, sort_expert_assignments,
 };
 #[cfg(feature = "direct-mlx")]
+pub use assignment_sort_policy::expert_assignment_order;
+#[cfg(feature = "direct-mlx")]
 pub(crate) use assignment_sort_policy::should_use_sorted_expert_reduction;
 pub use error::SparseExpertError;
 #[cfg(feature = "direct-mlx")]

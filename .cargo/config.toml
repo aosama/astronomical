@@ -259,3 +259,11 @@ test-neural-engine = "test --no-fail-fast -p astronomical-neural-engine --all-ta
 # model; narrow with --filter, add --configuration PATH with
 # {"diagnostics": true} for performance attribution.
 test-engine-versus-memory-ceiling = "run -p xtask -- test-run --package astronomical-acceptance --features performance_throughput --test performance_throughput --release --filter engine_versus_memory_ceiling --ignored"
+
+# Paged-versus-resident parity (issue #1679): the 35B sparse-MoE answers a long
+# greedy and a short seeded question resident and paged, and both engines must
+# give identical tokens. Each journey spawns its resident recording test in a
+# child process (MLX fixes its memory limit once per process) and reads the
+# answers from its standard output. The kernel-level guard for the same defect
+# runs without a model in `test-direct-mlx` (sparse_expert_projection_page_independence).
+test-paged-resident-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --filter should_give_the_resident_answer --ignored"

@@ -582,9 +582,9 @@ pub use qwen3_5_streaming::{
 #[cfg(feature = "direct-mlx")]
 pub use sparse_experts::{
     ExpertAssignmentOrder, SortedExpertAssignments, StackedExpertProjection,
-    gather_expert_projection, restore_expert_assignment_order, router_weighted_expert_inputs,
-    sort_expert_assignments, sorted_expert_weighted_sum, sorted_expert_weighted_sum_kernel,
-    unsorted_expert_weighted_sum,
+    expert_assignment_order, gather_expert_projection, restore_expert_assignment_order,
+    router_weighted_expert_inputs, sort_expert_assignments, sorted_expert_weighted_sum,
+    sorted_expert_weighted_sum_kernel, unsorted_expert_weighted_sum,
 };
 
 pub use sparse_experts::{SparseExpertError, invert_assignment_order};

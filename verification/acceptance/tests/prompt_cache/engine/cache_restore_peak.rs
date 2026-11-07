@@ -22,6 +22,8 @@ const CACHE_RESTORE_PEAK_BLOCK_TOKENS: u32 = 2_048;
 const CACHE_RESTORE_PEAK_COMPLETE_BLOCK_COUNT: usize = 4;
 const CACHE_RESTORE_PEAK_PARTIAL_TAIL_TOKENS: usize = CACHE_RESTORE_PEAK_BLOCK_TOKENS as usize / 2;
 const CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT: u16 = 1;
+const GREEDY_TEMPERATURE_THOUSANDTHS: u16 = 0;
+const FULL_TOP_P_THOUSANDTHS: u16 = 1_000;
 const ROMEO_AND_JULIET_REQUEST_ID_COLD: u64 = 81_001;
 const ROMEO_AND_JULIET_REQUEST_ID_RESTORED: u64 = 81_002;
 
@@ -119,14 +121,10 @@ async fn run_cache_restore_peak_acceptance() {
     );
     let cold_start_requested_at = tokio::time::Instant::now();
     qwen3_5_engine
-        .start_generation(
-            Qwen3_5InferenceRequest::new(
-                RequestId::new(ROMEO_AND_JULIET_REQUEST_ID_COLD),
-                prompt_token_ids.clone(),
-                CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT,
-            )
-            .with_image_pad_token_id(248_069),
-        )
+        .start_generation(greedy_romeo_and_juliet_request(
+            ROMEO_AND_JULIET_REQUEST_ID_COLD,
+            prompt_token_ids.clone(),
+        ))
         .await
         .expect("the cold Romeo and Juliet request should start");
     eprintln!(
@@ -170,14 +168,10 @@ async fn run_cache_restore_peak_acceptance() {
         .reset_peak_memory()
         .expect("the journey should reset the process peak before cache restore");
     let restored_generation_start = qwen3_5_engine
-        .start_generation(
-            Qwen3_5InferenceRequest::new(
-                RequestId::new(ROMEO_AND_JULIET_REQUEST_ID_RESTORED),
-                prompt_token_ids,
-                CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT,
-            )
-            .with_image_pad_token_id(248_069),
-        )
+        .start_generation(greedy_romeo_and_juliet_request(
+            ROMEO_AND_JULIET_REQUEST_ID_RESTORED,
+            prompt_token_ids,
+        ))
         .await
         .expect("the restored request should start");
     assert!(
@@ -227,6 +221,24 @@ async fn run_cache_restore_peak_acceptance() {
         "[prompt-cache-restore-peak] status=success elapsed_seconds={} restored_chunk_token_counts={restored_prefill_chunk_token_counts:?}",
         journey_started_at.elapsed().as_secs()
     );
+}
+
+/// The journey asserts that cold and restored prefill give the same next token,
+/// which only holds under greedy decoding: `Qwen3_5InferenceRequest::new`
+/// samples at temperature 1.0 with no seed, so it would compare two random draws.
+fn greedy_romeo_and_juliet_request(
+    request_number: u64,
+    prompt_token_ids: Vec<u32>,
+) -> Qwen3_5InferenceRequest {
+    Qwen3_5InferenceRequest::new_sampling(
+        RequestId::new(request_number),
+        prompt_token_ids,
+        CACHE_RESTORE_PEAK_OUTPUT_TOKEN_COUNT,
+        GREEDY_TEMPERATURE_THOUSANDTHS,
+        FULL_TOP_P_THOUSANDTHS,
+        None,
+    )
+    .with_image_pad_token_id(248_069)
 }
 
 /// Drives one generate-to-token phase while attributing wall time to every

@@ -24,6 +24,10 @@ use super::large_prefill_prompt::representative_long_generation_prompt_token_ids
 
 const CACHE_INTERACTION_ACCEPTANCE_TIMEOUT: Duration = Duration::from_secs(115);
 const FIXED_PREFILL_CHUNK_TOKENS: u32 = 2_048;
+/// Enough tokens that a state difference has room to show; one token proves little.
+const COMPARED_OUTPUT_TOKEN_COUNT: u16 = 64;
+const GREEDY_TEMPERATURE_THOUSANDTHS: u16 = 0;
+const FULL_TOP_P_THOUSANDTHS: u16 = 1_000;
 
 #[derive(Clone, Copy)]
 enum StorageTransition {
@@ -98,7 +102,7 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
         prompt_cache_block_token_count * 2 + 16,
     );
 
-    let (cold_cached_token_count, cold_generated_token_ids) = run_one_token_request(
+    let (cold_cached_token_count, cold_generated_token_ids) = run_greedy_request(
         &mut qwen3_5_engine,
         RequestId::new(30_001),
         &prompt_token_ids,
@@ -125,7 +129,7 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
             fs::remove_dir_all(persistent_prompt_cache_directory.path())
                 .expect("the acceptance should delete the cache while the engine remains live");
             let (replacement_cold_cached_token_count, replacement_cold_generated_token_ids) =
-                run_one_token_request(
+                run_greedy_request(
                     &mut qwen3_5_engine,
                     RequestId::new(30_002),
                     &prompt_token_ids,
@@ -148,7 +152,7 @@ async fn run_acceptance_cell(storage_transition: StorageTransition) {
         StorageTransition::LiveReuse | StorageTransition::WorkerRestart => RequestId::new(30_002),
     };
     let (warm_cached_token_count, warm_generated_token_ids) =
-        run_one_token_request(&mut qwen3_5_engine, warm_request_id, &prompt_token_ids).await;
+        run_greedy_request(&mut qwen3_5_engine, warm_request_id, &prompt_token_ids).await;
     assert!(
         warm_cached_token_count >= (prompt_cache_block_token_count * 2) as u32,
         "the pre-existing cache restored {warm_cached_token_count} tokens but must restore both complete prompt blocks"
@@ -175,20 +179,41 @@ fn romeo_and_juliet_prompt_token_ids(
     )
 }
 
-async fn run_one_token_request(
+async fn run_greedy_request(
     qwen3_5_engine: &mut Qwen3_5ResidentEngine,
     request_id: RequestId,
     prompt_token_ids: &[u32],
 ) -> (u32, Vec<u32>) {
     let generation_start = qwen3_5_engine
         .start_generation(
-            Qwen3_5InferenceRequest::new(request_id, prompt_token_ids.to_vec(), 1)
-                .with_image_pad_token_id(248_069),
+            // `new` samples at temperature 1.0 with no seed, so two runs would compare two
+            // random draws. Greedy makes the token a function of the logits alone, so a
+            // changed token means the restored cache changed them.
+            Qwen3_5InferenceRequest::new_sampling(
+                request_id,
+                prompt_token_ids.to_vec(),
+                COMPARED_OUTPUT_TOKEN_COUNT,
+                GREEDY_TEMPERATURE_THOUSANDTHS,
+                FULL_TOP_P_THOUSANDTHS,
+                None,
+            )
+            .with_image_pad_token_id(248_069),
         )
         .await
         .expect("the acceptance engine should accept the request");
     let cached_token_count = generation_start.cached_token_count();
-    let (generated_token_ids, _) = generate_token_ids(qwen3_5_engine, request_id, 1).await;
-    assert_eq!(generated_token_ids.len(), 1);
+    let (generated_token_ids, _) = generate_token_ids(
+        qwen3_5_engine,
+        request_id,
+        usize::from(COMPARED_OUTPUT_TOKEN_COUNT),
+    )
+    .await;
+    // An end-of-sequence token may stop early, so the length is bounded rather than
+    // fixed; the caller compares cold and warm answers token for token, length included.
+    assert!(
+        !generated_token_ids.is_empty()
+            && generated_token_ids.len() <= usize::from(COMPARED_OUTPUT_TOKEN_COUNT),
+        "a greedy request must emit between one and {COMPARED_OUTPUT_TOKEN_COUNT} tokens"
+    );
     (cached_token_count, generated_token_ids)
 }
