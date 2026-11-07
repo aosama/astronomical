@@ -30,8 +30,17 @@ final class ThinTalkProductionPathContractTests: XCTestCase {
       )
     }
     XCTAssertTrue(
-      source.contains("RootView(applicationIdentity:"),
-      "ThinTalkApp.swift must render RootView in the shipped WindowGroup (issue #713)."
+      source.contains("ThinTalkConversationWindow(applicationIdentity:"),
+      "ThinTalkApp.swift must open the shared conversation window, which renders RootView (issue #713)."
+    )
+    let conversationWindowSource = try String(
+      contentsOf: packageDirectoryURL
+        .appendingPathComponent("Sources/ThinTalkUI/ThinTalkConversationWindow.swift"),
+      encoding: .utf8
+    )
+    XCTAssertTrue(
+      conversationWindowSource.contains("RootView("),
+      "The shared conversation window must render the production RootView (issue #713)."
     )
   }
 

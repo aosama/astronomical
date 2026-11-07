@@ -9,29 +9,43 @@ public struct CanvasRuntimeConfig: Equatable, Sendable, Encodable {
     case daemonBaseURL
     case expectedChannel
     case expectedStateDirectory
+    case titlebarInset
   }
 
   public let daemonBaseURL: String
   public let expectedChannel: String
   public let expectedStateDirectory: String
+  /// Points of native title bar and toolbar drawn over the top of the page, or
+  /// nil for a host with an ordinary title bar. The page starts its content
+  /// below this strip because the strip takes the clicks there (it drags the
+  /// window). Encoded only when present, so the key stays optional for the page.
+  public let titlebarInset: Int?
 
-  public init(daemonBaseURL: String, expectedChannel: String, expectedStateDirectory: String) {
+  public init(
+    daemonBaseURL: String,
+    expectedChannel: String,
+    expectedStateDirectory: String,
+    titlebarInset: Int? = nil
+  ) {
     self.daemonBaseURL = daemonBaseURL
     self.expectedChannel = expectedChannel
     self.expectedStateDirectory = expectedStateDirectory
+    self.titlebarInset = titlebarInset
   }
 
   /// Builds the configuration for one application identity.
-  public init(applicationIdentity: ThinTalkApplicationIdentity) {
+  public init(applicationIdentity: ThinTalkApplicationIdentity, titlebarInset: Int? = nil) {
     self.init(
       daemonBaseURL: "http://127.0.0.1:\(applicationIdentity.daemonPort)",
       expectedChannel: applicationIdentity.channel.rawValue,
-      expectedStateDirectory: applicationIdentity.expectedServerStateDirectory
+      expectedStateDirectory: applicationIdentity.expectedServerStateDirectory,
+      titlebarInset: titlebarInset
     )
   }
 
   /// The document-start user script that installs the configuration. The page's
-  /// AppConfig reads exactly these three keys and refuses to boot without them.
+  /// AppConfig requires the first three keys and refuses to boot without them;
+  /// `titlebarInset` is optional.
   public func userScriptSource() throws -> String {
     let encoded = try JSONEncoder().encode(self)
     guard let json = String(data: encoded, encoding: .utf8) else {

@@ -220,9 +220,21 @@ export class ChatController {
     this.publish();
   }
 
+  /** Deletes one conversation; deleting the open one also clears the screen
+   * and starts a fresh conversation, so later turns save to a new file. */
   public async deleteSession(id: string): Promise<void> {
+    // Decided before the delete: the store forgets the active document as part
+    // of deleting it, so asking afterwards always answered "not active" and the
+    // deleted messages stayed on screen with nothing to save new turns into.
+    const isDeletingActiveSession = id === this.store.activeSessionID();
+    if (isDeletingActiveSession) {
+      // As in newChat: a reply still streaming or a debounced save in flight
+      // would otherwise write the conversation back after it was deleted.
+      await this.settleActiveStream();
+      await this.store.flushPendingSave().catch(() => undefined);
+    }
     await this.store.delete(id);
-    if (id === this.store.activeSessionID()) {
+    if (isDeletingActiveSession) {
       this.store.startNew();
       this.log.reset();
       this.failure = null;

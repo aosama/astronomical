@@ -51,6 +51,14 @@ declare global {
     daemonBaseURL: string;
     expectedChannel: string;
     expectedStateDirectory: string;
+    /** Points of native title bar and toolbar drawn over the top of the page;
+     * absent for hosts with an ordinary title bar. */
+    titlebarInset?: number;
+  }
+
+  /** The entry point the native menu bar and toolbar call (HostCommandRouter). */
+  interface ThintalkCommandEntry {
+    run(payload: unknown): boolean;
   }
 
   /** The test entry point AppShell installs for the harness. */
@@ -66,6 +74,7 @@ declare global {
     __thintalkBridge?: ThintalkBridgeGlobal;
     __thintalkConfig?: ThintalkConfigGlobal;
     __thintalk?: ThintalkTestEntry;
+    __thintalkCommands?: ThintalkCommandEntry;
     webkit?: {
       messageHandlers?: {
         thintalk?: {

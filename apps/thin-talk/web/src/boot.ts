@@ -13,6 +13,9 @@ import { SidebarView } from "./SidebarView";
 import { ChatController } from "./ChatController";
 import { AppShell } from "./AppShell";
 import { ThinkingEffort } from "./ThinkingEffort";
+import { WindowChrome } from "./WindowChrome";
+import { HostCommandRouter } from "./HostCommandRouter";
+import { hostCommandHandlers } from "./HostCommandWiring";
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -38,6 +41,8 @@ function showApplicationTitle(config: AppConfig): void {
 export function bootChatClient(): AppShell {
   const config = AppConfig.fromWindow(window.__thintalkConfig);
   showApplicationTitle(config);
+  const windowChrome = new WindowChrome(requireElement<HTMLElement>("#app"));
+  windowChrome.applyTitlebarInset(config.titlebarInset);
   const host = new HostChannel();
   const bridge = new SessionBridge((request) => host.postSessionCall(request));
   const store = new SessionStore(bridge);
@@ -63,8 +68,9 @@ export function bootChatClient(): AppShell {
     onError: (detail) => host.postError(detail),
   });
 
+  const composerField = requireElement<HTMLTextAreaElement>("#composer-input");
   const composer = new ComposerView({
-    field: requireElement<HTMLTextAreaElement>("#composer-input"),
+    field: composerField,
     sendButton: requireElement<HTMLButtonElement>('[data-testid="composer-send"]'),
     stopButton: requireElement<HTMLButtonElement>('[data-testid="composer-stop"]'),
     retryButton: requireElement<HTMLButtonElement>('[data-testid="composer-retry"]'),
@@ -108,6 +114,9 @@ export function bootChatClient(): AppShell {
   const controller = new ChatController({ client, bridge, store });
   const shell = new AppShell({ controller, transcript, composer, sidebar, host });
   shell.start();
+  new HostCommandRouter(
+    hostCommandHandlers({ controller, transcript, composerField, host, windowChrome }),
+  ).install(window);
   void controller.load();
   return shell;
 }
