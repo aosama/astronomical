@@ -25,12 +25,21 @@ fn should_record_verified_work_only_after_the_verdict_passed_on_a_real_macos_run
         record_condition.contains("macos_verification_required == 'true'"),
         "a run that skipped the macOS lanes proves nothing about them"
     );
-    for loosening_function in ["always()", "failure()", "cancelled()"] {
+    for loosening_function in ["always()", "failure()"] {
         assert!(
             !record_condition.contains(loosening_function),
             "{loosening_function} would record a run that did not pass"
         );
     }
+    assert!(
+        record_condition.contains("!cancelled() &&"),
+        "without a status function GitHub adds success(), which fails whenever a job \
+         upstream of the verdict was skipped, so the record would almost never be written"
+    );
+    assert!(
+        !record_condition.contains("||"),
+        "every part of this condition must hold, or a run that did not pass could leave a record"
+    );
     let verdict_job = required_job(&workflow, "verdict");
     let verdict_steps = steps_of(verdict_job, "verdict");
     assert_eq!(

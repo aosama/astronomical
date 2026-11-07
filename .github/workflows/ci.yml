@@ -1268,11 +1268,14 @@ jobs:
   # lanes (xtask/src/verified_tree.rs). Deliberately not in the verdict's needs and
   # not a required check: a job's setup or timeout can fail regardless of
   # continue-on-error, and losing a record only costs the next merge its full run.
-  # Only a passed verdict over macOS lanes that really ran may leave a record.
+  # Only a passed verdict over macOS lanes that really ran may leave a record. The
+  # condition needs !cancelled() because without a status function GitHub adds
+  # success(), which also requires every job upstream of the verdict to have
+  # succeeded, and the notices lane is normally skipped: the job then never ran.
   record-verified-work:
     name: Record verified work
     needs: [detect-changes, verdict]
-    if: ${{ needs.verdict.result == 'success' && needs.detect-changes.outputs.macos_verification_required == 'true' && github.event_name != 'workflow_dispatch' }}
+    if: ${{ !cancelled() && needs.verdict.result == 'success' && needs.detect-changes.outputs.macos_verification_required == 'true' && github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
