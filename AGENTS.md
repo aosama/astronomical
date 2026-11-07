@@ -24,6 +24,8 @@
 
 ## Testing Instructions For Astronomical
 
+- While coding or developing, never run tests, probes, or chat requests against Astronomical Stable; use the Astronomical Development instance instead.
+
 - Tests that use real full sized models and loads them in memory for further use by the GPU must use the Rust `serial_test` `#[serial]` annotation; The same applies to throughput-measurement tests and performance tests.
 
 - SSD-paging e2e journeys get a 120-second runner budget. If an e2e journey exceeds that budget, use lower-level tests to identify the slow call path rather than increasing the budget or repeating long model runs.

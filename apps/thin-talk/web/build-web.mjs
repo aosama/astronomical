@@ -76,6 +76,43 @@ async function bundleScript() {
   );
 }
 
+// The shipped bundle stays unminified for readable stack traces, so the budget
+// is measured on a minified build of the same entry: that tracks real code
+// weight without counting comments and whitespace. A second in-memory pass is
+// used instead of a metafile from the shipped build because a metafile reports
+// unminified input sizes. The agent loop imports only Pi's agent core and the
+// pi-ai event-stream utility; a stray import of one of Pi's provider adapters
+// would pull in a vendor SDK (the OpenAI one is 275 KB minified) and trip this
+// budget.
+const MAXIMUM_MINIFIED_BUNDLE_BYTES = 600 * 1024;
+
+async function checkBundleBudget() {
+  reportProgress("bundle-budget", "start");
+  const startedAtMs = Date.now();
+  const minifiedBuild = await build({
+    entryPoints: [path.join(webRoot, "src", "main.ts")],
+    bundle: true,
+    format: "iife",
+    target: ["safari17"],
+    write: false,
+    logLevel: "silent",
+    minify: true,
+  });
+  const minifiedByteCount = minifiedBuild.outputFiles.reduce(
+    (byteCount, outputFile) => byteCount + outputFile.contents.byteLength,
+    0,
+  );
+  const elapsedMs = Date.now() - startedAtMs;
+  const budgetReport = `elapsed_ms=${elapsedMs} minified_bytes=${minifiedByteCount} budget_bytes=${MAXIMUM_MINIFIED_BUNDLE_BYTES}`;
+  if (minifiedByteCount > MAXIMUM_MINIFIED_BUNDLE_BYTES) {
+    reportProgress("bundle-budget", `exceeded ${budgetReport}`);
+    throw new Error(
+      `bundle.js is ${minifiedByteCount} bytes minified, over the ${MAXIMUM_MINIFIED_BUNDLE_BYTES}-byte budget; look for a newly bundled dependency`,
+    );
+  }
+  reportProgress("bundle-budget", `within ${budgetReport}`);
+}
+
 async function bundleStylesheet() {
   reportProgress("bundle-stylesheet", "start");
   const startedAtMs = Date.now();
@@ -126,6 +163,7 @@ if (shouldCleanOnly) {
 } else {
   await cleanOutputs();
   await bundleScript();
+  await checkBundleBudget();
   await bundleStylesheet();
   await bundlePreviewShim();
   reportProgress("done", "web client bundle is up to date");
