@@ -4,36 +4,45 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.91</title>
-            <pubDate>Fri, 06 Nov 2026 18:26:38 -0500</pubDate>
-            <sparkle:version>2104</sparkle:version>
-            <sparkle:shortVersionString>0.2.91</sparkle:shortVersionString>
+            <title>0.2.92</title>
+            <pubDate>Sat, 07 Nov 2026 18:10:53 -0500</pubDate>
+            <sparkle:version>2139</sparkle:version>
+            <sparkle:shortVersionString>0.2.92</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new in Astronomical 0.2.91
+            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.92
 
-- **Prompts up to 1.29× faster on the Apple Neural Engine (opt-in).** Dense models can now run part of each long prompt on the Neural Engine beside the GPU. A 9B model ran 1.11× to 1.29× as fast in our measurements on one Mac, depending on how close together its prompts arrive. Turn on `experimental_neural_engine_prefill_enabled` under `chunking`, and the model serves on the GPU while its programs prepare in the background. It uses real memory, about 15 GB on a 9B model and about 10 GB of disk, and part of each prompt computes in fp16, so output can differ slightly from the GPU alone.
-- **It works out what suits your Mac.** Each model measures its own memory cost and its own speedup on your Mac, with your prompts. A model that doesn't gain at least 2 percent releases its programs and says why. Very small models usually end up here. Only long prompts benefit, and a small model gains only when they arrive close together.
-- **See what the Neural Engine did.** Observatory's Overview has a new panel with the measured speed, the share of prompt tokens the Neural Engine ran, and an estimate of the time saved, and the current request shows which engines it's using. The menu, `astronomical status` and `/v1/status` show the speed too.
-- **No more false "The daemon stopped responding."** `astronomical respond` and `embed` could report this after two minutes while the daemon was healthy, such as when a request was queued or a long prompt was processing.
-- **`astronomical vision`** says whether a model has a vision tower, checks whether a tower matches a text model, and builds a new model from the two, without running a model.
-- **A new look.** The brand moves to nebula violet across the app icon, logos and site, and Observatory gets a blue-black palette with clearer request phases.
-- **Thin Talk fixes.** The zoom keys now work in the chat window hosted by the app.
-- **A smaller 9B download.** The Library now offers the 4-bit Ornith 9B with its original vision tower, about 1.3 GB smaller.
-- **Metal residency switch.** `runtime.metal_residency_refresh_enabled`, off by default, keeps model memory resident while the GPU is idle. It's also on Observatory's Configuration page.
+Thin Talk, the chat in Astronomical, can now use tools, see the images it makes, and take new messages while it answers.
+
+## What changed
+
+**Thin Talk chat**
+- Every reply runs through an agent loop, so the model can call tools and use the results in its answer (#1886, #1887).
+- Tools: the current time, image generation with your local image model, reading a file or describing an image you choose, and searching your past conversations. Tools that touch your files ask first, each time (#1887, #1888, #1889).
+- A chat model that can see images is shown the images it generates, so it can describe them and spot mistakes (#1891).
+- You can keep typing while Thin Talk answers, and long conversations are trimmed to fit the model's context window (#1890).
+- The window uses the native Mac frame and menu bar (#1884).
+- Right-click a conversation to rename or delete it, drag the sidebar edge to resize it, and text is larger. Opening an old conversation no longer reorders the list (#1891).
+
+**Menu**
+- The Residency line in the status popover always fits on one line (#1892).
+
+**Reproducible answers**
+- A request with a `seed` now gives the same answer whether the SSD-streaming (paged) engine or the resident engine runs it, and no longer varies with what the paged engine had warmed up (#1879).
 
 ## Compatibility
 
-Your settings, installed models and conversations are preserved. The command-line tool and the app's daemon ship together in this release. The unused `experimental_quantized_kv_cache_enabled` and `experimental_fused_moe_decode_enabled` settings are gone, and a config that still holds them loads normally.
+- Requires macOS 14 or later on Apple silicon.
+- Your saved conversations and settings are kept.
 
 ## Distribution
 
-Signed with a Developer ID, notarized by Apple and stapled. The in-app updater verifies the update with an Ed25519 signature before installing.
+- The app and disk image are signed with a Developer ID certificate, notarized by Apple and stapled. Updates arrive through the signed Sparkle feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.91/Astronomical-0.2.91-macOS-arm64.dmg" length="20119115" type="application/octet-stream" sparkle:edSignature="tRrbcPRkX0nEBQuGjaNJbLKMZ3J2vQkVlMM8+ggaDhET3G+yREzIc4vR+019kzCatGHofIFbbb7EhuLxCSwsBw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.92/Astronomical-0.2.92-macOS-arm64.dmg" length="20191706" type="application/octet-stream" sparkle:edSignature="6nKIUji9hybMlD/DDhE1bnz7bNEPb/7pVgGGBiixBpi8HPZ7QlwgGURP1luudz135euyWcw5M2zM7aPXxY2pAw=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: DKpip0N73hspMwaM5+746Hks0ZmIwB+cUVXKPX2rqmlDsySzKr7wRWZ3hD9snGfZxDTsZfZTJSQCNIxrdSIbDQ==
-length: 3954
+edSignature: H+L965Er8d3eyqHNAG6bYA5rQ0nTOJsSBTuktku9h/H4i8TY30XKStztUCBOUKIPuEo9YFxLJ1ut7aFdmBVoCQ==
+length: 2834
 -->
