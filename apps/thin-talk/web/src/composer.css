@@ -151,6 +151,25 @@
   color: var(--accent);
 }
 
+.composer__menu button:disabled {
+  color: var(--text-secondary);
+}
+
+.composer__menu button:disabled:hover {
+  background: transparent;
+}
+
+/* A checked switch shows its check mark, so "on" does not rely on colour. */
+.composer__menu button[role="menuitemcheckbox"][aria-checked="true"]::before {
+  content: "✓ ";
+}
+
+.composer__menu-separator {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--border);
+}
+
 .composer__send {
   width: 32px;
   height: 32px;

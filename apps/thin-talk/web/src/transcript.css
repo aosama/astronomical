@@ -111,6 +111,57 @@
   white-space: pre-wrap;
 }
 
+/* One collapsed row per tool call, styled like the reasoning disclosure so
+   both read as working notes rather than as the answer. */
+.tool-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.tool-step {
+  border: 1px solid rgb(56 64 82 / 55%);
+  border-radius: 10px;
+  background: rgb(36 41 51 / 55%);
+}
+
+.tool-step > summary {
+  cursor: pointer;
+  padding: 6px 12px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  list-style: none;
+  user-select: none;
+}
+
+.tool-step > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-step[data-state="failed"] > summary {
+  color: var(--danger);
+}
+
+.tool-step[open] > summary {
+  border-bottom: 1px solid rgb(56 64 82 / 45%);
+}
+
+.tool-step__body {
+  display: grid;
+  gap: 6px;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+.tool-step__body pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
 .markdown-body > :first-child {
   margin-top: 0;
 }

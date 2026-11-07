@@ -1,6 +1,7 @@
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
 import { TranscriptAttachment } from "./TranscriptAttachment";
+import { ToolStep } from "./ToolStep";
 
 /**
  * The view-model of one transcript message: exactly what the renderer needs to
@@ -14,6 +15,7 @@ export class TranscriptMessage {
   public readonly reasoning: string;
   public readonly state: ChatMessageState;
   public readonly attachments: readonly TranscriptAttachment[];
+  public readonly toolSteps: readonly ToolStep[];
 
   public constructor(init: {
     id: string;
@@ -22,6 +24,7 @@ export class TranscriptMessage {
     reasoning: string;
     state: ChatMessageState;
     attachments?: readonly TranscriptAttachment[];
+    toolSteps?: readonly ToolStep[];
   }) {
     this.id = init.id;
     this.role = init.role;
@@ -30,5 +33,7 @@ export class TranscriptMessage {
     this.state = init.state;
     const configuredAttachments: readonly TranscriptAttachment[] | undefined = init.attachments;
     this.attachments = configuredAttachments != null ? configuredAttachments : [];
+    const configuredToolSteps: readonly ToolStep[] | undefined = init.toolSteps;
+    this.toolSteps = configuredToolSteps != null ? configuredToolSteps : [];
   }
 }

@@ -1,6 +1,7 @@
 import { ChatMessage } from "./ChatMessage";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
+import { ToolStep } from "./ToolStep";
 
 /**
  * Owns the message history and folds stream deltas into it. Keeping the fold
@@ -55,6 +56,20 @@ export class ConversationLog {
     }
   }
 
+  /** Records a tool step on the turn being answered: a new call is appended,
+   * and a later update for the same call (its result) replaces it in place,
+   * so steps stay in the order the model made them. */
+  public applyToolStep(toolStep: ToolStep): void {
+    const assistantTurn = this.currentAssistantTurn();
+    const turn = assistantTurn != null ? assistantTurn : this.currentAssistantTurnByID(this.openAssistantTurn());
+    const existingIndex = turn.toolSteps.findIndex((recordedStep) => recordedStep.toolCallID === toolStep.toolCallID);
+    if (existingIndex >= 0) {
+      turn.toolSteps[existingIndex] = toolStep;
+    } else {
+      turn.toolSteps.push(toolStep);
+    }
+  }
+
   /** Clears the log for a fresh conversation, as when switching sessions. */
   public reset(): void {
     this.messages = [];
@@ -76,7 +91,7 @@ export class ConversationLog {
     if (!turn) {
       return;
     }
-    if (turn.content.length === 0 && turn.reasoning.length === 0) {
+    if (turn.content.length === 0 && turn.reasoning.length === 0 && turn.toolSteps.length === 0) {
       this.messages.splice(index, 1);
     }
   }

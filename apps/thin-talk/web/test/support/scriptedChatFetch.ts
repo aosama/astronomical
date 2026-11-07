@@ -108,3 +108,15 @@ export async function waitUntil(condition: () => boolean, description: string): 
   }
   throw new Error(`timed out waiting for ${description}`);
 }
+
+/** One streamed tool call in the daemon's wire shape: the daemon sends the
+ * whole call in a single delta. */
+export function toolCallLine(toolCallID: string, toolName: string, argumentsJSON: string, toolCallIndex = 0): string {
+  return `data: ${JSON.stringify({
+    choices: [{
+      index: 0,
+      delta: { tool_calls: [{ index: toolCallIndex, id: toolCallID, type: "function", function: { name: toolName, arguments: argumentsJSON } }] },
+      finish_reason: null,
+    }],
+  })}`;
+}

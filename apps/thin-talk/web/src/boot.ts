@@ -3,6 +3,8 @@ import { HostChannel } from "./HostChannel";
 import { SessionBridge } from "./SessionBridge";
 import { SessionStore } from "./SessionStore";
 import { AgentTurnRunner } from "./AgentTurnRunner";
+import { CurrentTimeTool } from "./CurrentTimeTool";
+import { ToolCatalog } from "./ToolCatalog";
 import { DaemonClient } from "./DaemonClient";
 import { TrustBoundary } from "./TrustBoundary";
 import { MathPipeline } from "./MathPipeline";
@@ -101,6 +103,9 @@ export function bootChatClient(): AppShell {
         case "selectModel":
           controller.selectModel(action.detail);
           return;
+        case "setTools":
+          controller.setToolsEnabled(action.detail === "on");
+          return;
       }
     },
   });
@@ -112,7 +117,12 @@ export function bootChatClient(): AppShell {
     onNewChat: () => void controller.newChat(),
   });
 
-  const controller = new ChatController({ client, streamer: new AgentTurnRunner(client), bridge, store });
+  const controller = new ChatController({
+    client,
+    streamer: new AgentTurnRunner(client, new ToolCatalog([new CurrentTimeTool()])),
+    bridge,
+    store,
+  });
   const shell = new AppShell({ controller, transcript, composer, sidebar, host });
   shell.start();
   new HostCommandRouter(

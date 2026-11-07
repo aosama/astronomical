@@ -65,3 +65,23 @@ test("should_ignore_an_error_field_that_is_not_an_object", () => {
   const chunk = ChatCompletionChunk.fromServerSentEventLine('data: {"error":"text","choices":[{"delta":{"content":"still here"}}]}');
   assert.equal(chunk?.textDelta, "still here");
 });
+
+test("should_decode_a_whole_tool_call_and_a_later_arguments_piece", () => {
+  const firstPiece = ChatCompletionChunk.fromServerSentEventLine(
+    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"get_current_time","arguments":"{\\"zo"}}]}}]}',
+  );
+  assert.deepEqual(firstPiece?.toolCallFragments, [{ toolCallIndex: 0, toolCallID: "call-1", toolName: "get_current_time", argumentsFragment: '{"zo' }]);
+  const laterPiece = ChatCompletionChunk.fromServerSentEventLine(
+    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ne\\":1}"}}]}}]}',
+  );
+  assert.deepEqual(laterPiece?.toolCallFragments, [{ toolCallIndex: 0, toolCallID: null, toolName: null, argumentsFragment: 'ne":1}' }]);
+});
+
+test("should_skip_a_tool_call_piece_without_a_usable_index", () => {
+  for (const badIndex of ['"0"', "-1", "1.5", "null"]) {
+    const chunk = ChatCompletionChunk.fromServerSentEventLine(
+      `data: {"choices":[{"delta":{"tool_calls":[{"index":${badIndex},"id":"call-1","function":{"name":"x","arguments":"{}"}}]}}]}`,
+    );
+    assert.deepEqual(chunk?.toolCallFragments, [], badIndex);
+  }
+});

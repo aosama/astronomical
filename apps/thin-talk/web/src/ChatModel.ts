@@ -8,11 +8,14 @@ export class ChatModel {
   public readonly id: string;
   public readonly name: string;
   public readonly inputModalities: readonly string[];
+  /** Whether the daemon says this model can call tools. */
+  public readonly supportsToolCalls: boolean;
 
-  public constructor(init: { id: string; name: string; inputModalities: readonly string[] }) {
+  public constructor(init: { id: string; name: string; inputModalities: readonly string[]; supportsToolCalls?: boolean }) {
     this.id = init.id;
     this.name = init.name;
     this.inputModalities = init.inputModalities;
+    this.supportsToolCalls = init.supportsToolCalls === true;
   }
 
   /** Whether the loaded model can accept images. */

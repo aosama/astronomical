@@ -61,7 +61,15 @@ export class DaemonClient {
       .map((rawModel) => ModelCatalogEntry.fromPlain(rawModel))
       .filter((entry): entry is ModelCatalogEntry => entry !== null)
       .filter((entry) => entry.supportsChat)
-      .map((entry) => new ChatModel({ id: entry.id, name: entry.id, inputModalities: entry.inputModalities }));
+      .map(
+        (entry) =>
+          new ChatModel({
+            id: entry.id,
+            name: entry.id,
+            inputModalities: entry.inputModalities,
+            supportsToolCalls: entry.supportsToolCalls,
+          }),
+      );
   }
 
   /** Sends one streaming chat completion and hands every decoded chunk to

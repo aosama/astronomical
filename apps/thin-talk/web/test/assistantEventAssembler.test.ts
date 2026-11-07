@@ -114,3 +114,100 @@ test("should_finish_a_reasoning_only_response_with_done", async () => {
   const eventTypes = (await collectEvents(eventStream)).map((streamEvent) => streamEvent.type);
   assert.deepEqual(eventTypes, ["start", "thinking_start", "thinking_delta", "thinking_end", "done"]);
 });
+
+function toolCallChunk(toolCallIndex: number, toolCallID: string | null, toolName: string | null, argumentsFragment: string): ChatCompletionChunk {
+  return new ChatCompletionChunk({
+    textDelta: "",
+    reasoningDelta: "",
+    finishReason: null,
+    toolCallFragments: [{ toolCallIndex, toolCallID, toolName, argumentsFragment }],
+  });
+}
+
+test("should_assemble_a_tool_call_split_across_chunks_and_end_with_tool_use", async () => {
+  const eventStream = new AssistantMessageEventStream();
+  const assembler = new AssistantEventAssembler(eventStream, DAEMON_MODEL);
+  assembler.start();
+  assembler.apply(chunk({ text: "Let me check." }));
+  assembler.apply(toolCallChunk(0, "call-1", "get_current_time", '{"zo'));
+  assembler.apply(toolCallChunk(0, null, null, 'ne":"local"}'));
+  assembler.apply(chunk({ finishReason: "tool_calls" }));
+  assembler.finish();
+  const eventTypes = (await collectEvents(eventStream)).map((streamEvent) => streamEvent.type);
+  assert.deepEqual(eventTypes, [
+    "start", "text_start", "text_delta", "text_end",
+    "toolcall_start", "toolcall_delta", "toolcall_delta", "toolcall_end", "done",
+  ]);
+  const finalMessage = await eventStream.result();
+  assert.equal(finalMessage.stopReason, "toolUse");
+  assert.deepEqual(finalMessage.content[1], { type: "toolCall", id: "call-1", name: "get_current_time", arguments: { zone: "local" } });
+});
+
+test("should_report_tool_calls_that_end_with_stop_as_tool_use", async () => {
+  const eventStream = new AssistantMessageEventStream();
+  const assembler = new AssistantEventAssembler(eventStream, DAEMON_MODEL);
+  assembler.start();
+  assembler.apply(toolCallChunk(0, "call-1", "get_current_time", "{}"));
+  assembler.apply(chunk({ finishReason: "stop" }));
+  assembler.finish();
+  assert.equal((await eventStream.result()).stopReason, "toolUse");
+});
+
+test("should_record_arguments_that_are_not_a_json_object_as_an_error", async () => {
+  for (const badArguments of ["{cut off", "[1,2]", "42"]) {
+    const eventStream = new AssistantMessageEventStream();
+    const assembler = new AssistantEventAssembler(eventStream, DAEMON_MODEL);
+    assembler.start();
+    assembler.apply(toolCallChunk(0, "call-1", "get_current_time", badArguments));
+    assembler.apply(chunk({ finishReason: "tool_calls" }));
+    assembler.finish();
+    const toolCallBlock = (await eventStream.result()).content[0] as { arguments: unknown; argumentsError?: string };
+    assert.deepEqual(toolCallBlock.arguments, {}, badArguments);
+    assert.match(toolCallBlock.argumentsError ?? "", /not a JSON object/, badArguments);
+  }
+});
+
+test("should_give_a_call_without_an_id_one_unique_to_its_response", async () => {
+  const eventStream = new AssistantMessageEventStream();
+  const assembler = new AssistantEventAssembler(eventStream, DAEMON_MODEL);
+  assembler.start();
+  assembler.apply(toolCallChunk(2, null, "get_current_time", ""));
+  assembler.apply(chunk({ finishReason: "tool_calls" }));
+  assembler.finish();
+  const toolCallBlock = (await eventStream.result()).content[0] as { id: string; arguments: unknown };
+  assert.match(toolCallBlock.id, /^call_[0-9a-z]+_2$/);
+  assert.deepEqual(toolCallBlock.arguments, {});
+});
+
+test("should_keep_length_when_tool_calls_were_cut_off_so_they_are_not_run", async () => {
+  const eventStream = new AssistantMessageEventStream();
+  const assembler = new AssistantEventAssembler(eventStream, DAEMON_MODEL);
+  assembler.start();
+  assembler.apply(toolCallChunk(0, "call-1", "get_current_time", '{"zone":'));
+  assembler.apply(chunk({ finishReason: "length" }));
+  assembler.finish();
+  assert.equal((await eventStream.result()).stopReason, "length");
+});
+
+test("should_close_an_open_tool_call_before_reporting_a_failure", async () => {
+  const eventStream = new AssistantMessageEventStream();
+  const assembler = new AssistantEventAssembler(eventStream, DAEMON_MODEL);
+  assembler.start();
+  assembler.apply(toolCallChunk(0, "call-1", "get_current_time", "{}"));
+  assembler.fail("aborted", "Stopped by the user.");
+  const eventTypes = (await collectEvents(eventStream)).map((streamEvent) => streamEvent.type);
+  assert.deepEqual(eventTypes.slice(-2), ["toolcall_end", "error"]);
+});
+
+test("should_keep_two_calls_and_text_after_them_in_order", async () => {
+  const eventStream = new AssistantMessageEventStream();
+  const assembler = new AssistantEventAssembler(eventStream, DAEMON_MODEL);
+  assembler.start();
+  assembler.apply(toolCallChunk(0, "call-a", "get_current_time", "{}"));
+  assembler.apply(toolCallChunk(1, "call-b", "get_current_time", "{}"));
+  assembler.apply(chunk({ text: "Checking both." }));
+  assembler.apply(chunk({ finishReason: "tool_calls" }));
+  assembler.finish();
+  const content = (await eventStream.result()).content as { type: string; id?: string }[];
+  assert.deepEqual(content.map((contentBlock) => contentBlock.id ?? contentBlock.type), ["call-a", "call-b", "text"]);
+});

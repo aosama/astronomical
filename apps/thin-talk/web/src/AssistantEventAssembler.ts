@@ -1,16 +1,24 @@
 import type { Api, AssistantMessage, Model, StopReason } from "@earendil-works/pi-ai";
 import type { AssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
-import { ChatCompletionChunk } from "./ChatCompletionChunk";
+import { ChatCompletionChunk, type ToolCallFragment } from "./ChatCompletionChunk";
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { emptyAssistantMessage } from "./DaemonModelDescription";
 
 type DoneStopReason = Extract<StopReason, "stop" | "length" | "toolUse">;
 
+/** A tool call being assembled: where its block sits and its arguments text
+ * so far. Arguments are parsed once, when the response ends, because a
+ * fragment is rarely valid JSON on its own. */
+interface ToolCallInProgress {
+  readonly blockIndex: number;
+  argumentsText: string;
+}
+
 /**
  * Folds the daemon's streamed chunks into the event sequence Pi's agent loop
  * expects for one assistant response: `start`, then a start/delta/end run for
- * each reasoning or text block, then exactly one `done` or `error`.
+ * each reasoning, text or tool-call block, then exactly one `done` or `error`.
  *
  * The daemon interleaves reasoning and text freely, so a block closes as soon
  * as the other kind arrives and a fresh block opens; Pi keeps them as
@@ -21,6 +29,8 @@ export class AssistantEventAssembler {
   private readonly assistantMessage: AssistantMessage;
   private openBlockIndex: number | null = null;
   private finishReason: string | null = null;
+  private readonly toolCallsByFragmentIndex = new Map<number, ToolCallInProgress>();
+  private readonly responseStartedAtMilliseconds = Date.now();
 
   public constructor(eventStream: AssistantMessageEventStream, model: Model<Api>) {
     this.eventStream = eventStream;
@@ -38,6 +48,9 @@ export class AssistantEventAssembler {
     if (chunk.textDelta.length > 0) {
       this.appendText(chunk.textDelta);
     }
+    for (const toolCallFragment of chunk.toolCallFragments) {
+      this.appendToolCallFragment(toolCallFragment);
+    }
     if (chunk.finishReason != null) {
       this.finishReason = chunk.finishReason;
     }
@@ -51,7 +64,13 @@ export class AssistantEventAssembler {
       throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the stream ended without a finish reason");
     }
     this.closeOpenBlock();
-    const doneStopReason = AssistantEventAssembler.doneStopReason(this.finishReason);
+    this.finishToolCalls();
+    // A server that ends a tool-calling response with "stop" is reported as
+    // "toolUse", matching what Pi's own adapters report. "length" is kept: Pi
+    // then refuses to run calls whose arguments may have been cut off and
+    // asks the model to send them again.
+    const mappedStopReason = AssistantEventAssembler.doneStopReason(this.finishReason);
+    const doneStopReason = this.toolCallsByFragmentIndex.size > 0 && mappedStopReason === "stop" ? "toolUse" : mappedStopReason;
     this.assistantMessage.stopReason = doneStopReason;
     this.eventStream.push({ type: "done", reason: doneStopReason, message: this.assistantMessage });
     this.eventStream.end(this.assistantMessage);
@@ -61,6 +80,7 @@ export class AssistantEventAssembler {
    * keeping whatever text and reasoning already arrived. */
   public fail(stopReason: "aborted" | "error", errorMessage: string): void {
     this.closeOpenBlock();
+    this.finishToolCalls();
     this.assistantMessage.stopReason = stopReason;
     this.assistantMessage.errorMessage = errorMessage;
     this.eventStream.push({ type: "error", reason: stopReason, error: this.assistantMessage });
@@ -95,6 +115,60 @@ export class AssistantEventAssembler {
       textBlock.text += textDelta;
     }
     this.eventStream.push({ type: "text_delta", contentIndex: blockIndex, delta: textDelta, partial: this.snapshot() });
+  }
+
+  private appendToolCallFragment(toolCallFragment: ToolCallFragment): void {
+    let toolCallInProgress = this.toolCallsByFragmentIndex.get(toolCallFragment.toolCallIndex);
+    if (toolCallInProgress == null) {
+      this.closeOpenBlock();
+      // A server that sends no id gets one unique to this response, so calls
+      // from different rounds of a turn never share an id.
+      const toolCallID =
+        toolCallFragment.toolCallID != null ? toolCallFragment.toolCallID : `call_${this.responseStartedAtMilliseconds.toString(36)}_${toolCallFragment.toolCallIndex}`;
+      const toolName = toolCallFragment.toolName != null ? toolCallFragment.toolName : "";
+      const blockIndex = this.assistantMessage.content.push({ type: "toolCall", id: toolCallID, name: toolName, arguments: {} }) - 1;
+      toolCallInProgress = { blockIndex, argumentsText: "" };
+      this.toolCallsByFragmentIndex.set(toolCallFragment.toolCallIndex, toolCallInProgress);
+      this.eventStream.push({ type: "toolcall_start", contentIndex: blockIndex, partial: this.snapshot() });
+    }
+    const toolCallBlock = this.assistantMessage.content[toolCallInProgress.blockIndex];
+    if (toolCallBlock?.type === "toolCall" && toolCallBlock.name.length === 0 && toolCallFragment.toolName != null) {
+      toolCallBlock.name = toolCallFragment.toolName;
+    }
+    if (toolCallFragment.argumentsFragment.length > 0) {
+      toolCallInProgress.argumentsText += toolCallFragment.argumentsFragment;
+      this.eventStream.push({
+        type: "toolcall_delta",
+        contentIndex: toolCallInProgress.blockIndex,
+        delta: toolCallFragment.argumentsFragment,
+        partial: this.snapshot(),
+      });
+    }
+  }
+
+  /** Parses each tool call's complete arguments and closes its block. Text
+   * that is not a JSON object leaves the arguments empty and records why, so
+   * the loop reports a failed call to the model instead of running the tool
+   * with arguments it did not mean. */
+  private finishToolCalls(): void {
+    for (const toolCallInProgress of this.toolCallsByFragmentIndex.values()) {
+      const toolCallBlock = this.assistantMessage.content[toolCallInProgress.blockIndex];
+      if (toolCallBlock?.type !== "toolCall") {
+        continue;
+      }
+      const argumentsText = toolCallInProgress.argumentsText.trim();
+      try {
+        const decodedArguments: unknown = argumentsText.length === 0 ? {} : JSON.parse(argumentsText);
+        if (typeof decodedArguments !== "object" || decodedArguments === null || Array.isArray(decodedArguments)) {
+          throw new Error("not an object");
+        }
+        toolCallBlock.arguments = decodedArguments as typeof toolCallBlock.arguments;
+      } catch {
+        toolCallBlock.arguments = {};
+        toolCallBlock.argumentsError = `the arguments were not a JSON object: ${argumentsText}`;
+      }
+      this.eventStream.push({ type: "toolcall_end", contentIndex: toolCallInProgress.blockIndex, toolCall: toolCallBlock, partial: this.snapshot() });
+    }
   }
 
   private closeOpenBlock(): void {

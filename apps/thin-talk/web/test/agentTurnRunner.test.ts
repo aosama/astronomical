@@ -9,18 +9,24 @@ import { ChatRole } from "../src/ChatRole";
 import type { ChatStreamRequest } from "../src/ChatStreamer";
 import { DaemonClient } from "../src/DaemonClient";
 import { ThinkingEffort } from "../src/ThinkingEffort";
-import { DAEMON_BASE_URL, ScriptedChatFetch, chunkLine, waitUntil } from "./support/scriptedChatFetch";
+import type { ConversationTool } from "../src/ConversationTool";
+import { ToolCatalog } from "../src/ToolCatalog";
+import { DAEMON_BASE_URL, ScriptedChatFetch, chunkLine, toolCallLine, waitUntil } from "./support/scriptedChatFetch";
+import { MAXIMUM_TOOL_ROUNDS_PER_TURN, TOOL_ROUND_LIMIT_REASON } from "../src/ToolLimits";
+import { CurrentTimeTool } from "../src/CurrentTimeTool";
+import { ToolStep, ToolStepState } from "../src/ToolStep";
 
 interface ForwardedDeltas {
   text: string;
   reasoning: string;
 }
 
-function turnRunner(): AgentTurnRunner {
+function turnRunner(availableTools: ConversationTool[] = []): AgentTurnRunner {
   return new AgentTurnRunner(
     new DaemonClient(
       new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" }),
     ),
+    new ToolCatalog(availableTools),
   );
 }
 
@@ -29,8 +35,11 @@ function turnRequest(messages: ChatMessage[], forwardedDeltas: ForwardedDeltas, 
     modelID: "fake-chat-model",
     messages,
     thinkingEffort: ThinkingEffort.BALANCED,
+    toolsEnabled: true,
+    modelSupportsToolCalls: false,
     onText: (delta) => { forwardedDeltas.text += delta; },
     onReasoning: (delta) => { forwardedDeltas.reasoning += delta; },
+    onToolStep: () => undefined,
     signal,
   };
 }
@@ -144,4 +153,148 @@ test("should_cancel_the_daemon_request_when_the_conversation_listener_throws", a
     (error: unknown) => error instanceof ChatFailure && error.kind === ChatFailureKind.UNKNOWN,
   );
   await waitUntil(() => scriptedFetch.requests[0]?.wasCancelled === true, "the daemon request to be cancelled");
+});
+
+function clockTool(answer = "Saturday, 2 PM"): ConversationTool {
+  return {
+    name: "get_current_time",
+    label: "Current time",
+    description: "Reads the clock.",
+    parameters: { type: "object", properties: {} },
+    execute: async () => answer,
+  };
+}
+
+function toolTurnRequest(messages: ChatMessage[], recordedSteps: ToolStep[], forwardedDeltas: ForwardedDeltas): ChatStreamRequest {
+  return {
+    ...turnRequest(messages, forwardedDeltas, new AbortController().signal),
+    modelSupportsToolCalls: true,
+    onToolStep: (toolStep) => { recordedSteps.push(toolStep); },
+  };
+}
+
+test("should_run_a_tool_report_its_steps_and_answer_with_the_result", async () => {
+  const scriptedFetch = new ScriptedChatFetch([
+    { lines: [toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] },
+    { lines: [chunkLine({ content: "It is 2 PM." }, "stop")] },
+  ]);
+  scriptedFetch.install();
+  const recordedSteps: ToolStep[] = [];
+  const forwardedDeltas: ForwardedDeltas = { text: "", reasoning: "" };
+  await turnRunner([clockTool()]).streamChat(toolTurnRequest([userMessage("What time is it?")], recordedSteps, forwardedDeltas));
+  assert.equal(forwardedDeltas.text, "It is 2 PM.");
+  assert.deepEqual(recordedSteps.map((toolStep) => [toolStep.label, toolStep.state, toolStep.resultText]), [
+    ["Current time", ToolStepState.RUNNING, ""],
+    ["Current time", ToolStepState.SUCCEEDED, "Saturday, 2 PM"],
+  ]);
+  const followUpMessages = scriptedFetch.requests[1]?.body["messages"] as { role: string; content?: string }[];
+  assert.deepEqual(followUpMessages.map((requestMessage) => requestMessage.role), ["user", "assistant", "tool"]);
+  assert.equal(followUpMessages[2]?.content, "Saturday, 2 PM");
+});
+
+test("should_report_a_failing_tool_to_the_model_and_mark_its_step_failed", async () => {
+  const scriptedFetch = new ScriptedChatFetch([
+    { lines: [toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] },
+    { lines: [chunkLine({ content: "I could not read the clock." }, "stop")] },
+  ]);
+  scriptedFetch.install();
+  const brokenClock: ConversationTool = { ...clockTool(), execute: async () => { throw new Error("clock unavailable"); } };
+  const recordedSteps: ToolStep[] = [];
+  await turnRunner([brokenClock]).streamChat(toolTurnRequest([userMessage("What time is it?")], recordedSteps, { text: "", reasoning: "" }));
+  assert.equal(recordedSteps[recordedSteps.length - 1]?.state, ToolStepState.FAILED);
+  const toolMessage = (scriptedFetch.requests[1]?.body["messages"] as { role: string; content?: string }[])[2];
+  assert.match(toolMessage?.content ?? "", /clock unavailable/);
+});
+
+test("should_refuse_calls_past_the_round_limit_and_end_if_the_model_keeps_calling", async () => {
+  const toolCallReply = { lines: [toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] };
+  const scriptedFetch = new ScriptedChatFetch(Array.from({ length: MAXIMUM_TOOL_ROUNDS_PER_TURN + 4 }, () => toolCallReply));
+  scriptedFetch.install();
+  const recordedSteps: ToolStep[] = [];
+  await turnRunner([clockTool()]).streamChat(toolTurnRequest([userMessage("Loop")], recordedSteps, { text: "", reasoning: "" }));
+  // Eight rounds run, the ninth is refused with the reason, and the model
+  // gets one more request; calling tools again then ends the turn.
+  assert.equal(scriptedFetch.requests.length, MAXIMUM_TOOL_ROUNDS_PER_TURN + 2);
+  const refusedRoundMessages = scriptedFetch.requests[MAXIMUM_TOOL_ROUNDS_PER_TURN + 1]?.body["messages"] as { role: string; content?: string }[];
+  assert.equal(refusedRoundMessages[refusedRoundMessages.length - 1]?.content, TOOL_ROUND_LIMIT_REASON);
+  assert.equal(recordedSteps[recordedSteps.length - 1]?.state, ToolStepState.FAILED);
+});
+
+test("should_deliver_the_answer_after_exactly_the_round_limit", async () => {
+  const toolCallReply = { lines: [toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] };
+  const scriptedFetch = new ScriptedChatFetch([
+    ...Array.from({ length: MAXIMUM_TOOL_ROUNDS_PER_TURN }, () => toolCallReply),
+    { lines: [chunkLine({ content: "Done." }, "stop")] },
+  ]);
+  scriptedFetch.install();
+  const recordedSteps: ToolStep[] = [];
+  const forwardedDeltas: ForwardedDeltas = { text: "", reasoning: "" };
+  await turnRunner([clockTool()]).streamChat(toolTurnRequest([userMessage("Eight checks")], recordedSteps, forwardedDeltas));
+  assert.equal(forwardedDeltas.text, "Done.");
+  assert.equal(recordedSteps.filter((toolStep) => toolStep.state === ToolStepState.FAILED).length, 0);
+  assert.equal(recordedSteps[recordedSteps.length - 1]?.roundIndex, MAXIMUM_TOOL_ROUNDS_PER_TURN - 1);
+});
+
+test("should_offer_no_tools_when_the_switch_is_off_or_the_model_cannot_use_them", async () => {
+  for (const [toolsEnabled, modelSupportsToolCalls] of [[false, true], [true, false]] as const) {
+    const scriptedFetch = new ScriptedChatFetch([{ lines: [chunkLine({ content: "Hi." }, "stop")] }]);
+    scriptedFetch.install();
+    const request = { ...toolTurnRequest([userMessage("Hi")], [], { text: "", reasoning: "" }), toolsEnabled, modelSupportsToolCalls };
+    await turnRunner([clockTool()]).streamChat(request);
+    assert.equal("tools" in (scriptedFetch.requests[0]?.body ?? {}), false, `${toolsEnabled}/${modelSupportsToolCalls}`);
+  }
+});
+
+test("should_start_a_new_paragraph_when_text_resumes_after_a_tool_round", async () => {
+  new ScriptedChatFetch([
+    { lines: [chunkLine({ content: "Let me check." }), toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] },
+    { lines: [chunkLine({ content: "It is 2 PM." }, "stop")] },
+  ]).install();
+  const forwardedDeltas: ForwardedDeltas = { text: "", reasoning: "" };
+  await turnRunner([clockTool()]).streamChat(toolTurnRequest([userMessage("Time?")], [], forwardedDeltas));
+  assert.equal(forwardedDeltas.text, "Let me check.\n\nIt is 2 PM.");
+});
+
+test("should_run_the_real_clock_tool_when_the_model_sends_stray_arguments", async () => {
+  new ScriptedChatFetch([
+    { lines: [toolCallLine("call-1", "get_current_time", '{"type":"object","properties":{}}'), chunkLine({}, "tool_calls")] },
+    { lines: [chunkLine({ content: "Noted." }, "stop")] },
+  ]).install();
+  const recordedSteps: ToolStep[] = [];
+  await turnRunner([new CurrentTimeTool(() => new Date("2026-11-07T19:30:00.000Z"))])
+    .streamChat(toolTurnRequest([userMessage("Time?")], recordedSteps, { text: "", reasoning: "" }));
+  const finishedStep = recordedSteps[recordedSteps.length - 1];
+  assert.equal(finishedStep?.state, ToolStepState.SUCCEEDED);
+  assert.match(finishedStep?.resultText ?? "", /2026-11-07T19:30:00\.000Z/);
+  assert.equal(finishedStep?.argumentsJSON, '{"type":"object","properties":{}}');
+});
+
+test("should_fail_a_call_to_a_tool_that_does_not_exist_and_label_it_by_name", async () => {
+  new ScriptedChatFetch([
+    { lines: [toolCallLine("call-1", "open_the_pod_bay_doors", "{}"), chunkLine({}, "tool_calls")] },
+    { lines: [chunkLine({ content: "I cannot." }, "stop")] },
+  ]).install();
+  const recordedSteps: ToolStep[] = [];
+  await turnRunner([clockTool()]).streamChat(toolTurnRequest([userMessage("Open them")], recordedSteps, { text: "", reasoning: "" }));
+  const finishedStep = recordedSteps[recordedSteps.length - 1];
+  assert.equal(finishedStep?.state, ToolStepState.FAILED);
+  assert.equal(finishedStep?.label, "open_the_pod_bay_doors");
+});
+
+test("should_fail_the_running_step_and_end_quietly_when_stopped_mid_tool", async () => {
+  new ScriptedChatFetch([
+    { lines: [toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] },
+  ]).install();
+  const stopController = new AbortController();
+  const slowClock: ConversationTool = {
+    ...clockTool(),
+    execute: (_toolArguments, signal) => new Promise<string>((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new Error("stopped")));
+      stopController.abort();
+    }),
+  };
+  const recordedSteps: ToolStep[] = [];
+  const request = { ...toolTurnRequest([userMessage("Time?")], recordedSteps, { text: "", reasoning: "" }), signal: stopController.signal };
+  await turnRunner([slowClock]).streamChat(request);
+  assert.equal(recordedSteps[recordedSteps.length - 1]?.state, ToolStepState.FAILED);
 });

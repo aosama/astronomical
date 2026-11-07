@@ -41,3 +41,15 @@ test("session preferences round-trip through toPlain", () => {
   assert.equal(decoded.composerFontSize, 18);
   assert.equal(decoded.modelID, "model-beta");
 });
+
+test("should_turn_tools_on_by_default_and_for_preferences_saved_before_the_switch", () => {
+  assert.equal(SessionPreferences.default().toolsEnabled, true);
+  assert.equal(SessionPreferences.fromPlain({ thinkingEffort: "quick" }).toolsEnabled, true);
+  assert.equal(SessionPreferences.fromPlain({ toolsEnabled: "no" }).toolsEnabled, true);
+});
+
+test("should_remember_tools_switched_off", () => {
+  const preferences = SessionPreferences.default();
+  preferences.toolsEnabled = false;
+  assert.equal(SessionPreferences.fromPlain(preferences.toPlain()).toolsEnabled, false);
+});

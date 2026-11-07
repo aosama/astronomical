@@ -1,7 +1,11 @@
-import type { Api, Message, Model, SimpleStreamOptions, TextContent, TranscriptContext } from "@earendil-works/pi-ai";
+import { getCurrentTools, type Api, type AssistantMessage, type Message, type Model, type SimpleStreamOptions, type TextContent, type TranscriptContext } from "@earendil-works/pi-ai";
 import { AssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 import { AssistantEventAssembler } from "./AssistantEventAssembler";
-import type { ChatCompletionRequestBody, ChatCompletionRequestMessage } from "./ChatCompletionRequestBody";
+import type {
+  ChatCompletionRequestBody,
+  ChatCompletionRequestMessage,
+  ChatCompletionRequestTool,
+} from "./ChatCompletionRequestBody";
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { DaemonClient } from "./DaemonClient";
@@ -62,6 +66,10 @@ export class DaemonStreamFunction {
         messages: DaemonStreamFunction.requestMessages(context.messages),
         thinking_budget: this.thinkingBudgetTokens,
       };
+      const requestTools = DaemonStreamFunction.requestTools(context.messages);
+      if (requestTools.length > 0) {
+        requestBody.tools = requestTools;
+      }
       await this.client.streamChatCompletion(requestBody, requestSignal, (chunk) => assembler.apply(chunk));
       if (requestSignal.aborted) {
         assembler.fail("aborted", "Stopped by the user.");
@@ -96,15 +104,41 @@ export class DaemonStreamFunction {
           requestMessages.push({ role: "user", content: DaemonStreamFunction.plainText(transcriptMessage.content) });
           break;
         case "assistant":
-          requestMessages.push({ role: "assistant", content: DaemonStreamFunction.plainText(transcriptMessage.content) });
+          requestMessages.push(DaemonStreamFunction.assistantRequestMessage(transcriptMessage));
           break;
         case "toolResult":
-          // No tools are offered yet, so a tool result here means the
-          // transcript was built wrongly; failing beats silently dropping it.
-          throw new Error("A tool result reached the daemon request before tools are offered.");
+          requestMessages.push({
+            role: "tool",
+            tool_call_id: transcriptMessage.toolCallId,
+            content: DaemonStreamFunction.plainText(transcriptMessage.content),
+          });
+          break;
       }
     }
     return requestMessages;
+  }
+
+  /** The tools the transcript currently declares, in the OpenAI function
+   * format. Pi keeps tool declarations in the transcript's system messages. */
+  public static requestTools(transcript: readonly Message[]): ChatCompletionRequestTool[] {
+    return getCurrentTools(transcript).map((declaredTool) => ({
+      type: "function",
+      function: { name: declaredTool.name, description: declaredTool.description, parameters: declaredTool.parameters },
+    }));
+  }
+
+  private static assistantRequestMessage(assistantMessage: AssistantMessage): ChatCompletionRequestMessage {
+    const toolCalls = assistantMessage.content.flatMap((contentBlock) =>
+      contentBlock.type === "toolCall"
+        ? [{
+          id: contentBlock.id,
+          type: "function" as const,
+          function: { name: contentBlock.name, arguments: JSON.stringify(contentBlock.arguments) },
+        }]
+        : [],
+    );
+    const content = DaemonStreamFunction.plainText(assistantMessage.content);
+    return toolCalls.length > 0 ? { role: "assistant", content, tool_calls: toolCalls } : { role: "assistant", content };
   }
 
   private static plainText(content: string | readonly { type: string }[]): string {
