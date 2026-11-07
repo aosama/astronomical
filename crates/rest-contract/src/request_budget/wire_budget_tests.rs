@@ -8,6 +8,7 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use serde_json::json;
 
 const MODEL_ID: &str = "astronomical/fake-mixture-of-experts";
+const UNDECODABLE_IMAGE_DATA_URI: &str = "data:image/png;base64,A";
 
 fn image_data_uri(decoded_byte_count: usize) -> String {
     format!(
@@ -196,22 +197,38 @@ fn should_reject_a_chat_request_one_image_over_the_image_count_budget() {
 }
 
 #[test]
-fn should_reject_the_image_count_before_decoding_any_oversized_image() {
-    // Every image individually busts the per-image budget, so any decode would
-    // report ImageTooLarge; the image-count rejection proves the count guard
-    // runs ahead of all base64 decode work.
-    let image_data_uris = (0..=MAX_IMAGE_PARTS_PER_REQUEST)
-        .map(|_| image_data_uri(MAX_IMAGE_DECODED_BYTES + 1))
-        .collect::<Vec<_>>();
+fn should_reject_the_image_count_before_decoding_any_image() {
+    // A lone `A` passes the alphabet check in `validate` but cannot decode, so if any
+    // decode ran ahead of the count guard this would report InvalidBase64. Tiny images
+    // prove this at no cost: oversized ones took about 1 GB of JSON to build and parse,
+    // about 23 seconds and most of this crate's test time.
+    let image_data_uris =
+        vec![UNDECODABLE_IMAGE_DATA_URI.to_owned(); MAX_IMAGE_PARTS_PER_REQUEST + 1];
     let chat_completion_request = chat_request_with_image_data_uris(&image_data_uris);
 
     let validation_error = chat_completion_request
-        .validate()
+        .into_parts()
         .expect_err("the image-count budget must fire before any decode");
 
     assert!(matches!(
         validation_error,
         OpenAiChatCompletionValidationError::ImagePartCountExceedsBudget { .. }
+    ));
+}
+
+#[test]
+fn should_fail_at_decode_on_the_image_the_count_ordering_test_relies_on() {
+    let image_data_uris = vec![UNDECODABLE_IMAGE_DATA_URI.to_owned()];
+    let chat_completion_request = chat_request_with_image_data_uris(&image_data_uris);
+
+    assert!(chat_completion_request.validate().is_ok());
+    let decode_error = chat_completion_request
+        .into_parts()
+        .expect_err("an image that cannot decode must be rejected");
+
+    assert!(matches!(
+        decode_error,
+        OpenAiChatCompletionValidationError::InvalidBase64
     ));
 }
 
@@ -268,9 +285,9 @@ fn should_accept_a_responses_request_at_the_image_count_budget() {
 
 #[test]
 fn should_reject_a_responses_request_one_image_over_the_image_count_budget() {
-    let image_data_uris = (0..=MAX_IMAGE_PARTS_PER_REQUEST)
-        .map(|_| image_data_uri(1))
-        .collect::<Vec<_>>();
+    // Undecodable images, so this also proves the count guard runs ahead of any decode.
+    let image_data_uris =
+        vec![UNDECODABLE_IMAGE_DATA_URI.to_owned(); MAX_IMAGE_PARTS_PER_REQUEST + 1];
     let responses_request = responses_request_with_image_data_uris(&image_data_uris);
 
     let validation_error = responses_request.into_parts().expect_err(
