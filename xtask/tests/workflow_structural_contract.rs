@@ -438,7 +438,8 @@ fn packaging_contracts_run_on_required_checks() {
         "the packaging contracts must run whenever macOS verification is required"
     );
     let neural_engine_steps = steps_of(neural_engine_job, "neural-engine");
-    let xtask_tests_step = find_step_by_name(&neural_engine_steps, "Run the xtask unit tests");
+    let xtask_tests_step =
+        find_step_by_name(&neural_engine_steps, "Run the xtask unit and journey tests");
     assert!(
         run_text_of(xtask_tests_step, "xtask unit tests")
             .contains("cargo test --locked -p xtask --bin xtask"),

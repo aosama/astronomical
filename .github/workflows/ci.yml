@@ -1130,12 +1130,21 @@ jobs:
       # pipeline's signing plans, Cargo arguments, assembled-bundle layout and plist
       # checks for every channel. On macOS because that tooling is what they exercise,
       # and in this lane rather than the build job so they run beside the build
-      # instead of adding about 11 seconds to everything waiting on it.
-      - name: Run the xtask unit tests
+      # instead of delaying everything waiting on it. The journeys shim gh, curl, cmake,
+      # df and du, and the one real cargo build they run has no dependencies, so they
+      # reach no network or real GitHub state. They exercise the prune, installer,
+      # bootstrap and disposable-target tooling through the real binary, which the unit
+      # tests cannot.
+      - name: Run the xtask unit and journey tests
         run: |
           trap 'scripts/ci/ci-step-timing.sh end xtask-unit-tests' EXIT
           scripts/ci/ci-step-timing.sh begin xtask-unit-tests
           cargo test --locked -p xtask --bin xtask
+          cargo test --locked -p xtask --test integration_gh_shim_journeys
+          cargo test --locked -p xtask --test integration_install_tools_journeys
+          cargo test --locked -p xtask --test integration_bootstrap_journeys
+          cargo test --locked -p xtask --test integration_disposable_target_journeys
+          cargo test --locked -p xtask --test disposable_target_retirement_contract
         timeout-minutes: 5
       # The fixture features pull in image and base64 for this one library, so its
       # tests rebuild several crates. Here they cost the build job nothing: about 6

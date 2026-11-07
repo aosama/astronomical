@@ -551,3 +551,65 @@ fn should_read_only_workflow_contracts_from_the_manifest() {
         vec!["workflow_listed_contract"]
     );
 }
+
+/// Only `[[test]]` sections: the package and any binary also have a `name` line.
+fn xtask_test_targets(xtask_manifest_text: &str) -> Vec<&str> {
+    let mut test_targets = Vec::new();
+    let mut is_in_test_section = false;
+    for manifest_line in xtask_manifest_text.lines() {
+        if manifest_line.starts_with('[') {
+            is_in_test_section = manifest_line.trim() == "[[test]]";
+            continue;
+        }
+        if !is_in_test_section {
+            continue;
+        }
+        if let Some(after_name) = manifest_line.strip_prefix("name = \"") {
+            test_targets.push(after_name.trim_end_matches('"'));
+        }
+    }
+    test_targets
+}
+
+/// `autotests = false` means a target runs only where a lane names it, so a new one
+/// passes locally and then never runs in CI. Five targets sat like that.
+#[test]
+fn should_run_every_xtask_test_target_in_ci() {
+    let xtask_manifest_text =
+        std::fs::read_to_string(contract_support::repository_root().join("xtask/Cargo.toml"))
+            .expect("the xtask manifest should be readable");
+    let test_targets = xtask_test_targets(&xtask_manifest_text);
+    assert!(test_targets.contains(&"integration_gh_shim_journeys"));
+    let workflow = workflow_contract();
+    let config_steps = steps_of(
+        required_job(&workflow, "config-contracts"),
+        "config-contracts",
+    );
+    let config_step = find_step_by_name(&config_steps, "Run workflow and cache contracts");
+    let neural_engine_steps = steps_of(required_job(&workflow, "neural-engine"), "neural-engine");
+    let xtask_tests_step =
+        find_step_by_name(&neural_engine_steps, "Run the xtask unit and journey tests");
+    let lanes_text = format!(
+        "{}\n{}",
+        run_text_of(config_step, "config-contracts"),
+        run_text_of(xtask_tests_step, "xtask-unit-tests")
+    );
+    assert_eq!(
+        contract_targets_missing_from_lane(&test_targets, &lanes_text),
+        Vec::<&str>::new()
+    );
+}
+
+#[test]
+fn should_read_only_test_sections_from_the_manifest() {
+    let manifest_text = "[package]\nname = \"xtask\"\n\n\
+                         [[bin]]\nname = \"xtask\"\n\n\
+                         [[test]]\nname = \"listed_journeys\"\npath = \"tests/listed.rs\"\n";
+    assert_eq!(xtask_test_targets(manifest_text), vec!["listed_journeys"]);
+}
+
+#[test]
+fn should_find_no_test_targets_in_a_manifest_without_test_sections() {
+    let manifest_text = "[package]\nname = \"xtask\"\n";
+    assert_eq!(xtask_test_targets(manifest_text), Vec::<&str>::new());
+}

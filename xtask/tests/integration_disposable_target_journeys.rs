@@ -14,7 +14,7 @@ mod disposable_journey_support;
 
 use disposable_journey_support::process::{
     LIFECYCLE_MARKER_NAME, arm_termination_watchdog, du_kibibytes, exit_status_code,
-    process_is_alive, sccache_is_on_path, send_terminate,
+    process_exits_soon, sccache_is_on_path, send_terminate,
 };
 use disposable_journey_support::sandbox::{
     DisposableSandbox, assert_lane_root_is_empty, assert_path_is_absent, canonicalized,
@@ -342,7 +342,7 @@ fn should_stop_background_descendants_after_successful_command() {
     .parse()
     .expect("the descendant process id should be numeric");
     assert!(
-        !process_is_alive(descendant_process_id),
+        process_exits_soon(descendant_process_id),
         "the successful journey left descendant process {descendant_process_id} running"
     );
     let recorded_target = file_text(&record_path).trim().to_owned();
@@ -409,7 +409,7 @@ fn should_clean_owned_target_and_stop_descendants_when_interrupted() {
     .parse()
     .expect("the descendant process id should be numeric");
     assert!(
-        !process_is_alive(descendant_process_id),
+        process_exits_soon(descendant_process_id),
         "the interrupted journey left descendant process {descendant_process_id} running"
     );
     let recorded_target = file_text(&record_path).trim().to_owned();

@@ -27,6 +27,9 @@ pub(crate) fn arm_termination_watchdog(process_id: u32) {
     });
 }
 
+const PROCESS_REAP_ALLOWANCE: std::time::Duration = std::time::Duration::from_secs(5);
+const PROCESS_REAP_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(50);
+
 pub(crate) fn process_is_alive(process_id: i32) -> bool {
     unsafe { libc::kill(process_id, 0) == 0 }
 }
@@ -75,4 +78,18 @@ pub(crate) fn exit_status_code(journey_output: &Output) -> i32 {
         .status
         .code()
         .unwrap_or_else(|| 128 + journey_output.status.signal().unwrap_or(0))
+}
+
+/// A killed process stays visible to `kill(pid, 0)` as a zombie until its new parent
+/// reaps it, which can lag on a loaded CI runner. So "gone" is judged over a short
+/// window: a process that was really left running still fails it.
+pub(crate) fn process_exits_soon(process_id: i32) -> bool {
+    let deadline = std::time::Instant::now() + PROCESS_REAP_ALLOWANCE;
+    while std::time::Instant::now() < deadline {
+        if !process_is_alive(process_id) {
+            return true;
+        }
+        std::thread::sleep(PROCESS_REAP_POLL_INTERVAL);
+    }
+    !process_is_alive(process_id)
 }
