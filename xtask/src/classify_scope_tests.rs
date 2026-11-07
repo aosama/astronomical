@@ -1,5 +1,6 @@
 use crate::classify_scope::{
-    CiEvent, classify_change_scope, is_notices_freshness_input_path, is_static_only_path,
+    CiEvent, classify_change_scope, is_cache_input_path, is_notices_freshness_input_path,
+    is_static_only_path, may_reuse_verified_tree, verdict_for_verified_tree,
 };
 
 fn verdict_for(
@@ -207,4 +208,128 @@ fn should_never_let_a_manual_run_skip_macos_verification() {
 
     assert!(verdict.macos_verification_required);
     assert_eq!(verdict.classification, "manual_run");
+}
+
+#[test]
+fn should_treat_repository_housekeeping_files_as_static() {
+    assert!(is_static_only_path(".gitignore"));
+    assert!(is_static_only_path("apps/thin-talk/web/.gitignore"));
+    assert!(is_static_only_path(".github/dependabot.yml"));
+}
+
+#[test]
+fn should_not_treat_lookalikes_of_housekeeping_files_as_static() {
+    assert!(!is_static_only_path(".gitignored"));
+    assert!(!is_static_only_path("src/not.gitignore"));
+    assert!(!is_static_only_path(".gitattributes"));
+    assert!(!is_static_only_path(".github/dependabot.yml.bak"));
+}
+
+#[test]
+fn should_call_every_cache_key_input_a_cache_input() {
+    for cache_input in [
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "third-party/tool-pins/Cargo.toml",
+        "third-party/native-dependency-manifest.cmake",
+        "third-party/pins/mlx.cmake",
+        ".github/workflows/ci.yml",
+        ".github/actions/astronomical-cache/action.yml",
+        "apps/astronomical-menu/Sources/Menu.swift",
+        "apps/astronomical-menu/Package.resolved",
+        "apps/thin-talk/Tests/Canvas.swift",
+        "apps/thin-talk/web/package-lock.json",
+    ] {
+        assert!(is_cache_input_path(cache_input), "{cache_input}");
+    }
+}
+
+#[test]
+fn should_not_call_ordinary_code_a_cache_input() {
+    for ordinary_path in [
+        "crates/model-serving/src/lib.rs",
+        "apps/daemon/src/main.rs",
+        "apps/daemon/console/console.js",
+        "Cargo.toml",
+        "xtask/src/classify_scope.rs",
+        "third-party/about.toml",
+    ] {
+        assert!(!is_cache_input_path(ordinary_path), "{ordinary_path}");
+    }
+}
+
+fn paths(changed_paths: &[&str]) -> Vec<String> {
+    let mut owned_paths = Vec::new();
+    for changed_path in changed_paths {
+        owned_paths.push((*changed_path).to_owned());
+    }
+    owned_paths
+}
+
+fn code_verdict(changed_paths: &[String]) -> crate::classify_scope::ChangeScopeVerdict {
+    classify_change_scope(CiEvent::Push, changed_paths, false, false)
+}
+
+#[test]
+fn should_ask_about_a_verified_tree_for_a_code_only_push() {
+    let changed_paths = paths(&["crates/config/src/lib.rs", "README.md"]);
+    assert!(may_reuse_verified_tree(
+        CiEvent::Push,
+        &code_verdict(&changed_paths),
+        &changed_paths
+    ));
+}
+
+#[test]
+fn should_never_reuse_a_verified_tree_on_a_pull_request_or_manual_run() {
+    let changed_paths = paths(&["crates/config/src/lib.rs"]);
+    for event in [CiEvent::PullRequest, CiEvent::WorkflowDispatch] {
+        assert!(!may_reuse_verified_tree(
+            event,
+            &code_verdict(&changed_paths),
+            &changed_paths
+        ));
+    }
+}
+
+#[test]
+fn should_run_in_full_when_a_push_has_a_cache_to_publish() {
+    let changed_paths = paths(&["crates/config/src/lib.rs", "Cargo.lock"]);
+    assert!(!may_reuse_verified_tree(
+        CiEvent::Push,
+        &code_verdict(&changed_paths),
+        &changed_paths
+    ));
+}
+
+#[test]
+fn should_run_in_full_when_native_inputs_changed() {
+    let changed_paths = paths(&["crates/runtime-integration/native/shim.c"]);
+    let verdict = classify_change_scope(CiEvent::Push, &changed_paths, true, false);
+    assert!(!may_reuse_verified_tree(
+        CiEvent::Push,
+        &verdict,
+        &changed_paths
+    ));
+}
+
+#[test]
+fn should_not_ask_when_macos_verification_was_never_required() {
+    let changed_paths = paths(&["README.md"]);
+    assert!(!may_reuse_verified_tree(
+        CiEvent::Push,
+        &code_verdict(&changed_paths),
+        &changed_paths
+    ));
+}
+
+#[test]
+fn should_skip_only_the_macos_lanes_for_a_verified_tree() {
+    let changed_paths = paths(&["crates/config/src/lib.rs", "Cargo.lock"]);
+    let verdict = verdict_for_verified_tree(code_verdict(&changed_paths));
+    assert!(!verdict.macos_verification_required);
+    assert!(verdict.code_changed);
+    assert!(verdict.notices_inputs_changed);
+    assert_eq!(verdict.classification, "already_verified_tree");
+    assert_eq!(verdict.changed_file_count, 2);
 }

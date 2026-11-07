@@ -29,6 +29,14 @@ serde_yaml = "0.9"
 tempfile = "=3.27.0"
 
 [[test]]
+name = "workflow_verified_work_contract"
+path = "tests/workflow_verified_work_contract.rs"
+
+[[test]]
+name = "integration_classify_scope_journeys"
+path = "tests/integration_classify_scope_journeys.rs"
+
+[[test]]
 name = "integration_gh_shim_journeys"
 path = "tests/integration_gh_shim_journeys.rs"
 
