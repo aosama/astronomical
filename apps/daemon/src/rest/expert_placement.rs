@@ -1,15 +1,23 @@
-//! The two sentences every Observatory surface and the menu share.
+//! The stock label and the reply sentence every Observatory surface and the menu share.
 //!
 //! Stock describes where the expert library sits right now, from the seated
-//! byte counts. The reply sentence describes what the current or last reply
-//! did with storage, from the request-scoped memory mode. Clients print these
-//! strings. They do not keep a second phrase table.
+//! byte counts. It is a short label rather than a full sentence: the menu
+//! shows it in a half-width monospaced cell, so every stock label stays
+//! within MAXIMUM_STOCK_LABEL_CHARACTERS to fit on one line there. The reply
+//! sentence describes what the current or last reply did with storage, from
+//! the request-scoped memory mode. Clients print these strings. They do not
+//! keep a second phrase table.
 
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
 use crate::{ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot};
 
 const APPLE_GIGABYTE_BYTES: f64 = 1_073_741_824.0;
+
+/// Copy budget for the stock label, in characters. The menu's Residency cell
+/// is the tightest place the label appears, and 18 characters leaves margin
+/// there. Layer counts up to 999 stay within it.
+pub(crate) const MAXIMUM_STOCK_LABEL_CHARACTERS: usize = 18;
 
 pub(crate) struct ExpertPlacementCopy {
     pub(crate) stock_sentence: String,
@@ -22,8 +30,14 @@ pub(crate) fn expert_placement(
     expert_memory_mode: Option<ExpertMemoryMode>,
     expert_residency: Option<ExpertResidencySnapshot>,
 ) -> ExpertPlacementCopy {
+    let stock_label = stock_sentence(ready_model_id, expert_memory_mode, expert_residency);
+    // Guards future copy edits in debug builds; the unit test also enforces this limit.
+    debug_assert!(
+        stock_label.chars().count() <= MAXIMUM_STOCK_LABEL_CHARACTERS,
+        "stock label {stock_label:?} would wrap in the menu's Residency cell"
+    );
     ExpertPlacementCopy {
-        stock_sentence: stock_sentence(ready_model_id, expert_memory_mode, expert_residency),
+        stock_sentence: stock_label,
         reply_sentence: reply_sentence(ready_model_id, activity, expert_memory_mode),
     }
 }
@@ -74,7 +88,7 @@ fn stock_sentence(
     expert_residency: Option<ExpertResidencySnapshot>,
 ) -> String {
     if ready_model_id_is_absent(ready_model_id) {
-        return "No expert library is loaded.".to_owned();
+        return "No model loaded".to_owned();
     }
     let (complete_expert_payload_byte_count, resident_expert_payload_bytes, total_layer_count) =
         residency_bytes(expert_residency);
@@ -85,10 +99,10 @@ fn stock_sentence(
         return fully_seated_stock_sentence(total_layer_count);
     }
     if resident_expert_payload_bytes == 0 {
-        return "The expert library is still on the SSD.".to_owned();
+        return "All on SSD".to_owned();
     }
     format!(
-        "{:.2} GB are still on the SSD.",
+        "{:.2} GB on SSD",
         left_on_ssd_gigabytes(
             complete_expert_payload_byte_count,
             resident_expert_payload_bytes
@@ -116,18 +130,16 @@ fn residency_bytes(expert_residency: Option<ExpertResidencySnapshot>) -> (u64, u
 
 fn unmeasured_stock_sentence(expert_memory_mode: Option<ExpertMemoryMode>) -> &'static str {
     match expert_memory_mode {
-        Some(ExpertMemoryMode::Hybrid | ExpertMemoryMode::Paged) => {
-            "Expert library size is not measured yet."
-        }
-        Some(ExpertMemoryMode::Resident) | None => "Fully in memory.",
+        Some(ExpertMemoryMode::Hybrid | ExpertMemoryMode::Paged) => "Size not measured",
+        Some(ExpertMemoryMode::Resident) | None => "All in RAM",
     }
 }
 
 fn fully_seated_stock_sentence(total_layer_count: u32) -> String {
     if total_layer_count > 0 {
-        return format!("All {total_layer_count} layers are in RAM.");
+        return format!("{total_layer_count} layers in RAM");
     }
-    "The expert library is in RAM.".to_owned()
+    "All in RAM".to_owned()
 }
 
 fn left_on_ssd_gigabytes(

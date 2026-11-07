@@ -8,6 +8,8 @@ const vm = require("node:vm");
 const EXPERT_GIGABYTE_BYTES = 1073741824;
 const expertsRenderScriptPath = path.join(__dirname, "experts-render.js");
 const expertsRenderScript = fs.readFileSync(expertsRenderScriptPath, "utf8");
+const expertsScriptPath = path.join(__dirname, "experts.js");
+const expertsScript = fs.readFileSync(expertsScriptPath, "utf8");
 
 function createExpertsRenderContext() {
     const scriptContext = vm.createContext({ console: { log() {} } });
@@ -15,6 +17,25 @@ function createExpertsRenderContext() {
         filename: expertsRenderScriptPath
     });
     return scriptContext;
+}
+
+// Loads the page controller with a stub document so the lede writes can be read back.
+function createExpertsObservatoryContext() {
+    const elementsById = {};
+    const scriptContext = vm.createContext({
+        console: { log() {} },
+        document: {
+            getElementById(elementId) {
+                if (!elementsById[elementId]) {
+                    elementsById[elementId] = { textContent: "", hidden: false };
+                }
+                return elementsById[elementId];
+            }
+        }
+    });
+    vm.runInContext(expertsRenderScript, scriptContext, { filename: expertsRenderScriptPath });
+    vm.runInContext(expertsScript, scriptContext, { filename: expertsScriptPath });
+    return { context: scriptContext, elementsById };
 }
 
 const sampleTopology = [
@@ -46,7 +67,7 @@ test("should_format_sub_minute_durations_in_tenths", () => {
 
 test("should_name_the_three_residency_phrases", () => {
     const context = createExpertsRenderContext();
-    assert.equal(context.expertMemoryModePhrase("resident"), "Fully in memory");
+    assert.equal(context.expertMemoryModePhrase("resident"), "All in RAM");
     assert.equal(context.expertMemoryModePhrase("paged"), "RAM + SSD streaming");
     assert.equal(
         context.expertMemoryModePhrase("hybrid"),
@@ -291,7 +312,7 @@ test("should_render_mode_transitions_in_product_phrases", () => {
         previous_mode: null,
         next_mode: "resident"
     });
-    assert.match(firstTransitionLine, /Start → Fully in memory/);
+    assert.match(firstTransitionLine, /Start → All in RAM/);
     assert.equal(context.modeTransitionLine(null), "");
 });
 
@@ -356,17 +377,45 @@ test("should_copy_the_daemon_placement_sentences", () => {
     assert.equal(missingPlacement.replySentence, "");
     const placement = context.expertPlacementCopy({
         expert_placement: {
-            stock_sentence: "All 40 layers are in RAM.",
+            stock_sentence: "40 layers in RAM",
             reply_sentence: "This reply has read experts from the SSD."
         }
     });
-    assert.equal(placement.stockSentence, "All 40 layers are in RAM.");
+    assert.equal(placement.stockSentence, "40 layers in RAM");
     assert.equal(placement.replySentence, "This reply has read experts from the SSD.");
     const blankReply = context.expertPlacementCopy({
-        expert_placement: { stock_sentence: "Fully in memory." }
+        expert_placement: { stock_sentence: "All in RAM" }
     });
-    assert.equal(blankReply.stockSentence, "Fully in memory.");
+    assert.equal(blankReply.stockSentence, "All in RAM");
     assert.equal(blankReply.replySentence, "");
+});
+
+test("should_write_full_prose_into_the_lede_when_a_stock_label_is_present", () => {
+    const { context, elementsById } = createExpertsObservatoryContext();
+    const statusDocument = {
+        ready_model_id: "qwen",
+        expert_memory_mode: "resident",
+        expert_residency: {
+            complete_expert_payload_byte_count: 10 * EXPERT_GIGABYTE_BYTES,
+            resident_expert_payload_bytes: 10 * EXPERT_GIGABYTE_BYTES,
+            total_layer_count: 40
+        },
+        expert_placement: { stock_sentence: "40 layers in RAM", reply_sentence: "" }
+    };
+    context.renderExpertPlacement(statusDocument, context.expertHeadlineFacts(statusDocument, null));
+    const ledeText = elementsById["experts-headline"].textContent;
+    assert.notEqual(ledeText, "40 layers in RAM");
+    assert.match(ledeText, /qwen fits\. Its expert library is in RAM/);
+});
+
+test("should_keep_the_stock_label_available_as_placement_stock_sentence", () => {
+    const { context } = createExpertsObservatoryContext();
+    const statusDocument = {
+        ready_model_id: "qwen",
+        expert_placement: { stock_sentence: "40 layers in RAM", reply_sentence: "" }
+    };
+    const placement = context.expertPlacementCopy(statusDocument);
+    assert.equal(placement.stockSentence, "40 layers in RAM");
 });
 
 test("should_move_layer_columns_from_live_counts_and_wait_for_identities", () => {

@@ -102,16 +102,16 @@ extension DaemonStatusDocument {
 
   var modelFootprintTitle: String {
     if isLoadingModel { return "Being prepared" }
-    // The daemon owns this sentence so the menu and Observatory cannot drift.
+    // The daemon owns this label so the menu and Observatory cannot drift.
     // An older daemon omits expert_placement. A loaded model then stays fully
-    // in memory, and an unloaded one names the empty library.
+    // in memory, and an unloaded one says no model is loaded.
     if let stockSentence = expertPlacement?.stockSentence, !stockSentence.isEmpty {
       return stockSentence
     }
     if readyModelIdentifier == nil {
-      return "No expert library is loaded."
+      return "No model loaded"
     }
-    return "Fully in memory"
+    return "All in RAM"
   }
 
   var replyReadTitle: String {

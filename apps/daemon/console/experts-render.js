@@ -53,7 +53,7 @@ function formatExpertSubMinuteDuration(totalSeconds) {
 
 function expertMemoryModePhrase(expertMemoryMode) {
     if (expertMemoryMode === "resident") {
-        return "Fully in memory";
+        return "All in RAM";
     }
     if (expertMemoryMode === "paged") {
         return "RAM + SSD streaming";

@@ -243,9 +243,17 @@ struct OrbitalTelemetryPopover: View {
   private func residencySummary(_ statusDocument: DaemonStatusDocument) -> some View {
     VStack(alignment: .leading, spacing: 2) {
       Text("Residency").font(.caption).foregroundStyle(.secondary)
+      // The daemon keeps these labels short enough for one line of this
+      // half-width cell; the scale factor only covers an unexpected label
+      // (or a larger system font), so the row never wraps.
+      // Width arithmetic: the popover is 390pt wide; minus 32pt padding and
+      // 16pt column spacing leaves about 171pt per cell. The monospaced body
+      // is the system body size + 1 (about 14pt), about 8.4pt per character,
+      // so about 20 characters fit and the daemon keeps labels to 18.
       Text(statusDocument.modelFootprintTitle)
         .font(PopoverTypography.monospacedBody)
-        .fixedSize(horizontal: false, vertical: true)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
       if !statusDocument.replyReadTitle.isEmpty {
         Text(statusDocument.replyReadTitle)
           .font(.caption)

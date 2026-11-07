@@ -61,12 +61,11 @@ function renderExpertObservatory() {
     renderExpertMethod(statsDocument);
 }
 
+// The lede is always full prose. The daemon's stock label is a short stat,
+// so putting it in the headline made the lede flip between a label and a sentence.
 function renderExpertPlacement(statusDocument, headlineFacts) {
     const placement = expertPlacementCopy(statusDocument);
-    setExpertText(
-        "experts-headline",
-        placement.stockSentence || expertHeadline(headlineFacts)
-    );
+    setExpertText("experts-headline", expertHeadline(headlineFacts));
     const replyElement = document.getElementById("experts-reply");
     if (!replyElement) {
         return;
