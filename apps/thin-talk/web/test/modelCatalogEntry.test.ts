@@ -26,3 +26,10 @@ test("should_recognise_chat_models_that_accept_images", () => {
   assert.equal(ModelCatalogEntry.fromPlain(BASE_ENTRY)?.acceptsImages, false);
   assert.equal(ModelCatalogEntry.fromPlain({ id: "image-maker", input_modalities: ["text", "image"], supported_endpoints: ["/v1/images/generations"] })?.acceptsImages, false);
 });
+
+test("should_read_a_positive_whole_context_window_and_ignore_anything_else", () => {
+  assert.equal(ModelCatalogEntry.fromPlain({ ...BASE_ENTRY, context_window: 262_144 })?.contextWindowTokens, 262_144);
+  for (const unusable of [0, -1, 1.5, "8192", null, undefined]) {
+    assert.equal(ModelCatalogEntry.fromPlain({ ...BASE_ENTRY, context_window: unusable })?.contextWindowTokens, null, String(unusable));
+  }
+});

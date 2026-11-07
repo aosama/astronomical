@@ -123,9 +123,19 @@ export class ChatController {
 
   // MARK: - Sending
 
+  /** Sends a message. While an answer is still coming, the message is
+   * queued instead: the running turn takes it when it can, and anything it
+   * did not take is sent as soon as the turn is over. */
   public send(draft: string): void {
     const trimmed = draft.trim();
-    if (trimmed.length === 0 || !this.selectedModelID || this.isStreaming || this.loadPhase !== "ready") {
+    if (trimmed.length === 0 || !this.selectedModelID || this.loadPhase !== "ready") {
+      return;
+    }
+    if (this.isStreaming) {
+      const queuedMessage = this.log.appendQueuedUserTurn(trimmed);
+      this.streamer.queueUserMessage(queuedMessage.id, trimmed);
+      this.autosave();
+      this.publish();
       return;
     }
     this.failure = null;
@@ -290,6 +300,35 @@ export class ChatController {
     // Open the assistant turn up-front: a visible placeholder prevents stacked
     // user turns from looking unanswered.
     this.log.openAssistantTurn();
+    this.startTurn();
+  }
+
+  /** Answers the oldest message still queued once a turn ends normally; after
+   * a stop or a failure, the queued messages are marked not sent instead, so
+   * nothing goes out that the user may no longer want. */
+  private continueWithQueuedMessages(turnEndedNormally: boolean): void {
+    const queuedMessage = this.log.firstQueuedUserTurn();
+    if (queuedMessage == null) {
+      return;
+    }
+    if (!turnEndedNormally || !this.selectedModelID) {
+      this.log.markQueuedTurnsNotSent();
+      return;
+    }
+    this.log.beginAnsweringQueuedTurn(queuedMessage.id);
+    this.startTurn();
+    // The rest go to the new turn at once, oldest first, so they are answered
+    // in the order they were sent rather than behind anything sent later.
+    for (const laterQueuedMessage of this.log.messages.filter((message) => message.state === ChatMessageState.QUEUED)) {
+      this.streamer.queueUserMessage(laterQueuedMessage.id, laterQueuedMessage.content);
+    }
+  }
+
+  /** Starts streaming into the assistant turn the log has already opened. */
+  private startTurn(): void {
+    if (!this.selectedModelID) {
+      return;
+    }
     this.isStreaming = true;
     this.stopRequested = false;
     this.stallFailure = null;
@@ -317,9 +356,11 @@ export class ChatController {
         thinkingEffort: effort,
         toolsEnabled: this.preferences.toolsEnabled,
         modelSupportsToolCalls: this.selectedModelSupportsToolCalls(),
+        contextWindowTokens: this.selectedModelContextWindowTokens(),
         onText: (delta) => this.ingestDelta(delta, (text) => this.log.applyTextDelta(text)),
         onReasoning: (delta) => this.ingestDelta(delta, (text) => this.log.applyReasoningDelta(text)),
         onToolStep: (toolStep) => this.ingestToolStep(toolStep),
+        onQueuedMessageAnswered: (queuedMessageID) => this.ingestQueuedMessageAnswer(queuedMessageID),
         signal: streamAbort.signal,
       });
       this.watchdog.stop();
@@ -340,11 +381,13 @@ export class ChatController {
           : new ChatFailure(ChatFailureKind.UNKNOWN, error instanceof Error ? error.message : String(error));
       this.log.markAssistantTurn(ChatMessageState.FAILED);
     } finally {
+      const turnEndedNormally = !this.stopRequested && this.failure == null;
       this.log.removeEmptyAssistantTurn();
       this.isStreaming = false;
       this.log.assistantMessageID = null;
       this.activeStreamAbort = null;
       this.activeStreamPromise = null;
+      this.continueWithQueuedMessages(turnEndedNormally);
       this.autosave();
       void this.store
         .saveNow()
@@ -352,6 +395,17 @@ export class ChatController {
         .then(() => this.publish());
       this.publish();
     }
+  }
+
+  /** The running turn started on a queued message: the current answer is
+   * finished and a new one opens under that message. */
+  private ingestQueuedMessageAnswer(queuedMessageID: string): void {
+    this.watchdog.activity();
+    // The runner only reports ids it was handed for messages still queued,
+    // so this always opens a new answer.
+    this.log.beginAnsweringQueuedTurn(queuedMessageID);
+    this.autosave();
+    this.publish();
   }
 
   /** A tool step counts as activity, and stall detection pauses while any
@@ -368,6 +422,11 @@ export class ChatController {
     this.log.applyToolStep(toolStep);
     this.autosave();
     this.publish();
+  }
+
+  private selectedModelContextWindowTokens(): number | null {
+    const selectedModel = this.models.find((model) => model.id === this.selectedModelID);
+    return selectedModel != null ? selectedModel.contextWindowTokens : null;
   }
 
   private selectedModelSupportsToolCalls(): boolean {

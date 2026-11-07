@@ -50,3 +50,13 @@ test("should_record_the_generated_image_name_it_is_given", () => {
   assert.equal(tracker().finished("call-2", "generate_image", { content: [] }, false, "../x.png").generatedImageName, null);
   assert.equal(tracker().finished("call-3", "generate_image", { content: [] }, false).generatedImageName, null);
 });
+
+test("should_count_rounds_afresh_for_each_answer", () => {
+  const toolSteps = tracker();
+  toolSteps.started("call-1", "get_current_time", {});
+  toolSteps.completeRound();
+  toolSteps.completeRound();
+  toolSteps.beginNextAnswer();
+  assert.equal(toolSteps.completedRounds, 0);
+  assert.equal(toolSteps.started("call-2", "get_current_time", {}).roundIndex, 0);
+});

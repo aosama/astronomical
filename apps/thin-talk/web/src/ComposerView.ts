@@ -2,6 +2,9 @@ import { ComposerState } from "./ComposerState";
 import { ComposerAction } from "./ComposerAction";
 import { ThinkingEffort } from "./ThinkingEffort";
 
+/** The field's hint while an answer streams: a message sent now is read as
+ * soon as the model can take it, after the current reply or its tool calls. */
+const QUEUEING_PLACEHOLDER = "Add a message; Thin Talk reads it next";
 const MAX_FIELD_HEIGHT_PX = 160;
 
 /**
@@ -24,6 +27,9 @@ export class ComposerView {
   private readonly modelLabel: HTMLElement;
   private readonly modelMenu: HTMLElement;
   /** What the model menu last drew, so an unchanged menu is not rebuilt. */
+  /** The hint the page's markup gives the field, restored when no answer is
+   * streaming; the markup stays the one place that wording lives. */
+  private readonly idlePlaceholder: string;
   private renderedModelMenuSignature = "";
   private readonly banner: HTMLElement;
   private readonly bannerMessage: HTMLElement;
@@ -56,6 +62,7 @@ export class ComposerView {
     onAction: (action: ComposerAction) => void;
   }) {
     this.field = init.field;
+    this.idlePlaceholder = init.field.placeholder;
     this.sendButton = init.sendButton;
     this.stopButton = init.stopButton;
     this.retryButton = init.retryButton;
@@ -165,8 +172,10 @@ export class ComposerView {
 
   // MARK: - Send rules
 
+  /** A message can be sent while an answer is still coming; it is queued
+   * and answered next. */
   private canSend(): boolean {
-    return this.state.isReady && !this.state.isStreaming && this.draft().length > 0;
+    return this.state.isReady && this.draft().length > 0;
   }
 
   private refreshControls(): void {
@@ -175,6 +184,9 @@ export class ComposerView {
     this.stopButton.hidden = !streaming;
     this.stopButton.disabled = !streaming;
     this.field.disabled = !this.state.acceptsInput;
+    // While an answer streams, Return queues the message; the placeholder says
+    // so, since the send button gives way to Stop.
+    this.field.placeholder = streaming ? QUEUEING_PLACEHOLDER : this.idlePlaceholder;
     // The placeholder keeps the field discoverable while disabled; the send rule
     // needs the draft, so it is evaluated from the live value.
     this.sendButton.disabled = !this.canSend();

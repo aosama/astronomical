@@ -11,6 +11,9 @@ export class ModelCatalogEntry {
   public readonly supportsToolCalls: boolean;
   /** Whether the model makes images (an image-generation model). */
   public readonly generatesImages: boolean;
+  /** The model's context window in tokens, or null when the daemon does not
+   * say; conversations are trimmed to fit only when it is known. */
+  public readonly contextWindowTokens: number | null;
 
   public constructor(init: {
     id: string;
@@ -18,12 +21,15 @@ export class ModelCatalogEntry {
     supportedEndpoints: readonly string[] | null;
     supportsToolCalls?: boolean;
     generatesImages?: boolean;
+    contextWindowTokens?: number | null;
   }) {
     this.id = init.id;
     this.inputModalities = init.inputModalities;
     this.supportedEndpoints = init.supportedEndpoints;
     this.supportsToolCalls = init.supportsToolCalls === true;
     this.generatesImages = init.generatesImages === true;
+    const configuredContextWindow: number | null | undefined = init.contextWindowTokens;
+    this.contextWindowTokens = configuredContextWindow != null ? configuredContextWindow : null;
   }
 
   /** Whether the model can be sent an image in a chat request. */
@@ -55,6 +61,9 @@ export class ModelCatalogEntry {
     // tools is offered none, so it never sees declarations it cannot follow.
     const supportsToolCalls = record["supports_tool_calls"] === true;
     const generatesImages = supportedEndpoints !== null && supportedEndpoints.includes("/v1/images/generations");
-    return new ModelCatalogEntry({ id: record["id"], inputModalities, supportedEndpoints, supportsToolCalls, generatesImages });
+    const rawContextWindow = record["context_window"];
+    const contextWindowTokens =
+      typeof rawContextWindow === "number" && Number.isInteger(rawContextWindow) && rawContextWindow > 0 ? rawContextWindow : null;
+    return new ModelCatalogEntry({ id: record["id"], inputModalities, supportedEndpoints, supportsToolCalls, generatesImages, contextWindowTokens });
   }
 }

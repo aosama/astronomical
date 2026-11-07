@@ -40,6 +40,8 @@ function turnRequest(messages: ChatMessage[], forwardedDeltas: ForwardedDeltas, 
     onText: (delta) => { forwardedDeltas.text += delta; },
     onReasoning: (delta) => { forwardedDeltas.reasoning += delta; },
     onToolStep: () => undefined,
+    onQueuedMessageAnswered: () => undefined,
+    contextWindowTokens: null,
     signal,
   };
 }
@@ -297,4 +299,110 @@ test("should_fail_the_running_step_and_end_quietly_when_stopped_mid_tool", async
   const request = { ...toolTurnRequest([userMessage("Time?")], recordedSteps, { text: "", reasoning: "" }), signal: stopController.signal };
   await turnRunner([slowClock]).streamChat(request);
   assert.equal(recordedSteps[recordedSteps.length - 1]?.state, ToolStepState.FAILED);
+});
+
+test("should_refuse_a_queued_message_when_no_turn_is_running", () => {
+  assert.equal(turnRunner().queueUserMessage("q1", "Later"), false);
+});
+
+test("should_answer_a_message_queued_mid_answer_after_the_answer", async () => {
+  const scriptedFetch = new ScriptedChatFetch([
+    { lines: [chunkLine({ content: "Shakespeare." }, "stop")] },
+    { lines: [chunkLine({ content: "Around 1600." }, "stop")] },
+  ]);
+  scriptedFetch.install();
+  const runner = turnRunner();
+  const deliveryOrder: string[] = [];
+  let hasQueued = false;
+  const request: ChatStreamRequest = {
+    ...turnRequest([userMessage("Who wrote Hamlet?")], { text: "", reasoning: "" }, new AbortController().signal),
+    onText: (delta) => {
+      deliveryOrder.push(`text:${delta}`);
+      if (!hasQueued) {
+        hasQueued = true;
+        assert.equal(runner.queueUserMessage("q1", "And when?"), true);
+      }
+    },
+    onQueuedMessageAnswered: (queuedMessageID) => deliveryOrder.push(`answering:${queuedMessageID}`),
+  };
+  await runner.streamChat(request);
+  assert.deepEqual(deliveryOrder, ["text:Shakespeare.", "answering:q1", "text:Around 1600."]);
+  const followUpMessages = scriptedFetch.requests[1]?.body["messages"] as { role: string; content: string }[];
+  assert.deepEqual(followUpMessages.slice(-2), [{ role: "assistant", content: "Shakespeare." }, { role: "user", content: "And when?" }]);
+});
+
+test("should_steer_a_message_queued_during_a_tool_into_the_next_request", async () => {
+  const scriptedFetch = new ScriptedChatFetch([
+    { lines: [toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] },
+    { lines: [chunkLine({ content: "It is 2 PM in Verona." }, "stop")] },
+  ]);
+  scriptedFetch.install();
+  let runner: AgentTurnRunner | null = null;
+  const steeringClock: ConversationTool = {
+    ...clockTool(),
+    execute: async () => {
+      assert.equal(runner?.queueUserMessage("q1", "In Verona, please."), true);
+      return "Saturday, 2 PM";
+    },
+  };
+  runner = turnRunner([steeringClock]);
+  const answeredIDs: string[] = [];
+  await runner.streamChat({
+    ...toolTurnRequest([userMessage("What time is it?")], [], { text: "", reasoning: "" }),
+    onQueuedMessageAnswered: (queuedMessageID) => answeredIDs.push(queuedMessageID),
+  });
+  assert.equal(scriptedFetch.requests.length, 2, "the steered message rides on the request after the tool");
+  const secondRequestMessages = scriptedFetch.requests[1]?.body["messages"] as { role: string; content: string }[];
+  assert.deepEqual(secondRequestMessages.slice(-2).map((requestMessage) => requestMessage.role), ["tool", "user"]);
+  assert.equal(secondRequestMessages[secondRequestMessages.length - 1]?.content, "In Verona, please.");
+  assert.deepEqual(answeredIDs, ["q1"]);
+});
+
+test("should_trim_old_turns_to_the_models_context_window", async () => {
+  const scriptedFetch = new ScriptedChatFetch([{ lines: [chunkLine({ content: "Fine." }, "stop")] }]);
+  scriptedFetch.install();
+  const longHistory = [
+    userMessage("x".repeat(4_000)),
+    new ChatMessage({ id: "a1", role: ChatRole.ASSISTANT, content: "y".repeat(4_000) }),
+    userMessage("Short question?"),
+  ];
+  await turnRunner().streamChat({ ...turnRequest(longHistory, { text: "", reasoning: "" }, new AbortController().signal), contextWindowTokens: 200 });
+  assert.deepEqual(scriptedFetch.requests[0]?.body["messages"], [{ role: "user", content: "Short question?" }]);
+});
+
+test("should_answer_queued_messages_in_the_order_they_were_sent_even_across_a_tool", async () => {
+  const scriptedFetch = new ScriptedChatFetch([
+    { lines: [chunkLine({ content: "Checking." }), toolCallLine("call-1", "get_current_time", "{}"), chunkLine({}, "tool_calls")] },
+    { lines: [chunkLine({ content: "Answer to A." }, "stop")] },
+    { lines: [chunkLine({ content: "Answer to B." }, "stop")] },
+    { lines: [chunkLine({ content: "Done." }, "stop")] },
+  ]);
+  scriptedFetch.install();
+  let runner: AgentTurnRunner | null = null;
+  const queueingClock: ConversationTool = {
+    ...clockTool(),
+    execute: async () => {
+      runner?.queueUserMessage("b", "Message B");
+      return "Saturday, 2 PM";
+    },
+  };
+  runner = turnRunner([queueingClock]);
+  const answeredIDs: string[] = [];
+  let hasQueuedA = false;
+  await runner.streamChat({
+    ...toolTurnRequest([userMessage("Time?")], [], { text: "", reasoning: "" }),
+    onText: () => {
+      if (!hasQueuedA) {
+        hasQueuedA = true;
+        runner?.queueUserMessage("a", "Message A");
+      }
+    },
+    onQueuedMessageAnswered: (queuedMessageID) => answeredIDs.push(queuedMessageID),
+  });
+  assert.deepEqual(answeredIDs, ["a", "b"]);
+  const requestEndings = scriptedFetch.requests.slice(1, 3).map((sentRequest) => {
+    const requestMessages = sentRequest.body["messages"] as { content: string }[];
+    return requestMessages[requestMessages.length - 1]?.content;
+  });
+  assert.deepEqual(requestEndings, ["Message A", "Message B"]);
 });

@@ -22,6 +22,78 @@ export class ConversationLog {
     return userMessage;
   }
 
+  /** Adds a message the user sent while an answer was still coming. */
+  public appendQueuedUserTurn(content: string): ChatMessage {
+    const queuedMessage = new ChatMessage({
+      id: ConversationLog.newIdentifier(),
+      role: ChatRole.USER,
+      content,
+      state: ChatMessageState.QUEUED,
+    });
+    this.messages.push(queuedMessage);
+    return queuedMessage;
+  }
+
+  /** The oldest queued message still waiting for an answer, or null. */
+  public firstQueuedUserTurn(): ChatMessage | null {
+    const queuedMessage = this.messages.find((message) => message.state === ChatMessageState.QUEUED);
+    return queuedMessage != null ? queuedMessage : null;
+  }
+
+  /** Starts answering a queued message: the answer in progress is finished
+   * (or dropped if it is still empty), the queued message moves to just after
+   * the last message that is not waiting, and its answer opens right after it.
+   * The log then reads in the order the model saw the conversation, and a
+   * later request always ends with this question. Returns false when the id
+   * is not a queued message. */
+  public beginAnsweringQueuedTurn(queuedMessageID: string): boolean {
+    const queuedIndex = this.messages.findIndex((message) => message.id === queuedMessageID && message.state === ChatMessageState.QUEUED);
+    if (queuedIndex < 0) {
+      return false;
+    }
+    this.markAssistantTurn(ChatMessageState.COMPLETE);
+    this.removeEmptyAssistantTurn();
+    const [queuedMessage] = this.messages.splice(this.messages.findIndex((message) => message.id === queuedMessageID), 1);
+    if (queuedMessage == null) {
+      return false;
+    }
+    queuedMessage.state = ChatMessageState.COMPLETE;
+    const insertionIndex = this.indexAfterLastSettledMessage();
+    const answerID = ConversationLog.newIdentifier();
+    this.assistantMessageID = answerID;
+    this.messages.splice(insertionIndex, 0, queuedMessage, new ChatMessage({ id: answerID, role: ChatRole.ASSISTANT, content: "" }));
+    return true;
+  }
+
+  /** Where a message that is being answered now belongs: after every
+   * message that was sent and answered (or failed), ahead of messages still
+   * queued or never sent. */
+  private indexAfterLastSettledMessage(): number {
+    for (let messageIndex = this.messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+      const candidate = this.messages[messageIndex];
+      if (candidate != null && !ConversationLog.isWaitingUserMessage(candidate)) {
+        return messageIndex + 1;
+      }
+    }
+    return 0;
+  }
+
+  /** A user message that was queued, or queued and never sent. */
+  private static isWaitingUserMessage(message: ChatMessage): boolean {
+    return message.role === ChatRole.USER && (message.state === ChatMessageState.QUEUED || message.state === ChatMessageState.FAILED);
+  }
+
+  /** Marks every message still queued as not sent, as when the user stops
+   * or the answer fails; such messages stay visible but are left out of
+   * later requests. */
+  public markQueuedTurnsNotSent(): void {
+    for (const message of this.messages) {
+      if (message.state === ChatMessageState.QUEUED) {
+        message.state = ChatMessageState.FAILED;
+      }
+    }
+  }
+
   /** Opens the assistant turn up-front and hands its id back. Without this the
    * assistant id leaks from the previous turn and a second answer keeps
    * appending inside the first assistant bubble; a visible placeholder also
@@ -29,7 +101,11 @@ export class ConversationLog {
   public openAssistantTurn(): string {
     const placeholderID = ConversationLog.newIdentifier();
     this.assistantMessageID = placeholderID;
-    this.messages.push(
+    // Ahead of any message still queued or never sent, so a retry's answer
+    // sits under the question it answers.
+    this.messages.splice(
+      this.indexAfterLastSettledMessage(),
+      0,
       new ChatMessage({ id: placeholderID, role: ChatRole.ASSISTANT, content: "" }),
     );
     return placeholderID;
@@ -107,23 +183,28 @@ export class ConversationLog {
     }
   }
 
+  /** The latest question that was actually sent; queued and never-sent
+   * messages are not something a retry can answer. */
   public lastUserTurn(): ChatMessage | null {
     for (let index = this.messages.length - 1; index >= 0; index -= 1) {
       const candidate = this.messages[index];
-      if (candidate && candidate.role === ChatRole.USER) {
+      if (candidate && candidate.role === ChatRole.USER && !ConversationLog.isWaitingUserMessage(candidate)) {
         return candidate;
       }
     }
     return null;
   }
 
-  /** The history a new turn sends: every message except failed ones and the
-   * assistant turn being answered right now. That turn is opened as a
+  /** The history a new turn sends: every message except failed ones, queued
+   * ones not yet being answered, and the assistant turn being answered right now. That turn is opened as a
    * placeholder before the request goes out, and sending it made the daemon
    * render an empty assistant reply into the prompt ahead of the real one. */
   public requestMessages(): ChatMessage[] {
     return this.messages.filter(
-      (message) => message.state !== ChatMessageState.FAILED && message.id !== this.assistantMessageID,
+      (message) =>
+        message.state !== ChatMessageState.FAILED &&
+        message.state !== ChatMessageState.QUEUED &&
+        message.id !== this.assistantMessageID,
     );
   }
 

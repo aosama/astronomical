@@ -1,5 +1,6 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTurnContext, type AgentTurnDecision, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
+import { trimToContextBudget } from "./AgentContextTrimmer";
 import { agentHistory } from "./AgentHistoryReplay";
 import { agentTool, generatedImageNameFromToolResult } from "./AgentToolAdapter";
 import { ChatFailure } from "./ChatFailure";
@@ -29,16 +30,27 @@ interface TurnProgress {
   /** Whether any answer text has reached the conversation yet; a break is
    * only needed between two pieces of text. */
   hasForwardedText: boolean;
+  /** Queued messages handed to the loop, keyed by the message object itself:
+   * the loop emits that same object when it starts the message, so the id is
+   * found by identity, whatever order or timing the loop chose. */
+  readonly queuedMessageIDsByMessage: Map<AgentMessage, string>;
+}
+
+/** The turn currently running, if any, so queued messages can reach it. */
+interface ActiveTurn {
+  readonly agent: Agent;
+  readonly progress: TurnProgress;
 }
 
 /**
  * Serves each assistant turn through Pi's agent loop: the model answers, may
  * call the tools the catalog offers, reads their results, and keeps going
- * until it answers, the round limit is reached, or the user stops.
+ * until it answers, the round limit is reached, or the user stops. Messages
+ * the user sends meanwhile are answered in the same run, one after another.
  *
  * Pi is confined to this file, DaemonStreamFunction and their helpers
- * (AgentHistoryReplay, AgentToolAdapter, AssistantEventAssembler,
- * DaemonModelDescription): the controller sees only text, reasoning and
+ * (AgentContextTrimmer, AgentHistoryReplay, AgentToolAdapter,
+ * AssistantEventAssembler, DaemonModelDescription): the controller sees only text, reasoning and
  * tool-step updates, and saved conversations keep their own shape, so Pi can
  * be replaced without migrating anyone's history.
  */
@@ -46,6 +58,7 @@ export class AgentTurnRunner implements ChatStreamer {
   public readonly stallTimeoutMilliseconds = TURN_STALL_TIMEOUT_MILLISECONDS;
   private readonly client: DaemonClient;
   private readonly toolCatalog: ToolCatalog;
+  private activeTurn: ActiveTurn | null = null;
 
   public constructor(client: DaemonClient, toolCatalog: ToolCatalog) {
     this.client = client;
@@ -74,9 +87,11 @@ export class AgentTurnRunner implements ChatStreamer {
       toolSteps: new ToolStepTracker((toolName) => this.toolCatalog.labelFor(toolName)),
       paragraphBreakPending: false,
       hasForwardedText: false,
+      queuedMessageIDsByMessage: new Map(),
     };
     const agent = this.turnAgent(request, streamFunction, turnProgress);
     const stopListening = agent.subscribe((event) => AgentTurnRunner.forwardEvent(event, request, turnProgress));
+    this.activeTurn = { agent, progress: turnProgress };
     const stopTurn = (): void => {
       agent.abort();
       turnLifetime.abort();
@@ -85,11 +100,31 @@ export class AgentTurnRunner implements ChatStreamer {
     try {
       await agent.prompt(latestQuestion.content);
     } finally {
+      // Messages the loop never took stay queued in the conversation, which
+      // sends them itself once this turn is over.
+      this.activeTurn = null;
+      agent.clearAllQueues();
       request.signal.removeEventListener("abort", stopTurn);
       stopListening();
       turnLifetime.abort();
     }
     AgentTurnRunner.throwIfTurnFailed(agent.state.messages, streamFunction, request.signal);
+  }
+
+  /** Hands a queued message to the running turn through Pi's steering
+   * queue. Steering is taken after the response in progress (and after its
+   * tool calls, if it made any), so a message sent mid-answer is read next,
+   * and one sent while a tool runs is read before the model continues. One
+   * queue keeps queued messages in the order the user sent them. */
+  public queueUserMessage(queuedMessageID: string, content: string): boolean {
+    const activeTurn = this.activeTurn;
+    if (activeTurn == null) {
+      return false;
+    }
+    const queuedMessage: AgentMessage = { role: "user", content, timestamp: Date.now() };
+    activeTurn.progress.queuedMessageIDsByMessage.set(queuedMessage, queuedMessageID);
+    activeTurn.agent.steer(queuedMessage);
+    return true;
   }
 
   /**
@@ -121,9 +156,19 @@ export class AgentTurnRunner implements ChatStreamer {
         messages: agentHistory(request.messages.slice(0, -1), model, offeredTools.length > 0),
       },
       streamFn: streamFunction.stream.bind(streamFunction),
+      transformContext: AgentTurnRunner.contextTrimmer(request.contextWindowTokens),
       beforeToolCall: refuseCallsPastTheLimit,
       finishTurn: countRoundsAndStopAfterARefusedOne,
     });
+  }
+
+  /** Trims each request to the model's context window when the daemon says
+   * how large it is; otherwise sends the whole conversation, as before. */
+  private static contextTrimmer(contextWindowTokens: number | null): ((transcript: AgentMessage[]) => Promise<AgentMessage[]>) | undefined {
+    if (contextWindowTokens == null) {
+      return undefined;
+    }
+    return async (transcript) => trimToContextBudget(transcript, contextWindowTokens);
   }
 
   private static forwardEvent(event: AgentEvent, request: ChatStreamRequest, turnProgress: TurnProgress): void {
@@ -137,6 +182,9 @@ export class AgentTurnRunner implements ChatStreamer {
         } else if (event.assistantMessageEvent.type === "thinking_delta") {
           request.onReasoning(event.assistantMessageEvent.delta);
         }
+        break;
+      case "message_start":
+        AgentTurnRunner.noteUserMessageStart(event.message, request, turnProgress);
         break;
       case "tool_execution_start":
         request.onToolStep(turnProgress.toolSteps.started(event.toolCallId, event.toolName, event.args));
@@ -155,6 +203,21 @@ export class AgentTurnRunner implements ChatStreamer {
       default:
         break;
     }
+  }
+
+  /** A user message the loop starts that was handed in by queueUserMessage
+   * begins a new answer, with its own paragraphs and round count. The turn's
+   * own question is not in the map, so it starts nothing. */
+  private static noteUserMessageStart(startedMessage: AgentMessage, request: ChatStreamRequest, turnProgress: TurnProgress): void {
+    const queuedMessageID = turnProgress.queuedMessageIDsByMessage.get(startedMessage);
+    if (queuedMessageID == null) {
+      return;
+    }
+    turnProgress.queuedMessageIDsByMessage.delete(startedMessage);
+    turnProgress.paragraphBreakPending = false;
+    turnProgress.hasForwardedText = false;
+    turnProgress.toolSteps.beginNextAnswer();
+    request.onQueuedMessageAnswered(queuedMessageID);
   }
 
   /** A user stop is not a failure. Otherwise the stream function's classified
