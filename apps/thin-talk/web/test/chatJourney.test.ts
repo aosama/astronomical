@@ -52,6 +52,10 @@ test("a full chat journey: boot, send, stream, persist", async () => {
   assert.ok(chatBody, "a chat completions request was made");
   assert.equal(chatBody["stream"], true);
   assert.equal(chatBody["model"], "fake-chat-model");
+  // Only the question goes out: the assistant bubble opened for the answer
+  // must never be sent back to the daemon as an empty reply.
+  assert.equal((chatBody["messages"] as unknown[]).length, 1);
+  assert.equal((chatBody["messages"] as { role: string }[])[0]?.role, "user");
 }, { timeout: 30_000 });
 
 test("a second boot restores the persisted transcript from the host", async () => {

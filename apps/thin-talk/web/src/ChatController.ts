@@ -1,4 +1,5 @@
 import { DaemonClient } from "./DaemonClient";
+import type { ChatStreamer } from "./ChatStreamer";
 import { SessionBridge } from "./SessionBridge";
 import { SessionStore } from "./SessionStore";
 import { SessionPreferences } from "./SessionPreferences";
@@ -21,10 +22,11 @@ export type LoadPhase = "idle" | "loading" | "ready" | "empty" | "failed";
 const COMPOSER_FONT_SIZE_STEP = 1;
 
 /**
- * Owns the conversation: drives the streaming client, keeps the message history
- * and the session lifecycle, and preserves the user's ask so a failure always
- * offers a recoverable next action. It only publishes state; all wire logic
- * lives in the client and all drawing lives in the views.
+ * Owns the conversation: asks the turn streamer for each answer, keeps the
+ * message history and the session lifecycle, and preserves the user's ask so a
+ * failure always offers a recoverable next action. It only publishes state; the
+ * daemon handshake and model list come from the client, each turn's wire and
+ * agent loop live behind the streamer, and all drawing lives in the views.
  *
  * The surface is a pure function of the published ChatSurfaceState, so this
  * class decides what the conversation looks like and the views decide only how
@@ -32,6 +34,7 @@ const COMPOSER_FONT_SIZE_STEP = 1;
  */
 export class ChatController {
   private readonly client: DaemonClient;
+  private readonly streamer: ChatStreamer;
   private readonly bridge: SessionBridge;
   private readonly store: SessionStore;
   private readonly log = new ConversationLog();
@@ -49,11 +52,12 @@ export class ChatController {
   private selectedModelID: string | null = null;
   private isStreaming = false;
 
-  public constructor(init: { client: DaemonClient; bridge: SessionBridge; store: SessionStore }) {
+  public constructor(init: { client: DaemonClient; streamer: ChatStreamer; bridge: SessionBridge; store: SessionStore }) {
     this.client = init.client;
+    this.streamer = init.streamer;
     this.bridge = init.bridge;
     this.store = init.store;
-    this.watchdog = new StallWatchdog(this.client.stallTimeoutMilliseconds, () => this.handleStall());
+    this.watchdog = new StallWatchdog(this.streamer.stallTimeoutMilliseconds, () => this.handleStall());
   }
 
   public subscribe(listener: (state: ChatSurfaceState) => void): () => void {
@@ -270,7 +274,7 @@ export class ChatController {
     effort: ThinkingEffort,
   ): Promise<void> {
     try {
-      await this.client.streamChat({
+      await this.streamer.streamChat({
         modelID,
         messages: this.log.requestMessages(),
         thinkingEffort: effort,

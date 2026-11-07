@@ -1,36 +1,25 @@
 import { AppConfig } from "./AppConfig";
-import { ChatMessage } from "./ChatMessage";
+import { ChatCompletionChunk } from "./ChatCompletionChunk";
+import type { ChatCompletionRequestBody } from "./ChatCompletionRequestBody";
 import { ChatModel } from "./ChatModel";
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureClassifier } from "./ChatFailureClassifier";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ModelCatalogEntry } from "./ModelCatalogEntry";
 import { DaemonStatus } from "./DaemonStatus";
-import { ThinkingEffort } from "./ThinkingEffort";
 
 /** How long a readiness/model request may take before the page gives up. */
 const GET_TIMEOUT_MILLISECONDS = 2_000;
 /** The largest status/models body the page will read, matching the Swift client. */
 const MAXIMUM_RESPONSE_BYTE_COUNT = 1_048_576;
 
-/** One streaming chat completion request body. `thinking_budget` uses the
- * daemon's canonical numeric spelling: the REST contract rejects
- * unrecognised fields outright, so this key name is part of the wire agreement. */
-interface ChatCompletionRequestBody {
-  model: string;
-  stream: boolean;
-  messages: { role: string; content: string }[];
-  thinking_budget: number;
-}
-
 /**
  * Talks to a single daemon instance over its public REST endpoints: the
- * readiness handshake, the model list, and streaming chat completion. All
- * network and decoding logic is isolated here so the controller never touches
- * the wire.
+ * readiness handshake, the model list, and streaming chat completion. The
+ * network calls and the server-sent-events line framing live here, so the
+ * controller never touches the wire; decoding one line is ChatCompletionChunk's.
  */
 export class DaemonClient {
-  public readonly stallTimeoutMilliseconds = 60_000;
   private readonly config: AppConfig;
 
   public constructor(config: AppConfig) {
@@ -75,33 +64,29 @@ export class DaemonClient {
       .map((entry) => new ChatModel({ id: entry.id, name: entry.id, inputModalities: entry.inputModalities }));
   }
 
-  /** Consumes one streaming chat completion, invoking the handlers per delta.
-   * A user stop (abort signal) ends the stream normally; every other failure
-   * throws a classified ChatFailure. */
-  public async streamChat(init: {
-    modelID: string;
-    messages: ChatMessage[];
-    thinkingEffort: ThinkingEffort;
-    onText: (delta: string) => void;
-    onReasoning: (delta: string) => void;
-    signal: AbortSignal;
-  }): Promise<void> {
-    const requestBody: ChatCompletionRequestBody = {
-      model: init.modelID,
-      stream: true,
-      messages: init.messages.map((message) => ({ role: message.role, content: message.content })),
-      thinking_budget: ThinkingEffort.thinkingBudgetTokens(init.thinkingEffort),
-    };
+  /** Sends one streaming chat completion and hands every decoded chunk to
+   * `onChunk` in arrival order. A user stop (the abort signal) ends the stream
+   * normally, so the caller decides what a stopped turn means; every other
+   * failure throws a classified ChatFailure.
+   *
+   * Only `content-type` is sent: the daemon's CORS rule for the canvas origin
+   * allows no other request header, and WebKit refuses the whole request at
+   * the preflight when one is added. */
+  public async streamChatCompletion(
+    requestBody: ChatCompletionRequestBody,
+    signal: AbortSignal,
+    onChunk: (chunk: ChatCompletionChunk) => void,
+  ): Promise<void> {
     let response: Response;
     try {
       response = await fetch(`${this.config.daemonBaseURL}/v1/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
-        signal: init.signal,
+        signal,
       });
     } catch (error) {
-      if (init.signal.aborted) {
+      if (signal.aborted) {
         return;
       }
       // Pre-stream failure (e.g. a model that will not load): the daemon's
@@ -114,90 +99,57 @@ export class DaemonClient {
       const searchReason: string = reason != null ? reason : "";
       throw new ChatFailure(ChatFailureClassifier.classify(response.status, searchReason), reason);
     }
-    await this.consumeStream(response, init);
+    await DaemonClient.consumeServerSentEvents(response, signal, onChunk);
   }
 
-  private async consumeStream(
+  private static async consumeServerSentEvents(
     response: Response,
-    init: { onText: (delta: string) => void; onReasoning: (delta: string) => void; signal: AbortSignal },
+    signal: AbortSignal,
+    onChunk: (chunk: ChatCompletionChunk) => void,
   ): Promise<void> {
     const reader = response.body?.getReader();
     if (!reader) {
       throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the stream carried no body");
     }
     const decoder = new TextDecoder();
-    let buffered = "";
+    let unterminatedLine = "";
+    let isStreamFinished = false;
     try {
       for (;;) {
         const read = await reader.read();
         if (read.done) {
+          isStreamFinished = true;
           break;
         }
-        buffered += decoder.decode(read.value, { stream: true });
-        const lines = buffered.split("\n");
-        const remainder: string | undefined = lines.pop();
-        buffered = remainder != null ? remainder : "";
-        for (const line of lines) {
-          this.consumeLine(line, init);
-        }
+        unterminatedLine += decoder.decode(read.value, { stream: true });
+        const completeLines = unterminatedLine.split("\n");
+        const trailingPartialLine: string | undefined = completeLines.pop();
+        unterminatedLine = trailingPartialLine != null ? trailingPartialLine : "";
+        DaemonClient.deliverLines(completeLines, onChunk);
       }
-      if (buffered.length > 0) {
-        this.consumeLine(buffered, init);
+      if (unterminatedLine.length > 0) {
+        DaemonClient.deliverLines([unterminatedLine], onChunk);
       }
     } catch (error) {
-      if (init.signal.aborted) {
+      if (signal.aborted) {
         return;
       }
       throw error;
+    } finally {
+      // A chunk handler that throws (an error chunk, a failing listener)
+      // leaves the body unread; cancelling it closes the connection so the
+      // daemon stops generating for a reader that has gone.
+      if (!isStreamFinished) {
+        await reader.cancel().catch(() => undefined);
+      }
     }
   }
 
-  private consumeLine(
-    line: string,
-    handlers: { onText: (delta: string) => void; onReasoning: (delta: string) => void },
-  ): void {
-    const trimmedLine = line.trim();
-    if (!trimmedLine.startsWith("data:")) {
-      return;
-    }
-    const payload = trimmedLine.slice("data:".length).trim();
-    if (payload.length === 0 || payload === "[DONE]") {
-      return;
-    }
-    let chunk: unknown;
-    try {
-      chunk = JSON.parse(payload);
-    } catch {
-      return;
-    }
-    if (typeof chunk !== "object" || chunk === null) {
-      return;
-    }
-    const record = chunk as Record<string, unknown>;
-    const errorField = record["error"];
-    if (typeof errorField === "object" && errorField !== null) {
-      const message = (errorField as Record<string, unknown>)["message"];
-      const reason = typeof message === "string" ? message : null;
-      const classifiedReason: string = reason != null ? reason : "";
-      throw new ChatFailure(ChatFailureClassifier.classifyReason(classifiedReason), reason);
-    }
-    const choices = Array.isArray(record["choices"]) ? record["choices"] : [];
-    for (const rawChoice of choices) {
-      if (typeof rawChoice !== "object" || rawChoice === null) {
-        continue;
-      }
-      const delta = (rawChoice as Record<string, unknown>)["delta"];
-      if (typeof delta !== "object" || delta === null) {
-        continue;
-      }
-      const deltaRecord = delta as Record<string, unknown>;
-      const content = deltaRecord["content"];
-      if (typeof content === "string" && content.length > 0) {
-        handlers.onText(content);
-      }
-      const reasoning = deltaRecord["reasoning_content"];
-      if (typeof reasoning === "string" && reasoning.length > 0) {
-        handlers.onReasoning(reasoning);
+  private static deliverLines(serverSentEventLines: string[], onChunk: (chunk: ChatCompletionChunk) => void): void {
+    for (const serverSentEventLine of serverSentEventLines) {
+      const chunk = ChatCompletionChunk.fromServerSentEventLine(serverSentEventLine);
+      if (chunk != null) {
+        onChunk(chunk);
       }
     }
   }

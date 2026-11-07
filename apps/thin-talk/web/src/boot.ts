@@ -2,6 +2,7 @@ import { AppConfig } from "./AppConfig";
 import { HostChannel } from "./HostChannel";
 import { SessionBridge } from "./SessionBridge";
 import { SessionStore } from "./SessionStore";
+import { AgentTurnRunner } from "./AgentTurnRunner";
 import { DaemonClient } from "./DaemonClient";
 import { TrustBoundary } from "./TrustBoundary";
 import { MathPipeline } from "./MathPipeline";
@@ -111,7 +112,7 @@ export function bootChatClient(): AppShell {
     onNewChat: () => void controller.newChat(),
   });
 
-  const controller = new ChatController({ client, bridge, store });
+  const controller = new ChatController({ client, streamer: new AgentTurnRunner(client), bridge, store });
   const shell = new AppShell({ controller, transcript, composer, sidebar, host });
   shell.start();
   new HostCommandRouter(

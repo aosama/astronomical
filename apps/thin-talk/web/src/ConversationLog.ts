@@ -102,8 +102,14 @@ export class ConversationLog {
     return null;
   }
 
+  /** The history a new turn sends: every message except failed ones and the
+   * assistant turn being answered right now. That turn is opened as a
+   * placeholder before the request goes out, and sending it made the daemon
+   * render an empty assistant reply into the prompt ahead of the real one. */
   public requestMessages(): ChatMessage[] {
-    return this.messages.filter((message) => message.state !== ChatMessageState.FAILED);
+    return this.messages.filter(
+      (message) => message.state !== ChatMessageState.FAILED && message.id !== this.assistantMessageID,
+    );
   }
 
   private currentAssistantTurn(): ChatMessage | null {

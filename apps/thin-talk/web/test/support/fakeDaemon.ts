@@ -24,6 +24,10 @@ export interface FakeDaemonOptions {
 const DEFAULT_CHAT_LINES = [
   'data: {"choices":[{"delta":{"content":"Hello from the fake daemon."}}]}',
   'data: {"choices":[{"delta":{"content":" Second sentence."}}]}',
+  // The daemon closes every streamed choice with a finish reason before
+  // [DONE]; Thin Talk's AssistantEventAssembler treats a stream without one as
+  // cut off.
+  'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
   "data: [DONE]",
 ];
 
