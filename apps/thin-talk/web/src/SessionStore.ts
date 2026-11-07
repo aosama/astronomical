@@ -96,6 +96,9 @@ export class SessionStore {
           content: message.content,
           reasoning: message.reasoning,
           state: message.state,
+          // Steps are immutable values, so a copy of the list is enough to keep
+          // the save path from mutating the log.
+          toolSteps: [...message.toolSteps],
         }),
     );
   }

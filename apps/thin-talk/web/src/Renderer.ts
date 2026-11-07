@@ -10,6 +10,20 @@ import type { TranscriptAttachment } from "./TranscriptAttachment";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
 import { reasoningDisclosureIdentifier } from "./ReasoningDisclosure";
+import { ToolStep, ToolStepState } from "./ToolStep";
+
+/** The outcome shown after a tool step's label. */
+const TOOL_STEP_OUTCOME_LABELS: Record<ToolStepState, string> = {
+  [ToolStepState.RUNNING]: "running",
+  [ToolStepState.SUCCEEDED]: "done",
+  [ToolStepState.FAILED]: "failed",
+};
+
+/** The stable id of one tool-step row, keyed on the message and the call so
+ * the transcript and automation agents find the same row across patches. */
+export function toolStepIdentifier(messageID: string, toolCallID: string): string {
+  return `tool-step:${messageID}:${toolCallID}`;
+}
 
 const VISIBLE_STATE_LABELS: Record<string, string> = {
   streaming: "generating",
@@ -48,6 +62,7 @@ export class Renderer {
       : "";
     const answerBody = this.renderMarkdown(message.markdown);
     const attachments = this.attachmentStripHtml(message.attachments);
+    const toolSteps = this.toolStepsHtml(message);
     if (message.role === ChatRole.USER) {
       // The sender label lives inside the user bubble so stacked user turns
       // read as sent messages instead of extra compose fields.
@@ -67,6 +82,7 @@ export class Renderer {
       `</div>` +
       `<div class="message__answer">` +
       reasoning +
+      toolSteps +
       `<div class="markdown-body">${answerBody}</div>` +
       attachments +
       `</div>` +
@@ -96,6 +112,32 @@ export class Renderer {
       `<details class="reasoning" id="${disclosureIdentifier}" data-testid="${disclosureIdentifier}"${openAttribute}>` +
       `<summary>Reasoning</summary>` +
       `<div class="reasoning__body">${this.trust.escapeHtml(message.reasoning ?? "")}</div>` +
+      `</details>`
+    );
+  }
+
+  /** One collapsed row per tool call: the label and outcome in the summary,
+   * the arguments and result inside. Every value is escaped, since both come
+   * from the model or from a tool, never from trusted markup. */
+  private toolStepsHtml(message: TranscriptMessage): string {
+    if (message.toolSteps.length === 0) {
+      return "";
+    }
+    const toolStepRows = message.toolSteps.map((toolStep) => this.toolStepHtml(message.id, toolStep)).join("");
+    return `<div class="tool-steps" data-testid="tool-steps:${this.trust.escapeHtml(message.id)}">${toolStepRows}</div>`;
+  }
+
+  private toolStepHtml(messageID: string, toolStep: ToolStep): string {
+    const stepIdentifier = this.trust.escapeHtml(toolStepIdentifier(messageID, toolStep.toolCallID));
+    const argumentsText = toolStep.argumentsJSON.length === 0 || toolStep.argumentsJSON === "{}" ? "None" : toolStep.argumentsJSON;
+    const resultText = toolStep.state === ToolStepState.RUNNING ? "Waiting for the result." : toolStep.resultText;
+    return (
+      `<details class="tool-step" id="${stepIdentifier}" data-testid="${stepIdentifier}" data-state="${toolStep.state}">` +
+      `<summary>${this.trust.escapeHtml(toolStep.label)}: ${TOOL_STEP_OUTCOME_LABELS[toolStep.state]}</summary>` +
+      `<div class="tool-step__body">` +
+      `<span>Arguments</span><pre>${this.trust.escapeHtml(argumentsText)}</pre>` +
+      `<span>Result</span><pre>${this.trust.escapeHtml(resultText)}</pre>` +
+      `</div>` +
       `</details>`
     );
   }

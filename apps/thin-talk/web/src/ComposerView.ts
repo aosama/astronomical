@@ -23,6 +23,8 @@ export class ComposerView {
   private readonly modelPill: HTMLButtonElement;
   private readonly modelLabel: HTMLElement;
   private readonly modelMenu: HTMLElement;
+  /** What the model menu last drew, so an unchanged menu is not rebuilt. */
+  private renderedModelMenuSignature = "";
   private readonly banner: HTMLElement;
   private readonly bannerMessage: HTMLElement;
   private readonly bannerNextAction: HTMLElement;
@@ -100,6 +102,13 @@ export class ComposerView {
     this.modelMenu.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof Element)) {
+        return;
+      }
+      const toolsSwitch = target.closest("[data-tools-next-state]");
+      if (toolsSwitch instanceof HTMLButtonElement && !toolsSwitch.disabled) {
+        this.closeModelMenu();
+        const nextToolsState: string | undefined = toolsSwitch.dataset.toolsNextState;
+        this.onAction(new ComposerAction({ kind: "setTools", detail: nextToolsState != null ? nextToolsState : "on" }));
         return;
       }
       const choice = target.closest("[data-model-value]");
@@ -255,7 +264,23 @@ export class ComposerView {
     this.buildModelMenu(state);
   }
 
+  /**
+   * Rebuilds the menu only when what it shows has changed. The composer is
+   * rendered on every published state, including every streamed delta, and
+   * replacing the buttons that often could drop a click whose button was
+   * swapped out between mouse-down and mouse-up.
+   */
   private buildModelMenu(state: ComposerState): void {
+    const menuSignature = JSON.stringify([
+      state.models.map((model) => [model.id, model.name]),
+      state.selectedModelID,
+      state.toolsEnabled,
+      state.toolsAvailable,
+    ]);
+    if (menuSignature === this.renderedModelMenuSignature) {
+      return;
+    }
+    this.renderedModelMenuSignature = menuSignature;
     this.modelMenu.textContent = "";
     state.models.forEach((model) => {
       const item = document.createElement("li");
@@ -271,5 +296,32 @@ export class ComposerView {
       item.appendChild(choice);
       this.modelMenu.appendChild(item);
     });
+    if (state.models.length > 0) {
+      this.appendToolsSwitch(state);
+    }
+  }
+
+  /** The Tools switch sits under the model list because whether tools can
+   * run depends on the chosen model. A model that cannot call tools shows the
+   * switch disabled and unchecked, with the reason in the label. */
+  private appendToolsSwitch(state: ComposerState): void {
+    const separator = document.createElement("li");
+    separator.setAttribute("role", "separator");
+    separator.className = "composer__menu-separator";
+    this.modelMenu.appendChild(separator);
+    const toolsSwitchListItem = document.createElement("li");
+    toolsSwitchListItem.setAttribute("role", "none");
+    const toolsSwitch = document.createElement("button");
+    toolsSwitch.type = "button";
+    toolsSwitch.setAttribute("role", "menuitemcheckbox");
+    const isToolsSwitchChecked = state.toolsEnabled && state.toolsAvailable;
+    toolsSwitch.setAttribute("aria-checked", isToolsSwitchChecked ? "true" : "false");
+    toolsSwitch.disabled = !state.toolsAvailable;
+    toolsSwitch.dataset.testid = "composer-tools";
+    toolsSwitch.id = "composer-tools";
+    toolsSwitch.dataset.toolsNextState = state.toolsEnabled ? "off" : "on";
+    toolsSwitch.textContent = state.toolsAvailable ? "Use tools" : "Use tools (this model cannot)";
+    toolsSwitchListItem.appendChild(toolsSwitch);
+    this.modelMenu.appendChild(toolsSwitchListItem);
   }
 }

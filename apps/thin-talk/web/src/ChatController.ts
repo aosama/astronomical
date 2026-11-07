@@ -15,6 +15,7 @@ import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ThinkingEffort } from "./ThinkingEffort";
 import { StallWatchdog } from "./StallWatchdog";
+import { ToolStep } from "./ToolStep";
 
 /** How the chat surface discovered its models at startup. */
 export type LoadPhase = "idle" | "loading" | "ready" | "empty" | "failed";
@@ -181,6 +182,16 @@ export class ChatController {
     this.publish();
   }
 
+  /** Turns tool use on or off for future turns. */
+  public setToolsEnabled(toolsEnabled: boolean): void {
+    if (toolsEnabled === this.preferences.toolsEnabled) {
+      return;
+    }
+    this.preferences.toolsEnabled = toolsEnabled;
+    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
+    this.publish();
+  }
+
   public adjustFontSize(delta: number): void {
     const adjusted = this.preferences.clampComposerFontSize(
       this.preferences.composerFontSize + delta * COMPOSER_FONT_SIZE_STEP,
@@ -278,8 +289,11 @@ export class ChatController {
         modelID,
         messages: this.log.requestMessages(),
         thinkingEffort: effort,
+        toolsEnabled: this.preferences.toolsEnabled,
+        modelSupportsToolCalls: this.selectedModelSupportsToolCalls(),
         onText: (delta) => this.ingestDelta(delta, (text) => this.log.applyTextDelta(text)),
         onReasoning: (delta) => this.ingestDelta(delta, (text) => this.log.applyReasoningDelta(text)),
+        onToolStep: (toolStep) => this.ingestToolStep(toolStep),
         signal: streamAbort.signal,
       });
       this.watchdog.stop();
@@ -312,6 +326,20 @@ export class ChatController {
         .then(() => this.publish());
       this.publish();
     }
+  }
+
+  /** A tool step counts as activity: a slow tool must not look like a stalled
+   * stream, and the row shows the moment the call starts. */
+  private ingestToolStep(toolStep: ToolStep): void {
+    this.watchdog.activity();
+    this.log.applyToolStep(toolStep);
+    this.autosave();
+    this.publish();
+  }
+
+  private selectedModelSupportsToolCalls(): boolean {
+    const selectedModel = this.models.find((model) => model.id === this.selectedModelID);
+    return selectedModel != null && selectedModel.supportsToolCalls;
   }
 
   private ingestDelta(delta: string, apply: (text: string) => void): void {
@@ -369,6 +397,7 @@ export class ChatController {
           markdown: message.content,
           reasoning: message.reasoning,
           state: this.viewState(message),
+          toolSteps: message.toolSteps,
         }),
     );
     const snapshot: TranscriptSnapshot = { messages, notice: this.noticeText() };
@@ -390,6 +419,8 @@ export class ChatController {
       effort: this.preferences.thinkingEffort,
       models: this.models,
       selectedModelID: this.selectedModelID,
+      toolsEnabled: this.preferences.toolsEnabled,
+      toolsAvailable: this.selectedModelSupportsToolCalls(),
       failure: this.failure
         ? { message: this.failure.message, nextAction: this.failure.nextAction }
         : null,

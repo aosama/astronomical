@@ -19,6 +19,11 @@ export class ComposerState {
   public readonly effort: ThinkingEffort;
   public readonly models: readonly ChatModel[];
   public readonly selectedModelID: string | null;
+  /** The Tools switch as the user set it. */
+  public readonly toolsEnabled: boolean;
+  /** Whether the chosen model can call tools at all; the switch is shown
+   * disabled when it cannot, so it never promises tools that will not run. */
+  public readonly toolsAvailable: boolean;
   public readonly failure: ComposerFailure | null;
 
   public constructor(init: {
@@ -28,6 +33,8 @@ export class ComposerState {
     effort: ThinkingEffort;
     models: readonly ChatModel[];
     selectedModelID: string | null;
+    toolsEnabled?: boolean;
+    toolsAvailable?: boolean;
     failure: ComposerFailure | null;
   }) {
     this.isStreaming = init.isStreaming;
@@ -36,6 +43,8 @@ export class ComposerState {
     this.effort = init.effort;
     this.models = init.models;
     this.selectedModelID = init.selectedModelID;
+    this.toolsEnabled = init.toolsEnabled !== false;
+    this.toolsAvailable = init.toolsAvailable === true;
     this.failure = init.failure;
   }
 }

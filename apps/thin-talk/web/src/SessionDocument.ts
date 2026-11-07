@@ -1,9 +1,12 @@
 import { ChatMessage } from "./ChatMessage";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
+import { ToolStep } from "./ToolStep";
 
-/** The schema version this client writes. Bump when the document shape changes. */
-export const SESSION_SCHEMA_VERSION = 1;
+/** The schema version this client writes. Bump when the document shape changes.
+ * Version 2 adds `toolSteps` to assistant messages; a version 1 file has none
+ * and loads unchanged. */
+export const SESSION_SCHEMA_VERSION = 2;
 
 /** The longest title derived from a first user message. */
 const MAX_TITLE_LENGTH = 48;
@@ -45,7 +48,7 @@ export class SessionDocument {
   public static persistableMessages(messages: readonly ChatMessage[]): ChatMessage[] {
     const persistable: ChatMessage[] = [];
     messages.forEach((message) => {
-      const hasContent = message.content.length > 0 || message.reasoning.length > 0;
+      const hasContent = message.content.length > 0 || message.reasoning.length > 0 || message.toolSteps.length > 0;
       if (message.state === ChatMessageState.STREAMING) {
         if (!hasContent) {
           return;
@@ -57,6 +60,7 @@ export class SessionDocument {
             content: message.content,
             reasoning: message.reasoning,
             state: ChatMessageState.STOPPED,
+            toolSteps: message.toolSteps,
           }),
         );
         return;
@@ -94,6 +98,7 @@ export class SessionDocument {
         content: message.content,
         reasoning: message.reasoning,
         state: message.state,
+        toolSteps: message.toolSteps.map((toolStep) => toolStep.toPlain()),
       })),
     };
   }
@@ -130,7 +135,19 @@ export class SessionDocument {
     const content = typeof record["content"] === "string" ? record["content"] : "";
     const reasoning = typeof record["reasoning"] === "string" ? record["reasoning"] : "";
     const state = SessionDocument.stateFromPlain(record["state"]);
-    return new ChatMessage({ id, role, content, reasoning, state });
+    const toolSteps = SessionDocument.toolStepsFromPlain(record["toolSteps"]);
+    return new ChatMessage({ id, role, content, reasoning, state, toolSteps });
+  }
+
+  /** Tool steps saved with a message; absent in version 1 files. A damaged
+   * step is dropped on its own so the rest of the conversation still opens. */
+  private static toolStepsFromPlain(rawToolSteps: unknown): ToolStep[] {
+    if (!Array.isArray(rawToolSteps)) {
+      return [];
+    }
+    return rawToolSteps
+      .map((rawToolStep) => ToolStep.fromPlain(rawToolStep))
+      .filter((toolStep): toolStep is ToolStep => toolStep !== null);
   }
 
   private static stateFromPlain(rawState: unknown): ChatMessageState {

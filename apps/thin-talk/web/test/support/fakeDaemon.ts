@@ -17,6 +17,9 @@ export interface FakeDaemonOptions {
   readonly models?: unknown[];
   /** SSE lines streamed for chat completions; defaults to a short reply. */
   readonly chatStreamLines?: string[];
+  /** SSE lines for successive chat completions, one entry per request, for a
+   * turn that calls a tool and then answers. The last entry repeats. */
+  readonly chatReplySequence?: string[][];
   /** Makes the status handshake fail, to exercise the failed load path. */
   readonly failHandshake?: boolean;
 }
@@ -68,12 +71,36 @@ export class FakeDaemon {
       return Response.json({ data: models });
     }
     if (url.endsWith("/v1/chat/completions")) {
+      const scriptedReply = this.nextScriptedReply();
+      if (scriptedReply != null) {
+        return sseResponse(scriptedReply);
+      }
       const configuredChatStreamLines: string[] | undefined = this.options.chatStreamLines;
       const chatStreamLines: string[] =
         configuredChatStreamLines != null ? configuredChatStreamLines : DEFAULT_CHAT_LINES;
       return sseResponse(chatStreamLines);
     }
     return new Response("no such route on the fake daemon", { status: 404 });
+  }
+
+  private chatRepliesServed = 0;
+
+  private nextScriptedReply(): string[] | null {
+    const replySequence: string[][] | undefined = this.options.chatReplySequence;
+    if (replySequence == null || replySequence.length === 0) {
+      return null;
+    }
+    const replyIndex = Math.min(this.chatRepliesServed, replySequence.length - 1);
+    this.chatRepliesServed += 1;
+    const scriptedReply = replySequence[replyIndex];
+    return scriptedReply != null ? scriptedReply : null;
+  }
+
+  /** Every chat completion request body, in the order they were sent. */
+  public chatRequestBodies(): Record<string, unknown>[] {
+    return this.requests
+      .filter((request) => request.url.endsWith("/v1/chat/completions") && request.body != null)
+      .map((request) => JSON.parse(request.body as string) as Record<string, unknown>);
   }
 
   public chatRequestBody(): Record<string, unknown> | null {

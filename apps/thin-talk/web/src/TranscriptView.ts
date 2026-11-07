@@ -131,7 +131,7 @@ export class TranscriptView {
 
   /**
    * A message re-renders only when something the renderer reads — role,
-   * content, reasoning, state, or attachments — changed since it was last
+   * content, reasoning, state, attachments, or tool steps — changed since it was last
    * drawn. Every value Renderer.messageHtml consumes must appear here: a
    * missing field would let a changed message keep its stale node.
    *
@@ -160,6 +160,7 @@ export class TranscriptView {
       message.reasoning,
       message.state,
       message.attachments.map((attachment) => [attachment.id, attachment.assetURL, attachment.label]),
+      message.toolSteps.map((toolStep) => [toolStep.toolCallID, toolStep.label, toolStep.argumentsJSON, toolStep.resultText, toolStep.state]),
     ]);
   }
 
@@ -294,8 +295,10 @@ export class TranscriptView {
       morphdom(article, probe, {
         childrenOnly: true,
         getNodeKey: (node) => this.renderer.nodeKey(node),
-        onBeforeElUpdated: (fromElement: Element, toElement: Element) =>
-          this.renderer.beforeElUpdated(fromElement, toElement),
+        onBeforeElUpdated: (fromElement: Element, toElement: Element) => {
+          TranscriptView.keepToolStepOpenState(fromElement, toElement);
+          return this.renderer.beforeElUpdated(fromElement, toElement);
+        },
       });
       this.reconcileReasoningDisclosure(article, message);
     } finally {
@@ -306,6 +309,14 @@ export class TranscriptView {
     // the fence closes, exactly like code highlighting does.
     if (message.state === ChatMessageState.COMPLETE || message.state === ChatMessageState.STOPPED) {
       this.renderer.renderDiagrams(article);
+    }
+  }
+
+  /** A tool-step row arrives collapsed from the template on every patch; the
+   * reader's expand or collapse is carried over so it survives streaming. */
+  private static keepToolStepOpenState(fromElement: Element, toElement: Element): void {
+    if (fromElement instanceof HTMLDetailsElement && toElement instanceof HTMLDetailsElement && fromElement.classList.contains("tool-step")) {
+      toElement.open = fromElement.open;
     }
   }
 

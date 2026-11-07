@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AssistantMessage, Message, TranscriptContext } from "@earendil-works/pi-ai";
+import { createInitialSystemMessage, type AssistantMessage, type Message, type TranscriptContext } from "@earendil-works/pi-ai";
 import { AppConfig } from "../src/AppConfig";
 import { ChatFailureKind } from "../src/ChatFailureKind";
 import { DaemonClient } from "../src/DaemonClient";
@@ -61,12 +61,19 @@ test("should_send_history_as_plain_text_without_earlier_reasoning", () => {
   ]);
 });
 
-test("should_refuse_a_tool_result_while_no_tools_are_offered", () => {
-  assert.throws(() =>
-    DaemonStreamFunction.requestMessages([
-      { role: "toolResult", toolCallId: "call-1", toolName: "clock", content: [], isError: false, timestamp: 0 },
-    ] as unknown as Message[]),
-  );
+test("should_send_tool_calls_and_their_results_in_the_daemon_shape", () => {
+  const requestMessages = DaemonStreamFunction.requestMessages([
+    { role: "user", content: "What time is it?", timestamp: 0 },
+    assistantReply([{ type: "toolCall", id: "call-1", name: "get_current_time", arguments: {} }]),
+    { role: "toolResult", toolCallId: "call-1", toolName: "get_current_time", content: [{ type: "text", text: "Saturday 2 PM" }], isError: false, timestamp: 0 },
+    assistantReply([{ type: "text", text: "It is 2 PM." }]),
+  ] as Message[]);
+  assert.deepEqual(requestMessages, [
+    { role: "user", content: "What time is it?" },
+    { role: "assistant", content: "", tool_calls: [{ id: "call-1", type: "function", function: { name: "get_current_time", arguments: "{}" } }] },
+    { role: "tool", tool_call_id: "call-1", content: "Saturday 2 PM" },
+    { role: "assistant", content: "It is 2 PM." },
+  ]);
 });
 
 test("should_keep_the_classified_failure_behind_an_http_error", async () => {
@@ -107,8 +114,10 @@ test("should_report_an_unexpected_error_as_an_unknown_failure", async () => {
   const streamFunction = new DaemonStreamFunction(daemonClient(), 256, new AbortController().signal);
   const finalMessage = await streamFunction
     .stream(DAEMON_MODEL, transcript([
-      { role: "toolResult", toolCallId: "call-1", toolName: "clock", content: [], isError: false, timestamp: 0 },
-    ] as unknown as Message[]))
+      // A BigInt cannot be written as JSON, so building the request throws a
+      // plain TypeError rather than a classified failure.
+      assistantReply([{ type: "toolCall", id: "call-1", name: "clock", arguments: { tick: BigInt(1) } as never }]),
+    ] as Message[]))
     .result();
   assert.equal(finalMessage.stopReason, "error");
   assert.equal(streamFunction.lastFailure?.kind, ChatFailureKind.UNKNOWN);
@@ -128,4 +137,25 @@ test("should_cancel_the_request_when_its_turn_ends_first", async () => {
   }
   assert.equal((await eventStream.result()).stopReason, "aborted");
   assert.equal(scriptedFetch.requests[0]?.wasCancelled, true);
+});
+
+test("should_declare_the_transcripts_tools_and_omit_tools_when_there_are_none", async () => {
+  const scriptedFetch = new ScriptedChatFetch([
+    { lines: [chunkLine({ content: "ok" }, "stop")] },
+    { lines: [chunkLine({ content: "ok" }, "stop")] },
+  ]);
+  scriptedFetch.install();
+  const streamFunction = new DaemonStreamFunction(daemonClient(), 256, new AbortController().signal);
+  const clockTool = { name: "get_current_time", description: "Reads the clock.", parameters: { type: "object", properties: {} } };
+  await streamFunction
+    .stream(DAEMON_MODEL, transcript([
+      createInitialSystemMessage(undefined, [clockTool as never]),
+      { role: "user", content: "What time is it?", timestamp: 0 },
+    ] as unknown as Message[]))
+    .result();
+  await streamFunction.stream(DAEMON_MODEL, transcript([{ role: "user", content: "Hi", timestamp: 0 }])).result();
+  assert.deepEqual(scriptedFetch.requests[0]?.body["tools"], [
+    { type: "function", function: { name: "get_current_time", description: "Reads the clock.", parameters: { type: "object", properties: {} } } },
+  ]);
+  assert.equal("tools" in (scriptedFetch.requests[1]?.body ?? {}), false);
 });

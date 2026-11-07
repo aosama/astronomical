@@ -17,7 +17,7 @@ export interface Journey {
  * preferences before the client reads them. */
 export function bootJourney(
   previous?: Journey,
-  options?: { models?: unknown[]; seedPreferences?: unknown; titlebarInset?: number },
+  options?: { models?: unknown[]; seedPreferences?: unknown; titlebarInset?: number; chatReplySequence?: string[][] },
 ): Journey {
   installDom();
   installConfig(DAEMON_BASE_URL, options?.titlebarInset);
@@ -41,6 +41,7 @@ export function bootJourney(
       channel: "development",
       stateDirectory: "~/.astronomical-dev",
       models: options?.models,
+      chatReplySequence: options?.chatReplySequence,
     });
   daemon.install();
   bootChatClient();
