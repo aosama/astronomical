@@ -116,7 +116,7 @@
   "expert_memory_mode": null,
   "expert_placement": {
     "reply_sentence": "",
-    "stock_sentence": "Fully in memory."
+    "stock_sentence": "All in RAM"
   },
   "expert_residency": null,
   "machine_mlx_memory_ceiling_bytes": 0,

@@ -2,7 +2,9 @@
 
 use astronomical_ipc_protocol::{ExpertLayerSeatingCounts, ExpertMemoryMode};
 
-use super::expert_placement::{expert_placement, expert_residency_json};
+use super::expert_placement::{
+    MAXIMUM_STOCK_LABEL_CHARACTERS, expert_placement, expert_residency_json,
+};
 use crate::{ExpertResidencySnapshot, WorkerActivity};
 
 const APPLE_GIGABYTE_BYTES: u64 = 1_073_741_824;
@@ -23,7 +25,7 @@ fn measured_residency(
 }
 
 #[test]
-fn should_say_no_library_is_loaded_when_no_model_is_ready() {
+fn should_say_no_model_is_loaded_when_no_model_is_ready() {
     let placement = expert_placement(
         None,
         WorkerActivity::Idle,
@@ -34,7 +36,7 @@ fn should_say_no_library_is_loaded_when_no_model_is_ready() {
             APPLE_GIGABYTE_BYTES,
         )),
     );
-    assert_eq!(placement.stock_sentence, "No expert library is loaded.");
+    assert_eq!(placement.stock_sentence, "No model loaded");
     assert_eq!(placement.reply_sentence, "");
 
     let blank_model_id = expert_placement(
@@ -43,10 +45,7 @@ fn should_say_no_library_is_loaded_when_no_model_is_ready() {
         Some(ExpertMemoryMode::Paged),
         None,
     );
-    assert_eq!(
-        blank_model_id.stock_sentence,
-        "No expert library is loaded."
-    );
+    assert_eq!(blank_model_id.stock_sentence, "No model loaded");
     assert_eq!(blank_model_id.reply_sentence, "");
 }
 
@@ -58,31 +57,25 @@ fn should_say_the_library_size_is_unmeasured_for_hybrid_and_paged() {
         Some(ExpertMemoryMode::Hybrid),
         None,
     );
-    assert_eq!(
-        hybrid_placement.stock_sentence,
-        "Expert library size is not measured yet."
-    );
+    assert_eq!(hybrid_placement.stock_sentence, "Size not measured");
     let paged_placement = expert_placement(
         Some("Ornith"),
         WorkerActivity::Idle,
         Some(ExpertMemoryMode::Paged),
         Some(measured_residency(40, 0, 0)),
     );
-    assert_eq!(
-        paged_placement.stock_sentence,
-        "Expert library size is not measured yet."
-    );
+    assert_eq!(paged_placement.stock_sentence, "Size not measured");
 }
 
 #[test]
-fn should_say_fully_in_memory_when_the_loaded_model_is_not_sparse() {
+fn should_say_all_in_ram_when_the_loaded_model_is_not_sparse() {
     let image_placement = expert_placement(
         Some("fictional/flux-model"),
         WorkerActivity::ImageGeneration,
         None,
         None,
     );
-    assert_eq!(image_placement.stock_sentence, "Fully in memory.");
+    assert_eq!(image_placement.stock_sentence, "All in RAM");
     assert_eq!(image_placement.reply_sentence, "");
 
     let resident_without_a_measurement = expert_placement(
@@ -91,10 +84,7 @@ fn should_say_fully_in_memory_when_the_loaded_model_is_not_sparse() {
         Some(ExpertMemoryMode::Resident),
         Some(measured_residency(0, 0, 0)),
     );
-    assert_eq!(
-        resident_without_a_measurement.stock_sentence,
-        "Fully in memory."
-    );
+    assert_eq!(resident_without_a_measurement.stock_sentence, "All in RAM");
 }
 
 #[test]
@@ -109,11 +99,11 @@ fn should_say_every_measured_layer_is_in_ram() {
             2 * APPLE_GIGABYTE_BYTES,
         )),
     );
-    assert_eq!(placement.stock_sentence, "All 40 layers are in RAM.");
+    assert_eq!(placement.stock_sentence, "40 layers in RAM");
 }
 
 #[test]
-fn should_say_the_library_is_in_ram_when_the_layer_count_is_zero() {
+fn should_say_all_in_ram_when_the_layer_count_is_zero() {
     let placement = expert_placement(
         Some("Ornith"),
         WorkerActivity::Idle,
@@ -124,21 +114,18 @@ fn should_say_the_library_is_in_ram_when_the_layer_count_is_zero() {
             APPLE_GIGABYTE_BYTES,
         )),
     );
-    assert_eq!(placement.stock_sentence, "The expert library is in RAM.");
+    assert_eq!(placement.stock_sentence, "All in RAM");
 }
 
 #[test]
-fn should_say_the_library_is_still_on_the_ssd_when_nothing_is_resident() {
+fn should_say_all_on_ssd_when_nothing_is_resident() {
     let placement = expert_placement(
         Some("Ornith"),
         WorkerActivity::Idle,
         Some(ExpertMemoryMode::Paged),
         Some(measured_residency(40, 0, 4 * APPLE_GIGABYTE_BYTES)),
     );
-    assert_eq!(
-        placement.stock_sentence,
-        "The expert library is still on the SSD."
-    );
+    assert_eq!(placement.stock_sentence, "All on SSD");
 }
 
 #[test]
@@ -153,7 +140,7 @@ fn should_name_the_gigabytes_still_on_the_ssd() {
             3 * APPLE_GIGABYTE_BYTES,
         )),
     );
-    assert_eq!(placement.stock_sentence, "2.00 GB are still on the SSD.");
+    assert_eq!(placement.stock_sentence, "2.00 GB on SSD");
 }
 
 #[test]
@@ -168,7 +155,7 @@ fn should_name_seated_bytes_while_a_hybrid_reply_still_remembers_the_ssd() {
             2 * APPLE_GIGABYTE_BYTES,
         )),
     );
-    assert_eq!(placement.stock_sentence, "All 40 layers are in RAM.");
+    assert_eq!(placement.stock_sentence, "40 layers in RAM");
     assert_eq!(
         placement.reply_sentence,
         "This reply has read experts from the SSD."
@@ -211,10 +198,7 @@ fn should_say_this_reply_is_streaming_while_paged_generation_runs() {
         Some(ExpertMemoryMode::Paged),
         None,
     );
-    assert_eq!(
-        placement.stock_sentence,
-        "Expert library size is not measured yet."
-    );
+    assert_eq!(placement.stock_sentence, "Size not measured");
     assert_eq!(
         placement.reply_sentence,
         "This reply is streaming experts from the SSD."
@@ -290,7 +274,7 @@ fn should_not_call_image_generation_this_reply() {
 fn should_leave_the_reply_sentence_empty_when_the_mode_is_absent() {
     let placement = expert_placement(Some("dense"), WorkerActivity::Generating, None, None);
     assert_eq!(placement.reply_sentence, "");
-    assert_eq!(placement.stock_sentence, "Fully in memory.");
+    assert_eq!(placement.stock_sentence, "All in RAM");
 }
 
 #[test]
@@ -309,4 +293,62 @@ fn should_publish_only_the_seated_layer_prefix() {
         residency_json["retained_expert_counts"],
         serde_json::json!([0, 256])
     );
+}
+
+fn stock_label(
+    ready_model_id: Option<&str>,
+    expert_memory_mode: Option<ExpertMemoryMode>,
+    expert_residency: Option<ExpertResidencySnapshot>,
+) -> String {
+    expert_placement(
+        ready_model_id,
+        WorkerActivity::Idle,
+        expert_memory_mode,
+        expert_residency,
+    )
+    .stock_sentence
+}
+
+#[test]
+fn should_keep_every_stock_label_on_one_line_of_the_menu_cell() {
+    let hundreds_of_gigabytes = 999 * APPLE_GIGABYTE_BYTES;
+    let widest_labels = [
+        stock_label(None, Some(ExpertMemoryMode::Hybrid), None),
+        stock_label(Some("qwen"), Some(ExpertMemoryMode::Paged), None),
+        stock_label(Some("qwen"), Some(ExpertMemoryMode::Resident), None),
+        stock_label(
+            Some("qwen"),
+            Some(ExpertMemoryMode::Hybrid),
+            Some(measured_residency(
+                999,
+                hundreds_of_gigabytes,
+                hundreds_of_gigabytes,
+            )),
+        ),
+        stock_label(
+            Some("qwen"),
+            Some(ExpertMemoryMode::Hybrid),
+            Some(measured_residency(
+                0,
+                hundreds_of_gigabytes,
+                hundreds_of_gigabytes,
+            )),
+        ),
+        stock_label(
+            Some("qwen"),
+            Some(ExpertMemoryMode::Hybrid),
+            Some(measured_residency(999, 0, hundreds_of_gigabytes)),
+        ),
+        stock_label(
+            Some("qwen"),
+            Some(ExpertMemoryMode::Hybrid),
+            Some(measured_residency(999, 1, hundreds_of_gigabytes)),
+        ),
+    ];
+    for widest_label in widest_labels {
+        assert!(
+            widest_label.chars().count() <= MAXIMUM_STOCK_LABEL_CHARACTERS,
+            "{widest_label:?} is too long for one line"
+        );
+    }
 }

@@ -234,13 +234,13 @@ final class StatusPresentationContractTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"generating","ready_model_id":"Ornith","ready_model_size_bytes":18420000000,"progress":{"phase":"generation","processed_tokens":27,"total_tokens":512,"elapsed_ms":1000},"expert_memory_mode":"paged","expert_placement":{"stock_sentence":"Expert library size is not measured yet.","reply_sentence":"This reply is streaming experts from the SSD."},"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":4,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.4}}
+        {"status":"ready","activity":"generating","ready_model_id":"Ornith","ready_model_size_bytes":18420000000,"progress":{"phase":"generation","processed_tokens":27,"total_tokens":512,"elapsed_ms":1000},"expert_memory_mode":"paged","expert_placement":{"stock_sentence":"Size not measured","reply_sentence":"This reply is streaming experts from the SSD."},"mlx_memory_snapshot":{"source":"decode_submitted","active_memory_bytes":12000000000,"allocator_cache_memory_bytes":2000000000,"peak_memory_bytes":14000000000,"expert_payload_bytes":5000000000,"model_core_payload_bytes":4000000000,"context_state_payload_bytes":1000000000},"mlx_memory_ceiling_bytes":40000000000,"serving_session":{"completed_request_count":4,"total_prompt_token_count":4096,"total_reused_prompt_token_count":2048,"average_prefill_tok_per_second":1000,"average_generation_tok_per_second":27.4}}
         """.utf8)
     )
 
     XCTAssertEqual(statusDocument.menuBarTitle, "GEN 27.0 tok/s")
     XCTAssertEqual(statusDocument.phaseTitle, "Generating")
-    XCTAssertEqual(statusDocument.modelFootprintTitle, "Expert library size is not measured yet.")
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "Size not measured")
     XCTAssertEqual(statusDocument.replyReadTitle, "This reply is streaming experts from the SSD.")
     XCTAssertEqual(statusDocument.progressTitle, "27 / 512 tokens")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
@@ -280,7 +280,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s")
     XCTAssertEqual(statusDocument.progressCompletedUnitCount, 2)
     XCTAssertEqual(statusDocument.progressTotalUnitCount, 4)
-    XCTAssertEqual(statusDocument.modelFootprintTitle, "Fully in memory")
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "All in RAM")
     XCTAssertEqual(statusDocument.modelDiskSizeTitle, "3.91 GB")
   }
 
@@ -320,11 +320,11 @@ final class StatusPresentationContractTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"resident","expert_residency":{"total_layer_count":40,"resident_expert_count":10240,"resident_expert_payload_bytes":19595788288},"expert_placement":{"stock_sentence":"All 40 layers are in RAM.","reply_sentence":"Experts are being served from RAM."}}
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"resident","expert_residency":{"total_layer_count":40,"resident_expert_count":10240,"resident_expert_payload_bytes":19595788288},"expert_placement":{"stock_sentence":"40 layers in RAM","reply_sentence":"Experts are being served from RAM."}}
         """.utf8)
     )
 
-    XCTAssertEqual(statusDocument.modelFootprintTitle, "All 40 layers are in RAM.")
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "40 layers in RAM")
     XCTAssertEqual(statusDocument.replyReadTitle, "Experts are being served from RAM.")
   }
 
@@ -333,20 +333,20 @@ final class StatusPresentationContractTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_placement":{"stock_sentence":"2.00 GB are still on the SSD.","reply_sentence":"The last reply read experts from the SSD."},"expert_residency":{"total_layer_count":40,"resident_expert_count":8000,"resident_expert_payload_bytes":19200000000}}
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_placement":{"stock_sentence":"2.00 GB on SSD","reply_sentence":"The last reply read experts from the SSD."},"expert_residency":{"total_layer_count":40,"resident_expert_count":8000,"resident_expert_payload_bytes":19200000000}}
         """.utf8)
     )
-    XCTAssertEqual(partialLibrary.modelFootprintTitle, "2.00 GB are still on the SSD.")
+    XCTAssertEqual(partialLibrary.modelFootprintTitle, "2.00 GB on SSD")
     XCTAssertEqual(partialLibrary.replyReadTitle, "The last reply read experts from the SSD.")
 
     let coldLibrary = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_placement":{"stock_sentence":"The expert library is still on the SSD.","reply_sentence":"The last reply read experts from the SSD."},"expert_residency":{"total_layer_count":40,"resident_expert_count":0,"resident_expert_payload_bytes":0}}
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"hybrid","expert_placement":{"stock_sentence":"All on SSD","reply_sentence":"The last reply read experts from the SSD."},"expert_residency":{"total_layer_count":40,"resident_expert_count":0,"resident_expert_payload_bytes":0}}
         """.utf8)
     )
-    XCTAssertEqual(coldLibrary.modelFootprintTitle, "The expert library is still on the SSD.")
+    XCTAssertEqual(coldLibrary.modelFootprintTitle, "All on SSD")
     XCTAssertEqual(coldLibrary.replyReadTitle, "The last reply read experts from the SSD.")
   }
 
@@ -358,11 +358,11 @@ final class StatusPresentationContractTests: XCTestCase {
       DaemonStatusDocument.self,
       from: Data(
         """
-        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"paged","expert_residency":{"total_layer_count":40,"resident_expert_count":0,"resident_expert_payload_bytes":0},"expert_placement":{"stock_sentence":"Expert library size is not measured yet.","reply_sentence":"Experts stream from the SSD when a reply needs them."}}
+        {"status":"ready","activity":"idle","ready_model_id":"Ornith","expert_memory_mode":"paged","expert_residency":{"total_layer_count":40,"resident_expert_count":0,"resident_expert_payload_bytes":0},"expert_placement":{"stock_sentence":"Size not measured","reply_sentence":"Experts stream from the SSD when a reply needs them."}}
         """.utf8)
     )
 
-    XCTAssertEqual(statusDocument.modelFootprintTitle, "Expert library size is not measured yet.")
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "Size not measured")
     XCTAssertEqual(
       statusDocument.replyReadTitle,
       "Experts stream from the SSD when a reply needs them."
@@ -408,7 +408,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "Not active")
     XCTAssertEqual(statusDocument.progressCompletedUnitCount, 0)
     XCTAssertEqual(statusDocument.progressTotalUnitCount, 1)
-    XCTAssertEqual(statusDocument.modelFootprintTitle, "No expert library is loaded.")
+    XCTAssertEqual(statusDocument.modelFootprintTitle, "No model loaded")
     XCTAssertEqual(statusDocument.mlxMemoryLimitTitle, "37.25 GB")
   }
 
@@ -519,5 +519,31 @@ final class StatusPresentationContractTests: XCTestCase {
       ),
       "99.9%"
     )
+  }
+
+  func test_should_keep_the_menus_own_residency_fallbacks_within_one_line() throws {
+    // The menu's residency cell fits about 20 monospaced characters; the
+    // daemon keeps its labels to 18, and these fallbacks must stay under that
+    // limit too, since the menu shows them when the daemon sends no sentence.
+    let olderDaemonWithoutModel = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(#"{"status":"ready","activity":"idle","ready_model_id":null}"#.utf8)
+    )
+    let olderDaemonWithReadyModel = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(#"{"status":"ready","activity":"idle","ready_model_id":"Ornith"}"#.utf8)
+    )
+    let loadingModel = try JSONDecoder().decode(
+      DaemonStatusDocument.self,
+      from: Data(
+        #"{"status":"ready","activity":"idle","model_load_in_flight":{"model_id":"Ornith"}}"#.utf8)
+    )
+
+    XCTAssertEqual(olderDaemonWithoutModel.modelFootprintTitle, "No model loaded")
+    XCTAssertEqual(olderDaemonWithReadyModel.modelFootprintTitle, "All in RAM")
+    XCTAssertEqual(loadingModel.modelFootprintTitle, "Being prepared")
+    XCTAssertLessThanOrEqual(olderDaemonWithoutModel.modelFootprintTitle.count, 18)
+    XCTAssertLessThanOrEqual(olderDaemonWithReadyModel.modelFootprintTitle.count, 18)
+    XCTAssertLessThanOrEqual(loadingModel.modelFootprintTitle.count, 18)
   }
 }
