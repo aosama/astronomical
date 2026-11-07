@@ -354,14 +354,8 @@ jobs:
           # unifies features per command: separate commands rebuilt 49 crates with
           # different features, about 36 of this step's 108 seconds. The archive
           # aliases carry the same package list, so packing them compiles nothing.
+          # This also builds the daemon and fixture workers the E2E journeys spawn.
           cargo test-integration --timings --no-run --test rest_api_tests --test e2e
-          cargo test-test-harness-fixtures --no-run
-          # The selection above already built the daemon and its fixture workers
-          # for the lanes. This proves the daemon also builds on its own features,
-          # as a release does, rather than on what the other packages turned on,
-          # for about 2 seconds. Packing the archives relinks the selection's
-          # binaries over these, so the lanes never run this build.
-          cargo build --locked --bins -p astronomical-daemon
         timeout-minutes: 12
       - name: Classify native build result
         id: native-build-result
@@ -391,7 +385,6 @@ jobs:
           scripts/ci/ci-step-timing.sh begin archive-test-binaries
           mkdir -p target/nextest-archives
           cargo nextest-archive-integration
-          cargo nextest-archive-test-harness
           cargo nextest-archive-rest-api
           cargo nextest-archive-e2e
         timeout-minutes: 5
@@ -407,14 +400,6 @@ jobs:
         with:
           name: nextest-archive-integration
           path: target/nextest-archives/integration.tar.zst
-          retention-days: 1
-          if-no-files-found: error
-          compression-level: 0
-      - name: Upload test-harness test archive
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: nextest-archive-test-harness
-          path: target/nextest-archives/test-harness.tar.zst
           retention-days: 1
           if-no-files-found: error
           compression-level: 0
@@ -860,6 +845,7 @@ jobs:
           cargo test --locked -p xtask --test workflow_xcode_pin_contract
           cargo test --locked -p xtask --test workflow_macos_packaging_contract
           cargo test --locked -p xtask --test workflow_verified_work_contract
+          cargo test --locked -p xtask --test workflow_xtask_binary_contract
           # The decision to skip the macOS lanes on a merge, through real git
           # history and a shimmed gh, so a mistake here cannot pass quietly.
           cargo test --locked -p xtask --test integration_classify_scope_journeys
@@ -944,11 +930,6 @@ jobs:
         with:
           name: nextest-archive-integration
           path: ${{ runner.temp }}/nextest-archive
-      - name: Download test-harness test archive
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: nextest-archive-test-harness
-          path: ${{ runner.temp }}/nextest-archive
       - name: Download native metallib
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -958,15 +939,14 @@ jobs:
         run: |
           set -o pipefail
           # nextest canonicalizes the extract destination and refuses a
-          # missing directory, so every extract target is created first.
-          mkdir -p "$RUNNER_TEMP/nextest-extract" "$RUNNER_TEMP/nextest-extract-harness"
+          # missing directory, so the extract target is created first.
+          mkdir -p "$RUNNER_TEMP/nextest-extract"
           # The archive layout shifts the metallib's beside-the-executable
           # lookup and this runner holds no native build store, so the
           # runtime's environment override points at the builder's metallib;
           # its digest was pinned into these binaries at compile time.
           export ASTRONOMICAL_MLX_METALLIB_PATH="$RUNNER_TEMP/native-metallib/mlx.metallib"
           cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/integration.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract" --extract-overwrite -E 'kind(lib)'
-          cargo-nextest nextest run --archive-file "$RUNNER_TEMP/nextest-archive/test-harness.tar.zst" --extract-to "$RUNNER_TEMP/nextest-extract-harness" --extract-overwrite
 
   integration-tests:
     name: Integration tests
@@ -1067,8 +1047,8 @@ jobs:
   # crates with no MLX native build (the MLX baseline is behind a feature this
   # lane leaves off), so it runs in parallel with the build job, which it
   # would only slow down, and finishes well inside that job's minutes. The
-  # xtask unit tests join it for the same reason. It restores none of the build
-  # job's caches: the shared registry archive
+  # xtask unit tests and the standalone builds below join it for the same reason.
+  # It restores none of the build job's caches: the shared registry archive
   # (~95 MB, ~4 s to restore) holds the whole workspace's downloads, and the
   # shared sccache archive (~186 MB) is almost entirely objects this crate
   # never compiles. Its own small sccache directory, under its own prune
@@ -1076,7 +1056,7 @@ jobs:
   # the compiler through an sccache RUSTC_WRAPPER); the Objective-C bridge
   # always recompiles because sccache refuses -fmodules, a sub-second cost.
   neural-engine:
-    name: Neural Engine crate and xtask
+    name: Neural Engine, xtask and standalone builds
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
     runs-on: macos-26
@@ -1090,10 +1070,10 @@ jobs:
           {
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/neural-engine-sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
-            # The crate's and xtask's compiled graphs are far under this cap;
-            # it exists only so a dependency surge cannot grow the entry
-            # without bound, since this family carries no prune size ceiling.
-            printf 'SCCACHE_CACHE_SIZE=%s\n' "150M"
+            # These graphs are under this cap, including the daemon's; it exists
+            # only so a dependency surge cannot grow the entry without bound,
+            # since this family carries no prune size ceiling.
+            printf 'SCCACHE_CACHE_SIZE=%s\n' "200M"
             # sccache refuses incremental compilation (see the build job).
             printf '%s\n' 'CARGO_INCREMENTAL=0'
           } >> "$GITHUB_ENV"
@@ -1135,9 +1115,9 @@ jobs:
           # sccache family, and the build job's `astronomical-v2-sccache-`
           # fallbacks can never restore it. Keyed like that family: tool pins
           # rotate the sccache cache format, Cargo.lock the dependency graph.
-          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-xtask-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-standalone-builds-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-xtask-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
+            astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-standalone-builds-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
       # Every target compiles, so the #[ignore]d real-hardware journeys stay
       # buildable; only the pure unit tests execute (see the alias comment).
       - name: Compile every target and run the unit tests
@@ -1157,6 +1137,25 @@ jobs:
           scripts/ci/ci-step-timing.sh begin xtask-unit-tests
           cargo test --locked -p xtask --bin xtask
         timeout-minutes: 5
+      # The fixture features pull in image and base64 for this one library, so its
+      # tests rebuild several crates. Here they cost the build job nothing: about 6
+      # seconds of compile, plus packing and passing an archive.
+      - name: Run the shared test-fixture unit tests
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end test-fixture-unit-tests' EXIT
+          scripts/ci/ci-step-timing.sh begin test-fixture-unit-tests
+          cargo test-test-harness-fixtures --locked
+        timeout-minutes: 3
+      # The lanes run the daemon the build job built with every package's features
+      # unified. This proves it also builds on its own features, as a release does.
+      # In the build job that rebuilt 31 crates, 23 to 24 seconds that every test lane
+      # waited on, which is why it runs here.
+      - name: Build the daemon on its own features
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end daemon-standalone-build' EXIT
+          scripts/ci/ci-step-timing.sh begin daemon-standalone-build
+          cargo build --locked --bins -p astronomical-daemon
+        timeout-minutes: 4
       # Default-branch-only, like the build job's sccache save: pull requests
       # restore the default-branch entry, and a saved pull-request entry would
       # only duplicate it inside the 10 GB repository budget.
@@ -1168,7 +1167,7 @@ jobs:
           operation: save
           owner: neural-engine-sccache
           path: ~/Library/Caches/Astronomical/neural-engine-sccache
-          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-xtask-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-standalone-builds-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
       - name: Print compiler cache statistics
         if: always()
         run: sccache --show-stats

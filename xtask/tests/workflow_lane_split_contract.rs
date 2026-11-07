@@ -30,7 +30,6 @@ fn build_job_packs_one_archive_per_tier_lane() {
     let archive_text = run_text_of(archive_step, "archive-test-binaries");
     for archive_alias in [
         "cargo nextest-archive-integration",
-        "cargo nextest-archive-test-harness",
         "cargo nextest-archive-rest-api",
         "cargo nextest-archive-e2e",
     ] {
@@ -48,7 +47,6 @@ fn build_job_packs_one_archive_per_tier_lane() {
     );
     for upload_name in [
         "Upload integration test archive",
-        "Upload test-harness test archive",
         "Upload REST test archive",
         "Upload E2E test archive",
     ] {
@@ -215,8 +213,8 @@ fn every_tier_lane_applies_its_kind_and_archive_filters() {
         "unit",
     );
     assert!(
-        unit_text.contains("-E 'kind(lib)'") && unit_text.contains("test-harness.tar.zst"),
-        "the unit lane lost its lib-kind filter or the harness-fixtures archive"
+        unit_text.contains("-E 'kind(lib)'"),
+        "the unit lane lost its lib-kind filter"
     );
     let build_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
     assert_unit_lane_ships_the_native_metallib(&unit_steps, unit_text, &build_steps);
@@ -422,4 +420,134 @@ fn package_list_of_alias(alias_prefix: &str) -> String {
     }
     assert!(!packages.is_empty(), "{alias_prefix} should list packages");
     packages.join(" -p ")
+}
+
+/// These two compile with their own features, so they rebuild crates. In the build job
+/// every test lane would wait on them; removing them outright would lose the proof
+/// that the daemon builds as a release does and the fixture library's tests.
+#[test]
+fn should_keep_the_standalone_builds_beside_the_build_job_rather_than_in_it() {
+    let workflow = workflow_contract();
+    let parallel_steps = steps_of(required_job(&workflow, "neural-engine"), "neural-engine");
+    let daemon_step = find_step_by_name(&parallel_steps, "Build the daemon on its own features");
+    assert!(
+        run_text_of(daemon_step, "daemon-standalone-build")
+            .contains("cargo build --locked --bins -p astronomical-daemon")
+    );
+    let fixture_step = find_step_by_name(&parallel_steps, "Run the shared test-fixture unit tests");
+    assert!(
+        run_text_of(fixture_step, "test-fixture-unit-tests")
+            .contains("cargo test-test-harness-fixtures")
+    );
+    let build_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    let compile_step = find_step_by_name(&build_steps, "Compile integration lane tests");
+    let compile_text = run_text_of(compile_step, "compile-integration-tests");
+    assert!(!compile_text.contains("--bins"));
+    assert!(!compile_text.contains("test-test-harness-fixtures"));
+    let parallel_needs = required_field(
+        required_job(&workflow, "neural-engine"),
+        "needs",
+        "job neural-engine",
+    );
+    assert_eq!(
+        parallel_needs.as_str(),
+        Some("detect-changes"),
+        "waiting on the build job would put these back on the critical path"
+    );
+}
+
+fn workflow_contract_targets(xtask_manifest_text: &str) -> Vec<&str> {
+    let mut contract_targets = Vec::new();
+    for manifest_line in xtask_manifest_text.lines() {
+        let Some(after_name) = manifest_line.strip_prefix("name = \"") else {
+            continue;
+        };
+        let target_name = after_name.trim_end_matches('"');
+        if target_name.starts_with("workflow_") && target_name.ends_with("_contract") {
+            contract_targets.push(target_name);
+        }
+    }
+    contract_targets
+}
+
+fn contract_targets_missing_from_lane<'a>(
+    contract_targets: &[&'a str],
+    lane_text: &str,
+) -> Vec<&'a str> {
+    let mut missing_targets = Vec::new();
+    for contract_target in contract_targets {
+        if !lane_runs_test_target(lane_text, contract_target) {
+            missing_targets.push(*contract_target);
+        }
+    }
+    missing_targets
+}
+
+/// Line by line, so a commented-out invocation does not count as running the target.
+fn lane_runs_test_target(lane_text: &str, test_target: &str) -> bool {
+    let invocation_ending = format!("--test {test_target}");
+    for lane_line in lane_text.lines() {
+        let trimmed_line = lane_line.trim();
+        if !trimmed_line.starts_with('#') && trimmed_line.ends_with(&invocation_ending) {
+            return true;
+        }
+    }
+    false
+}
+
+/// The lane names its targets one by one, so a new contract passes locally and then
+/// never runs in CI. That happened to the xtask binary contract.
+#[test]
+fn should_run_every_workflow_contract_on_the_config_lane() {
+    let xtask_manifest_text =
+        std::fs::read_to_string(contract_support::repository_root().join("xtask/Cargo.toml"))
+            .expect("the xtask manifest should be readable");
+    let contract_targets = workflow_contract_targets(&xtask_manifest_text);
+    assert!(contract_targets.contains(&"workflow_xtask_binary_contract"));
+    let workflow = workflow_contract();
+    let lane_steps = steps_of(
+        required_job(&workflow, "config-contracts"),
+        "config-contracts",
+    );
+    let lane_step = find_step_by_name(&lane_steps, "Run workflow and cache contracts");
+    let lane_text = run_text_of(lane_step, "config-contracts");
+    assert_eq!(
+        contract_targets_missing_from_lane(&contract_targets, lane_text),
+        Vec::<&str>::new()
+    );
+}
+
+#[test]
+fn should_report_a_contract_the_lane_leaves_out() {
+    let contract_targets = ["workflow_listed_contract", "workflow_forgotten_contract"];
+    assert_eq!(
+        contract_targets_missing_from_lane(
+            &contract_targets,
+            "cargo test --test workflow_listed_contract\n"
+        ),
+        vec!["workflow_forgotten_contract"]
+    );
+}
+
+#[test]
+fn should_not_count_a_commented_out_contract_as_running() {
+    assert!(!lane_runs_test_target(
+        "# cargo test --test workflow_listed_contract\n",
+        "workflow_listed_contract"
+    ));
+    assert!(lane_runs_test_target(
+        "  cargo test --locked -p xtask --test workflow_listed_contract",
+        "workflow_listed_contract"
+    ));
+}
+
+#[test]
+fn should_read_only_workflow_contracts_from_the_manifest() {
+    let manifest_text = "name = \"xtask\"\n\
+                         name = \"integration_gh_shim_journeys\"\n\
+                         name = \"workflow_listed_contract\"\n";
+    assert_eq!(
+        workflow_contract_targets(manifest_text),
+        vec!["workflow_listed_contract"]
+    );
 }
