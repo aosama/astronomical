@@ -211,8 +211,7 @@ fn engine_declared_order(assignment_count: i32) -> ExpertAssignmentOrder {
 }
 
 #[tokio::test]
-async fn should_give_identical_bits_from_a_routed_page_and_the_complete_table_for_a_short_chunk()
-{
+async fn should_give_identical_bits_from_a_routed_page_and_the_complete_table_for_a_short_chunk() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let (table_values, page_values) = table_and_page_values(
         SHORT_CHUNK_ASSIGNMENT_COUNT,
@@ -225,8 +224,7 @@ async fn should_give_identical_bits_from_a_routed_page_and_the_complete_table_fo
 }
 
 #[tokio::test]
-async fn should_give_identical_bits_from_a_routed_page_and_the_complete_table_at_the_tiled_floor()
-{
+async fn should_give_identical_bits_from_a_routed_page_and_the_complete_table_at_the_tiled_floor() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let assignment_order = engine_declared_order(TILED_FLOOR_ASSIGNMENT_COUNT);
     assert_eq!(assignment_order, ExpertAssignmentOrder::SortedByExpert);

@@ -12,9 +12,7 @@ use crate::qwen3_5_resident::experts::{
     Qwen3_5ResidentExpertLayerWeights, Qwen3_5ResidentGateUpWeights,
 };
 use crate::qwen3_5_resident::model::Qwen3_5ResidentModel;
-use crate::sparse_experts::{
-    StackedExpertProjection, gather_expert_projection,
-};
+use crate::sparse_experts::{StackedExpertProjection, gather_expert_projection};
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;

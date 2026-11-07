@@ -332,7 +332,11 @@ fn parity_model_directory() -> std::path::PathBuf {
 }
 
 /// One marked line: the question, which ask, then the token IDs.
-fn resident_answer_line(question_name: &str, ask_name: &str, generated_token_ids: &[u32]) -> String {
+fn resident_answer_line(
+    question_name: &str,
+    ask_name: &str,
+    generated_token_ids: &[u32],
+) -> String {
     let mut answer_line = format!("{RESIDENT_ANSWER_MARKER} {question_name} {ask_name}");
     for generated_token_id in generated_token_ids {
         answer_line.push(' ');
