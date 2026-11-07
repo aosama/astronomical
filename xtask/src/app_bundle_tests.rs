@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::build_identity::{BuildIdentity, daemon_package_identity, github_pages_feed_url};
-use super::build_steps::npm_install_is_current;
+use super::build_steps::{menu_application_build_command, npm_install_is_current};
 use super::bundle_assembly::{BundleInputs, missing_inputs};
 use super::bundle_check::daemon_version_matches;
 use super::channel_profile::{Channel, ChannelProfile, SandboxPolicy};
@@ -636,4 +636,59 @@ fn should_say_the_daemon_is_running_when_the_menu_app_cannot_reopen() {
         reopen_outcome,
         Err("the daemon is running, but the menu app did not reopen: open refused".to_owned())
     );
+}
+
+fn command_arguments(tool_command: &std::process::Command) -> Vec<String> {
+    let mut arguments = Vec::new();
+    for argument in tool_command.get_args() {
+        arguments.push(argument.to_string_lossy().into_owned());
+    }
+    arguments
+}
+
+#[test]
+fn should_hand_the_macos_sdk_to_the_menu_link_step_so_the_app_gets_the_current_design() {
+    let swift_command = menu_application_build_command(
+        Path::new("/repository"),
+        "astronomical-menu",
+        "/sdks/MacOSX.sdk",
+    );
+    assert_eq!(swift_command.get_program(), "swift");
+    assert_eq!(
+        command_arguments(&swift_command),
+        vec![
+            "build",
+            "--configuration",
+            "release",
+            "--package-path",
+            "/repository/apps/astronomical-menu",
+            "--product",
+            "astronomical-menu",
+            "-Xswiftc",
+            "-warnings-as-errors",
+            "-Xswiftc",
+            "-Xclang-linker",
+            "-Xswiftc",
+            "-isysroot",
+            "-Xswiftc",
+            "-Xclang-linker",
+            "-Xswiftc",
+            "/sdks/MacOSX.sdk",
+        ]
+    );
+}
+
+#[test]
+fn should_pass_an_sdk_path_with_spaces_as_one_argument() {
+    let swift_command = menu_application_build_command(
+        Path::new("/repository"),
+        "astronomical-menu-app-store",
+        "/Applications/Xcode Beta.app/SDKs/MacOSX.sdk",
+    );
+    let arguments = command_arguments(&swift_command);
+    assert_eq!(
+        arguments.last().map(String::as_str),
+        Some("/Applications/Xcode Beta.app/SDKs/MacOSX.sdk")
+    );
+    assert!(arguments.contains(&"astronomical-menu-app-store".to_string()));
 }

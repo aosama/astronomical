@@ -1,3 +1,4 @@
+import type { ImageForModel } from "./ConversationTool";
 import { Agent, type AgentEvent, type AgentMessage, type AgentTurnContext, type AgentTurnDecision, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import { trimToContextBudget } from "./AgentContextTrimmer";
@@ -42,6 +43,17 @@ interface ActiveTurn {
   readonly progress: TurnProgress;
 }
 
+/** Reads a generated image back by its stored name, or null when it is gone. */
+export type GeneratedImageLoader = (imageName: string) => Promise<ImageForModel | null>;
+
+function noGeneratedImages(): Promise<ImageForModel | null> {
+  return Promise.resolve(null);
+}
+
+/** How many of a conversation's latest generated images a model that can see
+ * is shown again on each turn. */
+const RECALLED_IMAGE_LIMIT = 2;
+
 /**
  * Serves each assistant turn through Pi's agent loop: the model answers, may
  * call the tools the catalog offers, reads their results, and keeps going
@@ -58,11 +70,13 @@ export class AgentTurnRunner implements ChatStreamer {
   public readonly stallTimeoutMilliseconds = TURN_STALL_TIMEOUT_MILLISECONDS;
   private readonly client: DaemonClient;
   private readonly toolCatalog: ToolCatalog;
+  private readonly generatedImageLoader: GeneratedImageLoader;
   private activeTurn: ActiveTurn | null = null;
 
-  public constructor(client: DaemonClient, toolCatalog: ToolCatalog) {
+  public constructor(client: DaemonClient, toolCatalog: ToolCatalog, generatedImageLoader: GeneratedImageLoader = noGeneratedImages) {
     this.client = client;
     this.toolCatalog = toolCatalog;
+    this.generatedImageLoader = generatedImageLoader;
   }
 
   public async streamChat(request: ChatStreamRequest): Promise<void> {
@@ -89,7 +103,13 @@ export class AgentTurnRunner implements ChatStreamer {
       hasForwardedText: false,
       queuedMessageIDsByMessage: new Map(),
     };
-    const agent = this.turnAgent(request, streamFunction, turnProgress);
+    const recalledImagesByName = await this.recallGeneratedImages(request);
+    // Recalling images waits on the host, before the stop listener below is
+    // attached; a stop pressed meanwhile must still end the turn unsent.
+    if (request.signal.aborted) {
+      return;
+    }
+    const agent = this.turnAgent(request, streamFunction, turnProgress, recalledImagesByName);
     const stopListening = agent.subscribe((event) => AgentTurnRunner.forwardEvent(event, request, turnProgress));
     this.activeTurn = { agent, progress: turnProgress };
     const stopTurn = (): void => {
@@ -133,7 +153,12 @@ export class AgentTurnRunner implements ChatStreamer {
    * it must answer and gets one more request to do so. If it calls tools even
    * then, the turn ends after that refused round.
    */
-  private turnAgent(request: ChatStreamRequest, streamFunction: DaemonStreamFunction, turnProgress: TurnProgress): Agent {
+  private turnAgent(
+    request: ChatStreamRequest,
+    streamFunction: DaemonStreamFunction,
+    turnProgress: TurnProgress,
+    recalledImagesByName: ReadonlyMap<string, ImageForModel>,
+  ): Agent {
     const offeredTools = this.toolCatalog.toolsForTurn({
       modelSupportsToolCalls: request.modelSupportsToolCalls,
       toolsEnabled: request.toolsEnabled,
@@ -153,13 +178,44 @@ export class AgentTurnRunner implements ChatStreamer {
       initialState: {
         model,
         tools: offeredTools.map((offeredTool) => agentTool(offeredTool, { conversationID: request.conversationID, modelID: request.modelID })),
-        messages: agentHistory(request.messages.slice(0, -1), model, offeredTools.length > 0),
+        messages: agentHistory(request.messages.slice(0, -1), model, offeredTools.length > 0, recalledImagesByName),
       },
       streamFn: streamFunction.stream.bind(streamFunction),
       transformContext: AgentTurnRunner.contextTrimmer(request.contextWindowTokens),
       beforeToolCall: refuseCallsPastTheLimit,
       finishTurn: countRoundsAndStopAfterARefusedOne,
     });
+  }
+
+  /** The images generated earlier in this conversation that a model able to
+   * see is shown again, newest first, at most RECALLED_IMAGE_LIMIT of them.
+   * Each image costs the model a large block of context on every turn, so
+   * only the latest few come back; older ones keep their text result. An
+   * image that cannot be read is left out rather than failing the turn. */
+  private async recallGeneratedImages(request: ChatStreamRequest): Promise<Map<string, ImageForModel>> {
+    const recalledImagesByName = new Map<string, ImageForModel>();
+    // Images ride on replayed tool steps, which are replayed only when the
+    // turn offers tools; without them the images would be loaded for nothing.
+    const offersTools = this.toolCatalog.toolsForTurn({
+      modelSupportsToolCalls: request.modelSupportsToolCalls,
+      toolsEnabled: request.toolsEnabled,
+    }).length > 0;
+    if (!request.modelAcceptsImages || !offersTools) {
+      return recalledImagesByName;
+    }
+    const generatedImageNames = request.messages
+      .flatMap((earlierMessage) => earlierMessage.toolSteps)
+      .flatMap((toolStep) => (toolStep.generatedImageName != null ? [toolStep.generatedImageName] : []));
+    for (const imageName of generatedImageNames.slice(-RECALLED_IMAGE_LIMIT)) {
+      if (request.signal.aborted) {
+        break;
+      }
+      const recalledImage = await this.generatedImageLoader(imageName).catch(() => null);
+      if (recalledImage != null) {
+        recalledImagesByName.set(imageName, recalledImage);
+      }
+    }
+    return recalledImagesByName;
   }
 
   /** Trims each request to the model's context window when the daemon says

@@ -20,7 +20,6 @@ import { ToolStep, ToolStepState } from "./ToolStep";
 /** How the chat surface discovered its models at startup. */
 export type LoadPhase = "idle" | "loading" | "ready" | "empty" | "failed";
 
-const COMPOSER_FONT_SIZE_STEP = 1;
 /** Extra time before a stall is reported once tools finish: the next model
  * request may first reload the chat model, which an image tool swaps out, and
  * a large model can take longer than the stall timeout to load. */
@@ -208,18 +207,6 @@ export class ChatController {
     this.publish();
   }
 
-  public adjustFontSize(delta: number): void {
-    const adjusted = this.preferences.clampComposerFontSize(
-      this.preferences.composerFontSize + delta * COMPOSER_FONT_SIZE_STEP,
-    );
-    if (adjusted === this.preferences.composerFontSize) {
-      return;
-    }
-    this.preferences.composerFontSize = adjusted;
-    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
-    this.publish();
-  }
-
   // MARK: - Sessions
 
   public async newChat(): Promise<void> {
@@ -248,6 +235,31 @@ export class ChatController {
     this.log.reset();
     this.log.messages = document.messages;
     this.failure = null;
+    this.publish();
+  }
+
+  /** Keeps the width the user dragged the sidebar to; null goes back to the
+   * default width. Saved so the sidebar opens at that width next launch. */
+  public setSidebarWidth(widthPixels: number | null): void {
+    const sidebarWidthPixels = widthPixels != null ? SessionPreferences.clampSidebarWidth(widthPixels) : null;
+    if (sidebarWidthPixels === this.preferences.sidebarWidthPixels) {
+      return;
+    }
+    this.preferences.sidebarWidthPixels = sidebarWidthPixels;
+    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
+    this.publish();
+  }
+
+  /** Renames one conversation. A blank or unchanged title keeps the old one,
+   * so an accidental Enter on an emptied field never leaves a nameless chat. */
+  public async renameSession(id: string, requestedTitle: string): Promise<void> {
+    const newTitle = requestedTitle.trim();
+    const currentTitle = this.store.listSessions().find((session) => session.id === id)?.title;
+    if (newTitle.length === 0 || newTitle === currentTitle) {
+      this.publish();
+      return;
+    }
+    await this.store.rename(id, newTitle).catch(() => this.store.refreshList().catch(() => undefined));
     this.publish();
   }
 
@@ -356,6 +368,7 @@ export class ChatController {
         thinkingEffort: effort,
         toolsEnabled: this.preferences.toolsEnabled,
         modelSupportsToolCalls: this.selectedModelSupportsToolCalls(),
+        modelAcceptsImages: this.selectedModelAcceptsImages(),
         contextWindowTokens: this.selectedModelContextWindowTokens(),
         onText: (delta) => this.ingestDelta(delta, (text) => this.log.applyTextDelta(text)),
         onReasoning: (delta) => this.ingestDelta(delta, (text) => this.log.applyReasoningDelta(text)),
@@ -429,6 +442,11 @@ export class ChatController {
     return selectedModel != null ? selectedModel.contextWindowTokens : null;
   }
 
+  private selectedModelAcceptsImages(): boolean {
+    const selectedModel = this.models.find((model) => model.id === this.selectedModelID);
+    return selectedModel != null && selectedModel.supportsVision;
+  }
+
   private selectedModelSupportsToolCalls(): boolean {
     const selectedModel = this.models.find((model) => model.id === this.selectedModelID);
     return selectedModel != null && selectedModel.supportsToolCalls;
@@ -475,7 +493,7 @@ export class ChatController {
       composer: this.composerState(),
       sessions: this.store.listSessions(),
       activeSessionID: this.store.activeSessionID(),
-      composerFontSize: this.preferences.composerFontSize,
+      sidebarWidthPixels: this.preferences.sidebarWidthPixels,
     });
     this.listeners.forEach((listener) => listener(state));
   }

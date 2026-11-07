@@ -14,6 +14,9 @@ export interface ChatStreamRequest {
   toolsEnabled: boolean;
   /** Whether the chosen model declares that it can call tools. */
   modelSupportsToolCalls: boolean;
+  /** Whether the chosen model can take images; images it generated earlier
+   * in the conversation are then shown to it again. */
+  modelAcceptsImages: boolean;
   /** The chosen model's context window in tokens; long conversations are
    * trimmed to fit it. Null when the daemon does not say. */
   contextWindowTokens: number | null;

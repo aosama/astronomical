@@ -1,5 +1,6 @@
-import type { ConversationTool, ToolOutput, ToolParametersSchema } from "./ConversationTool";
+import type { ConversationTool, ToolCallContext, ToolOutput, ToolParametersSchema } from "./ConversationTool";
 import { DaemonClient } from "./DaemonClient";
+import { GeneratedImageReview, imageMimeType } from "./GeneratedImageReview";
 import type { ImageGenerationRequestBody } from "./ImageGenerationRequestBody";
 import { SessionBridge } from "./SessionBridge";
 
@@ -11,16 +12,24 @@ const IMAGE_SIZES_BY_SHAPE: Record<string, { width: number; height: number }> = 
   portrait: { width: 768, height: 1024 },
 };
 
-/** Loading an image model and generating one image can take well over the
- * default tool timeout, especially on the first image after a chat. */
-const IMAGE_GENERATION_TIMEOUT_MILLISECONDS = 5 * 60_000;
+/** Loading an image model, generating one image, then loading a vision model
+ * to look at it can take well over the default tool timeout, especially on
+ * the first image after a chat, when both models have to be loaded. */
+const IMAGE_GENERATION_TIMEOUT_MILLISECONDS = 10 * 60_000;
 
 /**
  * Makes an image with the first installed image model and shows it in the
  * answer. The image is kept by the app (so the conversation still shows it
- * after a relaunch); the model is told it was shown but cannot see it, so it
- * does not invent a description. Running it only calls the local daemon, so
- * it runs without asking.
+ * after a relaunch). Running it only calls the local daemon, so it runs
+ * without asking.
+ *
+ * The model then gets to see what it made, so it can notice a defect (an
+ * extra limb, garbled lettering) and offer to try again. A chat model that
+ * can see images is handed the image itself, attached to the result. A
+ * text-only chat model cannot take pixels, so another installed vision model
+ * looks for it and its account goes into the result instead. With no vision
+ * model at all, the model is told it cannot see the image, so it does not
+ * invent one.
  */
 export class GenerateImageTool implements ConversationTool {
   public readonly name = "generate_image";
@@ -38,13 +47,15 @@ export class GenerateImageTool implements ConversationTool {
   public readonly timeoutMilliseconds = IMAGE_GENERATION_TIMEOUT_MILLISECONDS;
   private readonly client: DaemonClient;
   private readonly bridge: SessionBridge;
+  private readonly imageReview: GeneratedImageReview;
 
   public constructor(client: DaemonClient, bridge: SessionBridge) {
     this.client = client;
     this.bridge = bridge;
+    this.imageReview = new GeneratedImageReview(client);
   }
 
-  public async execute(toolArguments: Record<string, unknown>, signal: AbortSignal): Promise<ToolOutput> {
+  public async execute(toolArguments: Record<string, unknown>, signal: AbortSignal, context: ToolCallContext): Promise<ToolOutput> {
     const prompt = typeof toolArguments["prompt"] === "string" ? toolArguments["prompt"].trim() : "";
     if (prompt.length === 0) {
       throw new Error("The image needs a description.");
@@ -66,9 +77,31 @@ export class GenerateImageTool implements ConversationTool {
     };
     const encodedImage = await this.client.generateImage(requestBody, signal);
     const generatedImageName = await this.bridge.storeGeneratedImage(encodedImage);
-    return {
-      text: `Generated a ${imageSize.width}×${imageSize.height} image with ${imageModelID} and showed it to the user. You cannot see the image, so do not describe what it shows.`,
-      generatedImageName,
-    };
+    const generationReport = `Generated a ${imageSize.width}×${imageSize.height} image with ${imageModelID} and showed it to the user.`;
+    const visionModelIDs = await this.visionModelIDsOrNone(signal);
+    if (visionModelIDs.includes(context.modelID)) {
+      return {
+        text: `${generationReport} The image is attached right after this result: look at it yourself before you talk about it, `
+          + "and check it against what was asked for.",
+        generatedImageName,
+        imageForModel: { base64: encodedImage, mimeType: imageMimeType(encodedImage) },
+      };
+    }
+    const imageAccount = await this.imageReview.accountForTextOnlyModel(prompt, encodedImage, visionModelIDs[0] ?? null, signal);
+    return { text: `${generationReport}\n\n${imageAccount}`, generatedImageName };
+  }
+
+  /** The installed vision models, or none when the list cannot be read: the
+   * image is already stored and on screen, so failing here would lose it from
+   * the answer. Only a stop or timeout propagates. */
+  private async visionModelIDsOrNone(signal: AbortSignal): Promise<string[]> {
+    try {
+      return await this.client.fetchVisionModelIDs(signal);
+    } catch (listFailure) {
+      if (signal.aborted) {
+        throw listFailure;
+      }
+      return [];
+    }
   }
 }

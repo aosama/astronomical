@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { waitFor } from "./support/dom";
 import { bootJourney, sendUserMessage, waitUntilReady } from "./support/journey";
 import { chunkLine, toolCallLine } from "./support/scriptedChatFetch";
+import { FAKE_GENERATED_IMAGE_BASE64 } from "./support/fakeDaemon";
 
 /**
  * Tool use as a reader sees it: a model that can call tools asks for the
@@ -118,4 +119,45 @@ test("should_tell_the_model_when_the_reader_does_not_allow_the_file", async () =
   const followUpMessages = daemon.chatRequestBodies()[1]?.["messages"] as { content: string }[];
   assert.match(followUpMessages[followUpMessages.length - 1]?.content ?? "", /did not allow/);
   assert.equal(host.receivedRequests.filter((request) => request.op === "useHostTool").length, 1, "one sheet, and the model was told not to ask again");
+}, { timeout: 30_000 });
+
+const IMAGE_MODEL = { id: "FLUX.2-klein-4B", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
+const SEEING_TOOL_MODEL = { ...TOOL_CAPABLE_MODEL, id: "seeing-model", input_modalities: ["text", "image"] };
+const GENERATED_IMAGE_DATA_URL = `data:image/png;base64,${FAKE_GENERATED_IMAGE_BASE64}`;
+
+const DRAW_THEN_ANSWER_THEN_FOLLOW_UP = [
+  [toolCallLine("call-1", "generate_image", JSON.stringify({ prompt: "A boy in a striped shirt" })), chunkLine({}, "tool_calls"), "data: [DONE]"],
+  [chunkLine({ content: "Here is the boy." }, "stop"), "data: [DONE]"],
+  [chunkLine({ content: "His shirt has rainbow stripes." }, "stop"), "data: [DONE]"],
+];
+
+function sentImageURLs(requestBody: Record<string, unknown> | undefined): string[] {
+  return [...JSON.stringify(requestBody?.["messages"] ?? []).matchAll(/"url":"(data:[^"]+)"/g)].map((urlMatch) => urlMatch[1] as string);
+}
+
+test("should_show_a_seeing_model_the_image_it_generated_and_again_on_the_next_turn", async () => {
+  const { daemon } = bootJourney(undefined, { models: [SEEING_TOOL_MODEL, IMAGE_MODEL], chatReplySequence: DRAW_THEN_ANSWER_THEN_FOLLOW_UP });
+  await waitUntilReady();
+  sendUserMessage("Draw a boy in a striped shirt.");
+  await waitFor(() => daemon.chatRequestBodies().length === 2, "the answer request after the tool");
+  assert.deepEqual(sentImageURLs(daemon.chatRequestBodies()[0]), [], "nothing to see before drawing");
+  assert.deepEqual(sentImageURLs(daemon.chatRequestBodies()[1]), [GENERATED_IMAGE_DATA_URL], "the model sees the image it just made");
+  await waitUntilReady();
+  sendUserMessage("What colour is his shirt?");
+  await waitFor(() => daemon.chatRequestBodies().length === 3, "the follow-up request");
+  assert.deepEqual(sentImageURLs(daemon.chatRequestBodies()[2]), [GENERATED_IMAGE_DATA_URL], "the image comes back on a later turn");
+}, { timeout: 30_000 });
+
+test("should_never_send_pixels_to_a_text_only_model", async () => {
+  const { daemon } = bootJourney(undefined, { models: [TOOL_CAPABLE_MODEL, IMAGE_MODEL], chatReplySequence: DRAW_THEN_ANSWER_THEN_FOLLOW_UP });
+  await waitUntilReady();
+  sendUserMessage("Draw a boy in a striped shirt.");
+  await waitFor(() => daemon.chatRequestBodies().length === 2, "the answer request after the tool");
+  await waitUntilReady();
+  sendUserMessage("What colour is his shirt?");
+  await waitFor(() => daemon.chatRequestBodies().length === 3, "the follow-up request");
+  for (const requestBody of daemon.chatRequestBodies()) {
+    assert.deepEqual(sentImageURLs(requestBody), []);
+  }
+  assert.match(JSON.stringify(daemon.chatRequestBodies()[1]?.["messages"]), /cannot see it/);
 }, { timeout: 30_000 });

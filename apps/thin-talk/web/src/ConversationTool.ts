@@ -6,11 +6,19 @@ export type ToolParametersSchema = {
   additionalProperties?: boolean;
 };
 
-/** What a tool hands back: the text the model reads, and for the image tool
- * the stored name of the image it generated, which the answer shows. */
+/** An image put in front of a model that can see, as base64 with its type. */
+export interface ImageForModel {
+  readonly base64: string;
+  readonly mimeType: string;
+}
+
+/** What a tool hands back: the text the model reads; for the image tool the
+ * stored name of the image it generated, which the answer shows; and, when
+ * the chat model can see images, the image itself for the model to look at. */
 export interface ToolOutput {
   readonly text: string;
   readonly generatedImageName?: string;
+  readonly imageForModel?: ImageForModel;
 }
 
 /** What a tool knows about the turn that called it. */

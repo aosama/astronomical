@@ -2,8 +2,7 @@
  * Composer and failure banner.
  *
  * These are the app's own chrome, drawn on the same surface as the answers so
- * the whole window shares one type scale and one set of tokens. The ask field
- * scales with the user's font-size preference via --composer-font-size.
+ * the whole window shares one type scale and one set of tokens.
  */
 .composer {
   flex: 0 0 auto;
@@ -18,12 +17,16 @@
   display: block;
   width: 100%;
   max-height: 160px;
-  padding: 14px 14px 4px;
+  /* The bottom padding keeps letters that hang below the line (g, y, p) clear
+   * of the buttons row under the field. */
+  padding: 14px 14px 12px;
   border: none;
   background: transparent;
   color: var(--text-primary);
   font-family: inherit;
-  font-size: var(--composer-font-size, 14px);
+  /* Matches the conversation text, so what you type reads at the same size
+   * as the replies above it. */
+  font-size: 18px;
   line-height: 1.62;
   resize: none;
   outline: none;
@@ -69,7 +72,7 @@
   background: var(--panel-alt);
   color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 17px;
   cursor: default;
 }
 
@@ -97,12 +100,25 @@
   color: var(--text-secondary);
 }
 
-/* Model names can be long; the pill must stay inside the composer row. */
+/* The model name is shown in full. Only when the window is too narrow for
+ * the whole row does the name give way, with an ellipsis, so the pill never
+ * pushes the send button out of the composer. The chain of min-width: 0 lets
+ * the flex row shrink the name instead of overflowing. */
 [data-testid="composer-model-label"] {
-  max-width: 240px;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.composer__actions > .composer__group:first-child,
+.composer__actions > .composer__group:first-child > .composer__menu-anchor:first-child,
+#composer-model {
+  min-width: 0;
+}
+
+#composer-model {
+  max-width: 100%;
 }
 
 .composer__menu-anchor {
@@ -137,7 +153,7 @@
   background: transparent;
   color: var(--text-primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 17px;
   text-align: left;
   cursor: default;
   white-space: nowrap;
@@ -220,13 +236,13 @@
 .failure-banner__message {
   margin: 0;
   color: var(--danger);
-  font-size: 13.5px;
+  font-size: 15.5px;
 }
 
 .failure-banner__next {
   margin: 2px 0 0;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .failure-banner__retry {
@@ -237,6 +253,6 @@
   background: var(--accent);
   color: #ffffff;
   font: inherit;
-  font-size: 13px;
+  font-size: 15px;
   cursor: default;
 }

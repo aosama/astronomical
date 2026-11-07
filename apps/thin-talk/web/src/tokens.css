@@ -29,7 +29,7 @@ body {
   background: var(--window-background);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.62;
   -webkit-font-smoothing: antialiased;
 }

@@ -13,7 +13,7 @@ use astronomical_native_identity::digest_bytes;
 use super::build_identity::BuildIdentity;
 use super::channel_profile::ChannelProfile;
 use super::step_reporter::StepReporter;
-use super::tool_command::run_tool;
+use super::tool_command::{run_quiet_tool, run_tool};
 
 /// The Cargo profile in the workspace manifest tuned for the edit loop.
 pub(crate) const APP_DEV_CARGO_PROFILE: &str = "app-dev";
@@ -122,13 +122,42 @@ pub(crate) fn build_menu_application(
     channel_profile: &ChannelProfile,
     step_reporter: &StepReporter,
 ) -> Result<(), String> {
+    let macos_sdk_path =
+        run_quiet_tool(Command::new("xcrun").args(["--sdk", "macosx", "--show-sdk-path"]))?;
+    let mut swift_command = menu_application_build_command(
+        repository_root,
+        channel_profile.menu_swift_product,
+        macos_sdk_path.trim(),
+    );
+    run_tool(&mut swift_command, step_reporter)
+}
+
+/// The `swift build` for the menu app, which also hosts the Thin Talk window.
+///
+/// The SDK is handed to the link step's clang as well as to swiftc. Under the
+/// swiftbuild backend the link runs without SDKROOT, so clang cannot read the
+/// SDK's version and stamps the binary with the deployment target (14.0)
+/// instead. macOS then treats the app as built for macOS 14 and draws its
+/// windows in the old style: smaller window controls and plain toolbar icons
+/// rather than the current design every other app on the Mac uses.
+///
+/// The SDK path travels as one argument. The tests prove that for the `swift`
+/// command line; an SDK path containing spaces has not been tried through the
+/// swiftbuild backend, which receives it from SwiftPM.
+pub(crate) fn menu_application_build_command(
+    repository_root: &Path,
+    menu_swift_product: &str,
+    macos_sdk_path: &str,
+) -> Command {
     let mut swift_command = Command::new("swift");
     swift_command
         .args(["build", "--configuration", "release", "--package-path"])
         .arg(repository_root.join("apps/astronomical-menu"))
-        .args(["--product", channel_profile.menu_swift_product])
-        .args(["-Xswiftc", "-warnings-as-errors"]);
-    run_tool(&mut swift_command, step_reporter)
+        .args(["--product", menu_swift_product])
+        .args(["-Xswiftc", "-warnings-as-errors"])
+        .args(["-Xswiftc", "-Xclang-linker", "-Xswiftc", "-isysroot"])
+        .args(["-Xswiftc", "-Xclang-linker", "-Xswiftc", macos_sdk_path]);
+    swift_command
 }
 
 pub(crate) fn file_sha256_hex(file_path: &Path) -> Result<String, String> {

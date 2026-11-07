@@ -1,44 +1,38 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { SessionPreferences } from "../src/SessionPreferences";
+import { MAX_SIDEBAR_WIDTH_PIXELS, MIN_SIDEBAR_WIDTH_PIXELS, SessionPreferences } from "../src/SessionPreferences";
 import { ThinkingEffort } from "../src/ThinkingEffort";
 
-test("session preferences default to quick effort and the base font size", () => {
+test("should_default_to_quick_effort_and_no_chosen_model", () => {
   const preferences = SessionPreferences.default();
   assert.equal(preferences.thinkingEffort, ThinkingEffort.QUICK);
-  assert.equal(preferences.composerFontSize, 14);
   assert.equal(preferences.modelID, null);
 });
 
-test("session preferences clamp out-of-range font sizes", () => {
-  const preferences = SessionPreferences.default();
-  assert.equal(preferences.clampComposerFontSize(1), 10);
-  assert.equal(preferences.clampComposerFontSize(99), 24);
-  assert.equal(preferences.clampComposerFontSize(16), 16);
+test("should_ignore_a_message_box_font_size_saved_by_an_earlier_version", () => {
+  const preferences = SessionPreferences.fromPlain({ composerFontSize: 14, thinkingEffort: "high" });
+  assert.equal(preferences.thinkingEffort, ThinkingEffort.HIGH);
+  assert.equal("composerFontSize" in preferences.toPlain(), false, "the size is no longer written back");
 });
 
-test("session preferences fall back to defaults on malformed input", () => {
+test("should_fall_back_to_defaults_on_malformed_input", () => {
   const preferences = SessionPreferences.fromPlain(null);
   assert.equal(preferences.thinkingEffort, ThinkingEffort.QUICK);
-  assert.equal(preferences.composerFontSize, 14);
   assert.equal(preferences.modelID, null);
-  const unknownEffort = SessionPreferences.fromPlain({ thinkingEffort: "nonsense", composerFontSize: 16 });
+  const unknownEffort = SessionPreferences.fromPlain({ thinkingEffort: "nonsense" });
   assert.equal(unknownEffort.thinkingEffort, ThinkingEffort.QUICK);
-  assert.equal(unknownEffort.composerFontSize, 16);
   assert.equal(unknownEffort.modelID, null);
   const unknownModel = SessionPreferences.fromPlain({ modelID: 42 });
   assert.equal(unknownModel.modelID, null);
 });
 
-test("session preferences round-trip through toPlain", () => {
+test("should_round_trip_through_plain_values", () => {
   const preferences = new SessionPreferences({
     thinkingEffort: ThinkingEffort.HIGH,
-    composerFontSize: 18,
     modelID: "model-beta",
   });
   const decoded = SessionPreferences.fromPlain(preferences.toPlain());
   assert.equal(decoded.thinkingEffort, ThinkingEffort.HIGH);
-  assert.equal(decoded.composerFontSize, 18);
   assert.equal(decoded.modelID, "model-beta");
 });
 
@@ -52,4 +46,17 @@ test("should_remember_tools_switched_off", () => {
   const preferences = SessionPreferences.default();
   preferences.toolsEnabled = false;
   assert.equal(SessionPreferences.fromPlain(preferences.toPlain()).toolsEnabled, false);
+});
+
+test("should_keep_a_saved_sidebar_width_within_its_range", () => {
+  assert.equal(SessionPreferences.fromPlain({ sidebarWidthPixels: 300 }).sidebarWidthPixels, 300);
+  assert.equal(SessionPreferences.fromPlain({ sidebarWidthPixels: 20 }).sidebarWidthPixels, MIN_SIDEBAR_WIDTH_PIXELS);
+  assert.equal(SessionPreferences.fromPlain({ sidebarWidthPixels: 5000 }).sidebarWidthPixels, MAX_SIDEBAR_WIDTH_PIXELS);
+});
+
+test("should_use_the_default_sidebar_width_when_none_or_a_damaged_one_was_saved", () => {
+  assert.equal(SessionPreferences.fromPlain({}).sidebarWidthPixels, null);
+  assert.equal(SessionPreferences.fromPlain({ sidebarWidthPixels: "wide" }).sidebarWidthPixels, null);
+  assert.equal(SessionPreferences.fromPlain({ sidebarWidthPixels: Number.NaN }).sidebarWidthPixels, null);
+  assert.equal(SessionPreferences.default().toPlain().sidebarWidthPixels, null);
 });

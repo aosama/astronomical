@@ -159,3 +159,63 @@ test("should_declare_the_transcripts_tools_and_omit_tools_when_there_are_none", 
   ]);
   assert.equal("tools" in (scriptedFetch.requests[1]?.body ?? {}), false);
 });
+
+test("should_follow_a_tool_result_with_its_image_as_a_user_message", () => {
+  const requestMessages = DaemonStreamFunction.requestMessages([
+    { role: "user", content: "Draw a rose.", timestamp: 0 },
+    assistantReply([{ type: "toolCall", id: "call-1", name: "generate_image", arguments: { prompt: "A rose" } }]),
+    {
+      role: "toolResult", toolCallId: "call-1", toolName: "generate_image", isError: false, timestamp: 0,
+      content: [{ type: "text", text: "Generated." }, { type: "image", data: "iVBORw0KGgo=", mimeType: "image/png" }],
+    },
+  ] as Message[]);
+  assert.deepEqual(requestMessages.slice(2), [
+    { role: "tool", tool_call_id: "call-1", content: "Generated." },
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "The images the tools returned:" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,iVBORw0KGgo=" } },
+      ],
+    },
+  ]);
+});
+
+test("should_send_a_user_message_with_an_image_as_parts_and_one_without_as_text", () => {
+  const requestMessages = DaemonStreamFunction.requestMessages([
+    { role: "user", content: [{ type: "text", text: "What is this?" }, { type: "image", data: "/9j/4AAQ", mimeType: "image/jpeg" }], timestamp: 0 },
+    { role: "user", content: [{ type: "image", data: "/9j/4AAQ", mimeType: "image/jpeg" }], timestamp: 0 },
+    { role: "user", content: "Plain words.", timestamp: 0 },
+  ] as Message[]);
+  assert.deepEqual(requestMessages, [
+    { role: "user", content: [{ type: "text", text: "What is this?" }, { type: "image_url", image_url: { url: "data:image/jpeg;base64,/9j/4AAQ" } }] },
+    { role: "user", content: [{ type: "image_url", image_url: { url: "data:image/jpeg;base64,/9j/4AAQ" } }] },
+    { role: "user", content: "Plain words." },
+  ]);
+});
+
+test("should_keep_every_tool_result_together_and_send_their_images_after_them", () => {
+  const imageResult = (callID: string, data: string) => ({
+    role: "toolResult", toolCallId: callID, toolName: "generate_image", isError: false, timestamp: 0,
+    content: [{ type: "text", text: `Drew ${callID}.` }, { type: "image", data, mimeType: "image/png" }],
+  });
+  const requestMessages = DaemonStreamFunction.requestMessages([
+    { role: "user", content: "Draw Romeo and Juliet.", timestamp: 0 },
+    assistantReply([
+      { type: "toolCall", id: "romeo", name: "generate_image", arguments: { prompt: "Romeo" } },
+      { type: "toolCall", id: "juliet", name: "generate_image", arguments: { prompt: "Juliet" } },
+    ]),
+    imageResult("romeo", "ROMEO"),
+    imageResult("juliet", "JULIET"),
+    assistantReply([{ type: "text", text: "Both drawn." }]),
+  ] as Message[]);
+  assert.deepEqual(requestMessages.map((requestMessage) => requestMessage.role), ["user", "assistant", "tool", "tool", "user", "assistant"]);
+  assert.deepEqual(requestMessages[4], {
+    role: "user",
+    content: [
+      { type: "text", text: "The images the tools returned:" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,ROMEO" } },
+      { type: "image_url", image_url: { url: "data:image/png;base64,JULIET" } },
+    ],
+  });
+});

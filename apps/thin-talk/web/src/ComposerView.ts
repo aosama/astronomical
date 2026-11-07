@@ -6,6 +6,7 @@ import { ThinkingEffort } from "./ThinkingEffort";
  * soon as the model can take it, after the current reply or its tool calls. */
 const QUEUEING_PLACEHOLDER = "Add a message; Thin Talk reads it next";
 const MAX_FIELD_HEIGHT_PX = 160;
+const FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX = 2;
 
 /**
  * Composer layer: the ask field, the thinking-effort pill, and the failure
@@ -195,7 +196,10 @@ export class ComposerView {
 
   private growField(): void {
     this.field.style.height = "auto";
-    const grownHeight = Math.min(this.field.scrollHeight, MAX_FIELD_HEIGHT_PX);
+    // scrollHeight is rounded to whole pixels while the line height is not
+    // (18px × 1.62), so a field sized to it exactly can shave the bottom of
+    // the last line; the spare pixels keep descenders whole.
+    const grownHeight = Math.min(this.field.scrollHeight + FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX, MAX_FIELD_HEIGHT_PX);
     this.field.style.height = `${grownHeight}px`;
     // The field scrolls only once the growth ceiling clamps it; a field that
     // still fits must never paint a scrollbar over the ask.

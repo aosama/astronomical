@@ -115,11 +115,11 @@ final class SessionFileStoreTests: XCTestCase {
     let store = makeStore()
     XCTAssertNil(try store.loadPreferences())
 
-    let preferences = Data(#"{"thinkingEffort":"balanced","composerFontSize":16}"#.utf8)
+    let preferences = Data(#"{"thinkingEffort":"balanced","sidebarWidthPixels":300}"#.utf8)
     try store.savePreferences(preferences)
     XCTAssertEqual(try store.loadPreferences(), preferences)
 
-    let updated = Data(#"{"thinkingEffort":"high","composerFontSize":12}"#.utf8)
+    let updated = Data(#"{"thinkingEffort":"high","sidebarWidthPixels":260}"#.utf8)
     try store.savePreferences(updated)
     XCTAssertEqual(try store.loadPreferences(), updated)
   }

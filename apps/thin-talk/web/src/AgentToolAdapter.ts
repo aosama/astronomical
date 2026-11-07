@@ -1,4 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import type { ConversationTool, ToolCallContext } from "./ConversationTool";
 import { executeWithinLimits } from "./ToolLimits";
 
@@ -22,10 +23,15 @@ export function agentTool(conversationTool: ConversationTool, context: ToolCallC
       const toolSignal = signal != null ? signal : new AbortController().signal;
       const toolOutput = await executeWithinLimits(conversationTool, toolArguments as Record<string, unknown>, toolSignal, context);
       // The image name rides in the result's details, which Pi hands to the
-      // end-of-call report; the model never sees it because
-      // DaemonStreamFunction sends only a result's text.
+      // end-of-call report; the model never sees the name. An image for the
+      // model rides in the content, which DaemonStreamFunction sends on.
       const details = toolOutput.generatedImageName != null ? { [GENERATED_IMAGE_DETAIL]: toolOutput.generatedImageName } : undefined;
-      return { content: [{ type: "text", text: toolOutput.text }], details };
+      const imageForModel = toolOutput.imageForModel;
+      const resultContent: (TextContent | ImageContent)[] = [{ type: "text", text: toolOutput.text }];
+      if (imageForModel != null) {
+        resultContent.push({ type: "image", data: imageForModel.base64, mimeType: imageForModel.mimeType });
+      }
+      return { content: resultContent, details };
     },
   };
 }

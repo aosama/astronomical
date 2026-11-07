@@ -1,7 +1,8 @@
-import { getCurrentTools, type Api, type AssistantMessage, type Message, type Model, type SimpleStreamOptions, type TextContent, type TranscriptContext } from "@earendil-works/pi-ai";
+import { getCurrentTools, type Api, type AssistantMessage, type Message, type Model, type SimpleStreamOptions, type ImageContent, type TextContent, type TranscriptContext } from "@earendil-works/pi-ai";
 import { AssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 import { AssistantEventAssembler } from "./AssistantEventAssembler";
 import type {
+  ChatCompletionContentPart,
   ChatCompletionRequestBody,
   ChatCompletionRequestMessage,
   ChatCompletionRequestTool,
@@ -91,7 +92,21 @@ export class DaemonStreamFunction {
    * re-sending it would only spend context. */
   public static requestMessages(transcript: readonly Message[]): ChatCompletionRequestMessage[] {
     const requestMessages: ChatCompletionRequestMessage[] = [];
+    // A tool message carries text only in the OpenAI format, so images that
+    // tools returned follow as one user message. It goes after the whole run
+    // of tool results, because every tool message must directly follow the
+    // assistant message that called it.
+    let pendingResultImages: ChatCompletionContentPart[] = [];
+    const flushResultImages = (): void => {
+      if (pendingResultImages.length > 0) {
+        requestMessages.push({ role: "user", content: [{ type: "text", text: "The images the tools returned:" }, ...pendingResultImages] });
+        pendingResultImages = [];
+      }
+    };
     for (const transcriptMessage of transcript) {
+      if (transcriptMessage.role !== "toolResult") {
+        flushResultImages();
+      }
       switch (transcriptMessage.role) {
         case "system": {
           const instructions = DaemonStreamFunction.plainText(transcriptMessage.content);
@@ -101,20 +116,23 @@ export class DaemonStreamFunction {
           break;
         }
         case "user":
-          requestMessages.push({ role: "user", content: DaemonStreamFunction.plainText(transcriptMessage.content) });
+          requestMessages.push(DaemonStreamFunction.userRequestMessage(transcriptMessage.content));
           break;
         case "assistant":
           requestMessages.push(DaemonStreamFunction.assistantRequestMessage(transcriptMessage));
           break;
-        case "toolResult":
+        case "toolResult": {
           requestMessages.push({
             role: "tool",
             tool_call_id: transcriptMessage.toolCallId,
             content: DaemonStreamFunction.plainText(transcriptMessage.content),
           });
+          pendingResultImages.push(...DaemonStreamFunction.imageParts(transcriptMessage.content));
           break;
+        }
       }
     }
+    flushResultImages();
     return requestMessages;
   }
 
@@ -139,6 +157,29 @@ export class DaemonStreamFunction {
     );
     const content = DaemonStreamFunction.plainText(assistantMessage.content);
     return toolCalls.length > 0 ? { role: "assistant", content, tool_calls: toolCalls } : { role: "assistant", content };
+  }
+
+  private static userRequestMessage(content: string | readonly { type: string }[]): ChatCompletionRequestMessage {
+    const images = typeof content === "string" ? [] : DaemonStreamFunction.imageParts(content);
+    const text = DaemonStreamFunction.plainText(content);
+    if (images.length === 0) {
+      return { role: "user", content: text };
+    }
+    return { role: "user", content: text.length > 0 ? [{ type: "text", text }, ...images] : images };
+  }
+
+  /** The images in a message's content as inline data URLs. */
+  private static imageParts(content: string | readonly { type: string }[]): ChatCompletionContentPart[] {
+    if (typeof content === "string") {
+      return [];
+    }
+    return content.flatMap((contentBlock): ChatCompletionContentPart[] => {
+      if (contentBlock.type !== "image") {
+        return [];
+      }
+      const imageBlock = contentBlock as ImageContent;
+      return [{ type: "image_url", image_url: { url: `data:${imageBlock.mimeType};base64,${imageBlock.data}` } }];
+    });
   }
 
   private static plainText(content: string | readonly { type: string }[]): string {

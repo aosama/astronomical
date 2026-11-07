@@ -197,6 +197,7 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
   /// thread and may wait minutes for an answer, unlike file ops.
   private static let hostToolOps: Set<String> = ["useHostTool", "cancelHostToolCall"]
   private lazy var toolHost = ThinTalkToolHost(windowProvider: { [weak self] in self?.webViewProvider()?.window })
+  private let conversationContextMenu = ConversationContextMenu()
 
   init(
     sessionFileStore: SessionFileStore,
@@ -242,6 +243,10 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     }
     if Self.hostToolOps.contains(op) {
       handleHostToolCall(callID: callID, op: op, payloadObject: envelope["payload"] as? [String: Any])
+      return
+    }
+    if op == "showConversationMenu" {
+      handleConversationMenuCall(callID: callID)
       return
     }
     // The payload is serialized to JSON on the main thread so only Sendable
@@ -322,7 +327,7 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
         }
         try sessionFileStore.savePreferences(JSONSerialization.data(withJSONObject: preferences))
         return .success("null")
-      case "storeGeneratedImage", "deleteGeneratedImages":
+      case "storeGeneratedImage", "deleteGeneratedImages", "loadGeneratedImage":
         return try performGeneratedImageCall(op: op, payloadObject: payloadObject)
       default:
         return .failure(.init(message: "unknown session op: \(op)"))
@@ -341,6 +346,13 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
       }
       try generatedImageStore.delete(imageNames: imageNames)
       return .success("null")
+    }
+    if op == "loadGeneratedImage" {
+      guard let imageName = payloadObject?["imageName"] as? String else {
+        return .failure(.init(message: "loadGeneratedImage requires an image name"))
+      }
+      guard let storedImage = try generatedImageStore.base64Image(named: imageName) else { return .success("null") }
+      return .success(try encodedJSONString(["base64": storedImage.base64, "mimeType": storedImage.mimeType]))
     }
     guard let encodedImage = payloadObject?["base64"] as? String else {
       return .failure(.init(message: "storeGeneratedImage requires base64 image data"))
@@ -368,6 +380,23 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
       let encodedOutcome = Result { try self.encodedJSONString(toolOutcome.bridgePayload) }
         .mapError { SessionBridgeFailure(message: "useHostTool could not encode its outcome: \($0)") }
       self.settleSessionCall(callID: callID, outcome: encodedOutcome.map { Optional($0) })
+    }
+  }
+
+  /// The sidebar's right-click menu runs on the main thread like the host
+  /// tools, and settles when the user picks, dismisses, or answers the delete
+  /// sheet.
+  private func handleConversationMenuCall(callID: String) {
+    guard let webView = webViewProvider() else {
+      settleSessionCall(callID: callID, outcome: .success(#"{"choice":"dismissed"}"#))
+      return
+    }
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let menuChoice = await self.conversationContextMenu.choose(in: webView)
+      let encodedChoice = Result { try self.encodedJSONString(["choice": menuChoice.rawValue]) }
+        .mapError { SessionBridgeFailure(message: "showConversationMenu could not encode its choice: \($0)") }
+      self.settleSessionCall(callID: callID, outcome: encodedChoice.map { Optional($0) })
     }
   }
 

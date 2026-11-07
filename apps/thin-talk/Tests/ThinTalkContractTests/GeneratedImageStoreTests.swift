@@ -37,6 +37,23 @@ final class GeneratedImageStoreTests: XCTestCase {
     XCTAssertNotNil(store.fileURL(forImageName: jpegName))
   }
 
+  func test_should_read_a_stored_image_back_as_base64_with_its_type() throws {
+    let store = GeneratedImageStore(directory: imageDirectory)
+    let pngName = try store.save(imageData: pngBytes)
+    let jpegName = try store.save(imageData: jpegBytes)
+    let storedPNG = try XCTUnwrap(try store.base64Image(named: pngName))
+    XCTAssertEqual(storedPNG.base64, pngBytes.base64EncodedString())
+    XCTAssertEqual(storedPNG.mimeType, "image/png")
+    XCTAssertEqual(try store.base64Image(named: jpegName)?.mimeType, "image/jpeg")
+  }
+
+  func test_should_read_nothing_back_for_a_missing_image_or_a_crafted_name() throws {
+    let store = GeneratedImageStore(directory: imageDirectory)
+    XCTAssertNil(try store.base64Image(named: "\(UUID().uuidString.lowercased()).png"), "a deleted image")
+    XCTAssertNil(try store.base64Image(named: "../preferences.json"))
+    XCTAssertNil(try store.base64Image(named: ""))
+  }
+
   func test_should_refuse_bytes_that_are_not_an_image() {
     let store = GeneratedImageStore(directory: imageDirectory)
     for notAnImage in [Data(), Data("<svg/>".utf8), Data([0x89, 0x50, 0x4E])] {

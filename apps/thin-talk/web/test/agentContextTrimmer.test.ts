@@ -76,3 +76,12 @@ test("should_count_what_the_model_reads_not_bookkeeping_fields", () => {
   assert.equal(estimatedTokens([answer("abcd")]), 1, "usage, model and timestamps are not counted");
   assert.equal(estimatedTokens([question("abcdefgh")]), 2);
 });
+
+test("should_count_an_image_as_a_fixed_block_of_tokens_not_by_its_base64_length", () => {
+  const hugeBase64 = "A".repeat(400_000);
+  const imageTokens = estimatedTokens([{
+    role: "toolResult", toolCallId: "call-1", toolName: "generate_image", isError: false, timestamp: 0,
+    content: [{ type: "image", data: hugeBase64, mimeType: "image/png" }],
+  } as AgentMessage]);
+  assert.equal(imageTokens, 2_000);
+});

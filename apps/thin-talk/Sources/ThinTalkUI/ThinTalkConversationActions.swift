@@ -60,15 +60,10 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
     zoomController.resetZoom()
   }
 
-  /// Deleting is the one command that cannot be undone, so it asks first, as a
-  /// sheet on the conversation window rather than a free-floating alert.
+  /// Deleting is the one command that cannot be undone, so it asks first; the
+  /// question is shared with the sidebar's right-click menu.
   @objc public func deleteConversation(_ sender: Any?) {
-    let confirmation = NSAlert()
-    confirmation.messageText = "Delete this conversation?"
-    confirmation.informativeText = "It is removed from this Mac and cannot be restored."
-    confirmation.alertStyle = .warning
-    confirmation.addButton(withTitle: "Delete").hasDestructiveAction = true
-    confirmation.addButton(withTitle: "Cancel")
+    let confirmation = DeleteConversationConfirmation.makeAlert()
     let deleteAfterConfirmation: (NSApplication.ModalResponse) -> Void = { [weak self] response in
       guard response == .alertFirstButtonReturn else { return }
       self?.commandController.run(.deleteConversation)

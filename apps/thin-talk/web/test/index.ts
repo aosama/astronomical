@@ -38,6 +38,8 @@ import "./describeChosenImageTool.test";
 import "./searchConversationsTool.test";
 import "./sessionBridgeHostTools.test";
 import "./sessionStore.test";
+import "./sidebarResizer.test";
+import "./conversationMenuJourney.test";
 import "./agentContextTrimmer.test";
 import "./toolLimits.test";
 import "./toolCatalog.test";

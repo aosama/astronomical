@@ -10,12 +10,13 @@
 
 /*
  * Under a native toolbar the window's title bar strip overlays the top of the
- * page and takes the clicks there (that strip is what drags the window), so
- * both columns start below it. Their backgrounds still run to the top edge, so
- * the frame reads as one surface the way native sidebar apps do.
+ * page and takes the clicks there (that strip is what drags the window). The
+ * sidebar starts below it. The conversation does not: its scroll area runs to
+ * the window's top edge, so text scrolls up under the strip the way it does
+ * in Apple's own chat apps, and only its opening padding clears the strip so
+ * the first message still starts below it.
  */
-#sidebar,
-#main {
+#sidebar {
   padding-top: var(--titlebar-inset, 0px);
 }
 
@@ -51,7 +52,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 26px 0 34px;
+  padding: calc(var(--titlebar-inset, 0px) + 26px) 0 34px;
 }
 
 .transcript__inner {
@@ -73,6 +74,8 @@
   gap: 6px;
   pointer-events: none;
   text-align: center;
+  /* Centred on the area below the title bar strip, not the whole column. */
+  padding-top: var(--titlebar-inset, 0px);
 }
 
 /*

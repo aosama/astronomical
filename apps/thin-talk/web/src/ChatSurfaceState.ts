@@ -12,19 +12,20 @@ export class ChatSurfaceState {
   public readonly composer: ComposerState;
   public readonly sessions: readonly SessionSummary[];
   public readonly activeSessionID: string | null;
-  public readonly composerFontSize: number;
+  /** The dragged sidebar width, or null for the stylesheet default. */
+  public readonly sidebarWidthPixels: number | null;
 
   public constructor(init: {
     transcript: TranscriptSnapshot;
     composer: ComposerState;
     sessions: readonly SessionSummary[];
     activeSessionID: string | null;
-    composerFontSize: number;
+    sidebarWidthPixels: number | null;
   }) {
     this.transcript = init.transcript;
     this.composer = init.composer;
     this.sessions = init.sessions;
     this.activeSessionID = init.activeSessionID;
-    this.composerFontSize = init.composerFontSize;
+    this.sidebarWidthPixels = init.sidebarWidthPixels;
   }
 }
