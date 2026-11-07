@@ -1,4 +1,4 @@
-import type { ConversationTool, ToolOutput } from "./ConversationTool";
+import type { ConversationTool, ToolCallContext, ToolOutput } from "./ConversationTool";
 
 /** Most tool rounds one assistant turn may run. A model that keeps calling
  * tools without answering is stuck, and each round costs a full model request.
@@ -25,8 +25,11 @@ export async function executeWithinLimits(
   tool: ConversationTool,
   toolArguments: Record<string, unknown>,
   turnSignal: AbortSignal,
-  timeoutMilliseconds: number = tool.timeoutMilliseconds != null ? tool.timeoutMilliseconds : TOOL_TIMEOUT_MILLISECONDS,
+  context: ToolCallContext,
+  options: { timeoutMilliseconds?: number } = {},
 ): Promise<ToolOutput> {
+  const timeoutMilliseconds =
+    options.timeoutMilliseconds != null ? options.timeoutMilliseconds : tool.timeoutMilliseconds != null ? tool.timeoutMilliseconds : TOOL_TIMEOUT_MILLISECONDS;
   // A tool is never started after the user stopped the turn, even one that
   // would finish at once.
   if (turnSignal.aborted) {
@@ -39,7 +42,7 @@ export async function executeWithinLimits(
   const watcherCleanup = new AbortController();
   try {
     const toolResult = await Promise.race([
-      tool.execute(toolArguments, toolSignal),
+      tool.execute(toolArguments, toolSignal, context),
       rejectWhenAborted(toolSignal, tool.label, timeoutSignal, watcherCleanup.signal),
     ]);
     const toolOutput: ToolOutput = typeof toolResult === "string" ? { text: toolResult } : toolResult;

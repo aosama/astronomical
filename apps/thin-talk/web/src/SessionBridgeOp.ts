@@ -14,4 +14,6 @@ export enum SessionBridgeOp {
   SAVE_PREFS = "savePrefs",
   STORE_GENERATED_IMAGE = "storeGeneratedImage",
   DELETE_GENERATED_IMAGES = "deleteGeneratedImages",
+  USE_HOST_TOOL = "useHostTool",
+  CANCEL_HOST_TOOL_CALL = "cancelHostToolCall",
 }

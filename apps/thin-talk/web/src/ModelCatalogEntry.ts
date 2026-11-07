@@ -26,6 +26,11 @@ export class ModelCatalogEntry {
     this.generatesImages = init.generatesImages === true;
   }
 
+  /** Whether the model can be sent an image in a chat request. */
+  public get acceptsImages(): boolean {
+    return this.supportsChat && this.inputModalities.includes("image");
+  }
+
   public get supportsChat(): boolean {
     const keepsText = this.inputModalities.length === 0 || this.inputModalities.includes("text");
     const keepsChat = this.supportedEndpoints === null || this.supportedEndpoints.some((endpoint) => endpoint.includes("chat"));

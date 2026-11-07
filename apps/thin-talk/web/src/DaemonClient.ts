@@ -18,6 +18,21 @@ const MAXIMUM_RESPONSE_BYTE_COUNT = 1_048_576;
  * around it. */
 const MAXIMUM_IMAGE_RESPONSE_CHARACTER_COUNT = Math.ceil((20 * 1024 * 1024 * 4) / 3) + 64 * 1024;
 
+/** One question about one image for a vision model. */
+export interface ImageDescriptionRequest {
+  readonly modelID: string;
+  readonly question: string;
+  readonly mimeType: string;
+  readonly base64: string;
+}
+
+/** A description needs little deliberation, and every thinking token delays
+ * the answer the conversation is waiting on. */
+const IMAGE_DESCRIPTION_THINKING_BUDGET_TOKENS = 256;
+/** A description is a tool result, capped at 16 KB of text anyway; this keeps
+ * a model that will not stop from running on behind the tool's timeout. */
+const IMAGE_DESCRIPTION_MAXIMUM_OUTPUT_TOKENS = 1_024;
+
 /**
  * Talks to a single daemon instance over its public REST endpoints: the
  * readiness handshake, the model list, streaming chat completion and image
@@ -74,6 +89,76 @@ export class DaemonClient {
     return catalogEntries.filter((entry) => entry.generatesImages).map((entry) => entry.id);
   }
 
+  /** The ids of the installed chat models that can look at images. */
+  public async fetchVisionModelIDs(signal?: AbortSignal): Promise<string[]> {
+    const catalogEntries = await this.fetchCatalogEntries(signal);
+    return catalogEntries.filter((entry) => entry.acceptsImages).map((entry) => entry.id);
+  }
+
+  /** Asks a vision model one question about one image and returns its answer.
+   * A single, non-streamed request: the answer becomes a tool result, so
+   * nothing is shown while it is written. */
+  public async describeImage(request: ImageDescriptionRequest, signal: AbortSignal): Promise<string> {
+    const requestBody = {
+      model: request.modelID,
+      stream: false,
+      thinking_budget: IMAGE_DESCRIPTION_THINKING_BUDGET_TOKENS,
+      max_tokens: IMAGE_DESCRIPTION_MAXIMUM_OUTPUT_TOKENS,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: request.question },
+          { type: "image_url", image_url: { url: `data:${request.mimeType};base64,${request.base64}` } },
+        ],
+      }],
+    };
+    const bodyText = await this.postJSON("/v1/chat/completions", requestBody, signal, MAXIMUM_RESPONSE_BYTE_COUNT);
+    return DaemonClient.firstAnswerText(bodyText);
+  }
+
+  /** Posts one JSON request and returns the response text, refusing a body
+   * past `maximumCharacterCount`. Network failures and refusals become
+   * classified ChatFailures, as for every other daemon call. */
+  private async postJSON(path: string, requestBody: unknown, signal: AbortSignal, maximumCharacterCount: number): Promise<string> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.daemonBaseURL}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal,
+      });
+    } catch (error) {
+      throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, DaemonClient.describeNetworkError(error));
+    }
+    const bodyText = await response.text();
+    if (bodyText.length > maximumCharacterCount) {
+      throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the response was too large");
+    }
+    if (!response.ok) {
+      const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
+      throw new ChatFailure(ChatFailureClassifier.classify(response.status, reason != null ? reason : ""), reason);
+    }
+    return bodyText;
+  }
+
+  private static firstAnswerText(bodyText: string): string {
+    let document: unknown;
+    try {
+      document = JSON.parse(bodyText);
+    } catch {
+      throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the description was not JSON");
+    }
+    const choices = typeof document === "object" && document !== null ? (document as Record<string, unknown>)["choices"] : null;
+    const firstChoice = Array.isArray(choices) ? choices[0] : null;
+    const message = typeof firstChoice === "object" && firstChoice !== null ? (firstChoice as Record<string, unknown>)["message"] : null;
+    const content = typeof message === "object" && message !== null ? (message as Record<string, unknown>)["content"] : null;
+    if (typeof content !== "string" || content.trim().length === 0) {
+      throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the vision model returned no description");
+    }
+    return content.trim();
+  }
+
   private async fetchCatalogEntries(signal?: AbortSignal): Promise<ModelCatalogEntry[]> {
     const bodyText = await this.requestText("/v1/models", signal);
     let document: unknown;
@@ -93,28 +178,10 @@ export class DaemonClient {
    * image model and can take tens of seconds, so only the caller's signal
    * bounds it. Failures throw a classified ChatFailure. */
   public async generateImage(requestBody: ImageGenerationRequestBody, signal: AbortSignal): Promise<string> {
-    let response: Response;
-    try {
-      response = await fetch(`${this.config.daemonBaseURL}/v1/images/generations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-        signal,
-      });
-    } catch (error) {
-      throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, DaemonClient.describeNetworkError(error));
-    }
-    const bodyText = await response.text();
     // An image response is far larger than the status and model documents
     // requestText caps at a megabyte, so it has its own cap: the largest image
     // the host will keep, in base64, plus room for the response's other fields.
-    if (bodyText.length > MAXIMUM_IMAGE_RESPONSE_CHARACTER_COUNT) {
-      throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the image response was too large");
-    }
-    if (!response.ok) {
-      const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
-      throw new ChatFailure(ChatFailureClassifier.classify(response.status, reason != null ? reason : ""), reason);
-    }
+    const bodyText = await this.postJSON("/v1/images/generations", requestBody, signal, MAXIMUM_IMAGE_RESPONSE_CHARACTER_COUNT);
     return DaemonClient.firstImageBase64(bodyText);
   }
 

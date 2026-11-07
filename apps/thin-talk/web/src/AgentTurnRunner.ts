@@ -117,7 +117,7 @@ export class AgentTurnRunner implements ChatStreamer {
     return new Agent({
       initialState: {
         model,
-        tools: offeredTools.map((offeredTool) => agentTool(offeredTool)),
+        tools: offeredTools.map((offeredTool) => agentTool(offeredTool, { conversationID: request.conversationID, modelID: request.modelID })),
         messages: agentHistory(request.messages.slice(0, -1), model, offeredTools.length > 0),
       },
       streamFn: streamFunction.stream.bind(streamFunction),

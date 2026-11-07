@@ -20,3 +20,9 @@ test("should_recognise_image_models_by_their_generation_endpoint", () => {
   assert.equal(ModelCatalogEntry.fromPlain(BASE_ENTRY)?.generatesImages, false);
   assert.equal(ModelCatalogEntry.fromPlain({ id: "no-endpoints" })?.generatesImages, false);
 });
+
+test("should_recognise_chat_models_that_accept_images", () => {
+  assert.equal(ModelCatalogEntry.fromPlain({ ...BASE_ENTRY, input_modalities: ["text", "image"] })?.acceptsImages, true);
+  assert.equal(ModelCatalogEntry.fromPlain(BASE_ENTRY)?.acceptsImages, false);
+  assert.equal(ModelCatalogEntry.fromPlain({ id: "image-maker", input_modalities: ["text", "image"], supported_endpoints: ["/v1/images/generations"] })?.acceptsImages, false);
+});

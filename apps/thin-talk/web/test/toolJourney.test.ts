@@ -86,3 +86,36 @@ test("should_disable_the_switch_after_moving_to_a_model_without_tools_and_restor
   await waitFor(() => toolsSwitch()?.disabled === false, "the switch to enable again");
   assert.equal(toolsSwitch()?.getAttribute("aria-checked"), "true", "the reader's choice was kept");
 }, { timeout: 30_000 });
+
+test("should_read_a_file_the_reader_allows_and_chooses", async () => {
+  const fileThenAnswer = [
+    [toolCallLine("call-1", "read_file", "{}"), chunkLine({}, "tool_calls"), "data: [DONE]"],
+    [chunkLine({ content: "Your file is a sonnet." }, "stop"), "data: [DONE]"],
+  ];
+  const { daemon, host } = bootJourney(undefined, { models: [TOOL_CAPABLE_MODEL], chatReplySequence: fileThenAnswer });
+  host.chosenTextFile = { fileName: "sonnet-18.txt", text: "Shall I compare thee to a summer's day?" };
+  await waitUntilReady();
+  sendUserMessage("Read my sonnet file.");
+  await waitFor(() => toolStepRows()[0]?.dataset.state === "succeeded", "the file step to finish");
+  const followUpMessages = daemon.chatRequestBodies()[1]?.["messages"] as { role: string; content: string }[];
+  assert.match(followUpMessages[followUpMessages.length - 1]?.content ?? "", /Contents of sonnet-18\.txt:[\s\S]*summer's day/);
+  const hostToolRequest = host.receivedRequests.find((request) => request.op === "useHostTool");
+  const savedConversationIDs = host.receivedRequests.filter((request) => request.op === "save").map((request) => (request.payload as { id: string }).id);
+  assert.equal((hostToolRequest?.payload as { conversationID: string }).conversationID, savedConversationIDs[0], "the approval is asked for the open conversation");
+}, { timeout: 30_000 });
+
+test("should_tell_the_model_when_the_reader_does_not_allow_the_file", async () => {
+  const fileThenAnswer = [
+    [toolCallLine("call-1", "read_file", "{}"), chunkLine({}, "tool_calls"), "data: [DONE]"],
+    [chunkLine({ content: "Understood." }, "stop"), "data: [DONE]"],
+  ];
+  const { daemon, host } = bootJourney(undefined, { models: [TOOL_CAPABLE_MODEL], chatReplySequence: fileThenAnswer });
+  host.toolApprovalAnswer = false;
+  await waitUntilReady();
+  sendUserMessage("Read my file.");
+  await waitFor(() => toolStepRows()[0]?.dataset.state === "failed", "the refused step");
+  await waitFor(() => daemon.chatRequestBodies().length === 2, "the model to hear about the refusal");
+  const followUpMessages = daemon.chatRequestBodies()[1]?.["messages"] as { content: string }[];
+  assert.match(followUpMessages[followUpMessages.length - 1]?.content ?? "", /did not allow/);
+  assert.equal(host.receivedRequests.filter((request) => request.op === "useHostTool").length, 1, "one sheet, and the model was told not to ask again");
+}, { timeout: 30_000 });

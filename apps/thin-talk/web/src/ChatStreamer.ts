@@ -5,6 +5,9 @@ import { ToolStep } from "./ToolStep";
 /** One streamed assistant turn the conversation asks for. */
 export interface ChatStreamRequest {
   modelID: string;
+  /** The conversation being answered, for tools that remember approvals;
+   * null when none is open. */
+  conversationID: string | null;
   messages: ChatMessage[];
   thinkingEffort: ThinkingEffort;
   /** Whether the user's Tools switch is on. */
