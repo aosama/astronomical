@@ -4,6 +4,7 @@ import { SessionBridge } from "./SessionBridge";
 import { SessionStore } from "./SessionStore";
 import { AgentTurnRunner } from "./AgentTurnRunner";
 import { CurrentTimeTool } from "./CurrentTimeTool";
+import { GenerateImageTool } from "./GenerateImageTool";
 import { ToolCatalog } from "./ToolCatalog";
 import { DaemonClient } from "./DaemonClient";
 import { TrustBoundary } from "./TrustBoundary";
@@ -119,7 +120,7 @@ export function bootChatClient(): AppShell {
 
   const controller = new ChatController({
     client,
-    streamer: new AgentTurnRunner(client, new ToolCatalog([new CurrentTimeTool()])),
+    streamer: new AgentTurnRunner(client, new ToolCatalog([new CurrentTimeTool(), new GenerateImageTool(client, bridge)])),
     bridge,
     store,
   });

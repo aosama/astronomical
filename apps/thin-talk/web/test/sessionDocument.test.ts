@@ -50,7 +50,7 @@ test("should_round_trip_tool_steps_in_a_version_2_document", () => {
       { id: "m1", role: "user", content: "What time is it?", reasoning: "", state: "complete", toolSteps: [] },
       {
         id: "m2", role: "assistant", content: "It is 2 PM.", reasoning: "", state: "complete",
-        toolSteps: [{ toolCallID: "call-1", toolName: "get_current_time", label: "Current time", argumentsJSON: "{}", resultText: "2 PM", state: "succeeded", roundIndex: 0 }],
+        toolSteps: [{ toolCallID: "call-1", toolName: "get_current_time", label: "Current time", argumentsJSON: "{}", resultText: "2 PM", state: "succeeded", roundIndex: 0, generatedImageName: null }],
       },
     ],
   };

@@ -12,4 +12,6 @@ export enum SessionBridgeOp {
   RENAME = "rename",
   LOAD_PREFS = "loadPrefs",
   SAVE_PREFS = "savePrefs",
+  STORE_GENERATED_IMAGE = "storeGeneratedImage",
+  DELETE_GENERATED_IMAGES = "deleteGeneratedImages",
 }

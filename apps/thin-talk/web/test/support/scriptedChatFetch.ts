@@ -99,8 +99,9 @@ export function chunkLine(delta: { content?: string; reasoning_content?: string 
 }
 
 /** Waits for a condition the event loop will make true, without a fixed sleep. */
-export async function waitUntil(condition: () => boolean, description: string): Promise<void> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
+export async function waitUntil(condition: () => boolean, description: string, timeoutMilliseconds = 1_000): Promise<void> {
+  const attemptCount = Math.ceil(timeoutMilliseconds / 5);
+  for (let attempt = 0; attempt < attemptCount; attempt += 1) {
     if (condition()) {
       return;
     }

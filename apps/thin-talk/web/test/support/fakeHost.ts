@@ -1,5 +1,8 @@
 import type { SessionBridgeRequest } from "../../src/SessionBridgeRequest";
 
+/** The name the fake host gives every stored generated image. */
+export const FAKE_STORED_IMAGE_NAME = "0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.png";
+
 /**
  * An in-memory stand-in for the Swift session host. It answers `sessionCall`
  * envelopes exactly the way SessionFileStore does — same plain shapes, same
@@ -13,6 +16,8 @@ export class FakeSessionHost {
   public readonly receivedRequests: SessionBridgeRequest[] = [];
   /** Every `action` envelope the page posted (copy, openExternal), in order. */
   public readonly receivedActions: Record<string, unknown>[] = [];
+  /** Generated images the page asked the host to delete, by stored name. */
+  public readonly deletedGeneratedImageNames: string[] = [];
 
   public constructor(
     private readonly resolveCall: (callId: string, payload: unknown) => void,
@@ -73,6 +78,13 @@ export class FakeSessionHost {
       case "savePrefs":
         this.preferences = payload;
         return null;
+      case "storeGeneratedImage":
+        return { imageName: FAKE_STORED_IMAGE_NAME };
+      case "deleteGeneratedImages": {
+        const imageNames = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["imageNames"] : null;
+        this.deletedGeneratedImageNames.push(...(Array.isArray(imageNames) ? imageNames.filter((name): name is string => typeof name === "string") : []));
+        return null;
+      }
       default:
         throw new Error(`fake host does not know op "${op}"`);
     }

@@ -45,3 +45,11 @@ test("should_drop_a_step_without_a_call_id", () => {
     assert.equal(ToolStep.fromPlain(damagedPlain), null, JSON.stringify(damagedPlain));
   }
 });
+
+test("should_keep_a_stored_image_name_and_drop_one_that_is_not", () => {
+  const storedName = "0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.png";
+  assert.equal(ToolStep.fromPlain({ ...finishedStep().toPlain(), generatedImageName: storedName })?.generatedImageName, storedName);
+  for (const craftedName of ["../sessions/a.json", "x.png", `${storedName}" onerror="x`, 42]) {
+    assert.equal(ToolStep.fromPlain({ ...finishedStep().toPlain(), generatedImageName: craftedName })?.generatedImageName, null, String(craftedName));
+  }
+});

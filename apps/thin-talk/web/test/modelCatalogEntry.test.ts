@@ -14,3 +14,9 @@ test("should_read_tool_support_only_from_an_explicit_true", () => {
 test("should_still_reject_an_entry_without_an_id", () => {
   assert.equal(ModelCatalogEntry.fromPlain({ supports_tool_calls: true }), null);
 });
+
+test("should_recognise_image_models_by_their_generation_endpoint", () => {
+  assert.equal(ModelCatalogEntry.fromPlain({ id: "FLUX", supported_endpoints: ["/v1/images/generations"] })?.generatesImages, true);
+  assert.equal(ModelCatalogEntry.fromPlain(BASE_ENTRY)?.generatesImages, false);
+  assert.equal(ModelCatalogEntry.fromPlain({ id: "no-endpoints" })?.generatesImages, false);
+});

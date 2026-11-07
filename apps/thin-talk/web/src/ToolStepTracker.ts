@@ -29,11 +29,13 @@ export class ToolStepTracker {
     return this.step(toolCallID, toolName, argumentsJSON, "", ToolStepState.RUNNING);
   }
 
-  public finished(toolCallID: string, toolName: string, toolResult: unknown, isError: boolean): ToolStep {
+  /** `generatedImageName` is the image the call produced, if any; the
+   * transcript shows it. */
+  public finished(toolCallID: string, toolName: string, toolResult: unknown, isError: boolean, generatedImageName: string | null = null): ToolStep {
     const recordedArgumentsJSON = this.argumentsJSONByToolCallID.get(toolCallID);
     const argumentsJSON = recordedArgumentsJSON != null ? recordedArgumentsJSON : "{}";
     const resultState = isError ? ToolStepState.FAILED : ToolStepState.SUCCEEDED;
-    return this.step(toolCallID, toolName, argumentsJSON, ToolStepTracker.resultText(toolResult), resultState);
+    return this.step(toolCallID, toolName, argumentsJSON, ToolStepTracker.resultText(toolResult), resultState, generatedImageName);
   }
 
   /** Marks the end of one model request whose tool calls have all finished. */
@@ -41,7 +43,14 @@ export class ToolStepTracker {
     this.completedRoundCount += 1;
   }
 
-  private step(toolCallID: string, toolName: string, argumentsJSON: string, resultText: string, state: ToolStepState): ToolStep {
+  private step(
+    toolCallID: string,
+    toolName: string,
+    argumentsJSON: string,
+    resultText: string,
+    state: ToolStepState,
+    generatedImageName: string | null = null,
+  ): ToolStep {
     const recordedRoundIndex = this.roundIndexByToolCallID.get(toolCallID);
     return new ToolStep({
       toolCallID,
@@ -51,6 +60,7 @@ export class ToolStepTracker {
       resultText,
       state,
       roundIndex: recordedRoundIndex != null ? recordedRoundIndex : this.completedRoundCount,
+      generatedImageName,
     });
   }
 

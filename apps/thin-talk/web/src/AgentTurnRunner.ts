@@ -1,7 +1,7 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTurnContext, type AgentTurnDecision, type BeforeToolCallResult } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import { agentHistory } from "./AgentHistoryReplay";
-import { agentTool } from "./AgentToolAdapter";
+import { agentTool, generatedImageNameFromToolResult } from "./AgentToolAdapter";
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ChatRole } from "./ChatRole";
@@ -16,8 +16,8 @@ import { ToolStepTracker } from "./ToolStepTracker";
 
 /** How long a turn may go without any streamed activity before the
  * conversation reports a stall. A turn that is still thinking emits reasoning
- * deltas and a running tool emits a step, so a minute of silence means the
- * stream is stuck. */
+ * deltas, and stall detection pauses while a tool runs (each tool has its own
+ * timeout), so a minute of silence means the stream is stuck. */
 const TURN_STALL_TIMEOUT_MILLISECONDS = 60_000;
 
 /** What one turn tracks while it runs. */
@@ -142,7 +142,15 @@ export class AgentTurnRunner implements ChatStreamer {
         request.onToolStep(turnProgress.toolSteps.started(event.toolCallId, event.toolName, event.args));
         break;
       case "tool_execution_end":
-        request.onToolStep(turnProgress.toolSteps.finished(event.toolCallId, event.toolName, event.result, event.isError));
+        request.onToolStep(
+          turnProgress.toolSteps.finished(
+            event.toolCallId,
+            event.toolName,
+            event.result,
+            event.isError,
+            generatedImageNameFromToolResult(event.result),
+          ),
+        );
         break;
       default:
         break;

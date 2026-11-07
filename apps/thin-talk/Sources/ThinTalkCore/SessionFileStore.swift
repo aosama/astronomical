@@ -53,6 +53,9 @@ public final class SessionFileStore: @unchecked Sendable {
 
   public var sessionsDirectory: URL { rootDirectory.appendingPathComponent("sessions", isDirectory: true) }
   public var preferencesFileURL: URL { rootDirectory.appendingPathComponent("preferences.json") }
+  /// Where the image tool's generated images are kept, beside the sessions
+  /// that show them.
+  public var generatedImagesDirectory: URL { rootDirectory.appendingPathComponent("generated-images", isDirectory: true) }
 
   // MARK: - Sessions
 

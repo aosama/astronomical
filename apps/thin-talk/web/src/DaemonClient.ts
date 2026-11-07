@@ -1,6 +1,7 @@
 import { AppConfig } from "./AppConfig";
 import { ChatCompletionChunk } from "./ChatCompletionChunk";
 import type { ChatCompletionRequestBody } from "./ChatCompletionRequestBody";
+import type { ImageGenerationRequestBody } from "./ImageGenerationRequestBody";
 import { ChatModel } from "./ChatModel";
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureClassifier } from "./ChatFailureClassifier";
@@ -12,12 +13,17 @@ import { DaemonStatus } from "./DaemonStatus";
 const GET_TIMEOUT_MILLISECONDS = 2_000;
 /** The largest status/models body the page will read, matching the Swift client. */
 const MAXIMUM_RESPONSE_BYTE_COUNT = 1_048_576;
+/** The largest image response the page will read: the host keeps images of
+ * up to 20 MB, which is about 27 MB of base64, plus a margin for the JSON
+ * around it. */
+const MAXIMUM_IMAGE_RESPONSE_CHARACTER_COUNT = Math.ceil((20 * 1024 * 1024 * 4) / 3) + 64 * 1024;
 
 /**
  * Talks to a single daemon instance over its public REST endpoints: the
- * readiness handshake, the model list, and streaming chat completion. The
- * network calls and the server-sent-events line framing live here, so the
- * controller never touches the wire; decoding one line is ChatCompletionChunk's.
+ * readiness handshake, the model list, streaming chat completion and image
+ * generation. The network calls and the server-sent-events line framing live
+ * here, so the controller never touches the wire; decoding one line is
+ * ChatCompletionChunk's.
  */
 export class DaemonClient {
   private readonly config: AppConfig;
@@ -48,18 +54,8 @@ export class DaemonClient {
 
   /** Returns the chat-capable models discovered on this channel. */
   public async fetchModels(): Promise<ChatModel[]> {
-    const bodyText = await this.requestText("/v1/models");
-    let document: unknown;
-    try {
-      document = JSON.parse(bodyText);
-    } catch {
-      throw new Error("The server returned an unexpected response.");
-    }
-    const record = typeof document === "object" && document !== null ? (document as Record<string, unknown>) : {};
-    const rawModels = Array.isArray(record["data"]) ? record["data"] : [];
-    return rawModels
-      .map((rawModel) => ModelCatalogEntry.fromPlain(rawModel))
-      .filter((entry): entry is ModelCatalogEntry => entry !== null)
+    const catalogEntries = await this.fetchCatalogEntries();
+    return catalogEntries
       .filter((entry) => entry.supportsChat)
       .map(
         (entry) =>
@@ -70,6 +66,74 @@ export class DaemonClient {
             supportsToolCalls: entry.supportsToolCalls,
           }),
       );
+  }
+
+  /** The ids of the installed models that generate images, in catalog order. */
+  public async fetchImageModelIDs(signal?: AbortSignal): Promise<string[]> {
+    const catalogEntries = await this.fetchCatalogEntries(signal);
+    return catalogEntries.filter((entry) => entry.generatesImages).map((entry) => entry.id);
+  }
+
+  private async fetchCatalogEntries(signal?: AbortSignal): Promise<ModelCatalogEntry[]> {
+    const bodyText = await this.requestText("/v1/models", signal);
+    let document: unknown;
+    try {
+      document = JSON.parse(bodyText);
+    } catch {
+      throw new Error("The server returned an unexpected response.");
+    }
+    const record = typeof document === "object" && document !== null ? (document as Record<string, unknown>) : {};
+    const rawModels = Array.isArray(record["data"]) ? record["data"] : [];
+    return rawModels
+      .map((rawModel) => ModelCatalogEntry.fromPlain(rawModel))
+      .filter((entry): entry is ModelCatalogEntry => entry !== null);
+  }
+
+  /** Generates one image and returns it as base64. Image generation loads an
+   * image model and can take tens of seconds, so only the caller's signal
+   * bounds it. Failures throw a classified ChatFailure. */
+  public async generateImage(requestBody: ImageGenerationRequestBody, signal: AbortSignal): Promise<string> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.daemonBaseURL}/v1/images/generations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal,
+      });
+    } catch (error) {
+      throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, DaemonClient.describeNetworkError(error));
+    }
+    const bodyText = await response.text();
+    // An image response is far larger than the status and model documents
+    // requestText caps at a megabyte, so it has its own cap: the largest image
+    // the host will keep, in base64, plus room for the response's other fields.
+    if (bodyText.length > MAXIMUM_IMAGE_RESPONSE_CHARACTER_COUNT) {
+      throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the image response was too large");
+    }
+    if (!response.ok) {
+      const reason = ChatFailureClassifier.reasonFromErrorDocument(bodyText);
+      throw new ChatFailure(ChatFailureClassifier.classify(response.status, reason != null ? reason : ""), reason);
+    }
+    return DaemonClient.firstImageBase64(bodyText);
+  }
+
+  private static firstImageBase64(bodyText: string): string {
+    let document: unknown;
+    try {
+      document = JSON.parse(bodyText);
+    } catch {
+      throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the image response was not JSON");
+    }
+    const record = typeof document === "object" && document !== null ? (document as Record<string, unknown>) : {};
+    const generatedImages = Array.isArray(record["data"]) ? record["data"] : [];
+    const firstImage = generatedImages[0];
+    const encodedImage =
+      typeof firstImage === "object" && firstImage !== null ? (firstImage as Record<string, unknown>)["b64_json"] : null;
+    if (typeof encodedImage !== "string" || encodedImage.length === 0) {
+      throw new ChatFailure(ChatFailureKind.MALFORMED_MODEL_OUTPUT, "the image response carried no image");
+    }
+    return encodedImage;
   }
 
   /** Sends one streaming chat completion and hands every decoded chunk to
@@ -162,11 +226,12 @@ export class DaemonClient {
     }
   }
 
-  private async requestText(path: string): Promise<string> {
+  private async requestText(path: string, callerSignal?: AbortSignal): Promise<string> {
+    const timeoutSignal = AbortSignal.timeout(GET_TIMEOUT_MILLISECONDS);
     let response: Response;
     try {
       response = await fetch(`${this.config.daemonBaseURL}${path}`, {
-        signal: AbortSignal.timeout(GET_TIMEOUT_MILLISECONDS),
+        signal: callerSignal != null ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal,
       });
     } catch (error) {
       throw new ChatFailure(ChatFailureKind.WORKER_UNAVAILABLE, DaemonClient.describeNetworkError(error));
