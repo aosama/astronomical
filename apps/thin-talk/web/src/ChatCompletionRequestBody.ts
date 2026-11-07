@@ -5,9 +5,16 @@ export interface ChatCompletionRequestToolCall {
   function: { name: string; arguments: string };
 }
 
+/** One part of a message that mixes text and images, in the OpenAI format the
+ * daemon accepts; an image travels inline as a data URL. */
+export type ChatCompletionContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 /** One message as the daemon's chat completion endpoint receives it. */
 export type ChatCompletionRequestMessage =
-  | { role: "system" | "user"; content: string }
+  | { role: "system"; content: string }
+  | { role: "user"; content: string | ChatCompletionContentPart[] }
   | { role: "assistant"; content: string; tool_calls?: ChatCompletionRequestToolCall[] }
   | { role: "tool"; tool_call_id: string; content: string };
 

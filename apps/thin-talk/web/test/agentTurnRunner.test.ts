@@ -37,6 +37,8 @@ function turnRequest(messages: ChatMessage[], forwardedDeltas: ForwardedDeltas, 
     thinkingEffort: ThinkingEffort.BALANCED,
     toolsEnabled: true,
     modelSupportsToolCalls: false,
+    modelAcceptsImages: false,
+    conversationID: null,
     onText: (delta) => { forwardedDeltas.text += delta; },
     onReasoning: (delta) => { forwardedDeltas.reasoning += delta; },
     onToolStep: () => undefined,
@@ -405,4 +407,111 @@ test("should_answer_queued_messages_in_the_order_they_were_sent_even_across_a_to
     return requestMessages[requestMessages.length - 1]?.content;
   });
   assert.deepEqual(requestEndings, ["Message A", "Message B"]);
+});
+
+function drawnImageStep(imageNumber: number): ToolStep {
+  return new ToolStep({
+    toolCallID: `draw-${imageNumber}`,
+    toolName: "generate_image",
+    label: "Image generation",
+    argumentsJSON: "{}",
+    resultText: `Generated image ${imageNumber}.`,
+    state: ToolStepState.SUCCEEDED,
+    roundIndex: imageNumber,
+    generatedImageName: `00000000-0000-4000-8000-00000000000${imageNumber}.png`,
+  });
+}
+
+test("should_show_a_seeing_model_only_the_two_latest_generated_images_again", async () => {
+  const loadedImageNames: string[] = [];
+  const runner = new AgentTurnRunner(
+    new DaemonClient(new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" })),
+    new ToolCatalog([new CurrentTimeTool()]),
+    async (imageName) => {
+      loadedImageNames.push(imageName);
+      return { base64: `IMAGE-${imageName.slice(-5, -4)}`, mimeType: "image/png" };
+    },
+  );
+  const scriptedFetch = new ScriptedChatFetch([{ lines: [chunkLine({ content: "Three roses." }, "stop")] }]);
+  scriptedFetch.install();
+  const earlierAnswer = new ChatMessage({
+    id: "assistant-1", role: ChatRole.ASSISTANT, content: "Drawn.", toolSteps: [drawnImageStep(1), drawnImageStep(2), drawnImageStep(3)],
+  });
+  const forwardedDeltas = { text: "", reasoning: "" };
+  const request = turnRequest([userMessage("Draw three roses."), earlierAnswer, userMessage("Which is reddest?")], forwardedDeltas, new AbortController().signal);
+  await runner.streamChat({ ...request, modelAcceptsImages: true, modelSupportsToolCalls: true });
+  assert.deepEqual(loadedImageNames.map((imageName) => imageName.slice(-5, -4)), ["2", "3"]);
+  const sentImageURLs = [...JSON.stringify(scriptedFetch.requests[0]?.body["messages"]).matchAll(/data:image\/png;base64,(IMAGE-\d)/g)].map((urlMatch) => urlMatch[1]);
+  assert.deepEqual(sentImageURLs, ["IMAGE-2", "IMAGE-3"]);
+});
+
+test("should_load_no_images_for_a_model_that_cannot_see_or_when_tools_are_off", async () => {
+  const loadedImageNames: string[] = [];
+  const runner = new AgentTurnRunner(
+    new DaemonClient(new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" })),
+    new ToolCatalog([new CurrentTimeTool()]),
+    async (imageName) => {
+      loadedImageNames.push(imageName);
+      return null;
+    },
+  );
+  const earlierAnswer = new ChatMessage({ id: "assistant-1", role: ChatRole.ASSISTANT, content: "Drawn.", toolSteps: [drawnImageStep(1)] });
+  for (const capabilities of [
+    { modelAcceptsImages: false, modelSupportsToolCalls: true, toolsEnabled: true },
+    { modelAcceptsImages: true, modelSupportsToolCalls: true, toolsEnabled: false },
+  ]) {
+    new ScriptedChatFetch([{ lines: [chunkLine({ content: "A rose." }, "stop")] }]).install();
+    const request = turnRequest([userMessage("Draw a rose."), earlierAnswer, userMessage("Is it red?")], { text: "", reasoning: "" }, new AbortController().signal);
+    await runner.streamChat({ ...request, ...capabilities });
+  }
+  assert.deepEqual(loadedImageNames, []);
+});
+
+test("should_answer_even_when_a_recalled_image_cannot_be_read", async () => {
+  const runner = new AgentTurnRunner(
+    new DaemonClient(new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" })),
+    new ToolCatalog([new CurrentTimeTool()]),
+    async () => { throw new Error("the image was deleted"); },
+  );
+  new ScriptedChatFetch([{ lines: [chunkLine({ content: "It was a rose." }, "stop")] }]).install();
+  const earlierAnswer = new ChatMessage({ id: "assistant-1", role: ChatRole.ASSISTANT, content: "Drawn.", toolSteps: [drawnImageStep(1)] });
+  const forwardedDeltas = { text: "", reasoning: "" };
+  const request = turnRequest([userMessage("Draw a rose."), earlierAnswer, userMessage("What was it?")], forwardedDeltas, new AbortController().signal);
+  await runner.streamChat({ ...request, modelAcceptsImages: true, modelSupportsToolCalls: true });
+  assert.equal(forwardedDeltas.text, "It was a rose.");
+});
+
+test("should_send_nothing_when_stopped_while_earlier_images_load", async () => {
+  const stopController = new AbortController();
+  const runner = new AgentTurnRunner(
+    new DaemonClient(new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" })),
+    new ToolCatalog([new CurrentTimeTool()]),
+    async () => {
+      stopController.abort();
+      return { base64: "IMAGE", mimeType: "image/png" };
+    },
+  );
+  const scriptedFetch = new ScriptedChatFetch([{ lines: [chunkLine({ content: "Too late." }, "stop")] }]);
+  scriptedFetch.install();
+  const earlierAnswer = new ChatMessage({ id: "assistant-1", role: ChatRole.ASSISTANT, content: "Drawn.", toolSteps: [drawnImageStep(1)] });
+  const request = turnRequest([userMessage("Draw a rose."), earlierAnswer, userMessage("Is it red?")], { text: "", reasoning: "" }, stopController.signal);
+  await runner.streamChat({ ...request, modelAcceptsImages: true, modelSupportsToolCalls: true });
+  assert.equal(scriptedFetch.requests.length, 0, "a stop during the image load sends no request");
+});
+
+test("should_load_no_images_when_the_catalog_offers_the_turn_no_tools", async () => {
+  const loadedImageNames: string[] = [];
+  const runner = new AgentTurnRunner(
+    new DaemonClient(new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" })),
+    new ToolCatalog([]),
+    async (imageName) => {
+      loadedImageNames.push(imageName);
+      return null;
+    },
+  );
+  new ScriptedChatFetch([{ lines: [chunkLine({ content: "A rose." }, "stop")] }]).install();
+  const earlierAnswer = new ChatMessage({ id: "assistant-1", role: ChatRole.ASSISTANT, content: "Drawn.", toolSteps: [drawnImageStep(1)] });
+  const request = turnRequest([userMessage("Draw a rose."), earlierAnswer, userMessage("Is it red?")], { text: "", reasoning: "" }, new AbortController().signal);
+  await runner.streamChat({ ...request, modelAcceptsImages: true, modelSupportsToolCalls: true });
+  assert.deepEqual(loadedImageNames, []);
 });

@@ -10,6 +10,29 @@
   min-width: 0;
   background: var(--panel);
   border-right: 1px solid rgb(56 64 82 / 55%);
+  /* Anchors the resize handle on the right edge. */
+  position: relative;
+}
+
+/* A strip a few pixels wide centred on the sidebar's edge: easy to grab
+ * without taking clicks from the conversation list or the transcript. */
+.sidebar__resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+/* While dragging, the whole page shows the resize cursor and no text gets
+ * selected as the pointer sweeps across it. */
+.is-resizing-sidebar,
+.is-resizing-sidebar * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .sidebar__header {
@@ -21,7 +44,7 @@
 }
 
 .sidebar__app-name {
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-secondary);
@@ -41,7 +64,7 @@
   background: var(--accent);
   color: #ffffff;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 16.5px;
   cursor: default;
 }
 
@@ -70,12 +93,28 @@
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 16.5px;
   text-align: left;
   cursor: default;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The rename field sits exactly where the row's title was, so renaming reads
+ * as editing the row in place rather than opening a new control. */
+.sidebar__session-rename {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: var(--panel-alt);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 16.5px;
+  outline: none;
 }
 
 .sidebar__session-item:hover {

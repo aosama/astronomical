@@ -17,6 +17,8 @@ import { Renderer } from "./Renderer";
 import { TranscriptView } from "./TranscriptView";
 import { ComposerView } from "./ComposerView";
 import { SidebarView } from "./SidebarView";
+import { SidebarResizer } from "./SidebarResizer";
+import { runConversationMenu } from "./ConversationMenuFlow";
 import { ChatController } from "./ChatController";
 import { AppShell } from "./AppShell";
 import { ThinkingEffort } from "./ThinkingEffort";
@@ -119,6 +121,13 @@ export function bootChatClient(): AppShell {
     sessionList: requireElement<HTMLElement>("#session-list"),
     onSelect: (id) => void controller.openSession(id),
     onNewChat: () => void controller.newChat(),
+    onConversationMenu: (id) => void runConversationMenu(id, { bridge, sidebar, controller }),
+    onRename: (id, title) => void controller.renameSession(id, title),
+  });
+
+  const sidebarResizer = new SidebarResizer({
+    sidebarElement: requireElement<HTMLElement>("#sidebar"),
+    onResizeEnd: (widthPixels) => controller.setSidebarWidth(widthPixels),
   });
 
   const controller = new ChatController({
@@ -132,11 +141,12 @@ export function bootChatClient(): AppShell {
         new DescribeChosenImageTool(client, bridge),
         new SearchConversationsTool(bridge),
       ]),
+      (imageName) => bridge.loadGeneratedImage(imageName),
     ),
     bridge,
     store,
   });
-  const shell = new AppShell({ controller, transcript, composer, sidebar, host });
+  const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();
   new HostCommandRouter(
     hostCommandHandlers({ controller, transcript, composerField, host, windowChrome }),

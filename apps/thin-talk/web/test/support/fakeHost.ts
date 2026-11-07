@@ -21,6 +21,11 @@ export class FakeSessionHost {
   /** How the fake approval sheet answers. */
   public toolApprovalAnswer = true;
   /** What the fake open panels return; null is a cancelled panel. */
+  /** What the right-click menu answers, as the native menu would after the
+   * user picks (a "delete" counts as already confirmed). */
+  /** Images the host can read back by name, as the app's image store would. */
+  public readonly storedImagesByName = new Map<string, { base64: string; mimeType: string }>();
+  public conversationMenuChoice: "rename" | "delete" | "dismissed" = "dismissed";
   public chosenTextFile: { fileName: string; text: string } | null = null;
   public chosenImageFile: { fileName: string; base64: string; mimeType: string } | null = null;
 
@@ -83,12 +88,22 @@ export class FakeSessionHost {
       case "savePrefs":
         this.preferences = payload;
         return null;
-      case "storeGeneratedImage":
+      case "storeGeneratedImage": {
+        // Kept so a later turn can read the image back, as the app's store does.
+        const storedBase64 = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["base64"] : null;
+        if (typeof storedBase64 === "string") {
+          this.storedImagesByName.set(FAKE_STORED_IMAGE_NAME, { base64: storedBase64, mimeType: "image/png" });
+        }
         return { imageName: FAKE_STORED_IMAGE_NAME };
+      }
+      case "loadGeneratedImage":
+        return this.storedImagesByName.get(this.stringField(payload, "imageName")) ?? null;
       case "useHostTool":
         return this.useHostTool(payload);
       case "cancelHostToolCall":
         return null;
+      case "showConversationMenu":
+        return { choice: this.conversationMenuChoice };
       case "deleteGeneratedImages": {
         const imageNames = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["imageNames"] : null;
         this.deletedGeneratedImageNames.push(...(Array.isArray(imageNames) ? imageNames.filter((name): name is string => typeof name === "string") : []));

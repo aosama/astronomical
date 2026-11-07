@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, JsonObject, Model, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, ImageContent, JsonObject, Model, TextContent, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { ImageForModel } from "./ConversationTool";
 import { ChatMessage } from "./ChatMessage";
 import { ChatRole } from "./ChatRole";
 import { emptyAssistantMessage } from "./DaemonModelDescription";
@@ -21,6 +22,7 @@ export function agentHistory(
   earlierMessages: readonly ChatMessage[],
   model: Model<Api>,
   replaysToolSteps: boolean,
+  recalledImagesByName: ReadonlyMap<string, ImageForModel> = new Map(),
 ): AgentMessage[] {
   const history: AgentMessage[] = [];
   for (const earlierMessage of earlierMessages) {
@@ -31,7 +33,7 @@ export function agentHistory(
     if (replaysToolSteps && earlierMessage.toolSteps.length > 0) {
       for (const roundSteps of stepsByRound(earlierMessage.toolSteps)) {
         history.push(toolCallMessage(roundSteps, model));
-        history.push(...roundSteps.map((toolStep) => toolResultMessage(toolStep)));
+        history.push(...roundSteps.map((toolStep) => toolResultMessage(toolStep, recalledImagesByName)));
       }
       if (earlierMessage.content.length === 0) {
         continue;
@@ -67,15 +69,22 @@ function toolCallMessage(toolSteps: readonly ToolStep[], model: Model<Api>): Ass
 }
 
 /** A step that never finished (the turn was stopped mid-call) is replayed as
- * a failed call, so the model does not assume it saw a result. */
-function toolResultMessage(toolStep: ToolStep): ToolResultMessage {
+ * a failed call, so the model does not assume it saw a result. A generated
+ * image that was recalled for this turn goes back with its step, so a model
+ * that can see still has the picture when asked about it later. */
+function toolResultMessage(toolStep: ToolStep, recalledImagesByName: ReadonlyMap<string, ImageForModel>): ToolResultMessage {
   const isSuccessful = toolStep.state === ToolStepState.SUCCEEDED;
   const resultText = toolStep.state === ToolStepState.RUNNING ? UNFINISHED_TOOL_CALL_RESULT : toolStep.resultText;
+  const resultContent: (TextContent | ImageContent)[] = [{ type: "text", text: resultText }];
+  const recalledImage = toolStep.generatedImageName != null ? recalledImagesByName.get(toolStep.generatedImageName) : undefined;
+  if (recalledImage != null) {
+    resultContent.push({ type: "image", data: recalledImage.base64, mimeType: recalledImage.mimeType });
+  }
   return {
     role: "toolResult",
     toolCallId: toolStep.toolCallID,
     toolName: toolStep.toolName,
-    content: [{ type: "text", text: resultText }],
+    content: resultContent,
     isError: !isSuccessful,
     timestamp: Date.now(),
   };

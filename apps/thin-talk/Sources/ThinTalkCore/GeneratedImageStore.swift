@@ -84,6 +84,16 @@ public final class GeneratedImageStore: @unchecked Sendable {
     return imageName
   }
 
+  /// A stored image as base64 with its media type, for showing it to a model
+  /// that can see images on a later turn. Nil for a name this store could not
+  /// have produced, or an image that is gone (its conversation was deleted).
+  public func base64Image(named imageName: String) throws -> (base64: String, mimeType: String)? {
+    guard let imageURL = fileURL(forImageName: imageName) else { return nil }
+    let imageData = try queue.sync { try Data(contentsOf: imageURL) }
+    let mimeType = imageName.hasSuffix(".jpg") ? "image/jpeg" : "image/png"
+    return (imageData.base64EncodedString(), mimeType)
+  }
+
   /// The file behind a stored image name, or nil when the name is not one this
   /// store could have produced or no such image exists.
   public func fileURL(forImageName imageName: String) -> URL? {

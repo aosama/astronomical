@@ -47,6 +47,8 @@
       case "rename" /* RENAME */:
         adapter.renameSession(stringField(payload, "id"), stringField(payload, "title"));
         return null;
+      case "showConversationMenu" /* SHOW_CONVERSATION_MENU */:
+        return { choice: "dismissed" };
       case "loadPrefs" /* LOAD_PREFS */:
         return adapter.loadPreferences();
       case "savePrefs" /* SAVE_PREFS */:

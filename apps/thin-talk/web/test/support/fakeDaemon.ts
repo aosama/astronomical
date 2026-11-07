@@ -70,6 +70,9 @@ export class FakeDaemon {
       const models: unknown[] = configuredModels != null ? configuredModels : [defaultFakeModel()];
       return Response.json({ data: models });
     }
+    if (url.endsWith("/v1/images/generations")) {
+      return Response.json({ data: [{ b64_json: FAKE_GENERATED_IMAGE_BASE64, mime_type: "image/png" }] });
+    }
     if (url.endsWith("/v1/chat/completions")) {
       const scriptedReply = this.nextScriptedReply();
       if (scriptedReply != null) {
@@ -111,6 +114,9 @@ export class FakeDaemon {
     return JSON.parse(chatRequest.body) as Record<string, unknown>;
   }
 }
+
+/** The image every fake image request returns: the first bytes of a PNG. */
+export const FAKE_GENERATED_IMAGE_BASE64 = "iVBORw0KGgoAAAANSUhEUg==";
 
 export function defaultFakeModel(): unknown {
   return { id: "fake-chat-model", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"] };

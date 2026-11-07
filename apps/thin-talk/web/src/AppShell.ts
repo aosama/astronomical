@@ -4,8 +4,8 @@ import { ComposerView } from "./ComposerView";
 import { SidebarView } from "./SidebarView";
 import { ChatSurfaceState } from "./ChatSurfaceState";
 import { HostChannel } from "./HostChannel";
+import type { SidebarResizer } from "./SidebarResizer";
 
-const COMPOSER_FONT_SIZE_VARIABLE = "--composer-font-size";
 
 /**
  * Wires the views to the controller and the page to its host.
@@ -21,6 +21,7 @@ export class AppShell {
   private readonly composer: ComposerView;
   private readonly sidebar: SidebarView;
   private readonly host: HostChannel;
+  private readonly sidebarResizer: SidebarResizer;
 
   public constructor(init: {
     controller: ChatController;
@@ -28,12 +29,14 @@ export class AppShell {
     composer: ComposerView;
     sidebar: SidebarView;
     host: HostChannel;
+    sidebarResizer: SidebarResizer;
   }) {
     this.controller = init.controller;
     this.transcript = init.transcript;
     this.composer = init.composer;
     this.sidebar = init.sidebar;
     this.host = init.host;
+    this.sidebarResizer = init.sidebarResizer;
   }
 
   public start(): void {
@@ -52,7 +55,7 @@ export class AppShell {
   }
 
   private render(state: ChatSurfaceState): void {
-    document.documentElement.style.setProperty(COMPOSER_FONT_SIZE_VARIABLE, `${state.composerFontSize}px`);
+    this.sidebarResizer.applyWidth(state.sidebarWidthPixels);
     this.transcript.render(state.transcript);
     this.composer.render(state.composer);
     this.sidebar.render({ sessions: state.sessions, activeSessionID: state.activeSessionID });

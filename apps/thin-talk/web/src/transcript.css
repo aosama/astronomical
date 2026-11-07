@@ -21,14 +21,14 @@
   border-radius: 18px 18px 4px 18px;
   padding: 14px 16px 12px;
   max-width: 78%;
-  font-size: 15px;
+  font-size: 19px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .message__answer--user .message__role {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-secondary);
   opacity: 0.85;
@@ -40,7 +40,7 @@
   gap: 10px;
   padding-left: 4px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 16px;
   letter-spacing: 0.01em;
 }
 
@@ -91,7 +91,7 @@
   cursor: pointer;
   padding: 8px 14px;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 16.5px;
   list-style: none;
   user-select: none;
 }
@@ -130,7 +130,7 @@
   cursor: pointer;
   padding: 6px 12px;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 16.5px;
   list-style: none;
   user-select: none;
 }
@@ -152,7 +152,7 @@
   gap: 6px;
   padding: 8px 12px;
   color: var(--text-secondary);
-  font-size: 12.5px;
+  font-size: 16.5px;
 }
 
 .generated-image {
@@ -192,19 +192,19 @@
 }
 
 .markdown-body h1 {
-  font-size: 21px;
+  font-size: 25px;
 }
 
 .markdown-body h2 {
-  font-size: 18px;
+  font-size: 22px;
 }
 
 .markdown-body h3 {
-  font-size: 15.5px;
+  font-size: 19.5px;
 }
 
 .markdown-body h4 {
-  font-size: 14px;
+  font-size: 18px;
 }
 
 .markdown-body p {
@@ -254,7 +254,7 @@
   background: var(--code-background);
   border: 1px solid rgb(56 64 82 / 55%);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
-  font-size: 12.5px;
+  font-size: 16.5px;
 }
 
 .markdown-body pre {
@@ -270,7 +270,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  font-size: 12.5px;
+  font-size: 16.5px;
   line-height: 1.55;
 }
 
@@ -285,7 +285,7 @@
   right: 12px;
   color: var(--text-secondary);
   opacity: 0.7;
-  font-size: 11px;
+  font-size: 15px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -294,7 +294,7 @@
   width: 100%;
   margin: 14px 0;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 17px;
 }
 
 .markdown-body th,
@@ -350,7 +350,7 @@
   background: rgb(15 18 26 / 88%);
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: 15.5px;
 }
 
 .message__actions {
@@ -366,7 +366,7 @@
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 12px;
+  font-size: 16px;
   cursor: default;
 }
 

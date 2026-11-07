@@ -9,6 +9,12 @@ export const CONTEXT_BUDGET_SHARE = 0.8;
  * near four. */
 const ESTIMATED_CHARACTERS_PER_TOKEN = 4;
 
+/** What one image is counted as, in tokens. Vision models spend on the order
+ * of a thousand or two tokens per image at the sizes Thin Talk generates; the
+ * base64 text itself is never read as text, so counting its characters would
+ * overstate an image a hundredfold. */
+const ESTIMATED_TOKENS_PER_IMAGE = 2_000;
+
 /**
  * Keeps a long conversation inside the model's context window by dropping its
  * oldest whole turns. A turn is a user message and everything after it up to
@@ -72,6 +78,8 @@ function readableCharacterCount(agentMessage: AgentMessage): number {
       characterCount += contentBlock["text"].length;
     } else if (typeof contentBlock["thinking"] === "string") {
       characterCount += contentBlock["thinking"].length;
+    } else if (contentBlock["type"] === "image") {
+      characterCount += ESTIMATED_TOKENS_PER_IMAGE * ESTIMATED_CHARACTERS_PER_TOKEN;
     } else if (contentBlock["type"] === "toolCall") {
       characterCount += JSON.stringify(contentBlock["arguments"] ?? {}).length + String(contentBlock["name"] ?? "").length;
     }

@@ -1,3 +1,5 @@
+import type { ConversationMenuChoice } from "./ConversationMenuChoice";
+import type { ImageForModel } from "./ConversationTool";
 import { SessionBridgeOp } from "./SessionBridgeOp";
 import { SessionBridgeRequest } from "./SessionBridgeRequest";
 import { SessionBridgeError, SessionBridgeTimeoutError } from "./SessionBridgeError";
@@ -140,6 +142,29 @@ export class SessionBridge {
       default:
         throw new Error("the host returned an unknown tool outcome");
     }
+  }
+
+  /** Shows the native right-click menu for one sidebar conversation and
+   * returns what the user picked; a delete has already been confirmed. The
+   * menu waits for a person, so it gets the user-choice timeout. */
+  public async showConversationMenu(conversationID: string): Promise<ConversationMenuChoice> {
+    const hostAnswer = await this.call(SessionBridgeOp.SHOW_CONVERSATION_MENU, { conversationID }, USER_CHOICE_TIMEOUT_MILLISECONDS);
+    const menuChoice = typeof hostAnswer === "object" && hostAnswer !== null ? (hostAnswer as Record<string, unknown>)["choice"] : null;
+    return menuChoice === "rename" || menuChoice === "delete" ? menuChoice : "dismissed";
+  }
+
+  /** Reads a generated image back, so a model that can see is shown it again
+   * on a later turn. Null when the image is gone or its name is not one the
+   * app stores. */
+  public async loadGeneratedImage(imageName: string): Promise<ImageForModel | null> {
+    if (!isGeneratedImageName(imageName)) {
+      return null;
+    }
+    const hostAnswer = await this.call(SessionBridgeOp.LOAD_GENERATED_IMAGE, { imageName }, STORE_IMAGE_TIMEOUT_MILLISECONDS);
+    const imageRecord = typeof hostAnswer === "object" && hostAnswer !== null ? (hostAnswer as Record<string, unknown>) : {};
+    const base64 = imageRecord["base64"];
+    const mimeType = imageRecord["mimeType"];
+    return typeof base64 === "string" && typeof mimeType === "string" ? { base64, mimeType } : null;
   }
 
   /** Deletes generated images by their stored names, as when the

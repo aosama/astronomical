@@ -73,6 +73,9 @@ export function handleSessionCall(op: string, payload: unknown, adapter: Session
     case SessionBridgeOp.RENAME:
       adapter.renameSession(stringField(payload, "id"), stringField(payload, "title"));
       return null;
+    case SessionBridgeOp.SHOW_CONVERSATION_MENU:
+      // The browser preview has no native menu; the row is left as it was.
+      return { choice: "dismissed" };
     case SessionBridgeOp.LOAD_PREFS:
       return adapter.loadPreferences();
     case SessionBridgeOp.SAVE_PREFS:

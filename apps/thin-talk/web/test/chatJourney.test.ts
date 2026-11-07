@@ -99,3 +99,40 @@ test("a failed handshake shows the failure notice instead of a transcript", asyn
   }, "the failure notice to appear");
   assert.equal(host.fileCount(), 0, "no session is written when the daemon is unreachable");
 }, { timeout: 30_000 });
+
+function seededUserLine(content: string): { id: string; role: string; content: string } {
+  return { id: content, role: "user", content };
+}
+
+function sidebarSessionIDs(): string[] {
+  return [...document.querySelectorAll<HTMLElement>("#session-list [data-session-id]")].map((item) => item.dataset.sessionId ?? "");
+}
+
+test("should_keep_the_sidebar_order_while_clicking_between_past_chats", async () => {
+  installDom();
+  installConfig(DAEMON_BASE_URL);
+  const host = new FakeSessionHost(
+    (callId, payload) => window.__thintalkBridge?.resolve(callId, payload),
+    (callId, message) => window.__thintalkBridge?.reject(callId, message),
+  );
+  host.seedSession("newest", "Hamlet", "2026-03-03T00:00:00.000Z", [seededUserLine("To be?")]);
+  host.seedSession("middle", "Macbeth", "2026-02-02T00:00:00.000Z", [seededUserLine("Is this a dagger?")]);
+  host.seedSession("oldest", "Lear", "2026-01-01T00:00:00.000Z", [seededUserLine("Nothing will come of nothing?")]);
+  host.install();
+  new FakeDaemon({ daemonBaseURL: DAEMON_BASE_URL, channel: "development", stateDirectory: "~/.astronomical-dev" }).install();
+  bootChatClient();
+  await waitUntilReady();
+  await waitFor(() => sidebarSessionIDs().length === 3, "the sidebar to list the seeded chats");
+  const initialOrder = sidebarSessionIDs();
+
+  for (const sessionID of ["oldest", "middle", "newest", "oldest"]) {
+    document.querySelector<HTMLElement>(`#session-list [data-session-id="${sessionID}"]`)?.click();
+    await waitFor(
+      () => document.querySelector(`#session-list [data-session-id="${sessionID}"][aria-current="true"]`) !== null,
+      `the ${sessionID} chat to open`,
+    );
+  }
+
+  assert.deepEqual(sidebarSessionIDs(), initialOrder, "reading a chat must not reorder the list");
+  assert.equal(host.receivedRequests.filter((request) => request.op === "save").length, 0, "no chat was rewritten");
+}, { timeout: 30_000 });
