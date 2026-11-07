@@ -54,7 +54,10 @@ const NOTICES_FRESHNESS_INPUT_PATHS: &[&str] = &[
 /// compiler, download and Swift caches are keyed on these, and pull requests can
 /// only restore what the default branch saved. Code-only merges saved nothing in
 /// every default-branch run measured, so only these still need that run. The
-/// workflow and cache action join them because they define the cache keys.
+/// workflow and cache action join them because they define the cache keys. What the
+/// cached xtask binary is keyed on stays out on purpose: those paths alone touched 11 of
+/// 60 merges, each a full run of about 12 job-minutes, while a missed binary costs about
+/// 9 seconds to rebuild until the next full run saves it.
 const CACHE_INPUT_PATH_PREFIXES: &[&str] = &[
     "Cargo.lock",
     "rust-toolchain.toml",
@@ -65,6 +68,20 @@ const CACHE_INPUT_PATH_PREFIXES: &[&str] = &[
     ".github/actions/",
     "apps/astronomical-menu/",
     "apps/thin-talk/",
+];
+
+/// Everything the Swift and Node lane builds or reads. It compiles no Rust and reads
+/// nothing else, so a change outside these cannot change what the lane reports.
+const SWIFT_NODE_INPUT_PATH_PREFIXES: &[&str] = &[
+    "apps/astronomical-menu/",
+    "apps/thin-talk/",
+    "apps/daemon/console/",
+    "scripts/internal/",
+    "scripts/ci/",
+    "site/schemas/",
+    ".node-version",
+    ".github/workflows/ci.yml",
+    ".github/actions/",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +107,7 @@ pub struct ChangeScopeVerdict {
     pub code_changed: bool,
     pub native_inputs_changed: bool,
     pub macos_verification_required: bool,
+    pub swift_node_required: bool,
     pub notices_inputs_changed: bool,
     pub classification: String,
     pub changed_file_count: usize,
@@ -152,6 +170,7 @@ pub fn may_reuse_verified_tree(
 pub fn verdict_for_verified_tree(verdict: ChangeScopeVerdict) -> ChangeScopeVerdict {
     ChangeScopeVerdict {
         macos_verification_required: false,
+        swift_node_required: false,
         classification: "already_verified_tree".to_owned(),
         ..verdict
     }
@@ -161,6 +180,25 @@ pub fn verdict_for_verified_tree(verdict: ChangeScopeVerdict) -> ChangeScopeVerd
 /// stale, so the pull request must prove them fresh before it merges.
 pub fn is_notices_freshness_input_path(changed_path: &str) -> bool {
     NOTICES_FRESHNESS_INPUT_PATHS.contains(&changed_path)
+}
+
+/// True when a change to this path can change what the Swift and Node lane checks.
+pub fn is_swift_node_input_path(changed_path: &str) -> bool {
+    for swift_node_input_prefix in SWIFT_NODE_INPUT_PATH_PREFIXES {
+        if changed_path.starts_with(swift_node_input_prefix) {
+            return true;
+        }
+    }
+    false
+}
+
+fn any_swift_node_input(changed_paths: &[String]) -> bool {
+    for changed_path in changed_paths {
+        if is_swift_node_input_path(changed_path) {
+            return true;
+        }
+    }
+    false
 }
 
 fn any_notices_freshness_input(changed_paths: &[String]) -> bool {
@@ -191,13 +229,30 @@ pub fn classify_change_scope(
             code_changed: true,
             native_inputs_changed: false,
             macos_verification_required: true,
+            swift_node_required: true,
             notices_inputs_changed: true,
             classification: "manual_run".to_owned(),
             changed_file_count: 0,
         },
-        CiEvent::PullRequest | CiEvent::Push => {
+        CiEvent::PullRequest => {
             classify_changed_paths(changed_paths, native_inputs_changed, is_version_only_bump)
         }
+        CiEvent::Push => with_swift_lane_on_every_full_run(classify_changed_paths(
+            changed_paths,
+            native_inputs_changed,
+            is_version_only_bump,
+        )),
+    }
+}
+
+/// A full default-branch run keeps the Swift lane even with no Swift input changed,
+/// because only that run saves its caches and the run's record tells later merges that
+/// every cache is current. Without this, seven quiet days evict the Swift caches while
+/// the record still says otherwise. `verdict_for_verified_tree` still skips it on a merge.
+fn with_swift_lane_on_every_full_run(verdict: ChangeScopeVerdict) -> ChangeScopeVerdict {
+    ChangeScopeVerdict {
+        swift_node_required: verdict.macos_verification_required,
+        ..verdict
     }
 }
 
@@ -222,6 +277,9 @@ fn classify_changed_paths(
         code_changed,
         native_inputs_changed,
         macos_verification_required: code_changed && !is_version_only_bump,
+        swift_node_required: code_changed
+            && !is_version_only_bump
+            && any_swift_node_input(changed_paths),
         notices_inputs_changed: any_notices_freshness_input(changed_paths),
         classification: classification.to_owned(),
         changed_file_count: changed_paths.len(),
@@ -237,6 +295,7 @@ pub(crate) fn fail_safe_verdict() -> ChangeScopeVerdict {
         code_changed: true,
         native_inputs_changed: true,
         macos_verification_required: true,
+        swift_node_required: true,
         notices_inputs_changed: true,
         classification: "unknown_history".to_owned(),
         changed_file_count: 0,
@@ -483,6 +542,12 @@ fn publish_verdict(
         github_output,
         "macos_verification_required={}",
         verdict.macos_verification_required
+    )
+    .unwrap();
+    writeln!(
+        github_output,
+        "swift_node_required={}",
+        verdict.swift_node_required
     )
     .unwrap();
     writeln!(

@@ -1,6 +1,7 @@
 use crate::classify_scope::{
     CiEvent, classify_change_scope, is_cache_input_path, is_notices_freshness_input_path,
-    is_static_only_path, may_reuse_verified_tree, verdict_for_verified_tree,
+    is_static_only_path, is_swift_node_input_path, may_reuse_verified_tree,
+    verdict_for_verified_tree,
 };
 
 fn verdict_for(
@@ -250,9 +251,12 @@ fn should_not_call_ordinary_code_a_cache_input() {
         "crates/model-serving/src/lib.rs",
         "apps/daemon/src/main.rs",
         "apps/daemon/console/console.js",
-        "Cargo.toml",
-        "xtask/src/classify_scope.rs",
         "third-party/about.toml",
+        "Cargo.toml",
+        ".cargo/config.toml",
+        "xtask/src/main.rs",
+        "crates/native-identity/src/lib.rs",
+        "crates/test-harness/src/lib.rs",
     ] {
         assert!(!is_cache_input_path(ordinary_path), "{ordinary_path}");
     }
@@ -328,8 +332,112 @@ fn should_skip_only_the_macos_lanes_for_a_verified_tree() {
     let changed_paths = paths(&["crates/config/src/lib.rs", "Cargo.lock"]);
     let verdict = verdict_for_verified_tree(code_verdict(&changed_paths));
     assert!(!verdict.macos_verification_required);
+    assert!(!verdict.swift_node_required);
     assert!(verdict.code_changed);
     assert!(verdict.notices_inputs_changed);
     assert_eq!(verdict.classification, "already_verified_tree");
     assert_eq!(verdict.changed_file_count, 2);
+}
+
+#[test]
+fn should_call_everything_the_swift_and_node_lane_reads_an_input() {
+    for swift_node_input in [
+        "apps/astronomical-menu/Sources/AstronomicalMenuCore/Menu.swift",
+        "apps/astronomical-menu/tests/AstronomicalMenuContractTests/Fixtures/full.json",
+        "apps/thin-talk/web/src/app.ts",
+        "apps/daemon/console/console.js",
+        "scripts/internal/render-macos-app-icon.swift",
+        "scripts/ci/ci-step-timing.sh",
+        "site/schemas/config/v1/astronomical-config.schema.json",
+        ".node-version",
+        ".github/workflows/ci.yml",
+        ".github/actions/assert-pinned-xcode/action.yml",
+    ] {
+        assert!(
+            is_swift_node_input_path(swift_node_input),
+            "{swift_node_input}"
+        );
+    }
+}
+
+#[test]
+fn should_not_call_rust_code_a_swift_and_node_input() {
+    for rust_path in [
+        "crates/model-serving/src/lib.rs",
+        "apps/daemon/src/main.rs",
+        "apps/daemon/tests/rest_api/application/contracts.rs",
+        "apps/astronomical-cli/src/main.rs",
+        "Cargo.lock",
+        "xtask/src/main.rs",
+    ] {
+        assert!(!is_swift_node_input_path(rust_path), "{rust_path}");
+    }
+}
+
+#[test]
+fn should_skip_only_the_swift_and_node_lane_for_a_rust_change() {
+    let verdict = classify_change_scope(
+        CiEvent::PullRequest,
+        &paths(&["crates/config/src/lib.rs"]),
+        false,
+        false,
+    );
+    assert!(verdict.macos_verification_required);
+    assert!(!verdict.swift_node_required);
+}
+
+#[test]
+fn should_run_the_swift_and_node_lane_for_a_mixed_change() {
+    let verdict = classify_change_scope(
+        CiEvent::PullRequest,
+        &paths(&["crates/config/src/lib.rs", "apps/daemon/console/console.js"]),
+        false,
+        false,
+    );
+    assert!(verdict.swift_node_required);
+}
+
+#[test]
+fn should_require_the_swift_and_node_lane_when_the_range_is_unknown_or_manual() {
+    assert!(crate::classify_scope::fail_safe_verdict().swift_node_required);
+    assert!(
+        classify_change_scope(CiEvent::WorkflowDispatch, &[], false, false).swift_node_required
+    );
+}
+
+#[test]
+fn should_not_require_the_swift_and_node_lane_for_a_version_bump_or_static_change() {
+    let bump_paths = paths(&["Cargo.toml", "Cargo.lock"]);
+    assert!(
+        !classify_change_scope(CiEvent::PullRequest, &bump_paths, false, true).swift_node_required
+    );
+    let docs_paths = paths(&["apps/thin-talk/README.md"]);
+    assert!(
+        !classify_change_scope(CiEvent::PullRequest, &docs_paths, false, false).swift_node_required
+    );
+}
+
+#[test]
+fn should_run_the_swift_lane_on_a_full_push_with_no_swift_input() {
+    let rust_paths = paths(&["crates/config/src/lib.rs"]);
+    let push_verdict = classify_change_scope(CiEvent::Push, &rust_paths, false, false);
+    assert!(push_verdict.macos_verification_required);
+    assert!(
+        push_verdict.swift_node_required,
+        "only a full default-branch run saves the Swift caches"
+    );
+    let pull_request_verdict =
+        classify_change_scope(CiEvent::PullRequest, &rust_paths, false, false);
+    assert!(!pull_request_verdict.swift_node_required);
+}
+
+#[test]
+fn should_keep_the_swift_lane_off_on_a_push_that_needs_no_macos_lanes() {
+    let bump_paths = paths(&["Cargo.toml", "Cargo.lock"]);
+    assert!(!classify_change_scope(CiEvent::Push, &bump_paths, false, true).swift_node_required);
+    let docs_paths = paths(&["docs/guide.md"]);
+    assert!(!classify_change_scope(CiEvent::Push, &docs_paths, false, false).swift_node_required);
+    let rust_paths = paths(&["crates/config/src/lib.rs"]);
+    let full_verdict = classify_change_scope(CiEvent::Push, &rust_paths, false, false);
+    assert!(!verdict_for_verified_tree(full_verdict).swift_node_required);
 }

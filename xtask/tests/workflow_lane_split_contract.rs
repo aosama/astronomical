@@ -374,3 +374,52 @@ fn assert_nextest_configuration_keeps_archive_budgets() {
         "the nextest configuration lost its hang budget or its archive-included binaries"
     );
 }
+
+/// Cargo unifies features per command, so a lane's archive built with a different
+/// package list recompiles what the build step just compiled.
+#[test]
+fn should_compile_and_archive_every_lane_with_one_package_list() {
+    let compile_selection = package_list_of_alias("test-integration = ");
+    assert!(compile_selection.contains("-p astronomical-rest-contract"));
+    assert!(compile_selection.contains("-p astronomical-e2e"));
+    for archive_alias in [
+        "nextest-archive-integration = ",
+        "nextest-archive-rest-api = ",
+        "nextest-archive-e2e = ",
+    ] {
+        assert_eq!(
+            package_list_of_alias(archive_alias),
+            compile_selection,
+            "{archive_alias}must carry the compile step's package list"
+        );
+    }
+    let workflow = workflow_contract();
+    let compile_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
+    let compile_step = find_step_by_name(&compile_steps, "Compile integration lane tests");
+    let compile_text = run_text_of(compile_step, "compile-integration");
+    assert!(
+        compile_text
+            .contains("cargo test-integration --timings --no-run --test rest_api_tests --test e2e"),
+        "the integration, REST and E2E lanes must compile in one command"
+    );
+}
+
+fn package_list_of_alias(alias_prefix: &str) -> String {
+    let cargo_config =
+        std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
+            .expect("the cargo config should be readable");
+    let mut packages = Vec::new();
+    for config_line in cargo_config.lines() {
+        if !config_line.starts_with(alias_prefix) {
+            continue;
+        }
+        let mut words = config_line.split_whitespace();
+        while let Some(word) = words.next() {
+            if word == "-p" {
+                packages.push(words.next().expect("-p takes a package"));
+            }
+        }
+    }
+    assert!(!packages.is_empty(), "{alias_prefix} should list packages");
+    packages.join(" -p ")
+}

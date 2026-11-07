@@ -327,6 +327,10 @@ fn verdict_script_decides_every_scenario_correctly() {
                 scenario.macos_required,
             )
             .replace(
+                "${{ needs.detect-changes.outputs.swift_node_required }}",
+                scenario.macos_required,
+            )
+            .replace(
                 "${{ needs.detect-changes.result }}",
                 scenario.classification,
             )
@@ -385,4 +389,58 @@ fn verdict_script_decides_every_scenario_correctly() {
             );
         }
     }
+}
+
+/// The verdict with every lane green except what these name.
+fn verdict_passes_with_swift_lane(swift_node_required: &str, swift_node_result: &str) -> bool {
+    let workflow = workflow_contract();
+    let verdict_steps = steps_of(required_job(&workflow, "verdict"), "verdict");
+    let verdict_step = find_step_by_name(
+        &verdict_steps,
+        "Fail closed unless every lane is green or legitimately skipped",
+    );
+    let mut script = run_text_of(verdict_step, "verdict")
+        .replace(
+            "${{ needs.detect-changes.outputs.macos_verification_required }}",
+            "true",
+        )
+        .replace(
+            "${{ needs.detect-changes.outputs.swift_node_required }}",
+            swift_node_required,
+        )
+        .replace("${{ needs.detect-changes.result }}", "success")
+        .replace("${{ needs.static.result }}", "success")
+        .replace("${{ needs.config-contracts.result }}", "success")
+        .replace(
+            "${{ needs.detect-changes.outputs.notices_inputs_changed }}",
+            "false",
+        )
+        .replace("${{ needs.notices-freshness.result }}", "skipped")
+        .replace("${{ needs.swift-node.result }}", swift_node_result);
+    for lane in MACOS_GATED_LANES {
+        script = script.replace(&format!("${{{{ needs.{lane}.result }}}}"), "success");
+    }
+    let script_directory = tempfile::tempdir().expect("a temporary directory");
+    let script_path = script_directory.path().join("verdict.sh");
+    std::fs::write(&script_path, script).expect("the verdict script should persist");
+    std::process::Command::new("bash")
+        .arg(&script_path)
+        .output()
+        .expect("the verdict script should execute")
+        .status
+        .success()
+}
+
+#[test]
+fn should_accept_a_skipped_swift_lane_only_when_nothing_it_reads_changed() {
+    assert!(verdict_passes_with_swift_lane("false", "skipped"));
+    assert!(!verdict_passes_with_swift_lane("true", "skipped"));
+}
+
+#[test]
+fn should_still_fail_a_swift_lane_that_ran_and_failed_whether_or_not_it_was_required() {
+    assert!(!verdict_passes_with_swift_lane("false", "failure"));
+    assert!(!verdict_passes_with_swift_lane("true", "failure"));
+    assert!(!verdict_passes_with_swift_lane("false", "cancelled"));
+    assert!(verdict_passes_with_swift_lane("true", "success"));
 }

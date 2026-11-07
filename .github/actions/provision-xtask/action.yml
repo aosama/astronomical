@@ -1,0 +1,59 @@
+name: 'Provision the xtask binary'
+description: 'Restores the xtask binary for these exact sources, or builds it, and puts it on PATH.'
+
+# Compiling xtask cost the classifier 18 of its 26 seconds, 10 of them only to have
+# rustup download a toolchain, and every lane waits on the classifier. The key covers
+# everything the binary is built from, so a pull request that changes xtask misses and
+# builds its own. Only the default branch saves, so no pull request's binary can reach
+# another run. A restored binary that cannot run is rebuilt rather than trusted.
+# A merge that changes these sources can skip the macOS lanes, so that platform's
+# binary may rebuild on each pull request until the next full run saves it; that costs
+# about 9 seconds, far less than forcing a full run. The key's inputs are pinned by the
+# workflow_xtask_binary_contract test.
+runs:
+  using: composite
+  steps:
+    - name: Restore xtask binary
+      id: xtask-binary-cache
+      uses: ./.github/actions/astronomical-cache
+      with:
+        operation: restore
+        owner: xtask-binary
+        path: ~/.astronomical-ci/xtask-binary
+        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/native-identity/**', 'crates/test-harness/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}
+    - name: Build xtask when no usable binary was restored
+      id: xtask-binary-build
+      shell: bash
+      run: |
+        set -uo pipefail
+        xtask_binary="$HOME/.astronomical-ci/xtask-binary/xtask"
+        restored_binary_exit_code=127
+        if [ -x "$xtask_binary" ]; then
+          "$xtask_binary" --help >/dev/null 2>&1
+          restored_binary_exit_code=$?
+        fi
+        case "$restored_binary_exit_code" in
+          126|127|132|133|134|137|139)
+            printf '[provision-xtask] status=building reason=%s\n' "$restored_binary_exit_code"
+            set -e
+            # This can run before sccache exists, so no wrapper may apply.
+            unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
+            cargo build --locked --quiet -p xtask --bin xtask
+            mkdir -p "$HOME/.astronomical-ci/xtask-binary"
+            cp target/debug/xtask "$xtask_binary"
+            printf 'was_built=true\n' >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            printf '[provision-xtask] status=restored\n'
+            printf 'was_built=false\n' >> "$GITHUB_OUTPUT"
+            ;;
+        esac
+        printf '%s\n' "$HOME/.astronomical-ci/xtask-binary" >> "$GITHUB_PATH"
+    - name: Save xtask binary
+      if: ${{ steps.xtask-binary-build.outputs.was_built == 'true' && github.ref_name == github.event.repository.default_branch }}
+      uses: ./.github/actions/astronomical-cache
+      with:
+        operation: save
+        owner: xtask-binary
+        path: ~/.astronomical-ci/xtask-binary
+        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/native-identity/**', 'crates/test-harness/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}

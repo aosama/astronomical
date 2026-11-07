@@ -45,8 +45,9 @@ pub enum DeletionReason {
 }
 
 /// The family is the token between the `astronomical-v2-` prefix and the
-/// runner platform segment (every key embeds `-macOS-` on this repository's
-/// runners).
+/// runner platform segment. Keys from a macOS runner embed `-macOS-`; a key from
+/// any other runner falls back to its first token, which is enough to keep it apart
+/// from the macOS families.
 pub fn family_of_key(cache_key: &str) -> &str {
     let stripped_key = cache_key
         .strip_prefix(CACHE_KEY_PREFIX)
