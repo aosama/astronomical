@@ -11,17 +11,23 @@ import XCTest
 final class ThinTalkMainMenuTests: XCTestCase {
   private var menuBarBeforeTest: NSMenu?
 
-  override func setUp() {
-    super.setUp()
+  // The async overrides are the forms XCTest runs on the main actor in every
+  // toolchain this repository builds with; the synchronous ones inherit
+  // XCTestCase's nonisolated declaration under older Xcode releases and
+  // cannot touch NSApp there.
+  @MainActor
+  override func setUp() async throws {
+    try await super.setUp()
     _ = NSApplication.shared
     menuBarBeforeTest = NSApp.mainMenu
   }
 
   // Installing a menu bar changes process-wide state; later tests must not
   // inherit it.
-  override func tearDown() {
+  @MainActor
+  override func tearDown() async throws {
     NSApp.mainMenu = menuBarBeforeTest
-    super.tearDown()
+    try await super.tearDown()
   }
 
   private func conversationActions() -> ThinTalkConversationActions {
