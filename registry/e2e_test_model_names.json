@@ -1,4 +1,5 @@
 {
+  "dense_vision": "Ornith-1.5-9B-MLX-4bit-vision",
   "flux2_klein": "FLUX.2-klein-4B",
   "large_sparse_moe_streaming": "Ornith-1.5-35B-A3B-MLX-8bit",
   "largest_sparse_moe_streaming": "Ornith-1.5-122B-MLX-mixed-2bit",

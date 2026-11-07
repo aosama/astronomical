@@ -19,13 +19,15 @@ const RESIDENT_SPARSE_MOE_ROLE: &str = "resident_sparse_moe";
 const ORNITH_DFLASH_DRAFT_ROLE: &str = "ornith_dflash_draft";
 const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
-const E2E_TEST_MODEL_ROLES: [&str; 6] = [
+const DENSE_VISION_ROLE: &str = "dense_vision";
+const E2E_TEST_MODEL_ROLES: [&str; 7] = [
     LARGE_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
     ORNITH_DFLASH_DRAFT_ROLE,
     SMALL_DENSE_ROLE,
     FLUX2_KLEIN_ROLE,
     LARGEST_SPARSE_MOE_STREAMING_ROLE,
+    DENSE_VISION_ROLE,
 ];
 
 fn e2e_test_model_names() -> &'static BTreeMap<String, String> {
@@ -97,7 +99,12 @@ pub fn largest_sparse_moe_streaming_model_id() -> &'static str {
     model_id_for_role(LARGEST_SPARSE_MOE_STREAMING_ROLE)
 }
 
-pub fn e2e_test_model_ids() -> [&'static str; 6] {
+/// The dense model whose artifact carries a vision tower, for image-chat contracts.
+pub fn dense_vision_model_id() -> &'static str {
+    model_id_for_role(DENSE_VISION_ROLE)
+}
+
+pub fn e2e_test_model_ids() -> [&'static str; 7] {
     [
         large_sparse_moe_streaming_model_id(),
         resident_sparse_moe_model_id(),
@@ -105,6 +112,7 @@ pub fn e2e_test_model_ids() -> [&'static str; 6] {
         small_dense_model_id(),
         flux2_klein_model_id(),
         largest_sparse_moe_streaming_model_id(),
+        dense_vision_model_id(),
     ]
 }
 

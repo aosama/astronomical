@@ -150,23 +150,24 @@ fn should_prepare_a_validated_structured_chat_command_for_prefill() {
 }
 
 #[test]
-#[ignore = "requires model_directories to discover the Ornith 1.5 acceptance artifact"]
+#[ignore = "requires model_directories to discover the dense vision artifact"]
 fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
-    // This journey needs a vision-capable artifact: the tokenizer's
-    // prepare_chat accepts images only when the artifact carries visual
-    // inputs (the optiq vision sidecar). When the installed large-sparse
-    // revision ships text-only, prepare_chat correctly refuses images, so
-    // the gap is named here instead of surfacing as a confusing
-    // ImageInputUnsupported below.
-    let model_directory = crate::common::configured_large_sparse_moe_streaming_model_directory();
+    // Image preparation needs an artifact with a vision tower. The large sparse
+    // model this file otherwise uses ships text-only, so this contract reads the
+    // dense vision model (the default model) instead of failing on that one.
+    let model_directory = crate::common::configured_dense_vision_model_directory();
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the dense vision artifact should validate");
     assert!(
-        model_directory.join("optiq").is_dir(),
-        "the configured large-sparse artifact must ship the optiq vision sidecar for image-chat preparation; the installed revision has none"
+        validated_artifact.supports_image_input(),
+        "the dense vision role must name an artifact with a vision tower"
     );
-    let tokenizer = load_tokenizer();
+    let tokenizer = Qwen3_5Tokenizer::from_validated_artifact(&validated_artifact)
+        .expect("the dense vision tokenizer should load from validated model metadata");
     let chat_generation_command = ChatGenerationCommand {
         request_id: RequestId::new(801),
-        model: crate::common::large_sparse_moe_streaming_model_id().to_owned(),
+        model: crate::common::dense_vision_model_id().to_owned(),
         messages: vec![ChatMessage::User {
             content: "What color is this image?".to_owned(),
             images: vec![ChatImageInput {
@@ -189,7 +190,7 @@ fn should_prepare_image_chat_with_processed_visual_images_for_engine_prefill() {
 
     let engine_request = tokenizer
         .prepare_chat(&chat_generation_command, false)
-        .expect("the image chat command should prepare for Ornith vision prefill");
+        .expect("the image chat command should prepare for vision prefill");
 
     assert_eq!(engine_request.request_id(), RequestId::new(801));
     assert_eq!(engine_request.processed_visual_images().len(), 1);
