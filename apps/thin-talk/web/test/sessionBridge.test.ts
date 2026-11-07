@@ -22,7 +22,7 @@ function harness(): {
   };
 }
 
-test("session bridge posts call-N envelopes with the op and payload", async () => {
+test("session bridge posts call envelopes with the op and payload", async () => {
   const { bridge, posted } = harness();
   const document = new SessionDocument({
     id: "abc",
@@ -33,7 +33,7 @@ test("session bridge posts call-N envelopes with the op and payload", async () =
   });
   const pending = bridge.save(document);
   assert.equal(posted.length, 1);
-  assert.equal(posted[0].callId, "call-1");
+  assert.match(posted[0].callId, /^call-[0-9a-z]+-1$/);
   assert.equal(posted[0].op, "save");
   assert.deepEqual(posted[0].payload, {
     schemaVersion: document.schemaVersion,
@@ -43,25 +43,35 @@ test("session bridge posts call-N envelopes with the op and payload", async () =
     updatedAt: "u",
     messages: [],
   });
-  window.__thintalkBridge?.resolve("call-1", null);
+  window.__thintalkBridge?.resolve(posted[0].callId, null);
   await pending;
 });
 
-test("session bridge call ids increment across calls", async () => {
+test("session bridge call ids increment across calls and carry one page tag", async () => {
   const { bridge, posted } = harness();
   const first = bridge.list();
   const second = bridge.list();
-  assert.equal(posted[0].callId, "call-1");
-  assert.equal(posted[1].callId, "call-2");
-  window.__thintalkBridge?.resolve("call-1", []);
-  window.__thintalkBridge?.resolve("call-2", []);
+  const [firstTag, firstNumber] = posted[0].callId.split("-").slice(1);
+  const [secondTag, secondNumber] = posted[1].callId.split("-").slice(1);
+  assert.equal(firstTag, secondTag);
+  assert.equal(Number(secondNumber), Number(firstNumber) + 1);
+  window.__thintalkBridge?.resolve(posted[0].callId, []);
+  window.__thintalkBridge?.resolve(posted[1].callId, []);
   await Promise.all([first, second]);
 });
 
+test("should_give_two_pages_different_call_ids_so_late_answers_cannot_cross", () => {
+  const firstPage = harness();
+  void firstPage.bridge.list().catch(() => undefined);
+  const secondPage = harness();
+  void secondPage.bridge.list().catch(() => undefined);
+  assert.notEqual(firstPage.posted[0].callId, secondPage.posted[0].callId);
+});
+
 test("session bridge rejects with the host's message", async () => {
-  const { bridge, reject } = harness();
+  const { bridge, reject, posted } = harness();
   const pending = bridge.load("missing");
-  reject("call-1", "unreadable document");
+  reject(posted[0].callId, "unreadable document");
   await assert.rejects(pending, (error: Error) => {
     assert.match(error.message, /unreadable document/);
     return true;

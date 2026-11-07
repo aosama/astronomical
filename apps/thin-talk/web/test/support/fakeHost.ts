@@ -18,6 +18,11 @@ export class FakeSessionHost {
   public readonly receivedActions: Record<string, unknown>[] = [];
   /** Generated images the page asked the host to delete, by stored name. */
   public readonly deletedGeneratedImageNames: string[] = [];
+  /** How the fake approval sheet answers. */
+  public toolApprovalAnswer = true;
+  /** What the fake open panels return; null is a cancelled panel. */
+  public chosenTextFile: { fileName: string; text: string } | null = null;
+  public chosenImageFile: { fileName: string; base64: string; mimeType: string } | null = null;
 
   public constructor(
     private readonly resolveCall: (callId: string, payload: unknown) => void,
@@ -80,6 +85,10 @@ export class FakeSessionHost {
         return null;
       case "storeGeneratedImage":
         return { imageName: FAKE_STORED_IMAGE_NAME };
+      case "useHostTool":
+        return this.useHostTool(payload);
+      case "cancelHostToolCall":
+        return null;
       case "deleteGeneratedImages": {
         const imageNames = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["imageNames"] : null;
         this.deletedGeneratedImageNames.push(...(Array.isArray(imageNames) ? imageNames.filter((name): name is string => typeof name === "string") : []));
@@ -88,6 +97,19 @@ export class FakeSessionHost {
       default:
         throw new Error(`fake host does not know op "${op}"`);
     }
+  }
+
+  /** Answers like ThinTalkToolHost: the sheet's answer, then the panel's. */
+  private useHostTool(payload: unknown): unknown {
+    if (!this.toolApprovalAnswer) {
+      return { outcome: "refused" };
+    }
+    const toolName = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["toolName"] : null;
+    if (toolName === "search_conversations") {
+      return { outcome: "approved" };
+    }
+    const chosenFile = toolName === "describe_image" ? this.chosenImageFile : this.chosenTextFile;
+    return chosenFile != null ? { outcome: "chosen", ...chosenFile } : { outcome: "nothingChosen" };
   }
 
   private list(): unknown[] {

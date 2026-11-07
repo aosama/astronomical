@@ -312,6 +312,7 @@ export class ChatController {
     try {
       await this.streamer.streamChat({
         modelID,
+        conversationID: this.store.activeSessionID(),
         messages: this.log.requestMessages(),
         thinkingEffort: effort,
         toolsEnabled: this.preferences.toolsEnabled,

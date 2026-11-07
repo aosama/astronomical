@@ -5,6 +5,9 @@ import { SessionStore } from "./SessionStore";
 import { AgentTurnRunner } from "./AgentTurnRunner";
 import { CurrentTimeTool } from "./CurrentTimeTool";
 import { GenerateImageTool } from "./GenerateImageTool";
+import { ReadChosenFileTool } from "./ReadChosenFileTool";
+import { DescribeChosenImageTool } from "./DescribeChosenImageTool";
+import { SearchConversationsTool } from "./SearchConversationsTool";
 import { ToolCatalog } from "./ToolCatalog";
 import { DaemonClient } from "./DaemonClient";
 import { TrustBoundary } from "./TrustBoundary";
@@ -120,7 +123,16 @@ export function bootChatClient(): AppShell {
 
   const controller = new ChatController({
     client,
-    streamer: new AgentTurnRunner(client, new ToolCatalog([new CurrentTimeTool(), new GenerateImageTool(client, bridge)])),
+    streamer: new AgentTurnRunner(
+      client,
+      new ToolCatalog([
+        new CurrentTimeTool(),
+        new GenerateImageTool(client, bridge),
+        new ReadChosenFileTool(bridge),
+        new DescribeChosenImageTool(client, bridge),
+        new SearchConversationsTool(bridge),
+      ]),
+    ),
     bridge,
     store,
   });

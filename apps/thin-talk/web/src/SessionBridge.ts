@@ -18,6 +18,19 @@ const CALL_TIMEOUT_MILLISECONDS = 10_000;
  * and through a decode and a file write, so it gets more time than a session
  * file: giving up early would report a failed image the host still saves. */
 const STORE_IMAGE_TIMEOUT_MILLISECONDS = 30_000;
+/** Calls that wait for the user (an approval sheet, an open panel) can take
+ * as long as the user takes; this only stops a call the host never answers
+ * from waiting forever. */
+const USER_CHOICE_TIMEOUT_MILLISECONDS = 10 * 60_000;
+
+/** How one use of a host tool ended (see HostToolOutcome in Swift).
+ * "unavailable" means the user was never asked; "refused" means they said no. */
+export type HostToolUse =
+  | { readonly outcome: "approved" }
+  | { readonly outcome: "chosenText"; readonly fileName: string; readonly text: string }
+  | { readonly outcome: "chosenImage"; readonly fileName: string; readonly base64: string; readonly mimeType: "image/png" | "image/jpeg" }
+  | { readonly outcome: "refused" | "nothingChosen" | "cancelled" }
+  | { readonly outcome: "unavailable"; readonly reason: string };
 
 /**
  * The typed client side of the session file bridge. Every durable read and write
@@ -30,6 +43,7 @@ export class SessionBridge {
   private readonly post: (request: SessionBridgeRequest) => void;
   private readonly pendingCalls = new Map<string, PendingSessionCall>();
   private nextCallNumber = 0;
+  private readonly pageInstanceTag = Math.random().toString(36).slice(2, 10);
 
   public constructor(post: (request: SessionBridgeRequest) => void) {
     this.post = post;
@@ -90,16 +104,91 @@ export class SessionBridge {
     );
   }
 
+  /** One use of a host tool: the approval sheet and, for the file tools, the
+   * open panel, run by the host as a single call so the page cannot reach a
+   * panel without the sheet. Stopping the turn cancels it on the host too,
+   * which closes the sheet or panel. */
+  public async useHostTool(toolName: string, conversationID: string, signal: AbortSignal): Promise<HostToolUse> {
+    const hostAnswer = await this.cancellableCall(
+      SessionBridgeOp.USE_HOST_TOOL,
+      { toolName, conversationID },
+      USER_CHOICE_TIMEOUT_MILLISECONDS,
+      signal,
+    );
+    return SessionBridge.hostToolUseFromPlain(hostAnswer);
+  }
+
+  private static hostToolUseFromPlain(hostAnswer: unknown): HostToolUse {
+    const record = typeof hostAnswer === "object" && hostAnswer !== null ? (hostAnswer as Record<string, unknown>) : {};
+    const fileName = record["fileName"];
+    switch (record["outcome"]) {
+      case "approved":
+      case "refused":
+      case "nothingChosen":
+      case "cancelled":
+        return { outcome: record["outcome"] };
+      case "unavailable":
+        return { outcome: "unavailable", reason: typeof record["reason"] === "string" ? record["reason"] : "unknown" };
+      case "chosen":
+        if (typeof fileName === "string" && typeof record["text"] === "string") {
+          return { outcome: "chosenText", fileName, text: record["text"] };
+        }
+        if (typeof fileName === "string" && typeof record["base64"] === "string" && (record["mimeType"] === "image/png" || record["mimeType"] === "image/jpeg")) {
+          return { outcome: "chosenImage", fileName, base64: record["base64"], mimeType: record["mimeType"] };
+        }
+        throw new Error("the host returned an unreadable file");
+      default:
+        throw new Error("the host returned an unknown tool outcome");
+    }
+  }
+
   /** Deletes generated images by their stored names, as when the
    * conversation that showed them is deleted. */
   public deleteGeneratedImages(imageNames: readonly string[]): Promise<void> {
     return this.call(SessionBridgeOp.DELETE_GENERATED_IMAGES, { imageNames: [...imageNames] }).then(() => undefined);
   }
 
-  private call(op: SessionBridgeOp, payload: unknown, timeoutMilliseconds: number = CALL_TIMEOUT_MILLISECONDS): Promise<unknown> {
+  /** A call that the turn's stop signal can end: it rejects at once on the
+   * page and asks the host to cancel the same call. */
+  private cancellableCall(op: SessionBridgeOp, payload: unknown, timeoutMilliseconds: number, signal: AbortSignal): Promise<unknown> {
+    if (signal.aborted) {
+      return Promise.reject(new Error(`${op} was stopped`));
+    }
+    const callId = this.nextCallID();
+    const answer = this.call(op, payload, timeoutMilliseconds, callId);
     return new Promise<unknown>((resolve, reject) => {
-      this.nextCallNumber += 1;
-      const callId = `call-${this.nextCallNumber}`;
+      const cancelOnHost = (): void => {
+        this.settlePendingCall(callId);
+        void this.call(SessionBridgeOp.CANCEL_HOST_TOOL_CALL, { callId }).catch(() => undefined);
+        reject(new Error(`${op} was stopped`));
+      };
+      signal.addEventListener("abort", cancelOnHost, { once: true });
+      answer.then(resolve, reject).finally(() => signal.removeEventListener("abort", cancelOnHost));
+    });
+  }
+
+  /** Call ids carry a value unique to this page, so a late answer meant for a
+   * page that has since reloaded cannot settle one of this page's calls. */
+  private nextCallID(): string {
+    this.nextCallNumber += 1;
+    return `call-${this.pageInstanceTag}-${this.nextCallNumber}`;
+  }
+
+  private settlePendingCall(callId: string): void {
+    const pendingCall = this.pendingCalls.get(callId);
+    if (pendingCall != null) {
+      window.clearTimeout(pendingCall.timer);
+      this.pendingCalls.delete(callId);
+    }
+  }
+
+  private call(
+    op: SessionBridgeOp,
+    payload: unknown,
+    timeoutMilliseconds: number = CALL_TIMEOUT_MILLISECONDS,
+    callId: string = this.nextCallID(),
+  ): Promise<unknown> {
+    return new Promise<unknown>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pendingCalls.delete(callId);
         reject(new SessionBridgeTimeoutError(op, timeoutMilliseconds));

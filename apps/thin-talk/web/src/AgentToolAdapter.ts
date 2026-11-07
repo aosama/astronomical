@@ -1,5 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { ConversationTool } from "./ConversationTool";
+import type { ConversationTool, ToolCallContext } from "./ConversationTool";
 import { executeWithinLimits } from "./ToolLimits";
 
 /**
@@ -7,7 +7,7 @@ import { executeWithinLimits } from "./ToolLimits";
  * shared timeout and result cap, and the turn's stop signal reaches it; Pi
  * reports a thrown error to the model as a failed call.
  */
-export function agentTool(conversationTool: ConversationTool): AgentTool {
+export function agentTool(conversationTool: ConversationTool, context: ToolCallContext): AgentTool {
   return {
     name: conversationTool.name,
     label: conversationTool.label,
@@ -15,9 +15,12 @@ export function agentTool(conversationTool: ConversationTool): AgentTool {
     // Pi accepts a plain JSON Schema here and validates arguments against it
     // without generating code, which the canvas's no-eval policy requires.
     parameters: conversationTool.parameters as unknown as AgentTool["parameters"],
+    // A tool that asks the user runs alone, so two sheets never compete for
+    // the conversation window; other tools keep running in parallel.
+    executionMode: conversationTool.needsUserAttention === true ? "sequential" : undefined,
     execute: async (_toolCallID, toolArguments, signal) => {
       const toolSignal = signal != null ? signal : new AbortController().signal;
-      const toolOutput = await executeWithinLimits(conversationTool, toolArguments as Record<string, unknown>, toolSignal);
+      const toolOutput = await executeWithinLimits(conversationTool, toolArguments as Record<string, unknown>, toolSignal, context);
       // The image name rides in the result's details, which Pi hands to the
       // end-of-call report; the model never sees it because
       // DaemonStreamFunction sends only a result's text.

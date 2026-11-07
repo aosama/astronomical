@@ -43,14 +43,16 @@ export class SessionStore {
   }
 
   /** Loads one session's document, or null when the file is missing or unreadable. */
+  /** Opens a saved conversation. A missing or unreadable file returns null
+   * and leaves the current conversation active: the controller keeps it on
+   * screen in that case, so the store must keep saving it too. */
   public async open(id: string): Promise<SessionDocument | null> {
     await this.flushPendingSave();
-    try {
-      this.activeDocument = await this.bridge.load(id);
-    } catch {
-      this.activeDocument = null;
+    const openedDocument = await this.bridge.load(id).catch(() => null);
+    if (openedDocument != null) {
+      this.activeDocument = openedDocument;
     }
-    return this.activeDocument;
+    return openedDocument;
   }
 
   /** Starts a fresh, unsaved conversation. The document is written only when

@@ -6,8 +6,10 @@ import WebKit
 ///
 /// This is a dumb host, deliberately. The page owns the conversation state, the
 /// transcript rendering, and the daemon conversation; Swift owns only what a
-/// web page cannot do for itself: reading and writing session files, the system
-/// pasteboard, opening external links, and injecting the runtime configuration.
+/// web page cannot do for itself: reading and writing session files, keeping
+/// generated images, asking the user's approval for tools and letting them pick
+/// a file, the system pasteboard, opening external links, and injecting the
+/// runtime configuration.
 /// Everything else crosses the bridge as data.
 ///
 /// The bridge contract lives in the web client (`SessionBridge.ts`): the page
@@ -191,6 +193,10 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
   private let assetRegistry: TranscriptAssetRegistry
   private let webViewProvider: () -> WKWebView?
   private let storeQueue = DispatchQueue(label: "astronomical.thintalk.canvas.store", qos: .userInitiated)
+  /// Session ops that show the user a sheet or a panel. They run on the main
+  /// thread and may wait minutes for an answer, unlike file ops.
+  private static let hostToolOps: Set<String> = ["useHostTool", "cancelHostToolCall"]
+  private lazy var toolHost = ThinTalkToolHost(windowProvider: { [weak self] in self?.webViewProvider()?.window })
 
   init(
     sessionFileStore: SessionFileStore,
@@ -232,6 +238,10 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
   private func handleSessionCall(_ envelope: [String: Any]) {
     guard let callID = envelope["callId"] as? String, let op = envelope["op"] as? String else {
       NSLog("ThinTalk canvas: sessionCall missing callId or op")
+      return
+    }
+    if Self.hostToolOps.contains(op) {
+      handleHostToolCall(callID: callID, op: op, payloadObject: envelope["payload"] as? [String: Any])
       return
     }
     // The payload is serialized to JSON on the main thread so only Sendable
@@ -337,6 +347,28 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
     }
     let imageName = try generatedImageStore.save(base64Image: encodedImage)
     return .success(try encodedJSONString(["imageName": imageName]))
+  }
+
+  /// `useHostTool` waits for the user, so it settles when they answer;
+  /// `cancelHostToolCall` closes the named use's sheet or panel and settles at
+  /// once. Encoding the outcome is the tool host's; this only routes.
+  private func handleHostToolCall(callID: String, op: String, payloadObject: [String: Any]?) {
+    let conversationID = payloadObject?["conversationID"] as? String ?? ""
+    let toolName = payloadObject?["toolName"] as? String ?? ""
+    if op == "cancelHostToolCall" {
+      if let cancelledCallID = payloadObject?["callId"] as? String {
+        toolHost.cancel(callID: cancelledCallID)
+      }
+      settleSessionCall(callID: callID, outcome: .success("null"))
+      return
+    }
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      let toolOutcome = await self.toolHost.use(toolName: toolName, conversationID: conversationID, callID: callID)
+      let encodedOutcome = Result { try self.encodedJSONString(toolOutcome.bridgePayload) }
+        .mapError { SessionBridgeFailure(message: "useHostTool could not encode its outcome: \($0)") }
+      self.settleSessionCall(callID: callID, outcome: encodedOutcome.map { Optional($0) })
+    }
   }
 
   private func settleSessionCall(callID: String, outcome: Result<String?, SessionBridgeFailure>) {
