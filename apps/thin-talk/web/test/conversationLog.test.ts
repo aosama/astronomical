@@ -71,3 +71,77 @@ test("should_keep_a_turn_that_only_called_tools_when_removing_empty_turns", () =
   log.removeEmptyAssistantTurn();
   assert.equal(log.messages.length, 2);
 });
+
+test("should_answer_queued_messages_in_order_with_each_answer_under_its_message", () => {
+  const log = new ConversationLog();
+  log.appendUserTurn("First");
+  log.openAssistantTurn();
+  log.applyTextDelta("One.");
+  const secondQueued = log.appendQueuedUserTurn("Second");
+  const thirdQueued = log.appendQueuedUserTurn("Third");
+  assert.deepEqual(log.requestMessages().map((message) => message.content), ["First"], "queued messages wait");
+  assert.equal(log.beginAnsweringQueuedTurn(secondQueued.id), true);
+  log.applyTextDelta("Two.");
+  assert.deepEqual(log.messages.map((message) => [message.content, message.state]), [
+    ["First", ChatMessageState.COMPLETE],
+    ["One.", ChatMessageState.COMPLETE],
+    ["Second", ChatMessageState.COMPLETE],
+    ["Two.", ChatMessageState.COMPLETE],
+    ["Third", ChatMessageState.QUEUED],
+  ]);
+  assert.equal(log.firstQueuedUserTurn()?.id, thirdQueued.id);
+});
+
+test("should_refuse_to_answer_a_message_that_is_not_queued", () => {
+  const log = new ConversationLog();
+  const sentMessage = log.appendUserTurn("Sent");
+  assert.equal(log.beginAnsweringQueuedTurn(sentMessage.id), false);
+  assert.equal(log.beginAnsweringQueuedTurn("unknown"), false);
+});
+
+test("should_mark_unanswered_queued_messages_not_sent", () => {
+  const log = new ConversationLog();
+  log.appendUserTurn("First");
+  log.appendQueuedUserTurn("Never mind");
+  log.markQueuedTurnsNotSent();
+  assert.equal(log.messages[1]?.state, ChatMessageState.FAILED);
+  assert.equal(log.firstQueuedUserTurn(), null);
+  assert.deepEqual(log.requestMessages().map((message) => message.content), ["First"]);
+});
+
+test("should_keep_the_log_in_answer_order_when_a_later_message_is_answered_first", () => {
+  const log = new ConversationLog();
+  log.appendUserTurn("U1");
+  log.openAssistantTurn();
+  log.applyTextDelta("A1");
+  const thirdQueued = log.appendQueuedUserTurn("Q3");
+  const fourthQueued = log.appendQueuedUserTurn("Q4");
+  log.beginAnsweringQueuedTurn(fourthQueued.id);
+  log.applyTextDelta("A4");
+  log.markAssistantTurn(ChatMessageState.COMPLETE);
+  log.assistantMessageID = null;
+  assert.deepEqual(log.messages.map((message) => message.content), ["U1", "A1", "Q4", "A4", "Q3"]);
+  log.beginAnsweringQueuedTurn(thirdQueued.id);
+  assert.deepEqual(log.requestMessages().map((message) => message.content), ["U1", "A1", "Q4", "A4", "Q3"], "the request ends with the question");
+});
+
+test("should_place_a_retried_answer_under_its_question_ahead_of_unsent_messages", () => {
+  const log = new ConversationLog();
+  log.appendUserTurn("U1");
+  log.openAssistantTurn();
+  log.markAssistantTurn(ChatMessageState.FAILED);
+  log.assistantMessageID = null;
+  log.appendQueuedUserTurn("Q2");
+  log.markQueuedTurnsNotSent();
+  assert.equal(log.lastUserTurn()?.content, "U1", "a message never sent is not retried");
+  log.openAssistantTurn();
+  log.applyTextDelta("Retried answer");
+  assert.deepEqual(log.messages.map((message) => message.content), ["U1", "", "Retried answer", "Q2"]);
+});
+
+test("should_find_no_question_to_retry_when_every_message_is_unsent", () => {
+  const log = new ConversationLog();
+  log.appendQueuedUserTurn("Q1");
+  log.markQueuedTurnsNotSent();
+  assert.equal(log.lastUserTurn(), null);
+});

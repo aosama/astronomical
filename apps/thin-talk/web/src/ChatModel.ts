@@ -10,12 +10,22 @@ export class ChatModel {
   public readonly inputModalities: readonly string[];
   /** Whether the daemon says this model can call tools. */
   public readonly supportsToolCalls: boolean;
+  /** The model's context window in tokens, or null when unknown. */
+  public readonly contextWindowTokens: number | null;
 
-  public constructor(init: { id: string; name: string; inputModalities: readonly string[]; supportsToolCalls?: boolean }) {
+  public constructor(init: {
+    id: string;
+    name: string;
+    inputModalities: readonly string[];
+    supportsToolCalls?: boolean;
+    contextWindowTokens?: number | null;
+  }) {
     this.id = init.id;
     this.name = init.name;
     this.inputModalities = init.inputModalities;
     this.supportsToolCalls = init.supportsToolCalls === true;
+    const configuredContextWindow: number | null | undefined = init.contextWindowTokens;
+    this.contextWindowTokens = configuredContextWindow != null ? configuredContextWindow : null;
   }
 
   /** Whether the loaded model can accept images. */

@@ -154,6 +154,9 @@ export class SessionDocument {
     if (rawState === ChatMessageState.STREAMING) return ChatMessageState.STREAMING;
     if (rawState === ChatMessageState.STOPPED) return ChatMessageState.STOPPED;
     if (rawState === ChatMessageState.FAILED) return ChatMessageState.FAILED;
+    // A message still queued when the conversation was saved was never
+    // answered; it reloads as not sent rather than as an ordinary message.
+    if (rawState === ChatMessageState.QUEUED) return ChatMessageState.FAILED;
     return ChatMessageState.COMPLETE;
   }
 }

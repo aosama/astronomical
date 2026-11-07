@@ -79,6 +79,7 @@ export class DaemonClient {
             name: entry.id,
             inputModalities: entry.inputModalities,
             supportsToolCalls: entry.supportsToolCalls,
+            contextWindowTokens: entry.contextWindowTokens,
           }),
       );
   }

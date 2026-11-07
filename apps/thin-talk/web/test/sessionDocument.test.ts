@@ -91,3 +91,8 @@ test("should_keep_a_turn_that_only_called_tools_when_saving", () => {
   assert.equal(persistable.length, 1);
   assert.equal(persistable[0]?.toolSteps.length, 1);
 });
+
+test("should_reload_a_message_saved_while_queued_as_not_sent", () => {
+  const document = SessionDocument.fromPlain({ id: "q", messages: [{ id: "m1", role: "user", content: "Later", reasoning: "", state: "queued" }] });
+  assert.equal(document.messages[0]?.state, "failed");
+});

@@ -94,6 +94,7 @@ export class Renderer {
       return (
         `<div class="message__answer message__answer--user">` +
         `<span class="message__role">You</span>` +
+        this.userStateHtml(message.state) +
         `<div class="markdown-body">${answerBody}</div>` +
         attachments +
         `</div>` +
@@ -113,6 +114,18 @@ export class Renderer {
       `</div>` +
       this.actionsHtml(message)
     );
+  }
+
+  /** A user message shows its state only when it was not simply sent: still
+   * queued behind an answer, or never sent because the turn stopped. */
+  private userStateHtml(state: ChatMessageState): string {
+    if (state === ChatMessageState.QUEUED) {
+      return `<span class="message__state" data-testid="message-state-queued">queued</span>`;
+    }
+    if (state === ChatMessageState.FAILED) {
+      return `<span class="message__state" data-testid="message-state-not-sent">not sent</span>`;
+    }
+    return "";
   }
 
   private stateLabel(state: ChatMessageState): string {

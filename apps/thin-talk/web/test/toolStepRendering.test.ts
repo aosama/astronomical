@@ -92,3 +92,11 @@ test("should_fall_back_to_a_plain_description_and_shorten_a_long_prompt", () => 
 test("should_show_no_image_for_a_step_without_one", () => {
   assert.equal(renderedSteps([imageStep('{"prompt":"A rose"}', null)]).querySelector("figure"), null);
 });
+
+test("should_label_queued_and_not_sent_user_messages_only", () => {
+  const userBubble = (state: ChatMessageState): string =>
+    renderer.messageHtml(new TranscriptMessage({ id: "u1", role: ChatRole.USER, markdown: "Later", reasoning: "", state }));
+  assert.match(userBubble(ChatMessageState.QUEUED), /data-testid="message-state-queued">queued</);
+  assert.match(userBubble(ChatMessageState.FAILED), /data-testid="message-state-not-sent">not sent</);
+  assert.doesNotMatch(userBubble(ChatMessageState.COMPLETE), /message__state/);
+});

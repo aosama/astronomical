@@ -14,11 +14,17 @@ export interface ChatStreamRequest {
   toolsEnabled: boolean;
   /** Whether the chosen model declares that it can call tools. */
   modelSupportsToolCalls: boolean;
+  /** The chosen model's context window in tokens; long conversations are
+   * trimmed to fit it. Null when the daemon does not say. */
+  contextWindowTokens: number | null;
   onText: (delta: string) => void;
   onReasoning: (delta: string) => void;
   /** Called when a tool call starts and again when it finishes, with the
    * same tool call id, so the conversation can show the step as it runs. */
   onToolStep: (toolStep: ToolStep) => void;
+  /** Called when the turn starts answering a message queued while it ran,
+   * so the conversation can close the current answer and open the next. */
+  onQueuedMessageAnswered: (queuedMessageID: string) => void;
   signal: AbortSignal;
 }
 
@@ -35,4 +41,8 @@ export interface ChatStreamRequest {
 export interface ChatStreamer {
   readonly stallTimeoutMilliseconds: number;
   streamChat(request: ChatStreamRequest): Promise<void>;
+  /** Hands the running turn a message the user sent while it was working;
+   * returns whether a running turn accepted it. A message the turn never
+   * starts stays queued in the conversation, which sends it next itself. */
+  queueUserMessage(queuedMessageID: string, content: string): boolean;
 }

@@ -8,4 +8,7 @@ export enum ChatMessageState {
   STREAMING = "streaming",
   STOPPED = "stopped",
   FAILED = "failed",
+  /** A user message sent while an answer was still coming; it is answered
+   * after (or, if a tool is running, during) the current answer. */
+  QUEUED = "queued",
 }

@@ -38,6 +38,12 @@ export class ToolStepTracker {
     return this.step(toolCallID, toolName, argumentsJSON, ToolStepTracker.resultText(toolResult), resultState, generatedImageName);
   }
 
+  /** Starts counting rounds afresh for the answer to a queued message: each
+   * answer gets its own round numbers and its own round limit. */
+  public beginNextAnswer(): void {
+    this.completedRoundCount = 0;
+  }
+
   /** Marks the end of one model request whose tool calls have all finished. */
   public completeRound(): void {
     this.completedRoundCount += 1;
