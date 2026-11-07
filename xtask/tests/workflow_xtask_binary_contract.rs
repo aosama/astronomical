@@ -10,8 +10,11 @@ use contract_support::{
     workflow_contract,
 };
 use serde_yaml::Value;
+use serial_test::serial;
 use std::collections::BTreeSet;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Command;
 
 const XTASK_FOLDER: &str = "xtask";
 const PROVISION_ACTION_REFERENCE: &str = "./.github/actions/provision-xtask";
@@ -315,4 +318,213 @@ fn should_tell_a_direct_xtask_command_from_one_through_cargo() {
     assert!(!runs_xtask_directly("cargo xtask check-architecture\n"));
     assert!(!runs_xtask_directly("# xtask prune-caches runs later\n"));
     assert!(!runs_xtask_directly(""));
+}
+
+const BUILD_STEP_ID: &str = "xtask-binary-build";
+const RESTORED_BINARY_RELATIVE_PATH: &str = ".astronomical-ci/xtask-binary/xtask";
+/// The real binary's usage exit, which the probe's `--help` always gets.
+const USAGE_EXIT_CODE: i32 = 2;
+const CRASH_EXIT_CODE: i32 = 139;
+const CARGO_SUCCESS: i32 = 0;
+const CARGO_FAILURE: i32 = 101;
+/// Marks the binary the stub cargo built, to tell it from one that was restored.
+const STUB_BUILT_MARKER: &str = "stub-built";
+
+enum RestoredBinary {
+    Missing,
+    NotExecutable,
+    Exits(i32),
+}
+
+struct ProvisionStepOutcome {
+    exit_code: Option<i32>,
+    step_outputs: String,
+    recorded_path: String,
+    installed_binary_text: Option<String>,
+    is_installed_binary_executable: bool,
+}
+
+fn write_executable_script(script_path: &Path, script_body: &str) {
+    std::fs::write(script_path, format!("#!/bin/bash\n{script_body}\n")).expect("script writes");
+    std::fs::set_permissions(script_path, std::fs::Permissions::from_mode(0o755))
+        .expect("script becomes executable");
+}
+
+fn provision_step_script() -> String {
+    let action = provision_xtask_action_contract();
+    for action_step in action_steps(&action) {
+        if action_step.get("id").and_then(Value::as_str) == Some(BUILD_STEP_ID) {
+            return required_text(action_step, "run", "the build step").to_owned();
+        }
+    }
+    panic!("the action has no step with id {BUILD_STEP_ID}");
+}
+
+fn place_restored_binary(installed_binary: &Path, restored_binary: &RestoredBinary) {
+    if matches!(restored_binary, RestoredBinary::Missing) {
+        return;
+    }
+    std::fs::create_dir_all(installed_binary.parent().expect("the binary has a folder"))
+        .expect("the binary folder should exist");
+    match restored_binary {
+        RestoredBinary::Missing => {}
+        RestoredBinary::NotExecutable => {
+            std::fs::write(installed_binary, "not a program\n").expect("the file writes");
+        }
+        RestoredBinary::Exits(exit_code) => {
+            write_executable_script(installed_binary, &format!("exit {exit_code}"));
+        }
+    }
+}
+
+fn write_stub_cargo(stub_folder: &Path, cargo_exit_code: i32) {
+    write_executable_script(
+        &stub_folder.join("cargo"),
+        &format!(
+            "[ {cargo_exit_code} -eq 0 ] || exit {cargo_exit_code}\n\
+             mkdir -p target/debug\n\
+             printf '#!/bin/bash\\n# {STUB_BUILT_MARKER}\\nexit 2\\n' > target/debug/xtask\n\
+             chmod +x target/debug/xtask"
+        ),
+    );
+}
+
+/// Runs the action's own script under the exact shell GitHub uses for a `shell: bash`
+/// step. Text contracts cannot see this: `-e` survives `set -uo pipefail`, so a probe
+/// exiting 2 once ended the script and failed every run that restored the binary.
+/// Callers run serially: each writes a script and executes it straight away, and a fork
+/// in a parallel test can briefly hold it open for writing, which Linux reports as
+/// "Text file busy" and would flake these tests.
+fn run_provision_step(
+    restored_binary: &RestoredBinary,
+    cargo_exit_code: i32,
+) -> ProvisionStepOutcome {
+    let sandbox = tempfile::tempdir().expect("the sandbox should exist");
+    let home_folder = sandbox.path().join("home");
+    let work_folder = sandbox.path().join("work");
+    let stub_folder = sandbox.path().join("stub");
+    for sandbox_folder in [&home_folder, &work_folder, &stub_folder] {
+        std::fs::create_dir_all(sandbox_folder).expect("the folder should exist");
+    }
+    let installed_binary = home_folder.join(RESTORED_BINARY_RELATIVE_PATH);
+    place_restored_binary(&installed_binary, restored_binary);
+    write_stub_cargo(&stub_folder, cargo_exit_code);
+    let step_script = sandbox.path().join("step.sh");
+    std::fs::write(&step_script, provision_step_script()).expect("the step script writes");
+    let outputs_file = sandbox.path().join("outputs");
+    let path_file = sandbox.path().join("path");
+    std::fs::write(&outputs_file, "").expect("the outputs file writes");
+    std::fs::write(&path_file, "").expect("the path file writes");
+    let inherited_path = std::env::var("PATH").expect("the test has a PATH");
+    let step_status = Command::new("bash")
+        .args(["--noprofile", "--norc", "-e", "-o", "pipefail"])
+        .arg(&step_script)
+        .current_dir(&work_folder)
+        // bash reads this even under --norc, so it must not reach the sandboxed shell.
+        .env_remove("BASH_ENV")
+        .env("HOME", &home_folder)
+        .env(
+            "PATH",
+            format!("{}:{inherited_path}", stub_folder.display()),
+        )
+        .env("GITHUB_OUTPUT", &outputs_file)
+        .env("GITHUB_PATH", &path_file)
+        .status()
+        .expect("bash should start");
+    ProvisionStepOutcome {
+        exit_code: step_status.code(),
+        step_outputs: std::fs::read_to_string(&outputs_file).expect("the outputs read"),
+        recorded_path: std::fs::read_to_string(&path_file).expect("the path file reads"),
+        installed_binary_text: std::fs::read_to_string(&installed_binary).ok(),
+        is_installed_binary_executable: is_executable_file(&installed_binary),
+    }
+}
+
+fn is_executable_file(file_path: &Path) -> bool {
+    match std::fs::metadata(file_path) {
+        Ok(file_metadata) => file_metadata.permissions().mode() & 0o111 != 0,
+        Err(_) => false,
+    }
+}
+
+fn assert_binary_was_built(outcome: &ProvisionStepOutcome) {
+    assert_eq!(outcome.exit_code, Some(0));
+    assert!(outcome.step_outputs.contains("was_built=true"));
+    assert!(outcome.recorded_path.contains("xtask-binary"));
+    let installed_text = outcome
+        .installed_binary_text
+        .as_deref()
+        .expect("the binary should be installed");
+    assert!(
+        installed_text.contains(STUB_BUILT_MARKER),
+        "the freshly built binary must replace whatever was restored"
+    );
+    assert!(
+        outcome.is_installed_binary_executable,
+        "a rebuilt binary that cannot execute would fail the next xtask command"
+    );
+}
+
+fn assert_restored_binary_was_kept(outcome: &ProvisionStepOutcome) {
+    assert_eq!(
+        outcome.exit_code,
+        Some(0),
+        "this exit must not end the step"
+    );
+    assert!(outcome.step_outputs.contains("was_built=false"));
+    assert!(outcome.recorded_path.contains("xtask-binary"));
+    let installed_text = outcome
+        .installed_binary_text
+        .as_deref()
+        .expect("the restored binary should remain");
+    assert!(!installed_text.contains(STUB_BUILT_MARKER));
+}
+
+#[test]
+#[serial(provision_step)]
+fn should_accept_a_restored_binary_that_exits_with_its_usage_code() {
+    let outcome = run_provision_step(&RestoredBinary::Exits(USAGE_EXIT_CODE), CARGO_FAILURE);
+    assert_restored_binary_was_kept(&outcome);
+}
+
+#[test]
+#[serial(provision_step)]
+fn should_accept_a_restored_binary_that_exits_cleanly() {
+    let outcome = run_provision_step(&RestoredBinary::Exits(0), CARGO_FAILURE);
+    assert_restored_binary_was_kept(&outcome);
+}
+
+#[test]
+#[serial(provision_step)]
+fn should_build_the_binary_when_none_was_restored() {
+    let outcome = run_provision_step(&RestoredBinary::Missing, CARGO_SUCCESS);
+    assert_binary_was_built(&outcome);
+}
+
+#[test]
+#[serial(provision_step)]
+fn should_rebuild_a_restored_binary_that_crashes() {
+    let outcome = run_provision_step(&RestoredBinary::Exits(CRASH_EXIT_CODE), CARGO_SUCCESS);
+    assert_binary_was_built(&outcome);
+}
+
+#[test]
+#[serial(provision_step)]
+fn should_rebuild_a_restored_file_that_is_not_executable() {
+    let outcome = run_provision_step(&RestoredBinary::NotExecutable, CARGO_SUCCESS);
+    assert_binary_was_built(&outcome);
+}
+
+#[test]
+#[serial(provision_step)]
+fn should_fail_the_step_with_cargos_exit_code_when_the_rebuild_fails() {
+    let outcome = run_provision_step(&RestoredBinary::Missing, CARGO_FAILURE);
+    assert_eq!(
+        outcome.exit_code,
+        Some(CARGO_FAILURE),
+        "CI must not continue without a binary"
+    );
+    assert_eq!(outcome.step_outputs, "");
+    assert_eq!(outcome.recorded_path, "");
+    assert_eq!(outcome.installed_binary_text, None);
 }

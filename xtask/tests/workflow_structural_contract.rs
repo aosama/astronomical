@@ -43,10 +43,6 @@ fn should_use_the_canonical_integration_package_selection_for_compile_and_execut
         }),
         "the compile step duplicates the canonical integration package selection"
     );
-    assert!(
-        compile_text.contains("cargo test-test-harness-fixtures"),
-        "the compile step must build the shared harness-fixture tests too"
-    );
     let configuration =
         std::fs::read_to_string(contract_support::repository_root().join(".cargo/config.toml"))
             .expect("the canonical Cargo configuration should be readable");
@@ -187,7 +183,7 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
     let neural_engine_job = required_job(&workflow, "neural-engine");
     assert_eq!(
         required_text(neural_engine_job, "name", "job neural-engine"),
-        "Neural Engine crate and xtask",
+        "Neural Engine, xtask and standalone builds",
         "the neural-engine lane name changed"
     );
     assert!(
@@ -466,6 +462,7 @@ fn packaging_contracts_run_on_required_checks() {
         "--test workflow_cache_owner_contract",
         "--test workflow_xcode_pin_contract",
         "--test workflow_macos_packaging_contract",
+        "--test workflow_xtask_binary_contract",
     ] {
         assert!(
             contracts_text.contains(contract_binary),

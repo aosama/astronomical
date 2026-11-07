@@ -44,7 +44,9 @@ runs:
             unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
             cargo build --locked --quiet -p xtask --bin xtask
             mkdir -p "$HOME/.astronomical-ci/xtask-binary"
-            cp target/debug/xtask "$xtask_binary"
+            # Not cp, which keeps the mode of a file it overwrites, so a restored file
+            # that could not execute would still fail after this rebuild.
+            install -m 755 target/debug/xtask "$xtask_binary"
             printf 'was_built=true\n' >> "$GITHUB_OUTPUT"
             ;;
           *)
