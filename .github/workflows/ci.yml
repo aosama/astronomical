@@ -35,10 +35,14 @@ jobs:
   detect-changes:
     name: Classify changed files
     runs-on: ubuntu-24.04
-    # The classifier compiles xtask first, and a hosted image without the
-    # pinned toolchain makes rustup download it before that compile; the cap
-    # covers both plus the policy contracts, with margin for a cold registry.
+    # A cache miss compiles xtask first, and a hosted image without the pinned
+    # toolchain makes rustup download it before that compile; the cap covers both
+    # plus the policy contracts, with margin for a cold registry.
     timeout-minutes: 5
+    # A stalled cache download must fall through to that compile rather than use
+    # up this cap: the default retry window is longer than the cap itself.
+    env:
+      SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
     # Job permissions replace the workflow-level set: reading whether this exact
     # tree already passed needs actions:read.
     permissions:
@@ -49,6 +53,7 @@ jobs:
       native_inputs_changed: ${{ steps.classify.outputs.native_inputs_changed }}
       macos_verification_required: ${{ steps.classify.outputs.macos_verification_required }}
       notices_inputs_changed: ${{ steps.classify.outputs.notices_inputs_changed }}
+      swift_node_required: ${{ steps.classify.outputs.swift_node_required }}
       head_tree_id: ${{ steps.head-tree.outputs.tree_id }}
     steps:
       - name: Check out source history
@@ -56,6 +61,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Provision the xtask binary
+        uses: ./.github/actions/provision-xtask
       - name: Classify code and static-only changes
         id: classify
         shell: bash
@@ -66,7 +73,7 @@ jobs:
           PUSH_BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
-        run: cargo run --quiet -p xtask -- classify-scope
+        run: xtask classify-scope
       # The same github.sha every lane checks out, so this names what they test.
       - name: Name the tree under test
         id: head-tree
@@ -152,8 +159,10 @@ jobs:
           key: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-
-      # Runs after the registry restore so the xtask compile below reuses the
+      # Runs after the registry restore so a cache miss's xtask compile reuses the
       # cached dependency downloads instead of hitting crates.io cold.
+      - name: Provision the xtask binary
+        uses: ./.github/actions/provision-xtask
       - name: Compute the native build identity cache key
         id: native-build-identity
         shell: bash
@@ -167,7 +176,7 @@ jobs:
           # --explain logs each toolchain probe value and its source to stderr,
           # so a native-cache identity flap is attributable from the run log
           # instead of by diffing runner images.
-          cargo run --quiet -p xtask -- native-fingerprint --explain --target aarch64-apple-darwin --profile core > "$native_identity_file"
+          xtask native-fingerprint --explain --target aarch64-apple-darwin --profile core > "$native_identity_file"
           native_build_identity="$(tr -d '[:space:]' < "$native_identity_file")"
           case "$native_build_identity" in
             ''|*[!0-9a-f]*) printf '%s\n' 'Error: native build identity is invalid' >&2; exit 1 ;;
@@ -263,37 +272,11 @@ jobs:
           restore-keys: |
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
-      - name: Run the app-builder packaging journey
-        run: |
-          trap 'scripts/ci/ci-step-timing.sh end app-builder-journey' EXIT
-          scripts/ci/ci-step-timing.sh begin app-builder-journey
-          # This step runs before sccache is installed, so cargo must not try
-          # to exec the not-yet-existing wrapper binary; the journey compiles
-          # from the restored cargo-downloads registry in well under the step
-          # budget. The host-agnostic workflow and cache contracts moved to
-          # the config-contracts lane (issue #1553); what stays here is the
-          # one contract that exercises macOS packaging tooling: the typed
-          # `cargo xtask app package` pipeline's signing plans, Cargo
-          # arguments, assembled-bundle layout, and plist checks for every
-          # channel, deterministic and done in seconds, so it enforces the
-          # packaging contract on every pull request instead of only before
-          # releases.
-          unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
-          # Every xtask unit test runs here, not only the packaging ones: the
-          # release, provisioning, and repository-tooling decisions are unit
-          # tests in the same binary, and running them all costs about a
-          # second once it is compiled.
-          cargo test --locked -p xtask --bin xtask
-        timeout-minutes: 5
       - name: Install verification tools
         run: |
           trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
           scripts/ci/ci-step-timing.sh begin install-verification-tools
-          # This step installs sccache, so the xtask compile must not run
-          # through the wrapper exported by the identity step: the wrapper
-          # binary does not exist yet.
-          unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
-          cargo run --quiet -p xtask -- install-verification-tools
+          xtask install-verification-tools
       # install-action ships the SHA-256 of every nextest release inside the
       # pinned action commit and verifies the download against it, so the
       # digest is pinned by the action SHA
@@ -318,7 +301,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end provision-native-dependencies' EXIT
           scripts/ci/ci-step-timing.sh begin provision-native-dependencies
-          cargo xtask bootstrap-native-dependencies
+          xtask bootstrap-native-dependencies
       - name: Set maximum parallel build jobs
         run: |
           printf 'CARGO_BUILD_JOBS=%s\n' "$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
@@ -337,7 +320,7 @@ jobs:
           # count. Every later Cargo step finds the native build store warm
           # and skips CMake, so native and Rust compilation never overlap on
           # the small hosted runners.
-          cargo xtask prewarm-native-build --profile core
+          xtask prewarm-native-build --profile core
           [ -f "$ASTRONOMICAL_NATIVE_BUILD_STATUS_FILE" ] || {
             printf '%s\n' 'Error: native build status was not published' >&2
             exit 1
@@ -367,13 +350,17 @@ jobs:
           progress_tail_pid=$!
           trap 'kill "$progress_tail_pid" 2>/dev/null || true; scripts/ci/ci-step-timing.sh end compile-integration-tests' EXIT
           scripts/ci/ci-step-timing.sh begin compile-integration-tests
-          cargo test-integration --timings --no-run
+          # One selection for the integration, REST and E2E lanes, because cargo
+          # unifies features per command: separate commands rebuilt 49 crates with
+          # different features, about 36 of this step's 108 seconds. The archive
+          # aliases carry the same package list, so packing them compiles nothing.
+          cargo test-integration --timings --no-run --test rest_api_tests --test e2e
           cargo test-test-harness-fixtures --no-run
-          cargo test --timings --no-fail-fast --no-run -p astronomical-daemon --test rest_api_tests
-          cargo test --timings --no-fail-fast --no-run -p astronomical-e2e --test e2e
-          # The root E2E journeys spawn the real daemon and fixture worker
-          # binaries from outside their package, so they must be built before
-          # the lane runs; workspace_binary fails loudly otherwise.
+          # The selection above already built the daemon and its fixture workers
+          # for the lanes. This proves the daemon also builds on its own features,
+          # as a release does, rather than on what the other packages turned on,
+          # for about 2 seconds. Packing the archives relinks the selection's
+          # binaries over these, so the lanes never run this build.
           cargo build --locked --bins -p astronomical-daemon
         timeout-minutes: 12
       - name: Classify native build result
@@ -505,7 +492,7 @@ jobs:
         if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo run --quiet -p xtask -- save-sccache "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}"
+        run: xtask save-sccache "astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}"
         timeout-minutes: 2
       - name: Save sccache-cache
         id: sccache-cache-save
@@ -537,7 +524,7 @@ jobs:
         run: |
           trap 'scripts/ci/ci-step-timing.sh end prune-ci-caches' EXIT
           scripts/ci/ci-step-timing.sh begin prune-ci-caches
-          cargo run --quiet -p xtask -- prune-caches
+          xtask prune-caches
         timeout-minutes: 2
       - name: Upload Cargo timing report
         if: always()
@@ -556,12 +543,15 @@ jobs:
         timeout-minutes: 1
 
   # Parallel macOS contract job, fanned in by the CI verdict rather than
-  # listed in branch protection: it may split or rename freely. The Swift
+  # listed in branch protection: it may split or rename freely. It runs only when
+  # something it reads changed (SWIFT_NODE_INPUT_PATH_PREFIXES in
+  # xtask/src/classify_scope.rs), because it compiles no Rust, and on every full
+  # default-branch run, because only that run saves its caches. The Swift
   # toolchain identity is resolved here (not inherited) because GitHub
   # Actions does not share GITHUB_ENV across jobs and the SwiftPM cache key
   # must match the toolchain that would build.
   swift-node:
-    if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
+    if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.swift_node_required == 'true') }}
     needs: detect-changes
     name: macOS Swift and Node contracts
     runs-on: macos-26
@@ -748,7 +738,7 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end observatory-contracts' EXIT
           scripts/ci/ci-step-timing.sh begin observatory-contracts
           set -o pipefail
-          node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
+          node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js apps/daemon/console/neural-engine-panel.test.js 2>&1 | tee "$RUNNER_TEMP/test-logs/observatory.log"
         timeout-minutes: 2
       - name: Run Thin Talk conversation canvas contracts
         run: |
@@ -1076,8 +1066,9 @@ jobs:
   # joining the macOS build because its default graph is a few dozen small
   # crates with no MLX native build (the MLX baseline is behind a feature this
   # lane leaves off), so it runs in parallel with the build job, which it
-  # would only slow down, and finishes well inside that job's minutes. It
-  # restores none of the build job's caches: the shared registry archive
+  # would only slow down, and finishes well inside that job's minutes. The
+  # xtask unit tests join it for the same reason. It restores none of the build
+  # job's caches: the shared registry archive
   # (~95 MB, ~4 s to restore) holds the whole workspace's downloads, and the
   # shared sccache archive (~186 MB) is almost entirely objects this crate
   # never compiles. Its own small sccache directory, under its own prune
@@ -1085,7 +1076,7 @@ jobs:
   # the compiler through an sccache RUSTC_WRAPPER); the Objective-C bridge
   # always recompiles because sccache refuses -fmodules, a sub-second cost.
   neural-engine:
-    name: Neural Engine crate
+    name: Neural Engine crate and xtask
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
     runs-on: macos-26
@@ -1099,7 +1090,7 @@ jobs:
           {
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/neural-engine-sccache"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
-            # The crate's whole compiled graph is ~8 MiB, far under this cap;
+            # The crate's and xtask's compiled graphs are far under this cap;
             # it exists only so a dependency surge cannot grow the entry
             # without bound, since this family carries no prune size ceiling.
             printf 'SCCACHE_CACHE_SIZE=%s\n' "150M"
@@ -1144,9 +1135,9 @@ jobs:
           # sccache family, and the build job's `astronomical-v2-sccache-`
           # fallbacks can never restore it. Keyed like that family: tool pins
           # rotate the sccache cache format, Cargo.lock the dependency graph.
-          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-xtask-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
+            astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-xtask-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
       # Every target compiles, so the #[ignore]d real-hardware journeys stay
       # buildable; only the pure unit tests execute (see the alias comment).
       - name: Compile every target and run the unit tests
@@ -1155,6 +1146,17 @@ jobs:
           scripts/ci/ci-step-timing.sh begin neural-engine-tests
           cargo test-neural-engine --locked
         timeout-minutes: 4
+      # Every xtask unit test, including the typed `cargo xtask app package`
+      # pipeline's signing plans, Cargo arguments, assembled-bundle layout and plist
+      # checks for every channel. On macOS because that tooling is what they exercise,
+      # and in this lane rather than the build job so they run beside the build
+      # instead of adding about 11 seconds to everything waiting on it.
+      - name: Run the xtask unit tests
+        run: |
+          trap 'scripts/ci/ci-step-timing.sh end xtask-unit-tests' EXIT
+          scripts/ci/ci-step-timing.sh begin xtask-unit-tests
+          cargo test --locked -p xtask --bin xtask
+        timeout-minutes: 5
       # Default-branch-only, like the build job's sccache save: pull requests
       # restore the default-branch entry, and a saved pull-request entry would
       # only duplicate it inside the 10 GB repository budget.
@@ -1166,7 +1168,7 @@ jobs:
           operation: save
           owner: neural-engine-sccache
           path: ~/Library/Caches/Astronomical/neural-engine-sccache
-          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
+          key: astronomical-v2-neural-engine-sccache-${{ runner.os }}-${{ runner.arch }}-with-xtask-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}
       - name: Print compiler cache statistics
         if: always()
         run: sccache --show-stats
@@ -1188,7 +1190,8 @@ jobs:
   # Skip legitimacy: the macOS lanes legitimately skip when the
   # classifier marked macOS verification not required (site-only changes, a
   # version-only bump proven from the file contents, or a default-branch push
-  # whose exact tree already passed them with no cache to publish), and the
+  # whose exact tree already passed them with no cache to publish), the Swift and
+  # Node lane also when nothing it reads changed, and the
   # notices-freshness lane when no notices input changed; the
   # verdict accepts a skip only under that classifier decision, so a lane
   # skipped for any other reason fails the gate.
@@ -1208,6 +1211,7 @@ jobs:
           }
           classification_result="${{ needs.detect-changes.result }}"
           macos_verification_required="${{ needs.detect-changes.outputs.macos_verification_required }}"
+          swift_node_required="${{ needs.detect-changes.outputs.swift_node_required }}"
           rust_core_result="${{ needs.rust-core.result }}"
           unit_tests_result="${{ needs.unit-tests.result }}"
           integration_tests_result="${{ needs.integration-tests.result }}"
@@ -1233,7 +1237,9 @@ jobs:
                 printf '[ci-verdict] lane=%s result=success\n' "$lane_name"
                 ;;
               skipped)
-                if [ "$macos_lanes_may_skip" = true ]; then
+                if [ "$lane_name" = swift-node ] && [ "$swift_node_required" != "true" ]; then
+                  printf '[ci-verdict] lane=%s result=skipped classification=swift-node-not-required\n' "$lane_name"
+                elif [ "$macos_lanes_may_skip" = true ]; then
                   printf '[ci-verdict] lane=%s result=skipped classification=macos-not-required\n' "$lane_name"
                 else
                   fail "lane=$lane_name skipped while classification requires macOS verification"

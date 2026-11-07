@@ -9,11 +9,12 @@ use serde_yaml::Value;
 use std::path::{Path, PathBuf};
 
 pub(crate) const EXPECTED_MACOS_AUTHORITY: &str = "${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}";
+pub(crate) const EXPECTED_SWIFT_NODE_AUTHORITY: &str = "${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.swift_node_required == 'true') }}";
 pub(crate) const EXPECTED_MACOS_CONCURRENCY_GROUP: &str =
     "macos-integration-${{ github.event_name }}-${{ github.ref }}";
 pub(crate) const EXPECTED_SWIFT_CONCURRENCY_GROUP: &str =
     "macos-swift-node-${{ github.event_name }}-${{ github.ref }}";
-pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str = "node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js";
+pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str = "node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/library.test.js apps/daemon/console/library-fetch.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js apps/daemon/console/neural-engine-panel.test.js";
 
 pub(crate) fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -43,6 +44,10 @@ pub(crate) fn macos_packaging_workflow_contract() -> Value {
 
 pub(crate) fn composite_action_contract() -> Value {
     parse_yaml_file(&repository_root().join(".github/actions/astronomical-cache/action.yml"))
+}
+
+pub(crate) fn provision_xtask_action_contract() -> Value {
+    parse_yaml_file(&repository_root().join(".github/actions/provision-xtask/action.yml"))
 }
 
 pub(crate) fn pinned_xcode_action_contract() -> Value {

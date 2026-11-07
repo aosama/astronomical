@@ -13,10 +13,10 @@ mod contract_support;
 
 use contract_support::{
     EXPECTED_MACOS_AUTHORITY, EXPECTED_MACOS_CONCURRENCY_GROUP, EXPECTED_OBSERVATORY_COMMAND,
-    EXPECTED_SWIFT_CONCURRENCY_GROUP, find_step_by_id, find_step_by_name,
-    is_pinned_action_reference, notices_freshness_workflow_contract, required_bool, required_field,
-    required_job, required_text, required_u64, run_text_of, steps_of, triggers_of,
-    workflow_contract,
+    EXPECTED_SWIFT_CONCURRENCY_GROUP, EXPECTED_SWIFT_NODE_AUTHORITY, find_step_by_id,
+    find_step_by_name, is_pinned_action_reference, notices_freshness_workflow_contract,
+    required_bool, required_field, required_job, required_text, required_u64, run_text_of,
+    steps_of, triggers_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -138,9 +138,11 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
         "macOS build",
         "the build job name changed"
     );
-    for (macos_job_id, hard_cap_minutes) in
-        [("rust-core", 15), ("swift-node", 12), ("neural-engine", 6)]
-    {
+    for (macos_job_id, hard_cap_minutes, expected_authority) in [
+        ("rust-core", 15, EXPECTED_MACOS_AUTHORITY),
+        ("swift-node", 12, EXPECTED_SWIFT_NODE_AUTHORITY),
+        ("neural-engine", 6, EXPECTED_MACOS_AUTHORITY),
+    ] {
         let job_context = format!("job {macos_job_id}");
         let macos_job = required_job(&workflow, macos_job_id);
         assert_eq!(
@@ -150,7 +152,7 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
         );
         assert_eq!(
             required_text(macos_job, "if", &job_context),
-            EXPECTED_MACOS_AUTHORITY,
+            expected_authority,
             "{macos_job_id} authority does not fail closed"
         );
     }
@@ -185,7 +187,7 @@ fn required_jobs_keep_names_timeouts_and_fail_closed_authority() {
     let neural_engine_job = required_job(&workflow, "neural-engine");
     assert_eq!(
         required_text(neural_engine_job, "name", "job neural-engine"),
-        "Neural Engine crate",
+        "Neural Engine crate and xtask",
         "the neural-engine lane name changed"
     );
     assert!(
@@ -428,13 +430,23 @@ fn packaging_contracts_run_on_required_checks() {
     // checks; a deleted step would otherwise fail silently until release
     // day, which is exactly what issue #1346 set out to end.
     let workflow = workflow_contract();
-    let verification_steps = steps_of(required_job(&workflow, "rust-core"), "rust-core");
-    let app_builder_step =
-        find_step_by_name(&verification_steps, "Run the app-builder packaging journey");
+    let neural_engine_job = required_job(&workflow, "neural-engine");
+    assert_eq!(
+        required_text(neural_engine_job, "runs-on", "job neural-engine"),
+        "macos-26",
+        "the packaging contracts exercise macOS tooling, so they must run on macOS"
+    );
+    assert_eq!(
+        required_text(neural_engine_job, "if", "job neural-engine"),
+        EXPECTED_MACOS_AUTHORITY,
+        "the packaging contracts must run whenever macOS verification is required"
+    );
+    let neural_engine_steps = steps_of(neural_engine_job, "neural-engine");
+    let xtask_tests_step = find_step_by_name(&neural_engine_steps, "Run the xtask unit tests");
     assert!(
-        run_text_of(app_builder_step, "app-builder")
+        run_text_of(xtask_tests_step, "xtask unit tests")
             .contains("cargo test --locked -p xtask --bin xtask"),
-        "the app-builder journey is not enforced on the macOS verification lane"
+        "the xtask unit tests are not enforced on the Neural Engine lane"
     );
 
     // The host-agnostic workflow contracts live in the config-contracts lane

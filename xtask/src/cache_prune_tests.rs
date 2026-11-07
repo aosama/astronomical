@@ -21,6 +21,18 @@ fn cache_entry(
 const DEFAULT_REF: &str = "refs/heads/main";
 
 #[test]
+fn should_keep_the_xtask_binary_keys_of_each_platform_in_their_own_family() {
+    assert_eq!(
+        family_of_key("astronomical-v2-xtask-binary-macOS-ARM64-digest"),
+        "xtask-binary"
+    );
+    assert_eq!(
+        family_of_key("astronomical-v2-xtask-binary-Linux-X64-digest"),
+        "xtask"
+    );
+}
+
+#[test]
 fn family_extraction_stops_at_the_runner_platform_segment() {
     assert_eq!(
         family_of_key("astronomical-v2-sccache-macOS-ARM64-toolchain-lock"),
