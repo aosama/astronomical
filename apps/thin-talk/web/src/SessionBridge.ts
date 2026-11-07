@@ -4,6 +4,7 @@ import { SessionBridgeError, SessionBridgeTimeoutError } from "./SessionBridgeEr
 import { SessionDocument } from "./SessionDocument";
 import { SessionSummary } from "./SessionSummary";
 import { SessionPreferences } from "./SessionPreferences";
+import { isGeneratedImageName } from "./ToolStep";
 
 interface PendingSessionCall {
   resolve: (payload: unknown) => void;
@@ -13,6 +14,10 @@ interface PendingSessionCall {
 
 /** How long a session call may run before the page gives up on the host. */
 const CALL_TIMEOUT_MILLISECONDS = 10_000;
+/** Storing a generated image carries megabytes of base64 across the bridge
+ * and through a decode and a file write, so it gets more time than a session
+ * file: giving up early would report a failed image the host still saves. */
+const STORE_IMAGE_TIMEOUT_MILLISECONDS = 30_000;
 
 /**
  * The typed client side of the session file bridge. Every durable read and write
@@ -69,14 +74,36 @@ export class SessionBridge {
     return this.call(SessionBridgeOp.SAVE_PREFS, preferences.toPlain()).then(() => undefined);
   }
 
-  private call(op: SessionBridgeOp, payload: unknown): Promise<unknown> {
+  /** Hands a generated image (base64 PNG or JPEG) to the host to keep, and
+   * returns the stored name the conversation records and loads it by. */
+  public storeGeneratedImage(base64Image: string): Promise<string> {
+    return this.call(SessionBridgeOp.STORE_GENERATED_IMAGE, { base64: base64Image }, STORE_IMAGE_TIMEOUT_MILLISECONDS).then(
+      (payload) => {
+        const imageName = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["imageName"] : null;
+        // A name the transcript would refuse to show must fail the tool here,
+        // or the model is told the image was shown when it was not.
+        if (typeof imageName !== "string" || !isGeneratedImageName(imageName)) {
+          throw new Error("the host did not return a usable stored image name");
+        }
+        return imageName;
+      },
+    );
+  }
+
+  /** Deletes generated images by their stored names, as when the
+   * conversation that showed them is deleted. */
+  public deleteGeneratedImages(imageNames: readonly string[]): Promise<void> {
+    return this.call(SessionBridgeOp.DELETE_GENERATED_IMAGES, { imageNames: [...imageNames] }).then(() => undefined);
+  }
+
+  private call(op: SessionBridgeOp, payload: unknown, timeoutMilliseconds: number = CALL_TIMEOUT_MILLISECONDS): Promise<unknown> {
     return new Promise<unknown>((resolve, reject) => {
       this.nextCallNumber += 1;
       const callId = `call-${this.nextCallNumber}`;
       const timer = window.setTimeout(() => {
         this.pendingCalls.delete(callId);
-        reject(new SessionBridgeTimeoutError(op, CALL_TIMEOUT_MILLISECONDS));
-      }, CALL_TIMEOUT_MILLISECONDS);
+        reject(new SessionBridgeTimeoutError(op, timeoutMilliseconds));
+      }, timeoutMilliseconds);
       this.pendingCalls.set(callId, { resolve, reject, timer });
       this.post(new SessionBridgeRequest({ callId, op, payload }));
     });

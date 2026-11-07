@@ -13,6 +13,8 @@ public enum CanvasSecurityPolicy {
   public static let shellHost = "shell"
   /// Host serving files the application registered, addressed by opaque token.
   public static let attachmentHost = "attachment"
+  /// Host serving images the image tool generated, addressed by stored name.
+  public static let generatedImageHost = "generated"
 
   /// Schemes that may leave the application and open in the system browser.
   public static let externallyOpenableSchemes: Set<String> = ["http", "https", "mailto"]
@@ -36,7 +38,17 @@ public enum CanvasSecurityPolicy {
   public static func isInternalAsset(_ url: URL) -> Bool {
     guard url.scheme?.lowercased() == shellScheme else { return false }
     guard let host = url.host?.lowercased() else { return false }
-    return host == shellHost || host == attachmentHost
+    return host == shellHost || host == attachmentHost || host == generatedImageHost
+  }
+
+  /// The stored image name addressed by an internal URL, or nil when the URL
+  /// is not a generated-image request. The name is still checked by the image
+  /// store before any file is read.
+  public static func generatedImageName(from url: URL) -> String? {
+    guard url.scheme?.lowercased() == shellScheme else { return nil }
+    guard url.host?.lowercased() == generatedImageHost else { return nil }
+    let imageName = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
+    return imageName.isEmpty ? nil : imageName
   }
 
   /// The browser-openable URL behind a clicked link, or nil when the link must be

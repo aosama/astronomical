@@ -15,12 +15,16 @@ import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ThinkingEffort } from "./ThinkingEffort";
 import { StallWatchdog } from "./StallWatchdog";
-import { ToolStep } from "./ToolStep";
+import { ToolStep, ToolStepState } from "./ToolStep";
 
 /** How the chat surface discovered its models at startup. */
 export type LoadPhase = "idle" | "loading" | "ready" | "empty" | "failed";
 
 const COMPOSER_FONT_SIZE_STEP = 1;
+/** Extra time before a stall is reported once tools finish: the next model
+ * request may first reload the chat model, which an image tool swaps out, and
+ * a large model can take longer than the stall timeout to load. */
+const MODEL_RELOAD_GRACE_MILLISECONDS = 120_000;
 
 /**
  * Owns the conversation: asks the turn streamer for each answer, keeps the
@@ -52,6 +56,8 @@ export class ChatController {
   private models: ChatModel[] = [];
   private selectedModelID: string | null = null;
   private isStreaming = false;
+  /** Tool calls of the current turn that have started and not yet finished. */
+  private readonly runningToolCallIDs = new Set<string>();
 
   public constructor(init: { client: DaemonClient; streamer: ChatStreamer; bridge: SessionBridge; store: SessionStore }) {
     this.client = init.client;
@@ -248,13 +254,31 @@ export class ChatController {
       await this.settleActiveStream();
       await this.store.flushPendingSave().catch(() => undefined);
     }
+    const generatedImageNames = await this.generatedImageNamesOf(id, isDeletingActiveSession);
     await this.store.delete(id);
+    if (generatedImageNames.length > 0) {
+      // The conversation is already gone; an image left behind by a failed
+      // delete costs disk space but must not undo or block the delete.
+      await this.bridge.deleteGeneratedImages(generatedImageNames).catch(() => undefined);
+    }
     if (isDeletingActiveSession) {
       this.store.startNew();
       this.log.reset();
       this.failure = null;
     }
     this.publish();
+  }
+
+  /** The images a conversation's tool steps generated, so they are deleted
+   * with it. The page reads them because it owns the conversation format; a
+   * conversation that is not open is loaded to find them. */
+  private async generatedImageNamesOf(id: string, isActiveSession: boolean): Promise<string[]> {
+    const messages = isActiveSession
+      ? this.log.messages
+      : await this.bridge.load(id).then((document) => (document != null ? document.messages : [])).catch(() => []);
+    return messages.flatMap((message) =>
+      message.toolSteps.flatMap((toolStep) => (toolStep.generatedImageName != null ? [toolStep.generatedImageName] : [])),
+    );
   }
 
   // MARK: - Streaming
@@ -271,6 +295,7 @@ export class ChatController {
     this.stallFailure = null;
     this.autosave();
     this.publish();
+    this.runningToolCallIDs.clear();
     this.watchdog.start();
     const streamAbort = new AbortController();
     this.activeStreamAbort = streamAbort;
@@ -328,10 +353,17 @@ export class ChatController {
     }
   }
 
-  /** A tool step counts as activity: a slow tool must not look like a stalled
-   * stream, and the row shows the moment the call starts. */
+  /** A tool step counts as activity, and stall detection pauses while any
+   * tool runs (image generation can take longer than the stall timeout); the
+   * row shows the moment the call starts. */
   private ingestToolStep(toolStep: ToolStep): void {
     this.watchdog.activity();
+    if (toolStep.state === ToolStepState.RUNNING) {
+      this.runningToolCallIDs.add(toolStep.toolCallID);
+      this.watchdog.pause();
+    } else if (this.runningToolCallIDs.delete(toolStep.toolCallID) && this.runningToolCallIDs.size === 0) {
+      this.watchdog.resume(MODEL_RELOAD_GRACE_MILLISECONDS);
+    }
     this.log.applyToolStep(toolStep);
     this.autosave();
     this.publish();

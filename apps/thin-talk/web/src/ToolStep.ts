@@ -13,6 +13,16 @@ export const UNFINISHED_TOOL_CALL_RESULT = "The call was stopped before it finis
 /** The label for a call to a tool name the model made up or left empty. */
 export const UNKNOWN_TOOL_LABEL = "Unknown tool";
 
+/** A stored image name exactly as the app's image store produces it: a
+ * lowercase UUID with a `.png` or `.jpg` extension. The store checks the same
+ * pattern before reading a file; checking here as well keeps a damaged or
+ * crafted name out of the transcript markup. */
+const GENERATED_IMAGE_NAME = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(?:png|jpg)$/;
+
+export function isGeneratedImageName(candidate: string): boolean {
+  return GENERATED_IMAGE_NAME.test(candidate);
+}
+
 /**
  * One tool call the model made while answering: what it asked for and what
  * came back. Steps are saved with the assistant message so a reloaded
@@ -36,6 +46,8 @@ export class ToolStep {
   /** Which model request in the turn asked for this call, counting from 0.
    * Replay groups calls by round so the model sees its turn as it happened. */
   public readonly roundIndex: number;
+  /** The stored image the call produced (the image tool), shown in the answer. */
+  public readonly generatedImageName: string | null;
 
   public constructor(init: {
     toolCallID: string;
@@ -45,6 +57,7 @@ export class ToolStep {
     resultText: string;
     state: ToolStepState;
     roundIndex?: number;
+    generatedImageName?: string | null;
   }) {
     this.toolCallID = init.toolCallID;
     this.toolName = init.toolName;
@@ -54,10 +67,13 @@ export class ToolStep {
     this.state = init.state;
     const configuredRoundIndex: number | undefined = init.roundIndex;
     this.roundIndex = configuredRoundIndex != null ? configuredRoundIndex : 0;
+    const configuredImageName: string | null | undefined = init.generatedImageName;
+    this.generatedImageName = configuredImageName != null && isGeneratedImageName(configuredImageName) ? configuredImageName : null;
   }
 
-  public toPlain(): Record<string, string | number> {
+  public toPlain(): Record<string, string | number | null> {
     return {
+      generatedImageName: this.generatedImageName,
       toolCallID: this.toolCallID,
       toolName: this.toolName,
       label: this.label,
@@ -91,6 +107,8 @@ export class ToolStep {
     const state = record["state"] === ToolStepState.SUCCEEDED ? ToolStepState.SUCCEEDED : ToolStepState.FAILED;
     const savedRoundIndex = record["roundIndex"];
     const roundIndex = typeof savedRoundIndex === "number" && Number.isInteger(savedRoundIndex) && savedRoundIndex >= 0 ? savedRoundIndex : 0;
-    return new ToolStep({ toolCallID, toolName, label, argumentsJSON, resultText, state, roundIndex });
+    const savedImageName = record["generatedImageName"];
+    const generatedImageName = typeof savedImageName === "string" ? savedImageName : null;
+    return new ToolStep({ toolCallID, toolName, label, argumentsJSON, resultText, state, roundIndex, generatedImageName });
   }
 }

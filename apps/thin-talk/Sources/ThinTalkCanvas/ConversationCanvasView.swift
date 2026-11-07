@@ -25,6 +25,7 @@ public final class ConversationCanvasView: NSView {
   private let webDirectory: URL
   private let assetRegistry: TranscriptAssetRegistry
   private let sessionFileStore: SessionFileStore
+  private let generatedImageStore: GeneratedImageStore
   private let runtimeConfig: CanvasRuntimeConfig
   private var webView: WKWebView?
   /// The native title bar's reach into the page, in points; nil for a plain
@@ -54,6 +55,7 @@ public final class ConversationCanvasView: NSView {
     self.webDirectory = webDirectory
     self.assetRegistry = assetRegistry
     self.sessionFileStore = sessionFileStore
+    self.generatedImageStore = GeneratedImageStore(directory: sessionFileStore.generatedImagesDirectory)
     self.runtimeConfig = runtimeConfig
     self.titlebarInsetPoints = runtimeConfig.titlebarInset
     super.init(frame: NSRect(x: 0, y: 0, width: 1080, height: 720))
@@ -82,11 +84,12 @@ public final class ConversationCanvasView: NSView {
     // from the bundled web directory. `loadFileURL` cannot be used here
     // because it throws on any URL that is not a `file://` URL.
     let assetSchemeHandler = CanvasAssetSchemeHandler(
-      webDirectory: webDirectory, assetRegistry: assetRegistry)
+      webDirectory: webDirectory, assetRegistry: assetRegistry, generatedImageStore: generatedImageStore)
     configuration.setURLSchemeHandler(
       assetSchemeHandler, forURLScheme: CanvasSecurityPolicy.shellScheme)
     let coordinator = CanvasCoordinator(
       sessionFileStore: sessionFileStore,
+      generatedImageStore: generatedImageStore,
       assetRegistry: assetRegistry,
       webViewProvider: { [weak self] in self?.webView }
     )
@@ -184,16 +187,19 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
   static let messageHandlerName = "thintalk"
 
   private let sessionFileStore: SessionFileStore
+  private let generatedImageStore: GeneratedImageStore
   private let assetRegistry: TranscriptAssetRegistry
   private let webViewProvider: () -> WKWebView?
   private let storeQueue = DispatchQueue(label: "astronomical.thintalk.canvas.store", qos: .userInitiated)
 
   init(
     sessionFileStore: SessionFileStore,
+    generatedImageStore: GeneratedImageStore,
     assetRegistry: TranscriptAssetRegistry,
     webViewProvider: @escaping () -> WKWebView?
   ) {
     self.sessionFileStore = sessionFileStore
+    self.generatedImageStore = generatedImageStore
     self.assetRegistry = assetRegistry
     self.webViewProvider = webViewProvider
   }
@@ -306,12 +312,31 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
         }
         try sessionFileStore.savePreferences(JSONSerialization.data(withJSONObject: preferences))
         return .success("null")
+      case "storeGeneratedImage", "deleteGeneratedImages":
+        return try performGeneratedImageCall(op: op, payloadObject: payloadObject)
       default:
         return .failure(.init(message: "unknown session op: \(op)"))
       }
     } catch {
       return .failure(.init(message: "\(op) failed: \(error)"))
     }
+  }
+
+  /// The generated-image ops, kept apart from the session ops: the store
+  /// checks every image and every name, so the page never chooses a path.
+  private nonisolated func performGeneratedImageCall(op: String, payloadObject: [String: Any]?) throws -> Result<String?, SessionBridgeFailure> {
+    if op == "deleteGeneratedImages" {
+      guard let imageNames = payloadObject?["imageNames"] as? [String] else {
+        return .failure(.init(message: "deleteGeneratedImages requires a list of image names"))
+      }
+      try generatedImageStore.delete(imageNames: imageNames)
+      return .success("null")
+    }
+    guard let encodedImage = payloadObject?["base64"] as? String else {
+      return .failure(.init(message: "storeGeneratedImage requires base64 image data"))
+    }
+    let imageName = try generatedImageStore.save(base64Image: encodedImage)
+    return .success(try encodedJSONString(["imageName": imageName]))
   }
 
   private func settleSessionCall(callID: String, outcome: Result<String?, SessionBridgeFailure>) {

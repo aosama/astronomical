@@ -19,6 +19,31 @@ const TOOL_STEP_OUTCOME_LABELS: Record<ToolStepState, string> = {
   [ToolStepState.FAILED]: "failed",
 };
 
+/** The longest prompt excerpt used in an image's text alternative; a screen
+ * reader reads the whole attribute, and prompts can run to paragraphs. */
+const MAXIMUM_IMAGE_DESCRIPTION_PROMPT_CHARACTERS = 250;
+
+/** The image's text alternative: it says the image was generated and what was
+ * asked for, since nothing describes what was actually drawn. */
+function generatedImageDescription(argumentsJSON: string): string {
+  let prompt: unknown = null;
+  try {
+    const decodedArguments: unknown = JSON.parse(argumentsJSON);
+    prompt = typeof decodedArguments === "object" && decodedArguments !== null ? (decodedArguments as Record<string, unknown>)["prompt"] : null;
+  } catch {
+    prompt = null;
+  }
+  if (typeof prompt !== "string" || prompt.trim().length === 0) {
+    return "Generated image";
+  }
+  const trimmedPrompt = prompt.trim();
+  const promptExcerpt =
+    trimmedPrompt.length > MAXIMUM_IMAGE_DESCRIPTION_PROMPT_CHARACTERS
+      ? `${trimmedPrompt.slice(0, MAXIMUM_IMAGE_DESCRIPTION_PROMPT_CHARACTERS)}…`
+      : trimmedPrompt;
+  return `Generated image: ${promptExcerpt}`;
+}
+
 /** The stable id of one tool-step row, keyed on the message and the call so
  * the transcript and automation agents find the same row across patches. */
 export function toolStepIdentifier(messageID: string, toolCallID: string): string {
@@ -62,7 +87,7 @@ export class Renderer {
       : "";
     const answerBody = this.renderMarkdown(message.markdown);
     const attachments = this.attachmentStripHtml(message.attachments);
-    const toolSteps = this.toolStepsHtml(message);
+    const toolSteps = this.toolStepsHtml(message) + this.generatedImagesHtml(message);
     if (message.role === ChatRole.USER) {
       // The sender label lives inside the user bubble so stacked user turns
       // read as sent messages instead of extra compose fields.
@@ -125,6 +150,30 @@ export class Renderer {
     }
     const toolStepRows = message.toolSteps.map((toolStep) => this.toolStepHtml(message.id, toolStep)).join("");
     return `<div class="tool-steps" data-testid="tool-steps:${this.trust.escapeHtml(message.id)}">${toolStepRows}</div>`;
+  }
+
+  /** The images a message's tool steps generated, in call order. */
+  private generatedImagesHtml(message: TranscriptMessage): string {
+    return message.toolSteps
+      .filter((toolStep) => toolStep.generatedImageName != null)
+      .map((toolStep) => this.generatedImageHtml(toolStep))
+      .join("");
+  }
+
+  /** A generated image is part of the answer, so it is shown outside the
+   * collapsed rows. Its source is the app's own `generated` host; the name was
+   * checked against the stored-name pattern when the step was built. */
+  private generatedImageHtml(toolStep: ToolStep): string {
+    const imageSource = `thintalk-asset://generated/${toolStep.generatedImageName ?? ""}`;
+    if (!this.trust.isAllowedImageSource(imageSource)) {
+      return "";
+    }
+    const imageDescription = this.trust.escapeHtml(generatedImageDescription(toolStep.argumentsJSON));
+    return (
+      `<figure class="generated-image" data-testid="generated-image:${this.trust.escapeHtml(toolStep.toolCallID)}">` +
+      `<img src="${this.trust.escapeHtml(imageSource)}" alt="${imageDescription}" loading="lazy">` +
+      `</figure>`
+    );
   }
 
   private toolStepHtml(messageID: string, toolStep: ToolStep): string {

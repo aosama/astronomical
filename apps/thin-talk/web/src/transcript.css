@@ -155,6 +155,18 @@
   font-size: 12.5px;
 }
 
+.generated-image {
+  margin: 0 0 14px;
+}
+
+.generated-image img {
+  display: block;
+  max-width: min(100%, 512px);
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid rgb(56 64 82 / 55%);
+}
+
 .tool-step__body pre {
   margin: 0;
   white-space: pre-wrap;

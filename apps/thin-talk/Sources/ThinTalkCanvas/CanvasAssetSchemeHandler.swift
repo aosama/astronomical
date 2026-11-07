@@ -1,4 +1,5 @@
 import Foundation
+import ThinTalkCore
 import UniformTypeIdentifiers
 import WebKit
 
@@ -10,12 +11,15 @@ import WebKit
 public final class CanvasAssetSchemeHandler: NSObject, WKURLSchemeHandler {
   private let webDirectory: URL
   private let assetRegistry: TranscriptAssetRegistry
+  private let generatedImageStore: GeneratedImageStore?
   private let fileManager = FileManager()
 
   /// Directories the canvas may read from, keyed by the host that addresses them.
-  public init(webDirectory: URL, assetRegistry: TranscriptAssetRegistry) {
+  /// Without a generated-image store the `generated` host serves nothing.
+  public init(webDirectory: URL, assetRegistry: TranscriptAssetRegistry, generatedImageStore: GeneratedImageStore? = nil) {
     self.webDirectory = webDirectory.standardizedFileURL
     self.assetRegistry = assetRegistry
+    self.generatedImageStore = generatedImageStore
     super.init()
   }
 
@@ -40,6 +44,9 @@ public final class CanvasAssetSchemeHandler: NSObject, WKURLSchemeHandler {
     case CanvasSecurityPolicy.attachmentHost:
       guard let token = CanvasSecurityPolicy.attachmentToken(from: url) else { return nil }
       return assetRegistry.fileURL(forToken: token)
+    case CanvasSecurityPolicy.generatedImageHost:
+      guard let imageName = CanvasSecurityPolicy.generatedImageName(from: url) else { return nil }
+      return generatedImageStore?.fileURL(forImageName: imageName)
     default:
       return nil
     }

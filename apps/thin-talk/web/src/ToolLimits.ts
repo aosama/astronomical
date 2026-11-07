@@ -1,4 +1,4 @@
-import type { ConversationTool } from "./ConversationTool";
+import type { ConversationTool, ToolOutput } from "./ConversationTool";
 
 /** Most tool rounds one assistant turn may run. A model that keeps calling
  * tools without answering is stuck, and each round costs a full model request.
@@ -9,7 +9,8 @@ export const MAXIMUM_TOOL_ROUNDS_PER_TURN = 8;
 /** What a refused call tells the model once the round limit is reached. */
 export const TOOL_ROUND_LIMIT_REASON =
   "The tool limit for this answer has been reached. Do not call any more tools; answer with the information you already have.";
-/** How long one page or host tool may run before it is reported as failed. */
+/** How long one tool may run before it is reported as failed, unless the
+ * tool sets its own limit. */
 export const TOOL_TIMEOUT_MILLISECONDS = 10_000;
 /** The most result text one tool call hands back to the model, so a single
  * large result cannot crowd the conversation out of the context window. */
@@ -24,8 +25,8 @@ export async function executeWithinLimits(
   tool: ConversationTool,
   toolArguments: Record<string, unknown>,
   turnSignal: AbortSignal,
-  timeoutMilliseconds: number = TOOL_TIMEOUT_MILLISECONDS,
-): Promise<string> {
+  timeoutMilliseconds: number = tool.timeoutMilliseconds != null ? tool.timeoutMilliseconds : TOOL_TIMEOUT_MILLISECONDS,
+): Promise<ToolOutput> {
   // A tool is never started after the user stopped the turn, even one that
   // would finish at once.
   if (turnSignal.aborted) {
@@ -37,11 +38,12 @@ export async function executeWithinLimits(
   // listener behind on the turn's signal.
   const watcherCleanup = new AbortController();
   try {
-    const resultText = await Promise.race([
+    const toolResult = await Promise.race([
       tool.execute(toolArguments, toolSignal),
       rejectWhenAborted(toolSignal, tool.label, timeoutSignal, watcherCleanup.signal),
     ]);
-    return capToolResult(resultText);
+    const toolOutput: ToolOutput = typeof toolResult === "string" ? { text: toolResult } : toolResult;
+    return { ...toolOutput, text: capToolResult(toolOutput.text) };
   } finally {
     watcherCleanup.abort();
   }

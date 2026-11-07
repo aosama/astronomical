@@ -43,3 +43,10 @@ test("should_label_a_nameless_call_as_unknown_and_survive_unencodable_arguments"
   assert.equal(startedStep.label, UNKNOWN_TOOL_LABEL);
   assert.equal(startedStep.argumentsJSON, "{}");
 });
+
+test("should_record_the_generated_image_name_it_is_given", () => {
+  const storedName = "0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.jpg";
+  assert.equal(tracker().finished("call-1", "generate_image", { content: [] }, false, storedName).generatedImageName, storedName);
+  assert.equal(tracker().finished("call-2", "generate_image", { content: [] }, false, "../x.png").generatedImageName, null);
+  assert.equal(tracker().finished("call-3", "generate_image", { content: [] }, false).generatedImageName, null);
+});

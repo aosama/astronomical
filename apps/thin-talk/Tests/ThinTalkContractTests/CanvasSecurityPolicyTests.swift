@@ -77,4 +77,11 @@ final class CanvasSecurityPolicyTests: XCTestCase {
     XCTAssertNil(
       CanvasSecurityPolicy.attachmentToken(from: URL(string: "thintalk-asset://attachment/")!))
   }
-}
+
+  func test_should_address_generated_images_only_through_the_generated_host() throws {
+    let generatedURL = try XCTUnwrap(URL(string: "thintalk-asset://generated/abc.png"))
+    XCTAssertTrue(CanvasSecurityPolicy.isInternalAsset(generatedURL))
+    XCTAssertEqual(CanvasSecurityPolicy.generatedImageName(from: generatedURL), "abc.png")
+    XCTAssertNil(CanvasSecurityPolicy.generatedImageName(from: try XCTUnwrap(URL(string: "thintalk-asset://shell/abc.png"))))
+    XCTAssertNil(CanvasSecurityPolicy.generatedImageName(from: try XCTUnwrap(URL(string: "https://generated/abc.png"))))
+  }}

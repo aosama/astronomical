@@ -9,17 +9,21 @@ export class ModelCatalogEntry {
   public readonly inputModalities: readonly string[];
   public readonly supportedEndpoints: readonly string[] | null;
   public readonly supportsToolCalls: boolean;
+  /** Whether the model makes images (an image-generation model). */
+  public readonly generatesImages: boolean;
 
   public constructor(init: {
     id: string;
     inputModalities: readonly string[];
     supportedEndpoints: readonly string[] | null;
     supportsToolCalls?: boolean;
+    generatesImages?: boolean;
   }) {
     this.id = init.id;
     this.inputModalities = init.inputModalities;
     this.supportedEndpoints = init.supportedEndpoints;
     this.supportsToolCalls = init.supportsToolCalls === true;
+    this.generatesImages = init.generatesImages === true;
   }
 
   public get supportsChat(): boolean {
@@ -45,6 +49,7 @@ export class ModelCatalogEntry {
     // Only an explicit `true` counts: a model that does not say it can call
     // tools is offered none, so it never sees declarations it cannot follow.
     const supportsToolCalls = record["supports_tool_calls"] === true;
-    return new ModelCatalogEntry({ id: record["id"], inputModalities, supportedEndpoints, supportsToolCalls });
+    const generatesImages = supportedEndpoints !== null && supportedEndpoints.includes("/v1/images/generations");
+    return new ModelCatalogEntry({ id: record["id"], inputModalities, supportedEndpoints, supportsToolCalls, generatesImages });
   }
 }

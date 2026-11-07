@@ -160,7 +160,7 @@ export class TranscriptView {
       message.reasoning,
       message.state,
       message.attachments.map((attachment) => [attachment.id, attachment.assetURL, attachment.label]),
-      message.toolSteps.map((toolStep) => [toolStep.toolCallID, toolStep.label, toolStep.argumentsJSON, toolStep.resultText, toolStep.state]),
+      message.toolSteps.map((toolStep) => [toolStep.toolCallID, toolStep.label, toolStep.argumentsJSON, toolStep.resultText, toolStep.state, toolStep.generatedImageName]),
     ]);
   }
 
