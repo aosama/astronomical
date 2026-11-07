@@ -55,7 +55,7 @@ repository = "https://github.com/aosama/astronomical"
 # Bare "1.101" (no prerelease suffix) — cargo rejects a "-nightly" suffix
 # here, and semver would rank the prerelease below the release anyway. The
 # exact compiler remains pinned by rust-toolchain.toml
-# (nightly-2026-10-18); this field only records the major.minor floor.
+# (nightly-2026-11-07); this field only records the major.minor floor.
 rust-version = "1.101"
 version = "0.2.91"
 
