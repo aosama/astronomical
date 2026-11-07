@@ -17,10 +17,10 @@ export interface Journey {
  * preferences before the client reads them. */
 export function bootJourney(
   previous?: Journey,
-  options?: { models?: unknown[]; seedPreferences?: unknown },
+  options?: { models?: unknown[]; seedPreferences?: unknown; titlebarInset?: number },
 ): Journey {
   installDom();
-  installConfig(DAEMON_BASE_URL);
+  installConfig(DAEMON_BASE_URL, options?.titlebarInset);
   const previousHost: FakeSessionHost | undefined = previous?.host;
   const host = previousHost != null
     ? previousHost

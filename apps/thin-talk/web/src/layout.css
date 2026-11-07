@@ -8,6 +8,27 @@
   height: 100%;
 }
 
+/*
+ * Under a native toolbar the window's title bar strip overlays the top of the
+ * page and takes the clicks there (that strip is what drags the window), so
+ * both columns start below it. Their backgrounds still run to the top edge, so
+ * the frame reads as one surface the way native sidebar apps do.
+ */
+#sidebar,
+#main {
+  padding-top: var(--titlebar-inset, 0px);
+}
+
+/* The toolbar and menu bar carry the name and New Chat, so the page's own
+   header would only repeat them. */
+#app.app--native-titlebar .sidebar__header {
+  display: none;
+}
+
+#app.app--sidebar-hidden #sidebar {
+  display: none;
+}
+
 #main {
   display: flex;
   flex-direction: column;

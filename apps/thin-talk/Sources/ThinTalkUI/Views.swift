@@ -9,10 +9,19 @@ import ThinTalkCore
 public struct RootView: View {
   private let applicationIdentity: ThinTalkApplicationIdentity
   private let zoomController: CanvasZoomController?
+  private let commandController: CanvasCommandController?
+  private let titlebarInset: Int?
 
-  public init(applicationIdentity: ThinTalkApplicationIdentity, zoomController: CanvasZoomController? = nil) {
+  public init(
+    applicationIdentity: ThinTalkApplicationIdentity,
+    zoomController: CanvasZoomController? = nil,
+    commandController: CanvasCommandController? = nil,
+    titlebarInset: Int? = nil
+  ) {
     self.applicationIdentity = applicationIdentity
     self.zoomController = zoomController
+    self.commandController = commandController
+    self.titlebarInset = titlebarInset
   }
 
   public var body: some View {
@@ -20,9 +29,15 @@ public struct RootView: View {
       CanvasWebView(
         webDirectory: webDirectory,
         applicationIdentity: applicationIdentity,
-        zoomController: zoomController
+        zoomController: zoomController,
+        commandController: commandController,
+        titlebarInset: titlebarInset
       )
       .frame(maxWidth: .infinity, maxHeight: .infinity)
+      // The page runs under the transparent title bar and pads itself by
+      // `titlebarInset`; respecting the safe area as well would push it down
+      // twice and leave the window's grey background showing in the strip.
+      .ignoresSafeArea()
     } else {
       CanvasUnavailableView()
     }
@@ -35,15 +50,19 @@ private struct CanvasWebView: NSViewRepresentable {
   let webDirectory: URL
   let applicationIdentity: ThinTalkApplicationIdentity
   let zoomController: CanvasZoomController?
+  let commandController: CanvasCommandController?
+  let titlebarInset: Int?
 
   func makeNSView(context: Context) -> ConversationCanvasView {
     let canvas = ConversationCanvasView(
       webDirectory: webDirectory,
       assetRegistry: TranscriptAssetRegistry(),
       sessionFileStore: SessionFileStore(directory: Self.stateDirectory(for: applicationIdentity)),
-      runtimeConfig: CanvasRuntimeConfig(applicationIdentity: applicationIdentity)
+      runtimeConfig: CanvasRuntimeConfig(
+        applicationIdentity: applicationIdentity, titlebarInset: titlebarInset)
     )
     canvas.zoomController = zoomController
+    canvas.commandController = commandController
     return canvas
   }
 

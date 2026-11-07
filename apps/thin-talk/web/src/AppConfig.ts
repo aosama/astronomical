@@ -1,3 +1,5 @@
+import { validTitlebarInset } from "./WindowChrome";
+
 /**
  * The runtime configuration the Swift host injects before the bundle runs: where
  * the daemon listens and which instance this window belongs to. The page
@@ -8,15 +10,21 @@ export class AppConfig {
   public readonly daemonBaseURL: string;
   public readonly expectedChannel: string;
   public readonly expectedStateDirectory: string;
+  /** Points of native title bar and toolbar the host draws over the top of the
+   * page. Content starts below it, because the native strip takes the clicks
+   * that land there (it is what drags the window). Zero for a plain title bar. */
+  public readonly titlebarInset: number;
 
   public constructor(init: {
     daemonBaseURL: string;
     expectedChannel: string;
     expectedStateDirectory: string;
+    titlebarInset?: number;
   }) {
     this.daemonBaseURL = init.daemonBaseURL;
     this.expectedChannel = init.expectedChannel;
     this.expectedStateDirectory = init.expectedStateDirectory;
+    this.titlebarInset = init.titlebarInset ?? 0;
   }
 
   /** What this window calls itself. Mirrors ThinTalkApplicationIdentity.windowTitle,
@@ -44,7 +52,21 @@ export class AppConfig {
     if (typeof expectedStateDirectory !== "string" || expectedStateDirectory.length === 0) {
       throw new Error("the injected configuration has no state directory");
     }
-    return new AppConfig({ daemonBaseURL, expectedChannel, expectedStateDirectory });
+    const titlebarInset = AppConfig.titlebarInsetFrom(record["titlebarInset"]);
+    return new AppConfig({ daemonBaseURL, expectedChannel, expectedStateDirectory, titlebarInset });
+  }
+
+  /** An absent inset means a plain title bar (zero); a present one must pass
+   * the same check the host's later inset updates do. */
+  private static titlebarInsetFrom(candidate: unknown): number {
+    if (candidate === undefined) {
+      return 0;
+    }
+    const titlebarInset = validTitlebarInset(candidate);
+    if (titlebarInset === null) {
+      throw new Error("the injected title bar inset is not a valid number of points");
+    }
+    return titlebarInset;
   }
 
   private static isLoopbackHTTP(candidate: string): boolean {

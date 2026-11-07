@@ -45,8 +45,8 @@ public final class CanvasZoomController {
   }
 
   /// Runs the zoom a key-down asks for and says whether it was one. The canvas
-  /// answers these itself because the chat window hosted by the menu application
-  /// has no View menu to fall back on.
+  /// answers these itself so ⌘+ works (see isZoomInKeyAlias) and each keystroke
+  /// zooms exactly once.
   func performZoomKey(keyCharacters: String?, modifierFlags: NSEvent.ModifierFlags) -> Bool {
     if Self.isZoomInKeyAlias(keyCharacters: keyCharacters, modifierFlags: modifierFlags) {
       zoomIn()
@@ -83,7 +83,7 @@ public final class CanvasZoomController {
   /// True when a key-down is one of the Command-only zoom-in spellings: bare
   /// ⌘= or the shifted ⌘+ (and the numpad plus) users actually press.
   ///
-  /// The View menu registers Zoom In on "=", but SwiftUI resolves menu key
+  /// The View menu registers Zoom In on "=", but AppKit resolves menu key
   /// equivalents against the event's charactersIgnoringModifiers — which for
   /// Shift+⌘+= is "=" and can never be "+" — so the advertised ⌘+ keystroke
   /// could only ever reach the canvas alias. The alias therefore owns both

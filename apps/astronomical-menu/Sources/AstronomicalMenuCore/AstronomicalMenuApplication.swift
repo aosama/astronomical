@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import ThinTalkUI
 
 @MainActor
 public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopoverDelegate {
@@ -20,7 +21,8 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
   private lazy var loginItemRegistrar: any LoginItemRegistering = SystemLoginItemRegistrar()
   private lazy var chatWindowController = ChatWindowController(
-    thinTalkIdentity: ChatLaunchIdentity.chatIdentity(from: applicationIdentity))
+    thinTalkIdentity: ChatLaunchIdentity.chatIdentity(from: applicationIdentity),
+    hostMenuActions: chatMenuActions())
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
@@ -211,6 +213,27 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       }
       telemetryStore.refreshNow()
     }
+  }
+
+  /// The app-level commands the chat window's menu bar offers. Check for
+  /// Updates appears only where this build updates itself (never the App Store
+  /// build), matching the popover's own update controls.
+  private func chatMenuActions() -> ThinTalkHostMenuActions {
+    let checkForUpdatesAction: (@MainActor () -> Void)?
+    if applicationUpdateController.supportsUserUpdateControls {
+      checkForUpdatesAction = { [weak self] in self?.checkForUpdates() }
+    } else {
+      checkForUpdatesAction = nil
+    }
+    // The bundle's own name, so the Development build's menus say
+    // "Quit Astronomical Development" like its menu bar title does.
+    let bundleApplicationName =
+      Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Astronomical"
+    return ThinTalkHostMenuActions(
+      applicationName: bundleApplicationName,
+      checkForUpdates: checkForUpdatesAction,
+      openObservatory: { [weak self] in self?.openObservatory() },
+      helpURL: URL(string: "https://aosama.github.io/astronomical/"))
   }
 
   // Reopening chat after a close restores the accessory posture the menu

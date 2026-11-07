@@ -27,6 +27,9 @@ public final class ConversationCanvasView: NSView {
   private let sessionFileStore: SessionFileStore
   private let runtimeConfig: CanvasRuntimeConfig
   private var webView: WKWebView?
+  /// The native title bar's reach into the page, in points; nil for a plain
+  /// title bar. Kept so every zoom change can re-send it in CSS pixels.
+  private var titlebarInsetPoints: Int?
   // WebKit does not retain scheme handlers, so the view owns this one for as
   // long as the web view lives.
   private var assetSchemeHandler: CanvasAssetSchemeHandler?
@@ -35,6 +38,11 @@ public final class ConversationCanvasView: NSView {
   /// view once it exists.
   public var zoomController: CanvasZoomController? {
     didSet { zoomController?.attach(self) }
+  }
+  /// Receives the menu bar's and toolbar's conversation commands, registered
+  /// the same way as the zoom controller.
+  public var commandController: CanvasCommandController? {
+    didSet { commandController?.attach(self) }
   }
 
   public init(
@@ -47,6 +55,7 @@ public final class ConversationCanvasView: NSView {
     self.assetRegistry = assetRegistry
     self.sessionFileStore = sessionFileStore
     self.runtimeConfig = runtimeConfig
+    self.titlebarInsetPoints = runtimeConfig.titlebarInset
     super.init(frame: NSRect(x: 0, y: 0, width: 1080, height: 720))
   }
 
@@ -118,19 +127,45 @@ public final class ConversationCanvasView: NSView {
   public func adjustPageZoom(by factor: CGFloat) {
     guard let webView else { return }
     webView.pageZoom = CanvasZoomController.clampedPageZoom(current: webView.pageZoom, factor: factor)
+    resendTitlebarInset()
   }
 
   public func resetPageZoom() {
     webView?.pageZoom = CanvasZoomController.defaultPageZoom
+    resendTitlebarInset()
   }
 
-  /// Answers the zoom keys (⌘= and ⌘+, ⌘-, ⌘0) before the menu lookup. The chat
-  /// window hosted by the menu application has no View menu, so this is the only
-  /// path those keys have there. In the standalone app it also means one zoom
-  /// step per keystroke, because the View menu never sees a key answered here.
-  /// SwiftUI resolves menu key equivalents against charactersIgnoringModifiers,
-  /// so the View menu's "=" item can never answer ⌘+ itself. Every other key
-  /// equivalent falls through so the web view and the menu keep their shortcuts.
+  // MARK: - Title bar inset
+
+  /// Records a new title bar height and passes it to the page.
+  public func applyTitlebarInset(points insetPoints: Int) {
+    titlebarInsetPoints = insetPoints
+    resendTitlebarInset()
+  }
+
+  /// Zoom scales the page's CSS pixels but not the native strip, so the page's
+  /// inset is restated at the new zoom; a plain title bar has nothing to send.
+  private func resendTitlebarInset() {
+    guard let webView, let titlebarInsetPoints else { return }
+    webView.evaluateJavaScript(
+      CanvasPageCommand.titlebarInsetScript(insetPoints: titlebarInsetPoints, pageZoom: webView.pageZoom),
+      completionHandler: nil)
+  }
+
+  // MARK: - Page commands
+
+  /// Delivers one menu or toolbar command to the page. A page that has not
+  /// booted yet ignores it; see `CanvasPageCommand.scriptSource`.
+  public func runPageCommand(_ pageCommand: CanvasPageCommand) {
+    webView?.evaluateJavaScript(pageCommand.scriptSource, completionHandler: nil)
+  }
+
+  /// Answers the zoom keys (⌘= and ⌘+, ⌘-, ⌘0) before the menu lookup, so each
+  /// keystroke zooms exactly one step: the View menu never sees a key answered
+  /// here. AppKit matches menu key equivalents against the unshifted character,
+  /// so the View menu's "=" item can never answer ⌘+ itself; the canvas does.
+  /// Every other key equivalent falls through so the web view and the menu keep
+  /// their shortcuts.
   public override func performKeyEquivalent(with event: NSEvent) -> Bool {
     if let zoomController,
       zoomController.performZoomKey(

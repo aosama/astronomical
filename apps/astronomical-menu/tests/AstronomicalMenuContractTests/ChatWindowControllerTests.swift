@@ -43,6 +43,51 @@ final class ChatWindowControllerTests: XCTestCase {
     XCTAssertFalse(canvas.performKeyEquivalent(with: try commandKeyEvent("j")))
   }
 
+  /// While chat is open the app is a regular app with a menu bar; without the
+  /// conversation's menus the bar held only the Apple menu, and ⌘V had no Edit
+  /// menu to reach the message field through.
+  func test_should_install_the_conversation_menu_bar_when_chat_opens() throws {
+    try bootstrap()
+    defer { cleanup() }
+
+    showChat()
+
+    let mainMenu = try XCTUnwrap(NSApp.mainMenu)
+    XCTAssertEqual(
+      mainMenu.items.map(\.title),
+      ["Astronomical", "File", "Edit", "View", "Conversation", "Window", "Help"])
+    let pasteItem = try XCTUnwrap(mainMenu.item(withTitle: "Edit")?.submenu?.item(withTitle: "Paste"))
+    XCTAssertEqual(pasteItem.keyEquivalent, "v")
+  }
+
+  /// The menu bar outlives the chat window, so closing chat puts back the
+  /// menu from before; another window must never show the conversation menus.
+  func test_should_put_the_previous_menu_bar_back_when_chat_closes() throws {
+    try bootstrap()
+    defer { cleanup() }
+    let menuBeforeChat = NSMenu(title: "Before chat")
+    NSApp.mainMenu = menuBeforeChat
+
+    showChat()
+    XCTAssertNotNil(NSApp.mainMenu?.item(withTitle: "Conversation"))
+    try XCTUnwrap(chatWindow()).close()
+
+    XCTAssertTrue(NSApp.mainMenu === menuBeforeChat)
+  }
+
+  func test_should_frame_the_chat_window_like_a_native_mac_window() throws {
+    try bootstrap()
+    defer { cleanup() }
+
+    showChat()
+
+    let window = try XCTUnwrap(chatWindow())
+    XCTAssertTrue(window.styleMask.contains(.fullSizeContentView))
+    XCTAssertEqual(window.titleVisibility, .hidden)
+    XCTAssertNotNil(window.toolbar)
+    XCTAssertEqual(window.tabbingMode, .disallowed)
+  }
+
   private func findCanvas(in view: NSView) -> ConversationCanvasView? {
     if let canvas = view as? ConversationCanvasView { return canvas }
     for childView in view.subviews {

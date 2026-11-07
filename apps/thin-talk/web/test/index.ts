@@ -17,3 +17,4 @@ import "./previewBridgeShim.test";
 import "./copyAnswer.test";
 import "./transcriptRenderSkip.test";
 import "./attachmentTrust.test";
+import "./hostCommand.test";

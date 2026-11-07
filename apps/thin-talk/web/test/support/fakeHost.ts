@@ -11,6 +11,8 @@ export class FakeSessionHost {
   private preferences: unknown = null;
   private nextIdentifier = 1;
   public readonly receivedRequests: SessionBridgeRequest[] = [];
+  /** Every `action` envelope the page posted (copy, openExternal), in order. */
+  public readonly receivedActions: Record<string, unknown>[] = [];
 
   public constructor(
     private readonly resolveCall: (callId: string, payload: unknown) => void,
@@ -33,6 +35,10 @@ export class FakeSessionHost {
       return;
     }
     const record = payload as Record<string, unknown>;
+    if (record["kind"] === "action") {
+      this.receivedActions.push(record);
+      return;
+    }
     if (record["kind"] !== "sessionCall") {
       return;
     }
