@@ -4,45 +4,54 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.92</title>
-            <pubDate>Sat, 07 Nov 2026 18:10:53 -0500</pubDate>
-            <sparkle:version>2139</sparkle:version>
-            <sparkle:shortVersionString>0.2.92</sparkle:shortVersionString>
+            <title>0.2.93</title>
+            <pubDate>Sun, 08 Nov 2026 14:09:48 -0500</pubDate>
+            <sparkle:version>2161</sparkle:version>
+            <sparkle:shortVersionString>0.2.93</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[# Astronomical 0.2.92
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.93
 
-Thin Talk, the chat in Astronomical, can now use tools, see the images it makes, and take new messages while it answers.
+### Meet Astro in Thin Talk
 
-## What changed
+Thin Talk now opens with Astro for anyone meeting it for the first time: a short welcome made for ages 8 to 18 that asks for a nickname (kept only on this Mac), offers an Explorer or Pilot style, downloads a chat model once if none is installed, and teaches Astro a first skill when you drop a card on it. Empty chats become Astro's home, and conversations show Astro's face and skill tags, tool steps as skill moments, Draw / Look / Read buttons, and chats coloured by skill in the sidebar. View > Show or Hide Astro brings back the classic look, and View > Meet Astro Again replays the welcome.
 
-**Thin Talk chat**
-- Every reply runs through an agent loop, so the model can call tools and use the results in its answer (#1886, #1887).
-- Tools: the current time, image generation with your local image model, reading a file or describing an image you choose, and searching your past conversations. Tools that touch your files ask first, each time (#1887, #1888, #1889).
-- A chat model that can see images is shown the images it generates, so it can describe them and spot mistakes (#1891).
-- You can keep typing while Thin Talk answers, and long conversations are trimmed to fit the model's context window (#1890).
-- The window uses the native Mac frame and menu bar (#1884).
-- Right-click a conversation to rename or delete it, drag the sidebar edge to resize it, and text is larger. Opening an old conversation no longer reorders the list (#1891).
+### Enhancements
 
-**Menu**
-- The Residency line in the status popover always fits on one line (#1892).
+- Thin Talk no longer caps thinking: the thinking-level control is gone and the model thinks as long as it needs.
+- Choose which image model draws pictures in Thin Talk.
+- The 4-bit FLUX.2 Klein build is supported and is the Library's Pictures pick.
+- The Library's Get started picks are grouped by job, with a More models page and download sizes.
+- `validate config` explains what each `models` entry does and which installed model it applies to.
+- `respond`, `embed` and `models` entries accept a full Hugging Face ID such as `organization/model`.
+- Small Macs are never refused a model because of their memory size.
 
-**Reproducible answers**
-- A request with a `seed` now gives the same answer whether the SSD-streaming (paged) engine or the resident engine runs it, and no longer varies with what the paged engine had warmed up (#1879).
+### Bug fixes
 
-## Compatibility
+- Downloads that include a zero-byte file now finish.
+- A failed download no longer blocks other models' downloads, even after a restart.
+- The Library's Download button stays usable after another model's download failed.
+- Publishing a model no longer leaves empty hidden folders behind, and folders left by earlier versions are cleared at startup.
+- Show in Finder in the Library opens Finder.
+- Lowering the memory limit below a loaded image model's needs is refused instead of crashing the worker.
+- The worker is relaunched if it exits during a memory change, and status reflects it.
+- Changing the memory limit with no model loaded no longer stops the next image model from loading.
+- The menu popover no longer shows a spinner that never stops.
 
-- Requires macOS 14 or later on Apple silicon.
-- Your saved conversations and settings are kept.
+### Thanks
 
-## Distribution
+Thank you to @charlesberret for reporting the download and model-ID problems fixed in this release (#1896, #1897, #1898).
 
-- The app and disk image are signed with a Developer ID certificate, notarized by Apple and stapled. Updates arrive through the signed Sparkle feed.
+### Compatibility
+
+macOS 14.0 or later on Apple Silicon. Your configuration, conversations, preferences and installed models carry over unchanged. Thin Talk shows Astro's welcome once after the update; you can skip it or hide Astro from the View menu.
+
+This release is signed with a Developer ID, notarized by Apple, and delivered through GitHub and the in-app updater.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.92/Astronomical-0.2.92-macOS-arm64.dmg" length="20191706" type="application/octet-stream" sparkle:edSignature="6nKIUji9hybMlD/DDhE1bnz7bNEPb/7pVgGGBiixBpi8HPZ7QlwgGURP1luudz135euyWcw5M2zM7aPXxY2pAw=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.93/Astronomical-0.2.93-macOS-arm64.dmg" length="20479437" type="application/octet-stream" sparkle:edSignature="93hStFv57p+K7+xTQ09wJLNxieY/mwuoJprUbvEJqL4HEyYOYxZvUKiJNz3Mlf2ylqJLnLF4YBfyumJt7aEwCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: H+L965Er8d3eyqHNAG6bYA5rQ0nTOJsSBTuktku9h/H4i8TY30XKStztUCBOUKIPuEo9YFxLJ1ut7aFdmBVoCQ==
-length: 2834
+edSignature: Xy2aszefLnKr9Hhuvi+F89o/5q2KmeZy+/4VyTHNAB9fjYkLTaA0h4WTxFv/RwmH1Cac7D+DTFZ9wsX5ctxrBw==
+length: 3790
 -->
