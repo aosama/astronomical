@@ -162,7 +162,7 @@ pub use astronomical_memory_policy::residency::{
 };
 pub use astronomical_memory_policy::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
-    machine_ceiling_from_physical_ram_bytes,
+    hardware_bound_model_floor_ceiling_bytes, machine_ceiling_from_physical_ram_bytes,
 };
 pub use astronomical_memory_policy::vocabulary::{MemoryAdmissionDecision, MemoryBoundary};
 pub use utilization::MemoryCeilingUtilization;

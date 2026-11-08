@@ -9,8 +9,8 @@ use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationFailureReason, ChatGenerationOutput, ExpertMemoryMode,
     RequestId, WorkerEvent,
 };
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 pub(crate) struct ScriptedChatProcessor {
     emits_parallel_tool_calls: bool,
     prompt_token_count: usize,
@@ -236,6 +236,10 @@ pub(crate) struct ScriptedChatEngine {
     pub(super) maximum_allocator_cache_memory_limit_bytes: u64,
     idle_mlx_memory_telemetry: Option<MlxMemoryTelemetry>,
     scripted_replacement_required_reason: Option<String>,
+    /// Floor reported at load; 1 byte unless a test needs a model larger than its ceiling.
+    load_floor_bytes: u64,
+    /// Every live ceiling the worker asked this engine to adopt, in order.
+    pub(crate) adopted_ceilings: Arc<Mutex<Vec<u64>>>,
 }
 
 impl ScriptedChatEngine {
@@ -286,7 +290,15 @@ impl ScriptedChatEngine {
             maximum_allocator_cache_memory_limit_bytes: u64::MAX,
             idle_mlx_memory_telemetry: None,
             scripted_replacement_required_reason: None,
+            load_floor_bytes: 1,
+            adopted_ceilings: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Scripts the floor this engine reports when it loads.
+    pub(crate) fn with_load_floor_bytes(mut self, load_floor_bytes: u64) -> Self {
+        self.load_floor_bytes = load_floor_bytes;
+        self
     }
 
     pub(super) fn with_idle_mlx_memory_telemetry(
@@ -376,7 +388,9 @@ impl InferenceEngine for ScriptedChatEngine {
     type Request = ScriptedInferenceRequest;
 
     async fn load(&mut self) -> Result<EngineLoadResult, InferenceEngineError> {
-        Ok(EngineLoadResult::new().with_expert_memory_mode(self.initial_expert_memory_mode))
+        Ok(EngineLoadResult::new()
+            .with_expert_memory_mode(self.initial_expert_memory_mode)
+            .with_minimum_mlx_memory_ceiling_bytes(self.load_floor_bytes))
     }
 
     async fn start_generation(
@@ -450,6 +464,10 @@ impl InferenceEngine for ScriptedChatEngine {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<MlxMemoryLimitAdjustment, InferenceEngineError> {
+        self.adopted_ceilings
+            .lock()
+            .expect("the adopted-ceiling record should not be poisoned")
+            .push(requested_mlx_memory_ceiling_bytes);
         if let Some(rejection_reason) = &self.scripted_replacement_required_reason
             && requested_mlx_memory_ceiling_bytes < self.maximum_allocator_cache_memory_limit_bytes
         {

@@ -379,4 +379,79 @@ async fn should_report_a_bounded_actionable_image_engine_load_failure() {
     close_worker(commands, worker).await;
 }
 
+// A loaded model whose floor is above a hardware-set ceiling is served at its
+// floor; one under a user-configured ceiling is not (#1902). These live with
+// the image journeys because they share the scripted runtime factory.
+
+/// Loads one scripted chat model reporting `load_floor_bytes` into a worker
+/// whose machine and effective ceilings are given, and returns every ceiling
+/// the loaded engine was asked to adopt during the load.
+async fn ceilings_adopted_while_loading(
+    machine_ceiling_bytes: u64,
+    effective_ceiling_bytes: u64,
+    load_floor_bytes: u64,
+) -> Vec<u64> {
+    let chat_engine = ScriptedChatEngine::new().with_load_floor_bytes(load_floor_bytes);
+    let adopted_ceilings = Arc::clone(&chat_engine.adopted_ceilings);
+    let worker = crate::EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+        ScriptedRuntimeFactory::new(vec![Ok(ScriptedRuntime::autoregressive(
+            ScriptedChatProcessor::new(),
+            chat_engine,
+            crate::EnginePlacement::CompleteResidencyFits,
+        ))]),
+        machine_ceiling_bytes,
+        effective_ceiling_bytes,
+    );
+    let (mut events, mut commands, worker_task) = start_worker(worker).await;
+    let _idle = next_event(&mut events).await;
+    commands
+        .send_command(&WorkerCommand::SwapModel {
+            model_directory: "/models/chat".to_owned(),
+            model_configuration: chat_support::worker_model_configuration("example/scripted-chat"),
+        })
+        .await
+        .expect("chat swap");
+    // The raise happens before the swap is announced, so the announcement
+    // proves the record below is complete.
+    while !matches!(
+        next_event(&mut events).await,
+        WorkerEvent::ModelSwapped { .. }
+    ) {}
+    let adopted = lock(&adopted_ceilings).clone();
+    close_worker(commands, worker_task).await;
+    adopted
+}
+
+#[tokio::test]
+async fn should_serve_a_model_at_its_floor_when_the_hardware_sets_the_ceiling() {
+    // The Mac's own memory (8,000 bytes here) is the ceiling and the model
+    // needs 9,000: it is served at 9,000 instead of refusing every request.
+    assert_eq!(
+        ceilings_adopted_while_loading(8_000, 8_000, 9_000).await,
+        vec![9_000]
+    );
+}
+
+#[tokio::test]
+async fn should_keep_a_user_configured_ceiling_below_the_model_floor() {
+    // The user chose 4,000 on an 8,000-byte machine; that limit is theirs.
+    assert!(
+        ceilings_adopted_while_loading(8_000, 4_000, 6_000)
+            .await
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn should_not_touch_the_ceiling_when_the_floor_fits_under_it() {
+    for load_floor_bytes in [1, 7_999, 8_000] {
+        assert!(
+            ceilings_adopted_while_loading(8_000, 8_000, load_floor_bytes)
+                .await
+                .is_empty(),
+            "a {load_floor_bytes}-byte floor fits under an 8,000-byte ceiling"
+        );
+    }
+}
+
 mod support;

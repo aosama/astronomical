@@ -109,6 +109,8 @@ where
             engine_load_result.is_neural_engine_preparation_running();
         self.unsent_neural_engine_prefill_event = engine_load_result.neural_engine_prefill_event();
         self.loaded_runtime = Some(LoadedRuntime::Autoregressive(replacement_model));
+        self.serve_loaded_model_at_its_floor_when_hardware_bound()
+            .await;
         // The gate already proved complete residency fits at the effective
         // ceiling, and the promotion runtime was built by the resident
         // selection, so the lifecycle records the promotion itself.

@@ -154,6 +154,51 @@ where
         }
     }
 
+    /// Serves the just-loaded model at its floor when the hardware, not the
+    /// user, set a ceiling below that floor (#1902).
+    ///
+    /// Engines report their floor at load and size every request against the
+    /// ceiling they were given, so without this a dense model larger than an
+    /// 8 GB Mac's wired budget loads and then refuses even a one-token request.
+    /// Only the loaded engine is raised: the factory keeps the hardware
+    /// ceiling, so the next model is planned against the machine again. A
+    /// raise the engine cannot adopt is logged and the model keeps its
+    /// original ceiling, exactly as before this rule existed.
+    pub(super) async fn serve_loaded_model_at_its_floor_when_hardware_bound(&mut self) {
+        if self.machine_mlx_memory_ceiling_bytes == 0 {
+            return;
+        }
+        let hardware_mlx_memory_ceiling_bytes = effective_requested_ceiling_after_wired_claim(
+            self.machine_mlx_memory_ceiling_bytes,
+            self.machine_mlx_memory_ceiling_bytes,
+            self.wired_residency_budget_bytes,
+        );
+        let Some(floor_ceiling_bytes) = crate::hardware_bound_model_floor_ceiling_bytes(
+            self.effective_mlx_memory_ceiling_bytes,
+            hardware_mlx_memory_ceiling_bytes,
+            self.minimum_mlx_memory_ceiling_bytes,
+        ) else {
+            return;
+        };
+        let Some(loaded_runtime) = self.loaded_runtime.as_mut() else {
+            return;
+        };
+        match Self::adjust_loaded_runtime_mlx_memory_limit(loaded_runtime, floor_ceiling_bytes)
+            .await
+        {
+            Ok(_) => tracing::info!(
+                hardware_mlx_memory_ceiling_bytes,
+                floor_ceiling_bytes,
+                "serving the loaded model at its floor above the hardware ceiling; macOS pages the rest"
+            ),
+            Err(raise_error) => tracing::warn!(
+                error = %raise_error,
+                floor_ceiling_bytes,
+                "the loaded model could not be raised to its floor; it keeps the hardware ceiling"
+            ),
+        }
+    }
+
     /// Dispatches the live memory-limit change to whichever runtime is loaded.
     async fn adjust_loaded_runtime_mlx_memory_limit(
         loaded_runtime: &mut LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,

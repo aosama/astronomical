@@ -104,3 +104,30 @@ pub const fn plannable_wired_residency_bytes(claimed_wired_residency_budget_byte
         claimed_wired_residency_budget_bytes / 1_000 * METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND,
     )
 }
+
+/// The ceiling to serve a loaded model at when its floor is above the
+/// effective ceiling, or `None` when the effective ceiling stands.
+///
+/// A model's floor is the least memory its leanest execution needs. When the
+/// effective ceiling is the hardware's own bound (physical memory, or Metal's
+/// plannable wired residency), refusing that model would refuse it only
+/// because the Mac is small, which Astronomical never does (#1902): the model
+/// is served at its floor and MLX and macOS page the rest. When the user
+/// configured a limit below the hardware bound, that limit is theirs to keep,
+/// so the ceiling stands and the engine refuses as before. Only the
+/// "nothing fits, not even the floor" outcome changes; requests are still
+/// sized against the effective ceiling, which keeps oversized prefills
+/// refused on large Macs (#1297).
+#[must_use]
+pub const fn hardware_bound_model_floor_ceiling_bytes(
+    effective_mlx_memory_ceiling_bytes: u64,
+    hardware_mlx_memory_ceiling_bytes: u64,
+    model_floor_bytes: u64,
+) -> Option<u64> {
+    let is_hardware_bound = effective_mlx_memory_ceiling_bytes >= hardware_mlx_memory_ceiling_bytes;
+    if is_hardware_bound && model_floor_bytes > effective_mlx_memory_ceiling_bytes {
+        Some(model_floor_bytes)
+    } else {
+        None
+    }
+}
