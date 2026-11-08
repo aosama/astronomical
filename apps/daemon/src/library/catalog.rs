@@ -3,6 +3,7 @@
 mod catalog_endpoint;
 mod catalog_projection;
 mod download_catalog;
+mod reveal_endpoint;
 
 #[cfg(test)]
 mod download_catalog_tests;
@@ -16,3 +17,4 @@ pub use download_catalog::{
     DownloadCatalogFamily, DownloadCatalogRole,
 };
 pub(crate) use download_catalog::{is_valid_huggingface_id, is_valid_immutable_revision};
+pub(crate) use reveal_endpoint::library_reveal_routes;

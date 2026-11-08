@@ -6,6 +6,7 @@ mod config_reload;
 mod copilot_responses_compatibility;
 mod library_catalog;
 mod library_download;
+mod library_reveal;
 mod openai_chat_completion_non_streaming;
 mod openai_chat_endpoint_negative;
 mod openai_chat_streaming;

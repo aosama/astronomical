@@ -8,7 +8,7 @@ pub(crate) mod hub;
 pub(crate) mod model_discovery_refresh;
 
 pub(crate) use catalog::{
-    CatalogEntryProjection, library_catalog_routes, project_catalog_entries,
+    CatalogEntryProjection, library_catalog_routes, library_reveal_routes, project_catalog_entries,
     requestable_model_id_from_huggingface_id,
 };
 pub use catalog::{

@@ -285,3 +285,60 @@ test("should_reread_the_serving_ceiling_only_once_it_is_stale_or_unknown", ASYNC
     assert.equal(statusReadCount, 2, "exactly the refresh interval re-reads the ceiling");
     assert.equal(vm.runInContext("libraryServingCeilingBytes", scriptContext), 17_179_869_184);
 });
+
+test("should_ask_the_daemon_to_reveal_a_model_by_identity_and_report_the_outcome", ASYNC_TEST_OPTIONS, async () => {
+    const scriptContext = createLibraryContext();
+    const revealRequests = [];
+    let revealStatus = 204;
+    scriptContext.fetch = async (requestPath, requestOptions) => {
+        revealRequests.push({ requestPath, requestOptions });
+        return { ok: revealStatus >= 200 && revealStatus < 300, status: revealStatus };
+    };
+
+    assert.equal(
+        await vm.runInContext('revealLibraryModelInFinder("astronomical-test/example-qwen")', scriptContext),
+        true
+    );
+    assert.equal(revealRequests[0].requestPath, "/v1/library/reveal");
+    assert.equal(revealRequests[0].requestOptions.method, "POST");
+    assert.deepEqual(
+        JSON.parse(revealRequests[0].requestOptions.body),
+        { huggingface_id: "astronomical-test/example-qwen" },
+        "the page names the model and never sends a path"
+    );
+
+    revealStatus = 409;
+    assert.equal(
+        await vm.runInContext('revealLibraryModelInFinder("astronomical-test/example-qwen")', scriptContext),
+        false,
+        "a model that is not on this Mac is reported as not revealed"
+    );
+    scriptContext.fetch = async () => { throw new Error("daemon unreachable"); };
+    assert.equal(
+        await vm.runInContext('revealLibraryModelInFinder("astronomical-test/example-qwen")', scriptContext),
+        false
+    );
+});
+
+test("should_offer_show_in_finder_only_for_a_model_already_on_this_mac", () => {
+    const scriptContext = createLibraryContext();
+    scriptContext.document = createLibraryDocument();
+    const buttonClassesFor = (readyOnThisMac) => {
+        scriptContext.catalogRow = { readyOnThisMac, huggingfaceId: "astronomical-test/example-qwen" };
+        const locationSection = vm.runInContext(
+            'createLibraryLocationSection("/models/example-qwen", catalogRow)',
+            scriptContext
+        );
+        const actionRow = locationSection.children[2];
+        return actionRow.children.map((button) => button.className);
+    };
+    assert.deepEqual(buttonClassesFor(true), [
+        "button button-secondary library-reveal-button",
+        "button button-secondary library-copy-path-button"
+    ]);
+    assert.deepEqual(
+        buttonClassesFor(false),
+        ["button button-secondary library-copy-path-button"],
+        "a model still to be downloaded has no folder for Finder to show"
+    );
+});

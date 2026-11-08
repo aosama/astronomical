@@ -602,12 +602,12 @@ function createLibraryDetailsPanel(catalogRow, allRows) {
     panel.appendChild(detailList);
     const destinationPath = libraryDestinationPath(catalogRow);
     if (destinationPath) {
-        panel.appendChild(createLibraryLocationSection(destinationPath));
+        panel.appendChild(createLibraryLocationSection(destinationPath, catalogRow));
     }
     return panel;
 }
 
-function createLibraryLocationSection(destinationPath) {
+function createLibraryLocationSection(destinationPath, catalogRow) {
     const location = document.createElement("section");
     location.className = "library-model-location";
     const locationLabel = document.createElement("p");
@@ -618,30 +618,31 @@ function createLibraryLocationSection(destinationPath) {
     locationValue.textContent = destinationPath;
     const actionRow = document.createElement("div");
     actionRow.className = "library-location-actions";
-    const revealButton = document.createElement("button");
-    revealButton.className = "button button-secondary library-reveal-button";
-    revealButton.type = "button";
-    revealButton.textContent = "Show in Finder";
-    revealButton.addEventListener("click", () => revealLibraryPathInFinder(destinationPath));
     const copyButton = document.createElement("button");
     copyButton.className = "button button-secondary library-copy-path-button";
     copyButton.type = "button";
     copyButton.textContent = "Copy Path";
     copyButton.addEventListener("click", () => copyLibraryPathToClipboard(destinationPath));
-    actionRow.replaceChildren(revealButton, copyButton);
+    // Finder can only show a folder that exists, so the button appears once the
+    // model is on this Mac; before that the path is where it will be saved.
+    const actionButtons = catalogRow.readyOnThisMac
+        ? [createLibraryRevealButton(catalogRow.huggingfaceId), copyButton]
+        : [copyButton];
+    actionRow.replaceChildren(...actionButtons);
     location.replaceChildren(locationLabel, locationValue, actionRow);
     return location;
 }
 
-async function revealLibraryPathInFinder(destinationPath) {
-    // Observatory is a web UI; the daemon does not expose a reveal endpoint, so
-    // we use the Web Share API as a progressive enhancement and fall back to
-    // copying the path for the user.
-    try {
-        await navigator.clipboard.writeText(destinationPath);
-    } catch {
-        // Clipboard may be unavailable without a secure context or user gesture.
-    }
+function createLibraryRevealButton(huggingfaceId) {
+    const revealButton = document.createElement("button");
+    revealButton.className = "button button-secondary library-reveal-button";
+    revealButton.type = "button";
+    revealButton.textContent = "Show in Finder";
+    revealButton.addEventListener("click", async () => {
+        const isRevealed = await revealLibraryModelInFinder(huggingfaceId);
+        if (!isRevealed) revealButton.textContent = "Could not open Finder";
+    });
+    return revealButton;
 }
 
 async function copyLibraryPathToClipboard(destinationPath) {

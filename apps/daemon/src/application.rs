@@ -393,6 +393,7 @@ fn core_api_routes() -> Router<ApplicationState> {
     Router::new()
         .merge(console_routes())
         .merge(library_catalog_routes())
+        .merge(crate::library::library_reveal_routes())
         .merge(library_download_routes())
         .merge(crate::rest::config_reveal::config_reveal_routes())
         .merge(system_telemetry_routes())
