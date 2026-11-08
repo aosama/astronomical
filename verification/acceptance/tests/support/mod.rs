@@ -60,6 +60,49 @@ pub(crate) fn isolated_development_home_from_user_config() -> tempfile::TempDir 
     isolated_development_home
 }
 
+/// An isolated Development home whose config also lists `serving_model_directory`
+/// as a model directory. The isolated home has its own empty Library folder,
+/// so a model installed through Development's Library is reachable there only
+/// when its folder is listed; a folder already listed is not added twice.
+#[allow(dead_code)]
+pub(crate) fn isolated_development_home_serving_models_from(
+    serving_model_directory: &std::path::Path,
+) -> tempfile::TempDir {
+    let isolated_development_home = isolated_development_home_from_user_config();
+    let isolated_config_path = isolated_development_home
+        .path()
+        .join(".astronomical-dev")
+        .join("config.json");
+    let mut isolated_config: serde_json::Value = serde_json::from_slice(
+        &fs::read(&isolated_config_path).expect("isolated Development config should be readable"),
+    )
+    .expect("isolated Development config should be JSON");
+    let model_directories = isolated_config
+        .as_object_mut()
+        .expect("Development config should be a JSON object")
+        .entry("runtime")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .expect("Development config runtime should be a JSON object")
+        .entry("model_directories")
+        .or_insert_with(|| serde_json::json!([]))
+        .as_array_mut()
+        .expect("Development model_directories should be a JSON array");
+    let serving_model_directory_text = serving_model_directory.to_string_lossy().into_owned();
+    if !model_directories.iter().any(|listed_directory| {
+        listed_directory.as_str() == Some(serving_model_directory_text.as_str())
+    }) {
+        model_directories.push(serde_json::Value::String(serving_model_directory_text));
+    }
+    fs::write(
+        &isolated_config_path,
+        serde_json::to_vec_pretty(&isolated_config)
+            .expect("isolated Development config should serialize"),
+    )
+    .expect("isolated Development config should be written");
+    isolated_development_home
+}
+
 #[allow(dead_code)]
 pub(crate) fn discovered_model_artifact(
     model_id: &str,
