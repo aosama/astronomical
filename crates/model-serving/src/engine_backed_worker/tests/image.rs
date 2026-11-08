@@ -379,8 +379,6 @@ async fn should_report_a_bounded_actionable_image_engine_load_failure() {
     close_worker(commands, worker).await;
 }
 
-mod support;
-
 #[tokio::test]
 async fn should_refuse_a_ceiling_below_the_image_floor_and_keep_serving_at_the_floor() {
     let image_engine = ScriptedImageEngine::new(vec![vec![Ok(completed_step())]]);
@@ -434,3 +432,5 @@ async fn should_refuse_a_ceiling_below_the_image_floor_and_keep_serving_at_the_f
     assert_eq!(*lock(&updated_limits), vec![1_000]);
     close_worker(commands, worker).await;
 }
+
+mod support;
