@@ -46,14 +46,14 @@
 //!
 //! # Process-global invariants (why the statics exist)
 //!
-//! One worker process serves exactly one MLX runtime configuration. MLX-C
-//! itself is process-global: its error handler, Metallib path, and memory
-//! limits are installed once for the process, not per object. The statics in
-//! `mlx_runtime` (`RUNTIME_MEMORY_LIMITS`, `RUNTIME_METALLIB_PATH`) therefore
-//! enforce once-per-process semantics and reject a second, different
-//! configuration instead of silently racing the native state. This mirrors the
-//! product model: the daemon spawns one worker per model load, and a model
-//! swap replaces the worker process rather than reconfiguring MLX in place.
+//! MLX-C is process-global: its error handler, Metallib path, and memory
+//! limits are installed for the process, not per object. The statics in
+//! `mlx_runtime` therefore guard them. `RUNTIME_METALLIB_PATH` is installed
+//! once per process. `PROCESS_MEMORY_POLICY` lets runtimes alive at the same
+//! time share only identical memory limits, refusing a different configuration
+//! instead of silently racing the native state; once every runtime has been
+//! dropped, the next one installs its own limits, because a worker swaps
+//! models in place and may change its ceiling between them (#1906).
 //!
 //! # Relationship to the bridge crates
 //!
