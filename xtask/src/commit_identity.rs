@@ -148,9 +148,11 @@ pub fn unpublishable_identity_emails(
 
 /// The `git rev-list` arguments selecting what one pre-push line publishes.
 ///
-/// `None` for a branch deletion, which publishes nothing. A new remote ref
-/// lists only commits no remote-tracking ref already has, so pushing a fresh
-/// branch does not re-scan the whole history that is already public.
+/// `None` for a branch deletion, which publishes nothing. Both a new and an
+/// updated remote ref list only commits no remote-tracking ref already has:
+/// pushing a fresh branch must not re-scan the whole public history, and
+/// pushing a branch that merged `main` must not re-scan `main`'s commits,
+/// which refusing the push could no longer keep private anyway.
 #[must_use]
 pub fn rev_list_arguments_for_pre_push_line(pre_push_line: &str) -> Option<Vec<String>> {
     let pre_push_fields: Vec<&str> = pre_push_line.split_whitespace().collect();
@@ -167,7 +169,11 @@ pub fn rev_list_arguments_for_pre_push_line(pre_push_line: &str) -> Option<Vec<S
             "--remotes".to_owned(),
         ]);
     }
-    Some(vec![format!("{remote_object_id}..{local_object_id}")])
+    Some(vec![
+        format!("{remote_object_id}..{local_object_id}"),
+        "--not".to_owned(),
+        "--remotes".to_owned(),
+    ])
 }
 
 fn is_absent_object_id(object_id: &str) -> bool {
