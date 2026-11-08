@@ -4,6 +4,7 @@ pub(crate) mod error;
 pub(crate) mod filesystem;
 pub(crate) mod lock;
 pub(crate) mod publication;
+pub(crate) mod staging_cleanup;
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};

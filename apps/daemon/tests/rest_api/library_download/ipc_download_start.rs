@@ -434,3 +434,75 @@ async fn should_start_another_model_over_a_failed_download_left_before_a_restart
     .await
     .expect("the restart journey should remain bounded");
 }
+
+/// Startup clears the empty staging folders earlier versions left behind (#1929), and keeps a
+/// paused download's staged bytes so it can still be resumed.
+#[tokio::test]
+async fn should_clear_old_empty_staging_folders_at_startup() {
+    timeout(Duration::from_secs(10), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        interrupt_a_running_download(test_directory.path()).await;
+        let leftover_directory = test_directory.path().join("models/.incomplete/araysuter");
+        std::fs::create_dir_all(&leftover_directory)
+            .expect("the leftover folder should be created");
+
+        let restarted_service = start_a_restarted_daemon(test_directory.path()).await;
+
+        assert!(
+            !leftover_directory.exists(),
+            "the empty leftover folder is removed"
+        );
+        let staged_byte_count = staged_byte_count(
+            &test_directory
+                .path()
+                .join(format!("models/.incomplete/{REPOSITORY_ID}")),
+        );
+        assert!(
+            staged_byte_count > 0,
+            "the paused download keeps its staged bytes"
+        );
+        restarted_service.shutdown().await.expect("clean shutdown");
+    })
+    .await
+    .expect("the startup cleanup journey should remain bounded");
+}
+
+/// Total bytes staged under `staging_directory`, counted recursively.
+fn staged_byte_count(staging_directory: &Path) -> u64 {
+    let mut total_bytes = 0;
+    for staging_entry in std::fs::read_dir(staging_directory).expect("staging should be readable") {
+        let staging_entry = staging_entry.expect("staging entry");
+        let entry_metadata = staging_entry.metadata().expect("staging entry metadata");
+        total_bytes += if entry_metadata.is_dir() {
+            staged_byte_count(&staging_entry.path())
+        } else {
+            entry_metadata.len()
+        };
+    }
+    total_bytes
+}
+
+/// Startup cleanup is housekeeping: when it cannot run (a symlinked staging folder, which the
+/// store refuses to follow), startup still succeeds.
+#[tokio::test]
+async fn should_start_even_when_the_staging_folder_cannot_be_tidied() {
+    let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+    let models_directory = test_directory.path().join("models");
+    let outside_directory = test_directory.path().join("outside");
+    std::fs::create_dir_all(&models_directory).expect("the models folder should be created");
+    std::fs::create_dir_all(&outside_directory).expect("the outside folder should be created");
+    std::os::unix::fs::symlink(&outside_directory, models_directory.join(".incomplete"))
+        .expect("the symlink should be created");
+    let coordinator = build_test_coordinator(
+        test_directory.path(),
+        test_catalog(),
+        Arc::new(ScriptedHub::new()),
+    );
+
+    coordinator
+        .recover_startup_state()
+        .await
+        .expect("a failed tidy-up must not stop startup");
+
+    assert!(outside_directory.is_dir());
+}

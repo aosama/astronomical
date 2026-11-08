@@ -112,6 +112,7 @@ impl LibraryDownloadCoordinator {
 
     pub async fn recover_startup_state(&self) -> Result<(), LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
+        self.remove_empty_staging_folders_best_effort().await;
         let job_store = self.job_store.clone();
         // Two failure layers: the join fails only when the blocking task
         // panicked or was aborted; the inner Result is the recovery outcome.
@@ -134,6 +135,27 @@ impl LibraryDownloadCoordinator {
             self.spawn_publication_task().await?;
         }
         Ok(())
+    }
+
+    /// Clears empty staging folders left by earlier versions. It is housekeeping, so a failure
+    /// is logged and startup carries on.
+    async fn remove_empty_staging_folders_best_effort(&self) {
+        let job_store = self.job_store.clone();
+        let cleanup_join =
+            tokio::task::spawn_blocking(move || job_store.remove_empty_staging_folders()).await;
+        match cleanup_join {
+            Ok(Ok(())) => {}
+            Ok(Err(cleanup_error)) => {
+                tracing::warn!(
+                    %cleanup_error,
+                    models_directory = %self.job_store.models_directory().display(),
+                    "could not remove empty download staging folders"
+                );
+            }
+            Err(join_error) => {
+                tracing::warn!(%join_error, "the staging folder cleanup task panicked or was cancelled");
+            }
+        }
     }
 
     pub async fn current_job(
