@@ -149,12 +149,18 @@ fn should_report_only_the_unpublishable_emails_of_a_commit() {
 }
 
 #[test]
-fn should_select_the_new_range_for_an_updated_remote_branch() {
+fn should_select_only_unpublished_new_commits_for_an_updated_remote_branch() {
+    // A branch that merged `main` would otherwise re-scan `main`'s commits,
+    // which are already public on the remote.
     let pre_push_line =
         format!("refs/heads/topic {PUSHED_OBJECT_ID} refs/heads/topic {REMOTE_OBJECT_ID}");
     assert_eq!(
         rev_list_arguments_for_pre_push_line(&pre_push_line),
-        Some(vec![format!("{REMOTE_OBJECT_ID}..{PUSHED_OBJECT_ID}")])
+        Some(vec![
+            format!("{REMOTE_OBJECT_ID}..{PUSHED_OBJECT_ID}"),
+            "--not".to_owned(),
+            "--remotes".to_owned(),
+        ])
     );
 }
 
