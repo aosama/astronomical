@@ -22,6 +22,7 @@ pub(super) struct ScriptedHub {
     payload_delay: Duration,
     corrupt_model_config: bool,
     publishes_payload_in_two_chunks: bool,
+    drops_every_payload_connection: bool,
 }
 
 impl ScriptedHub {
@@ -43,6 +44,14 @@ impl ScriptedHub {
         Self::with_repository_files(Duration::ZERO, false, true)
     }
 
+    /// The network drops every payload request, as a lost Wi-Fi connection or a provider
+    /// outage would; the download ends `failed` with `download_failed`.
+    pub(super) fn network_failure() -> Self {
+        let mut hub = Self::new();
+        hub.drops_every_payload_connection = true;
+        hub
+    }
+
     pub(super) fn progressive(payload_delay: Duration) -> Self {
         let mut hub = Self::with_payload_behavior(payload_delay, false);
         hub.publishes_payload_in_two_chunks = true;
@@ -59,6 +68,7 @@ impl ScriptedHub {
             payload_delay: Duration::ZERO,
             corrupt_model_config: false,
             publishes_payload_in_two_chunks: false,
+            drops_every_payload_connection: false,
         }
     }
 
@@ -99,6 +109,7 @@ impl ScriptedHub {
             payload_delay,
             corrupt_model_config,
             publishes_payload_in_two_chunks: false,
+            drops_every_payload_connection: false,
         }
     }
 }
@@ -153,25 +164,34 @@ fn ok_bytes(body: &'static [u8]) -> HubHttpResponse {
         .expect("scripted raw file response should be valid")
 }
 
+impl ScriptedHub {
+    /// The payload as one chunk, or as two separated by the payload delay so a journey can
+    /// observe progress mid-file.
+    fn scripted_payload_stream(&self, payload: &'static [u8]) -> HubPayloadByteStream {
+        if !self.publishes_payload_in_two_chunks || payload.len() <= 1 {
+            return Box::pin(stream::iter([Ok(Bytes::from_static(payload))]));
+        }
+        let first_payload_byte = Bytes::from_static(&payload[..1]);
+        let remaining_payload_bytes = Bytes::from_static(&payload[1..]);
+        let payload_delay = self.payload_delay;
+        Box::pin(
+            stream::iter([Ok(first_payload_byte)]).chain(stream::once(async move {
+                tokio::time::sleep(payload_delay).await;
+                Ok(remaining_payload_bytes)
+            })),
+        )
+    }
+}
+
 impl HubPayloadTransport for ScriptedHub {
     fn execute_payload(&self, request: HubPayloadRequest) -> HubPayloadFuture<'_> {
         Box::pin(async move {
             tokio::time::sleep(self.payload_delay).await;
+            if self.drops_every_payload_connection {
+                return Err(HubTransportError::new("scripted connection reset"));
+            }
             let payload = payload_for_request(&request, self.corrupt_model_config)?;
-            let payload_stream: HubPayloadByteStream =
-                if self.publishes_payload_in_two_chunks && payload.len() > 1 {
-                    let first_payload_byte = Bytes::from_static(&payload[..1]);
-                    let remaining_payload_bytes = Bytes::from_static(&payload[1..]);
-                    let payload_delay = self.payload_delay;
-                    Box::pin(stream::iter([Ok(first_payload_byte)]).chain(stream::once(
-                        async move {
-                            tokio::time::sleep(payload_delay).await;
-                            Ok(remaining_payload_bytes)
-                        },
-                    )))
-                } else {
-                    Box::pin(stream::iter([Ok(Bytes::from_static(payload))]))
-                };
+            let payload_stream = self.scripted_payload_stream(payload);
             Ok(HubPayloadResponse::new(
                 200,
                 None,

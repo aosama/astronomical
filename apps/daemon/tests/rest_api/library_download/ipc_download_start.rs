@@ -369,3 +369,68 @@ async fn should_start_another_model_over_a_failed_download_through_download_star
     .await
     .expect("the failed-then-other-model journey should remain bounded");
 }
+
+/// The upgrade path: a download failed under the previous daemon (or the previous version,
+/// whose job file format is the same), the Mac restarts or the app updates, and the person asks
+/// for another model. The new daemon must recover the failed job at startup and still let the
+/// other model start and publish.
+#[tokio::test]
+async fn should_start_another_model_over_a_failed_download_left_before_a_restart() {
+    timeout(Duration::from_secs(10), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let first_catalog = two_model_catalog();
+        let first_coordinator = build_test_coordinator(
+            test_directory.path(),
+            Arc::clone(&first_catalog),
+            Arc::new(ScriptedHub::checksum_mismatch()),
+        );
+        let first_service =
+            start_ipc_service(test_directory.path(), first_catalog, first_coordinator).await;
+        assert_download_started(
+            &ask(&first_service, download_start()).await,
+            "the first model",
+        );
+        wait_until_failed(&first_service).await;
+        first_service
+            .shutdown()
+            .await
+            .expect("the first daemon shuts down");
+
+        let restarted_catalog = two_model_catalog();
+        let restarted_coordinator = build_test_coordinator(
+            test_directory.path(),
+            Arc::clone(&restarted_catalog),
+            Arc::new(ScriptedHub::new()),
+        );
+        restarted_coordinator
+            .recover_startup_state()
+            .await
+            .expect("startup recovery should accept the failed job");
+        let restarted_service = start_ipc_service(
+            test_directory.path(),
+            restarted_catalog,
+            restarted_coordinator,
+        )
+        .await;
+        wait_until_failed(&restarted_service).await;
+
+        let other_model_response = ask(
+            &restarted_service,
+            DaemonRequest::DownloadStart {
+                model_id: OTHER_REPOSITORY_ID.to_owned(),
+            },
+        )
+        .await;
+
+        assert_eq!(
+            other_model_response,
+            DaemonResponse::DownloadStarted {
+                huggingface_id: OTHER_REPOSITORY_ID.to_owned()
+            }
+        );
+        wait_until_job_names(&restarted_service, OTHER_REPOSITORY_ID).await;
+        restarted_service.shutdown().await.expect("clean shutdown");
+    })
+    .await
+    .expect("the restart journey should remain bounded");
+}

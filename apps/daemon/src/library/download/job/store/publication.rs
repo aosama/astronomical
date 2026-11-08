@@ -1,6 +1,9 @@
 //! Locked publication transactions kept separate from ordinary durable-job persistence.
 
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use super::{
     DownloadJob, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
@@ -86,23 +89,12 @@ impl DownloadJobStore {
         ensure_descendant_directory_or_absent(&self.models_directory, &staging_directory)?;
         let published_directory = self.published_directory(&download_job);
         ensure_descendant_directory_or_absent(&self.models_directory, &published_directory)?;
-        let organization_directory = published_directory
-            .parent()
-            .ok_or(DownloadJobStoreError::InconsistentPublicationState)?;
         match (
             metadata_without_symlink(&staging_directory)?,
             metadata_without_symlink(&published_directory)?,
         ) {
             (Some(staging), None) if staging.is_dir() => {
-                create_descendant_directories(&self.models_directory, organization_directory)?;
-                fs::rename(&staging_directory, &published_directory).map_err(|source| {
-                    DownloadJobStoreError::PublishModel {
-                        path: published_directory.clone(),
-                        source,
-                    }
-                })?;
-                synchronize_directory(organization_directory)?;
-                synchronize_directory(&self.models_directory)?;
+                self.move_staging_into_place(&staging_directory, &published_directory)?;
             }
             (None, Some(published)) if published.is_dir() => {}
             (Some(staging), Some(published)) if staging.is_dir() && published.is_dir() => {
@@ -124,6 +116,29 @@ impl DownloadJobStore {
         remove_file_if_present(&self.job_file_path())?;
         synchronize_directory(&self.models_directory)?;
         Ok(published_directory)
+    }
+
+    /// Renames verified staging into the published location, then removes the emptied staging
+    /// organisation folder (and `.incomplete` when nothing else is staged), as cancel does, so a
+    /// published model leaves no empty hidden folders behind.
+    fn move_staging_into_place(
+        &self,
+        staging_directory: &Path,
+        published_directory: &Path,
+    ) -> Result<(), DownloadJobStoreError> {
+        let organization_directory = published_directory
+            .parent()
+            .ok_or(DownloadJobStoreError::InconsistentPublicationState)?;
+        create_descendant_directories(&self.models_directory, organization_directory)?;
+        fs::rename(staging_directory, published_directory).map_err(|source| {
+            DownloadJobStoreError::PublishModel {
+                path: published_directory.to_path_buf(),
+                source,
+            }
+        })?;
+        synchronize_directory(organization_directory)?;
+        self.synchronize_removed_staging_ancestors(staging_directory)?;
+        synchronize_directory(&self.models_directory)
     }
 
     fn published_directory(&self, download_job: &DownloadJob) -> PathBuf {

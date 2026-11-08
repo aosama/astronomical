@@ -447,7 +447,7 @@ impl DownloadJobStore {
         Ok(())
     }
 
-    fn synchronize_removed_staging_ancestors(
+    pub(super) fn synchronize_removed_staging_ancestors(
         &self,
         staging_directory: &Path,
     ) -> Result<(), DownloadJobStoreError> {
