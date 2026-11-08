@@ -1,4 +1,5 @@
-//! One-file-at-a-time ranged transfer and provider-digest verification.
+//! Resume orchestration for one download: ranged transfer of payload files, creation of the
+//! zero-byte files the transfer window never schedules, and provider-digest verification.
 
 use std::{
     sync::{
@@ -18,7 +19,9 @@ use super::{
 };
 use crate::library::download::publication::reconciliation::reconcile_publication_intent;
 use crate::library::download::transfer::payload_verification::verify_download_job;
-use crate::library::download::transfer::staged_file::open_staged_file_for_append;
+use crate::library::download::transfer::staged_file::{
+    EmptyFileCreation, create_empty_staged_files, open_staged_file_for_append,
+};
 use crate::library::{
     DownloadJob, DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore,
     DownloadJobStoreError, DownloadProgressSnapshot, HubPayloadRequest, HubPayloadTransport,
@@ -99,6 +102,11 @@ impl DownloadTransferControl {
     fn is_pause_requested(&self) -> bool {
         self.pause_requested.load(Ordering::Acquire)
     }
+
+    /// The shared flag itself, for blocking work that must stop between steps on a pause or cancel.
+    fn pause_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.pause_requested)
+    }
 }
 
 impl DownloadPayloadTransfer {
@@ -154,9 +162,6 @@ impl DownloadPayloadTransfer {
         self.replace_job(download_job.clone()).await?;
         self.progress_snapshot.publish(download_job.clone());
 
-        self.replace_job(download_job.clone()).await?;
-        self.progress_snapshot.publish(download_job.clone());
-
         match self
             .resume_download_window(&mut download_job, updated_at_unix_millis)
             .await?
@@ -183,7 +188,51 @@ impl DownloadPayloadTransfer {
         ))
     }
 
-    /// Runs one bounded download window and classifies how it ended. Paused
+    /// Fetches every file the job still needs. Zero-byte files are created directly, because
+    /// `pending_segment_queue` only queues files with bytes left, and the rest go through the
+    /// bounded transfer window. A pause or cancel requested during the creation stops here as a
+    /// pause, before any request is made.
+    async fn download_all_pending_files(
+        &self,
+        download_job: &mut DownloadJob,
+        updated_at_unix_millis: u64,
+    ) -> Result<(), TransferWindowStop> {
+        let empty_file_creation = self
+            .create_empty_staged_files_off_runtime(download_job)
+            .await
+            .map_err(TransferWindowStop::TransferFailed)?;
+        if empty_file_creation == EmptyFileCreation::Interrupted || self.is_pause_requested() {
+            return Err(TransferWindowStop::Paused);
+        }
+        self.download_pending_files_within_bounded_window(download_job, updated_at_unix_millis)
+            .await
+    }
+
+    /// Creates zero-byte files off the async runtime, like every other staged-file write. The
+    /// thread cannot be aborted by a cancel, so it is handed the pause flag to stop between files.
+    async fn create_empty_staged_files_off_runtime(
+        &self,
+        download_job: &DownloadJob,
+    ) -> Result<EmptyFileCreation, DownloadPayloadTransferError> {
+        let models_directory = self.job_store.models_directory().to_path_buf();
+        let download_job_with_empty_files = download_job.clone();
+        let pause_requested = self.transfer_control.pause_flag();
+        match tokio::task::spawn_blocking(move || {
+            create_empty_staged_files(
+                &models_directory,
+                &download_job_with_empty_files,
+                &pause_requested,
+            )
+        })
+        .await
+        {
+            Ok(creation_outcome) => Ok(creation_outcome?),
+            Err(join_error) => Err(DownloadPayloadTransferError::Task(join_error)),
+        }
+    }
+
+    /// Creates the job's empty files, then runs one bounded download window, and classifies how
+    /// it ended. Paused
     /// carries the pause transition's own outcome for the caller to return;
     /// Failed carries both the public failure code (gated vs failed, so the
     /// operator sees why bytes stopped) and the transfer error to re-raise
@@ -219,8 +268,8 @@ impl DownloadPayloadTransfer {
     /// Marks the job verifying, re-publishes it, runs the measured checksum
     /// verification, and routes the failure: a checksum mismatch primes the
     /// retry path (the mismatched file alone is re-downloaded), any other
-    /// verification failure persists a terminal checksum failure. The
-    /// verification error itself always propagates to the caller.
+    /// verification failure persists a download failure, which a resume can
+    /// retry. The verification error itself always propagates to the caller.
     async fn verify_and_recover(
         &self,
         download_job: &mut DownloadJob,
@@ -264,7 +313,7 @@ impl DownloadPayloadTransfer {
                     .await?;
             } else {
                 self.persist_failure(
-                    DownloadJobPublicErrorCode::ChecksumMismatch,
+                    DownloadJobPublicErrorCode::DownloadFailed,
                     updated_at_unix_millis,
                 )
                 .await?;

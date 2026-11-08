@@ -16,7 +16,6 @@ use futures_util::stream::{FuturesUnordered, StreamExt};
 use super::{
     DownloadPayloadTransfer, DownloadPayloadTransferError,
     payload_transfer_segment::{PayloadSegment, SegmentedFileAssembler, plan_payload_segments},
-    staged_file::create_empty_staged_files,
 };
 use crate::library::{DownloadJob, DownloadJobError, DownloadJobFile, DownloadProgressSnapshot};
 use crate::{
@@ -154,40 +153,7 @@ fn pending_file_for_relative_path(
 }
 
 impl DownloadPayloadTransfer {
-    /// Fetches every file the job still needs: zero-byte files are created
-    /// directly, since `pending_segment_queue` only queues files with bytes
-    /// left, and the rest go through the bounded transfer window.
-    pub(super) async fn download_all_pending_files(
-        &self,
-        download_job: &mut DownloadJob,
-        updated_at_unix_millis: u64,
-    ) -> Result<(), TransferWindowStop> {
-        self.create_empty_staged_files(download_job)
-            .await
-            .map_err(TransferWindowStop::TransferFailed)?;
-        self.download_pending_files_within_bounded_window(download_job, updated_at_unix_millis)
-            .await
-    }
-
-    /// Creates zero-byte files off the async runtime, like every other
-    /// staged-file write.
-    async fn create_empty_staged_files(
-        &self,
-        download_job: &DownloadJob,
-    ) -> Result<(), DownloadPayloadTransferError> {
-        let models_directory = self.job_store().models_directory().to_path_buf();
-        let staged_job = download_job.clone();
-        match tokio::task::spawn_blocking(move || {
-            create_empty_staged_files(&models_directory, &staged_job)
-        })
-        .await
-        {
-            Ok(creation_outcome) => Ok(creation_outcome?),
-            Err(join_error) => Err(DownloadPayloadTransferError::Task(join_error)),
-        }
-    }
-
-    async fn download_pending_files_within_bounded_window(
+    pub(super) async fn download_pending_files_within_bounded_window(
         &self,
         download_job: &mut DownloadJob,
         updated_at_unix_millis: u64,

@@ -1,10 +1,12 @@
-//! Symlink-rejecting creation and append access for one hidden payload file.
+//! Symlink-rejecting creation and append access for hidden payload files, including the
+//! zero-byte files that the transfer window never schedules.
 
 use std::{
     fs::{self, File, OpenOptions},
     io::{Seek, SeekFrom},
     os::unix::fs::OpenOptionsExt,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use crate::library::download::job::store::filesystem::{
@@ -64,23 +66,41 @@ pub(in crate::library::download) fn open_staged_file_for_append(
     Ok(staged_file)
 }
 
+/// How creating the empty files ended.
+#[derive(Debug, PartialEq, Eq)]
+pub(in crate::library::download) enum EmptyFileCreation {
+    Created,
+    /// A pause or cancel was requested first; some empty files may be missing, and a resume
+    /// creates them, since creation is idempotent.
+    Interrupted,
+}
+
 /// Creates the staged copy of every zero-byte file in `download_job`. The
 /// transfer window only schedules files with bytes left to fetch, so an empty
 /// file (an `__init__.py`, say) would otherwise never be created, and
 /// verification would refuse the download as missing it on every attempt
 /// (issue #1896). Creating it is the whole download of such a file.
+///
+/// The loop runs on a blocking thread, which a cancel cannot abort. It therefore checks
+/// `pause_requested` before each file, so a cancel that removes the staging folder is not
+/// followed by this loop re-creating files inside it.
 pub(in crate::library::download) fn create_empty_staged_files(
     models_directory: &Path,
     download_job: &DownloadJob,
-) -> Result<(), DownloadJobStoreError> {
+    pause_requested: &AtomicBool,
+) -> Result<EmptyFileCreation, DownloadJobStoreError> {
     let staging_directory = download_job.staging_directory(models_directory);
     for download_file in download_job.files() {
-        if download_file.expected_bytes() == 0 {
-            let staged_file_path = staging_directory.join(download_file.relative_path());
-            open_staged_file_for_append(models_directory, &staged_file_path, 0)?;
+        if download_file.expected_bytes() != 0 {
+            continue;
         }
+        if pause_requested.load(Ordering::Acquire) {
+            return Ok(EmptyFileCreation::Interrupted);
+        }
+        let staged_file_path = staging_directory.join(download_file.relative_path());
+        open_staged_file_for_append(models_directory, &staged_file_path, 0)?;
     }
-    Ok(())
+    Ok(EmptyFileCreation::Created)
 }
 
 pub(in crate::library::download) fn create_descendant_directories(
@@ -126,3 +146,7 @@ pub(in crate::library::download) fn create_descendant_directories(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "staged_file_tests.rs"]
+mod staged_file_tests;

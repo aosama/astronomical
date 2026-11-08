@@ -14,6 +14,9 @@ use super::{
     git_blob_sha1_hex, payload_for_request,
 };
 
+/// Where the empty file sits in the `with_empty_file` repository.
+pub(super) const EMPTY_FILE_PATH: &str = "tools/__init__.py";
+
 pub(super) struct ScriptedHub {
     metadata_responses: Mutex<VecDeque<HubHttpResponse>>,
     payload_delay: Duration,
@@ -122,9 +125,6 @@ fn tree_entry(path: &str, contents: &[u8]) -> serde_json::Value {
         "oid": git_blob_sha1_hex(contents)
     })
 }
-
-/// Where the empty file sits in the `with_empty_file` repository.
-pub(super) const EMPTY_FILE_PATH: &str = "tools/__init__.py";
 
 impl HubTransport for ScriptedHub {
     fn execute(&self, request: HubHttpRequest) -> HubTransportFuture<'_> {

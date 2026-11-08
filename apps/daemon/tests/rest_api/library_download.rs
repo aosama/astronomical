@@ -204,18 +204,23 @@ async fn should_download_and_publish_a_repository_with_an_empty_file() {
         let published_directory = test_directory
             .path()
             .join(format!("models/{REPOSITORY_ID}"));
+        let mut last_download_document = serde_json::Value::Null;
         for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
-            let download_document = get_download_document(&application).await;
+            last_download_document = get_download_document(&application).await;
             assert_ne!(
-                download_document["state"], "failed",
+                last_download_document["state"], "failed",
                 "the download failed with {}",
-                download_document["error_code"]
+                last_download_document["error_code"]
             );
-            if published_directory.is_dir() && download_document["state"] == "idle" {
+            if published_directory.is_dir() && last_download_document["state"] == "idle" {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
+        assert!(
+            published_directory.is_dir(),
+            "the model was never published; the last status was {last_download_document}"
+        );
 
         let published_empty_file = published_directory.join(EMPTY_FILE_PATH);
         let empty_file_metadata = std::fs::metadata(&published_empty_file)
