@@ -380,3 +380,57 @@ async fn should_report_a_bounded_actionable_image_engine_load_failure() {
 }
 
 mod support;
+
+#[tokio::test]
+async fn should_refuse_a_ceiling_below_the_image_floor_and_keep_serving_at_the_floor() {
+    let image_engine = ScriptedImageEngine::new(vec![vec![Ok(completed_step())]]);
+    let updated_limits = Arc::clone(&image_engine.updated_limits);
+    let (mut events, mut commands, worker) =
+        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 8_000).await;
+    let _idle = next_event(&mut events).await;
+    commands
+        .send_command(&swap_image_command())
+        .await
+        .expect("image swap");
+    let _image_swapped = next_event(&mut events).await;
+    let _image_model_load_memory = next_event(&mut events).await;
+
+    // The scripted image model reports a 1,000-byte floor at load; one byte
+    // under it must be refused before the engine plans anything (#1899).
+    commands
+        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
+            effective_mlx_memory_ceiling_bytes: 999,
+            configuration_generation: "below-image-floor".to_owned(),
+        })
+        .await
+        .expect("below-floor memory update");
+    assert!(matches!(
+        next_event(&mut events).await,
+        WorkerEvent::MlxMemoryLimitRejected {
+            requested_mlx_memory_ceiling_bytes: 999,
+            minimum_mlx_memory_ceiling_bytes: 1_000,
+            ..
+        }
+    ));
+    assert!(
+        lock(&updated_limits).is_empty(),
+        "a refused ceiling must never reach the image engine"
+    );
+
+    commands
+        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
+            effective_mlx_memory_ceiling_bytes: 1_000,
+            configuration_generation: "at-image-floor".to_owned(),
+        })
+        .await
+        .expect("at-floor memory update");
+    assert!(matches!(
+        next_event(&mut events).await,
+        WorkerEvent::MlxMemoryLimitChanged {
+            effective_mlx_memory_ceiling_bytes: 1_000,
+            ..
+        }
+    ));
+    assert_eq!(*lock(&updated_limits), vec![1_000]);
+    close_worker(commands, worker).await;
+}
