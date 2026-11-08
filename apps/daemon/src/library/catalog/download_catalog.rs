@@ -7,10 +7,10 @@ use thiserror::Error;
 
 use crate::library::DownloadPathSelection;
 
-// Version 2 is the current closed executable-family set. There are no
-// downstream catalog consumers, so the schema moves forward without
-// compatibility shims when a new executable family is offered.
-const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 2;
+// Version 3 adds per-entry memory footprint and measured streaming floor,
+// catalog role, the Get started pick, and the experimental flag. There are no downstream catalog
+// consumers, so the schema moves forward without compatibility shims.
+const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 3;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
 const MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT: usize = 1_024;
 const MAXIMUM_HUGGING_FACE_COMPONENT_LENGTH: usize = 96;
@@ -38,6 +38,11 @@ pub struct DownloadCatalogEntry {
     display_name: String,
     family: DownloadCatalogFamily,
     approximate_size_bytes: u64,
+    approximate_memory_bytes: u64,
+    role: DownloadCatalogRole,
+    get_started: bool,
+    experimental: bool,
+    minimum_memory_bytes: Option<u64>,
     description: Option<String>,
     capabilities: DownloadCatalogCapabilities,
     quantization_label: Option<String>,
@@ -87,6 +92,28 @@ impl DownloadCatalogFamily {
     }
 }
 
+/// The job a catalog model is offered for; each role has at most one Get started pick.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum DownloadCatalogRole {
+    Chat,
+    Coding,
+    ImageGeneration,
+    Helper,
+}
+
+impl DownloadCatalogRole {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Chat => "chat",
+            Self::Coding => "coding",
+            Self::ImageGeneration => "image_generation",
+            Self::Helper => "helper",
+        }
+    }
+}
+
 /// Catalog syntax or semantic validation failure.
 #[derive(Debug, Error)]
 pub enum DownloadCatalogError {
@@ -116,10 +143,24 @@ pub enum DownloadCatalogError {
         "download catalog entry {entry_index} must declare approximate_size_bytes between 1 and 9007199254740991"
     )]
     InvalidApproximateSize { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} must declare approximate_memory_bytes between 1 and 9007199254740991"
+    )]
+    InvalidApproximateMemory { entry_index: usize },
+    #[error(
+        "download catalog entry {entry_index} must declare minimum_memory_bytes between 1 and its approximate_memory_bytes"
+    )]
+    InvalidMinimumMemory { entry_index: usize },
     #[error("download catalog entry {entry_index} must declare public: true")]
     ModelNotPublic { entry_index: usize },
     #[error("download catalog contains a duplicate or case-colliding Hugging Face identity")]
     DuplicateHuggingFaceId,
+    #[error(
+        "download catalog entry {entry_index} cannot be the get_started pick: it is experimental or a helper"
+    )]
+    InvalidGetStartedPick { entry_index: usize },
+    #[error("download catalog declares more than one get_started pick for role {role}")]
+    DuplicateGetStartedPick { role: &'static str },
     #[error("download catalog entry {entry_index} has invalid or overlapping included paths")]
     InvalidIncludedPaths { entry_index: usize },
 }
@@ -139,8 +180,15 @@ struct DownloadCatalogEntryDocument {
     display_name: String,
     family: DownloadCatalogFamily,
     approximate_size_bytes: u64,
+    approximate_memory_bytes: u64,
+    role: DownloadCatalogRole,
     #[serde(rename = "public")]
     is_public: bool,
+    #[serde(default)]
+    get_started: bool,
+    #[serde(default)]
+    experimental: bool,
+    minimum_memory_bytes: Option<u64>,
     description: Option<String>,
     capabilities: Option<DownloadCatalogCapabilitiesDocument>,
     quantization_label: Option<String>,
@@ -170,12 +218,14 @@ impl DownloadCatalog {
     pub fn parse_json(catalog_json: &str) -> Result<Self, DownloadCatalogError> {
         let catalog_document = parse_and_shape_check_document(catalog_json)?;
         let mut normalized_huggingface_ids = BTreeSet::new();
+        let mut get_started_role_names = BTreeSet::new();
         let mut entries = Vec::with_capacity(catalog_document.entries.len());
         for (entry_index, entry_document) in catalog_document.entries.into_iter().enumerate() {
             entries.push(parse_catalog_entry(
                 entry_document,
                 entry_index,
                 &mut normalized_huggingface_ids,
+                &mut get_started_role_names,
             )?);
         }
 
@@ -246,9 +296,14 @@ fn parse_catalog_entry(
     entry_document: DownloadCatalogEntryDocument,
     entry_index: usize,
     normalized_huggingface_ids: &mut BTreeSet<String>,
+    get_started_role_names: &mut BTreeSet<&'static str>,
 ) -> Result<DownloadCatalogEntry, DownloadCatalogError> {
-    validate_entry_identity(&entry_document, entry_index, normalized_huggingface_ids)?;
-    validate_entry_display_metadata(&entry_document, entry_index)?;
+    validate_entry_document(
+        &entry_document,
+        entry_index,
+        normalized_huggingface_ids,
+        get_started_role_names,
+    )?;
     let description = parse_optional_entry_description(&entry_document, entry_index)?;
     let capabilities = parse_entry_capabilities(entry_document.capabilities.as_ref(), entry_index)?;
     let quantization_label = parse_optional_entry_quantization_label(&entry_document, entry_index)?;
@@ -261,12 +316,32 @@ fn parse_catalog_entry(
         display_name: entry_document.display_name,
         family: entry_document.family,
         approximate_size_bytes: entry_document.approximate_size_bytes,
+        approximate_memory_bytes: entry_document.approximate_memory_bytes,
+        role: entry_document.role,
+        get_started: entry_document.get_started,
+        experimental: entry_document.experimental,
+        minimum_memory_bytes: entry_document.minimum_memory_bytes,
         description,
         capabilities,
         quantization_label,
         upstream_license,
         download_path_selection,
     })
+}
+
+/// Runs the whole-entry checks that need no conversion, in the authored order
+/// (identity, display metadata, memory, Get started pick), so the first failing
+/// rule decides the reported error exactly as before they were grouped.
+fn validate_entry_document(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+    normalized_huggingface_ids: &mut BTreeSet<String>,
+    get_started_role_names: &mut BTreeSet<&'static str>,
+) -> Result<(), DownloadCatalogError> {
+    validate_entry_identity(entry_document, entry_index, normalized_huggingface_ids)?;
+    validate_entry_display_metadata(entry_document, entry_index)?;
+    validate_entry_memory_footprint(entry_document, entry_index)?;
+    validate_get_started_pick(entry_document, entry_index, get_started_role_names)
 }
 
 /// Guards the entry identity: a Hub-safe repository id, first-seen
@@ -309,6 +384,52 @@ fn validate_entry_display_metadata(
     }
     if !entry_document.is_public {
         return Err(DownloadCatalogError::ModelNotPublic { entry_index });
+    }
+    Ok(())
+}
+
+/// Memory is bounded by the same JavaScript-safe integer rule as the download
+/// size, so the Library can render both figures exactly. Zero would claim a
+/// model needs no memory, which the admission check cannot honor. The optional
+/// streaming floor must sit inside that footprint.
+fn validate_entry_memory_footprint(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+) -> Result<(), DownloadCatalogError> {
+    if entry_document.approximate_memory_bytes == 0
+        || entry_document.approximate_memory_bytes > MAXIMUM_JAVASCRIPT_SAFE_INTEGER
+    {
+        return Err(DownloadCatalogError::InvalidApproximateMemory { entry_index });
+    }
+    // A streaming floor above the fully loaded footprint would make the Library
+    // promise streaming exactly where the model already fits whole.
+    if let Some(minimum_memory_bytes) = entry_document.minimum_memory_bytes
+        && (minimum_memory_bytes == 0
+            || minimum_memory_bytes > entry_document.approximate_memory_bytes)
+    {
+        return Err(DownloadCatalogError::InvalidMinimumMemory { entry_index });
+    }
+    Ok(())
+}
+
+/// The Get started pick is the single model steered to a first-time user for
+/// a role, so it must be stable (not experimental) and must serve a user-facing
+/// role (helpers run behind the scenes). A role can have only one pick, since
+/// two picks would make the Library's recommendation ambiguous.
+fn validate_get_started_pick(
+    entry_document: &DownloadCatalogEntryDocument,
+    entry_index: usize,
+    get_started_role_names: &mut BTreeSet<&'static str>,
+) -> Result<(), DownloadCatalogError> {
+    if !entry_document.get_started {
+        return Ok(());
+    }
+    if entry_document.experimental || entry_document.role == DownloadCatalogRole::Helper {
+        return Err(DownloadCatalogError::InvalidGetStartedPick { entry_index });
+    }
+    let role_name = entry_document.role.as_str();
+    if !get_started_role_names.insert(role_name) {
+        return Err(DownloadCatalogError::DuplicateGetStartedPick { role: role_name });
     }
     Ok(())
 }
@@ -426,6 +547,34 @@ impl DownloadCatalogEntry {
     #[must_use]
     pub const fn approximate_size_bytes(&self) -> u64 {
         self.approximate_size_bytes
+    }
+
+    #[must_use]
+    pub const fn approximate_memory_bytes(&self) -> u64 {
+        self.approximate_memory_bytes
+    }
+
+    #[must_use]
+    pub const fn role(&self) -> DownloadCatalogRole {
+        self.role
+    }
+
+    #[must_use]
+    pub const fn get_started(&self) -> bool {
+        self.get_started
+    }
+
+    #[must_use]
+    pub const fn experimental(&self) -> bool {
+        self.experimental
+    }
+
+    /// The smallest memory ceiling the daemon measured this model running at by
+    /// streaming weights from the SSD, or `None` when no streaming floor was
+    /// measured and the model must fit in memory whole.
+    #[must_use]
+    pub const fn minimum_memory_bytes(&self) -> Option<u64> {
+        self.minimum_memory_bytes
     }
 
     #[must_use]

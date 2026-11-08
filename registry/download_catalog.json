@@ -1,5 +1,5 @@
 {
-    "schema_version": 2,
+    "schema_version": 3,
     "entries": [
         {
             "huggingface_id": "mlx-community/nomicai-modernbert-embed-base-8bit",
@@ -7,8 +7,10 @@
             "display_name": "Nomic AI ModernBERT Embed Base 8-bit",
             "family": "modernbert",
             "approximate_size_bytes": 162580729,
+            "approximate_memory_bytes": 536870910,
+            "role": "helper",
             "public": true,
-            "description": "A small helper that turns text into a compact numerical fingerprint, which is what powers local search, finding similar text, and organizing text on your Mac. It is tiny (about 0.16 GB of memory) and runs quietly in the background. Each piece of text is limited to about 2,000 words.",
+            "description": "A small helper that turns text into a compact numerical fingerprint, which is what powers local search, finding similar text, and organizing text on your Mac. It is tiny and runs quietly in the background. Each piece of text is limited to about 2,000 words.",
             "capabilities": {
                 "supports_embeddings": true
             },
@@ -21,8 +23,10 @@
             "display_name": "Qwen 3.5 0.8B 4-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 652031020,
+            "approximate_memory_bytes": 1825361094,
+            "role": "chat",
             "public": true,
-            "description": "A small, fast, all-around model for daily tasks - chatting, solving problems, using tools, and looking at pictures. It fits comfortably on most Macs (about 0.65 GB of memory), answers quickly, and keeps a large memory window for long conversations. Doubles as a lightweight assistant that helps bigger models respond faster.",
+            "description": "A small, fast, all-around model for daily tasks - chatting, solving problems, using tools, and looking at pictures. It fits comfortably on most Macs, answers quickly, and keeps a large memory window for long conversations. Doubles as a lightweight assistant that helps bigger models respond faster.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -38,8 +42,10 @@
             "display_name": "Qwen 3.5 2B 4-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 1749081857,
+            "approximate_memory_bytes": 2899102914,
+            "role": "chat",
             "public": true,
-            "description": "A slightly larger all-around model for everyday use - chatting, reasoning, using tools, and understanding images. Runs on most Macs (about 1.75 GB of memory), balances speed and capability, and keeps a large memory window for long conversations and documents.",
+            "description": "A slightly larger all-around model for everyday use - chatting, reasoning, using tools, and understanding images. Runs on most Macs, balances speed and capability, and keeps a large memory window for long conversations and documents.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -55,6 +61,8 @@
             "display_name": "Qwen 3.6 35B A3B OptiQ 4-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 24693956069,
+            "approximate_memory_bytes": 25769803680,
+            "role": "chat",
             "public": true,
             "description": "A large, capable model that reads pictures and text and gives thoughtful answers. Best for harder work - writing, coding, and multi-step reasoning - when quality matters more than speed. This leaner version runs it on ordinary Macs without a noticeable drop in quality.",
             "capabilities": {
@@ -72,6 +80,9 @@
             "display_name": "Ornith 1.5 9B MLX 4-bit Vision",
             "family": "qwen3_5",
             "approximate_size_bytes": 5970332199,
+            "approximate_memory_bytes": 7086696012,
+            "role": "chat",
+            "get_started": true,
             "public": true,
             "description": "A capable everyday model that sees pictures and text, reasons before answering, and answers quickly. A strong all-rounder for common work - writing, coding, and understanding images. Ornith's own 4-bit weights with its original vision tower, at a lean size that runs comfortably on most Macs.",
             "capabilities": {
@@ -89,6 +100,10 @@
             "display_name": "FLUX.2 Klein 4B",
             "family": "flux2_klein",
             "approximate_size_bytes": 15980141329,
+            "approximate_memory_bytes": 18146236758,
+            "minimum_memory_bytes": 2249870406,
+            "role": "image_generation",
+            "get_started": true,
             "public": true,
             "description": "A local image generator that turns a written description into one high-quality image, all on your Mac - no uploads, and no internet needed for the drawing itself.",
             "capabilities": {
@@ -111,6 +126,8 @@
             "display_name": "Qwen-Image 2.1 4-bit",
             "family": "qwen_image_21",
             "approximate_size_bytes": 10497210127,
+            "approximate_memory_bytes": 12670153476,
+            "role": "image_generation",
             "public": true,
             "description": "A local image generator that turns a written description into one clean image on your Mac, with no uploads and no internet needed for the drawing itself.",
             "capabilities": {
@@ -133,6 +150,10 @@
             "display_name": "Ornith 1.5 35B A3B OptiQ 4bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 23565955947,
+            "approximate_memory_bytes": 24696061860,
+            "minimum_memory_bytes": 4451287808,
+            "role": "coding",
+            "get_started": true,
             "public": true,
             "description": "A large, powerful model for the hard jobs - long writing, complex reasoning, coding, and reading pictures. This leaner version keeps strong quality while fitting ordinary Macs. Expect thoughtful answers over fast ones.",
             "capabilities": {
@@ -150,6 +171,8 @@
             "display_name": "Ornith 1.5 35B A3B OptiQ Static 5.5bpw",
             "family": "qwen3_5",
             "approximate_size_bytes": 27559062441,
+            "approximate_memory_bytes": 28668906594,
+            "role": "coding",
             "public": true,
             "description": "A large, capable model for writing, reasoning, and picture work, compressed to take less memory so it runs comfortably on more Macs. Quality stays strong - a good option when you want big-model power but have limited memory.",
             "capabilities": {
@@ -167,6 +190,8 @@
             "display_name": "Ornith 1.5 35B A3B MLX 6-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 28190535198,
+            "approximate_memory_bytes": 29313151686,
+            "role": "coding",
             "public": true,
             "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents, runs comfortably on more Macs thanks to its lighter compression, and takes about 28.2 GB on disk.",
             "capabilities": {
@@ -183,6 +208,9 @@
             "display_name": "Tiel Coder 35B A3B 6-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 29529737097,
+            "approximate_memory_bytes": 30709016052,
+            "minimum_memory_bytes": 4113679104,
+            "role": "coding",
             "public": true,
             "description": "A large, coding-focused model built from Ornith 1.5. It reads code and text, reasons through multi-step problems, and uses tools to work through real software tasks - strong at finding and fixing bugs. Runs on ordinary Macs with a lean 6-bit compression that keeps quality high for serious work.",
             "capabilities": {
@@ -199,6 +227,8 @@
             "display_name": "Qwen 3.8 27B MTPLX Optimized Speed 4-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 20703486926,
+            "approximate_memory_bytes": 21796958946,
+            "role": "chat",
             "public": true,
             "description": "A fast all-around model that reads pictures and text, reasons before answering, and calls tools for agentic work. It keeps Qwen 3.8's native multi-token-prediction head for two to three times the speed of plain decoding, at a lean 4-bit size that fits comfortably on 32 GB Macs.",
             "capabilities": {
@@ -216,6 +246,9 @@
             "display_name": "Ornith 1.5 35B A3B MLX 8-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 36850140696,
+            "approximate_memory_bytes": 38010460428,
+            "minimum_memory_bytes": 4484842240,
+            "role": "coding",
             "public": true,
             "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents and takes about 34.3 GB on disk. This is the highest-precision MLX build of the 35B model, favoring quality over fitting smaller Macs.",
             "capabilities": {
@@ -232,6 +265,9 @@
             "display_name": "Ternary Bonsai 2 27B 2-bit",
             "family": "prism_hadamard_qwen35",
             "approximate_size_bytes": 8595477990,
+            "approximate_memory_bytes": 9771050562,
+            "role": "chat",
+            "experimental": true,
             "public": true,
             "description": "A 27B dense ternary model folded into a 2-bit pack. Every rotated projection applies its Hadamard transform at run time, so the compressed weights serve full-precision-quality chat with 48 gated-delta layers and 16 full-attention layers.",
             "capabilities": {
@@ -248,6 +284,9 @@
             "display_name": "Qwen 3.8 27B Ternary Bonsai 2 DFlash2 MLX",
             "family": "prism_hadamard_qwen35",
             "approximate_size_bytes": 8840805938,
+            "approximate_memory_bytes": 9985798926,
+            "role": "chat",
+            "experimental": true,
             "public": true,
             "description": "A 27B dense ternary model folded into a 2-bit Hadamard pack and paired with a DFlash2 block-diffusion draft model for speculative decoding. The folded ternary weights serve full-precision chat quality, while the draft model accelerates generation by proposing tokens the main model verifies. Text-only, built on Qwen 3.8 27B.",
             "capabilities": {
@@ -264,6 +303,9 @@
             "display_name": "Ornith 1.5 122B MLX Mixed 2-bit",
             "family": "qwen3_5",
             "approximate_size_bytes": 40646996157,
+            "approximate_memory_bytes": 41768556798,
+            "role": "chat",
+            "experimental": true,
             "public": true,
             "description": "The largest model in the Library, built for the heaviest writing, reasoning, and coding work. This experimental 2-bit mixed-precision build is the leanest way to run the full Ornith 122B - it takes about 37.9 GB on disk and needs a Mac with a large amount of memory. Favors deep, thoughtful answers over fast ones. Reads text only.",
             "capabilities": {

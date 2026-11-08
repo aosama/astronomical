@@ -13,6 +13,6 @@ pub(crate) use catalog_projection::{
 };
 pub use download_catalog::{
     DownloadCatalog, DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadCatalogError,
-    DownloadCatalogFamily,
+    DownloadCatalogFamily, DownloadCatalogRole,
 };
 pub(crate) use download_catalog::{is_valid_huggingface_id, is_valid_immutable_revision};

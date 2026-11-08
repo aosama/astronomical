@@ -19,9 +19,10 @@ test("fetches the immutable catalog once when Library wiring is repeated", ASYNC
     const libraryDocument = createLibraryDocument();
     let catalogFetchCount = 0;
     scriptContext.document = libraryDocument;
-    scriptContext.fetch = async () => {
-        catalogFetchCount += 1;
-        return { ok: true, async json() { return { schema_version: 2, entries: [] }; } };
+    scriptContext.fetch = async (requestPath) => {
+        // Only the catalog request is counted; the memory status read is a separate, advisory request.
+        if (requestPath === "/v1/library/catalog") catalogFetchCount += 1;
+        return { ok: true, async json() { return { schema_version: 3, entries: [] }; } };
     };
 
     await vm.runInContext(
@@ -37,7 +38,7 @@ test("renders unavailable state for malformed, non-success, and failed catalog r
     const malformedContext = createLibraryContext();
     const malformedDocument = createLibraryDocument();
     malformedContext.document = malformedDocument;
-    malformedContext.catalogDocument = { schema_version: 2, entries: [{}] };
+    malformedContext.catalogDocument = { schema_version: 3, entries: [{}] };
     assert.equal(
         vm.runInContext("renderLibraryCatalogDocument(catalogDocument)", malformedContext),
         "unavailable"
@@ -48,7 +49,7 @@ test("renders unavailable state for malformed, non-success, and failed catalog r
     nonSuccessContext.document = nonSuccessDocument;
     nonSuccessContext.fetch = async () => ({
         ok: false,
-        async json() { return { schema_version: 2, entries: [] }; }
+        async json() { return { schema_version: 3, entries: [] }; }
     });
     await vm.runInContext("wireLibraryCatalog()", nonSuccessContext);
     assert.equal(nonSuccessDocument.catalogContainer.dataset.libraryState, "unavailable");
@@ -74,7 +75,7 @@ test("recovers the catalog automatically after a daemon interruption", ASYNC_TES
             return {
                 ok: true,
                 async json() {
-                    return { schema_version: 2, entries: [validCatalogEntry()] };
+                    return { schema_version: 3, entries: [validCatalogEntry()] };
                 }
             };
         }
@@ -138,7 +139,7 @@ test("loads the shipped scripts and resolves the startup Library journey", ASYNC
         fetch: async (requestPath) => {
             requestedPaths.push(requestPath);
             if (requestPath === "/v1/library/catalog") {
-                return { ok: true, async json() { return { schema_version: 2, entries: [] }; } };
+                return { ok: true, async json() { return { schema_version: 3, entries: [] }; } };
             }
             return { ok: false, async json() { return {}; } };
         },
@@ -175,4 +176,112 @@ test("loads the shipped scripts and resolves the startup Library journey", ASYNC
         1
     );
     assert.equal(libraryCatalogContainer.dataset.libraryState, "empty");
+});
+
+function catalogAndStatusFetch(statusHandler) {
+    return async (requestPath) => {
+        if (requestPath === "/v1/library/catalog") {
+            return { ok: true, async json() { return { schema_version: 3, entries: [validCatalogEntry()] }; } };
+        }
+        return statusHandler(requestPath);
+    };
+}
+
+test("should_read_the_serving_memory_ceiling_from_status_with_the_catalog", ASYNC_TEST_OPTIONS, async () => {
+    const scriptContext = createLibraryContext();
+    const libraryDocument = createLibraryDocument();
+    scriptContext.document = libraryDocument;
+    scriptContext.catalogContainer = libraryDocument.catalogContainer;
+    scriptContext.fetch = catalogAndStatusFetch(async () => ({
+        ok: true,
+        async json() {
+            return {
+                mlx_memory_ceiling_bytes: 34_359_738_368,
+                machine_mlx_memory_ceiling_bytes: 42_949_672_960
+            };
+        }
+    }));
+
+    await vm.runInContext("loadLibraryCatalog(catalogContainer, 10_000)", scriptContext);
+
+    assert.equal(vm.runInContext("libraryServingCeilingBytes", scriptContext), 34_359_738_368);
+    assert.equal(libraryDocument.catalogContainer.dataset.libraryState, "ready");
+});
+
+test("should_use_the_effective_ceiling_and_fall_back_to_the_machine_ceiling_only_when_it_is_missing", () => {
+    const scriptContext = createLibraryContext();
+    scriptContext.statusDocument = {
+        mlx_memory_ceiling_bytes: 34_359_738_368,
+        machine_mlx_memory_ceiling_bytes: 42_949_672_960
+    };
+    assert.equal(
+        vm.runInContext("readLibraryServingCeilingBytes(statusDocument)", scriptContext),
+        34_359_738_368
+    );
+    for (const missingEffectiveCeiling of [undefined, 0, -1, "34359738368", Infinity]) {
+        scriptContext.statusDocument = {
+            mlx_memory_ceiling_bytes: missingEffectiveCeiling,
+            machine_mlx_memory_ceiling_bytes: 42_949_672_960
+        };
+        assert.equal(
+            vm.runInContext("readLibraryServingCeilingBytes(statusDocument)", scriptContext),
+            42_949_672_960,
+            `effective ceiling ${String(missingEffectiveCeiling)} must fall back to the machine ceiling`
+        );
+    }
+});
+
+test("should_return_null_serving_ceiling_when_both_status_ceilings_are_missing_or_zero", () => {
+    const scriptContext = createLibraryContext();
+    for (const statusDocument of [{}, { mlx_memory_ceiling_bytes: 0, machine_mlx_memory_ceiling_bytes: 0 }]) {
+        scriptContext.statusDocument = statusDocument;
+        assert.equal(
+            vm.runInContext("readLibraryServingCeilingBytes(statusDocument)", scriptContext),
+            null
+        );
+    }
+});
+
+test("should_treat_a_failed_or_zero_status_as_unknown_without_failing_the_catalog", ASYNC_TEST_OPTIONS, async () => {
+    const zeroCeilingContext = createLibraryContext();
+    const zeroCeilingDocument = createLibraryDocument();
+    zeroCeilingContext.document = zeroCeilingDocument;
+    zeroCeilingContext.catalogContainer = zeroCeilingDocument.catalogContainer;
+    zeroCeilingContext.fetch = catalogAndStatusFetch(async () => ({
+        ok: true,
+        async json() { return { machine_mlx_memory_ceiling_bytes: 0 }; }
+    }));
+    await vm.runInContext("loadLibraryCatalog(catalogContainer, 10_000)", zeroCeilingContext);
+    assert.equal(vm.runInContext("libraryServingCeilingBytes", zeroCeilingContext), null);
+
+    const failedStatusContext = createLibraryContext();
+    const failedStatusDocument = createLibraryDocument();
+    failedStatusContext.document = failedStatusDocument;
+    failedStatusContext.catalogContainer = failedStatusDocument.catalogContainer;
+    failedStatusContext.fetch = catalogAndStatusFetch(async () => { throw new Error("status down"); });
+    await vm.runInContext("loadLibraryCatalog(catalogContainer, 10_000)", failedStatusContext);
+    assert.equal(vm.runInContext("libraryServingCeilingBytes", failedStatusContext), null);
+    assert.equal(failedStatusDocument.catalogContainer.dataset.libraryState, "ready");
+});
+
+test("should_reread_the_serving_ceiling_only_once_it_is_stale_or_unknown", ASYNC_TEST_OPTIONS, async () => {
+    const scriptContext = createLibraryContext();
+    let statusReadCount = 0;
+    let reportedCeilingBytes = 34_359_738_368;
+    scriptContext.fetch = catalogAndStatusFetch(async () => {
+        statusReadCount += 1;
+        return { ok: true, async json() { return { mlx_memory_ceiling_bytes: reportedCeilingBytes }; } };
+    });
+
+    await vm.runInContext("refetchLibraryCatalogDocument(100_000)", scriptContext);
+    assert.equal(statusReadCount, 1, "an unknown ceiling is read at once");
+
+    reportedCeilingBytes = 17_179_869_184;
+    await vm.runInContext("refetchLibraryCatalogDocument(129_999)", scriptContext);
+    assert.equal(statusReadCount, 1, "one millisecond short of the refresh interval reuses the known ceiling");
+    assert.equal(vm.runInContext("libraryServingCeilingBytes", scriptContext), 34_359_738_368);
+
+    await vm.runInContext("refetchLibraryCatalogDocument(130_000)", scriptContext);
+    assert.equal(statusReadCount, 2, "exactly the refresh interval re-reads the ceiling");
+    assert.equal(vm.runInContext("libraryServingCeilingBytes", scriptContext), 17_179_869_184);
 });

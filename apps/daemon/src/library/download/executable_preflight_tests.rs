@@ -433,6 +433,6 @@ fn json_response(body: serde_json::Value) -> HubHttpResponse {
 
 fn catalog_json() -> String {
     format!(
-        "{{\"schema_version\":2,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example model\",\"family\":\"qwen3_5\",\"approximate_size_bytes\":39,\"public\":true}}]}}"
+        "{{\"schema_version\":3,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example model\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":39,\"public\":true}}]}}"
     )
 }
