@@ -127,7 +127,12 @@ where
     )
     .with_diagnostic_qwen3_5_resident_prefill_activation_floor_bytes(
         worker_startup_configuration.diagnostic_qwen3_5_resident_prefill_activation_floor_bytes,
-    );
+    )
+    .with_hardware_mlx_memory_ceiling_bytes(effective_mlx_memory_ceiling_after_wired_claim(
+        machine_mlx_memory_ceiling_bytes_u64,
+        claimed_wired_residency_budget_bytes
+            .and_then(|budget_bytes| u64::try_from(budget_bytes).ok()),
+    ));
     let engine_worker: InferenceWorker = idle_engine_worker_from_factory(
         model_factory,
         machine_mlx_memory_ceiling_bytes_u64,

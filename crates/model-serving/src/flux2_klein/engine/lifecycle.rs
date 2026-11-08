@@ -75,6 +75,18 @@ impl Flux2KleinImageEngine {
         )
     }
 
+    /// Tells the engine what the hardware itself allows, so a load whose
+    /// floor is above a hardware-set ceiling plans at its floor (#1902).
+    #[must_use]
+    pub fn with_hardware_mlx_memory_ceiling_bytes(
+        mut self,
+        hardware_mlx_memory_ceiling_bytes: u64,
+    ) -> Self {
+        self.components
+            .adopt_hardware_mlx_memory_ceiling(hardware_mlx_memory_ceiling_bytes);
+        self
+    }
+
     #[doc(hidden)]
     // The DX production constructor composes through this seam, so it survives
     // any direct-mlx build, not just test builds.

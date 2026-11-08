@@ -454,4 +454,22 @@ async fn should_not_touch_the_ceiling_when_the_floor_fits_under_it() {
     }
 }
 
+#[tokio::test]
+async fn should_serve_an_image_model_at_its_floor_when_the_hardware_sets_the_ceiling() {
+    // The scripted image model reports a 1,000-byte floor; this machine's own
+    // memory allows only 800, so the loaded engine is raised to 1,000 (#1902).
+    let image_engine = ScriptedImageEngine::new(vec![vec![Ok(completed_step())]]);
+    let updated_limits = Arc::clone(&image_engine.updated_limits);
+    let (mut events, mut commands, worker) =
+        start_idle_worker(vec![Ok(ScriptedRuntime::Image(image_engine))], 800).await;
+    let _idle = next_event(&mut events).await;
+    commands
+        .send_command(&swap_image_command())
+        .await
+        .expect("image swap");
+    let _image_swapped = next_event(&mut events).await;
+    assert_eq!(*lock(&updated_limits), vec![1_000]);
+    close_worker(commands, worker).await;
+}
+
 mod support;

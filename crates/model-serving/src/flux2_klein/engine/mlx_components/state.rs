@@ -17,6 +17,7 @@ impl Flux2KleinMlxComponents {
             model_directory,
             provenance,
             effective_mlx_memory_ceiling_bytes,
+            hardware_mlx_memory_ceiling_bytes: u64::MAX,
             original_allocator_cache_memory_limit_bytes: allocator_cache_memory_limit_bytes,
             allocator_cache_memory_limit_bytes,
             performance_attribution_enabled,

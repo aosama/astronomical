@@ -69,6 +69,12 @@ pub trait Flux2KleinEngineComponents {
     fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         None
     }
+    /// Records the ceiling the hardware itself allows (physical memory or
+    /// Metal's plannable wired residency), so a load whose floor is above a
+    /// hardware-set ceiling plans at its floor instead of refusing (#1902).
+    /// Components that never refuse at load ignore it.
+    fn adopt_hardware_mlx_memory_ceiling(&mut self, _hardware_mlx_memory_ceiling_bytes: u64) {}
+
     fn update_mlx_memory_limit(
         &mut self,
         _requested_mlx_memory_ceiling_bytes: u64,

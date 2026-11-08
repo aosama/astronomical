@@ -193,12 +193,10 @@ impl Flux2KleinMlxComponents {
             validated_artifact.transformer_config(),
         )
         .map_err(|error| error.to_string())?;
+        let load_planning_ceiling_bytes = self.load_planning_ceiling_bytes(&geometry);
         let residency_plan = attribution
             .measure_operation(PerformanceOperation::MemoryAdmissionSnapshot, |_| {
-                Flux2KleinMemoryAdmission::plan(
-                    self.effective_mlx_memory_ceiling_bytes as u64,
-                    &geometry,
-                )
+                Flux2KleinMemoryAdmission::plan(load_planning_ceiling_bytes, &geometry)
             })
             .map_err(|error| error.to_string())?;
         let minimum_ceiling_bytes = residency_plan.minimum_mlx_memory_ceiling_bytes();
@@ -211,6 +209,28 @@ impl Flux2KleinMlxComponents {
             total_artifact_payload_bytes,
             model_shard_count,
         })
+    }
+
+    /// The ceiling the load plans against: the effective ceiling, or the
+    /// model's floor when the hardware set a ceiling below it (#1902). The
+    /// worker then raises the loaded engine to that floor through the live
+    /// limit path, which also moves the MLX runtime limits. A ceiling the user
+    /// configured below the floor is planned as is, so the load still refuses.
+    /// Invalid geometry plans at the effective ceiling, where the planner
+    /// reports the same geometry error itself.
+    fn load_planning_ceiling_bytes(&self, geometry: &Flux2KleinMemoryGeometry) -> u64 {
+        let effective_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes as u64;
+        let Ok(model_floor_bytes) =
+            Flux2KleinMemoryAdmission::minimum_mlx_memory_ceiling_bytes(geometry)
+        else {
+            return effective_ceiling_bytes;
+        };
+        crate::hardware_bound_model_floor_ceiling_bytes(
+            effective_ceiling_bytes,
+            self.hardware_mlx_memory_ceiling_bytes,
+            model_floor_bytes,
+        )
+        .unwrap_or(effective_ceiling_bytes)
     }
 }
 

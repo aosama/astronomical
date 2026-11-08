@@ -48,6 +48,11 @@ pub struct ModelFamilyFactory {
     persistent_prompt_cache_enabled: bool,
     diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
+    /// What the hardware allows (physical memory or Metal's plannable wired
+    /// residency), fixed for the worker's lifetime. Image engines plan a load
+    /// at their floor when the ceiling they receive is this bound (#1902).
+    /// `u64::MAX` until startup reports it, which keeps loads refusing.
+    hardware_mlx_memory_ceiling_bytes: u64,
 }
 
 pub(crate) type InferenceWorker = EngineBackedWorker<
@@ -90,7 +95,18 @@ impl ModelFamilyFactory {
             persistent_prompt_cache_enabled,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
+            hardware_mlx_memory_ceiling_bytes: u64::MAX,
         }
+    }
+
+    /// Records the ceiling the hardware itself allows; see the field.
+    #[must_use]
+    pub(crate) fn with_hardware_mlx_memory_ceiling_bytes(
+        mut self,
+        hardware_mlx_memory_ceiling_bytes: u64,
+    ) -> Self {
+        self.hardware_mlx_memory_ceiling_bytes = hardware_mlx_memory_ceiling_bytes;
+        self
     }
 
     /// Forces the Qwen3.5 engine family for controlled diagnostic journeys.
@@ -413,14 +429,17 @@ impl ModelFamilyFactory {
             verified_evidence.license.spdx_identifier(),
         );
         Ok(ModelFactoryRuntime::Image(
-            ModelFamilyImageEngine::Flux2Klein(Flux2KleinImageEngine::from_model_family_factory(
-                model_directory_path,
-                provenance,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.allocator_cache_memory_limit_bytes,
-                self.performance_attribution_enabled,
-                self.performance_attribution_log_path.clone(),
-            )),
+            ModelFamilyImageEngine::Flux2Klein(
+                Flux2KleinImageEngine::from_model_family_factory(
+                    model_directory_path,
+                    provenance,
+                    self.effective_mlx_memory_ceiling_bytes,
+                    self.allocator_cache_memory_limit_bytes,
+                    self.performance_attribution_enabled,
+                    self.performance_attribution_log_path.clone(),
+                )
+                .with_hardware_mlx_memory_ceiling_bytes(self.hardware_mlx_memory_ceiling_bytes),
+            ),
         ))
     }
 
@@ -466,14 +485,17 @@ impl ModelFamilyFactory {
             verified_evidence.license.spdx_identifier(),
         );
         Ok(ModelFactoryRuntime::Image(
-            ModelFamilyImageEngine::QwenImage21(QwenImage21ImageEngine::from_model_family_factory(
-                model_directory_path,
-                provenance,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.allocator_cache_memory_limit_bytes,
-                self.performance_attribution_enabled,
-                self.performance_attribution_log_path.clone(),
-            )),
+            ModelFamilyImageEngine::QwenImage21(
+                QwenImage21ImageEngine::from_model_family_factory(
+                    model_directory_path,
+                    provenance,
+                    self.effective_mlx_memory_ceiling_bytes,
+                    self.allocator_cache_memory_limit_bytes,
+                    self.performance_attribution_enabled,
+                    self.performance_attribution_log_path.clone(),
+                )
+                .with_hardware_mlx_memory_ceiling_bytes(self.hardware_mlx_memory_ceiling_bytes),
+            ),
         ))
     }
 

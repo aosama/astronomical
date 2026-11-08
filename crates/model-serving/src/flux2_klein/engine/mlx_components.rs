@@ -54,6 +54,9 @@ pub(super) struct Flux2KleinMlxComponents {
     model_directory: PathBuf,
     provenance: Flux2KleinArtifactProvenance,
     effective_mlx_memory_ceiling_bytes: usize,
+    /// What the hardware allows; `u64::MAX` until the factory reports it,
+    /// which keeps the load refusing below its floor as before.
+    hardware_mlx_memory_ceiling_bytes: u64,
     original_allocator_cache_memory_limit_bytes: usize,
     allocator_cache_memory_limit_bytes: usize,
     performance_attribution_enabled: bool,

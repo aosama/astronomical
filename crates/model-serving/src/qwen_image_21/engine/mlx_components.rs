@@ -43,6 +43,9 @@ pub struct QwenImage21MlxComponents {
     model_directory: PathBuf,
     provenance: QwenImage21ArtifactProvenance,
     effective_mlx_memory_ceiling_bytes: usize,
+    /// What the hardware allows; `u64::MAX` until the factory reports it,
+    /// which keeps the load refusing below its floor as before.
+    hardware_mlx_memory_ceiling_bytes: u64,
     allocator_cache_memory_limit_bytes: usize,
     minimum_mlx_memory_ceiling_bytes: Option<u64>,
     performance_attribution_enabled: bool,
@@ -82,6 +85,7 @@ impl QwenImage21MlxComponents {
             model_directory: model_directory.into(),
             provenance,
             effective_mlx_memory_ceiling_bytes,
+            hardware_mlx_memory_ceiling_bytes: u64::MAX,
             allocator_cache_memory_limit_bytes,
             minimum_mlx_memory_ceiling_bytes: None,
             performance_attribution_enabled,
@@ -94,6 +98,29 @@ impl QwenImage21MlxComponents {
             request_attribution: None,
             post_cleanup_memory_telemetry: None,
         }
+    }
+
+    /// Serves the artifact at its floor when the hardware set a ceiling below
+    /// it (#1902): the runtime initializes lazily at the raised ceiling and
+    /// macOS pages the rest. Only a ceiling the user configured below the floor
+    /// is refused, which keeps the load honest about a limit the user chose.
+    fn admit_load_ceiling(&mut self, minimum_mlx_memory_ceiling_bytes: u64) -> Result<(), String> {
+        if let Some(floor_ceiling_bytes) = crate::hardware_bound_model_floor_ceiling_bytes(
+            self.effective_mlx_memory_ceiling_bytes as u64,
+            self.hardware_mlx_memory_ceiling_bytes,
+            minimum_mlx_memory_ceiling_bytes,
+        ) {
+            self.effective_mlx_memory_ceiling_bytes =
+                usize::try_from(floor_ceiling_bytes).unwrap_or(usize::MAX);
+        }
+        if usize::try_from(minimum_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX)
+            > self.effective_mlx_memory_ceiling_bytes
+        {
+            return Err(format!(
+                "the configured MLX memory ceiling is below the artifact floor of {minimum_mlx_memory_ceiling_bytes} bytes"
+            ));
+        }
+        Ok(())
     }
 
     fn new_attribution(&self) -> PerformanceAttribution {
@@ -211,15 +238,7 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
         // The reviewed artifact stores each component as one weight file, so the shard count
         // is the component count.
         let model_shard_count = Some(3_usize);
-        if usize::try_from(minimum_mlx_memory_ceiling_bytes).unwrap_or(usize::MAX)
-            > self.effective_mlx_memory_ceiling_bytes
-        {
-            // The runtime initializes lazily on the first request; refusing here keeps the load
-            // boundary honest about a ceiling that cannot serve the artifact.
-            return Err(format!(
-                "the configured MLX memory ceiling is below the artifact floor of {minimum_mlx_memory_ceiling_bytes} bytes"
-            ));
-        }
+        self.admit_load_ceiling(minimum_mlx_memory_ceiling_bytes)?;
         if let Some(report) =
             load_attribution.finish_model_loading(ModelLoadingPerformanceAttributionMetadata {
                 outcome: PerformanceAttributionOutcome::Success,
@@ -420,6 +439,10 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
 
     fn collect_mlx_memory_telemetry(&self) -> Option<MlxMemoryTelemetry> {
         self.memory_telemetry()
+    }
+
+    fn adopt_hardware_mlx_memory_ceiling(&mut self, hardware_mlx_memory_ceiling_bytes: u64) {
+        self.hardware_mlx_memory_ceiling_bytes = hardware_mlx_memory_ceiling_bytes;
     }
 
     fn update_mlx_memory_limit(
