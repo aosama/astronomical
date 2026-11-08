@@ -98,6 +98,41 @@ fn should_apply_a_full_huggingface_id_entry_and_report_only_entries_that_match_n
     );
 }
 
+/// A Library download records its full Hugging Face ID beside the model, so an entry for another
+/// organisation's model of the same name must not configure it.
+#[test]
+fn should_not_apply_another_organisations_entry_to_a_library_model() {
+    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
+    let model_directory = config_home_directory
+        .path()
+        .join(".astronomical-dev/models/astronomical-test/example-qwen");
+    write_minimal_qwen_model(&model_directory);
+    write_library_provenance(&model_directory, "astronomical-test/example-qwen");
+    write_development_config_with_models(
+        config_home_directory.path(),
+        &[],
+        &serde_json::json!({
+            "other-organisation/example-qwen": {"generation_defaults": {"temperature": 0.7}},
+            "astronomical-test/example-qwen": {"generation_defaults": {"temperature": 0.4}},
+        }),
+    );
+
+    let resolved_config = development_resolver(config_home_directory.path())
+        .load()
+        .expect("the config should resolve");
+
+    assert_eq!(
+        resolved_config.model_policy_catalog["example-qwen"]
+            .generation_defaults
+            .temperature_thousandths,
+        Some(400)
+    );
+    assert_eq!(
+        resolved_config.unmatched_model_config_ids,
+        ["other-organisation/example-qwen"]
+    );
+}
+
 #[test]
 fn should_report_an_entry_shadowed_by_an_exact_entry_as_unmatched() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
@@ -426,6 +461,20 @@ fn write_development_config_with_models(
         serde_json::to_vec(&config_document).expect("the config fixture should serialize"),
     )
     .expect("the config fixture should be written");
+}
+
+/// The provenance file a Library download writes beside the model it publishes.
+fn write_library_provenance(model_directory: &Path, provider_model_id: &str) {
+    let provenance_document = serde_json::json!({
+        "provider_model_id": provider_model_id,
+        "revision": "0123456789abcdef0123456789abcdef01234567",
+        "schema_version": 1,
+    });
+    fs::write(
+        model_directory.join(".astronomical-library-provenance.json"),
+        serde_json::to_vec(&provenance_document).expect("the provenance should serialize"),
+    )
+    .expect("the provenance should be written");
 }
 
 fn write_minimal_qwen_model(model_directory: &Path) {
