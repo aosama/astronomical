@@ -28,7 +28,7 @@ final class ModelLoadInFlightPresentationTests: XCTestCase {
     XCTAssertEqual(statusDocument.progressTitle, "Loading the model")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "In progress")
-    XCTAssertFalse(statusDocument.hasDeterminateProgress)
+    XCTAssertFalse(statusDocument.showsProgressBar)
   }
 
   // During a swap the daemon still names the model the worker has already dropped.

@@ -224,7 +224,7 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertEqual(statusDocument.progressTitle, "27 tokens")
-    XCTAssertFalse(statusDocument.hasDeterminateProgress)
+    XCTAssertFalse(statusDocument.showsProgressBar)
     XCTAssertEqual(statusDocument.flightTitle, "Generating · 27.0 tok/s")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
   }
@@ -296,7 +296,7 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.phaseTitle, "Decoding image")
     XCTAssertEqual(statusDocument.flightTitle, "Decoding image")
     XCTAssertEqual(statusDocument.progressTitle, "Decoding image")
-    XCTAssertFalse(statusDocument.hasDeterminateProgress)
+    XCTAssertFalse(statusDocument.showsProgressBar)
   }
 
   func test_should_label_completed_denoising_as_one_finished_phase_not_a_finished_image() throws {

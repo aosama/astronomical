@@ -19,7 +19,7 @@ final class PromptCacheRestorePresentationTests: XCTestCase {
     XCTAssertEqual(statusDocument.flightTitle, "Restoring prompt cache")
     XCTAssertEqual(statusDocument.progressTitle, "Restoring prompt cache")
     XCTAssertFalse(
-      statusDocument.hasDeterminateProgress,
+      statusDocument.showsProgressBar,
       "restore has no token totals yet, so the popover must not draw a 0% bar"
     )
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "Calculating")

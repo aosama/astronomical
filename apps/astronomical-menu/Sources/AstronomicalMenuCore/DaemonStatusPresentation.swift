@@ -143,7 +143,7 @@ extension DaemonStatusDocument {
       // A request without an explicit output cap reports the endpoint's
       // default budget (65,535), which makes "x / y tokens" read as a
       // permanently near-zero bar; large budgets present as a plain count
-      // with an indeterminate bar.
+      // and no bar.
       if progress.totalUnitCount >= 8_192 {
         return "\(progress.completedUnitCount) tokens"
       }
@@ -181,12 +181,17 @@ extension DaemonStatusDocument {
     return String(format: "%.1f s / %.1f s", elapsedSeconds, estimatedRemainingSeconds)
   }
 
-  var hasDeterminateProgress: Bool {
+  /// Whether the popover draws its progress bar. It does when there is a
+  /// completion fraction, and while idle, where an empty bar keeps the section
+  /// readable. It does not during a model load, a prompt-cache restore, a
+  /// generation against the default budget, or an image phase other than
+  /// denoising: the Flight and Progress rows describe those instead.
+  var showsProgressBar: Bool {
     if isLoadingModel { return false }
     if isRestoringPromptCache { return false }
     guard let progress else { return true }
     // A generation against the endpoint's default budget has no meaningful
-    // completion fraction; show the indeterminate bar instead of ~0%.
+    // completion fraction; the popover shows no bar instead of ~0%.
     if progress.phase == "generation" && progress.totalUnitCount >= 8_192 {
       return false
     }
