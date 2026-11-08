@@ -92,6 +92,10 @@ async fn should_resume_verify_and_atomically_publish_the_complete_user_journey()
                 .is_none()
         );
         assert!(!staged_file.exists());
+        assert!(
+            !models_directory.join(".incomplete").exists(),
+            "publishing leaves no empty hidden staging folders behind"
+        );
     })
     .await
     .expect("payload acceptance journey should remain bounded");
