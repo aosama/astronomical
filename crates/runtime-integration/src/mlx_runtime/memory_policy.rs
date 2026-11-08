@@ -202,6 +202,43 @@ pub(super) fn configure_runtime_memory_limits(
     Ok(())
 }
 
+/// Re-installs the process-global MLX limits while no [`MlxRuntime`] is alive.
+///
+/// The one-configuration invariant above exists to catch two live runtimes
+/// disagreeing. Once the worker has no model loaded, though, the record only
+/// remembers the last engine's limits; a ceiling the user changed in that
+/// state would otherwise leave the record stale, and the next engine's
+/// initialization at the new ceiling would be refused until the app restarted
+/// (#1906). Callers must hold no runtime: a live runtime's own
+/// `update_memory_limits` still refuses limits it did not install.
+///
+/// # Errors
+///
+/// Returns the native error when MLX rejects the limits; the record then
+/// keeps its previous value.
+pub fn reinstall_process_memory_limits_while_idle(
+    memory_limits: MlxMemoryLimits,
+) -> Result<(), MlxRuntimeError> {
+    reinstall_memory_limits_record(&RUNTIME_MEMORY_LIMITS, memory_limits, set_memory_limits)
+}
+
+/// The record-keeping behind [`reinstall_process_memory_limits_while_idle`],
+/// with the record and the native setter passed in so it is testable without
+/// touching the process-global MLX state other tests share.
+pub(super) fn reinstall_memory_limits_record(
+    limits_record: &Mutex<Option<MlxMemoryLimits>>,
+    memory_limits: MlxMemoryLimits,
+    apply_native_limits: fn(MlxMemoryLimits) -> Result<(), MlxRuntimeError>,
+) -> Result<(), MlxRuntimeError> {
+    let mut configured_limits = error_classification::lock_unpoisoned(limits_record);
+    if *configured_limits == Some(memory_limits) {
+        return Ok(());
+    }
+    apply_native_limits(memory_limits)?;
+    *configured_limits = Some(memory_limits);
+    Ok(())
+}
+
 /// Applies the active-allocation and allocator-retention MLX process controls.
 ///
 /// - `mlx_set_memory_limit` configures MLX graph-evaluation memory guidance.

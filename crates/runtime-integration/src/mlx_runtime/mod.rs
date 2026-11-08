@@ -45,6 +45,7 @@ mod device_info;
 // every sibling module here, so they travel through the module tree rather
 // than being repeated.
 pub(crate) use error_classification::check_status;
+pub use memory_policy::reinstall_process_memory_limits_while_idle;
 
 /// Process-global official MLX C runtime configured for one isolated worker.
 ///

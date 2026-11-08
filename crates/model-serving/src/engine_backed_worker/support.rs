@@ -143,6 +143,13 @@ pub trait ModelFactory<
     ) {
     }
 
+    /// Adopts a ceiling while no model is loaded, so the next model loads under
+    /// it. A factory whose models share process-global native limits overrides
+    /// this to re-install them as well (#1906); the default only records it.
+    fn adopt_mlx_memory_limits_with_no_model_loaded(&mut self, mlx_memory_ceiling_bytes: u64) {
+        self.update_mlx_memory_limits(mlx_memory_ceiling_bytes, mlx_memory_ceiling_bytes);
+    }
+
     /// Returns the global prompt-cache root directory, if the factory manages one.
     ///
     /// `None` means the factory does not own a cache (e.g. the `()` unit factory).

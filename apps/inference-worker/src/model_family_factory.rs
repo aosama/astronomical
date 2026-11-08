@@ -25,6 +25,9 @@ use astronomical_model_serving::{
     QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
+use astronomical_runtime_integration::{
+    MlxMemoryLimits, reinstall_process_memory_limits_while_idle,
+};
 
 mod qwen3_5_model_startup;
 mod qwen3_5_model_startup_error;
@@ -326,6 +329,23 @@ impl
         // policy acknowledged by the loaded engine rather than derive a fresh cache limit.
         self.allocator_cache_memory_limit_bytes =
             usize::try_from(allocator_cache_memory_limit_bytes).unwrap_or(usize::MAX);
+    }
+
+    /// No engine holds an MLX runtime here, so the process-global limits the
+    /// last engine left behind are re-installed at the new ceiling; otherwise
+    /// the next engine's initialization at that ceiling is refused (#1906).
+    fn adopt_mlx_memory_limits_with_no_model_loaded(&mut self, mlx_memory_ceiling_bytes: u64) {
+        self.update_mlx_memory_limits(mlx_memory_ceiling_bytes, mlx_memory_ceiling_bytes);
+        let memory_ceiling = usize::try_from(mlx_memory_ceiling_bytes).unwrap_or(usize::MAX);
+        let reinstall_outcome = MlxMemoryLimits::new(memory_ceiling, memory_ceiling)
+            .and_then(reinstall_process_memory_limits_while_idle);
+        if let Err(reinstall_error) = reinstall_outcome {
+            tracing::warn!(
+                error = %reinstall_error,
+                mlx_memory_ceiling_bytes,
+                "could not re-install the process MLX limits while no model is loaded"
+            );
+        }
     }
 
     fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
