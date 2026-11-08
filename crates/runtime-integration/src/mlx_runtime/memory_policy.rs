@@ -46,8 +46,29 @@ use mlx_c_rust::{
 
 use super::error_classification;
 
-/// The process-global memory policy. `None` until the first configuration.
-static RUNTIME_MEMORY_LIMITS: Mutex<Option<MlxMemoryLimits>> = Mutex::new(None);
+/// The process-global memory policy and how many runtimes currently hold it.
+///
+/// MLX limits are process-global, so two live runtimes must agree on them; a
+/// runtime that would install different limits beside a live one is refused.
+/// Once every runtime has been dropped, nothing depends on the installed
+/// limits any more, so the next runtime installs its own. Without that, a
+/// worker that loaded one model, changed its ceiling with no model loaded,
+/// and then loaded another was refused until restart (#1906).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct ProcessMemoryPolicy {
+    pub(super) installed_limits: Option<MlxMemoryLimits>,
+    pub(super) live_runtime_count: usize,
+}
+
+impl ProcessMemoryPolicy {
+    pub(super) const UNCONFIGURED: Self = Self {
+        installed_limits: None,
+        live_runtime_count: 0,
+    };
+}
+
+static PROCESS_MEMORY_POLICY: Mutex<ProcessMemoryPolicy> =
+    Mutex::new(ProcessMemoryPolicy::UNCONFIGURED);
 
 impl MlxRuntime {
     /// Replaces the two process-local MLX memory limits without reinitializing the runtime.
@@ -77,8 +98,8 @@ impl MlxRuntime {
         &mut self,
         memory_limits: MlxMemoryLimits,
     ) -> Result<(), MlxRuntimeError> {
-        let mut configured_limits = error_classification::lock_unpoisoned(&RUNTIME_MEMORY_LIMITS);
-        if let Some(existing_limits) = *configured_limits
+        let mut process_policy = error_classification::lock_unpoisoned(&PROCESS_MEMORY_POLICY);
+        if let Some(existing_limits) = process_policy.installed_limits
             && existing_limits != self.memory_limits
         {
             return Err(MlxRuntimeError::RuntimeAlreadyConfigured {
@@ -91,7 +112,7 @@ impl MlxRuntime {
             return Ok(());
         }
         set_memory_limits(memory_limits)?;
-        *configured_limits = Some(memory_limits);
+        process_policy.installed_limits = Some(memory_limits);
         self.memory_limits = memory_limits;
         Ok(())
     }
@@ -178,28 +199,59 @@ impl MlxRuntime {
     }
 }
 
-/// The initialization-time application of the memory policy.
+/// The initialization-time application of the memory policy, which also
+/// counts the new runtime as live.
 ///
-/// Enforces the same one-configuration invariant as
-/// [`MlxRuntime::update_memory_limits`]: the first call installs, an identical
-/// repeat is a no-op, and a conflicting second call is rejected.
+/// Beside a live runtime the same one-configuration rule as
+/// [`MlxRuntime::update_memory_limits`] holds: identical limits are shared, and
+/// different ones are refused. With no runtime alive the new limits replace
+/// whatever the last runtime left behind.
 pub(super) fn configure_runtime_memory_limits(
     memory_limits: MlxMemoryLimits,
 ) -> Result<(), MlxRuntimeError> {
-    let mut configured_limits = error_classification::lock_unpoisoned(&RUNTIME_MEMORY_LIMITS);
-    if let Some(existing_limits) = *configured_limits {
-        if existing_limits != memory_limits {
+    admit_runtime_memory_limits(&PROCESS_MEMORY_POLICY, memory_limits, set_memory_limits)
+}
+
+/// Releases one live runtime's hold on the process policy. Paired with every
+/// successful [`configure_runtime_memory_limits`], including when the
+/// runtime's construction fails after the limits were admitted.
+pub(super) fn release_runtime_memory_limits() {
+    release_runtime_from(&PROCESS_MEMORY_POLICY);
+}
+
+/// The admission rule behind [`configure_runtime_memory_limits`], with the
+/// policy and the native setter passed in so tests never touch the process
+/// state other tests share. The check, the install and the count change happen
+/// under one lock, so two runtimes starting at once cannot both replace it.
+pub(super) fn admit_runtime_memory_limits(
+    process_policy: &Mutex<ProcessMemoryPolicy>,
+    memory_limits: MlxMemoryLimits,
+    apply_native_limits: fn(MlxMemoryLimits) -> Result<(), MlxRuntimeError>,
+) -> Result<(), MlxRuntimeError> {
+    let mut process_policy = error_classification::lock_unpoisoned(process_policy);
+    match process_policy.installed_limits {
+        Some(existing_limits) if existing_limits == memory_limits => {}
+        Some(existing_limits) if process_policy.live_runtime_count > 0 => {
             return Err(MlxRuntimeError::RuntimeAlreadyConfigured {
                 active_memory_limit_bytes: existing_limits.active_memory_limit_bytes,
                 allocator_cache_memory_limit_bytes: existing_limits
                     .allocator_cache_memory_limit_bytes,
             });
         }
-    } else {
-        set_memory_limits(memory_limits)?;
-        *configured_limits = Some(memory_limits);
+        _ => {
+            apply_native_limits(memory_limits)?;
+            process_policy.installed_limits = Some(memory_limits);
+        }
     }
+    process_policy.live_runtime_count += 1;
     Ok(())
+}
+
+/// The release rule behind [`release_runtime_memory_limits`]; saturates so a
+/// stray release can never wrap the count and wedge every later runtime.
+pub(super) fn release_runtime_from(process_policy: &Mutex<ProcessMemoryPolicy>) {
+    let mut process_policy = error_classification::lock_unpoisoned(process_policy);
+    process_policy.live_runtime_count = process_policy.live_runtime_count.saturating_sub(1);
 }
 
 /// Applies the active-allocation and allocator-retention MLX process controls.
