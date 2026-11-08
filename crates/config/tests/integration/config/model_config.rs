@@ -328,3 +328,57 @@ fn should_ignore_the_speculative_decoding_block_length_at_both_levels() {
         "the per-model chunking override must still win for real fields"
     );
 }
+
+/// #1898: the Library and `models download` speak full Hugging Face IDs, so a `models` entry
+/// keyed that way must configure the installed model, which the daemon knows by its leaf ID.
+#[test]
+fn should_apply_a_full_huggingface_id_entry_to_the_installed_leaf_model() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"generation_defaults":{"temperature":0.7}}}}"#,
+    );
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("full-ID model entry should load");
+
+    let installed_model = astronomical_config
+        .resolved_model_config("target", 65_536)
+        .expect("the leaf model should resolve");
+    let other_model = astronomical_config
+        .resolved_model_config("another", 65_536)
+        .expect("an unconfigured model should resolve");
+
+    assert_eq!(installed_model.temperature(), Some(0.7));
+    assert_eq!(other_model.temperature(), None);
+    assert_eq!(
+        astronomical_config.configured_model_id_for("target", None),
+        Some("organization/target")
+    );
+    assert_eq!(
+        astronomical_config.configured_model_id_for("another", None),
+        None
+    );
+}
+
+#[test]
+fn should_prefer_the_exact_leaf_entry_over_a_full_huggingface_id_entry() {
+    let temporary_home_directory = tempfile::tempdir().expect("temporary home should be created");
+    write_config(
+        temporary_home_directory.path(),
+        r#"{"$schema":"./astronomical-config.schema.json","schema_version":1,"runtime":{"model_directories":[]},"models":{"organization/target":{"generation_defaults":{"temperature":0.7}},"target":{"generation_defaults":{"temperature":0.2}}}}"#,
+    );
+    let astronomical_config =
+        AstronomicalConfig::load_from_home_directory(temporary_home_directory.path())
+            .expect("both entries should load");
+
+    let installed_model = astronomical_config
+        .resolved_model_config("target", 65_536)
+        .expect("the leaf model should resolve");
+
+    assert_eq!(installed_model.temperature(), Some(0.2));
+    assert_eq!(
+        astronomical_config.configured_model_id_for("target", None),
+        Some("target")
+    );
+}

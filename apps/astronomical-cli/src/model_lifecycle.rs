@@ -141,11 +141,13 @@ impl ModelLifecycle {
             return Err(ModelLifecycleError::WorkerNotReady);
         }
         let installed_models = self.daemon_probe.models_list().await?;
-        let resolved_model_id = self.resolve_requested_model_id(
+        let requested_or_default_model_id = self.resolve_requested_model_id(
             requested_model_id,
             required_capability,
             &status_snapshot,
         )?;
+        let resolved_model_id =
+            installed_model_id_for(&installed_models, requested_or_default_model_id);
         let installed_and_capable = installed_models.iter().any(|listed_model| {
             listed_model.model_id == resolved_model_id
                 && required_capability.describes_installed_model(listed_model)
@@ -507,3 +509,21 @@ mod download_progress;
 
 #[cfg(test)]
 mod model_lifecycle_tests;
+
+/// The installed model's own ID when the request names it, either exactly or by its full
+/// Hugging Face ID (`organization/model`, as the Library and `models download` print it);
+/// otherwise the request unchanged, so the catalog and unknown-model paths see what was typed.
+pub(crate) fn installed_model_id_for(
+    installed_models: &[DaemonListedModel],
+    requested_model_id: String,
+) -> String {
+    let requested_leaf_model_id = astronomical_config::leaf_model_id(&requested_model_id);
+    for listed_model in installed_models {
+        if listed_model.model_id == requested_model_id
+            || listed_model.model_id == requested_leaf_model_id
+        {
+            return listed_model.model_id.clone();
+        }
+    }
+    requested_model_id
+}

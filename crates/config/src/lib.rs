@@ -68,7 +68,8 @@ pub use model_discovery::{
     verify_qwen_image_21_model_directory,
 };
 pub use model_identity::{
-    decode_huggingface_cache_directory_name, leaf_model_id, near_model_matches, resolve_model_id,
+    configured_model_id_for, decode_huggingface_cache_directory_name, leaf_model_id,
+    near_model_matches, resolve_model_id,
 };
 pub use neural_engine_program_cache::{
     ListedNeuralEngineProgramSet, NEURAL_ENGINE_PROGRAM_DIRECTORY_NAME,
@@ -349,10 +350,23 @@ impl AstronomicalConfig {
             .unwrap_or(false)
     }
 
-    /// Resolves inherited policy for one canonical discovered model identity.
+    /// Resolves inherited policy for one canonical discovered model identity, matching `models`
+    /// entries by its leaf ID only. Prefer [`Self::resolved_discovered_model_config`] when the
+    /// model's full Hugging Face ID is known.
     pub fn resolved_model_config(
         &self,
         model_id: &str,
+        artifact_maximum_context_tokens: u32,
+    ) -> Result<ResolvedModelConfig, AstronomicalConfigError> {
+        self.resolved_discovered_model_config(model_id, None, artifact_maximum_context_tokens)
+    }
+
+    /// Resolves inherited policy for one discovered model, matching `models` entries by its
+    /// leaf ID or its recorded full Hugging Face ID (see [`configured_model_id_for`]).
+    pub fn resolved_discovered_model_config(
+        &self,
+        model_id: &str,
+        provider_model_id: Option<&str>,
         artifact_maximum_context_tokens: u32,
     ) -> Result<ResolvedModelConfig, AstronomicalConfigError> {
         let global_chunking = self.user_config_file.chunking.clone().unwrap_or_default();
@@ -360,7 +374,30 @@ impl AstronomicalConfig {
             model_id,
             artifact_maximum_context_tokens,
             &global_chunking,
-            self.user_config_file.models.get(model_id),
+            self.configured_model_entry(model_id, provider_model_id),
+        )
+    }
+
+    fn configured_model_entry(
+        &self,
+        model_id: &str,
+        provider_model_id: Option<&str>,
+    ) -> Option<&config_document::ModelConfigFile> {
+        let configured_model_id = self.configured_model_id_for(model_id, provider_model_id)?;
+        self.user_config_file.models.get(configured_model_id)
+    }
+
+    /// The `models` key that configures one discovered model (see [`configured_model_id_for`]).
+    #[must_use]
+    pub fn configured_model_id_for(
+        &self,
+        discovered_model_id: &str,
+        provider_model_id: Option<&str>,
+    ) -> Option<&str> {
+        configured_model_id_for(
+            discovered_model_id,
+            provider_model_id,
+            self.configured_model_ids(),
         )
     }
 

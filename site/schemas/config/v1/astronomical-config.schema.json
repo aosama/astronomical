@@ -26,7 +26,7 @@
     },
     "models": {
       "type": "object",
-      "description": "Optional preferences keyed by canonical requestable discovered model ID.",
+      "description": "Optional preferences keyed by the discovered model ID (the model folder name), or by its full Hugging Face ID such as organization/model. An entry keyed by the exact folder name wins over one keyed by the full ID.",
       "default": {},
       "propertyNames": {
         "type": "string",
