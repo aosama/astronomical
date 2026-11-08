@@ -12,8 +12,8 @@ use tempfile::TempDir;
 use super::download_payload_support as support;
 
 use support::{
-    RELATIVE_PATH, ScriptedPayloadTransport, disabled_attribution, multi_file_paused_job,
-    payload_response, staged_file_path_for_relative_path,
+    RELATIVE_PATH, REPOSITORY_ID, REVISION, ScriptedPayloadTransport, disabled_attribution,
+    multi_file_paused_job, payload_response, sha256_hex, staged_file_path_for_relative_path,
 };
 
 const EMPTY_FILE_PATH: &str = "tools/__init__.py";
@@ -183,4 +183,77 @@ async fn should_keep_the_empty_file_through_a_checksum_retry() {
     })
     .await
     .expect("the checksum-retry journey should remain bounded");
+}
+
+/// The job 0.2.91 left behind on charlesberret's Mac (#1896): every byte of every non-empty file
+/// is staged, the empty file was never created, and verification marked the job
+/// `failed: checksum_mismatch`. After the upgrade, running the same command again must create the
+/// empty file, verify and publish, without fetching anything.
+fn job_failed_by_the_missing_empty_file() -> astronomical_daemon::DownloadJob {
+    let romeo_bytes = ROMEO_AND_JULIET.len();
+    let job_document = format!(
+        "{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"state\":\"failed\",\
+\"bytes_completed\":{romeo_bytes},\"bytes_total\":{romeo_bytes},\"current_file_relative_path\":null,\
+\"files\":[{{\"relative_path\":\"{EMPTY_FILE_PATH}\",\"expected_bytes\":0,\
+\"expected_digest\":{{\"algorithm\":\"sha256\",\"hex\":\"{empty_digest}\"}},\"bytes_on_disk\":0}},\
+{{\"relative_path\":\"{RELATIVE_PATH}\",\"expected_bytes\":{romeo_bytes},\
+\"expected_digest\":{{\"algorithm\":\"sha256\",\"hex\":\"{romeo_digest}\"}},\"bytes_on_disk\":{romeo_bytes}}}],\
+\"error_code\":\"checksum_mismatch\",\"updated_at\":100}}",
+        empty_digest = sha256_hex(b""),
+        romeo_digest = sha256_hex(ROMEO_AND_JULIET),
+    );
+    astronomical_daemon::DownloadJob::parse_json(&job_document)
+        .expect("the job left by the previous version should still parse")
+}
+
+#[tokio::test]
+async fn should_publish_a_job_the_previous_version_failed_for_a_missing_empty_file() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let test_directory = TempDir::new().expect("temporary directory should be available");
+        let job_store = DownloadJobStore::new(test_directory.path().join("models"));
+        job_store
+            .create(&job_failed_by_the_missing_empty_file())
+            .expect("the leftover failed job should persist");
+        let staged_romeo =
+            staged_file_path_for_relative_path(job_store.models_directory(), RELATIVE_PATH);
+        fs::create_dir_all(
+            staged_romeo
+                .parent()
+                .expect("staged file should have a parent"),
+        )
+        .expect("staging directory should exist");
+        fs::write(&staged_romeo, ROMEO_AND_JULIET)
+            .expect("the complete staged file should be written");
+        let no_network = Arc::new(ScriptedPayloadTransport::new([]));
+        let transfer = transfer_over(
+            &test_directory,
+            &job_store,
+            no_network.clone(),
+            DownloadTransferControl::new(),
+        );
+
+        let transfer_outcome = transfer
+            .resume(200)
+            .await
+            .expect("the upgraded daemon should finish the leftover job");
+
+        assert!(matches!(
+            transfer_outcome,
+            DownloadPayloadTransferOutcome::ReadyToPublish(_)
+        ));
+        assert!(
+            no_network.requests().is_empty(),
+            "every byte was already on disk"
+        );
+        let empty_file =
+            staged_file_path_for_relative_path(job_store.models_directory(), EMPTY_FILE_PATH);
+        assert_eq!(
+            fs::metadata(empty_file)
+                .expect("the empty file should now exist")
+                .len(),
+            0
+        );
+    })
+    .await
+    .expect("the upgrade journey should remain bounded");
 }

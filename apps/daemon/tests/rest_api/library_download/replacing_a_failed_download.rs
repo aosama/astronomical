@@ -133,3 +133,34 @@ async fn should_refuse_another_model_while_a_download_is_paused() {
     .await
     .expect("the paused journey should remain bounded");
 }
+
+/// A real-world failure is usually the network, not a bad digest: the connection drops, the job
+/// ends `failed` with `download_failed`, and another model must still be able to start.
+#[tokio::test]
+async fn should_start_another_model_after_a_network_failure_through_rest() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let catalog = two_model_catalog();
+        let coordinator = build_test_coordinator(
+            test_directory.path(),
+            Arc::clone(&catalog),
+            Arc::new(ScriptedHub::network_failure()),
+        );
+        let application = build_application_with_library_download(
+            ScriptedExecutor::unavailable(),
+            catalog,
+            coordinator,
+        );
+        assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
+        let failed_job = wait_for_download_state(&application, "failed").await;
+        assert_eq!(failed_job["error_code"], "download_failed");
+
+        let other_model_response = start_download_of(&application, OTHER_REPOSITORY_ID).await;
+
+        assert_eq!(other_model_response, StatusCode::ACCEPTED);
+        wait_for_download_model(&application, OTHER_REPOSITORY_ID).await;
+        wait_for_download_state(&application, "failed").await;
+    })
+    .await
+    .expect("the network-failure journey should remain bounded");
+}
