@@ -398,6 +398,26 @@ test("should not show another model's download state or controls on a row", () =
         vm.runInContext("libraryActionButtons(catalogRow)[0].disabled", scriptContext),
         true
     );
+
+    // Once the other model's download has failed, it no longer holds the Library.
+    vm.runInContext(
+        `libraryCurrentDownload = {
+            state: "failed",
+            huggingface_id: "astronomical-test/other-qwen",
+            error_code: "checksum_mismatch"
+        }`,
+        scriptContext
+    );
+    assert.deepEqual(rowButtonLabels(), ["Download"]);
+    assert.equal(
+        vm.runInContext("libraryActionButtons(catalogRow)[0].disabled", scriptContext),
+        false
+    );
+    vm.runInContext(`libraryCurrentDownload = { state: "paused", huggingface_id: "astronomical-test/other-qwen" }`, scriptContext);
+    assert.equal(
+        vm.runInContext("libraryActionButtons(catalogRow)[0].disabled", scriptContext),
+        true
+    );
 });
 
 test("accepts the largest catalog size that JavaScript can represent exactly", () => {
