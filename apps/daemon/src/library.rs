@@ -13,7 +13,7 @@ pub(crate) use catalog::{
 };
 pub use catalog::{
     DownloadCatalog, DownloadCatalogCapabilities, DownloadCatalogEntry, DownloadCatalogError,
-    DownloadCatalogFamily,
+    DownloadCatalogFamily, DownloadCatalogRole,
 };
 pub(crate) use catalog::{is_valid_huggingface_id, is_valid_immutable_revision};
 pub use download::job::{DownloadJob, DownloadJobError, DownloadJobFile, DownloadJobState};

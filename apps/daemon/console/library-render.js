@@ -10,19 +10,286 @@ function libraryFamilyLabel(family) {
     return family;
 }
 
-// Editorial "start here" list: the two models the Observatory recommends for
-// everyday use. Matched on the stable requestable id when the catalog ships
-// one, falling back to the display name so the 35B 4-bit (which ships no backend
-// id) still matches. Exact-match sets keep every other variant out.
-const LIBRARY_EVERYDAY_MODEL_IDS = new Set([
-    "Ornith-1.5-9B-MLX-4bit-vision",
-    "Ornith 1.5 35B A3B OptiQ 4bit",
-]);
+// Plain-language copy for each role. The same wording labels the Get started
+// cards and the More models groups, so a model reads the same on both pages.
+const LIBRARY_ROLE_TITLES = {
+    chat: "Chat",
+    coding: "Code",
+    image_generation: "Pictures",
+    helper: "Helpers"
+};
+const LIBRARY_ROLE_DESCRIPTIONS = {
+    chat: "Talk, write, and ask about photos.",
+    coding: "Help writing, reading, and fixing code.",
+    image_generation: "Turn a written description into a picture."
+};
+const LIBRARY_GET_STARTED_ROLES = ["chat", "coding", "image_generation"];
+const LIBRARY_MORE_MODEL_GROUPS = [
+    { key: "chat", title: "Chat", explanation: LIBRARY_ROLE_DESCRIPTIONS.chat },
+    { key: "coding", title: "Code", explanation: LIBRARY_ROLE_DESCRIPTIONS.coding },
+    { key: "image_generation", title: "Pictures", explanation: LIBRARY_ROLE_DESCRIPTIONS.image_generation },
+    {
+        key: "helper",
+        title: "Helpers",
+        explanation: "Background helpers other features use. You don't chat with these."
+    },
+    {
+        key: "experimental",
+        title: "Experimental",
+        explanation: "Early builds that may be slower or less reliable."
+    }
+];
+const LIBRARY_TABS = [
+    { name: "get-started", label: "Get started" },
+    { name: "more-models", label: "More models" }
+];
+const LIBRARY_FIT_LABELS = {
+    fits: "Runs in memory on this Mac",
+    streams: "Streams from your SSD on this Mac (slower)",
+    "too-big": "Needs more memory than this Mac has"
+};
 
-function isLibraryEverydayCatalogRow(catalogRow) {
-    const candidates = [catalogRow.requestableModelId, catalogRow.displayName]
-        .filter((value) => typeof value === "string" && value.length > 0);
-    return candidates.some((candidate) => LIBRARY_EVERYDAY_MODEL_IDS.has(candidate));
+// Plain-language size for download decisions: one decimal in 2^30-byte gigabytes,
+// the unit Apple prints on the box, so a teenager can compare two picks at a glance.
+function formatLibraryDownloadSize(approximateSizeBytes) {
+    return (approximateSizeBytes / 1073741824).toFixed(1) + " GB download";
+}
+
+// Fit compares the model's fully loaded memory with the serving ceiling, the
+// limit the engine actually loads within. Equal counts as fitting because the
+// ceiling is the runtime's own resident limit. Below that, a model runs only if
+// the catalog carries a streaming floor measured on a real engine (experts or
+// image components paged from the SSD) and the ceiling still reaches it; a model
+// without a measured floor makes no streaming promise.
+function libraryFitOutcome(catalogRow, servingCeilingBytes) {
+    if (!(servingCeilingBytes > 0)) return null;
+    if (catalogRow.approximateMemoryBytes <= servingCeilingBytes) return "fits";
+    const streamingFloorBytes = catalogRow.minimumMemoryBytes;
+    return streamingFloorBytes !== null && streamingFloorBytes <= servingCeilingBytes
+        ? "streams"
+        : "too-big";
+}
+
+function libraryFitLabel(catalogRow, servingCeilingBytes) {
+    const fitOutcome = libraryFitOutcome(catalogRow, servingCeilingBytes);
+    return fitOutcome === null ? null : LIBRARY_FIT_LABELS[fitOutcome];
+}
+
+function libraryStarterRowForRole(catalogRows, role) {
+    return catalogRows.find(
+        (catalogRow) => catalogRow.role === role && catalogRow.getStarted
+    ) || null;
+}
+
+// Experimental wins over role so an early build never appears in a stable group.
+function libraryMoreModelsGroupKey(catalogRow) {
+    return catalogRow.experimental ? "experimental" : catalogRow.role;
+}
+
+function createLibraryTabPanel(tabName, pageChildren) {
+    const panel = document.createElement("section");
+    panel.id = "library-panel-" + tabName;
+    panel.className = "library-tab-panel";
+    panel.setAttribute("role", "tabpanel");
+    panel.setAttribute("aria-labelledby", "library-tab-" + tabName);
+    panel.replaceChildren(...pageChildren);
+    return panel;
+}
+
+function createLibraryTabBar() {
+    const tabBar = document.createElement("div");
+    tabBar.className = "library-tab-bar";
+    tabBar.setAttribute("role", "tablist");
+    tabBar.setAttribute("aria-label", "Library pages");
+    tabBar.replaceChildren(...LIBRARY_TABS.map(createLibraryTabButton));
+    return tabBar;
+}
+
+function createLibraryTabButton(tabDefinition) {
+    const isSelected = libraryActiveTab === tabDefinition.name;
+    const tabButton = document.createElement("button");
+    tabButton.className = isSelected ? "library-tab library-tab-selected" : "library-tab";
+    tabButton.type = "button";
+    tabButton.id = "library-tab-" + tabDefinition.name;
+    tabButton.setAttribute("role", "tab");
+    tabButton.setAttribute("aria-selected", String(isSelected));
+    tabButton.setAttribute("aria-controls", "library-panel-" + tabDefinition.name);
+    // Roving tabindex: only the selected tab sits in the Tab order, as the ARIA tabs pattern expects.
+    tabButton.tabIndex = isSelected ? 0 : -1;
+    tabButton.textContent = tabDefinition.label;
+    tabButton.addEventListener("click", () => selectLibraryTab(tabDefinition.name));
+    tabButton.addEventListener("keydown", (keyboardEvent) => handleLibraryTabKeydown(keyboardEvent, tabDefinition.name));
+    return tabButton;
+}
+
+// WAI-ARIA tabs pattern: arrows step through the tabs with wrap-around, and
+// Home and End jump to the ends. Returns the target tab name, or null for keys
+// the tablist does not handle, so those keep their default behavior.
+function libraryTabNameForKey(currentTabName, pressedKey) {
+    const tabCount = LIBRARY_TABS.length;
+    const currentIndex = LIBRARY_TABS.findIndex((tab) => tab.name === currentTabName);
+    const targetIndexByKey = {
+        ArrowRight: (currentIndex + 1) % tabCount,
+        ArrowLeft: (currentIndex - 1 + tabCount) % tabCount,
+        Home: 0,
+        End: tabCount - 1
+    };
+    if (!Object.hasOwn(targetIndexByKey, pressedKey)) return null;
+    return LIBRARY_TABS[targetIndexByKey[pressedKey]].name;
+}
+
+// Keyboard selection uses the same path as a click, so focus follows the newly selected tab.
+function handleLibraryTabKeydown(keyboardEvent, tabName) {
+    const targetTabName = libraryTabNameForKey(tabName, keyboardEvent.key);
+    if (targetTabName === null) return;
+    keyboardEvent.preventDefault();
+    selectLibraryTab(targetTabName);
+}
+
+function createLibraryActivePage(catalogRows, catalogDocument) {
+    if (libraryActiveTab === "more-models") {
+        return createLibraryMoreModelsPage(catalogRows, catalogDocument);
+    }
+    return createLibraryGetStartedPage(catalogRows);
+}
+
+function createLibraryGetStartedPage(catalogRows) {
+    const intro = document.createElement("p");
+    intro.className = "library-intro";
+    intro.textContent = "Pick what you want to do. Each is one download.";
+    const roleCards = LIBRARY_GET_STARTED_ROLES
+        .map((role) => libraryStarterRowForRole(catalogRows, role))
+        .filter((starterRow) => starterRow !== null)
+        .map(createLibraryRoleCard);
+    const cardGrid = document.createElement("div");
+    cardGrid.className = "library-role-grid";
+    cardGrid.replaceChildren(...roleCards);
+    return createLibraryTabPanel("get-started", [intro, cardGrid]);
+}
+
+function createLibraryRoleCard(catalogRow) {
+    const card = document.createElement("article");
+    card.className = catalogRow.readyOnThisMac
+        ? "library-role-card library-role-card-ready"
+        : "library-role-card";
+    const cardChildren = [
+        createLibraryRoleHeading(catalogRow),
+        createLibraryRoleFacts(catalogRow)
+    ];
+    const progress = createLibraryProgress(catalogRow);
+    if (progress.firstChild) cardChildren.push(progress);
+    const detailText = libraryProgressDetail(catalogRow);
+    if (detailText) {
+        cardChildren.push(createLibraryParagraph("library-download-detail", detailText));
+    }
+    cardChildren.push(createLibraryStartActions(catalogRow));
+    card.replaceChildren(...cardChildren);
+    return card;
+}
+
+function createLibraryRoleHeading(catalogRow) {
+    const heading = document.createElement("div");
+    heading.className = "library-role-heading";
+    const roleTitle = document.createElement("h3");
+    roleTitle.className = "library-role-title";
+    roleTitle.textContent = LIBRARY_ROLE_TITLES[catalogRow.role];
+    heading.appendChild(roleTitle);
+    if (catalogRow.readyOnThisMac) {
+        const availability = document.createElement("span");
+        availability.className = "library-availability library-availability-ready";
+        availability.textContent = "On this Mac";
+        heading.appendChild(availability);
+    }
+    return heading;
+}
+
+// Get started shows only plain facts: no Hugging Face id, quantization, context
+// size, or capability badges. Those stay on More models for people who look for them.
+function createLibraryRoleFacts(catalogRow) {
+    const facts = document.createElement("div");
+    facts.className = "library-role-facts";
+    const factElements = [
+        createLibraryParagraph("library-role-description", LIBRARY_ROLE_DESCRIPTIONS[catalogRow.role]),
+        createLibraryParagraph("library-role-model", catalogRow.displayName),
+        createLibraryParagraph("library-role-size", formatLibraryDownloadSize(catalogRow.approximateSizeBytes))
+    ];
+    const fitLabel = createLibraryFitLabel(catalogRow);
+    if (fitLabel) factElements.push(fitLabel);
+    facts.replaceChildren(...factElements);
+    return facts;
+}
+
+function createLibraryParagraph(className, text) {
+    const paragraph = document.createElement("p");
+    paragraph.className = className;
+    paragraph.textContent = text;
+    return paragraph;
+}
+
+// The modifier class carries the outcome so CSS can color fits, streams and too-big apart.
+function createLibraryFitLabel(catalogRow) {
+    const fitOutcome = libraryFitOutcome(catalogRow, libraryServingCeilingBytes);
+    if (fitOutcome === null) return null;
+    return createLibraryParagraph(
+        "library-fit-label library-fit-" + fitOutcome,
+        LIBRARY_FIT_LABELS[fitOutcome]
+    );
+}
+
+function createLibraryStartActions(catalogRow) {
+    const actions = document.createElement("div");
+    actions.className = "library-primary-actions";
+    if (catalogRow.readyOnThisMac && catalogRow.role !== "image_generation") {
+        actions.appendChild(createLibraryOpenInChatButton());
+    }
+    for (const button of libraryActionButtons(catalogRow)) {
+        actions.appendChild(button);
+    }
+    return actions;
+}
+
+function createLibraryMoreModelsPage(catalogRows, catalogDocument) {
+    const filteredRows = filterLibraryRows(catalogRows);
+    const catalogList = document.createElement("div");
+    catalogList.className = "library-catalog-list";
+    if (filteredRows.length === 0) {
+        const noMatches = document.createElement("p");
+        noMatches.className = "library-no-matches";
+        noMatches.textContent = "No models match the current filter.";
+        catalogList.replaceChildren(noMatches);
+    } else {
+        catalogList.replaceChildren(...createLibraryGroupSections(filteredRows));
+    }
+    return createLibraryTabPanel("more-models", [
+        createLibraryHeroSummary(catalogRows, catalogDocument),
+        createLibraryFilterBar(catalogRows),
+        catalogList
+    ]);
+}
+
+function createLibraryGroupSections(filteredRows) {
+    return LIBRARY_MORE_MODEL_GROUPS
+        .map((group) => {
+            const groupRows = filteredRows.filter(
+                (catalogRow) => libraryMoreModelsGroupKey(catalogRow) === group.key
+            );
+            return groupRows.length === 0 ? null : createLibraryGroupSection(group, groupRows);
+        })
+        .filter((groupSection) => groupSection !== null);
+}
+
+function createLibraryGroupSection(group, groupRows) {
+    const section = document.createElement("section");
+    section.className = "library-group";
+    const heading = document.createElement("h3");
+    heading.className = "library-group-heading";
+    heading.textContent = group.title;
+    section.replaceChildren(
+        heading,
+        createLibraryParagraph("library-group-explanation", group.explanation),
+        ...groupRows.map((catalogRow) => createLibraryCatalogRow(catalogRow, groupRows))
+    );
+    return section;
 }
 
 function formatLibraryContextTokens(tokenCount) {
@@ -130,7 +397,6 @@ function createLibraryCatalogRow(catalogRow, allRows) {
     const rowClasses = ["library-model-card"];
     if (catalogRow.readyOnThisMac) rowClasses.push("library-model-card-ready");
     if (isDownloading) rowClasses.push("library-model-card-downloading");
-    if (isLibraryEverydayCatalogRow(catalogRow)) rowClasses.push("library-model-card-everyday");
     if (isExpanded) rowClasses.push("library-model-card-expanded");
     row.className = rowClasses.join(" ");
 
@@ -165,20 +431,16 @@ function createLibraryCardHeader(catalogRow) {
     header.className = "library-model-heading";
     const identity = document.createElement("div");
     identity.className = "library-model-identity";
-    const identityChildren = [];
-    if (isLibraryEverydayCatalogRow(catalogRow)) {
-        const everydayBadge = document.createElement("span");
-        everydayBadge.className = "library-everyday-badge";
-        everydayBadge.textContent = "Everyday choice";
-        identityChildren.push(everydayBadge);
-    }
-    const displayName = document.createElement("h3");
+    const displayName = document.createElement("h4");
     displayName.textContent = catalogRow.displayName;
     const providerIdentity = document.createElement("p");
     providerIdentity.className = "library-model-provider-id";
     providerIdentity.textContent = catalogRow.huggingfaceId;
-    identityChildren.push(displayName, providerIdentity);
-    identity.replaceChildren(...identityChildren);
+    identity.replaceChildren(
+        displayName,
+        providerIdentity,
+        createLibraryCardFacts(catalogRow)
+    );
     const availability = document.createElement("span");
     availability.className = catalogRow.readyOnThisMac
         ? "library-availability library-availability-ready"
@@ -192,6 +454,20 @@ function createLibraryCardHeader(catalogRow) {
             : "Available";
     header.replaceChildren(identity, availability);
     return header;
+}
+
+// The size and fit line sit under the title so the decision inputs are visible
+// before the reader reaches the actions.
+function createLibraryCardFacts(catalogRow) {
+    const facts = document.createElement("div");
+    facts.className = "library-model-facts";
+    const sizeLine = createLibraryParagraph(
+        "library-model-size",
+        formatLibraryDownloadSize(catalogRow.approximateSizeBytes)
+    );
+    const fitLabel = createLibraryFitLabel(catalogRow);
+    facts.replaceChildren(sizeLine, ...(fitLabel ? [fitLabel] : []));
+    return facts;
 }
 
 function isLibraryRowDownloading(catalogRow) {
@@ -254,12 +530,7 @@ function createLibraryPrimaryActions(catalogRow, isExpanded) {
     const actions = document.createElement("div");
     actions.className = "library-primary-actions";
     if (catalogRow.readyOnThisMac && !catalogRow.supportsImageGeneration) {
-        const openInChatButton = document.createElement("button");
-        openInChatButton.className = "button button-primary library-open-in-chat";
-        openInChatButton.type = "button";
-        openInChatButton.textContent = "Open in Thin Talk";
-        openInChatButton.addEventListener("click", openThinTalkFromLibrary);
-        actions.appendChild(openInChatButton);
+        actions.appendChild(createLibraryOpenInChatButton());
     }
     for (const button of libraryActionButtons(catalogRow)) {
         actions.appendChild(button);
@@ -277,6 +548,15 @@ function createLibraryPrimaryActions(catalogRow, isExpanded) {
     });
     actions.appendChild(detailsButton);
     return actions;
+}
+
+function createLibraryOpenInChatButton() {
+    const openInChatButton = document.createElement("button");
+    openInChatButton.className = "button button-primary library-open-in-chat";
+    openInChatButton.type = "button";
+    openInChatButton.textContent = "Open in Thin Talk";
+    openInChatButton.addEventListener("click", openThinTalkFromLibrary);
+    return openInChatButton;
 }
 
 // Thin Talk picks the model inside its own model chooser, so opening the

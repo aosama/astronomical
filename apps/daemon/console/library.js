@@ -9,6 +9,11 @@ const LIBRARY_DOWNLOAD_URL = "/v1/library/download";
 // loading state when a daemon connection is interrupted without an immediate
 // fetch error.
 const LIBRARY_CATALOG_TIMEOUT_MILLIS = 10_000;
+const LIBRARY_STATUS_URL = "/v1/status";
+// Schema 3 adds the role, get-started, experimental, and memory fields that
+// the Get started and More models pages are built from.
+const LIBRARY_CATALOG_SCHEMA_VERSION = 3;
+const LIBRARY_ROLES = ["chat", "coding", "image_generation", "helper"];
 
 let libraryCatalogLoadPromise = null;
 let libraryCatalogDocument = null;
@@ -26,6 +31,14 @@ let librarySearchQuery = "";
 let libraryFamilyFilter = "all";
 let libraryReadinessFilter = "all";
 let libraryExpandedModelId = null;
+// Serving memory ceiling from /v1/status: the limit the engine loads models
+// within, which can sit below the machine's RAM when the user configured a lower
+// maximum. Null means unknown, and the cards then show no fit label rather than a guess.
+let libraryServingCeilingBytes = null;
+let libraryServingCeilingReadAtMillis = 0;
+const LIBRARY_CEILING_REFRESH_MILLIS = 30_000;
+// Which Library page is showing: "get-started" (default) or "more-models".
+let libraryActiveTab = "get-started";
 
 function wireLibraryCatalog() {
     if (libraryCatalogLoadPromise !== null) {
@@ -86,6 +99,8 @@ async function loadLibraryCatalog(
         }
         const catalogDocument = await catalogResponse.json();
         libraryCatalogDocument = catalogDocument;
+        libraryServingCeilingBytes = await fetchLibraryServingCeilingBytes();
+        libraryServingCeilingReadAtMillis = Date.now();
         return renderLibraryCatalogDocument(catalogDocument, catalogContainer);
     } catch {
         return renderLibraryUnavailableState(catalogContainer);
@@ -110,6 +125,8 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
         libraryFamilyFilter,
         libraryReadinessFilter,
         libraryExpandedModelId,
+        libraryActiveTab,
+        libraryServingCeilingBytes,
     ]);
     if (renderStateFingerprint === libraryRenderedStateFingerprint) {
         return libraryRenderedStateOutcome;
@@ -125,7 +142,6 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
         return renderLibraryEmptyState(resolvedCatalogContainer);
     }
 
-    const filteredRows = filterLibraryRows(catalogRows);
     const statusMessage = resolveLibraryStatusMessage();
     statusMessage.className = "library-catalog-state library-catalog-status-only";
     statusMessage.textContent = "Model catalog loaded.";
@@ -137,26 +153,10 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
     // Capturing after the rebuild would observe the fresh, unfocused input
     // and silently drop focus on every keystroke.
     const searchSnapshot = captureLibrarySearchSnapshot();
-    const heroSummary = createLibraryHeroSummary(catalogRows, catalogDocument);
-    const filterBar = createLibraryFilterBar(catalogRows);
-    const catalogList = document.createElement("div");
-    catalogList.className = "library-catalog-list";
-    catalogList.replaceChildren(
-        ...filteredRows.map((catalogRow) =>
-            createLibraryCatalogRow(catalogRow, catalogRows)
-        )
-    );
-    if (filteredRows.length === 0 && catalogRows.length > 0) {
-        const noMatches = document.createElement("p");
-        noMatches.className = "library-no-matches";
-        noMatches.textContent = "No models match the current filter.";
-        catalogList.replaceChildren(noMatches);
-    }
     resolvedCatalogContainer.replaceChildren(
         statusMessage,
-        heroSummary,
-        filterBar,
-        catalogList
+        createLibraryTabBar(),
+        createLibraryActivePage(catalogRows, catalogDocument)
     );
     // Restore focus and caret only after the replacement bar is connected to
     // the container, so the id lookup resolves the fresh input the user is
@@ -164,6 +164,17 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
     restoreLibrarySearchSnapshot(searchSnapshot);
     libraryRenderedStateOutcome = "ready";
     return "ready";
+}
+
+// Switching pages re-renders at once and moves focus to the newly selected tab,
+// because the rebuild replaces the tab the keyboard user was on.
+function selectLibraryTab(tabName) {
+    libraryActiveTab = tabName;
+    renderLibraryCatalogDocument(libraryCatalogDocument);
+    const selectedTabButton = document.getElementById("library-tab-" + tabName);
+    if (selectedTabButton) {
+        selectedTabButton.focus({ preventScroll: true });
+    }
 }
 
 function captureLibrarySearchSnapshot() {
@@ -228,7 +239,7 @@ function filterLibraryRows(catalogRows) {
 
 function libraryCatalogRowsFromDocument(catalogDocument) {
     if (!catalogDocument
-        || catalogDocument.schema_version !== 2
+        || catalogDocument.schema_version !== LIBRARY_CATALOG_SCHEMA_VERSION
         || !Array.isArray(catalogDocument.entries)) {
         return null;
     }
@@ -237,44 +248,55 @@ function libraryCatalogRowsFromDocument(catalogDocument) {
         if (!isRenderableLibraryCatalogEntry(catalogEntry)) {
             return null;
         }
-        const capabilities = catalogEntry.capabilities || {};
-        catalogRows.push({
-            huggingfaceId: catalogEntry.huggingface_id,
-            displayName: catalogEntry.display_name,
-            family: catalogEntry.family,
-            approximateSize: formatLibrarySizeGigabytes(catalogEntry.approximate_size_bytes),
-            approximateSizeBytes: catalogEntry.approximate_size_bytes,
-            readyOnThisMac: catalogEntry.ready_on_this_mac === true,
-            destinationDirectory: typeof catalogEntry.destination_directory === "string"
-                ? catalogEntry.destination_directory
-                : null,
-            downloadState: catalogEntry.download_state || null,
-            description: typeof catalogEntry.description === "string"
-                ? catalogEntry.description
-                : null,
-            quantizationLabel: typeof catalogEntry.quantization_label === "string"
-                ? catalogEntry.quantization_label
-                : null,
-            upstreamLicense: typeof catalogEntry.upstream_license === "string"
-                ? catalogEntry.upstream_license
-                : null,
-            requestableModelId: typeof catalogEntry.requestable_model_id === "string"
-                ? catalogEntry.requestable_model_id
-                : null,
-            supportsReasoning: capabilities.supports_reasoning === true,
-            supportsVision: capabilities.supports_vision === true,
-            supportsToolCalls: capabilities.supports_tool_calls === true,
-            supportsImageGeneration: capabilities.supports_image_generation === true,
-            supportsEmbeddings: capabilities.supports_embeddings === true,
-            contextWindow: typeof capabilities.context_window === "number"
-                ? capabilities.context_window
-                : null,
-            maxOutputTokens: typeof capabilities.max_output_tokens === "number"
-                ? capabilities.max_output_tokens
-                : null
-        });
+        catalogRows.push(libraryCatalogRowFromEntry(catalogEntry));
     }
     return catalogRows;
+}
+
+function libraryCatalogRowFromEntry(catalogEntry) {
+    const capabilities = catalogEntry.capabilities || {};
+    return {
+        huggingfaceId: catalogEntry.huggingface_id,
+        displayName: catalogEntry.display_name,
+        family: catalogEntry.family,
+        approximateSize: formatLibrarySizeGigabytes(catalogEntry.approximate_size_bytes),
+        approximateSizeBytes: catalogEntry.approximate_size_bytes,
+        approximateMemoryBytes: catalogEntry.approximate_memory_bytes,
+        role: catalogEntry.role,
+        getStarted: catalogEntry.get_started === true,
+        experimental: catalogEntry.experimental === true,
+        minimumMemoryBytes: isLibraryStreamingFloor(catalogEntry.minimum_memory_bytes)
+            ? catalogEntry.minimum_memory_bytes
+            : null,
+        readyOnThisMac: catalogEntry.ready_on_this_mac === true,
+        destinationDirectory: typeof catalogEntry.destination_directory === "string"
+            ? catalogEntry.destination_directory
+            : null,
+        downloadState: catalogEntry.download_state || null,
+        description: typeof catalogEntry.description === "string"
+            ? catalogEntry.description
+            : null,
+        quantizationLabel: typeof catalogEntry.quantization_label === "string"
+            ? catalogEntry.quantization_label
+            : null,
+        upstreamLicense: typeof catalogEntry.upstream_license === "string"
+            ? catalogEntry.upstream_license
+            : null,
+        requestableModelId: typeof catalogEntry.requestable_model_id === "string"
+            ? catalogEntry.requestable_model_id
+            : null,
+        supportsReasoning: capabilities.supports_reasoning === true,
+        supportsVision: capabilities.supports_vision === true,
+        supportsToolCalls: capabilities.supports_tool_calls === true,
+        supportsImageGeneration: capabilities.supports_image_generation === true,
+        supportsEmbeddings: capabilities.supports_embeddings === true,
+        contextWindow: typeof capabilities.context_window === "number"
+            ? capabilities.context_window
+            : null,
+        maxOutputTokens: typeof capabilities.max_output_tokens === "number"
+            ? capabilities.max_output_tokens
+            : null
+    };
 }
 
 function isRenderableLibraryCatalogEntry(catalogEntry) {
@@ -290,7 +312,53 @@ function isRenderableLibraryCatalogEntry(catalogEntry) {
         && catalogEntry.family.trim().length > 0
         && Number.isSafeInteger(catalogEntry.approximate_size_bytes)
         && catalogEntry.approximate_size_bytes > 0
+        && Number.isSafeInteger(catalogEntry.approximate_memory_bytes)
+        && catalogEntry.approximate_memory_bytes > 0
+        && LIBRARY_ROLES.includes(catalogEntry.role)
         && catalogEntry.public === true;
+}
+
+// Memory ceiling is advisory: any failure leaves it unknown rather than
+// failing the catalog, so the page still renders without fit labels.
+async function fetchLibraryServingCeilingBytes() {
+    const statusAbortController = new AbortController();
+    const statusTimeout = setTimeout(
+        () => statusAbortController.abort(),
+        LIBRARY_CATALOG_TIMEOUT_MILLIS
+    );
+    try {
+        const statusResponse = await fetch(
+            LIBRARY_STATUS_URL,
+            { signal: statusAbortController.signal }
+        );
+        if (!statusResponse.ok) return null;
+        return readLibraryServingCeilingBytes(await statusResponse.json());
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(statusTimeout);
+    }
+}
+
+// Prefer the effective ceiling: the engine serves within the user's configured
+// maximum, so a model above it will not run in memory even on a Mac with more RAM.
+// The machine maximum is only a fallback for status documents that omit the effective value.
+function readLibraryServingCeilingBytes(statusDocument) {
+    const effectiveCeilingBytes = statusDocument?.mlx_memory_ceiling_bytes;
+    if (isPositiveFiniteByteCount(effectiveCeilingBytes)) return effectiveCeilingBytes;
+    const machineCeilingBytes = statusDocument?.machine_mlx_memory_ceiling_bytes;
+    return isPositiveFiniteByteCount(machineCeilingBytes) ? machineCeilingBytes : null;
+}
+
+// The daemon omits the floor for models that must fit whole; anything that is
+// not a positive safe integer is treated the same way, so a malformed floor can
+// never turn into a streaming promise.
+function isLibraryStreamingFloor(minimumMemoryBytes) {
+    return Number.isSafeInteger(minimumMemoryBytes) && minimumMemoryBytes > 0;
+}
+
+function isPositiveFiniteByteCount(byteCount) {
+    return Number.isFinite(byteCount) && byteCount > 0;
 }
 
 function formatLibrarySizeGigabytes(approximateSizeBytes) {
@@ -511,12 +579,27 @@ async function refreshLibraryDownloadStateOnce() {
         if (libraryCurrentDownload.state === "idle"
             || libraryCurrentDownload.state === "verifying"
             || libraryCurrentDownload.state === "publishing") {
-            const catalogResponse = await fetch(LIBRARY_CATALOG_URL);
-            if (catalogResponse.ok) libraryCatalogDocument = await catalogResponse.json();
+            await refetchLibraryCatalogDocument();
         }
         renderLibraryCatalogDocument(libraryCatalogDocument);
     } catch {
         // Polling is self-healing and must never cancel daemon-owned work.
+    }
+}
+
+// The ceiling is re-read while still unknown (the worker reports it after
+// startup) and otherwise at most every LIBRARY_CEILING_REFRESH_MILLIS, so a
+// memory limit changed on the Configuration page reaches the fit labels within
+// seconds without doubling every request of the idle 1s catalog poll.
+async function refetchLibraryCatalogDocument(nowMillis = Date.now()) {
+    const catalogResponse = await fetch(LIBRARY_CATALOG_URL);
+    if (!catalogResponse.ok) return;
+    libraryCatalogDocument = await catalogResponse.json();
+    const isCeilingStale = nowMillis - libraryServingCeilingReadAtMillis
+        >= LIBRARY_CEILING_REFRESH_MILLIS;
+    if (libraryServingCeilingBytes === null || isCeilingStale) {
+        libraryServingCeilingBytes = await fetchLibraryServingCeilingBytes();
+        libraryServingCeilingReadAtMillis = nowMillis;
     }
 }
 

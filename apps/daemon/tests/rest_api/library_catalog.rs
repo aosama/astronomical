@@ -13,7 +13,7 @@ use tower::ServiceExt;
 use crate::support::ScriptedExecutor;
 
 const VALID_CATALOG_JSON: &str = r#"{
-    "schema_version": 2,
+    "schema_version": 3,
     "entries": [
         {
             "huggingface_id": "astronomical-test/example-qwen",
@@ -21,6 +21,9 @@ const VALID_CATALOG_JSON: &str = r#"{
             "display_name": "Example Qwen",
             "family": "qwen3_5",
             "approximate_size_bytes": 4000000000,
+            "approximate_memory_bytes": 1825361094,
+            "role": "chat",
+            "get_started": true,
             "public": true
         },
         {
@@ -29,6 +32,10 @@ const VALID_CATALOG_JSON: &str = r#"{
             "display_name": "Example Prism",
             "family": "prism_hadamard_qwen35",
             "approximate_size_bytes": 5000000000,
+            "approximate_memory_bytes": 25769803680,
+            "role": "coding",
+            "experimental": true,
+            "minimum_memory_bytes": 4451287808,
             "public": true
         },
         {
@@ -37,11 +44,87 @@ const VALID_CATALOG_JSON: &str = r#"{
             "display_name": "Example Embedder",
             "family": "modernbert",
             "approximate_size_bytes": 200000000,
+            "approximate_memory_bytes": 536870910,
+            "role": "helper",
             "public": true,
             "capabilities": {"supports_embeddings": true}
         }
     ]
 }"#;
+
+/// The authored three-entry fixture projected onto the public response, pinning
+/// every field the Library renders for each entry, including the v3 role and flags.
+fn expected_validated_catalog_document() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 3,
+        "entries": [
+            {
+                "huggingface_id": "astronomical-test/example-qwen",
+                "revision": "0123456789abcdef0123456789abcdef01234567",
+                "display_name": "Example Qwen",
+                "family": "qwen3_5",
+                "approximate_size_bytes": 4_000_000_000_u64,
+                "approximate_memory_bytes": 1_825_361_094_u64,
+                "role": "chat",
+                "get_started": true,
+                "experimental": false,
+                "public": true,
+                "ready_on_this_mac": false,
+                "download_state": null,
+                "capabilities": {
+                    "supports_reasoning": false,
+                    "supports_vision": false,
+                    "supports_tool_calls": false,
+                    "supports_image_generation": false,
+                    "supports_embeddings": false
+                }
+            },
+            {
+                "huggingface_id": "astronomical-test/example-prism",
+                "revision": "89abcdef0123456789abcdef0123456789abcdef",
+                "display_name": "Example Prism",
+                "family": "prism_hadamard_qwen35",
+                "approximate_size_bytes": 5_000_000_000_u64,
+                "approximate_memory_bytes": 25_769_803_680_u64,
+                "role": "coding",
+                "get_started": false,
+                "experimental": true,
+                "minimum_memory_bytes": 4_451_287_808_u64,
+                "public": true,
+                "ready_on_this_mac": false,
+                "download_state": null,
+                "capabilities": {
+                    "supports_reasoning": false,
+                    "supports_vision": false,
+                    "supports_tool_calls": false,
+                    "supports_image_generation": false,
+                    "supports_embeddings": false
+                }
+            },
+            {
+                "huggingface_id": "astronomical-test/example-embedder",
+                "revision": "fedcba9876543210fedcba9876543210fedcba98",
+                "display_name": "Example Embedder",
+                "family": "modernbert",
+                "approximate_size_bytes": 200_000_000_u64,
+                "approximate_memory_bytes": 536_870_910_u64,
+                "role": "helper",
+                "get_started": false,
+                "experimental": false,
+                "public": true,
+                "ready_on_this_mac": false,
+                "download_state": null,
+                "capabilities": {
+                    "supports_reasoning": false,
+                    "supports_vision": false,
+                    "supports_tool_calls": false,
+                    "supports_image_generation": false,
+                    "supports_embeddings": true
+                }
+            }
+        ]
+    })
+}
 
 #[tokio::test]
 async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_is_unavailable() {
@@ -76,65 +159,7 @@ async fn should_return_the_validated_catalog_in_authored_order_when_the_worker_i
         let catalog_document: serde_json::Value = serde_json::from_slice(&catalog_body)
             .expect("the catalog response should contain JSON");
 
-        assert_eq!(
-            catalog_document,
-            serde_json::json!({
-                "schema_version": 2,
-                "entries": [
-                    {
-                        "huggingface_id": "astronomical-test/example-qwen",
-                        "revision": "0123456789abcdef0123456789abcdef01234567",
-                        "display_name": "Example Qwen",
-                        "family": "qwen3_5",
-                        "approximate_size_bytes": 4_000_000_000_u64,
-                        "public": true,
-                        "ready_on_this_mac": false,
-                        "download_state": null,
-                        "capabilities": {
-                            "supports_reasoning": false,
-                            "supports_vision": false,
-                            "supports_tool_calls": false,
-                            "supports_image_generation": false,
-                            "supports_embeddings": false
-                        }
-                    },
-                    {
-                        "huggingface_id": "astronomical-test/example-prism",
-                        "revision": "89abcdef0123456789abcdef0123456789abcdef",
-                        "display_name": "Example Prism",
-                        "family": "prism_hadamard_qwen35",
-                        "approximate_size_bytes": 5_000_000_000_u64,
-                        "public": true,
-                        "ready_on_this_mac": false,
-                        "download_state": null,
-                        "capabilities": {
-                            "supports_reasoning": false,
-                            "supports_vision": false,
-                            "supports_tool_calls": false,
-                            "supports_image_generation": false,
-                            "supports_embeddings": false
-                        }
-                    },
-                    {
-                        "huggingface_id": "astronomical-test/example-embedder",
-                        "revision": "fedcba9876543210fedcba9876543210fedcba98",
-                        "display_name": "Example Embedder",
-                        "family": "modernbert",
-                        "approximate_size_bytes": 200_000_000_u64,
-                        "public": true,
-                        "ready_on_this_mac": false,
-                        "download_state": null,
-                        "capabilities": {
-                            "supports_reasoning": false,
-                            "supports_vision": false,
-                            "supports_tool_calls": false,
-                            "supports_image_generation": false,
-                            "supports_embeddings": true
-                        }
-                    }
-                ]
-            })
-        );
+        assert_eq!(catalog_document, expected_validated_catalog_document());
     })
     .await
     .expect("the catalog response journey must finish within five seconds");
@@ -303,8 +328,58 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
                 published_entry["public"], serde_json::json!(true),
                 "published entry {published_entry_index} must be public"
             );
+            assert_published_entry_carries_role_memory_and_flags(
+                published_entry,
+                published_entry_index,
+            );
         }
     })
     .await
     .expect("the bundled catalog publication journey must finish within five seconds");
+}
+
+const PUBLISHED_ROLE_NAMES: [&str; 4] = ["chat", "coding", "image_generation", "helper"];
+const JAVASCRIPT_SAFE_INTEGER_MAXIMUM: u64 = 9_007_199_254_740_991;
+
+/// The Library card uses the role for its grouping, the memory figure for the
+/// fit hint, and the three flags for its badges. Each must be present on every
+/// shipped entry, because the card cannot tell "false" from "missing" otherwise.
+fn assert_published_entry_carries_role_memory_and_flags(
+    published_entry: &serde_json::Value,
+    published_entry_index: usize,
+) {
+    assert!(
+        published_entry["role"].is_string(),
+        "published entry {published_entry_index} must carry a string role"
+    );
+    let role = published_entry["role"]
+        .as_str()
+        .expect("the role was checked to be a string");
+    assert!(
+        PUBLISHED_ROLE_NAMES.contains(&role),
+        "published entry {published_entry_index} role must be a closed catalog role"
+    );
+    assert!(
+        is_javascript_safe_positive_integer(published_entry["approximate_memory_bytes"].as_u64()),
+        "published entry {published_entry_index} must carry a JavaScript-safe approximate_memory_bytes"
+    );
+    let minimum_memory_bytes = &published_entry["minimum_memory_bytes"];
+    assert!(
+        minimum_memory_bytes.is_null()
+            || is_javascript_safe_positive_integer(minimum_memory_bytes.as_u64()),
+        "published entry {published_entry_index} streaming floor must be absent or a JavaScript-safe integer"
+    );
+    for flag_name in ["get_started", "experimental"] {
+        assert!(
+            published_entry[flag_name].is_boolean(),
+            "published entry {published_entry_index} must always carry boolean {flag_name}"
+        );
+    }
+}
+
+fn is_javascript_safe_positive_integer(candidate_integer: Option<u64>) -> bool {
+    match candidate_integer {
+        Some(integer) => integer > 0 && integer <= JAVASCRIPT_SAFE_INTEGER_MAXIMUM,
+        None => false,
+    }
 }

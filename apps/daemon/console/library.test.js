@@ -6,10 +6,19 @@ const {
     createLibraryContext,
     createLibraryDocument,
     createLibraryElement,
+    findRenderedElement,
+    findRenderedElementsByClass,
+    renderedTexts,
     test,
     validCatalogEntry,
     vm
 } = require("./library-test-support.js");
+
+// The hero, filter bar, and model cards live on More models, which is no longer
+// the default page; tests that inspect them select it first, as a person would.
+function showMoreModelsTab(scriptContext) {
+    vm.runInContext('libraryActiveTab = "more-models"', scriptContext);
+}
 
 // Renders the catalog the way loadLibraryCatalog does and wires the
 // controls, so a test can pretend a browser is ready for the user to type.
@@ -17,8 +26,9 @@ function createTypingSession() {
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();
     scriptContext.document = libraryDocument;
+    showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
-        schema_version: 2,
+        schema_version: 3,
         entries: [
             validCatalogEntry(),
             validCatalogEntry({
@@ -43,9 +53,8 @@ function createTypingSession() {
     // well before the user types the first character.
     vm.runInContext("wireLibraryControls()", scriptContext);
 
-    const currentSearchInput = () => libraryDocument.catalogContainer.children.find(
-        (renderedElement) => renderedElement.className === "library-filter-bar"
-    ).children.find(
+    const currentSearchInput = () => findRenderedElement(
+        libraryDocument.catalogContainer,
         (element) => element.id === "library-search"
     );
     return { libraryDocument, currentSearchInput };
@@ -55,8 +64,9 @@ test("shows where new downloads are saved in the hero summary", () => {
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();
     scriptContext.document = libraryDocument;
+    showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
-        schema_version: 2,
+        schema_version: 3,
         models_download_directory: "/shared/astronomical-models",
         entries: [validCatalogEntry()]
     };
@@ -69,7 +79,8 @@ test("shows where new downloads are saved in the hero summary", () => {
         "ready"
     );
 
-    const heroSummary = libraryDocument.catalogContainer.children.find(
+    const heroSummary = findRenderedElement(
+        libraryDocument.catalogContainer,
         (renderedElement) => renderedElement.className === "library-hero-summary"
     );
     const locationNote = heroSummary.children.find(
@@ -86,8 +97,9 @@ test("omits the hero download location when the catalog ships none", () => {
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();
     scriptContext.document = libraryDocument;
+    showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
-        schema_version: 2,
+        schema_version: 3,
         entries: [validCatalogEntry()]
     };
 
@@ -99,7 +111,8 @@ test("omits the hero download location when the catalog ships none", () => {
         "ready"
     );
 
-    const heroSummary = libraryDocument.catalogContainer.children.find(
+    const heroSummary = findRenderedElement(
+        libraryDocument.catalogContainer,
         (renderedElement) => renderedElement.className === "library-hero-summary"
     );
     assert.equal(
@@ -127,7 +140,8 @@ test("keeps the search input focused, valued, and caret-set while typing", () =>
     assert.equal(rebuiltSearchInput.value, "qwen");
     assert.deepEqual(rebuiltSearchInput.selectionRange, [4, 4]);
     // The catalog list now shows only the matching rows.
-    const catalogList = libraryDocument.catalogContainer.children.find(
+    const catalogList = findRenderedElement(
+        libraryDocument.catalogContainer,
         (renderedElement) => renderedElement.className === "library-catalog-list"
     );
     assert.equal(catalogList.children.length, 1);
@@ -152,7 +166,7 @@ test("renders an empty catalog through the bounded empty state", () => {
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();
     scriptContext.document = libraryDocument;
-    scriptContext.catalogDocument = { schema_version: 2, entries: [] };
+    scriptContext.catalogDocument = { schema_version: 3, entries: [] };
 
     const renderedState = vm.runInContext(
         "renderLibraryCatalogDocument(catalogDocument)",
@@ -168,7 +182,7 @@ test("renders an empty catalog through the bounded empty state", () => {
 test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
     const scriptContext = createLibraryContext();
     scriptContext.catalogDocument = {
-        schema_version: 2,
+        schema_version: 3,
         entries: [
             validCatalogEntry({ display_name: "First", approximate_size_bytes: 1_500_000_000 }),
             validCatalogEntry({
@@ -199,6 +213,11 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             quantizationLabel: "6-bit affine (group 64)",
             upstreamLicense: "MIT",
             requestableModelId: null,
+            approximateMemoryBytes: 6_000_000_000,
+            role: "chat",
+            getStarted: false,
+            experimental: false,
+            minimumMemoryBytes: null,
             supportsReasoning: true,
             supportsVision: false,
             supportsToolCalls: true,
@@ -220,6 +239,11 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             quantizationLabel: "6-bit affine (group 64)",
             upstreamLicense: "MIT",
             requestableModelId: null,
+            approximateMemoryBytes: 6_000_000_000,
+            role: "chat",
+            getStarted: false,
+            experimental: false,
+            minimumMemoryBytes: null,
             supportsReasoning: true,
             supportsVision: false,
             supportsToolCalls: true,
@@ -357,8 +381,9 @@ test("renders catalog entries with safe document operations and an explicit down
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();
     scriptContext.document = libraryDocument;
+    showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
-        schema_version: 2,
+        schema_version: 3,
         entries: [
             validCatalogEntry({
                 display_name: "<img src=x onerror=alert(1)>",
@@ -377,7 +402,8 @@ test("renders catalog entries with safe document operations and an explicit down
     while (pendingElements.length > 0) {
         const renderedElement = pendingElements.shift();
         renderedTags.push(renderedElement.tagName);
-        if (renderedElement.tagName === "H3") renderedHeading = renderedElement;
+        // Model names are H4 now; H3 is reserved for the More models group headings.
+        if (renderedElement.tagName === "H4") renderedHeading = renderedElement;
         pendingElements.push(...renderedElement.children);
     }
 
@@ -396,8 +422,9 @@ test("renders daemon-authored catalog families without a client allowlist", () =
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();
     scriptContext.document = libraryDocument;
+    showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
-        schema_version: 2,
+        schema_version: 3,
         entries: [
             validCatalogEntry(),
             validCatalogEntry({
@@ -425,7 +452,10 @@ test("renders daemon-authored catalog families without a client allowlist", () =
         JSON.parse(JSON.stringify(catalogRows.map((catalogRow) => catalogRow.family))),
         ["qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
     );
-    const filterBar = libraryDocument.catalogContainer.children[2];
+    const filterBar = findRenderedElement(
+        libraryDocument.catalogContainer,
+        (renderedElement) => renderedElement.className === "library-filter-bar"
+    );
     const familyFilter = filterBar.children[2];
     assert.deepEqual(
         familyFilter.children.map((option) => option.value),
@@ -437,8 +467,9 @@ test("surfaces ModernBERT embedding entries with their family and capability bad
     const scriptContext = createLibraryContext();
     const libraryDocument = createLibraryDocument();
     scriptContext.document = libraryDocument;
+    showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
-        schema_version: 2,
+        schema_version: 3,
         entries: [
             validCatalogEntry({
                 huggingface_id: "astronomical-test/example-embedder",
@@ -459,20 +490,14 @@ test("surfaces ModernBERT embedding entries with their family and capability bad
 
     assert.equal(renderedState, "ready");
     assert.equal(catalogRows[0].supportsEmbeddings, true);
-    const renderedTexts = [];
-    const pendingElements = [...libraryDocument.catalogContainer.children];
-    while (pendingElements.length > 0) {
-        const renderedElement = pendingElements.shift();
-        renderedTexts.push(renderedElement.textContent);
-        pendingElements.push(...renderedElement.children);
-    }
+    const visibleTexts = renderedTexts(libraryDocument.catalogContainer);
     assert.equal(
-        renderedTexts.some((text) => text.includes("Embeddings")),
+        visibleTexts.some((text) => text.includes("Embeddings")),
         true,
         "the embedding capability badge should be rendered"
     );
     assert.equal(
-        renderedTexts.some((text) => text.includes("ModernBERT")),
+        visibleTexts.some((text) => text.includes("ModernBERT")),
         true,
         "the ModernBERT family label should be rendered"
     );
@@ -555,4 +580,3 @@ test("rejects an incomplete entry even when its visible fields are renderable", 
         false
     );
 });
-

@@ -11,7 +11,7 @@ use std::{
 
 use crate::{
     DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
-    DownloadCatalog,
+    DownloadCatalog, DownloadCatalogRole,
 };
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -32,7 +32,7 @@ fn should_parse_and_load_the_shipped_bundled_catalog() {
 #[test]
 fn should_accept_complete_entries_for_all_executable_families_in_authored_order() {
     let catalog_json = serde_json::json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "entries": [
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-flux", "flux2_klein"),
@@ -95,12 +95,12 @@ fn should_accept_bounded_executable_payload_selection_and_reject_unsafe_rules() 
 fn should_reject_invalid_catalog_document_shapes() {
     for invalid_catalog_json in [
         r#"{"entries":[]}"#,
-        r#"{"schema_version":3,"entries":[]}"#,
-        r#"{"schema_version":2}"#,
-        r#"{"schema_version":2,"entries":{}}"#,
-        r#"{"schema_version":2,"entries":[],"unexpected":true}"#,
-        r#"{"schema_version":2,"schema_version":2,"entries":[]}"#,
-        r#"{"schema_version":2,"entries":[]} trailing"#,
+        r#"{"schema_version":1,"entries":[]}"#,
+        r#"{"schema_version":3}"#,
+        r#"{"schema_version":3,"entries":{}}"#,
+        r#"{"schema_version":3,"entries":[],"unexpected":true}"#,
+        r#"{"schema_version":3,"schema_version":3,"entries":[]}"#,
+        r#"{"schema_version":3,"entries":[]} trailing"#,
     ] {
         DownloadCatalog::parse_json(invalid_catalog_json)
             .expect_err("an invalid catalog document shape must fail closed");
@@ -114,7 +114,7 @@ fn should_reject_catalog_metadata_that_exceeds_startup_resource_bounds() {
         .expect_err("catalog metadata beyond the startup byte bound must fail closed");
 
     let oversized_entry_count_catalog = serde_json::json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "entries": (0..1_025)
             .map(|entry_index| valid_entry(
                 &format!("astronomical-test/example-{entry_index}"),
@@ -193,7 +193,7 @@ fn should_reject_invalid_revision_family_visibility_size_and_display_name() {
     }
 
     DownloadCatalog::parse_json(&format!(
-        r#"{{"schema_version":2,"entries":[{{"huggingface_id":"astronomical-test/example-qwen","revision":"{VALID_REVISION}","display_name":"Example","family":"qwen3_5","approximate_size_bytes":4000000000}}]}}"#
+        r#"{{"schema_version":3,"entries":[{{"huggingface_id":"astronomical-test/example-qwen","revision":"{VALID_REVISION}","display_name":"Example","family":"qwen3_5","approximate_size_bytes":4000000000,"approximate_memory_bytes":2000000000,"role":"chat"}}]}}"#
     ))
     .expect_err("public must remain a required field");
 }
@@ -221,14 +221,14 @@ fn should_reject_unknown_duplicate_and_case_colliding_entries() {
 
     let duplicated_entry = valid_entry("astronomical-test/example-qwen", "qwen3_5");
     let duplicate_catalog = serde_json::json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "entries": [duplicated_entry.clone(), duplicated_entry]
     });
     DownloadCatalog::parse_json(&duplicate_catalog.to_string())
         .expect_err("exact duplicate identities must fail closed");
 
     let case_collision_catalog = serde_json::json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "entries": [
             valid_entry("Astronomical-Test/Example-Qwen", "qwen3_5"),
             valid_entry("astronomical-test/example-qwen", "qwen3_5"),
@@ -247,7 +247,7 @@ fn should_leave_the_daemon_attribution_file_absent_when_disabled() {
     let measured_catalog = attribution_log
         .measure_operation(
             DaemonPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":3,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
                 Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
@@ -276,7 +276,7 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let successful_catalog = attribution_log
         .measure_operation(
             DaemonPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":3,"entries":[]}"#),
             |catalog_outcome| match catalog_outcome {
                 Ok(download_catalog) => DaemonPerformanceMeasurement::successful_catalog_load(
                     download_catalog.entry_count(),
@@ -290,7 +290,7 @@ fn should_record_success_and_failure_catalog_load_boundaries_when_enabled() {
     let failed_catalog = attribution_log
         .measure_operation(
             DaemonPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":3,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":1,"entries":[]}"#),
             |_| DaemonPerformanceMeasurement::failure(),
         )
         .expect("failed operation attribution should still be written");
@@ -334,7 +334,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_write_fails() {
     let attribution_error = attribution_log
         .measure_operation(
             DaemonPerformanceOperation::LibraryCatalogLoad,
-            || DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#),
+            || DownloadCatalog::parse_json(r#"{"schema_version":3,"entries":[]}"#),
             |_| DaemonPerformanceMeasurement::successful_catalog_load(0),
         )
         .expect_err("required attribution write failures must remain typed");
@@ -367,7 +367,7 @@ fn should_return_a_typed_io_error_when_an_enabled_attribution_timestamp_fails() 
             DaemonPerformanceOperation::LibraryCatalogLoad,
             || {
                 measured_operation_executed_for_operation.store(true, Ordering::SeqCst);
-                DownloadCatalog::parse_json(r#"{"schema_version":2,"entries":[]}"#)
+                DownloadCatalog::parse_json(r#"{"schema_version":3,"entries":[]}"#)
             },
             |_| DaemonPerformanceMeasurement::successful_catalog_load(0),
         )
@@ -402,6 +402,8 @@ fn valid_entry(huggingface_id: &str, family: &str) -> serde_json::Value {
         "display_name": "Example model",
         "family": family,
         "approximate_size_bytes": 4_000_000_000_u64,
+        "approximate_memory_bytes": 2_000_000_000_u64,
+        "role": "chat",
         "public": true,
     })
 }
@@ -421,5 +423,96 @@ fn entry_with_overrides(overrides: serde_json::Value) -> serde_json::Value {
 }
 
 fn catalog_with_entry(catalog_entry: serde_json::Value) -> serde_json::Value {
-    serde_json::json!({"schema_version": 2, "entries": [catalog_entry]})
+    serde_json::json!({"schema_version": 3, "entries": [catalog_entry]})
+}
+
+/// Counts the Get started picks for one role so catalog-wide uniqueness tests
+/// can state their expectation without a closure.
+fn count_get_started_picks_for(
+    download_catalog: &DownloadCatalog,
+    role: DownloadCatalogRole,
+) -> usize {
+    let mut pick_count = 0;
+    for catalog_entry in download_catalog.entries() {
+        if catalog_entry.get_started() && catalog_entry.role() == role {
+            pick_count += 1;
+        }
+    }
+    pick_count
+}
+
+#[test]
+fn should_offer_exactly_one_get_started_pick_for_chat_coding_and_image_generation() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+
+    assert_eq!(
+        count_get_started_picks_for(&download_catalog, DownloadCatalogRole::Chat),
+        1
+    );
+    assert_eq!(
+        count_get_started_picks_for(&download_catalog, DownloadCatalogRole::Coding),
+        1
+    );
+    assert_eq!(
+        count_get_started_picks_for(&download_catalog, DownloadCatalogRole::ImageGeneration),
+        1
+    );
+}
+
+#[test]
+fn should_reject_an_unknown_role() {
+    let catalog_json = catalog_with_entry(entry_with_overrides(
+        serde_json::json!({"role": "translation"}),
+    ));
+    DownloadCatalog::parse_json(&catalog_json.to_string())
+        .expect_err("a role outside the closed role set must fail closed");
+}
+
+#[test]
+fn should_reject_two_get_started_picks_for_one_role_across_the_catalog() {
+    let catalog_json = serde_json::json!({
+        "schema_version": 3,
+        "entries": [
+            entry_with_overrides(serde_json::json!({
+                "huggingface_id": "astronomical-test/first-chat",
+                "role": "chat",
+                "get_started": true,
+            })),
+            entry_with_overrides(serde_json::json!({
+                "huggingface_id": "astronomical-test/second-chat",
+                "role": "chat",
+                "get_started": true,
+            })),
+        ]
+    });
+    DownloadCatalog::parse_json(&catalog_json.to_string())
+        .expect_err("two Get started picks for one role must fail closed");
+}
+
+#[test]
+fn should_accept_one_get_started_pick_per_role_across_the_catalog() {
+    let catalog_json = serde_json::json!({
+        "schema_version": 3,
+        "entries": [
+            entry_with_overrides(serde_json::json!({
+                "huggingface_id": "astronomical-test/chat-pick",
+                "role": "chat",
+                "get_started": true,
+            })),
+            entry_with_overrides(serde_json::json!({
+                "huggingface_id": "astronomical-test/coding-pick",
+                "role": "coding",
+                "get_started": true,
+            })),
+            entry_with_overrides(serde_json::json!({
+                "huggingface_id": "astronomical-test/image-pick",
+                "role": "image_generation",
+                "get_started": true,
+            })),
+        ]
+    });
+    let download_catalog = DownloadCatalog::parse_json(&catalog_json.to_string())
+        .expect("one Get started pick per role should be accepted");
+    assert_eq!(download_catalog.entry_count(), 3);
 }

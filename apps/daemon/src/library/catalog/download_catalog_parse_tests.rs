@@ -11,13 +11,14 @@ use serde_json::{Value, json};
 
 use super::{
     DownloadCatalogCapabilitiesDocument, DownloadCatalogEntryDocument, DownloadCatalogError,
-    DownloadCatalogFamily, MAXIMUM_DESCRIPTION_BYTES, MAXIMUM_DISPLAY_NAME_BYTES,
-    MAXIMUM_DOWNLOAD_CATALOG_BYTES, MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT,
-    MAXIMUM_JAVASCRIPT_SAFE_INTEGER, MAXIMUM_QUANTIZATION_LABEL_BYTES,
-    MAXIMUM_UPSTREAM_LICENSE_BYTES, parse_and_shape_check_document, parse_catalog_entry,
-    parse_entry_capabilities, parse_optional_entry_description,
-    parse_optional_entry_quantization_label, parse_optional_entry_upstream_license,
-    validate_entry_display_metadata, validate_entry_identity,
+    DownloadCatalogFamily, DownloadCatalogRole, MAXIMUM_DESCRIPTION_BYTES,
+    MAXIMUM_DISPLAY_NAME_BYTES, MAXIMUM_DOWNLOAD_CATALOG_BYTES,
+    MAXIMUM_DOWNLOAD_CATALOG_ENTRY_COUNT, MAXIMUM_JAVASCRIPT_SAFE_INTEGER,
+    MAXIMUM_QUANTIZATION_LABEL_BYTES, MAXIMUM_UPSTREAM_LICENSE_BYTES,
+    parse_and_shape_check_document, parse_catalog_entry, parse_entry_capabilities,
+    parse_optional_entry_description, parse_optional_entry_quantization_label,
+    parse_optional_entry_upstream_license, validate_entry_display_metadata,
+    validate_entry_identity, validate_entry_memory_footprint, validate_get_started_pick,
 };
 
 const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -29,6 +30,8 @@ fn baseline_entry_document() -> Value {
         "display_name": "Example model",
         "family": "qwen3_5",
         "approximate_size_bytes": 4_000_000_000_u64,
+        "approximate_memory_bytes": 2_000_000_000_u64,
+        "role": "chat",
         "public": true,
     })
 }
@@ -50,10 +53,14 @@ fn empty_normalized_huggingface_ids() -> BTreeSet<String> {
     BTreeSet::new()
 }
 
+fn empty_get_started_role_names() -> BTreeSet<&'static str> {
+    BTreeSet::new()
+}
+
 /// Trailing JSON whitespace is legal, so a document padded with spaces to an
 /// exact byte size still parses — making the byte bound directly testable.
 fn catalog_document_padded_to_byte_size(total_byte_size: usize) -> String {
-    let unpadded_catalog_document = r#"{"schema_version":2,"entries":[]}"#;
+    let unpadded_catalog_document = r#"{"schema_version":3,"entries":[]}"#;
     let padding_byte_count = total_byte_size - unpadded_catalog_document.len();
     format!(
         "{unpadded_catalog_document}{}",
@@ -70,10 +77,12 @@ fn catalog_document_with_entry_count(entry_count: usize) -> String {
             "display_name": "Example model",
             "family": "qwen3_5",
             "approximate_size_bytes": 4_000_000_000_u64,
+            "approximate_memory_bytes": 2_000_000_000_u64,
+            "role": "chat",
             "public": true,
         }));
     }
-    json!({"schema_version": 2, "entries": entry_values}).to_string()
+    json!({"schema_version": 3, "entries": entry_values}).to_string()
 }
 
 #[test]
@@ -108,8 +117,8 @@ fn should_reject_documents_beyond_resource_bounds_or_with_bad_shapes() {
         Err(DownloadCatalogError::Parse(_))
     ));
     assert!(matches!(
-        parse_and_shape_check_document(r#"{"schema_version":3,"entries":[]}"#),
-        Err(DownloadCatalogError::UnsupportedSchemaVersion { schema_version: 3 })
+        parse_and_shape_check_document(r#"{"schema_version":1,"entries":[]}"#),
+        Err(DownloadCatalogError::UnsupportedSchemaVersion { schema_version: 1 })
     ));
 }
 
@@ -445,7 +454,12 @@ fn should_parse_a_complete_entry_into_the_public_entry_type() {
         ("included_paths", json!(["LICENSE.md", "transformer/"])),
     ]);
 
-    let outcome = parse_catalog_entry(complete_entry, 0, &mut empty_normalized_huggingface_ids());
+    let outcome = parse_catalog_entry(
+        complete_entry,
+        0,
+        &mut empty_normalized_huggingface_ids(),
+        &mut empty_get_started_role_names(),
+    );
 
     let catalog_entry = outcome.expect("a complete entry should parse");
     assert_eq!(
@@ -460,6 +474,7 @@ fn should_parse_a_complete_entry_into_the_public_entry_type() {
         catalog_entry.description(),
         Some("A complete fictional entry")
     );
+    assert_eq!(catalog_entry.role(), DownloadCatalogRole::Chat);
     assert!(catalog_entry.capabilities().supports_reasoning);
     assert_eq!(catalog_entry.capabilities().context_window, Some(8192));
     assert_eq!(catalog_entry.quantization_label(), Some("4-bit (affine)"));
@@ -482,6 +497,7 @@ fn should_report_identity_failures_before_display_description_and_capability_fai
         multi_invalid_entry,
         0,
         &mut empty_normalized_huggingface_ids(),
+        &mut empty_get_started_role_names(),
     );
 
     assert!(matches!(
@@ -501,6 +517,7 @@ fn should_report_description_failures_before_capability_failures() {
         invalid_description_with_badgeless_capabilities,
         0,
         &mut empty_normalized_huggingface_ids(),
+        &mut empty_get_started_role_names(),
     );
 
     assert!(matches!(
@@ -520,6 +537,7 @@ fn should_report_quantization_label_failures_before_upstream_license_failures() 
         both_labels_invalid,
         0,
         &mut empty_normalized_huggingface_ids(),
+        &mut empty_get_started_role_names(),
     );
 
     assert!(matches!(
@@ -536,10 +554,147 @@ fn should_report_included_path_failures_last_in_the_entry_order() {
         invalid_included_paths,
         9,
         &mut empty_normalized_huggingface_ids(),
+        &mut empty_get_started_role_names(),
     );
 
     assert!(matches!(
         outcome,
         Err(DownloadCatalogError::InvalidIncludedPaths { entry_index: 9 })
     ));
+}
+
+#[test]
+fn should_parse_role_memory_and_flags_into_the_public_entry_type() {
+    let flagged_entry = entry_document_with(&[
+        ("role", json!("coding")),
+        ("approximate_memory_bytes", json!(25_769_803_680_u64)),
+        ("get_started", json!(true)),
+        ("experimental", json!(false)),
+        ("minimum_memory_bytes", json!(4_451_287_808_u64)),
+    ]);
+
+    let catalog_entry = parse_catalog_entry(
+        flagged_entry,
+        0,
+        &mut empty_normalized_huggingface_ids(),
+        &mut empty_get_started_role_names(),
+    )
+    .expect("a flagged coding entry should parse");
+
+    assert_eq!(catalog_entry.role(), DownloadCatalogRole::Coding);
+    assert_eq!(catalog_entry.role().as_str(), "coding");
+    assert_eq!(catalog_entry.approximate_memory_bytes(), 25_769_803_680);
+    assert!(catalog_entry.get_started());
+    assert!(!catalog_entry.experimental());
+    assert_eq!(catalog_entry.minimum_memory_bytes(), Some(4_451_287_808));
+}
+
+#[test]
+fn should_default_flags_to_false_and_the_streaming_floor_to_none() {
+    let plain_entry = parse_catalog_entry(
+        entry_document_with(&[]),
+        0,
+        &mut empty_normalized_huggingface_ids(),
+        &mut empty_get_started_role_names(),
+    )
+    .expect("an entry without optional flags should parse");
+
+    assert!(!plain_entry.get_started());
+    assert!(!plain_entry.experimental());
+    assert_eq!(plain_entry.minimum_memory_bytes(), None);
+}
+
+#[test]
+fn should_accept_memory_at_one_byte_and_the_javascript_safe_maximum() {
+    for accepted_memory_bytes in [1_u64, MAXIMUM_JAVASCRIPT_SAFE_INTEGER] {
+        let memory_entry =
+            entry_document_with(&[("approximate_memory_bytes", json!(accepted_memory_bytes))]);
+        assert!(validate_entry_memory_footprint(&memory_entry, 0).is_ok());
+    }
+}
+
+#[test]
+fn should_reject_zero_or_unsafe_approximate_memory() {
+    for rejected_memory_bytes in [0_u64, MAXIMUM_JAVASCRIPT_SAFE_INTEGER + 1] {
+        let memory_entry =
+            entry_document_with(&[("approximate_memory_bytes", json!(rejected_memory_bytes))]);
+        assert!(matches!(
+            validate_entry_memory_footprint(&memory_entry, 4),
+            Err(DownloadCatalogError::InvalidApproximateMemory { entry_index: 4 })
+        ));
+    }
+}
+
+#[test]
+fn should_accept_one_get_started_pick_per_role() {
+    let mut get_started_role_names = empty_get_started_role_names();
+    let chat_pick = entry_document_with(&[("role", json!("chat")), ("get_started", json!(true))]);
+    let coding_pick =
+        entry_document_with(&[("role", json!("coding")), ("get_started", json!(true))]);
+    let chat_non_pick = entry_document_with(&[("role", json!("chat"))]);
+
+    assert!(validate_get_started_pick(&chat_pick, 0, &mut get_started_role_names).is_ok());
+    assert!(validate_get_started_pick(&coding_pick, 1, &mut get_started_role_names).is_ok());
+    assert!(validate_get_started_pick(&chat_non_pick, 2, &mut get_started_role_names).is_ok());
+}
+
+#[test]
+fn should_reject_two_get_started_picks_for_one_role() {
+    let mut get_started_role_names = empty_get_started_role_names();
+    let first_chat_pick =
+        entry_document_with(&[("role", json!("chat")), ("get_started", json!(true))]);
+    let second_chat_pick =
+        entry_document_with(&[("role", json!("chat")), ("get_started", json!(true))]);
+    assert!(validate_get_started_pick(&first_chat_pick, 0, &mut get_started_role_names).is_ok());
+
+    assert!(matches!(
+        validate_get_started_pick(&second_chat_pick, 1, &mut get_started_role_names),
+        Err(DownloadCatalogError::DuplicateGetStartedPick { role: "chat" })
+    ));
+}
+
+#[test]
+fn should_reject_an_experimental_or_helper_get_started_pick() {
+    let mut get_started_role_names = empty_get_started_role_names();
+    let experimental_pick = entry_document_with(&[
+        ("role", json!("chat")),
+        ("get_started", json!(true)),
+        ("experimental", json!(true)),
+    ]);
+    let helper_pick =
+        entry_document_with(&[("role", json!("helper")), ("get_started", json!(true))]);
+
+    assert!(matches!(
+        validate_get_started_pick(&experimental_pick, 3, &mut get_started_role_names),
+        Err(DownloadCatalogError::InvalidGetStartedPick { entry_index: 3 })
+    ));
+    assert!(matches!(
+        validate_get_started_pick(&helper_pick, 5, &mut get_started_role_names),
+        Err(DownloadCatalogError::InvalidGetStartedPick { entry_index: 5 })
+    ));
+}
+
+#[test]
+fn should_accept_a_streaming_floor_from_one_byte_up_to_the_full_footprint() {
+    for accepted_minimum_bytes in [1_u64, 8_000_000_000] {
+        let streaming_entry = entry_document_with(&[
+            ("approximate_memory_bytes", json!(8_000_000_000_u64)),
+            ("minimum_memory_bytes", json!(accepted_minimum_bytes)),
+        ]);
+        assert!(validate_entry_memory_footprint(&streaming_entry, 0).is_ok());
+    }
+}
+
+#[test]
+fn should_reject_a_zero_streaming_floor_or_one_above_the_full_footprint() {
+    for rejected_minimum_bytes in [0_u64, 8_000_000_001] {
+        let streaming_entry = entry_document_with(&[
+            ("approximate_memory_bytes", json!(8_000_000_000_u64)),
+            ("minimum_memory_bytes", json!(rejected_minimum_bytes)),
+        ]);
+        assert!(matches!(
+            validate_entry_memory_footprint(&streaming_entry, 3),
+            Err(DownloadCatalogError::InvalidMinimumMemory { entry_index: 3 })
+        ));
+    }
 }

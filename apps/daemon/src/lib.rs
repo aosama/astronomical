@@ -60,7 +60,7 @@ pub use ipc::service::{DaemonIpcGenerationContext, DaemonIpcService, start_daemo
 pub use library::model_discovery_refresh::LibraryModelDiscoveryRefresh;
 pub use library::{
     DiskCapacityQuery, DownloadCatalog, DownloadCatalogEntry, DownloadCatalogError,
-    DownloadCatalogFamily, DownloadDiskCapacityCheck, DownloadDiskPreflight,
+    DownloadCatalogFamily, DownloadCatalogRole, DownloadDiskCapacityCheck, DownloadDiskPreflight,
     DownloadDiskPreflightError, DownloadFileDigest, DownloadJob, DownloadJobError, DownloadJobFile,
     DownloadJobPublicErrorCode, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
     DownloadManifestPreflight, DownloadManifestPreflightError, DownloadPayloadTransfer,

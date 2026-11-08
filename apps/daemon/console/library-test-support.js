@@ -50,8 +50,16 @@ function createLibraryElement(tagName, onElementRegistered, onElementFocused) {
             this.selectionEnd = endIndex;
             this.selectionRange = [startIndex, endIndex];
         },
-        dispatch(eventType) {
-            for (const listener of this.listeners[eventType] || []) listener({ type: eventType });
+        // Returns the event so tests can assert on defaultPrevented after a handled key.
+        dispatch(eventType, eventInit = {}) {
+            const dispatchedEvent = {
+                type: eventType,
+                defaultPrevented: false,
+                preventDefault() { this.defaultPrevented = true; },
+                ...eventInit
+            };
+            for (const listener of this.listeners[eventType] || []) listener(dispatchedEvent);
+            return dispatchedEvent;
         },
         appendChild(child) {
             this.children.push(child);
@@ -103,6 +111,33 @@ function createLibraryDocument() {
     return shell;
 }
 
+// Depth-first search of the rendered tree, so tests can reach a card or control
+// inside a page without depending on how many wrappers the page adds.
+function findRenderedElement(rootElement, elementPredicate) {
+    const pendingElements = [rootElement];
+    while (pendingElements.length > 0) {
+        const renderedElement = pendingElements.shift();
+        if (elementPredicate(renderedElement)) return renderedElement;
+        pendingElements.unshift(...renderedElement.children);
+    }
+    return undefined;
+}
+
+function findRenderedElementsByClass(rootElement, className) {
+    const matches = [];
+    const pendingElements = [rootElement];
+    while (pendingElements.length > 0) {
+        const renderedElement = pendingElements.shift();
+        // Match one class token, because a card carries modifiers such as
+        // library-model-card-ready next to its base class.
+        if (String(renderedElement.className).split(" ").includes(className)) matches.push(renderedElement);
+        pendingElements.unshift(...renderedElement.children);
+    }
+    return matches;
+}
+
+// Schema 3 defaults: a chat model that is not a Get started pick, sized to
+// memory the fit tests can compare against explicit ceilings.
 function validCatalogEntry(overrides = {}) {
     return {
         huggingface_id: "astronomical-test/example-qwen",
@@ -110,6 +145,10 @@ function validCatalogEntry(overrides = {}) {
         display_name: "Example model",
         family: "qwen3_5",
         approximate_size_bytes: 4_000_000_000,
+        approximate_memory_bytes: 6_000_000_000,
+        role: "chat",
+        get_started: false,
+        experimental: false,
         public: true,
         description: "A test model for exercising Library rendering.",
         capabilities: {
@@ -125,15 +164,31 @@ function validCatalogEntry(overrides = {}) {
     };
 }
 
+// Every text node under a rendered element, depth first, so tests can assert
+// what a person would read without depending on the exact element tree.
+function renderedTexts(rootElement) {
+    const texts = [];
+    const pendingElements = [rootElement];
+    while (pendingElements.length > 0) {
+        const renderedElement = pendingElements.shift();
+        texts.push(renderedElement.textContent);
+        pendingElements.unshift(...renderedElement.children);
+    }
+    return texts;
+}
+
 module.exports = {
     ASYNC_TEST_OPTIONS,
     assert,
     createLibraryContext,
     createLibraryDocument,
     createLibraryElement,
+    findRenderedElement,
+    findRenderedElementsByClass,
     fs,
     observatoryShell,
     path,
+    renderedTexts,
     test,
     validCatalogEntry,
     vm
