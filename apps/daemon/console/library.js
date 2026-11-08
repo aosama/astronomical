@@ -550,7 +550,10 @@ function libraryActionButtons(catalogRow) {
         return [libraryActionButton("Pause", "pause"), libraryActionButton("Cancel", "cancel")];
     }
     const downloadButton = libraryActionButton("Download", "start", catalogRow.huggingfaceId);
-    downloadButton.disabled = libraryCurrentDownload.state !== "idle";
+    // A failed download of another model does not hold the Library: the daemon discards it when
+    // this download starts, so the button stays usable and nobody has to cancel it first.
+    downloadButton.disabled = libraryCurrentDownload.state !== "idle"
+        && libraryCurrentDownload.state !== "failed";
     return [downloadButton];
 }
 
