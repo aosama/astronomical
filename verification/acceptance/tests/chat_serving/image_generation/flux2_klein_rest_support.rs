@@ -12,7 +12,6 @@ use astronomical_daemon::{
     GenerationPerformanceLog, ResolvedRuntimeConfigResolver, WorkerHandle,
     build_development_application_with_reload,
 };
-use astronomical_model_serving::FLUX2_KLEIN_OFFICIAL_MODEL_ID;
 use serde_json::Value;
 use tokio::{net::TcpListener, sync::oneshot, task::JoinHandle, time::sleep};
 
@@ -128,7 +127,11 @@ impl FluxRestServer {
     }
 }
 
-pub(crate) fn assert_image_attribution(rest_server: &FluxRestServer, expected_outcomes: &[&str]) {
+pub(crate) fn assert_image_attribution(
+    rest_server: &FluxRestServer,
+    flux_model_id: &str,
+    expected_outcomes: &[&str],
+) {
     let report_text = fs::read_to_string(rest_server.attribution_log_path())
         .expect("enabled isolated attribution should record FLUX reports");
     let image_reports = parse_image_attribution_reports(&report_text);
@@ -169,7 +172,7 @@ pub(crate) fn assert_image_attribution(rest_server: &FluxRestServer, expected_ou
                     .find(|snapshot| snapshot["phase"] == "final_cleanup")
             })
             .expect("every image outcome should expose final MLX cleanup telemetry");
-        assert_eq!(report["model_id"], FLUX2_KLEIN_OFFICIAL_MODEL_ID);
+        assert_eq!(report["model_id"], flux_model_id);
         let reported_revision = report["model_revision"]
             .as_str()
             .expect("image attribution should name the artifact revision");
