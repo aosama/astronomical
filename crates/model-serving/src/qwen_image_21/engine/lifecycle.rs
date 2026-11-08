@@ -47,6 +47,15 @@ impl QwenImage21ImageEngine {
         }
     }
 
+    /// Tells the engine how far a load may plan above its ceiling to reach its
+    /// floor (#1902): the user's own limit, or unbounded when they set none.
+    #[must_use]
+    pub fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
+        self.components
+            .adopt_floor_raise_limit(floor_raise_limit_bytes);
+        self
+    }
+
     /// Worker-factory constructor over the native MLX component owner.
     #[cfg(feature = "direct-mlx")]
     #[must_use]

@@ -433,4 +433,257 @@ async fn should_refuse_a_ceiling_below_the_image_floor_and_keep_serving_at_the_f
     close_worker(commands, worker).await;
 }
 
+// A loaded model whose floor is above its ceiling is served at its floor unless
+// that would pass a limit the user set (#1902). These live with
+// the image journeys because they share the scripted runtime factory.
+
+/// Loads one scripted chat model reporting `load_floor_bytes` into a worker
+/// whose machine and effective ceilings and floor-raise limit are given, and
+/// returns every ceiling the loaded engine was asked to adopt during the load.
+async fn ceilings_adopted_while_loading(
+    machine_ceiling_bytes: u64,
+    effective_ceiling_bytes: u64,
+    floor_raise_limit_bytes: u64,
+    load_floor_bytes: u64,
+) -> Vec<u64> {
+    let chat_engine = ScriptedChatEngine::new().with_load_floor_bytes(load_floor_bytes);
+    let adopted_ceilings = Arc::clone(&chat_engine.adopted_ceilings);
+    let worker = crate::EngineBackedWorker::idle_with_model_factory_and_machine_mlx_memory_ceiling(
+        ScriptedRuntimeFactory::new(vec![Ok(ScriptedRuntime::autoregressive(
+            ScriptedChatProcessor::new(),
+            chat_engine,
+            crate::EnginePlacement::CompleteResidencyFits,
+        ))]),
+        machine_ceiling_bytes,
+        effective_ceiling_bytes,
+    )
+    .with_floor_raise_limit_bytes(floor_raise_limit_bytes);
+    let (mut events, mut commands, worker_task) = start_worker(worker).await;
+    let _idle = next_event(&mut events).await;
+    commands
+        .send_command(&WorkerCommand::SwapModel {
+            model_directory: "/models/chat".to_owned(),
+            model_configuration: chat_support::worker_model_configuration("example/scripted-chat"),
+        })
+        .await
+        .expect("chat swap");
+    // The raise happens before the swap is announced, so the announcement
+    // proves the record below is complete.
+    while !matches!(
+        next_event(&mut events).await,
+        WorkerEvent::ModelSwapped { .. }
+    ) {}
+    let adopted = lock(&adopted_ceilings).clone();
+    close_worker(commands, worker_task).await;
+    adopted
+}
+
+#[tokio::test]
+async fn should_raise_a_loaded_chat_model_to_its_floor_when_the_user_set_no_limit() {
+    // The Mac's own memory (8,000 bytes here) is the ceiling and the model
+    // needs 9,000: it is served at 9,000 instead of refusing every request.
+    assert_eq!(
+        ceilings_adopted_while_loading(8_000, 8_000, u64::MAX, 9_000).await,
+        vec![9_000]
+    );
+}
+
+#[tokio::test]
+async fn should_keep_a_user_configured_ceiling_below_the_model_floor() {
+    // The user chose 4,000 on an 8,000-byte machine; that limit is theirs.
+    assert!(
+        ceilings_adopted_while_loading(8_000, 4_000, 4_000, 6_000)
+            .await
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn should_not_touch_the_ceiling_when_the_floor_fits_under_it() {
+    for load_floor_bytes in [1, 7_999, 8_000] {
+        assert!(
+            ceilings_adopted_while_loading(8_000, 8_000, u64::MAX, load_floor_bytes)
+                .await
+                .is_empty(),
+            "a {load_floor_bytes}-byte floor fits under an 8,000-byte ceiling"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_serve_an_image_model_at_its_floor_when_the_user_set_no_limit() {
+    // The scripted image model reports a 1,000-byte floor; this machine's own
+    // memory allows only 800, so the loaded engine is raised to 1,000 (#1902).
+    let image_engine = ScriptedImageEngine::new(vec![vec![Ok(completed_step())]]);
+    let updated_limits = Arc::clone(&image_engine.updated_limits);
+    let (mut events, mut commands, worker) = start_worker(
+        crate::EngineBackedWorker::idle_with_model_factory(
+            ScriptedRuntimeFactory::new(vec![Ok(ScriptedRuntime::Image(image_engine))]),
+            800,
+        )
+        .with_floor_raise_limit_bytes(u64::MAX),
+    )
+    .await;
+    let _idle = next_event(&mut events).await;
+    commands
+        .send_command(&swap_image_command())
+        .await
+        .expect("image swap");
+    let _image_swapped = next_event(&mut events).await;
+    assert_eq!(*lock(&updated_limits), vec![1_000]);
+    close_worker(commands, worker).await;
+}
+
+#[tokio::test]
+async fn should_keep_a_floor_served_model_at_its_floor_when_the_user_asks_for_the_maximum() {
+    // Served at its 1,000-byte floor on an 800-byte machine, the image model
+    // then receives "Use Max" (the machine ceiling). Without re-applying the
+    // floor rule the update would push it back to 800, under its floor.
+    let image_engine = ScriptedImageEngine::new(vec![vec![Ok(completed_step())]]);
+    let updated_limits = Arc::clone(&image_engine.updated_limits);
+    let (mut events, mut commands, worker) = start_worker(
+        crate::EngineBackedWorker::idle_with_model_factory(
+            ScriptedRuntimeFactory::new(vec![Ok(ScriptedRuntime::Image(image_engine))]),
+            800,
+        )
+        .with_floor_raise_limit_bytes(u64::MAX),
+    )
+    .await;
+    let _idle = next_event(&mut events).await;
+    commands
+        .send_command(&swap_image_command())
+        .await
+        .expect("image swap");
+    let _image_swapped = next_event(&mut events).await;
+    let _image_model_load_memory = next_event(&mut events).await;
+    assert!(
+        matches!(
+            next_event(&mut events).await,
+            WorkerEvent::MlxMemoryLimitChanged {
+                effective_mlx_memory_ceiling_bytes: 1_000,
+                ..
+            }
+        ),
+        "the load-time raise is announced so status never shows a ceiling below the floor"
+    );
+    commands
+        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
+            effective_mlx_memory_ceiling_bytes: 800,
+            configuration_generation: "use-max-after-floor-serve".to_owned(),
+        })
+        .await
+        .expect("use-max memory update");
+    assert!(matches!(
+        next_event(&mut events).await,
+        WorkerEvent::MlxMemoryLimitChanged {
+            effective_mlx_memory_ceiling_bytes: 1_000,
+            ..
+        }
+    ));
+    assert_eq!(*lock(&updated_limits), vec![1_000, 1_000]);
+    close_worker(commands, worker).await;
+}
+
+/// Swaps in the next scripted chat model and waits for its announcement, by
+/// which point any raise to its floor has already happened.
+async fn swap_in_scripted_chat_model<ReadTransport, WriteTransport>(
+    events: &mut astronomical_ipc_protocol::ProtocolReader<ReadTransport>,
+    commands: &mut astronomical_ipc_protocol::ProtocolWriter<WriteTransport>,
+) where
+    ReadTransport: tokio::io::AsyncRead + Unpin,
+    WriteTransport: tokio::io::AsyncWrite + Unpin,
+{
+    commands
+        .send_command(&WorkerCommand::SwapModel {
+            model_directory: "/models/chat".to_owned(),
+            model_configuration: chat_support::worker_model_configuration("example/scripted-chat"),
+        })
+        .await
+        .expect("chat swap");
+    while !matches!(next_event(events).await, WorkerEvent::ModelSwapped { .. }) {}
+}
+
+#[tokio::test]
+async fn should_judge_the_next_model_against_the_factory_ceiling_not_an_earlier_floor() {
+    // Model A (floor 9,000) is raised above the 8,000-byte machine. Model B
+    // (floor 8,500) must still be raised: judged against A's 9,000 it would
+    // look as if it fit and then refuse every request.
+    let first_chat_engine = ScriptedChatEngine::new().with_load_floor_bytes(9_000);
+    let second_chat_engine = ScriptedChatEngine::new().with_load_floor_bytes(8_500);
+    let second_adopted_ceilings = Arc::clone(&second_chat_engine.adopted_ceilings);
+    let (mut events, mut commands, worker) = start_worker(
+        crate::EngineBackedWorker::idle_with_model_factory(
+            ScriptedRuntimeFactory::new(vec![
+                Ok(ScriptedRuntime::autoregressive(
+                    ScriptedChatProcessor::new(),
+                    first_chat_engine,
+                    crate::EnginePlacement::CompleteResidencyFits,
+                )),
+                Ok(ScriptedRuntime::autoregressive(
+                    ScriptedChatProcessor::new(),
+                    second_chat_engine,
+                    crate::EnginePlacement::CompleteResidencyFits,
+                )),
+            ]),
+            8_000,
+        )
+        .with_floor_raise_limit_bytes(u64::MAX),
+    )
+    .await;
+    let _idle = next_event(&mut events).await;
+    swap_in_scripted_chat_model(&mut events, &mut commands).await;
+    swap_in_scripted_chat_model(&mut events, &mut commands).await;
+    assert_eq!(*lock(&second_adopted_ceilings), vec![8_500]);
+    close_worker(commands, worker).await;
+}
+
+#[tokio::test]
+async fn should_keep_the_previous_raise_limit_when_a_live_update_is_rejected() {
+    // A 999-byte request is below the loaded image model's 1,000-byte floor
+    // and is refused (#1899). The refused request must not leave its 999-byte
+    // user limit behind: the next chat model (floor 9,000) is still raised.
+    let image_engine = ScriptedImageEngine::new(vec![vec![Ok(completed_step())]]);
+    let chat_engine = ScriptedChatEngine::new().with_load_floor_bytes(9_000);
+    let chat_adopted_ceilings = Arc::clone(&chat_engine.adopted_ceilings);
+    let (mut events, mut commands, worker) = start_worker(
+        crate::EngineBackedWorker::idle_with_model_factory(
+            ScriptedRuntimeFactory::new(vec![
+                Ok(ScriptedRuntime::Image(image_engine)),
+                Ok(ScriptedRuntime::autoregressive(
+                    ScriptedChatProcessor::new(),
+                    chat_engine,
+                    crate::EnginePlacement::CompleteResidencyFits,
+                )),
+            ]),
+            8_000,
+        )
+        .with_floor_raise_limit_bytes(u64::MAX),
+    )
+    .await;
+    let _idle = next_event(&mut events).await;
+    commands
+        .send_command(&swap_image_command())
+        .await
+        .expect("image swap");
+    while !matches!(
+        next_event(&mut events).await,
+        WorkerEvent::ModelSwapped { .. }
+    ) {}
+    let _image_model_load_memory = next_event(&mut events).await;
+    commands
+        .send_command(&WorkerCommand::UpdateMlxMemoryLimit {
+            effective_mlx_memory_ceiling_bytes: 999,
+            configuration_generation: "rejected-below-image-floor".to_owned(),
+        })
+        .await
+        .expect("below-floor memory update");
+    assert!(matches!(
+        next_event(&mut events).await,
+        WorkerEvent::MlxMemoryLimitRejected { .. }
+    ));
+    swap_in_scripted_chat_model(&mut events, &mut commands).await;
+    assert_eq!(*lock(&chat_adopted_ceilings), vec![9_000]);
+    close_worker(commands, worker).await;
+}
+
 mod support;

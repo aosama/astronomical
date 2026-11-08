@@ -23,6 +23,9 @@ struct Flux2KleinValidatedLoadPlan {
     residency_plan: Flux2KleinResidencyPlan,
     transformer_geometry: super::super::super::Flux2KleinTransformerGeometry,
     minimum_ceiling_bytes: u64,
+    /// The ceiling the plan was made against: the effective ceiling, or the
+    /// model's floor when the load plans at its floor (#1902).
+    planning_ceiling_bytes: u64,
     memory_geometry: Flux2KleinMemoryGeometry,
     total_artifact_payload_bytes: u64,
     model_shard_count: usize,
@@ -88,10 +91,14 @@ impl Flux2KleinMlxComponents {
             residency_plan,
             transformer_geometry,
             minimum_ceiling_bytes,
+            planning_ceiling_bytes,
             memory_geometry,
             ..
         } = load_plan?;
         self.runtime = initialized_runtime;
+        self.effective_mlx_memory_ceiling_bytes = self
+            .effective_mlx_memory_ceiling_bytes
+            .max(usize::try_from(planning_ceiling_bytes).unwrap_or(usize::MAX));
         self.validated_artifact = Some(validated_artifact);
         self.residency_plan = Some(residency_plan);
         self.transformer_geometry = Some(transformer_geometry);
@@ -114,7 +121,7 @@ impl Flux2KleinMlxComponents {
         &self,
         attribution: &mut PerformanceAttribution,
     ) -> Flux2KleinValidatedLoad {
-        let initialized_runtime = match self.initialize_flux2_klein_runtime(attribution) {
+        let mut initialized_runtime = match self.initialize_flux2_klein_runtime(attribution) {
             Ok(initialized_runtime) => Some(initialized_runtime),
             Err(load_failure) => {
                 return Flux2KleinValidatedLoad {
@@ -132,10 +139,39 @@ impl Flux2KleinMlxComponents {
                 };
             }
         };
+        let plan = self.raise_runtime_to_planning_ceiling(initialized_runtime.as_mut(), load_plan);
         Flux2KleinValidatedLoad {
             initialized_runtime,
-            plan: Ok(load_plan),
+            plan,
         }
+    }
+
+    /// Moves the runtime's limits up to the ceiling the load was planned at,
+    /// so a load planned at its floor (#1902) never runs under the lower
+    /// limits the runtime started with, even if the worker's later raise of
+    /// the loaded engine fails. A failure here fails the load.
+    fn raise_runtime_to_planning_ceiling(
+        &self,
+        initialized_runtime: Option<&mut MlxRuntime>,
+        load_plan: Flux2KleinValidatedLoadPlan,
+    ) -> Result<Flux2KleinValidatedLoadPlan, String> {
+        let Some(initialized_runtime) = initialized_runtime else {
+            return Ok(load_plan);
+        };
+        if load_plan.planning_ceiling_bytes <= self.effective_mlx_memory_ceiling_bytes as u64 {
+            return Ok(load_plan);
+        }
+        let planning_ceiling_bytes = usize::try_from(load_plan.planning_ceiling_bytes)
+            .map_err(|_| "the FLUX.2 Klein planning ceiling exceeds this platform".to_owned())?;
+        let memory_limits = MlxMemoryLimits::new(
+            planning_ceiling_bytes,
+            self.allocator_cache_memory_limit_bytes,
+        )
+        .map_err(|error| error.to_string())?;
+        initialized_runtime
+            .update_memory_limits(memory_limits)
+            .map_err(|error| error.to_string())?;
+        Ok(load_plan)
     }
 
     /// Initializes the MLX runtime under this load's memory limits and clears
@@ -193,12 +229,10 @@ impl Flux2KleinMlxComponents {
             validated_artifact.transformer_config(),
         )
         .map_err(|error| error.to_string())?;
+        let load_planning_ceiling_bytes = self.load_planning_ceiling_bytes(&geometry);
         let residency_plan = attribution
             .measure_operation(PerformanceOperation::MemoryAdmissionSnapshot, |_| {
-                Flux2KleinMemoryAdmission::plan(
-                    self.effective_mlx_memory_ceiling_bytes as u64,
-                    &geometry,
-                )
+                Flux2KleinMemoryAdmission::plan(load_planning_ceiling_bytes, &geometry)
             })
             .map_err(|error| error.to_string())?;
         let minimum_ceiling_bytes = residency_plan.minimum_mlx_memory_ceiling_bytes();
@@ -207,10 +241,32 @@ impl Flux2KleinMlxComponents {
             residency_plan,
             transformer_geometry,
             minimum_ceiling_bytes,
+            planning_ceiling_bytes: load_planning_ceiling_bytes,
             memory_geometry: geometry,
             total_artifact_payload_bytes,
             model_shard_count,
         })
+    }
+
+    /// The ceiling the load plans against: the effective ceiling, or the
+    /// model's floor when the ceiling is below it and the user set no limit
+    /// below it (#1902). A limit the user chose below the floor is planned as
+    /// is, so the load still refuses.
+    /// Invalid geometry plans at the effective ceiling, where the planner
+    /// reports the same geometry error itself.
+    fn load_planning_ceiling_bytes(&self, geometry: &Flux2KleinMemoryGeometry) -> u64 {
+        let effective_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes as u64;
+        let Ok(model_floor_bytes) =
+            Flux2KleinMemoryAdmission::minimum_mlx_memory_ceiling_bytes(geometry)
+        else {
+            return effective_ceiling_bytes;
+        };
+        crate::floor_raised_ceiling_bytes(
+            effective_ceiling_bytes,
+            model_floor_bytes,
+            self.floor_raise_limit_bytes,
+        )
+        .unwrap_or(effective_ceiling_bytes)
     }
 }
 

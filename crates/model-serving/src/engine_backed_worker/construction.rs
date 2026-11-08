@@ -19,6 +19,8 @@ where
             effective_mlx_memory_ceiling_bytes: 0,
             minimum_mlx_memory_ceiling_bytes: 1,
             wired_residency_budget_bytes: None,
+            floor_raise_limit_bytes: 0,
+            factory_mlx_memory_ceiling_bytes: 0,
             worker_runtime_feature_configuration: None,
             selected_model: None,
             // A directly injected engine is treated as complete-resident:
@@ -62,6 +64,8 @@ where
             effective_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes: 1,
             wired_residency_budget_bytes: None,
+            floor_raise_limit_bytes: 0,
+            factory_mlx_memory_ceiling_bytes: effective_mlx_memory_ceiling_bytes,
             worker_runtime_feature_configuration: None,
             selected_model: None,
             // No autoregressive engine is loaded, so there is no placement.
@@ -81,6 +85,14 @@ where
         wired_residency_budget_bytes: Option<u64>,
     ) -> Self {
         self.wired_residency_budget_bytes = wired_residency_budget_bytes;
+        self
+    }
+
+    /// Records how far a loaded model may be raised to serve at its floor; see
+    /// the field. Startup derives it from the configured maximum.
+    #[must_use]
+    pub const fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
         self
     }
 

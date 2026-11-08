@@ -190,6 +190,7 @@ where
             model_configuration: model_configuration.clone(),
         });
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
+        let floor_raise_event = self.serve_loaded_model_at_its_floor_when_allowed().await;
         self.engine_placement = engine_placement;
         self.startup_residency_facts = startup_residency_facts;
         tracing::info!(
@@ -213,6 +214,7 @@ where
         }
         self.emit_mlx_memory_sample(MlxMemorySnapshotSource::ModelLoaded, event_writer)
             .await?;
+        announce_floor_raise(floor_raise_event, event_writer).await?;
         self.emit_cache_stats_then_neural_engine_status(
             event_writer,
             neural_engine_prefill_event.as_ref(),
@@ -484,4 +486,21 @@ pub(super) fn model_swapped_from_ready_event(
             })
         }
     }
+}
+
+/// Tells the daemon the ceiling a freshly loaded model was raised to (#1902),
+/// after the swap itself is announced, so status never shows a ceiling below
+/// the model's reported floor.
+async fn announce_floor_raise<WriteTransport>(
+    floor_raise_event: Option<WorkerEvent>,
+    event_writer: &mut ProtocolWriter<WriteTransport>,
+) -> Result<(), WorkerRuntimeError>
+where
+    WriteTransport: AsyncWrite + Unpin,
+{
+    let Some(floor_raise_event) = floor_raise_event else {
+        return Ok(());
+    };
+    event_writer.send_event(&floor_raise_event).await?;
+    Ok(())
 }

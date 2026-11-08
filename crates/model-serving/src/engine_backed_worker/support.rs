@@ -143,6 +143,11 @@ pub trait ModelFactory<
     ) {
     }
 
+    /// Records how far the next model may be raised to serve at its floor
+    /// (#1902). Factories whose engines refuse a too-low ceiling at load use it
+    /// to plan that load at the floor instead; the default ignores it.
+    fn update_floor_raise_limit(&mut self, _floor_raise_limit_bytes: u64) {}
+
     /// Returns the global prompt-cache root directory, if the factory manages one.
     ///
     /// `None` means the factory does not own a cache (e.g. the `()` unit factory).

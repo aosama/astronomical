@@ -1,38 +1,25 @@
 //! Resolution of the effective MLX memory ceiling from the user's
 //! configuration and the machine bound.
 //!
-//! One source of truth governs the maximum: physical RAM minus the
-//! operating-system survival reserve. The user's configured value may cap
-//! below that bound; with no configuration the machine bound itself is the
-//! ceiling. No graphics-memory recommendation from the kernel or the device
-//! participates in the bound.
-
-/// End-user-facing memory values use the gigabyte convention Apple uses to
-/// market the machine: 1 GB = 1,073,741,824 bytes (2³⁰), so a
-/// 51,539,607,552-byte machine is the "48 GB" on the purchase sticker.
-const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
-/// What macOS keeps for itself so the machine stays usable while a model
-/// holds the rest of RAM.
-const OPERATING_SYSTEM_SURVIVAL_RESERVE_BYTES: u64 = 8 * BYTES_PER_MARKETED_GIGABYTE;
-/// Smallest machine ceiling so very small computers remain servable instead
-/// of resolving to a zero ceiling that rejects every configuration.
-const MINIMUM_MACHINE_MLX_MEMORY_CEILING_BYTES: u64 = BYTES_PER_MARKETED_GIGABYTE;
+//! One source of truth governs the maximum: the machine's physical memory.
+//! Astronomical keeps no reserve of its own for the operating system and
+//! refuses nothing because a Mac is small (#1902): MLX's own allocation
+//! limits and macOS (compression, then swap) handle memory pressure, so an
+//! 8 GB Mac may serve slowly but is never turned away. The user's configured
+//! value may cap below the bound; with no configuration the machine bound is
+//! the ceiling. No graphics-memory recommendation from the kernel or the
+//! device participates in the bound; the wired-residency cap below is applied
+//! separately, because that one is Metal's own limit.
 
 /// Resolves the machine MLX memory ceiling from the physical memory size.
 ///
-/// The ceiling is the total RAM minus the 8 GB operating-system survival
-/// reserve, floored at 1 GB. Example: a 51,539,607,552-byte machine (sold
-/// as 48 GB) resolves to 42,949,672,960 bytes — the 40 GB on the same
-/// sticker scale.
+/// The ceiling is the whole of physical memory. A fixed operating-system
+/// reserve used to be subtracted here, which left an 8 GB Mac a 1 GB ceiling
+/// and so refused every catalog model on the machines the project most wants
+/// to reach; that reserve is gone on purpose.
 #[must_use]
 pub const fn machine_ceiling_from_physical_ram_bytes(physical_ram_bytes: u64) -> u64 {
-    let ceiling_after_reserve_bytes =
-        physical_ram_bytes.saturating_sub(OPERATING_SYSTEM_SURVIVAL_RESERVE_BYTES);
-    if ceiling_after_reserve_bytes < MINIMUM_MACHINE_MLX_MEMORY_CEILING_BYTES {
-        MINIMUM_MACHINE_MLX_MEMORY_CEILING_BYTES
-    } else {
-        ceiling_after_reserve_bytes
-    }
+    physical_ram_bytes
 }
 
 /**
@@ -116,4 +103,56 @@ pub const fn plannable_wired_residency_bytes(claimed_wired_residency_budget_byte
     claimed_wired_residency_budget_bytes.saturating_sub(
         claimed_wired_residency_budget_bytes / 1_000 * METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND,
     )
+}
+
+/// The highest ceiling a loaded model may be raised to so it can serve at
+/// its floor: the maximum the user configured, when it is below what this Mac
+/// allows, or no bound at all when it is not.
+///
+/// The decision uses the configured value before Metal's wired-residency clamp
+/// is applied: a user limit between the plannable wired residency and physical
+/// memory is still the user's, and a raise must never pass it. `None` (no
+/// configured maximum) and a maximum at or above the machine both mean the
+/// user set no limit, so only the Mac itself bounds the model.
+#[must_use]
+pub const fn floor_raise_limit_bytes(
+    configured_mlx_memory_ceiling_bytes: Option<u64>,
+    machine_mlx_memory_ceiling_bytes: u64,
+) -> u64 {
+    match configured_mlx_memory_ceiling_bytes {
+        Some(configured_mlx_memory_ceiling_bytes)
+            if configured_mlx_memory_ceiling_bytes < machine_mlx_memory_ceiling_bytes =>
+        {
+            configured_mlx_memory_ceiling_bytes
+        }
+        _ => u64::MAX,
+    }
+}
+
+/// The ceiling to serve a loaded model at when its floor is above the
+/// effective ceiling, or `None` when the effective ceiling stands.
+///
+/// A model's floor is the least memory its leanest execution needs. Refusing a
+/// model only because the Mac is small is something Astronomical never does
+/// (#1902), so when the floor is above the effective ceiling the model is
+/// served at its floor, unless that would pass a limit the user set (see
+/// [`floor_raise_limit_bytes`]), in which case the ceiling stands and the
+/// engine refuses as before. Memory above Metal's wired claim is not wired, so
+/// whether macOS pages it or a command buffer fails on a small Mac is left to
+/// MLX and the system. Only the "nothing fits, not even the floor" outcome
+/// changes; requests are still sized against the effective ceiling, which
+/// keeps oversized prefills refused on large Macs (#1297).
+#[must_use]
+pub const fn floor_raised_ceiling_bytes(
+    effective_mlx_memory_ceiling_bytes: u64,
+    model_floor_bytes: u64,
+    floor_raise_limit_bytes: u64,
+) -> Option<u64> {
+    if model_floor_bytes > effective_mlx_memory_ceiling_bytes
+        && model_floor_bytes <= floor_raise_limit_bytes
+    {
+        Some(model_floor_bytes)
+    } else {
+        None
+    }
 }

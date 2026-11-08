@@ -123,7 +123,6 @@ pub struct Flux2KleinMemoryAdmission;
 impl Flux2KleinMemoryAdmission {
     /// Returns the maximum of streamed text, fixed transformer execution with no
     /// retained blocks, complete VAE decoding, and RGB/PNG/base64 encoding overlap.
-    #[cfg(test)]
     pub fn minimum_mlx_memory_ceiling_bytes(
         geometry: &Flux2KleinMemoryGeometry,
     ) -> Result<u64, Flux2KleinMemoryAdmissionError> {

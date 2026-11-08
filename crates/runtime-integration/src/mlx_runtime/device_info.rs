@@ -3,7 +3,7 @@
 //! # Diagnostic-only by policy
 //!
 //! Nothing in the memory policy consumes this recommendation — the machine
-//! ceiling is physical RAM minus the operating-system reserve, resolved by
+//! ceiling is the whole of physical RAM (#1902), resolved by
 //! the worker. This probe exists so measurements and probes can report what
 //! the device *advertises* (a machine-independent fact) rather than a
 //! hardcoded model or laptop value, and reading it changes neither kernel

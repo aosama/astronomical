@@ -101,6 +101,12 @@ pub trait QwenImage21EngineComponents {
         None
     }
 
+    /// Records the highest ceiling a load may plan at to reach its floor
+    /// (#1902), so a load whose floor is above the ceiling plans at its floor
+    /// instead of refusing, unless the user set a lower limit. Components that
+    /// never refuse at load ignore it.
+    fn adopt_floor_raise_limit(&mut self, _floor_raise_limit_bytes: u64) {}
+
     fn update_mlx_memory_limit(
         &mut self,
         _requested_mlx_memory_ceiling_bytes: u64,

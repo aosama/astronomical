@@ -91,6 +91,9 @@ where
             engine_load_result.is_neural_engine_preparation_running();
         self.unsent_neural_engine_prefill_event = engine_load_result.neural_engine_prefill_event();
         self.loaded_runtime = Some(LoadedRuntime::Autoregressive(replacement_model));
+        // Not announced: a generation is active, and the daemon waits only for
+        // the events it expects, so the raised ceiling reaches status later.
+        let _floor_raise_event = self.serve_loaded_model_at_its_floor_when_allowed().await;
         // The swap is complete: the placement lifecycle records the typed
         // request demotion, and the streaming engine's own startup residency
         // facts are kept so a later re-promotion gate can replay them.

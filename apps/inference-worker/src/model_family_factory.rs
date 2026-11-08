@@ -48,6 +48,11 @@ pub struct ModelFamilyFactory {
     persistent_prompt_cache_enabled: bool,
     diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
+    /// The highest ceiling an image engine may plan its load at to reach its
+    /// floor (#1902): the user's own limit, or unbounded when they set none.
+    /// Startup sets it and live limit changes update it; zero until then,
+    /// which keeps loads refusing below their floor.
+    floor_raise_limit_bytes: u64,
 }
 
 pub(crate) type InferenceWorker = EngineBackedWorker<
@@ -90,7 +95,15 @@ impl ModelFamilyFactory {
             persistent_prompt_cache_enabled,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
+            floor_raise_limit_bytes: 0,
         }
+    }
+
+    /// Records how far an image load may plan above its ceiling; see the field.
+    #[must_use]
+    pub(crate) fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
+        self
     }
 
     /// Forces the Qwen3.5 engine family for controlled diagnostic journeys.
@@ -328,6 +341,10 @@ impl
             usize::try_from(allocator_cache_memory_limit_bytes).unwrap_or(usize::MAX);
     }
 
+    fn update_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
+    }
+
     fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
         Some(
             self.prompt_cache_config
@@ -413,14 +430,17 @@ impl ModelFamilyFactory {
             verified_evidence.license.spdx_identifier(),
         );
         Ok(ModelFactoryRuntime::Image(
-            ModelFamilyImageEngine::Flux2Klein(Flux2KleinImageEngine::from_model_family_factory(
-                model_directory_path,
-                provenance,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.allocator_cache_memory_limit_bytes,
-                self.performance_attribution_enabled,
-                self.performance_attribution_log_path.clone(),
-            )),
+            ModelFamilyImageEngine::Flux2Klein(
+                Flux2KleinImageEngine::from_model_family_factory(
+                    model_directory_path,
+                    provenance,
+                    self.effective_mlx_memory_ceiling_bytes,
+                    self.allocator_cache_memory_limit_bytes,
+                    self.performance_attribution_enabled,
+                    self.performance_attribution_log_path.clone(),
+                )
+                .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
+            ),
         ))
     }
 
@@ -466,14 +486,17 @@ impl ModelFamilyFactory {
             verified_evidence.license.spdx_identifier(),
         );
         Ok(ModelFactoryRuntime::Image(
-            ModelFamilyImageEngine::QwenImage21(QwenImage21ImageEngine::from_model_family_factory(
-                model_directory_path,
-                provenance,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.allocator_cache_memory_limit_bytes,
-                self.performance_attribution_enabled,
-                self.performance_attribution_log_path.clone(),
-            )),
+            ModelFamilyImageEngine::QwenImage21(
+                QwenImage21ImageEngine::from_model_family_factory(
+                    model_directory_path,
+                    provenance,
+                    self.effective_mlx_memory_ceiling_bytes,
+                    self.allocator_cache_memory_limit_bytes,
+                    self.performance_attribution_enabled,
+                    self.performance_attribution_log_path.clone(),
+                )
+                .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
+            ),
         ))
     }
 
