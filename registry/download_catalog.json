@@ -103,9 +103,8 @@
             "approximate_memory_bytes": 8897394184,
             "minimum_memory_bytes": 2249870406,
             "role": "image_generation",
-            "get_started": true,
             "public": true,
-            "description": "A local image generator that turns a written description into one high-quality image, all on your Mac - no uploads, and no internet needed for the drawing itself.",
+            "description": "The full-precision original of the FLUX.2 Klein 4B 4-bit image generator: the same model, all on your Mac, from a download about three times larger.",
             "capabilities": {
                 "supports_image_generation": true
             },
@@ -129,8 +128,9 @@
             "approximate_memory_bytes": 6644714346,
             "minimum_memory_bytes": 2249870406,
             "role": "image_generation",
+            "get_started": true,
             "public": true,
-            "description": "The same local image generator as FLUX.2 Klein 4B in a quarter of the space: it turns a written description into one image on your Mac, with no uploads and no internet needed for the drawing itself.",
+            "description": "A local image generator that turns a written description into one high-quality image, all on your Mac - no uploads, and no internet needed for the drawing itself.",
             "capabilities": {
                 "supports_image_generation": true
             },
