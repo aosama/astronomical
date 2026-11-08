@@ -5,11 +5,11 @@
  * the model id, or "on"/"off" for the switch.
  */
 export class ComposerAction {
-  public readonly kind: "send" | "stop" | "retry" | "setEffort" | "selectModel" | "selectImageModel" | "setTools";
+  public readonly kind: "send" | "stop" | "retry" | "setEffort" | "selectModel" | "selectImageModel" | "openImageModels" | "setTools";
   public readonly detail: string;
 
   public constructor(init: {
-    kind: "send" | "stop" | "retry" | "setEffort" | "selectModel" | "selectImageModel" | "setTools";
+    kind: "send" | "stop" | "retry" | "setEffort" | "selectModel" | "selectImageModel" | "openImageModels" | "setTools";
     detail?: string;
   }) {
     const configuredDetail: string | undefined = init.detail;

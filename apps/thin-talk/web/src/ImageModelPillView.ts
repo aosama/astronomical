@@ -6,13 +6,14 @@ const MINIMUM_IMAGE_MODELS_TO_OFFER_A_CHOICE = 2;
 
 /**
  * The composer's picture pill: which installed image model draws the next
- * picture. It draws the choices it is given and reports the one picked; the
- * controller owns the choice and its persistence.
+ * picture. It draws the choices it is given and reports when it opens and
+ * which choice was picked; the controller owns the choice and its persistence.
  */
 export class ImageModelPillView {
   private readonly pill: HTMLButtonElement;
   private readonly label: HTMLElement;
   private readonly menu: HTMLElement;
+  private readonly onOpen: () => void;
   private readonly onSelect: (imageModelID: string) => void;
   /** What the menu last drew, so an unchanged menu is not rebuilt while a
    * click on one of its buttons is still in flight. */
@@ -30,13 +31,9 @@ export class ImageModelPillView {
     this.pill = init.pill;
     this.label = init.label;
     this.menu = init.menu;
+    this.onOpen = init.onOpen;
     this.onSelect = init.onSelect;
-    this.pill.addEventListener("click", () => {
-      if (!this.isOpen) {
-        init.onOpen();
-      }
-      this.toggle();
-    });
+    this.pill.addEventListener("click", () => this.toggle());
     this.menu.addEventListener("click", (event) => this.reportChoice(event));
   }
 
@@ -44,8 +41,11 @@ export class ImageModelPillView {
     return !this.menu.hidden;
   }
 
-  public toggle(): void {
+  private toggle(): void {
     const opening = this.menu.hidden;
+    if (opening) {
+      this.onOpen();
+    }
     this.menu.hidden = !opening;
     this.pill.setAttribute("aria-expanded", opening ? "true" : "false");
   }
@@ -55,8 +55,11 @@ export class ImageModelPillView {
     this.pill.setAttribute("aria-expanded", "false");
   }
 
-  public render(imageModels: readonly ImageModel[], selectedImageModelID: string | null): void {
-    const offersChoice = imageModels.length >= MINIMUM_IMAGE_MODELS_TO_OFFER_A_CHOICE;
+  /** `canDraw` is whether the chat model may use the image tool at all (tools
+   * on, and a model that can call them); a pill that could not take effect is
+   * not shown, as the composer never promises tools that will not run. */
+  public render(imageModels: readonly ImageModel[], selectedImageModelID: string | null, canDraw: boolean): void {
+    const offersChoice = canDraw && imageModels.length >= MINIMUM_IMAGE_MODELS_TO_OFFER_A_CHOICE;
     this.pill.hidden = !offersChoice;
     if (!offersChoice) {
       this.close();
@@ -64,6 +67,8 @@ export class ImageModelPillView {
     const selectedImageModel = imageModels.find((imageModel) => imageModel.id === selectedImageModelID);
     this.label.textContent = selectedImageModel != null ? selectedImageModel.name : "Pictures";
     this.pill.title = selectedImageModel != null ? `Pictures are drawn with ${selectedImageModel.name}` : "";
+    // The accessible name carries the choice, as the visible label does.
+    this.pill.setAttribute("aria-label", selectedImageModel != null ? `Image model: ${selectedImageModel.name}` : "Image model");
     this.buildMenu(imageModels, selectedImageModelID);
   }
 
@@ -82,6 +87,7 @@ export class ImageModelPillView {
       choice.setAttribute("role", "menuitemradio");
       choice.setAttribute("aria-checked", imageModel.id === selectedImageModelID ? "true" : "false");
       choice.dataset.testid = `composer-image-model-${imageModel.id}`;
+      choice.id = `composer-image-model-${imageModel.id}`;
       choice.dataset.imageModelValue = imageModel.id;
       choice.textContent = imageModel.name;
       menuItem.appendChild(choice);

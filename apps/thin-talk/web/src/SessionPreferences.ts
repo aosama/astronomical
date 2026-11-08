@@ -17,7 +17,8 @@ export class SessionPreferences {
    * model at load time. */
   public modelID: string | null;
   /** The image model the user chose last, or null before any choice. A stored
-   * id that is no longer installed falls back to the Library's Pictures pick. */
+   * id that is no longer installed falls back to the Library's Pictures pick,
+   * then to the first installed image model. */
   public imageModelID: string | null;
   /** The Tools switch. On by default: tools are offered only to models that
    * declare tool support, and the tools offered so far read nothing personal

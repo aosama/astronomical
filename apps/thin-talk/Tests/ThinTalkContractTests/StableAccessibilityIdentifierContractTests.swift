@@ -31,6 +31,8 @@ final class StableAccessibilityIdentifierContractTests: XCTestCase {
     "composer-effort-menu",
     "composer-model",
     "composer-model-menu",
+    "composer-image-model",
+    "composer-image-model-menu",
     "sidebar-new-chat",
   ]
 

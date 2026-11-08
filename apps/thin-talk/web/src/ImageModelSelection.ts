@@ -1,9 +1,10 @@
 import { ImageModel } from "./ImageModel";
 
 /**
- * Which image model makes the next picture. The composer's picker sets it and
- * the image tool reads it, so the choice reaches the tool without travelling
- * through every layer of a turn.
+ * Which image model makes the next picture, over the image models installed
+ * as last listed. The controller sets the person's choice and the image tool
+ * refreshes the installed list each time it draws, so the composer's pill and
+ * the tool always read the same answer; listeners hear every change.
  *
  * One rule decides: the person's saved choice while it is installed, otherwise
  * the Library's Pictures pick, otherwise the first installed image model. The
@@ -11,30 +12,52 @@ import { ImageModel } from "./ImageModel";
  */
 export class ImageModelSelection {
   private preferredImageModelID: string | null;
+  private installedImageModels: readonly ImageModel[] = [];
+  private readonly changeListeners = new Set<() => void>();
 
   public constructor(preferredImageModelID: string | null = null) {
     this.preferredImageModelID = preferredImageModelID;
   }
 
-  public get preferredID(): string | null {
-    return this.preferredImageModelID;
+  public get installed(): readonly ImageModel[] {
+    return this.installedImageModels;
   }
 
   public prefer(imageModelID: string | null): void {
     this.preferredImageModelID = imageModelID;
+    this.notifyChange();
   }
 
-  /** The model to use from `installedImageModels`, or null when none is installed. */
-  public resolve(installedImageModels: readonly ImageModel[]): ImageModel | null {
-    const preferredImageModel = installedImageModels.find((imageModel) => imageModel.id === this.preferredImageModelID);
+  public updateInstalled(installedImageModels: readonly ImageModel[]): void {
+    this.installedImageModels = installedImageModels;
+    this.notifyChange();
+  }
+
+  /** Calls `listener` after each change; returns the call that stops it. */
+  public onChange(listener: () => void): () => void {
+    this.changeListeners.add(listener);
+    return () => {
+      this.changeListeners.delete(listener);
+    };
+  }
+
+  /** The model the next picture is drawn with, or null when none is installed. */
+  public current(): ImageModel | null {
+    const preferredImageModel = this.installedImageModels.find((imageModel) => imageModel.id === this.preferredImageModelID);
     if (preferredImageModel != null) {
       return preferredImageModel;
     }
-    const picturesPick = installedImageModels.find((imageModel) => imageModel.isPicturesPick);
+    const picturesPick = this.installedImageModels.find((imageModel) => imageModel.isPicturesPick);
     if (picturesPick != null) {
       return picturesPick;
     }
-    const firstImageModel: ImageModel | undefined = installedImageModels[0];
+    const firstImageModel: ImageModel | undefined = this.installedImageModels[0];
     return firstImageModel != null ? firstImageModel : null;
+  }
+
+  private notifyChange(): void {
+    for (const changeListener of this.changeListeners) {
+      changeListener();
+    }
   }
 }

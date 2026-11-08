@@ -6,10 +6,11 @@ import { bootJourney, waitUntilReady } from "./support/journey";
 /**
  * The composer's picture pill: which installed image model draws the next
  * picture. It starts on the Library's Pictures pick, remembers the person's
- * choice across a relaunch, and stays out of the way with one image model.
+ * choice across a relaunch, and stays out of the way with one image model or
+ * when tools cannot run.
  */
 
-const CHAT_MODEL = { id: "model-alpha", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"] };
+const CHAT_MODEL = { id: "model-alpha", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"], supports_tool_calls: true };
 const FULL_PRECISION_IMAGE_MODEL = { id: "FLUX.2-klein-4B", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
 const PICTURES_LIBRARY = {
@@ -91,4 +92,43 @@ test("should_hide_the_picture_pill_with_one_or_no_image_model", async () => {
     await waitUntilReady();
     assert.equal(imageModelPill().hidden, true, JSON.stringify(installedModels.map((model) => model.id)));
   }
+}, { timeout: 30_000 });
+
+test("should_close_the_picture_menu_on_escape_and_on_a_click_outside", async () => {
+  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY });
+  await waitUntilReady();
+  await waitFor(() => !imageModelPill().hidden, "the picture pill to appear");
+  const pictureMenu = document.querySelector<HTMLElement>('[data-testid="composer-image-model-menu"]');
+
+  imageModelPill().dispatchEvent(new window.Event("click", { bubbles: true }));
+  document.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape" }));
+  assert.equal(pictureMenu?.hidden, true, "Escape closes the menu");
+
+  imageModelPill().dispatchEvent(new window.Event("click", { bubbles: true }));
+  document.querySelector("#transcript")?.dispatchEvent(new window.Event("click", { bubbles: true }));
+  assert.equal(pictureMenu?.hidden, true, "a click outside closes the menu");
+  assert.equal(imageModelPill().getAttribute("aria-expanded"), "false");
+}, { timeout: 30_000 });
+
+test("should_show_a_model_name_with_markup_as_plain_text", async () => {
+  const markupLibrary = {
+    entries: [
+      { display_name: "<b>Bold</b> model", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
+    ],
+  };
+  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: markupLibrary });
+  await waitUntilReady();
+  await waitFor(() => !imageModelPill().hidden, "the picture pill to appear");
+
+  assert.equal(imageModelLabel(), "<b>Bold</b> model");
+  assert.equal(imageModelChoice("flux2-klein-4b-4bit")?.children.length, 0, "the name is text, never markup");
+  assert.equal(imageModelPill().getAttribute("aria-label"), "Image model: <b>Bold</b> model");
+}, { timeout: 30_000 });
+
+test("should_hide_the_picture_pill_when_tools_are_off", async () => {
+  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY, seedPreferences: { toolsEnabled: false } });
+  await waitUntilReady();
+  await new Promise((resolve) => setTimeout(resolve, 64));
+
+  assert.equal(imageModelPill().hidden, true, "a pill that cannot take effect is not offered");
 }, { timeout: 30_000 });

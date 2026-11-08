@@ -11,20 +11,24 @@ export interface LibraryImageEntry {
 }
 
 /**
- * Reads the image generators out of a `/v1/library/catalog` document. Only
- * entries installed on this Mac carry the id to request, so the rest are
- * skipped; anything malformed is skipped too, because names are a courtesy and
- * must never stop an image from being made.
+ * Reads the image generators out of a `/v1/library/catalog` document, or
+ * returns null when the text is not a catalog at all. Only entries installed
+ * on this Mac carry the id to request, so the rest are skipped; a malformed
+ * entry is skipped too, because names are a courtesy and must never stop an
+ * image from being made.
  */
-export function parseLibraryImageEntries(catalogBodyText: string): LibraryImageEntry[] {
+export function parseLibraryImageEntries(catalogBodyText: string): LibraryImageEntry[] | null {
   let catalogDocument: unknown;
   try {
     catalogDocument = JSON.parse(catalogBodyText);
   } catch {
-    return [];
+    return null;
   }
   const catalogRecord = typeof catalogDocument === "object" && catalogDocument !== null ? (catalogDocument as Record<string, unknown>) : {};
-  const rawEntries = Array.isArray(catalogRecord["entries"]) ? catalogRecord["entries"] : [];
+  const rawEntries = catalogRecord["entries"];
+  if (!Array.isArray(rawEntries)) {
+    return null;
+  }
   const libraryImageEntries: LibraryImageEntry[] = [];
   for (const rawEntry of rawEntries) {
     const parsedImageEntry = parseLibraryImageEntry(rawEntry);

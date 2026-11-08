@@ -1,5 +1,14 @@
 import { ToolStep, ToolStepState, UNKNOWN_TOOL_LABEL } from "./ToolStep";
 
+/** The image a finished call produced and the model that made it, grouped so
+ * the two names cannot be passed in the wrong order. */
+export interface GeneratedImageRecord {
+  readonly generatedImageName: string | null;
+  readonly generatedImageModelName: string | null;
+}
+
+const NO_GENERATED_IMAGE: GeneratedImageRecord = { generatedImageName: null, generatedImageModelName: null };
+
 /**
  * Builds the tool steps of one turn from the agent loop's start and end
  * reports. The loop reports a call's arguments only when it starts and its
@@ -29,21 +38,19 @@ export class ToolStepTracker {
     return this.step(toolCallID, toolName, argumentsJSON, "", ToolStepState.RUNNING);
   }
 
-  /** `generatedImageName` is the image the call produced, if any, and
-   * `generatedImageModelName` the model that made it; the transcript shows both. */
+  /** `generatedImage` names the image the call produced, if any, and the
+   * model that made it; the transcript shows both. */
   public finished(
     toolCallID: string,
     toolName: string,
     toolResult: unknown,
     isError: boolean,
-    generatedImageName: string | null = null,
-    generatedImageModelName: string | null = null,
+    generatedImage: GeneratedImageRecord = NO_GENERATED_IMAGE,
   ): ToolStep {
     const recordedArgumentsJSON = this.argumentsJSONByToolCallID.get(toolCallID);
     const argumentsJSON = recordedArgumentsJSON != null ? recordedArgumentsJSON : "{}";
     const resultState = isError ? ToolStepState.FAILED : ToolStepState.SUCCEEDED;
-    const toolStep = this.step(toolCallID, toolName, argumentsJSON, ToolStepTracker.resultText(toolResult), resultState, generatedImageName);
-    return toolStep.withGeneratedImageModelName(generatedImageModelName);
+    return this.step(toolCallID, toolName, argumentsJSON, ToolStepTracker.resultText(toolResult), resultState, generatedImage);
   }
 
   /** Starts counting rounds afresh for the answer to a queued message: each
@@ -63,7 +70,7 @@ export class ToolStepTracker {
     argumentsJSON: string,
     resultText: string,
     state: ToolStepState,
-    generatedImageName: string | null = null,
+    generatedImage: GeneratedImageRecord = NO_GENERATED_IMAGE,
   ): ToolStep {
     const recordedRoundIndex = this.roundIndexByToolCallID.get(toolCallID);
     return new ToolStep({
@@ -74,7 +81,8 @@ export class ToolStepTracker {
       resultText,
       state,
       roundIndex: recordedRoundIndex != null ? recordedRoundIndex : this.completedRoundCount,
-      generatedImageName,
+      generatedImageName: generatedImage.generatedImageName,
+      generatedImageModelName: generatedImage.generatedImageModelName,
     });
   }
 

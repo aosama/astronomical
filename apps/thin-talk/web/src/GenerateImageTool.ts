@@ -1,6 +1,7 @@
 import type { ConversationTool, ToolCallContext, ToolOutput, ToolParametersSchema } from "./ConversationTool";
 import { DaemonClient } from "./DaemonClient";
 import { GeneratedImageReview, imageMimeType } from "./GeneratedImageReview";
+import { ImageModelDirectory } from "./ImageModelDirectory";
 import { ImageModelSelection } from "./ImageModelSelection";
 import type { ImageGenerationRequestBody } from "./ImageGenerationRequestBody";
 import { SessionBridge } from "./SessionBridge";
@@ -19,10 +20,11 @@ const IMAGE_SIZES_BY_SHAPE: Record<string, { width: number; height: number }> = 
 const IMAGE_GENERATION_TIMEOUT_MILLISECONDS = 10 * 60_000;
 
 /**
- * Makes an image with the image model the person chose (see
- * `ImageModelSelection`) and shows it in the answer. The image is kept by the app (so the conversation still shows it
- * after a relaunch). Running it only calls the local daemon, so it runs
- * without asking.
+ * Makes an image and shows it in the answer. The model is the one
+ * `ImageModelSelection` names: the person's choice while it is installed, else
+ * the Library's Pictures pick, else the first installed image model. The image
+ * is kept by the app, so the conversation still shows it after a relaunch.
+ * Running it only calls the local daemon, so it runs without asking.
  *
  * The model then gets to see what it made, so it can notice a defect (an
  * extra limb, garbled lettering) and offer to try again. A chat model that
@@ -49,11 +51,18 @@ export class GenerateImageTool implements ConversationTool {
   private readonly client: DaemonClient;
   private readonly bridge: SessionBridge;
   private readonly imageReview: GeneratedImageReview;
+  private readonly imageModelDirectory: ImageModelDirectory;
   private readonly imageModelSelection: ImageModelSelection;
 
-  public constructor(client: DaemonClient, bridge: SessionBridge, imageModelSelection: ImageModelSelection) {
+  public constructor(
+    client: DaemonClient,
+    bridge: SessionBridge,
+    imageModelDirectory: ImageModelDirectory,
+    imageModelSelection: ImageModelSelection,
+  ) {
     this.client = client;
     this.bridge = bridge;
+    this.imageModelDirectory = imageModelDirectory;
     this.imageModelSelection = imageModelSelection;
     this.imageReview = new GeneratedImageReview(client);
   }
@@ -63,9 +72,11 @@ export class GenerateImageTool implements ConversationTool {
     if (prompt.length === 0) {
       throw new Error("The image needs a description.");
     }
-    // The installed models are read afresh for each picture, so a model
-    // added or removed since Thin Talk opened is honoured.
-    const imageModel = this.imageModelSelection.resolve(await this.client.fetchImageModels(signal));
+    // The installed models are read afresh for each picture, so a model added
+    // or removed since Thin Talk opened is honoured. Writing the list back to
+    // the shared selection updates the composer's pill to match what draws.
+    this.imageModelSelection.updateInstalled(await this.imageModelDirectory.load(signal));
+    const imageModel = this.imageModelSelection.current();
     if (imageModel == null) {
       throw new Error("No image model is installed. The user can add one from the Library.");
     }

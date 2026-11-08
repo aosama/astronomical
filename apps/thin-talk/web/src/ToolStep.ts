@@ -77,21 +77,6 @@ export class ToolStep {
     this.generatedImageModelName = this.generatedImageName != null && configuredImageModelName != null ? configuredImageModelName : null;
   }
 
-  /** This step with the name of the model that made its image. */
-  public withGeneratedImageModelName(generatedImageModelName: string | null): ToolStep {
-    return new ToolStep({
-      toolCallID: this.toolCallID,
-      toolName: this.toolName,
-      label: this.label,
-      argumentsJSON: this.argumentsJSON,
-      resultText: this.resultText,
-      state: this.state,
-      roundIndex: this.roundIndex,
-      generatedImageName: this.generatedImageName,
-      generatedImageModelName,
-    });
-  }
-
   public toPlain(): Record<string, string | number | null> {
     return {
       generatedImageName: this.generatedImageName,

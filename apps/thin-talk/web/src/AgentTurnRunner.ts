@@ -252,8 +252,10 @@ export class AgentTurnRunner implements ChatStreamer {
             event.toolName,
             event.result,
             event.isError,
-            generatedImageNameFromToolResult(event.result),
-            generatedImageModelNameFromToolResult(event.result),
+            {
+              generatedImageName: generatedImageNameFromToolResult(event.result),
+              generatedImageModelName: generatedImageModelNameFromToolResult(event.result),
+            },
           ),
         );
         break;

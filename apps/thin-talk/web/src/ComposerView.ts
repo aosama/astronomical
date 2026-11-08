@@ -28,11 +28,11 @@ export class ComposerView {
   private readonly modelPill: HTMLButtonElement;
   private readonly modelLabel: HTMLElement;
   private readonly modelMenu: HTMLElement;
-  private readonly imageModelPicker: ImageModelPillView;
-  /** What the model menu last drew, so an unchanged menu is not rebuilt. */
+  private readonly imageModelPill: ImageModelPillView;
   /** The hint the page's markup gives the field, restored when no answer is
    * streaming; the markup stays the one place that wording lives. */
   private readonly idlePlaceholder: string;
+  /** What the model menu last drew, so an unchanged menu is not rebuilt. */
   private renderedModelMenuSignature = "";
   private readonly banner: HTMLElement;
   private readonly bannerMessage: HTMLElement;
@@ -78,13 +78,15 @@ export class ComposerView {
     this.modelPill = init.modelPill;
     this.modelLabel = init.modelLabel;
     this.modelMenu = init.modelMenu;
-    this.imageModelPicker = new ImageModelPillView({
+    this.imageModelPill = new ImageModelPillView({
       pill: init.imageModelPill,
       label: init.imageModelLabel,
       menu: init.imageModelMenu,
       onOpen: () => {
         this.closeEffortMenu();
         this.closeModelMenu();
+        // A model installed since the list was read appears once it is re-read.
+        this.onAction(new ComposerAction({ kind: "openImageModels" }));
       },
       onSelect: (imageModelID) => this.onAction(new ComposerAction({ kind: "selectImageModel", detail: imageModelID })),
     });
@@ -149,7 +151,7 @@ export class ComposerView {
       if (event.key === "Escape") {
         this.closeEffortMenu();
         this.closeModelMenu();
-        this.imageModelPicker.close();
+        this.imageModelPill.close();
       }
     });
     document.addEventListener("click", (event) => {
@@ -160,8 +162,8 @@ export class ComposerView {
       if (!this.modelMenu.hidden && target instanceof Element && !target.closest(".composer__menu-anchor")) {
         this.closeModelMenu();
       }
-      if (this.imageModelPicker.isOpen && target instanceof Element && !target.closest(".composer__menu-anchor")) {
-        this.imageModelPicker.close();
+      if (this.imageModelPill.isOpen && target instanceof Element && !target.closest(".composer__menu-anchor")) {
+        this.imageModelPill.close();
       }
     });
   }
@@ -179,11 +181,11 @@ export class ComposerView {
     this.effortPill.title = ThinkingEffort.budgetSummary(state.effort);
     this.buildEffortMenu();
     this.renderModelControls(state);
-    this.imageModelPicker.render(state.imageModels, state.selectedImageModelID);
+    this.imageModelPill.render(state.imageModels, state.selectedImageModelID, state.toolsEnabled && state.toolsAvailable);
     if (!state.isReady) {
       this.closeEffortMenu();
       this.closeModelMenu();
-      this.imageModelPicker.close();
+      this.imageModelPill.close();
     }
     this.refreshControls();
   }
@@ -246,7 +248,7 @@ export class ComposerView {
 
   private toggleEffortMenu(): void {
     this.closeModelMenu();
-    this.imageModelPicker.close();
+    this.imageModelPill.close();
     const opening = this.effortMenu.hidden;
     this.effortMenu.hidden = !opening;
     this.effortPill.setAttribute("aria-expanded", opening ? "true" : "false");
@@ -279,7 +281,7 @@ export class ComposerView {
 
   private toggleModelMenu(): void {
     this.closeEffortMenu();
-    this.imageModelPicker.close();
+    this.imageModelPill.close();
     const opening = this.modelMenu.hidden;
     this.modelMenu.hidden = !opening;
     this.modelPill.setAttribute("aria-expanded", opening ? "true" : "false");

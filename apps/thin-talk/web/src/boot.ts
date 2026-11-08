@@ -1,3 +1,4 @@
+import { ImageModelDirectory } from "./ImageModelDirectory";
 import { ImageModelSelection } from "./ImageModelSelection";
 import { AppConfig } from "./AppConfig";
 import { HostChannel } from "./HostChannel";
@@ -78,8 +79,10 @@ export function bootChatClient(): AppShell {
     onError: (detail) => host.postError(detail),
   });
 
-  // One choice of image model, shared by the composer's picker (through the
-  // controller) and the image tool that draws with it.
+  // One choice of image model and one list of installed image models, shared
+  // by the controller (which draws the composer's pill) and the image tool
+  // (which draws pictures), so the two can never disagree.
+  const imageModelDirectory = new ImageModelDirectory(client);
   const imageModelSelection = new ImageModelSelection();
   const composerField = requireElement<HTMLTextAreaElement>("#composer-input");
   const composer = new ComposerView({
@@ -119,6 +122,9 @@ export function bootChatClient(): AppShell {
         case "selectImageModel":
           controller.selectImageModel(action.detail);
           return;
+        case "openImageModels":
+          void controller.refreshImageModels();
+          return;
         case "setTools":
           controller.setToolsEnabled(action.detail === "on");
           return;
@@ -146,7 +152,7 @@ export function bootChatClient(): AppShell {
       client,
       new ToolCatalog([
         new CurrentTimeTool(),
-        new GenerateImageTool(client, bridge, imageModelSelection),
+        new GenerateImageTool(client, bridge, imageModelDirectory, imageModelSelection),
         new ReadChosenFileTool(bridge),
         new DescribeChosenImageTool(client, bridge),
         new SearchConversationsTool(bridge),
@@ -155,6 +161,7 @@ export function bootChatClient(): AppShell {
     ),
     bridge,
     store,
+    imageModelDirectory,
     imageModelSelection,
   });
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });

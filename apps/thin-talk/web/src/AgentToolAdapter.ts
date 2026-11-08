@@ -22,9 +22,10 @@ export function agentTool(conversationTool: ConversationTool, context: ToolCallC
     execute: async (_toolCallID, toolArguments, signal) => {
       const toolSignal = signal != null ? signal : new AbortController().signal;
       const toolOutput = await executeWithinLimits(conversationTool, toolArguments as Record<string, unknown>, toolSignal, context);
-      // The image name and its model's name ride in the result's details,
-      // which Pi hands to the end-of-call report; the model never sees them.
-      // An image for the model rides in the content, which
+      // The stored image's name and its model's name ride in the result's
+      // details, which Pi hands to the end-of-call report for the transcript
+      // row; the details are not sent to the model (the result text may still
+      // mention the model). An image for the model rides in the content, which
       // DaemonStreamFunction sends on.
       const details = generatedImageDetails(toolOutput);
       const imageForModel = toolOutput.imageForModel;
@@ -69,6 +70,6 @@ function stringDetail(toolResult: unknown, detailKey: string): string | null {
   const resultRecord = typeof toolResult === "object" && toolResult !== null ? (toolResult as Record<string, unknown>) : {};
   const details = resultRecord["details"];
   const detailsRecord = typeof details === "object" && details !== null ? (details as Record<string, unknown>) : {};
-  const detailValue = detailsRecord[detailKey];
-  return typeof detailValue === "string" ? detailValue : null;
+  const detailText = detailsRecord[detailKey];
+  return typeof detailText === "string" ? detailText : null;
 }

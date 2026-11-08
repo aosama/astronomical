@@ -115,7 +115,7 @@
 
 .composer__actions > .composer__group:first-child,
 .composer__actions > .composer__group:first-child > .composer__menu-anchor:first-child,
-.composer__actions > .composer__group:first-child > .composer__menu-anchor:last-child,
+.composer__menu-anchor--image-model,
 #composer-model,
 #composer-image-model {
   min-width: 0;

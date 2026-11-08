@@ -5,6 +5,7 @@ import { ChatFailure } from "../src/ChatFailure";
 import { ChatFailureKind } from "../src/ChatFailureKind";
 import { DaemonClient } from "../src/DaemonClient";
 import { GenerateImageTool } from "../src/GenerateImageTool";
+import { ImageModelDirectory } from "../src/ImageModelDirectory";
 import { ImageModelSelection } from "../src/ImageModelSelection";
 import { imageMimeType } from "../src/GeneratedImageReview";
 import { SessionBridge } from "../src/SessionBridge";
@@ -79,7 +80,7 @@ function imageTool(storedImages: string[] = [], imageModelSelection = new ImageM
   const client = new DaemonClient(
     new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" }),
   );
-  return new GenerateImageTool(client, storingBridge(storedImages), imageModelSelection);
+  return new GenerateImageTool(client, storingBridge(storedImages), new ImageModelDirectory(client), imageModelSelection);
 }
 
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
@@ -98,6 +99,19 @@ test("should_draw_with_the_library_pictures_pick_and_name_it", async () => {
   assert.equal(imageRequestBodies[0]?.["model"], "flux2-klein-4b-4bit");
   assert.equal(toolOutput.generatedImageModelName, "FLUX.2 Klein 4B 4-bit");
   assert.match(toolOutput.text, /with FLUX\.2 Klein 4B 4-bit and showed it/);
+});
+
+test("should_leave_the_shared_selection_naming_the_model_that_drew", async () => {
+  installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], libraryCatalog: PICTURES_LIBRARY });
+  const imageModelSelection = new ImageModelSelection();
+  const notifiedSelections: (string | null)[] = [];
+  imageModelSelection.onChange(() => notifiedSelections.push(imageModelSelection.current()?.name ?? null));
+
+  const toolOutput = await imageTool([], imageModelSelection).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
+
+  // The composer's pill reads the same selection, so it shows what drew.
+  assert.equal(imageModelSelection.current()?.name, toolOutput.generatedImageModelName);
+  assert.deepEqual(notifiedSelections, ["FLUX.2 Klein 4B 4-bit"]);
 });
 
 test("should_draw_with_the_model_the_person_chose", async () => {
@@ -179,7 +193,7 @@ test("should_fail_when_the_host_cannot_store_the_image", async () => {
   const refusingBridge = new SessionBridge((request) => {
     queueMicrotask(() => window.__thintalkBridge?.reject(request.callId, "the disk is full"));
   });
-  await assert.rejects(new GenerateImageTool(client, refusingBridge, new ImageModelSelection()).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT), /the disk is full/);
+  await assert.rejects(new GenerateImageTool(client, refusingBridge, new ImageModelDirectory(client), new ImageModelSelection()).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT), /the disk is full/);
 });
 
 test("should_pass_a_stop_through_to_the_daemon_request", async () => {

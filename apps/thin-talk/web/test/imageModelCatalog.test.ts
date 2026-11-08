@@ -19,14 +19,18 @@ test("should_read_only_installed_image_generators_from_the_library", () => {
   ]);
 });
 
-test("should_read_nothing_from_a_catalog_that_is_missing_or_malformed", () => {
-  for (const catalogBodyText of ["", "not json", "[]", "{}", '{"entries":[42,null,{"role":"image_generation"}]}']) {
-    assert.deepEqual(parseLibraryImageEntries(catalogBodyText), [], catalogBodyText);
+test("should_report_text_that_is_not_a_catalog", () => {
+  for (const catalogBodyText of ["", "not json", "[]", "{}", '{"entries":{}}']) {
+    assert.equal(parseLibraryImageEntries(catalogBodyText), null, catalogBodyText);
   }
 });
 
+test("should_skip_malformed_entries_of_a_real_catalog", () => {
+  assert.deepEqual(parseLibraryImageEntries('{"entries":[42,null,{"role":"image_generation"}]}'), []);
+});
+
 test("should_put_the_pictures_pick_first_and_name_models_as_the_library_does", () => {
-  const libraryImageEntries = parseLibraryImageEntries(JSON.stringify(LIBRARY_CATALOG));
+  const libraryImageEntries = parseLibraryImageEntries(JSON.stringify(LIBRARY_CATALOG)) ?? [];
   const imageModels = buildImageModels(["FLUX.2-klein-4B", "Qwen-Image-2.1-MLX-4bit", "flux2-klein-4b-4bit"], libraryImageEntries);
   assert.deepEqual(
     imageModels.map((imageModel) => [imageModel.id, imageModel.name, imageModel.isPicturesPick]),
@@ -44,5 +48,5 @@ test("should_keep_the_server_order_and_ids_without_a_library", () => {
     ["model-b", "model-b", false],
     ["model-a", "model-a", false],
   ]);
-  assert.deepEqual(buildImageModels([], parseLibraryImageEntries(JSON.stringify(LIBRARY_CATALOG))), []);
+  assert.deepEqual(buildImageModels([], parseLibraryImageEntries(JSON.stringify(LIBRARY_CATALOG)) ?? []), []);
 });

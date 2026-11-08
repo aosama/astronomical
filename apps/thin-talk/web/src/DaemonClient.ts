@@ -7,8 +7,6 @@ import { ChatFailure } from "./ChatFailure";
 import { ChatFailureClassifier } from "./ChatFailureClassifier";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ModelCatalogEntry } from "./ModelCatalogEntry";
-import { ImageModel } from "./ImageModel";
-import { buildImageModels, parseLibraryImageEntries } from "./ImageModelCatalog";
 import { DaemonStatus } from "./DaemonStatus";
 
 /** How long a readiness/model request may take before the page gives up. */
@@ -37,8 +35,8 @@ const IMAGE_DESCRIPTION_MAXIMUM_OUTPUT_TOKENS = 1_024;
 
 /**
  * Talks to a single daemon instance over its public REST endpoints: the
- * readiness handshake, the model list, streaming chat completion and image
- * generation. The network calls and the server-sent-events line framing live
+ * readiness handshake, the model list, the Library catalog, streaming chat
+ * completion and image generation. The network calls and the server-sent-events line framing live
  * here, so the controller never touches the wire; decoding one line is
  * ChatCompletionChunk's.
  */
@@ -92,23 +90,10 @@ export class DaemonClient {
     return catalogEntries.filter((entry) => entry.generatesImages).map((entry) => entry.id);
   }
 
-  /** The installed image models, named and ordered as the Library presents
-   * them. The Library catalog only adds names and the Pictures pick, so when it
-   * cannot be read the models are still returned, under their ids. */
-  public async fetchImageModels(signal?: AbortSignal): Promise<ImageModel[]> {
-    const imageModelIDs = await this.fetchImageModelIDs(signal);
-    if (imageModelIDs.length === 0) {
-      return [];
-    }
-    let libraryCatalogText = "";
-    try {
-      libraryCatalogText = await this.requestText("/v1/library/catalog", signal);
-    } catch (catalogFailure) {
-      if (signal?.aborted === true) {
-        throw catalogFailure;
-      }
-    }
-    return buildImageModels(imageModelIDs, parseLibraryImageEntries(libraryCatalogText));
+  /** The Library catalog document as text. Throws like any other read; the
+   * caller decides what a missing catalog means. */
+  public async fetchLibraryCatalogText(signal?: AbortSignal): Promise<string> {
+    return this.requestText("/v1/library/catalog", signal);
   }
 
   /** The ids of the installed chat models that can look at images. */

@@ -12,8 +12,9 @@
  *   is the prebuilt `preview/preview-shim.js` (the compiled `installPreviewShim`
  *   glue). Both load as `<script src=...>` and pass the CSP.
  * - The daemon endpoints (`/v1/status`, `/v1/models`, `/v1/chat/completions`,
- *   and the Library catalog's image entries) are served by this same process, with the chat completion streamed over real
- *   SSE so token rendering is visible in the browser.
+ *   and the Library catalog's image entries) are served by this same
+ *   process, with the chat completion streamed over real SSE so token
+ *   rendering is visible in the browser.
  * - The port is taken from an environment variable and, if busy, falls back to a
  *   free ephemeral port instead of crashing; a source edit is picked up on the
  *   next request because every asset is read from disk per request.
