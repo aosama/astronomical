@@ -72,10 +72,17 @@ async fn resolve_library_model_folder(
     let matching_projection = projections
         .iter()
         .find(|projection| projection.catalog_entry.huggingface_id() == huggingface_id);
-    let published_download_folder = application_state
-        .library_download_coordinator
-        .as_ref()
-        .map(|download_coordinator| download_coordinator.destination_directory(huggingface_id));
+    // The folder is resolved from the catalog's own identity, never the text
+    // the request carried, so only a catalog entry's folder can be revealed.
+    let published_download_folder = match (
+        matching_projection,
+        application_state.library_download_coordinator.as_ref(),
+    ) {
+        (Some(projection), Some(download_coordinator)) => Some(
+            download_coordinator.destination_directory(projection.catalog_entry.huggingface_id()),
+        ),
+        _ => None,
+    };
     ready_model_folder(matching_projection, published_download_folder)
 }
 

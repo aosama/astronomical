@@ -342,3 +342,32 @@ test("should_offer_show_in_finder_only_for_a_model_already_on_this_mac", () => {
         "a model still to be downloaded has no folder for Finder to show"
     );
 });
+
+test("should_say_finder_could_not_open_when_the_daemon_refuses_the_reveal", ASYNC_TEST_OPTIONS, async () => {
+    const scriptContext = createLibraryContext();
+    scriptContext.document = createLibraryDocument();
+    scriptContext.fetch = async () => ({ ok: false, status: 409 });
+    const revealButton = vm.runInContext(
+        'createLibraryRevealButton("astronomical-test/example-qwen")',
+        scriptContext
+    );
+    assert.equal(revealButton.textContent, "Show in Finder");
+
+    await revealButton.listeners.click[0]();
+
+    assert.equal(revealButton.textContent, "Could not open Finder");
+});
+
+test("should_keep_the_show_in_finder_label_when_finder_opens", ASYNC_TEST_OPTIONS, async () => {
+    const scriptContext = createLibraryContext();
+    scriptContext.document = createLibraryDocument();
+    scriptContext.fetch = async () => ({ ok: true, status: 204 });
+    const revealButton = vm.runInContext(
+        'createLibraryRevealButton("astronomical-test/example-qwen")',
+        scriptContext
+    );
+
+    await revealButton.listeners.click[0]();
+
+    assert.equal(revealButton.textContent, "Show in Finder");
+});
