@@ -1,7 +1,7 @@
 import { ComposerState } from "./ComposerState";
 import { ComposerAction } from "./ComposerAction";
 import { ImageModelPillView } from "./ImageModelPillView";
-import { ThinkingEffort } from "./ThinkingEffort";
+import type { ComposerFriendlyNames } from "./ComposerFriendlyNames";
 
 /** The field's hint while an answer streams: a message sent now is read as
  * soon as the model can take it, after the current reply or its tool calls. */
@@ -10,8 +10,8 @@ const MAX_FIELD_HEIGHT_PX = 160;
 const FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX = 2;
 
 /**
- * Composer layer: the ask field, the model, thinking-effort and picture
- * pills, and the failure banner.
+ * Composer layer: the ask field, the model and picture pills, and the
+ * failure banner.
  *
  * This class renders the state the controller pushes and reports every intent
  * back; it owns no chat behaviour and holds no chat state beyond the field's
@@ -22,16 +22,17 @@ export class ComposerView {
   private readonly sendButton: HTMLButtonElement;
   private readonly stopButton: HTMLButtonElement;
   private readonly retryButton: HTMLButtonElement;
-  private readonly effortPill: HTMLButtonElement;
-  private readonly effortLabel: HTMLElement;
-  private readonly effortMenu: HTMLElement;
   private readonly modelPill: HTMLButtonElement;
   private readonly modelLabel: HTMLElement;
   private readonly modelMenu: HTMLElement;
   private readonly imageModelPill: ImageModelPillView;
-  /** The hint the page's markup gives the field, restored when no answer is
-   * streaming; the markup stays the one place that wording lives. */
-  private readonly idlePlaceholder: string;
+  /** Plain words for the pills, or null for the models' own names. */
+  private friendlyNames: ComposerFriendlyNames | null = null;
+  /** The hint shown in the empty field while no answer is streaming: the
+   * markup's wording, or what setIdlePlaceholder asked for (Astro's). */
+  private idlePlaceholder: string;
+  /** The markup's own wording, which the Focus switch restores. */
+  private readonly markupPlaceholder: string;
   /** What the model menu last drew, so an unchanged menu is not rebuilt. */
   private renderedModelMenuSignature = "";
   private readonly banner: HTMLElement;
@@ -42,7 +43,6 @@ export class ComposerView {
     isStreaming: false,
     acceptsInput: true,
     isReady: false,
-    effort: ThinkingEffort.QUICK,
     models: [],
     selectedModelID: null,
     failure: null,
@@ -53,9 +53,6 @@ export class ComposerView {
     sendButton: HTMLButtonElement;
     stopButton: HTMLButtonElement;
     retryButton: HTMLButtonElement;
-    effortPill: HTMLButtonElement;
-    effortLabel: HTMLElement;
-    effortMenu: HTMLElement;
     modelPill: HTMLButtonElement;
     modelLabel: HTMLElement;
     modelMenu: HTMLElement;
@@ -69,12 +66,10 @@ export class ComposerView {
   }) {
     this.field = init.field;
     this.idlePlaceholder = init.field.placeholder;
+    this.markupPlaceholder = init.field.placeholder;
     this.sendButton = init.sendButton;
     this.stopButton = init.stopButton;
     this.retryButton = init.retryButton;
-    this.effortPill = init.effortPill;
-    this.effortLabel = init.effortLabel;
-    this.effortMenu = init.effortMenu;
     this.modelPill = init.modelPill;
     this.modelLabel = init.modelLabel;
     this.modelMenu = init.modelMenu;
@@ -83,7 +78,6 @@ export class ComposerView {
       label: init.imageModelLabel,
       menu: init.imageModelMenu,
       onOpen: () => {
-        this.closeEffortMenu();
         this.closeModelMenu();
         // A model installed since the list was read appears once it is re-read.
         this.onAction(new ComposerAction({ kind: "openImageModels" }));
@@ -106,23 +100,6 @@ export class ComposerView {
     this.sendButton.addEventListener("click", () => this.reportSend());
     this.stopButton.addEventListener("click", () => this.onAction(new ComposerAction({ kind: "stop" })));
     this.retryButton.addEventListener("click", () => this.onAction(new ComposerAction({ kind: "retry" })));
-    this.effortPill.addEventListener("click", () => this.toggleEffortMenu());
-    this.effortMenu.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      const choice = target.closest("[data-effort-value]");
-      if (!choice) {
-        return;
-      }
-      this.closeEffortMenu();
-      const storedEffortValue: string | undefined = (choice as HTMLElement).dataset.effortValue;
-      const effortDetail: string = storedEffortValue != null ? storedEffortValue : "";
-      this.onAction(
-        new ComposerAction({ kind: "setEffort", detail: effortDetail }),
-      );
-    });
     this.modelPill.addEventListener("click", () => this.toggleModelMenu());
     this.modelMenu.addEventListener("click", (event) => {
       const target = event.target;
@@ -149,16 +126,12 @@ export class ComposerView {
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        this.closeEffortMenu();
         this.closeModelMenu();
         this.imageModelPill.close();
       }
     });
     document.addEventListener("click", (event) => {
       const target = event.target;
-      if (!this.effortMenu.hidden && target instanceof Element && !target.closest(".composer__menu-anchor")) {
-        this.closeEffortMenu();
-      }
       if (!this.modelMenu.hidden && target instanceof Element && !target.closest(".composer__menu-anchor")) {
         this.closeModelMenu();
       }
@@ -166,6 +139,13 @@ export class ComposerView {
         this.imageModelPill.close();
       }
     });
+  }
+
+  /** Switches the pills between friendly words (Astro's Explorer style) and
+   * the models' own names, and redraws them at once. */
+  public setFriendlyNames(friendlyNames: ComposerFriendlyNames | null): void {
+    this.friendlyNames = friendlyNames;
+    this.render(this.state);
   }
 
   public render(state: ComposerState): void {
@@ -177,13 +157,9 @@ export class ComposerView {
     } else {
       this.banner.hidden = true;
     }
-    this.effortLabel.textContent = ThinkingEffort.displayName(state.effort);
-    this.effortPill.title = ThinkingEffort.budgetSummary(state.effort);
-    this.buildEffortMenu();
     this.renderModelControls(state);
-    this.imageModelPill.render(state.imageModels, state.selectedImageModelID, state.toolsEnabled && state.toolsAvailable);
+    this.imageModelPill.render(state.imageModels, state.selectedImageModelID, state.toolsEnabled && state.toolsAvailable, this.friendlyNames?.sketchbook ?? null);
     if (!state.isReady) {
-      this.closeEffortMenu();
       this.closeModelMenu();
       this.imageModelPill.close();
     }
@@ -200,6 +176,19 @@ export class ComposerView {
    * and answered next. */
   private canSend(): boolean {
     return this.state.isReady && this.draft().length > 0;
+  }
+
+  /** Changes what the empty field says when idle: Astro's home asks for "Ask
+   * Astro anything", and the Focus switch restores the original. The queueing
+   * placeholder still wins while an answer streams. */
+  public setIdlePlaceholder(idlePlaceholder: string): void {
+    this.idlePlaceholder = idlePlaceholder;
+    this.refreshControls();
+  }
+
+  /** The placeholder the page's markup gives the field. */
+  public get markupIdlePlaceholder(): string {
+    return this.markupPlaceholder;
   }
 
   private refreshControls(): void {
@@ -239,39 +228,6 @@ export class ComposerView {
     this.onAction(new ComposerAction({ kind: "send", detail: ask }));
   }
 
-  // MARK: - Effort menu
-
-  private closeEffortMenu(): void {
-    this.effortMenu.hidden = true;
-    this.effortPill.setAttribute("aria-expanded", "false");
-  }
-
-  private toggleEffortMenu(): void {
-    this.closeModelMenu();
-    this.imageModelPill.close();
-    const opening = this.effortMenu.hidden;
-    this.effortMenu.hidden = !opening;
-    this.effortPill.setAttribute("aria-expanded", opening ? "true" : "false");
-  }
-
-  private buildEffortMenu(): void {
-    this.effortMenu.textContent = "";
-    ThinkingEffort.ALL.forEach((option) => {
-      const item = document.createElement("li");
-      item.setAttribute("role", "none");
-      const choice = document.createElement("button");
-      choice.type = "button";
-      choice.setAttribute("role", "menuitemradio");
-      choice.setAttribute("aria-checked", option === this.state.effort ? "true" : "false");
-      choice.dataset.testid = `composer-effort-${option}`;
-      choice.id = `composer-effort-${option}`;
-      choice.dataset.effortValue = option;
-      choice.textContent = ThinkingEffort.budgetSummary(option);
-      item.appendChild(choice);
-      this.effortMenu.appendChild(item);
-    });
-  }
-
   // MARK: - Model menu
 
   private closeModelMenu(): void {
@@ -280,7 +236,6 @@ export class ComposerView {
   }
 
   private toggleModelMenu(): void {
-    this.closeEffortMenu();
     this.imageModelPill.close();
     const opening = this.modelMenu.hidden;
     this.modelMenu.hidden = !opening;
@@ -296,7 +251,7 @@ export class ComposerView {
     }
     const selectedModel = state.models.find((model) => model.id === state.selectedModelID);
     if (selectedModel) {
-      this.modelLabel.textContent = selectedModel.name;
+      this.modelLabel.textContent = this.friendlyNames !== null ? this.friendlyNames.brain : selectedModel.name;
       this.modelPill.title = selectedModel.id;
     } else {
       this.modelLabel.textContent = "Model";

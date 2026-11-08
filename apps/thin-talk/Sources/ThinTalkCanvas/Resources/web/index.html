@@ -58,7 +58,27 @@
           </div>
           <button type="button" class="failure-banner__retry" id="composer-retry" data-testid="composer-retry">Retry</button>
         </aside>
+        <!--
+          Astro's skill buttons. Each one only fills the message field with a
+          starter question (src/astro/AstroComposerChrome.ts); the person still
+          presses send. Shown while Astro is shown.
+        -->
+        <div id="skill-launchers" class="skill-launchers" role="group" aria-label="Skills" data-testid="skill-launchers" hidden>
+          <button type="button" class="skill-launcher skill-launcher--pictures" id="composer-skill-pictures" data-testid="composer-skill-pictures" data-skill="pictures" title="Draw">
+            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM3 18l6-5 4 3 3-2 5 4"/></svg></span><span class="skill-launcher__name">Draw</span>
+          </button>
+          <button type="button" class="skill-launcher skill-launcher--look" id="composer-skill-look" data-testid="composer-skill-look" data-skill="look" title="Look at a photo">
+            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6"/></svg></span><span class="skill-launcher__name">Look at a photo</span>
+          </button>
+          <button type="button" class="skill-launcher skill-launcher--read" id="composer-skill-read" data-testid="composer-skill-read" data-skill="read" title="Read a file">
+            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM9 13h7M9 17h5"/></svg></span><span class="skill-launcher__name">Read a file</span>
+          </button>
+          <button type="button" class="skill-launcher skill-launcher--voice" id="composer-skill-voice" data-testid="composer-skill-voice" data-skill="voice" title="Talking to Astro is coming soon" aria-disabled="true">
+            <span class="skill-launcher__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v10M8 8v6M16 8v6"/></svg></span><span class="skill-launcher__name">Talk (soon)</span>
+          </button>
+        </div>
         <footer id="composer" class="composer">
+          <img id="composer-astro" class="composer__astro" src="astro/astro-look-4.webp" alt="" data-testid="composer-astro">
           <textarea
             id="composer-input"
             data-testid="composer-input"
@@ -74,13 +94,6 @@
                   <svg class="composer__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
                 </button>
                 <ul class="composer__menu" id="composer-model-menu" data-testid="composer-model-menu" role="menu" hidden></ul>
-              </div>
-              <div class="composer__menu-anchor">
-                <button type="button" class="composer__pill" id="composer-effort" data-testid="composer-effort" aria-label="Thinking level" aria-haspopup="menu" aria-expanded="false">
-                  <span data-testid="composer-effort-label">Quick</span>
-                  <svg class="composer__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-                </button>
-                <ul class="composer__menu" id="composer-effort-menu" data-testid="composer-effort-menu" role="menu" hidden></ul>
               </div>
               <div class="composer__menu-anchor composer__menu-anchor--image-model">
                 <button type="button" class="composer__pill" id="composer-image-model" data-testid="composer-image-model" aria-label="Image model" aria-haspopup="menu" aria-expanded="false" hidden>
@@ -102,6 +115,13 @@
           </div>
         </footer>
       </div>
+      <!--
+        Astro's first flight covers the whole window, sidebar included, for a
+        newcomer (and on View > Meet Astro Again). It sits inside #app so it
+        inherits the title bar inset. It is app-owned chrome built by
+        src/astro/FirstFlightView.ts; nothing in it comes from a model.
+      -->
+      <section id="first-flight" class="first-flight" role="dialog" aria-modal="true" aria-label="Meet Astro" data-testid="first-flight" hidden></section>
     </div>
     <!--
       KaTeX and mermaid stay as vendored globals because they are large, slow to

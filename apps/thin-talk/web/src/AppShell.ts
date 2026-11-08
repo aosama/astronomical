@@ -10,7 +10,7 @@ import type { SidebarResizer } from "./SidebarResizer";
 /**
  * Wires the views to the controller and the page to its host.
  *
- * This class owns no behaviour: sending, stopping, effort choice, and session
+ * This class owns no behaviour: sending, stopping, model choice, and session
  * switching all run in the controller; copying and opening a link leave the page
  * because the host owns the pasteboard and the system link opener. It applies
  * the published surface state to every view and exposes the test entry point.

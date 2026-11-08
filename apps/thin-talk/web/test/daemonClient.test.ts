@@ -5,14 +5,13 @@ import { ChatCompletionChunk } from "../src/ChatCompletionChunk";
 import type { ChatCompletionRequestBody } from "../src/ChatCompletionRequestBody";
 import { ChatFailure } from "../src/ChatFailure";
 import { ChatFailureKind } from "../src/ChatFailureKind";
-import { DaemonClient } from "../src/DaemonClient";
+import { DaemonClient, LibraryDownloadRefusal } from "../src/DaemonClient";
 import { DAEMON_BASE_URL, ScriptedChatFetch, chunkLine } from "./support/scriptedChatFetch";
 
 const QUESTION_BODY: ChatCompletionRequestBody = {
   model: "fake-chat-model",
   stream: true,
   messages: [{ role: "user", content: "Who wrote The Tempest?" }],
-  thinking_budget: 256,
 };
 
 function daemonClient(): DaemonClient {
@@ -72,4 +71,44 @@ test("should_return_quietly_when_stopped_before_the_reply_arrives", async () => 
   const stopController = new AbortController();
   stopController.abort();
   await daemonClient().streamChatCompletion(QUESTION_BODY, stopController.signal, () => assert.fail("no chunk expected"));
+});
+
+/** Answers every request with one scripted response, recording what was sent. */
+function answerEveryRequest(answer: () => Response | Promise<Response>): { method: string; url: string; body: string | null }[] {
+  const sentRequests: { method: string; url: string; body: string | null }[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    sentRequests.push({ method: init?.method ?? "GET", url: String(input), body: typeof init?.body === "string" ? init.body : null });
+    return answer();
+  }) as typeof fetch;
+  return sentRequests;
+}
+
+test("should_start_a_library_download_and_read_its_starting_status", async () => {
+  const sentRequests = answerEveryRequest(() => Response.json({ state: "checking_disk", huggingface_id: "example-org/brain", bytes_completed: 0, bytes_total: 0, error_code: null }, { status: 202 }));
+  const startingStatus = await daemonClient().startLibraryDownload("example-org/brain");
+  assert.equal(startingStatus.state, "checking_disk");
+  assert.deepEqual(sentRequests, [{ method: "POST", url: `${DAEMON_BASE_URL}/v1/library/download`, body: JSON.stringify({ huggingface_id: "example-org/brain" }) }]);
+});
+
+test("should_carry_the_daemons_refusal_code_or_none_when_a_download_cannot_start", async () => {
+  answerEveryRequest(() => Response.json({ error: { code: "library_busy", message: "busy" } }, { status: 409 }));
+  await assert.rejects(daemonClient().startLibraryDownload("example-org/brain"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === "library_busy");
+  answerEveryRequest(() => new Response("<html>gateway</html>", { status: 502 }));
+  await assert.rejects(daemonClient().startLibraryDownload("example-org/brain"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === null);
+  answerEveryRequest(() => Promise.reject(new TypeError("connection refused")));
+  await assert.rejects(daemonClient().startLibraryDownload("example-org/brain"), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === null);
+});
+
+test("should_resume_the_paused_download_and_report_a_refusal", async () => {
+  const sentRequests = answerEveryRequest(() => Response.json({ state: "resuming" }, { status: 202 }));
+  await daemonClient().resumeLibraryDownload();
+  assert.deepEqual(sentRequests.map((request) => [request.method, request.url]), [["POST", `${DAEMON_BASE_URL}/v1/library/download/resume`]]);
+  answerEveryRequest(() => Response.json({ error: { code: "download_failed", message: "There is no model download to control." } }, { status: 404 }));
+  await assert.rejects(daemonClient().resumeLibraryDownload(), (refusal: LibraryDownloadRefusal) => refusal.refusalCode === "download_failed");
+});
+
+test("should_read_the_current_library_download", async () => {
+  answerEveryRequest(() => Response.json({ state: "downloading", huggingface_id: "example-org/brain", bytes_completed: 5, bytes_total: 10, error_code: null }));
+  const currentStatus = await daemonClient().fetchLibraryDownloadStatus();
+  assert.deepEqual([currentStatus.state, currentStatus.bytesCompleted, currentStatus.bytesTotal], ["downloading", 5, 10]);
 });

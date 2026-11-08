@@ -28,7 +28,8 @@
       id: stringField(record, "id"),
       title: typeof record["title"] === "string" ? record["title"] : "",
       updatedAt: typeof record["updatedAt"] === "string" ? record["updatedAt"] : "",
-      messages: Array.isArray(record["messages"]) ? record["messages"] : []
+      messages: Array.isArray(record["messages"]) ? record["messages"] : [],
+      ...typeof record["skill"] === "string" ? { skill: record["skill"] } : {}
     };
   }
   function handleSessionCall(op, payload, adapter) {
@@ -54,6 +55,11 @@
       case "savePrefs" /* SAVE_PREFS */:
         adapter.savePreferences(payload);
         return null;
+      case "loadAstroProfile" /* LOAD_ASTRO_PROFILE */:
+        return adapter.loadAstroProfile();
+      case "saveAstroProfile" /* SAVE_ASTRO_PROFILE */:
+        adapter.saveAstroProfile(payload);
+        return null;
       default:
         throw new SessionBridgeError(`host does not know op "${op}"`);
     }
@@ -62,6 +68,7 @@
   // src/preview/previewShim.ts
   var SESSIONS_KEY = "thintalk.preview.sessions";
   var PREFERENCES_KEY = "thintalk.preview.preferences";
+  var ASTRO_PROFILE_KEY = "thintalk.preview.astro-profile";
   function makeStorageAdapter(storage) {
     const readSessions = () => storage.getItem(SESSIONS_KEY) ? JSON.parse(storage.getItem(SESSIONS_KEY)) : {};
     const writeSessions = (sessions) => {
@@ -99,6 +106,14 @@
       },
       savePreferences: (value) => {
         storage.setItem(PREFERENCES_KEY, JSON.stringify(value));
+      },
+      // Null before the first save, as the Swift store answers, so the preview
+      // also opens on Astro's first flight.
+      loadAstroProfile: () => {
+        return storage.getItem(ASTRO_PROFILE_KEY) ? JSON.parse(storage.getItem(ASTRO_PROFILE_KEY)) : null;
+      },
+      saveAstroProfile: (value) => {
+        storage.setItem(ASTRO_PROFILE_KEY, JSON.stringify(value));
       }
     };
   }

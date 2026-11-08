@@ -5,11 +5,16 @@ public struct SessionFileSummary: Equatable, Sendable {
   public let id: String
   public let title: String
   public let updatedAt: String
+  /// The chat's main skill as the page recorded it on save ("pictures",
+  /// "look", …), or nil for files saved before skills were recorded. The page
+  /// owns the vocabulary; the store only passes it through.
+  public let skill: String?
 
-  public init(id: String, title: String, updatedAt: String) {
+  public init(id: String, title: String, updatedAt: String, skill: String? = nil) {
     self.id = id
     self.title = title
     self.updatedAt = updatedAt
+    self.skill = skill
   }
 }
 
@@ -53,6 +58,10 @@ public final class SessionFileStore: @unchecked Sendable {
 
   public var sessionsDirectory: URL { rootDirectory.appendingPathComponent("sessions", isDirectory: true) }
   public var preferencesFileURL: URL { rootDirectory.appendingPathComponent("preferences.json") }
+  /// Astro's profile (nickname, style, whether the first flight is done) lives
+  /// apart from the chat preferences: the page saves each from a different
+  /// component, and one shared file would let either save overwrite the other.
+  public var astroProfileFileURL: URL { rootDirectory.appendingPathComponent("astro-profile.json") }
   /// Where the image tool's generated images are kept, beside the sessions
   /// that show them.
   public var generatedImagesDirectory: URL { rootDirectory.appendingPathComponent("generated-images", isDirectory: true) }
@@ -129,6 +138,22 @@ public final class SessionFileStore: @unchecked Sendable {
     }
   }
 
+  // MARK: - Astro profile
+
+  public func loadAstroProfile() throws -> Data? {
+    try queue.sync {
+      guard fileManager.fileExists(atPath: astroProfileFileURL.path) else { return nil }
+      return try Data(contentsOf: astroProfileFileURL)
+    }
+  }
+
+  public func saveAstroProfile(_ astroProfileData: Data) throws {
+    try queue.sync {
+      try createDirectoriesIfNeeded()
+      try astroProfileData.write(to: astroProfileFileURL, options: [.atomic])
+    }
+  }
+
   // MARK: - Internals
 
   private func listSynced() throws -> [SessionFileSummary] {
@@ -142,7 +167,7 @@ public final class SessionFileStore: @unchecked Sendable {
     return summaries.sorted { $0.updatedAt > $1.updatedAt }
   }
 
-  /// Reads the three fields the sidebar needs without loading the transcript.
+  /// Reads the fields the sidebar needs without loading the transcript.
   private func readHeader(of fileURL: URL) throws -> SessionFileSummary? {
     let rawDocument = try JSONSerialization.jsonObject(with: Data(contentsOf: fileURL))
     guard let document = rawDocument as? [String: Any] else {
@@ -161,7 +186,7 @@ public final class SessionFileStore: @unchecked Sendable {
     } else {
       updatedAt = ""
     }
-    return SessionFileSummary(id: id, title: title, updatedAt: updatedAt)
+    return SessionFileSummary(id: id, title: title, updatedAt: updatedAt, skill: document["skill"] as? String)
   }
 
   private func sessionFileURL(id: String) -> URL {

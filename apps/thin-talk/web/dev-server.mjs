@@ -99,6 +99,10 @@ function streamChatCompletion(requestBody, response) {
       return;
     }
     clearInterval(streamTimer);
+    // The daemon closes every streamed choice with a finish reason before
+    // [DONE], and AssistantEventAssembler treats a stream without one as cut
+    // off, so the preview must send it too or every answer shows as failed.
+    response.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`);
     response.write("data: [DONE]\n\n");
     response.end();
   }, 70);

@@ -1,4 +1,3 @@
-import { ThinkingEffort } from "./ThinkingEffort";
 import { ChatModel } from "./ChatModel";
 import { ImageModel } from "./ImageModel";
 
@@ -9,7 +8,7 @@ export interface ComposerFailure {
 }
 
 /**
- * The state the composer, the model pill, the effort pill, and the failure
+ * The state the composer, the model pill, and the failure
  * banner render. The controller produces it; the composer only draws it and
  * reports intents back.
  */
@@ -17,7 +16,6 @@ export class ComposerState {
   public readonly isStreaming: boolean;
   public readonly acceptsInput: boolean;
   public readonly isReady: boolean;
-  public readonly effort: ThinkingEffort;
   public readonly models: readonly ChatModel[];
   public readonly selectedModelID: string | null;
   /** The Tools switch as the user set it. */
@@ -35,7 +33,6 @@ export class ComposerState {
     isStreaming: boolean;
     acceptsInput: boolean;
     isReady: boolean;
-    effort: ThinkingEffort;
     models: readonly ChatModel[];
     selectedModelID: string | null;
     toolsEnabled?: boolean;
@@ -47,7 +44,6 @@ export class ComposerState {
     this.isStreaming = init.isStreaming;
     this.acceptsInput = init.acceptsInput;
     this.isReady = init.isReady;
-    this.effort = init.effort;
     this.models = init.models;
     this.selectedModelID = init.selectedModelID;
     this.toolsEnabled = init.toolsEnabled !== false;

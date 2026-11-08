@@ -24,16 +24,14 @@ import { DaemonClient } from "./DaemonClient";
  */
 export class DaemonStreamFunction {
   private readonly client: DaemonClient;
-  private readonly thinkingBudgetTokens: number;
   private readonly turnLifetimeSignal: AbortSignal;
   private failure: ChatFailure | null = null;
 
   /** `turnLifetimeSignal` fires when the turn that owns this function ends,
    * so a daemon request can never outlive its turn even when Pi stops
    * listening without aborting the request itself. */
-  public constructor(client: DaemonClient, thinkingBudgetTokens: number, turnLifetimeSignal: AbortSignal) {
+  public constructor(client: DaemonClient, turnLifetimeSignal: AbortSignal) {
     this.client = client;
-    this.thinkingBudgetTokens = thinkingBudgetTokens;
     this.turnLifetimeSignal = turnLifetimeSignal;
   }
 
@@ -65,7 +63,6 @@ export class DaemonStreamFunction {
         model: model.id,
         stream: true,
         messages: DaemonStreamFunction.requestMessages(context.messages),
-        thinking_budget: this.thinkingBudgetTokens,
       };
       const requestTools = DaemonStreamFunction.requestTools(context.messages);
       if (requestTools.length > 0) {

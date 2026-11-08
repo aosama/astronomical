@@ -15,7 +15,6 @@ import { ChatMessageState } from "./ChatMessageState";
 import { ChatModel } from "./ChatModel";
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
-import { ThinkingEffort } from "./ThinkingEffort";
 import { StallWatchdog } from "./StallWatchdog";
 import { ToolStep, ToolStepState } from "./ToolStep";
 
@@ -181,6 +180,35 @@ export class ChatController {
     await this.activeStreamPromise?.catch(() => undefined);
   }
 
+  /**
+   * Re-reads the chat models after one was installed while the window was
+   * open (Astro's brain landing). Keeps the current choice when it is still
+   * installed; a window that had no model becomes ready to chat. A failed read
+   * keeps the previous list, as the image pill does.
+   */
+  public async refreshChatModels(): Promise<void> {
+    if (this.loadPhase === "failed") {
+      // The window never reached the daemon; a model landing means it can
+      // now, so the whole start-up runs again rather than half of it.
+      await this.load();
+      return;
+    }
+    if (this.loadPhase !== "ready" && this.loadPhase !== "empty") {
+      return;
+    }
+    try {
+      this.models = await this.client.fetchModels();
+    } catch {
+      return;
+    }
+    const selectedModelID = this.selectedModelID;
+    if (selectedModelID === null || !this.models.some((model) => model.id === selectedModelID)) {
+      this.selectedModelID = this.initialModelID();
+    }
+    this.loadPhase = this.models.length === 0 ? "empty" : "ready";
+    this.publish();
+  }
+
   /** Lists the installed image models again, for the picture pill. A failed
    * read keeps the last list: the image tool lists them again when it runs. */
   public async refreshImageModels(): Promise<void> {
@@ -237,15 +265,6 @@ export class ChatController {
   private selectedImageModelID(): string | null {
     const selectedImageModel = this.imageModelSelection.current();
     return selectedImageModel != null ? selectedImageModel.id : null;
-  }
-
-  public setEffort(effort: ThinkingEffort): void {
-    if (effort === this.preferences.thinkingEffort) {
-      return;
-    }
-    this.preferences.thinkingEffort = effort;
-    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
-    this.publish();
   }
 
   /** Turns tool use on or off for future turns. */
@@ -402,21 +421,18 @@ export class ChatController {
     const streamAbort = new AbortController();
     this.activeStreamAbort = streamAbort;
     const modelID = this.selectedModelID;
-    const effort = this.preferences.thinkingEffort;
-    this.activeStreamPromise = this.runStream(streamAbort, modelID, effort);
+    this.activeStreamPromise = this.runStream(streamAbort, modelID);
   }
 
   private async runStream(
     streamAbort: AbortController,
     modelID: string,
-    effort: ThinkingEffort,
   ): Promise<void> {
     try {
       await this.streamer.streamChat({
         modelID,
         conversationID: this.store.activeSessionID(),
         messages: this.log.requestMessages(),
-        thinkingEffort: effort,
         toolsEnabled: this.preferences.toolsEnabled,
         modelSupportsToolCalls: this.selectedModelSupportsToolCalls(),
         modelAcceptsImages: this.selectedModelAcceptsImages(),
@@ -577,7 +593,6 @@ export class ChatController {
       isStreaming: this.isStreaming,
       acceptsInput: this.loadPhase !== "loading",
       isReady: this.loadPhase === "ready",
-      effort: this.preferences.thinkingEffort,
       models: this.models,
       selectedModelID: this.selectedModelID,
       toolsEnabled: this.preferences.toolsEnabled,

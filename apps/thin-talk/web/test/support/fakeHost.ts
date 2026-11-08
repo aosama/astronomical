@@ -10,8 +10,10 @@ export const FAKE_STORED_IMAGE_NAME = "0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.png"
  * exercises the real bridge, store, and controller against a faithful double.
  */
 export class FakeSessionHost {
-  private readonly files = new Map<string, { title: string; updatedAt: string; messages: unknown[] }>();
+  private readonly files = new Map<string, { title: string; updatedAt: string; messages: unknown[]; skill?: string }>();
   private preferences: unknown = null;
+  /** Astro's saved profile, or null before the first save, like astro-profile.json. */
+  public astroProfile: unknown = null;
   private nextIdentifier = 1;
   public readonly receivedRequests: SessionBridgeRequest[] = [];
   /** Every `action` envelope the page posted (copy, openExternal), in order. */
@@ -88,6 +90,11 @@ export class FakeSessionHost {
       case "savePrefs":
         this.preferences = payload;
         return null;
+      case "loadAstroProfile":
+        return this.astroProfile;
+      case "saveAstroProfile":
+        this.astroProfile = payload;
+        return null;
       case "storeGeneratedImage": {
         // Kept so a later turn can read the image back, as the app's store does.
         const storedBase64 = typeof payload === "object" && payload !== null ? (payload as Record<string, unknown>)["base64"] : null;
@@ -132,6 +139,7 @@ export class FakeSessionHost {
       id,
       title: file.title,
       updatedAt: file.updatedAt,
+      ...(file.skill !== undefined ? { skill: file.skill } : {}),
     }));
     summaries.sort((first, second) => second.updatedAt.localeCompare(first.updatedAt));
     return summaries;
@@ -155,6 +163,7 @@ export class FakeSessionHost {
       title: typeof record["title"] === "string" ? record["title"] : "",
       updatedAt: typeof record["updatedAt"] === "string" ? record["updatedAt"] : "",
       messages: Array.isArray(record["messages"]) ? record["messages"] : [],
+      ...(typeof record["skill"] === "string" ? { skill: record["skill"] } : {}),
     });
   }
 

@@ -41,6 +41,7 @@ test("session bridge posts call envelopes with the op and payload", async () => 
     title: "t",
     createdAt: "c",
     updatedAt: "u",
+    skill: "chat",
     messages: [],
   });
   window.__thintalkBridge?.resolve(posted[0].callId, null);

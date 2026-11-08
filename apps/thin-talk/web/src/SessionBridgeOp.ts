@@ -12,6 +12,8 @@ export enum SessionBridgeOp {
   RENAME = "rename",
   LOAD_PREFS = "loadPrefs",
   SAVE_PREFS = "savePrefs",
+  LOAD_ASTRO_PROFILE = "loadAstroProfile",
+  SAVE_ASTRO_PROFILE = "saveAstroProfile",
   STORE_GENERATED_IMAGE = "storeGeneratedImage",
   DELETE_GENERATED_IMAGES = "deleteGeneratedImages",
   LOAD_GENERATED_IMAGE = "loadGeneratedImage",

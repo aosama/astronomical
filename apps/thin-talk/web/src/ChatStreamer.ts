@@ -1,5 +1,4 @@
 import { ChatMessage } from "./ChatMessage";
-import { ThinkingEffort } from "./ThinkingEffort";
 import { ToolStep } from "./ToolStep";
 
 /** One streamed assistant turn the conversation asks for. */
@@ -9,7 +8,6 @@ export interface ChatStreamRequest {
    * null when none is open. */
   conversationID: string | null;
   messages: ChatMessage[];
-  thinkingEffort: ThinkingEffort;
   /** Whether the user's Tools switch is on. */
   toolsEnabled: boolean;
   /** Whether the chosen model declares that it can call tools. */

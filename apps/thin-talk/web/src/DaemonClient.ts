@@ -8,9 +8,26 @@ import { ChatFailureClassifier } from "./ChatFailureClassifier";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ModelCatalogEntry } from "./ModelCatalogEntry";
 import { DaemonStatus } from "./DaemonStatus";
+import { parseLibraryDownloadStatus, refusalCodeFromErrorDocument } from "./LibraryDownloadStatus";
+import type { LibraryDownloadStatus } from "./LibraryDownloadStatus";
 
-/** How long a readiness/model request may take before the page gives up. */
-const GET_TIMEOUT_MILLISECONDS = 2_000;
+/** The daemon refused to start a Library download; `refusalCode` is its
+ * reason (`library_busy`, `catalog_entry_not_found` or `download_failed`) or
+ * null when the request never reached it. Problems found once the download is
+ * under way (no disk space, a model already present) arrive later, as the
+ * job's error code. */
+export class LibraryDownloadRefusal extends Error {
+  public readonly refusalCode: string | null;
+
+  public constructor(refusalCode: string | null) {
+    super(refusalCode != null ? `the Library refused the download: ${refusalCode}` : "the Library could not be reached");
+    this.refusalCode = refusalCode;
+  }
+}
+
+/** How long a readiness, model-list or Library control request may take
+ * before the page gives up: each one is a quick local answer. */
+const REQUEST_TIMEOUT_MILLISECONDS = 2_000;
 /** The largest status/models body the page will read, matching the Swift client. */
 const MAXIMUM_RESPONSE_BYTE_COUNT = 1_048_576;
 /** The largest image response the page will read: the host keeps images of
@@ -94,6 +111,53 @@ export class DaemonClient {
    * caller decides what a missing catalog means. */
   public async fetchLibraryCatalogText(signal?: AbortSignal): Promise<string> {
     return this.requestText("/v1/library/catalog", signal);
+  }
+
+  /** The daemon's current Library download. */
+  public async fetchLibraryDownloadStatus(signal?: AbortSignal): Promise<LibraryDownloadStatus> {
+    return parseLibraryDownloadStatus(await this.requestText("/v1/library/download", signal));
+  }
+
+  /**
+   * Asks the daemon to download one Library model. Resolves with the starting
+   * status; a refusal throws a LibraryDownloadRefusal carrying the daemon's
+   * code (`library_busy` when another download holds the Library), so the
+   * caller can tell "wait your turn" from "something broke".
+   */
+  public async startLibraryDownload(huggingfaceID: string): Promise<LibraryDownloadStatus> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.daemonBaseURL}/v1/library/download`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ huggingface_id: huggingfaceID }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+      });
+    } catch {
+      throw new LibraryDownloadRefusal(null);
+    }
+    const bodyText = await response.text();
+    if (!response.ok) {
+      throw new LibraryDownloadRefusal(refusalCodeFromErrorDocument(bodyText));
+    }
+    return parseLibraryDownloadStatus(bodyText);
+  }
+
+  /** Continues the Library's paused download, as the Observatory's Resume
+   * button does. Throws a LibraryDownloadRefusal when the daemon refuses. */
+  public async resumeLibraryDownload(): Promise<void> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.config.daemonBaseURL}/v1/library/download/resume`, {
+        method: "POST",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+      });
+    } catch {
+      throw new LibraryDownloadRefusal(null);
+    }
+    if (!response.ok) {
+      throw new LibraryDownloadRefusal(refusalCodeFromErrorDocument(await response.text()));
+    }
   }
 
   /** The ids of the installed chat models that can look at images. */
@@ -301,7 +365,7 @@ export class DaemonClient {
   }
 
   private async requestText(path: string, callerSignal?: AbortSignal): Promise<string> {
-    const timeoutSignal = AbortSignal.timeout(GET_TIMEOUT_MILLISECONDS);
+    const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS);
     let response: Response;
     try {
       response = await fetch(`${this.config.daemonBaseURL}${path}`, {

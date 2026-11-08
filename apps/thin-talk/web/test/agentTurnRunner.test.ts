@@ -8,7 +8,6 @@ import { ChatMessage } from "../src/ChatMessage";
 import { ChatRole } from "../src/ChatRole";
 import type { ChatStreamRequest } from "../src/ChatStreamer";
 import { DaemonClient } from "../src/DaemonClient";
-import { ThinkingEffort } from "../src/ThinkingEffort";
 import type { ConversationTool } from "../src/ConversationTool";
 import { ToolCatalog } from "../src/ToolCatalog";
 import { DAEMON_BASE_URL, ScriptedChatFetch, chunkLine, toolCallLine, waitUntil } from "./support/scriptedChatFetch";
@@ -34,7 +33,6 @@ function turnRequest(messages: ChatMessage[], forwardedDeltas: ForwardedDeltas, 
   return {
     modelID: "fake-chat-model",
     messages,
-    thinkingEffort: ThinkingEffort.BALANCED,
     toolsEnabled: true,
     modelSupportsToolCalls: false,
     modelAcceptsImages: false,
@@ -76,7 +74,7 @@ test("should_replay_earlier_turns_and_ask_the_latest_question_once", async () =>
     { role: "assistant", content: "Shakespeare." },
     { role: "user", content: "When?" },
   ]);
-  assert.equal(scriptedFetch.requests[0]?.body["thinking_budget"], ThinkingEffort.thinkingBudgetTokens(ThinkingEffort.BALANCED));
+  assert.equal("thinking_budget" in (scriptedFetch.requests[0]?.body ?? {}), false, "no cap on thinking");
 });
 
 test("should_refuse_a_turn_whose_history_does_not_end_with_a_question", async () => {

@@ -10,6 +10,7 @@ import type { PreviewWindowLike } from "../src/preview/previewShim";
 class MemoryAdapter implements SessionStoreAdapter {
   private files = new Map<string, SessionStoreRecord>();
   private preferences: Record<string, unknown> = {};
+  private astroProfile: unknown = null;
 
   public listSessions(): SessionStoreRecord[] {
     return [...this.files.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -35,6 +36,12 @@ class MemoryAdapter implements SessionStoreAdapter {
   }
   public savePreferences(value: Record<string, unknown>): void {
     this.preferences = { ...value };
+  }
+  public loadAstroProfile(): unknown {
+    return this.astroProfile;
+  }
+  public saveAstroProfile(value: unknown): void {
+    this.astroProfile = value;
   }
 }
 

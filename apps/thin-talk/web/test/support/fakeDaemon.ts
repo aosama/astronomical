@@ -25,6 +25,14 @@ export interface FakeDaemonOptions {
   /** The Library catalog document; without one the endpoint is not found,
    * as on a daemon whose Library cannot be read. */
   readonly libraryCatalog?: unknown;
+  /** Successive answers to `GET /v1/library/download` once a download was
+   * requested; the last repeats. Before any request the Library is idle. */
+  readonly libraryDownloadSequence?: unknown[];
+  /** Refuses `POST /v1/library/download` with this status and error code. */
+  readonly libraryDownloadRefusal?: { status: number; code: string };
+  /** What lands when a requested download finishes: the model joins
+   * /v1/models and its catalog entry turns ready, as on the real daemon. */
+  readonly installsWhenDownloadFinishes?: { huggingfaceID: string; model: unknown };
 }
 
 const DEFAULT_CHAT_LINES = [
@@ -40,9 +48,17 @@ const DEFAULT_CHAT_LINES = [
 export class FakeDaemon {
   public readonly requests: RecordedDaemonRequest[] = [];
   private readonly options: FakeDaemonOptions;
+  /** The models /v1/models lists; a finished download adds to it. */
+  private readonly installedModels: unknown[];
+  /** Hugging Face ids whose downloads were requested, in order. */
+  public readonly requestedLibraryDownloads: string[] = [];
+  private libraryDownloadPollCount = 0;
+  private readonly readyLibraryModelIDs = new Set<string>();
 
   public constructor(options: FakeDaemonOptions) {
     this.options = options;
+    const configuredModels: unknown[] | undefined = options.models;
+    this.installedModels = configuredModels != null ? [...configuredModels] : [defaultFakeModel()];
   }
 
   /** Replaces the global fetch the DaemonClient resolves at call time. */
@@ -69,12 +85,13 @@ export class FakeDaemon {
       });
     }
     if (url.endsWith("/v1/models")) {
-      const configuredModels: unknown[] | undefined = this.options.models;
-      const models: unknown[] = configuredModels != null ? configuredModels : [defaultFakeModel()];
-      return Response.json({ data: models });
+      return Response.json({ data: this.installedModels });
     }
     if (url.endsWith("/v1/library/catalog") && this.options.libraryCatalog !== undefined) {
-      return Response.json(this.options.libraryCatalog);
+      return Response.json(this.catalogWithReadyModels());
+    }
+    if (url.endsWith("/v1/library/download")) {
+      return requestMethod === "POST" ? this.startLibraryDownload(init) : this.nextLibraryDownloadStatus();
     }
     if (url.endsWith("/v1/images/generations")) {
       return Response.json({ data: [{ b64_json: FAKE_GENERATED_IMAGE_BASE64, mime_type: "image/png" }] });
@@ -93,6 +110,52 @@ export class FakeDaemon {
   }
 
   private chatRepliesServed = 0;
+
+  private startLibraryDownload(init?: RequestInit): Response {
+    const requestBody = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+    const huggingfaceID = String(requestBody["huggingface_id"]);
+    this.requestedLibraryDownloads.push(huggingfaceID);
+    const refusal = this.options.libraryDownloadRefusal;
+    if (refusal !== undefined) {
+      return Response.json({ error: { code: refusal.code, message: "refused by the fake daemon" } }, { status: refusal.status });
+    }
+    return Response.json({ state: "checking_disk", huggingface_id: huggingfaceID, bytes_completed: 0, bytes_total: 0, error_code: null });
+  }
+
+  /** Idle until a download is requested; then the scripted sequence, and the
+   * install lands when the sequence reaches its last answer. */
+  private nextLibraryDownloadStatus(): Response {
+    const downloadSequence = this.options.libraryDownloadSequence;
+    if (this.requestedLibraryDownloads.length === 0 || downloadSequence === undefined || downloadSequence.length === 0) {
+      return Response.json({ state: "idle", huggingface_id: null, bytes_completed: 0, bytes_total: 0, error_code: null });
+    }
+    const sequencePosition = Math.min(this.libraryDownloadPollCount, downloadSequence.length - 1);
+    this.libraryDownloadPollCount += 1;
+    if (sequencePosition === downloadSequence.length - 1) {
+      this.finishInstall();
+    }
+    return Response.json(downloadSequence[sequencePosition]);
+  }
+
+  private finishInstall(): void {
+    const install = this.options.installsWhenDownloadFinishes;
+    if (install === undefined || this.readyLibraryModelIDs.has(install.huggingfaceID)) {
+      return;
+    }
+    this.readyLibraryModelIDs.add(install.huggingfaceID);
+    this.installedModels.push(install.model);
+  }
+
+  private catalogWithReadyModels(): unknown {
+    const catalog = this.options.libraryCatalog as { entries?: Record<string, unknown>[] };
+    if (!Array.isArray(catalog.entries)) {
+      return catalog;
+    }
+    const entries = catalog.entries.map((entry) =>
+      this.readyLibraryModelIDs.has(String(entry["huggingface_id"])) ? { ...entry, ready_on_this_mac: true } : entry,
+    );
+    return { ...catalog, entries };
+  }
 
   private nextScriptedReply(): string[] | null {
     const replySequence: string[][] | undefined = this.options.chatReplySequence;

@@ -2,10 +2,13 @@ import { ChatMessage } from "./ChatMessage";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
 import { ToolStep } from "./ToolStep";
+import { dominantSkill } from "./ConversationSkill";
 
 /** The schema version this client writes. Bump when the document shape changes.
  * Version 2 adds `toolSteps` to assistant messages; a version 1 file has none
- * and loads unchanged. */
+ * and loads unchanged. The top-level `skill` needs no bump: it is derived from
+ * the messages on every save and only read back by the session list, so a
+ * file without it simply lists as a chat. */
 export const SESSION_SCHEMA_VERSION = 2;
 
 /** The longest title derived from a first user message. */
@@ -92,6 +95,9 @@ export class SessionDocument {
       title: this.title,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      // Derived on every save so the sidebar can colour the chat by its main
+      // skill without the host or the list ever reading the messages.
+      skill: this.mainSkill(),
       messages: this.messages.map((message) => ({
         id: message.id,
         role: message.role,
@@ -101,6 +107,13 @@ export class SessionDocument {
         toolSteps: message.toolSteps.map((toolStep) => toolStep.toPlain()),
       })),
     };
+  }
+
+  private mainSkill(): string {
+    const answers = this.messages
+      .filter((message) => message.role === ChatRole.ASSISTANT)
+      .map((message) => ({ markdown: message.content, toolNames: message.toolSteps.map((toolStep) => toolStep.toolName) }));
+    return dominantSkill(answers);
   }
 
   /** Rebuilds a document from bridge JSON, validating every field so a corrupt

@@ -23,10 +23,13 @@ import { SidebarResizer } from "./SidebarResizer";
 import { runConversationMenu } from "./ConversationMenuFlow";
 import { ChatController } from "./ChatController";
 import { AppShell } from "./AppShell";
-import { ThinkingEffort } from "./ThinkingEffort";
 import { WindowChrome } from "./WindowChrome";
 import { HostCommandRouter } from "./HostCommandRouter";
 import { hostCommandHandlers } from "./HostCommandWiring";
+import { AstroCompanion } from "./astro/AstroCompanion";
+import { AstroLibrary } from "./astro/AstroLibrary";
+import { applyAstroPresentation } from "./astro/AstroPresentation";
+import { PictureModelGuidance } from "./PictureModelGuidance";
 
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -84,15 +87,13 @@ export function bootChatClient(): AppShell {
   // (which draws pictures), so the two can never disagree.
   const imageModelDirectory = new ImageModelDirectory(client);
   const imageModelSelection = new ImageModelSelection();
+  const pictureModelGuidance = new PictureModelGuidance();
   const composerField = requireElement<HTMLTextAreaElement>("#composer-input");
   const composer = new ComposerView({
     field: composerField,
     sendButton: requireElement<HTMLButtonElement>('[data-testid="composer-send"]'),
     stopButton: requireElement<HTMLButtonElement>('[data-testid="composer-stop"]'),
     retryButton: requireElement<HTMLButtonElement>('[data-testid="composer-retry"]'),
-    effortPill: requireElement<HTMLButtonElement>('[data-testid="composer-effort"]'),
-    effortLabel: requireElement<HTMLElement>('[data-testid="composer-effort-label"]'),
-    effortMenu: requireElement<HTMLElement>('[data-testid="composer-effort-menu"]'),
     modelPill: requireElement<HTMLButtonElement>('[data-testid="composer-model"]'),
     modelLabel: requireElement<HTMLElement>('[data-testid="composer-model-label"]'),
     modelMenu: requireElement<HTMLElement>('[data-testid="composer-model-menu"]'),
@@ -112,9 +113,6 @@ export function bootChatClient(): AppShell {
           return;
         case "retry":
           controller.retry();
-          return;
-        case "setEffort":
-          controller.setEffort(ThinkingEffort.parse(action.detail));
           return;
         case "selectModel":
           controller.selectModel(action.detail);
@@ -152,7 +150,7 @@ export function bootChatClient(): AppShell {
       client,
       new ToolCatalog([
         new CurrentTimeTool(),
-        new GenerateImageTool(client, bridge, imageModelDirectory, imageModelSelection),
+        new GenerateImageTool(client, bridge, imageModelDirectory, imageModelSelection, pictureModelGuidance),
         new ReadChosenFileTool(bridge),
         new DescribeChosenImageTool(client, bridge),
         new SearchConversationsTool(bridge),
@@ -166,9 +164,25 @@ export function bootChatClient(): AppShell {
   });
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();
+  const astro = new AstroCompanion({
+    bridge,
+    library: new AstroLibrary(client),
+    firstFlightOverlay: requireElement<HTMLElement>("#first-flight"),
+    emptyState: requireElement<HTMLElement>("#empty-state"),
+    composerField,
+    skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),
+    composerAstro: requireElement<HTMLImageElement>("#composer-astro"),
+    startNewChat: () => controller.newChat(),
+    applyPresentation: (persona) => applyAstroPresentation({ appRoot: requireElement<HTMLElement>("#app"), transcript, composer, pictureModelGuidance }, persona),
+    onModelInstalled: () => {
+      void controller.refreshChatModels();
+      void controller.refreshImageModels();
+    },
+  });
   new HostCommandRouter(
-    hostCommandHandlers({ controller, transcript, composerField, host, windowChrome }),
+    hostCommandHandlers({ controller, transcript, composerField, host, windowChrome, astro }),
   ).install(window);
   void controller.load();
+  void astro.start();
   return shell;
 }

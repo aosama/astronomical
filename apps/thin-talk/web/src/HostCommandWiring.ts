@@ -5,6 +5,7 @@ import type { HostChannel } from "./HostChannel";
 import type { HostCommandHandlers } from "./HostCommandRouter";
 import type { TranscriptView } from "./TranscriptView";
 import type { WindowChrome } from "./WindowChrome";
+import type { AstroCompanion } from "./astro/AstroCompanion";
 
 /** Everything the host commands act on, supplied by boot.ts. */
 export interface HostCommandTargets {
@@ -13,6 +14,7 @@ export interface HostCommandTargets {
   composerField: HTMLTextAreaElement;
   host: HostChannel;
   windowChrome: WindowChrome;
+  astro: AstroCompanion;
 }
 
 /** The id of the newest assistant message, or null before the first answer. */
@@ -57,6 +59,8 @@ export function hostCommandHandlers(targets: HostCommandTargets): HostCommandHan
       }
     },
     focusComposer: () => targets.composerField.focus(),
+    meetAstro: () => void targets.astro.meetAgain(),
+    toggleAstro: () => targets.astro.toggleShown(),
     setTitlebarInset: (titlebarInsetPixels) => targets.windowChrome.applyTitlebarInset(titlebarInsetPixels),
   };
 }

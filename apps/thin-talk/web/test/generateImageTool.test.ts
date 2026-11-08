@@ -5,6 +5,7 @@ import { ChatFailure } from "../src/ChatFailure";
 import { ChatFailureKind } from "../src/ChatFailureKind";
 import { DaemonClient } from "../src/DaemonClient";
 import { GenerateImageTool } from "../src/GenerateImageTool";
+import { PictureModelGuidance } from "../src/PictureModelGuidance";
 import { ImageModelDirectory } from "../src/ImageModelDirectory";
 import { ImageModelSelection } from "../src/ImageModelSelection";
 import { imageMimeType } from "../src/GeneratedImageReview";
@@ -28,6 +29,8 @@ interface ImageDaemonScript {
   failModelListAfter?: number;
   /** The Library catalog; without one the endpoint is not found. */
   libraryCatalog?: unknown;
+  /** Model lists for successive reads, the last repeating; overrides `models`. */
+  modelsByListRead?: unknown[][];
 }
 
 /** A daemon that lists models and answers image requests, recording each
@@ -42,7 +45,8 @@ function installImageDaemon(script: ImageDaemonScript): Record<string, unknown>[
       if (script.failModelListAfter != null && modelListRequestCount > script.failModelListAfter) {
         return Response.json({ error: { message: "server_capacity: busy" } }, { status: 503 });
       }
-      return Response.json({ data: script.models });
+      const scriptedModels = script.modelsByListRead?.[Math.min(modelListRequestCount, script.modelsByListRead.length) - 1];
+      return Response.json({ data: scriptedModels ?? script.models });
     }
     if (url.endsWith("/v1/library/catalog") && script.libraryCatalog !== undefined) {
       return Response.json(script.libraryCatalog);
@@ -76,11 +80,11 @@ function storingBridge(storedImages: string[]): SessionBridge {
   return bridge;
 }
 
-function imageTool(storedImages: string[] = [], imageModelSelection = new ImageModelSelection()): GenerateImageTool {
+function imageTool(storedImages: string[] = [], imageModelSelection = new ImageModelSelection(), pictureModelGuidance = new PictureModelGuidance()): GenerateImageTool {
   const client = new DaemonClient(
     new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" }),
   );
-  return new GenerateImageTool(client, storingBridge(storedImages), new ImageModelDirectory(client), imageModelSelection);
+  return new GenerateImageTool(client, storingBridge(storedImages), new ImageModelDirectory(client), imageModelSelection, pictureModelGuidance);
 }
 
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
@@ -159,9 +163,42 @@ test("should_refuse_an_empty_prompt_without_calling_the_daemon", async () => {
   assert.equal(imageRequestBodies.length, 0);
 });
 
-test("should_say_so_when_no_image_model_is_installed", async () => {
+test("should_point_to_the_library_when_no_picture_model_is_installed_in_classic_thin_talk", async () => {
   installImageDaemon({ models: [CHAT_MODEL] });
-  await assert.rejects(imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT), /No image model is installed/);
+  await assert.rejects(
+    imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT),
+    (failure: Error) => /No picture model is installed/.test(failure.message) && /Library in the Observatory/.test(failure.message) && !/Pictures card/.test(failure.message),
+  );
+});
+
+test("should_point_to_the_pictures_card_when_no_picture_model_is_installed_with_astro_shown", async () => {
+  installImageDaemon({ models: [CHAT_MODEL] });
+  const astroGuidance = new PictureModelGuidance();
+  astroGuidance.setAstroShown(true);
+  await assert.rejects(
+    imageTool([], new ImageModelSelection(), astroGuidance).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT),
+    (failure: Error) => /Pictures card in a new chat/.test(failure.message) && !/Observatory/.test(failure.message),
+  );
+});
+
+test("should_draw_when_a_picture_model_appears_on_the_second_read", async () => {
+  const imageRequestBodies = installImageDaemon({ models: [], modelsByListRead: [[CHAT_MODEL], [CHAT_MODEL, IMAGE_MODEL]] });
+  const toolOutput = await imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
+  assert.equal(imageRequestBodies.length, 1, "one drawing after the recheck");
+  assert.match(toolOutput.text, /Generated a/);
+});
+
+test("should_stop_waiting_for_the_recheck_when_the_turn_is_stopped_during_the_pause", async () => {
+  installImageDaemon({ models: [CHAT_MODEL] });
+  const stopTurn = new AbortController();
+  const pendingDrawing = imageTool().execute({ prompt: "A crown" }, stopTurn.signal, TOOL_CONTEXT);
+  // The first list read finishes within a few event-loop turns; the stop then
+  // lands inside the one-second pause before the second read.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const stoppedAt = Date.now();
+  stopTurn.abort(new Error("stopped by the person"));
+  await assert.rejects(pendingDrawing, /stopped by the person/);
+  assert.ok(Date.now() - stoppedAt < 500, "the pause ends at the stop, not after the full second");
 });
 
 test("should_report_a_daemon_refusal_and_a_response_without_an_image", async () => {
