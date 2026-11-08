@@ -69,28 +69,14 @@ async fn resolve_library_model_folder(
         &validated_publications,
         None,
     );
-    let matching_projection = projection_for_identity(&projections, huggingface_id);
+    let matching_projection = projections
+        .iter()
+        .find(|projection| projection.catalog_entry.huggingface_id() == huggingface_id);
     let published_download_folder = application_state
         .library_download_coordinator
         .as_ref()
         .map(|download_coordinator| download_coordinator.destination_directory(huggingface_id));
     ready_model_folder(matching_projection, published_download_folder)
-}
-
-#[expect(
-    clippy::manual_find,
-    reason = "the repository owner reads plain loops more easily than closures"
-)]
-fn projection_for_identity<'projections, 'catalog>(
-    projections: &'projections [CatalogEntryProjection<'catalog>],
-    huggingface_id: &str,
-) -> Option<&'projections CatalogEntryProjection<'catalog>> {
-    for projection in projections {
-        if projection.catalog_entry.huggingface_id() == huggingface_id {
-            return Some(projection);
-        }
-    }
-    None
 }
 
 /// A discovered model reveals the folder discovery found it in; a model that
