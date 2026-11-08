@@ -22,6 +22,9 @@ export interface FakeDaemonOptions {
   readonly chatReplySequence?: string[][];
   /** Makes the status handshake fail, to exercise the failed load path. */
   readonly failHandshake?: boolean;
+  /** The Library catalog document; without one the endpoint is not found,
+   * as on a daemon whose Library cannot be read. */
+  readonly libraryCatalog?: unknown;
 }
 
 const DEFAULT_CHAT_LINES = [
@@ -69,6 +72,9 @@ export class FakeDaemon {
       const configuredModels: unknown[] | undefined = this.options.models;
       const models: unknown[] = configuredModels != null ? configuredModels : [defaultFakeModel()];
       return Response.json({ data: models });
+    }
+    if (url.endsWith("/v1/library/catalog") && this.options.libraryCatalog !== undefined) {
+      return Response.json(this.options.libraryCatalog);
     }
     if (url.endsWith("/v1/images/generations")) {
       return Response.json({ data: [{ b64_json: FAKE_GENERATED_IMAGE_BASE64, mime_type: "image/png" }] });

@@ -21,6 +21,8 @@ const SINGLETON_CONTROL_IDENTIFIERS = [
   "composer-effort-menu",
   "composer-model",
   "composer-model-menu",
+  "composer-image-model",
+  "composer-image-model-menu",
   "sidebar-new-chat",
 ] as const;
 

@@ -1,3 +1,5 @@
+import { ImageModelDirectory } from "../src/ImageModelDirectory";
+import { ImageModelSelection } from "../src/ImageModelSelection";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AppConfig } from "../src/AppConfig";
@@ -62,11 +64,14 @@ async function bootController(streamer: ChatStreamer = new SlowToolStreamer()): 
   const config = new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" });
   const channel = new HostChannel();
   const bridge = new SessionBridge((request) => channel.postSessionCall(request));
+  const client = new DaemonClient(config);
   const controller = new ChatController({
-    client: new DaemonClient(config),
+    client,
     streamer,
     bridge,
     store: new SessionStore(bridge),
+    imageModelDirectory: new ImageModelDirectory(client),
+    imageModelSelection: new ImageModelSelection(),
   });
   await controller.load();
   return { controller, host };
@@ -182,3 +187,13 @@ test("should_not_send_queued_messages_after_starting_a_new_chat", async () => {
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.deepEqual(streamer.askedQuestions, ["First?"]);
 }, { timeout: 30_000 });
+
+test("should_ignore_an_image_model_that_is_not_installed_without_saving", async () => {
+  const { controller, host } = await bootController();
+  const savesBefore = host.receivedRequests.filter((request) => request.op === "savePrefs").length;
+
+  controller.selectImageModel("not-installed");
+  await new Promise((resolve) => setTimeout(resolve, 32));
+
+  assert.equal(host.receivedRequests.filter((request) => request.op === "savePrefs").length, savesBefore);
+});

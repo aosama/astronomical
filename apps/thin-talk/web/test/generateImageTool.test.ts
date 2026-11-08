@@ -5,6 +5,8 @@ import { ChatFailure } from "../src/ChatFailure";
 import { ChatFailureKind } from "../src/ChatFailureKind";
 import { DaemonClient } from "../src/DaemonClient";
 import { GenerateImageTool } from "../src/GenerateImageTool";
+import { ImageModelDirectory } from "../src/ImageModelDirectory";
+import { ImageModelSelection } from "../src/ImageModelSelection";
 import { imageMimeType } from "../src/GeneratedImageReview";
 import { SessionBridge } from "../src/SessionBridge";
 import { DAEMON_BASE_URL } from "./support/scriptedChatFetch";
@@ -24,6 +26,8 @@ interface ImageDaemonScript {
   describeRequestBodies?: Record<string, unknown>[];
   /** The model list fails after this many successful reads. */
   failModelListAfter?: number;
+  /** The Library catalog; without one the endpoint is not found. */
+  libraryCatalog?: unknown;
 }
 
 /** A daemon that lists models and answers image requests, recording each
@@ -39,6 +43,9 @@ function installImageDaemon(script: ImageDaemonScript): Record<string, unknown>[
         return Response.json({ error: { message: "server_capacity: busy" } }, { status: 503 });
       }
       return Response.json({ data: script.models });
+    }
+    if (url.endsWith("/v1/library/catalog") && script.libraryCatalog !== undefined) {
+      return Response.json(script.libraryCatalog);
     }
     if (url.endsWith("/v1/images/generations")) {
       imageRequestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
@@ -69,14 +76,64 @@ function storingBridge(storedImages: string[]): SessionBridge {
   return bridge;
 }
 
-function imageTool(storedImages: string[] = []): GenerateImageTool {
+function imageTool(storedImages: string[] = [], imageModelSelection = new ImageModelSelection()): GenerateImageTool {
   const client = new DaemonClient(
     new AppConfig({ daemonBaseURL: DAEMON_BASE_URL, expectedChannel: "development", expectedStateDirectory: "~/.astronomical-dev" }),
   );
-  return new GenerateImageTool(client, storingBridge(storedImages));
+  return new GenerateImageTool(client, storingBridge(storedImages), new ImageModelDirectory(client), imageModelSelection);
 }
 
-test("should_generate_with_the_first_image_model_store_the_image_and_report_it", async () => {
+const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
+const PICTURES_LIBRARY = {
+  entries: [
+    { display_name: "FLUX.2 Klein 4B", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+    { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
+  ],
+};
+
+test("should_draw_with_the_library_pictures_pick_and_name_it", async () => {
+  const imageRequestBodies = installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], libraryCatalog: PICTURES_LIBRARY });
+
+  const toolOutput = await imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
+
+  assert.equal(imageRequestBodies[0]?.["model"], "flux2-klein-4b-4bit");
+  assert.equal(toolOutput.generatedImageModelName, "FLUX.2 Klein 4B 4-bit");
+  assert.match(toolOutput.text, /with FLUX\.2 Klein 4B 4-bit and showed it/);
+});
+
+test("should_leave_the_shared_selection_naming_the_model_that_drew", async () => {
+  installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], libraryCatalog: PICTURES_LIBRARY });
+  const imageModelSelection = new ImageModelSelection();
+  const notifiedSelections: (string | null)[] = [];
+  imageModelSelection.onChange(() => notifiedSelections.push(imageModelSelection.current()?.name ?? null));
+
+  const toolOutput = await imageTool([], imageModelSelection).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
+
+  // The composer's pill reads the same selection, so it shows what drew.
+  assert.equal(imageModelSelection.current()?.name, toolOutput.generatedImageModelName);
+  assert.deepEqual(notifiedSelections, ["FLUX.2 Klein 4B 4-bit"]);
+});
+
+test("should_draw_with_the_model_the_person_chose", async () => {
+  const imageRequestBodies = installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], libraryCatalog: PICTURES_LIBRARY });
+
+  const toolOutput = await imageTool([], new ImageModelSelection("FLUX.2-klein-4B"))
+    .execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
+
+  assert.equal(imageRequestBodies[0]?.["model"], "FLUX.2-klein-4B");
+  assert.equal(toolOutput.generatedImageModelName, "FLUX.2 Klein 4B");
+});
+
+test("should_still_draw_when_the_library_cannot_be_read", async () => {
+  const imageRequestBodies = installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL] });
+
+  const toolOutput = await imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
+
+  assert.equal(imageRequestBodies[0]?.["model"], "FLUX.2-klein-4B");
+  assert.equal(toolOutput.generatedImageModelName, "FLUX.2-klein-4B", "without the Library the id is the name");
+});
+
+test("should_generate_with_the_only_image_model_store_the_image_and_report_it", async () => {
   const imageRequestBodies = installImageDaemon({ models: [CHAT_MODEL, IMAGE_MODEL] });
   const storedImages: string[] = [];
   const toolOutput = await imageTool(storedImages).execute({ prompt: "A rose in Verona at dusk", shape: "landscape" }, new AbortController().signal, TOOL_CONTEXT);
@@ -136,7 +193,7 @@ test("should_fail_when_the_host_cannot_store_the_image", async () => {
   const refusingBridge = new SessionBridge((request) => {
     queueMicrotask(() => window.__thintalkBridge?.reject(request.callId, "the disk is full"));
   });
-  await assert.rejects(new GenerateImageTool(client, refusingBridge).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT), /the disk is full/);
+  await assert.rejects(new GenerateImageTool(client, refusingBridge, new ImageModelDirectory(client), new ImageModelSelection()).execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT), /the disk is full/);
 });
 
 test("should_pass_a_stop_through_to_the_daemon_request", async () => {

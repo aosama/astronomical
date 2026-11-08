@@ -35,8 +35,8 @@ const IMAGE_DESCRIPTION_MAXIMUM_OUTPUT_TOKENS = 1_024;
 
 /**
  * Talks to a single daemon instance over its public REST endpoints: the
- * readiness handshake, the model list, streaming chat completion and image
- * generation. The network calls and the server-sent-events line framing live
+ * readiness handshake, the model list, the Library catalog, streaming chat
+ * completion and image generation. The network calls and the server-sent-events line framing live
  * here, so the controller never touches the wire; decoding one line is
  * ChatCompletionChunk's.
  */
@@ -88,6 +88,12 @@ export class DaemonClient {
   public async fetchImageModelIDs(signal?: AbortSignal): Promise<string[]> {
     const catalogEntries = await this.fetchCatalogEntries(signal);
     return catalogEntries.filter((entry) => entry.generatesImages).map((entry) => entry.id);
+  }
+
+  /** The Library catalog document as text. Throws like any other read; the
+   * caller decides what a missing catalog means. */
+  public async fetchLibraryCatalogText(signal?: AbortSignal): Promise<string> {
+    return this.requestText("/v1/library/catalog", signal);
   }
 
   /** The ids of the installed chat models that can look at images. */

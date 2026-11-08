@@ -1,3 +1,5 @@
+import { ImageModelDirectory } from "./ImageModelDirectory";
+import { ImageModelSelection } from "./ImageModelSelection";
 import { DaemonClient } from "./DaemonClient";
 import type { ChatStreamer } from "./ChatStreamer";
 import { SessionBridge } from "./SessionBridge";
@@ -54,12 +56,27 @@ export class ChatController {
   private failure: ChatFailure | null = null;
   private models: ChatModel[] = [];
   private selectedModelID: string | null = null;
+  private readonly imageModelDirectory: ImageModelDirectory;
+  private readonly imageModelSelection: ImageModelSelection;
   private isStreaming = false;
   /** Tool calls of the current turn that have started and not yet finished. */
   private readonly runningToolCallIDs = new Set<string>();
 
-  public constructor(init: { client: DaemonClient; streamer: ChatStreamer; bridge: SessionBridge; store: SessionStore }) {
+  /** `imageModelSelection` is shared with the image tool: choosing here is what
+   * the next picture is drawn with, and the tool's fresh list of installed
+   * models redraws the composer's pill through it. */
+  public constructor(init: {
+    client: DaemonClient;
+    streamer: ChatStreamer;
+    bridge: SessionBridge;
+    store: SessionStore;
+    imageModelDirectory: ImageModelDirectory;
+    imageModelSelection: ImageModelSelection;
+  }) {
     this.client = init.client;
+    this.imageModelDirectory = init.imageModelDirectory;
+    this.imageModelSelection = init.imageModelSelection;
+    this.imageModelSelection.onChange(() => this.publish());
     this.streamer = init.streamer;
     this.bridge = init.bridge;
     this.store = init.store;
@@ -83,6 +100,7 @@ export class ChatController {
     } catch {
       this.preferences = SessionPreferences.default();
     }
+    this.imageModelSelection.prefer(this.preferences.imageModelID);
     try {
       await this.client.handshake();
       this.models = await this.client.fetchModels();
@@ -100,6 +118,9 @@ export class ChatController {
       this.store.startNew();
     }
     this.publish();
+    // Image models only decorate the composer, so they are listed after chat
+    // is ready rather than delaying it.
+    void this.refreshImageModels();
   }
 
   private async restoreMostRecentSession(): Promise<void> {
@@ -160,6 +181,16 @@ export class ChatController {
     await this.activeStreamPromise?.catch(() => undefined);
   }
 
+  /** Lists the installed image models again, for the picture pill. A failed
+   * read keeps the last list: the image tool lists them again when it runs. */
+  public async refreshImageModels(): Promise<void> {
+    try {
+      this.imageModelSelection.updateInstalled(await this.imageModelDirectory.load());
+    } catch {
+      // Keep the previous list; the pill is a convenience, not a requirement.
+    }
+  }
+
   // MARK: - Preferences
 
   /** The model to start with: the user's saved choice when the catalog still
@@ -186,6 +217,26 @@ export class ChatController {
     this.preferences.modelID = modelID;
     void this.bridge.savePrefs(this.preferences).catch(() => undefined);
     this.publish();
+  }
+
+  /** Switches the image model the next picture is drawn with. An unknown or
+   * unchanged id is ignored, as for the chat model. */
+  public selectImageModel(imageModelID: string): void {
+    if (imageModelID === this.selectedImageModelID()) {
+      return;
+    }
+    if (!this.imageModelSelection.installed.some((imageModel) => imageModel.id === imageModelID)) {
+      return;
+    }
+    this.preferences.imageModelID = imageModelID;
+    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
+    // Publishes through the selection's change listener.
+    this.imageModelSelection.prefer(imageModelID);
+  }
+
+  private selectedImageModelID(): string | null {
+    const selectedImageModel = this.imageModelSelection.current();
+    return selectedImageModel != null ? selectedImageModel.id : null;
   }
 
   public setEffort(effort: ThinkingEffort): void {
@@ -531,6 +582,8 @@ export class ChatController {
       selectedModelID: this.selectedModelID,
       toolsEnabled: this.preferences.toolsEnabled,
       toolsAvailable: this.selectedModelSupportsToolCalls(),
+      imageModels: this.imageModelSelection.installed,
+      selectedImageModelID: this.selectedImageModelID(),
       failure: this.failure
         ? { message: this.failure.message, nextAction: this.failure.nextAction }
         : null,

@@ -53,3 +53,14 @@ test("should_keep_a_stored_image_name_and_drop_one_that_is_not", () => {
     assert.equal(ToolStep.fromPlain({ ...finishedStep().toPlain(), generatedImageName: craftedName })?.generatedImageName, null, String(craftedName));
   }
 });
+
+test("should_keep_the_image_model_name_only_alongside_an_image", () => {
+  const storedName = "0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.png";
+  const imageStep = ToolStep.fromPlain({ ...finishedStep().toPlain(), generatedImageName: storedName, generatedImageModelName: "FLUX.2 Klein 4B 4-bit" });
+  assert.equal(imageStep?.generatedImageModelName, "FLUX.2 Klein 4B 4-bit");
+  assert.equal(ToolStep.fromPlain(imageStep?.toPlain())?.generatedImageModelName, "FLUX.2 Klein 4B 4-bit");
+  const imagelessStep = ToolStep.fromPlain({ ...finishedStep().toPlain(), generatedImageModelName: "FLUX.2 Klein 4B 4-bit" });
+  assert.equal(imagelessStep?.generatedImageModelName, null);
+  const earlierStep = ToolStep.fromPlain({ ...finishedStep().toPlain(), generatedImageName: storedName });
+  assert.equal(earlierStep?.generatedImageModelName, null, "a step saved before the name was recorded still loads");
+});

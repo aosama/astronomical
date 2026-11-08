@@ -100,3 +100,17 @@ test("should_label_queued_and_not_sent_user_messages_only", () => {
   assert.match(userBubble(ChatMessageState.FAILED), /data-testid="message-state-not-sent">not sent</);
   assert.doesNotMatch(userBubble(ChatMessageState.COMPLETE), /message__state/);
 });
+
+test("should_name_the_model_that_drew_an_image_on_its_row", () => {
+  const container = renderedSteps([
+    new ToolStep({
+      toolCallID: "call-1", toolName: "generate_image", label: "Image generation", argumentsJSON: "{}", resultText: "Generated.",
+      state: ToolStepState.SUCCEEDED, generatedImageName: "0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.png", generatedImageModelName: "FLUX.2 Klein 4B <4-bit>",
+    }),
+    new ToolStep({ toolCallID: "call-2", toolName: "get_current_time", label: "Current time", argumentsJSON: "{}", resultText: "2 PM", state: ToolStepState.SUCCEEDED }),
+  ]);
+  const summaries = [...container.querySelectorAll("details.tool-step summary")].map((summary) => summary.textContent);
+  assert.deepEqual(summaries, ["Image generation: done · FLUX.2 Klein 4B <4-bit>", "Current time: done"]);
+  const imageRowSummary = container.querySelector("details.tool-step summary");
+  assert.equal(imageRowSummary?.children.length, 0, "the name is text, never markup");
+});

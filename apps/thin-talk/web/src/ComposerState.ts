@@ -1,5 +1,6 @@
 import { ThinkingEffort } from "./ThinkingEffort";
 import { ChatModel } from "./ChatModel";
+import { ImageModel } from "./ImageModel";
 
 /** The failure banner's content, or null when no failure is showing. */
 export interface ComposerFailure {
@@ -25,6 +26,10 @@ export class ComposerState {
    * disabled when it cannot, so it never promises tools that will not run. */
   public readonly toolsAvailable: boolean;
   public readonly failure: ComposerFailure | null;
+  /** The installed image models, in the order the picture pill lists them. */
+  public readonly imageModels: readonly ImageModel[];
+  /** The image model that draws the next picture, or null with none installed. */
+  public readonly selectedImageModelID: string | null;
 
   public constructor(init: {
     isStreaming: boolean;
@@ -36,6 +41,8 @@ export class ComposerState {
     toolsEnabled?: boolean;
     toolsAvailable?: boolean;
     failure: ComposerFailure | null;
+    imageModels?: readonly ImageModel[];
+    selectedImageModelID?: string | null;
   }) {
     this.isStreaming = init.isStreaming;
     this.acceptsInput = init.acceptsInput;
@@ -46,5 +53,8 @@ export class ComposerState {
     this.toolsEnabled = init.toolsEnabled !== false;
     this.toolsAvailable = init.toolsAvailable === true;
     this.failure = init.failure;
+    this.imageModels = init.imageModels != null ? init.imageModels : [];
+    const configuredImageModelID: string | null | undefined = init.selectedImageModelID;
+    this.selectedImageModelID = configuredImageModelID != null ? configuredImageModelID : null;
   }
 }

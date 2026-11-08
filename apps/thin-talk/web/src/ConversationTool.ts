@@ -18,6 +18,9 @@ export interface ImageForModel {
 export interface ToolOutput {
   readonly text: string;
   readonly generatedImageName?: string;
+  /** The display name of the model that made `generatedImageName`, shown on
+   * the call's row so the person can see which model drew the picture. */
+  readonly generatedImageModelName?: string;
   readonly imageForModel?: ImageForModel;
 }
 

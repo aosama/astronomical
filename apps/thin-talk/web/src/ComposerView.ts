@@ -1,5 +1,6 @@
 import { ComposerState } from "./ComposerState";
 import { ComposerAction } from "./ComposerAction";
+import { ImageModelPillView } from "./ImageModelPillView";
 import { ThinkingEffort } from "./ThinkingEffort";
 
 /** The field's hint while an answer streams: a message sent now is read as
@@ -9,8 +10,8 @@ const MAX_FIELD_HEIGHT_PX = 160;
 const FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX = 2;
 
 /**
- * Composer layer: the ask field, the thinking-effort pill, and the failure
- * banner.
+ * Composer layer: the ask field, the model, thinking-effort and picture
+ * pills, and the failure banner.
  *
  * This class renders the state the controller pushes and reports every intent
  * back; it owns no chat behaviour and holds no chat state beyond the field's
@@ -27,10 +28,11 @@ export class ComposerView {
   private readonly modelPill: HTMLButtonElement;
   private readonly modelLabel: HTMLElement;
   private readonly modelMenu: HTMLElement;
-  /** What the model menu last drew, so an unchanged menu is not rebuilt. */
+  private readonly imageModelPill: ImageModelPillView;
   /** The hint the page's markup gives the field, restored when no answer is
    * streaming; the markup stays the one place that wording lives. */
   private readonly idlePlaceholder: string;
+  /** What the model menu last drew, so an unchanged menu is not rebuilt. */
   private renderedModelMenuSignature = "";
   private readonly banner: HTMLElement;
   private readonly bannerMessage: HTMLElement;
@@ -57,6 +59,9 @@ export class ComposerView {
     modelPill: HTMLButtonElement;
     modelLabel: HTMLElement;
     modelMenu: HTMLElement;
+    imageModelPill: HTMLButtonElement;
+    imageModelLabel: HTMLElement;
+    imageModelMenu: HTMLElement;
     banner: HTMLElement;
     bannerMessage: HTMLElement;
     bannerNextAction: HTMLElement;
@@ -73,6 +78,18 @@ export class ComposerView {
     this.modelPill = init.modelPill;
     this.modelLabel = init.modelLabel;
     this.modelMenu = init.modelMenu;
+    this.imageModelPill = new ImageModelPillView({
+      pill: init.imageModelPill,
+      label: init.imageModelLabel,
+      menu: init.imageModelMenu,
+      onOpen: () => {
+        this.closeEffortMenu();
+        this.closeModelMenu();
+        // A model installed since the list was read appears once it is re-read.
+        this.onAction(new ComposerAction({ kind: "openImageModels" }));
+      },
+      onSelect: (imageModelID) => this.onAction(new ComposerAction({ kind: "selectImageModel", detail: imageModelID })),
+    });
     this.banner = init.banner;
     this.bannerMessage = init.bannerMessage;
     this.bannerNextAction = init.bannerNextAction;
@@ -134,6 +151,7 @@ export class ComposerView {
       if (event.key === "Escape") {
         this.closeEffortMenu();
         this.closeModelMenu();
+        this.imageModelPill.close();
       }
     });
     document.addEventListener("click", (event) => {
@@ -143,6 +161,9 @@ export class ComposerView {
       }
       if (!this.modelMenu.hidden && target instanceof Element && !target.closest(".composer__menu-anchor")) {
         this.closeModelMenu();
+      }
+      if (this.imageModelPill.isOpen && target instanceof Element && !target.closest(".composer__menu-anchor")) {
+        this.imageModelPill.close();
       }
     });
   }
@@ -160,9 +181,11 @@ export class ComposerView {
     this.effortPill.title = ThinkingEffort.budgetSummary(state.effort);
     this.buildEffortMenu();
     this.renderModelControls(state);
+    this.imageModelPill.render(state.imageModels, state.selectedImageModelID, state.toolsEnabled && state.toolsAvailable);
     if (!state.isReady) {
       this.closeEffortMenu();
       this.closeModelMenu();
+      this.imageModelPill.close();
     }
     this.refreshControls();
   }
@@ -225,6 +248,7 @@ export class ComposerView {
 
   private toggleEffortMenu(): void {
     this.closeModelMenu();
+    this.imageModelPill.close();
     const opening = this.effortMenu.hidden;
     this.effortMenu.hidden = !opening;
     this.effortPill.setAttribute("aria-expanded", opening ? "true" : "false");
@@ -257,6 +281,7 @@ export class ComposerView {
 
   private toggleModelMenu(): void {
     this.closeEffortMenu();
+    this.imageModelPill.close();
     const opening = this.modelMenu.hidden;
     this.modelMenu.hidden = !opening;
     this.modelPill.setAttribute("aria-expanded", opening ? "true" : "false");
