@@ -4,7 +4,7 @@
 //! runtime config and a candidate config into one of three decisions:
 //! no worker restart, worker restart, or full REST API restart.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -464,26 +464,16 @@ fn log_unavailable_model_directories(
     }
 }
 
-/// The `models` entries that configure no discovered model: neither keyed by a discovered
-/// model's ID, nor by a full Hugging Face ID that resolves to one. An entry shadowed by an
-/// exact entry for the same model is reported too, since it has no effect.
+/// The `models` entries that configure no discovered model: none matches, another entry
+/// configures it instead, or it names a different organisation's model of the same name.
 fn unmatched_model_config_ids(
     user_config: &AstronomicalConfig,
     discovered_models: &[DiscoveredModel],
 ) -> Vec<String> {
-    let mut applied_entry_ids = HashSet::new();
-    for discovered_model in discovered_models {
-        if let Some(configured_model_id) = user_config.configured_model_id_for(
-            &discovered_model.model_id,
-            discovered_model.provider_model_id.as_deref(),
-        ) {
-            applied_entry_ids.insert(configured_model_id);
-        }
-    }
     let mut unmatched_ids = Vec::new();
-    for configured_model_id in user_config.configured_model_ids() {
-        if !applied_entry_ids.contains(configured_model_id) {
-            unmatched_ids.push(configured_model_id.to_owned());
+    for entry_report in user_config.model_config_entry_reports(discovered_models) {
+        if !entry_report.applies() {
+            unmatched_ids.push(entry_report.configured_model_id);
         }
     }
     unmatched_ids

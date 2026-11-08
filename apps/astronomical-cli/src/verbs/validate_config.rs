@@ -1,5 +1,8 @@
 //! `astronomical validate config`: loads one instance's configuration file
-//! in-process and reports the effective values Astronomical will run with.
+//! in-process and reports the effective values Astronomical will run with, including what each
+//! `models` entry does against the models installed now.
+
+mod model_entries;
 
 use std::io;
 use std::net::SocketAddr;
@@ -49,15 +52,29 @@ pub fn run_validate_config(
                 config_file_path: config_file_path.clone(),
                 source,
             })?;
-    let effective_values = effective_values_from_loaded_config(&loaded_config, &config_file_path)?;
+    // Scanning the installed models is its own step, apart from mapping the document's values.
+    let model_entries_check =
+        model_entries::check_model_entries_and_warn(&loaded_config, dependencies.stderr)
+            .map_err(|source| ValidateConfigError::ReportWriteFailed { source })?;
+    let effective_values = effective_values_from_loaded_config(
+        &loaded_config,
+        &config_file_path,
+        model_entries_check,
+    )?;
+    render_report(validate_arguments, &effective_values, dependencies.stdout)
+        .map_err(|source| ValidateConfigError::ReportWriteFailed { source })
+}
+
+fn render_report(
+    validate_arguments: &ValidateConfigArguments,
+    effective_values: &EffectiveConfigurationValues,
+    rendered_output: &mut dyn io::Write,
+) -> io::Result<()> {
     if validate_arguments.render_json {
-        render_json_report(&effective_values, dependencies.stdout)
-            .map_err(|source| ValidateConfigError::ReportWriteFailed { source })?;
+        render_json_report(effective_values, rendered_output)
     } else {
-        render_text_report(&effective_values, dependencies.stdout)
-            .map_err(|source| ValidateConfigError::ReportWriteFailed { source })?;
+        render_text_report(effective_values, rendered_output)
     }
-    Ok(())
 }
 
 fn read_config_file_bytes(config_file_path: &Path) -> Result<Vec<u8>, ValidateConfigError> {
@@ -78,7 +95,9 @@ struct EffectiveConfigurationValues {
     runtime_instance: AstronomicalRuntimeInstance,
     daemon_bind_address: SocketAddr,
     model_directories: Vec<PathBuf>,
-    configured_model_ids: Vec<String>,
+    /// What each `models` entry does against the installed models, or why that could not be
+    /// checked. Validation never fails on this: a missing model is not a configuration error.
+    model_entries_check: model_entries::ModelEntriesCheck,
     persistent_prompt_cache_enabled: bool,
     maximum_mlx_memory_bytes: Option<u64>,
     logging_level: String,
@@ -91,6 +110,7 @@ struct EffectiveConfigurationValues {
 fn effective_values_from_loaded_config(
     loaded_config: &AstronomicalConfig,
     config_file_path: &Path,
+    model_entries_check: model_entries::ModelEntriesCheck,
 ) -> Result<EffectiveConfigurationValues, ValidateConfigError> {
     let daemon_bind_address = loaded_config
         .daemon_bind_address()
@@ -110,11 +130,7 @@ fn effective_values_from_loaded_config(
             .unwrap_or(AstronomicalRuntimeInstance::Development),
         daemon_bind_address,
         model_directories: loaded_config.model_directories().to_vec(),
-        configured_model_ids: loaded_config
-            .configured_model_ids()
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
+        model_entries_check,
         persistent_prompt_cache_enabled: loaded_config.persistent_prompt_cache_enabled(),
         maximum_mlx_memory_bytes,
         logging_level: logging_values.level().as_str().to_owned(),
@@ -150,10 +166,7 @@ fn render_text_report(
     for model_directory in &effective_values.model_directories {
         report_lines.push(format!("  {}", model_directory.display()));
     }
-    report_lines.push(format!(
-        "Configured model ids: {}",
-        rendered_model_id_list(&effective_values.configured_model_ids)
-    ));
+    model_entries::push_text_lines(&effective_values.model_entries_check, &mut report_lines);
     report_lines.push(format!(
         "Persistent prompt cache: {}",
         enabled_word(effective_values.persistent_prompt_cache_enabled)
@@ -197,7 +210,7 @@ fn render_json_report(
             .iter()
             .map(|model_directory| model_directory.display().to_string())
             .collect::<Vec<_>>(),
-        "configured_model_ids": effective_values.configured_model_ids,
+        "model_settings": model_entries::json_document(&effective_values.model_entries_check),
         "persistent_prompt_cache_enabled": effective_values.persistent_prompt_cache_enabled,
         "maximum_mlx_memory_bytes": effective_values.maximum_mlx_memory_bytes,
         "logging": {
@@ -225,14 +238,6 @@ fn runtime_instance_slug(runtime_instance: AstronomicalRuntimeInstance) -> &'sta
 
 fn enabled_word(is_enabled: bool) -> &'static str {
     if is_enabled { "enabled" } else { "disabled" }
-}
-
-fn rendered_model_id_list(configured_model_ids: &[String]) -> String {
-    if configured_model_ids.is_empty() {
-        "none".to_owned()
-    } else {
-        configured_model_ids.join(", ")
-    }
 }
 
 /// Renders a byte count in the gigabyte convention Apple uses to market the

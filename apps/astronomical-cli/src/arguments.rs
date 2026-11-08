@@ -70,7 +70,7 @@ const HELP_TEXT: &str = concat!(
     "  status           Worker state, resident model, default model, active download\n",
     "  doctor           This binary's channel binding plus both channels' daemon liveness\n",
     "  schema object    Build a strict JSON object schema for structured output\n",
-    "  validate config  Report effective values of an instance configuration\n",
+    "  validate config  Report effective values of an instance configuration and what each model setting does\n",
     "  vision inspect   Show whether a model has a vision tower, reading headers only\n",
     "  vision match     Prove whether a tower shares a text model's base, reading a few small\n",
     "                   tensors; MODEL is organization/name[@revision] or a local directory\n",
