@@ -7,7 +7,10 @@ pub(crate) mod image;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -29,7 +32,9 @@ const DEFAULT_WORKER_CANCELLATION_ACKNOWLEDGEMENT_TIMEOUT: Duration = Duration::
 /// How many requests can wait in the queue when one request is already active.
 /// A second request waits in the queue; the (QUEUE_DEPTH + 1)th request is
 /// rejected immediately with CapacityUnavailable.
-const GENERATION_QUEUE_DEPTH: usize = 8;
+pub(crate) const GENERATION_QUEUE_DEPTH: usize = 8;
+/// One generation runs at a time; the worker process serves a single request.
+pub(crate) const ACTIVE_GENERATION_SLOTS: usize = 1;
 
 /// Exposes the generation queue depth constant for tests and configuration.
 pub struct GenerationQueueDepth;
@@ -61,6 +66,10 @@ pub struct WorkerHandle {
     pub(super) generation_queue_permits: Arc<Semaphore>,
     pub(super) command_sender: Option<mpsc::Sender<WorkerLoopCommand>>,
     pub(super) health_snapshot: Arc<RwLock<WorkerHealthSnapshot>>,
+    /// Live `runtime.idle_model_unload_seconds`, shared with the worker loop.
+    /// Zero until the daemon applies its configuration, so a handle launched
+    /// outside the daemon never unloads a model on its own.
+    pub(super) idle_model_unload_seconds: Arc<AtomicU64>,
 }
 
 /// Everything a launch needs beyond the worker executable path: the two
@@ -83,9 +92,10 @@ impl WorkerHandle {
     #[must_use]
     pub fn unavailable() -> Self {
         Self {
-            active_generation_permits: Arc::new(Semaphore::new(1)),
+            active_generation_permits: Arc::new(Semaphore::new(ACTIVE_GENERATION_SLOTS)),
             generation_queue_permits: Arc::new(Semaphore::new(GENERATION_QUEUE_DEPTH)),
             command_sender: None,
+            idle_model_unload_seconds: Arc::new(AtomicU64::new(0)),
             health_snapshot: Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
                 WorkerHealthStatus::Unavailable,
             ))),
@@ -239,8 +249,9 @@ impl WorkerHandle {
         let health_snapshot = Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
             WorkerHealthStatus::Loading,
         )));
-        let active_generation_permits = Arc::new(Semaphore::new(1));
+        let active_generation_permits = Arc::new(Semaphore::new(ACTIVE_GENERATION_SLOTS));
         let generation_queue_permits = Arc::new(Semaphore::new(GENERATION_QUEUE_DEPTH));
+        let idle_model_unload_seconds = Arc::new(AtomicU64::new(0));
 
         tokio::spawn(worker::run_worker(
             worker_process,
@@ -254,6 +265,7 @@ impl WorkerHandle {
             model_policy_catalog,
             Arc::clone(&active_generation_permits),
             Arc::clone(&generation_queue_permits),
+            Arc::clone(&idle_model_unload_seconds),
         ));
 
         Ok(Self {
@@ -261,7 +273,15 @@ impl WorkerHandle {
             generation_queue_permits,
             command_sender: Some(command_sender),
             health_snapshot,
+            idle_model_unload_seconds,
         })
+    }
+
+    /// Sets how long a loaded model may stay unused before the worker loop
+    /// unloads it; zero keeps it loaded. Takes effect on the next idle check.
+    pub fn set_idle_model_unload_seconds(&self, idle_model_unload_seconds: u64) {
+        self.idle_model_unload_seconds
+            .store(idle_model_unload_seconds, Ordering::Relaxed);
     }
 
     /// Shuts down and reaps the owned inference worker process.

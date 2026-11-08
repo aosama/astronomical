@@ -1,31 +1,31 @@
-// Focused Library rendering behavior tests keep the Observatory suite bounded.
+// Focused Download Models rendering behavior tests keep the Observatory suite bounded.
 
 const {
     ASYNC_TEST_OPTIONS,
     assert,
-    createLibraryContext,
-    createLibraryDocument,
-    createLibraryElement,
+    createDownloadModelsContext,
+    createDownloadModelsDocument,
+    createDownloadModelsElement,
     findRenderedElement,
     findRenderedElementsByClass,
     renderedTexts,
     test,
     validCatalogEntry,
     vm
-} = require("./library-test-support.js");
+} = require("./download-models-test-support.js");
 
 // The hero, filter bar, and model cards live on More models, which is no longer
 // the default page; tests that inspect them select it first, as a person would.
 function showMoreModelsTab(scriptContext) {
-    vm.runInContext('libraryActiveTab = "more-models"', scriptContext);
+    vm.runInContext('downloadModelsActiveTab = "more-models"', scriptContext);
 }
 
-// Renders the catalog the way loadLibraryCatalog does and wires the
+// Renders the catalog the way loadDownloadModelsCatalog does and wires the
 // controls, so a test can pretend a browser is ready for the user to type.
 function createTypingSession() {
-    const scriptContext = createLibraryContext();
-    const libraryDocument = createLibraryDocument();
-    scriptContext.document = libraryDocument;
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
     showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
         schema_version: 3,
@@ -41,29 +41,29 @@ function createTypingSession() {
 
     assert.equal(
         vm.runInContext(
-            "renderLibraryCatalogDocument(catalogDocument)",
+            "renderDownloadModelsCatalogDocument(catalogDocument)",
             scriptContext
         ),
         "ready"
     );
-    // Simulate what loadLibraryCatalog does — it is the only code path that
-    // assigns libraryCatalogDocument in production.
-    vm.runInContext("libraryCatalogDocument = catalogDocument", scriptContext);
+    // Simulate what loadDownloadModelsCatalog does — it is the only code path that
+    // assigns downloadModelsCatalogDocument in production.
+    vm.runInContext("downloadModelsCatalogDocument = catalogDocument", scriptContext);
     // A real browser wires the handlers one tick after the first render,
     // well before the user types the first character.
-    vm.runInContext("wireLibraryControls()", scriptContext);
+    vm.runInContext("wireDownloadModelsControls()", scriptContext);
 
     const currentSearchInput = () => findRenderedElement(
-        libraryDocument.catalogContainer,
-        (element) => element.id === "library-search"
+        downloadModelsDocument.catalogContainer,
+        (element) => element.id === "download-models-search"
     );
-    return { libraryDocument, currentSearchInput };
+    return { downloadModelsDocument, currentSearchInput };
 }
 
 test("shows where new downloads are saved in the hero summary", () => {
-    const scriptContext = createLibraryContext();
-    const libraryDocument = createLibraryDocument();
-    scriptContext.document = libraryDocument;
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
     showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
         schema_version: 3,
@@ -73,18 +73,18 @@ test("shows where new downloads are saved in the hero summary", () => {
 
     assert.equal(
         vm.runInContext(
-            "renderLibraryCatalogDocument(catalogDocument)",
+            "renderDownloadModelsCatalogDocument(catalogDocument)",
             scriptContext
         ),
         "ready"
     );
 
     const heroSummary = findRenderedElement(
-        libraryDocument.catalogContainer,
-        (renderedElement) => renderedElement.className === "library-hero-summary"
+        downloadModelsDocument.catalogContainer,
+        (renderedElement) => renderedElement.className === "download-models-hero-summary"
     );
     const locationNote = heroSummary.children.find(
-        (element) => element.className === "library-hero-location"
+        (element) => element.className === "download-models-hero-location"
     );
     assert.ok(locationNote, "the hero should surface the download directory");
     assert.equal(
@@ -94,9 +94,9 @@ test("shows where new downloads are saved in the hero summary", () => {
 });
 
 test("omits the hero download location when the catalog ships none", () => {
-    const scriptContext = createLibraryContext();
-    const libraryDocument = createLibraryDocument();
-    scriptContext.document = libraryDocument;
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
     showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
         schema_version: 3,
@@ -105,19 +105,19 @@ test("omits the hero download location when the catalog ships none", () => {
 
     assert.equal(
         vm.runInContext(
-            "renderLibraryCatalogDocument(catalogDocument)",
+            "renderDownloadModelsCatalogDocument(catalogDocument)",
             scriptContext
         ),
         "ready"
     );
 
     const heroSummary = findRenderedElement(
-        libraryDocument.catalogContainer,
-        (renderedElement) => renderedElement.className === "library-hero-summary"
+        downloadModelsDocument.catalogContainer,
+        (renderedElement) => renderedElement.className === "download-models-hero-summary"
     );
     assert.equal(
         heroSummary.children.some(
-            (element) => element.className === "library-hero-location"
+            (element) => element.className === "download-models-hero-location"
         ),
         false,
         "no location line should render without a catalog directory"
@@ -125,32 +125,32 @@ test("omits the hero download location when the catalog ships none", () => {
 });
 
 test("keeps the search input focused, valued, and caret-set while typing", () => {
-    const { libraryDocument, currentSearchInput } = createTypingSession();
+    const { downloadModelsDocument, currentSearchInput } = createTypingSession();
     // The user clicks into the field and types — the exact flow the issue
     // report describes losing.
     const originalSearchInput = currentSearchInput();
-    libraryDocument.activeElement = originalSearchInput;
+    downloadModelsDocument.activeElement = originalSearchInput;
     originalSearchInput.value = "qwen";
     originalSearchInput.dispatch("input");
 
     const rebuiltSearchInput = currentSearchInput();
-    assert.equal(rebuiltSearchInput.id, "library-search");
-    assert.equal(libraryDocument.activeElement, rebuiltSearchInput);
-    assert.equal(libraryDocument.lastFocusOptions.preventScroll, true);
+    assert.equal(rebuiltSearchInput.id, "download-models-search");
+    assert.equal(downloadModelsDocument.activeElement, rebuiltSearchInput);
+    assert.equal(downloadModelsDocument.lastFocusOptions.preventScroll, true);
     assert.equal(rebuiltSearchInput.value, "qwen");
     assert.deepEqual(rebuiltSearchInput.selectionRange, [4, 4]);
     // The catalog list now shows only the matching rows.
     const catalogList = findRenderedElement(
-        libraryDocument.catalogContainer,
-        (renderedElement) => renderedElement.className === "library-catalog-list"
+        downloadModelsDocument.catalogContainer,
+        (renderedElement) => renderedElement.className === "download-models-catalog-list"
     );
     assert.equal(catalogList.children.length, 1);
 });
 
 test("restores the caret where the user placed it when typing mid-query", () => {
-    const { libraryDocument, currentSearchInput } = createTypingSession();
+    const { downloadModelsDocument, currentSearchInput } = createTypingSession();
     const originalSearchInput = currentSearchInput();
-    libraryDocument.activeElement = originalSearchInput;
+    downloadModelsDocument.activeElement = originalSearchInput;
     // A click between characters leaves the caret there, and the browser
     // reports that position on the input event after a key press.
     originalSearchInput.value = "qwen3-max";
@@ -163,24 +163,24 @@ test("restores the caret where the user placed it when typing mid-query", () => 
 });
 
 test("renders an empty catalog through the bounded empty state", () => {
-    const scriptContext = createLibraryContext();
-    const libraryDocument = createLibraryDocument();
-    scriptContext.document = libraryDocument;
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
     scriptContext.catalogDocument = { schema_version: 3, entries: [] };
 
     const renderedState = vm.runInContext(
-        "renderLibraryCatalogDocument(catalogDocument)",
+        "renderDownloadModelsCatalogDocument(catalogDocument)",
         scriptContext
     );
 
     assert.equal(renderedState, "empty");
-    assert.equal(libraryDocument.catalogContainer.dataset.libraryState, "empty");
-    assert.equal(libraryDocument.catalogContainer.children.length, 1);
-    assert.equal(libraryDocument.catalogContainer.children[0].attributes.role, "status");
+    assert.equal(downloadModelsDocument.catalogContainer.dataset.downloadModelsState, "empty");
+    assert.equal(downloadModelsDocument.catalogContainer.children.length, 1);
+    assert.equal(downloadModelsDocument.catalogContainer.children[0].attributes.role, "status");
 });
 
 test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
-    const scriptContext = createLibraryContext();
+    const scriptContext = createDownloadModelsContext();
     scriptContext.catalogDocument = {
         schema_version: 3,
         entries: [
@@ -195,7 +195,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
     };
 
     const catalogRows = vm.runInContext(
-        "libraryCatalogRowsFromDocument(catalogDocument)",
+        "downloadModelsCatalogRowsFromDocument(catalogDocument)",
         scriptContext
     );
 
@@ -209,7 +209,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             readyOnThisMac: false,
             destinationDirectory: null,
             downloadState: null,
-            description: "A test model for exercising Library rendering.",
+            description: "A test model for exercising Download Models rendering.",
             quantizationLabel: "6-bit affine (group 64)",
             upstreamLicense: "MIT",
             requestableModelId: null,
@@ -217,6 +217,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             role: "chat",
             getStarted: false,
             experimental: false,
+            retiring: false,
             minimumMemoryBytes: null,
             supportsReasoning: true,
             supportsVision: false,
@@ -235,7 +236,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             readyOnThisMac: false,
             destinationDirectory: null,
             downloadState: null,
-            description: "A test model for exercising Library rendering.",
+            description: "A test model for exercising Download Models rendering.",
             quantizationLabel: "6-bit affine (group 64)",
             upstreamLicense: "MIT",
             requestableModelId: null,
@@ -243,6 +244,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             role: "chat",
             getStarted: false,
             experimental: false,
+            retiring: false,
             minimumMemoryBytes: null,
             supportsReasoning: true,
             supportsVision: false,
@@ -256,8 +258,8 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
 });
 
 test("presents progress and only the controls valid for each durable download state", () => {
-    const scriptContext = createLibraryContext();
-    scriptContext.document = createLibraryDocument();
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.document = createDownloadModelsDocument();
     scriptContext.catalogRow = {
         huggingfaceId: "astronomical-test/example-qwen",
         displayName: "Example model",
@@ -267,7 +269,7 @@ test("presents progress and only the controls valid for each durable download st
         downloadState: "downloading"
     };
     vm.runInContext(
-        `libraryCurrentDownload = {
+        `downloadModelsCurrentDownload = {
             state: "downloading",
             huggingface_id: "astronomical-test/example-qwen",
             bytes_completed: 7_500_000_000,
@@ -277,28 +279,28 @@ test("presents progress and only the controls valid for each durable download st
     );
 
     assert.equal(
-        vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
+        vm.runInContext("downloadModelsStateTitle(catalogRow)", scriptContext),
         "Downloading 25% · 6.98 GB of 27.94 GB"
     );
     assert.deepEqual(
         JSON.parse(JSON.stringify(vm.runInContext(
-            "libraryActionButtons(catalogRow).map(button => button.textContent)",
+            "downloadModelsActionButtons(catalogRow).map(button => button.textContent)",
             scriptContext
         ))),
         ["Pause", "Cancel"]
     );
-    assert.equal(vm.runInContext("formatLibraryRate(27_500_000)", scriptContext), "27.5 MB/s");
+    assert.equal(vm.runInContext("formatDownloadModelsRate(27_500_000)", scriptContext), "27.5 MB/s");
     assert.equal(
-        vm.runInContext("smoothLibraryTransferRate(20_000_000, 4_000_000)", scriptContext),
+        vm.runInContext("smoothDownloadModelsTransferRate(20_000_000, 4_000_000)", scriptContext),
         16_000_000
     );
     assert.equal(
-        vm.runInContext("formatLibraryRemainingTime(16 * 60)", scriptContext),
+        vm.runInContext("formatDownloadModelsRemainingTime(16 * 60)", scriptContext),
         "About 16 minutes left"
     );
 
     vm.runInContext(
-        `libraryCurrentDownload = {
+        `downloadModelsCurrentDownload = {
             state: "publishing",
             huggingface_id: "astronomical-test/example-qwen",
             bytes_completed: 30_000_000_000,
@@ -307,19 +309,19 @@ test("presents progress and only the controls valid for each durable download st
         scriptContext
     );
     assert.equal(
-        vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
-        "Download complete. Adding it to Library…"
+        vm.runInContext("downloadModelsStateTitle(catalogRow)", scriptContext),
+        "Download complete. Adding it to your models…"
     );
     assert.deepEqual(
         JSON.parse(JSON.stringify(vm.runInContext(
-            "libraryActionButtons(catalogRow).map(button => button.textContent)",
+            "downloadModelsActionButtons(catalogRow).map(button => button.textContent)",
             scriptContext
         ))),
         []
     );
 
     vm.runInContext(
-        `libraryCurrentDownload = {
+        `downloadModelsCurrentDownload = {
             state: "failed",
             huggingface_id: "astronomical-test/example-qwen",
             error_code: "checksum_mismatch"
@@ -327,19 +329,19 @@ test("presents progress and only the controls valid for each durable download st
         scriptContext
     );
     assert.equal(
-        vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
+        vm.runInContext("downloadModelsStateTitle(catalogRow)", scriptContext),
         "Downloaded files did not pass verification"
     );
     assert.deepEqual(
         JSON.parse(JSON.stringify(vm.runInContext(
-            "libraryActionButtons(catalogRow).map(button => button.textContent)",
+            "downloadModelsActionButtons(catalogRow).map(button => button.textContent)",
             scriptContext
         ))),
         ["Resume", "Cancel"]
     );
 
     vm.runInContext(
-        `libraryCurrentDownload = {
+        `downloadModelsCurrentDownload = {
             state: "failed",
             huggingface_id: "astronomical-test/example-qwen",
             error_code: "model_already_present"
@@ -348,20 +350,20 @@ test("presents progress and only the controls valid for each durable download st
     );
     assert.deepEqual(
         JSON.parse(JSON.stringify(vm.runInContext(
-            "libraryActionButtons(catalogRow).map(button => button.textContent)",
+            "downloadModelsActionButtons(catalogRow).map(button => button.textContent)",
             scriptContext
         ))),
         ["Cancel"]
     );
     assert.match(
-        vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
+        vm.runInContext("downloadModelsStateTitle(catalogRow)", scriptContext),
         /move it elsewhere/i
     );
 });
 
 test("should not show another model's download state or controls on a row", () => {
-    const scriptContext = createLibraryContext();
-    scriptContext.document = createLibraryDocument();
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.document = createDownloadModelsDocument();
     scriptContext.catalogRow = {
         huggingfaceId: "astronomical-test/example-qwen",
         displayName: "Example model",
@@ -371,17 +373,17 @@ test("should not show another model's download state or controls on a row", () =
         downloadState: "failed"
     };
     const rowButtonLabels = () => JSON.parse(JSON.stringify(vm.runInContext(
-        "libraryActionButtons(catalogRow).map(button => button.textContent)",
+        "downloadModelsActionButtons(catalogRow).map(button => button.textContent)",
         scriptContext
     )));
 
     // Before the first status poll, the catalog's own copy is all there is.
-    assert.equal(vm.runInContext("libraryRowDownloadState(catalogRow)", scriptContext), "failed");
+    assert.equal(vm.runInContext("downloadModelsRowDownloadState(catalogRow)", scriptContext), "failed");
     assert.deepEqual(rowButtonLabels(), ["Resume", "Cancel"]);
 
     // The failed download was replaced by another model's: this row's copy is stale.
     vm.runInContext(
-        `libraryCurrentDownload = {
+        `downloadModelsCurrentDownload = {
             state: "downloading",
             huggingface_id: "astronomical-test/other-qwen",
             bytes_completed: 1_000,
@@ -390,18 +392,18 @@ test("should not show another model's download state or controls on a row", () =
         scriptContext
     );
     assert.equal(
-        vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
+        vm.runInContext("downloadModelsStateTitle(catalogRow)", scriptContext),
         "Available to download"
     );
     assert.deepEqual(rowButtonLabels(), ["Download"]);
     assert.equal(
-        vm.runInContext("libraryActionButtons(catalogRow)[0].disabled", scriptContext),
+        vm.runInContext("downloadModelsActionButtons(catalogRow)[0].disabled", scriptContext),
         true
     );
 
-    // Once the other model's download has failed, it no longer holds the Library.
+    // Once the other model's download has failed, it no longer holds the download slot.
     vm.runInContext(
-        `libraryCurrentDownload = {
+        `downloadModelsCurrentDownload = {
             state: "failed",
             huggingface_id: "astronomical-test/other-qwen",
             error_code: "checksum_mismatch"
@@ -410,38 +412,38 @@ test("should not show another model's download state or controls on a row", () =
     );
     assert.deepEqual(rowButtonLabels(), ["Download"]);
     assert.equal(
-        vm.runInContext("libraryActionButtons(catalogRow)[0].disabled", scriptContext),
+        vm.runInContext("downloadModelsActionButtons(catalogRow)[0].disabled", scriptContext),
         false
     );
-    vm.runInContext(`libraryCurrentDownload = { state: "paused", huggingface_id: "astronomical-test/other-qwen" }`, scriptContext);
+    vm.runInContext(`downloadModelsCurrentDownload = { state: "paused", huggingface_id: "astronomical-test/other-qwen" }`, scriptContext);
     assert.equal(
-        vm.runInContext("libraryActionButtons(catalogRow)[0].disabled", scriptContext),
+        vm.runInContext("downloadModelsActionButtons(catalogRow)[0].disabled", scriptContext),
         true
     );
 });
 
 test("accepts the largest catalog size that JavaScript can represent exactly", () => {
-    const scriptContext = createLibraryContext();
+    const scriptContext = createDownloadModelsContext();
     scriptContext.catalogEntry = validCatalogEntry({
         display_name: "Largest exact size",
         approximate_size_bytes: Number.MAX_SAFE_INTEGER
     });
 
     assert.equal(
-        vm.runInContext("isRenderableLibraryCatalogEntry(catalogEntry)", scriptContext),
+        vm.runInContext("isRenderableDownloadModelsCatalogEntry(catalogEntry)", scriptContext),
         true
     );
     scriptContext.catalogEntry.approximate_size_bytes = Number.MAX_SAFE_INTEGER + 1;
     assert.equal(
-        vm.runInContext("isRenderableLibraryCatalogEntry(catalogEntry)", scriptContext),
+        vm.runInContext("isRenderableDownloadModelsCatalogEntry(catalogEntry)", scriptContext),
         false
     );
 });
 
 test("renders catalog entries with safe document operations and an explicit download action", () => {
-    const scriptContext = createLibraryContext();
-    const libraryDocument = createLibraryDocument();
-    scriptContext.document = libraryDocument;
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
     showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
         schema_version: 3,
@@ -454,12 +456,12 @@ test("renders catalog entries with safe document operations and an explicit down
     };
 
     const renderedState = vm.runInContext(
-        "renderLibraryCatalogDocument(catalogDocument)",
+        "renderDownloadModelsCatalogDocument(catalogDocument)",
         scriptContext
     );
     const renderedTags = [];
     let renderedHeading = null;
-    const pendingElements = [...libraryDocument.catalogContainer.children];
+    const pendingElements = [...downloadModelsDocument.catalogContainer.children];
     while (pendingElements.length > 0) {
         const renderedElement = pendingElements.shift();
         renderedTags.push(renderedElement.tagName);
@@ -469,7 +471,7 @@ test("renders catalog entries with safe document operations and an explicit down
     }
 
     assert.equal(renderedState, "ready");
-    assert.equal(libraryDocument.catalogStatus.textContent, "Model catalog loaded.");
+    assert.equal(downloadModelsDocument.catalogStatus.textContent, "Model catalog loaded.");
     assert.equal(renderedTags.includes("BUTTON"), true);
     // The filter bar uses a search input; no raw text inputs or anchors appear.
     assert.equal(renderedTags.includes("A"), false);
@@ -480,9 +482,9 @@ test("renders catalog entries with safe document operations and an explicit down
 });
 
 test("renders daemon-authored catalog families without a client allowlist", () => {
-    const scriptContext = createLibraryContext();
-    const libraryDocument = createLibraryDocument();
-    scriptContext.document = libraryDocument;
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
     showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
         schema_version: 3,
@@ -500,11 +502,11 @@ test("renders daemon-authored catalog families without a client allowlist", () =
     };
 
     const renderedState = vm.runInContext(
-        "renderLibraryCatalogDocument(catalogDocument)",
+        "renderDownloadModelsCatalogDocument(catalogDocument)",
         scriptContext
     );
     const catalogRows = vm.runInContext(
-        "libraryCatalogRowsFromDocument(catalogDocument)",
+        "downloadModelsCatalogRowsFromDocument(catalogDocument)",
         scriptContext
     );
 
@@ -514,8 +516,8 @@ test("renders daemon-authored catalog families without a client allowlist", () =
         ["qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
     );
     const filterBar = findRenderedElement(
-        libraryDocument.catalogContainer,
-        (renderedElement) => renderedElement.className === "library-filter-bar"
+        downloadModelsDocument.catalogContainer,
+        (renderedElement) => renderedElement.className === "download-models-filter-bar"
     );
     const familyFilter = filterBar.children[2];
     assert.deepEqual(
@@ -525,9 +527,9 @@ test("renders daemon-authored catalog families without a client allowlist", () =
 });
 
 test("surfaces ModernBERT embedding entries with their family and capability badge", () => {
-    const scriptContext = createLibraryContext();
-    const libraryDocument = createLibraryDocument();
-    scriptContext.document = libraryDocument;
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
     showMoreModelsTab(scriptContext);
     scriptContext.catalogDocument = {
         schema_version: 3,
@@ -541,17 +543,17 @@ test("surfaces ModernBERT embedding entries with their family and capability bad
     };
 
     const renderedState = vm.runInContext(
-        "renderLibraryCatalogDocument(catalogDocument)",
+        "renderDownloadModelsCatalogDocument(catalogDocument)",
         scriptContext
     );
     const catalogRows = vm.runInContext(
-        "libraryCatalogRowsFromDocument(catalogDocument)",
+        "downloadModelsCatalogRowsFromDocument(catalogDocument)",
         scriptContext
     );
 
     assert.equal(renderedState, "ready");
     assert.equal(catalogRows[0].supportsEmbeddings, true);
-    const visibleTexts = renderedTexts(libraryDocument.catalogContainer);
+    const visibleTexts = renderedTexts(downloadModelsDocument.catalogContainer);
     assert.equal(
         visibleTexts.some((text) => text.includes("Embeddings")),
         true,
@@ -565,8 +567,8 @@ test("surfaces ModernBERT embedding entries with their family and capability bad
 });
 
 test("does not offer the Thin Talk handoff for a ready image-generation-only model", () => {
-    const scriptContext = createLibraryContext();
-    scriptContext.document = createLibraryDocument();
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.document = createDownloadModelsDocument();
     scriptContext.catalogRow = {
         huggingfaceId: "astronomical-test/example-flux",
         readyOnThisMac: true,
@@ -575,23 +577,67 @@ test("does not offer the Thin Talk handoff for a ready image-generation-only mod
     };
 
     const actionLabels = vm.runInContext(
-        "createLibraryPrimaryActions(catalogRow, false).children.map(button => button.textContent)",
+        "createDownloadModelsPrimaryActions(catalogRow, false).children.map(button => button.textContent)",
         scriptContext
     );
 
     assert.deepEqual(JSON.parse(JSON.stringify(actionLabels)), ["Details"]);
 });
 
-function thinTalkHandoffsFromLibrary(applicationChannel) {
+function primaryActionLabelsFor(catalogRow) {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.document = createDownloadModelsDocument();
+    scriptContext.catalogRow = catalogRow;
+    const actionLabels = vm.runInContext(
+        "createDownloadModelsPrimaryActions(catalogRow, false).children.map(button => button.textContent)",
+        scriptContext
+    );
+    return JSON.parse(JSON.stringify(actionLabels));
+}
+
+test("should_not_offer_the_thin_talk_handoff_for_a_ready_embedding_model", () => {
+    const actionLabels = primaryActionLabelsFor({
+        huggingfaceId: "astronomical-test/example-embedder",
+        readyOnThisMac: true,
+        requestableModelId: "example-embedder",
+        supportsEmbeddings: true
+    });
+
+    assert.deepEqual(actionLabels, ["Details"]);
+});
+
+test("should_offer_the_thin_talk_handoff_for_a_ready_chat_model", () => {
+    const actionLabels = primaryActionLabelsFor({
+        huggingfaceId: "astronomical-test/example-chat",
+        readyOnThisMac: true,
+        requestableModelId: "example-chat",
+        supportsReasoning: true
+    });
+
+    assert.equal(actionLabels[0], "Open in Thin Talk");
+});
+
+test("should_not_offer_the_thin_talk_handoff_for_a_chat_model_not_yet_on_this_mac", () => {
+    const actionLabels = primaryActionLabelsFor({
+        huggingfaceId: "astronomical-test/example-chat",
+        readyOnThisMac: false,
+        requestableModelId: "example-chat",
+        supportsReasoning: true
+    });
+
+    assert.equal(actionLabels.includes("Open in Thin Talk"), false);
+});
+
+function thinTalkHandoffsFromDownloadModels(applicationChannel) {
     const thinTalkHandoffs = [];
-    const scriptContext = createLibraryContext();
-    scriptContext.document = createLibraryDocument();
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.document = createDownloadModelsDocument();
     scriptContext.document.body = { dataset: { applicationChannel } };
     scriptContext.window = {
         location: { assign: (handoffTarget) => thinTalkHandoffs.push(handoffTarget) }
     };
     // console.js owns the channel table and its own tests pin the values; this
-    // stands in for it so these tests prove the library asks for this instance's
+    // stands in for it so these tests prove Download Models asks for this instance's
     // channel rather than naming a link of its own.
     scriptContext.thinTalkChatLink = (requestedChannel) =>
         requestedChannel === "development" ? "development-chat-link" : null;
@@ -602,7 +648,7 @@ function thinTalkHandoffsFromLibrary(applicationChannel) {
     };
 
     const primaryActions = vm.runInContext(
-        "createLibraryPrimaryActions(catalogRow, false)",
+        "createDownloadModelsPrimaryActions(catalogRow, false)",
         scriptContext
     );
     const openInThinTalkButton = primaryActions.children.find(
@@ -621,15 +667,15 @@ function thinTalkHandoffsFromLibrary(applicationChannel) {
 }
 
 test("should_hand_a_ready_model_to_this_channels_thin_talk", () => {
-    assert.deepEqual(thinTalkHandoffsFromLibrary("development"), ["development-chat-link"]);
+    assert.deepEqual(thinTalkHandoffsFromDownloadModels("development"), ["development-chat-link"]);
 });
 
 test("should_not_hand_off_when_this_channel_has_no_thin_talk_link", () => {
-    assert.deepEqual(thinTalkHandoffsFromLibrary("unknown"), []);
+    assert.deepEqual(thinTalkHandoffsFromDownloadModels("unknown"), []);
 });
 
 test("rejects an incomplete entry even when its visible fields are renderable", () => {
-    const scriptContext = createLibraryContext();
+    const scriptContext = createDownloadModelsContext();
     scriptContext.catalogEntry = {
         display_name: "Incomplete model",
         family: "qwen3_5",
@@ -637,7 +683,7 @@ test("rejects an incomplete entry even when its visible fields are renderable", 
     };
 
     assert.equal(
-        vm.runInContext("isRenderableLibraryCatalogEntry(catalogEntry)", scriptContext),
+        vm.runInContext("isRenderableDownloadModelsCatalogEntry(catalogEntry)", scriptContext),
         false
     );
 });

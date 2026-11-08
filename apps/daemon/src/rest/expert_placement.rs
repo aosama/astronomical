@@ -14,6 +14,9 @@ use crate::{ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot};
 
 const APPLE_GIGABYTE_BYTES: f64 = 1_073_741_824.0;
 
+/// What a dense model says instead of a sentence about experts it does not have.
+const DENSE_MODEL_REPLY_SENTENCE: &str = "Dense model, no experts.";
+
 /// Copy budget for the stock label, in characters. The menu's Residency cell
 /// is the tightest place the label appears, and 18 characters leaves margin
 /// there. Layer counts up to 999 stay within it.
@@ -38,7 +41,12 @@ pub(crate) fn expert_placement(
     );
     ExpertPlacementCopy {
         stock_sentence: stock_label,
-        reply_sentence: reply_sentence(ready_model_id, activity, expert_memory_mode),
+        reply_sentence: reply_sentence(
+            ready_model_id,
+            activity,
+            expert_memory_mode,
+            expert_residency,
+        ),
     }
 }
 
@@ -155,6 +163,7 @@ fn reply_sentence(
     ready_model_id: Option<&str>,
     activity: WorkerActivity,
     expert_memory_mode: Option<ExpertMemoryMode>,
+    expert_residency: Option<ExpertResidencySnapshot>,
 ) -> String {
     // A mode left over from a worker that has no ready model must not talk
     // about a reply. There is no library to have read.
@@ -164,10 +173,26 @@ fn reply_sentence(
     let Some(expert_memory_mode) = expert_memory_mode else {
         return String::new();
     };
+    if is_dense_model_residency(expert_residency) {
+        return DENSE_MODEL_REPLY_SENTENCE.to_owned();
+    }
     if reply_is_running(activity) {
         return running_reply_sentence(expert_memory_mode).to_owned();
     }
     idle_reply_sentence(expert_memory_mode).to_owned()
+}
+
+/// The worker builds an expert pager only for a mixture-of-experts model, and
+/// without one it reports no layers, no expert capacity and no expert bytes.
+/// All three must be zero: a capacity of zero alone can also mean a sparse
+/// model whose plans did not name an expert count. Without a measurement the
+/// model's kind is unknown and the mode sentence stands.
+fn is_dense_model_residency(expert_residency: Option<ExpertResidencySnapshot>) -> bool {
+    expert_residency.is_some_and(|measured_residency| {
+        measured_residency.expert_capacity == 0
+            && measured_residency.total_layer_count == 0
+            && measured_residency.complete_expert_payload_byte_count == 0
+    })
 }
 
 fn reply_is_running(activity: WorkerActivity) -> bool {

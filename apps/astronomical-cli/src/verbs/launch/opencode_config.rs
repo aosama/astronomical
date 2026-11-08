@@ -10,14 +10,14 @@ use std::net::SocketAddr;
 
 use serde_json::{Map, json};
 
-use super::chat_models::LibraryChatModel;
+use super::chat_models::InstalledChatModel;
 
 pub const OPENCODE_CONFIG_CONTENT_VARIABLE: &str = "OPENCODE_CONFIG_CONTENT";
 const OPENCODE_PROVIDER_ID: &str = "astronomical";
 
 pub fn opencode_config_content(
     bind_address: SocketAddr,
-    chat_model: &LibraryChatModel,
+    chat_model: &InstalledChatModel,
 ) -> Result<String, serde_json::Error> {
     let openai_base_url = format!("http://{bind_address}/v1");
     let provider_model_id = format!("{OPENCODE_PROVIDER_ID}/{}", chat_model.model_id);

@@ -83,6 +83,7 @@ struct LibraryCatalogEntryResponse {
     role: &'static str,
     get_started: bool,
     experimental: bool,
+    retiring: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     minimum_memory_bytes: Option<u64>,
     public: bool,
@@ -131,6 +132,7 @@ impl LibraryCatalogEntryResponse {
             role: catalog_entry.role().as_str(),
             get_started: catalog_entry.get_started(),
             experimental: catalog_entry.experimental(),
+            retiring: catalog_entry.retiring(),
             minimum_memory_bytes: catalog_entry.minimum_memory_bytes(),
             public: true,
             ready_on_this_mac: projection.ready_on_this_mac,

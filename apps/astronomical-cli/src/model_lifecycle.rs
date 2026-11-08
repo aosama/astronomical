@@ -511,7 +511,7 @@ mod download_progress;
 mod model_lifecycle_tests;
 
 /// The installed model's own ID when the request names it, either exactly or by its full
-/// Hugging Face ID (`organization/model`, as the Library and `models download` print it);
+/// Hugging Face ID (`organization/model`, as Download Models and `models download` print it);
 /// otherwise the request unchanged, so the catalog and unknown-model paths see what was typed.
 pub(crate) fn installed_model_id_for(
     installed_models: &[DaemonListedModel],

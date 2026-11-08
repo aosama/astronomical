@@ -1,4 +1,10 @@
+// Astronomical Observatory Maximum model RAM control, at the top of the
+// Configuration page. It reuses pollStatus and formatGigabytes from console.js
+// and tells the configuration editor about a changed config.json through the
+// "observatory:config-file-written" event rather than calling into it.
+
 const MAXIMUM_MLX_MEMORY_URL = "/v1/config/maximum-mlx-memory";
+const CONFIG_FILE_WRITTEN_EVENT = "observatory:config-file-written";
 const MARKETED_GIGABYTE_BYTES = 1073741824;
 // Mirrors METAL_WORKING_SET_MARGIN_PARTS_PER_THOUSAND in the serving ceiling:
 // the engine plans 2.5% below any wired claim, so the control must too or it
@@ -91,6 +97,14 @@ function renderMemoryLimitControl(statusDocument) {
     noticeElement.hidden = noticeElement.textContent === "";
 }
 
+// Feedback stays inside the control's own panel, next to the button pressed.
+function showMemoryControlFeedback(message, feedbackKind) {
+    const feedbackElement = document.getElementById("maximum-mlx-memory-feedback");
+    feedbackElement.textContent = message;
+    feedbackElement.className = "control-feedback feedback-" + feedbackKind;
+    feedbackElement.hidden = false;
+}
+
 function wireMemoryLimitControl() {
     const input = document.getElementById("maximum-mlx-memory-gb");
     const applyButton = document.getElementById("maximum-mlx-memory-apply");
@@ -105,7 +119,7 @@ function wireMemoryLimitControl() {
         const requestedGigabytes = Number(input.value);
         const bounds = { minimumGigabytes: Number(input.min), maximumGigabytes: Number(input.max) };
         if (!Number.isInteger(requestedGigabytes) || requestedGigabytes < bounds.minimumGigabytes || requestedGigabytes > bounds.maximumGigabytes) {
-            showControlFeedback("Choose a whole GB value within the reported bounds.", "error");
+            showMemoryControlFeedback("Choose a whole GB value within the reported bounds.", "error");
             return;
         }
         await updateMaximumMlxMemory(requestedGigabytes);
@@ -121,11 +135,15 @@ async function updateMaximumMlxMemory(maximumMlxMemoryGigabytes) {
             body: JSON.stringify({ maximum_mlx_memory_gb: maximumMlxMemoryGigabytes })
         });
         const responseDocument = await response.json();
-        if (!response.ok) { showControlFeedback(responseDocument.message || "Memory limit update failed", "error"); return; }
+        // The daemon can write config.json even when it answers with an error (a
+        // refused ceiling keeps the persisted intent), so the editor re-reads the
+        // file after every answered request; a request that never answered skips it.
+        document.dispatchEvent(new CustomEvent(CONFIG_FILE_WRITTEN_EVENT));
+        if (!response.ok) { showMemoryControlFeedback(responseDocument.message || "Memory limit update failed", "error"); return; }
         maximumMlxMemoryEditIsActive = false;
-        showControlFeedback(responseDocument.message || "Memory limit updated", response.status === 202 ? "progress" : "success");
+        showMemoryControlFeedback(responseDocument.message || "Memory limit updated", response.status === 202 ? "progress" : "success");
         await pollStatus();
     } catch (fetchError) {
-        showControlFeedback("Memory limit update failed: " + fetchError.message, "error");
+        showMemoryControlFeedback("Memory limit update failed: " + fetchError.message, "error");
     }
 }

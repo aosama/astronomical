@@ -9,6 +9,7 @@ use super::write_config;
 
 mod chunking;
 mod default_model;
+mod idle_model_unload;
 mod local_api_base_urls;
 mod logging;
 mod maximum_mlx_memory;

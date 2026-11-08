@@ -146,6 +146,10 @@ async fn should_keep_reporting_restart_required_until_server_is_restarted() {
         persistent_prompt_cache_enabled: true,
         configured_persistent_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
+        // These reload tests write config files that omit the span, so the
+        // live fixture holds the default the reload will resolve; any other
+        // value would make every reload report a span change.
+        idle_model_unload_seconds: astronomical_config::DEFAULT_IDLE_MODEL_UNLOAD_SECONDS,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         prompt_cache_config: astronomical_config::PromptCacheConfig::new(

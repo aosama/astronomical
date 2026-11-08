@@ -170,7 +170,7 @@ fn should_render_json_report_for_scripts() {
     }
 }
 
-/// One installed model as a Library download publishes it under `models_root`: the model files
+/// One installed model as a model download publishes it under `models_root`: the model files
 /// plus the provenance file that records its full Hugging Face ID.
 fn install_library_model(models_root: &std::path::Path, provider_model_id: &str) {
     const MODEL_SHARD_BYTES: &[u8] = b"fictional-shard";

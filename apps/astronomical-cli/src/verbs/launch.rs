@@ -105,7 +105,7 @@ pub fn prepare_launch(
 fn session_environment(
     launch_tool_kind: LaunchToolKind,
     chosen_bind_address: SocketAddr,
-    selected_chat_model: &chat_models::LibraryChatModel,
+    selected_chat_model: &chat_models::InstalledChatModel,
 ) -> Result<Vec<(String, String)>, LaunchError> {
     match launch_tool_kind {
         LaunchToolKind::OpenCode => {
@@ -169,7 +169,7 @@ pub enum LaunchError {
     AstronomicalUnavailable,
     #[error("Astronomical is running but did not return a model list.")]
     ModelListUnavailable,
-    #[error("No models in the Library yet. Open Astronomical and download one.")]
+    #[error("No models installed yet. Open Observatory's Download Models page and download one.")]
     NoChatModels,
     #[error("Install OpenCode: curl -fsSL https://opencode.ai/install | bash")]
     OpenCodeMissing,
@@ -179,9 +179,9 @@ pub enum LaunchError {
     ClaudeCodeMissing,
     #[error("Unknown tool {requested_tool}. Supported tools: opencode, codex, claude")]
     UnknownTool { requested_tool: String },
-    #[error("Choose a model with --model; several chat models are in the Library.")]
+    #[error("Choose a model with --model; several chat models are installed.")]
     ModelPickerRequired,
-    #[error("Model {requested_model_id} is not a chat model in the Library.")]
+    #[error("Model {requested_model_id} is not an installed chat model.")]
     RequestedModelMissing { requested_model_id: String },
     #[error("Select a model by number or id.")]
     InvalidModelSelection,

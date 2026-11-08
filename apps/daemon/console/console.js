@@ -5,21 +5,26 @@ const STATUS_URL = "/v1/status";
 const MODELS_URL = "/v1/models";
 const CACHE_STATS_URL = "/v1/cache/stats";
 const SYSTEM_TELEMETRY_URL = "/v1/system/telemetry";
-const CONFIG_RELOAD_URL = "/v1/config/reload";
 const CONFIG_REVEAL_URL = "/v1/config/reveal";
-const SERVER_SHUTDOWN_URL = "/v1/control/shutdown";
 const POLL_INTERVAL_MILLIS = 1000;
 const SPARKLINE_BUFFER_SIZE = 60;
 
 const OBSERVATORY_PATH_MAP = {
     overview: "/overview",
     chat: "/chat",
-    model: "/model",
     experts: "/experts",
-    library: "/library",
+    "download-models": "/download-models",
     connect: "/connect",
-    configuration: "/configuration",
-    settings: "/settings"
+    configuration: "/configuration"
+};
+
+// Retired addresses still open the page that replaced them: the Model page was
+// folded into Overview, the Library page was renamed Download Models, and the
+// Settings page was folded into Configuration.
+const OBSERVATORY_RETIRED_PATH_DESTINATIONS = {
+    "/model": "overview",
+    "/library": "download-models",
+    "/settings": "configuration"
 };
 
 const OBSERVATORY_PATH_TO_DESTINATION_MAP = Object.fromEntries(
@@ -30,13 +35,16 @@ const OBSERVATORY_DEFAULT_DESTINATION = "overview";
 const OBSERVATORY_DEFAULT_PATH = "/overview";
 
 let selectedModelId = null;
-let selectedModelMaximumInputTokens = null;
+// The model the worker reports as loaded (status ready_model_id), or null.
+let loadedModelId = null;
 const sparklineHitRateBuffer = [];
 
 document.addEventListener("DOMContentLoaded", () => {
     console.log("observatory boot");
+    // Navigation runs first: it shows the view for the address (retired ones
+    // included), and the Configuration editor loads only when its view is shown.
     wireObservatoryNavigation();
-    wireLibraryCatalog();
+    wireDownloadModelsCatalog();
     wireConnectMaterial();
     wireExpertObservatory();
     wireConfigurationEditor();
@@ -46,7 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(pollStatus, POLL_INTERVAL_MILLIS);
     setInterval(pollCacheStats, POLL_INTERVAL_MILLIS);
     setInterval(pollModels, POLL_INTERVAL_MILLIS);
-    wireServerControls();
+    wireConfigRevealControl();
     wireMemoryLimitControl();
 });
 
@@ -58,10 +66,11 @@ function wireObservatoryNavigation() {
     const activateCurrentObservatoryPath = () => {
         const currentObservatoryPath = window.location.pathname;
         const matchedDestination = OBSERVATORY_PATH_TO_DESTINATION_MAP[currentObservatoryPath]
+            || OBSERVATORY_RETIRED_PATH_DESTINATIONS[currentObservatoryPath]
             || OBSERVATORY_DEFAULT_DESTINATION;
         activateObservatoryView(matchedDestination, navigationButtons, observatoryViews, false);
         if (!OBSERVATORY_PATH_TO_DESTINATION_MAP[currentObservatoryPath]) {
-            history.replaceState(null, "", OBSERVATORY_DEFAULT_PATH);
+            history.replaceState(null, "", OBSERVATORY_PATH_MAP[matchedDestination] || OBSERVATORY_DEFAULT_PATH);
         }
     };
     navigationButtons.forEach((navigationButton) => {
@@ -109,14 +118,14 @@ async function pollStatus() {
         renderApplicationIdentity(data.application);
         renderStatusHeader(data);
         renderNowStrip(data);
-        renderAboutFromStatus(data);
+        renderLoadedModelFromStatus(data);
         renderCompactMlxMemory(data);
         renderMemoryLimitControl(data);
         renderConfigurationNeuralEngineStatus(data);
         renderNeuralEnginePanel(data);
         renderModelDiscoveryDiagnostic(data.configuration);
         renderSession(data);
-        renderAboutEnhanced(data);
+        renderLoadedModelFootprint(data);
     } catch (fetchError) {
         setStatusUnavailable();
     }
@@ -149,6 +158,9 @@ function renderModelDiscoveryDiagnostic(configurationDocument) {
         || !Array.isArray(diagnostic.configured_root_numbers)) {
         warningElement.hidden = true;
         messageElement.textContent = "";
+        // A reveal failure belongs to the warning it was shown in, not to the next one.
+        const revealFeedback = document.getElementById("model-discovery-reveal-feedback");
+        if (revealFeedback) { revealFeedback.textContent = ""; }
         return;
     }
     const configuredRootNumbers = diagnostic.configured_root_numbers.join(", ");
@@ -187,8 +199,8 @@ function renderApplicationIdentity(applicationIdentity) {
     if (!applicationIdentity) { return; }
     document.getElementById("application-channel").textContent =
         applicationIdentity.channel_display_name || applicationIdentity.channel;
-    document.getElementById("about-instance-note").textContent =
-        `Single-user local console. Served by astronomicald on this machine. Config: ${applicationIdentity.state_directory}/config.json`;
+    document.getElementById("loaded-model-instance-note").textContent =
+        `Single-user local console. Private and served by astronomicald on this Mac. Config: ${applicationIdentity.state_directory}/config.json`;
     document.body.dataset.applicationChannel = applicationIdentity.channel || "unknown";
     renderThinTalkLink(applicationIdentity.channel);
 }
@@ -236,7 +248,9 @@ function renderStatusHeader(data) {
     if (readyModelId) {
         modelIdLabel.textContent = readyModelId;
         selectedModelId = readyModelId;
-    } else if (status !== "ready") {
+    } else {
+        // A ready worker with no model is the normal state after an idle
+        // unload, so the header must stop naming the model it let go.
         modelIdLabel.textContent = "No model loaded";
     }
 }
@@ -261,9 +275,8 @@ async function pollModels() {
         });
         if (selectedModel) {
             selectedModelId = selectedModel.id;
-            selectedModelMaximumInputTokens = Number(selectedModel.max_input_tokens || 0) || null;
-            renderAboutFromModels(selectedModel);
         }
+        renderLoadedModelLimits(models.find((model) => model.id === loadedModelId) || null);
     } catch (fetchError) {
         // Status polling handles the unavailable display; stay quiet here.
     }
@@ -376,11 +389,14 @@ function readExpertPlacement(statusDocument) {
     return expertPlacementCopy(statusDocument);
 }
 
-function renderAboutFromStatus(data) {
-    if (data.ready_model_id) {
-        document.getElementById("about-model-id").textContent = data.ready_model_id;
+function renderLoadedModelFromStatus(data) {
+    loadedModelId = data.ready_model_id || null;
+    document.getElementById("loaded-model-id").textContent = loadedModelId || "No model loaded";
+    const expertMemoryElement = document.getElementById("loaded-model-expert-memory");
+    if (!loadedModelId) {
+        expertMemoryElement.textContent = "—";
+        return;
     }
-    const expertMemoryElement = document.getElementById("about-expert-memory");
     const placement = readExpertPlacement(data);
     if (placement.replySentence) {
         expertMemoryElement.textContent = placement.replySentence;
@@ -390,46 +406,41 @@ function renderAboutFromStatus(data) {
     expertMemoryElement.textContent = expertMemoryPhrase || "—";
 }
 
-function renderAboutFromModels(model) {
-    document.getElementById("about-context-window").textContent =
-        (model.context_window || 0).toLocaleString();
-    document.getElementById("about-max-input").textContent =
-        (model.max_input_tokens || 0).toLocaleString();
-    document.getElementById("about-max-output").textContent =
-        (model.max_output_tokens || 0).toLocaleString();
-    const inputModalities = model.input_modalities || [];
-    const hasImage = inputModalities.indexOf("image") !== -1;
-    document.getElementById("about-modalities").textContent =
-        hasImage ? "Text + Image" : "Text only";
-    const maximumOutputTokens = model.max_output_tokens || 1;
-    const maximumOutputSlider = document.getElementById("sampling-max-tokens");
-    maximumOutputSlider.max = String(maximumOutputTokens);
-    if (parseInt(maximumOutputSlider.value, 10) > maximumOutputTokens) {
-        maximumOutputSlider.value = String(maximumOutputTokens);
-        document.getElementById("sampling-max-tokens-value").textContent =
-            maximumOutputTokens.toLocaleString();
-    }
+// The Loaded model panel describes the model the worker has loaded, never the
+// chat picker's choice: with nothing loaded every fact reads "—" rather than
+// another model's limits.
+function renderLoadedModelLimits(loadedModel) {
+    const formatTokens = (tokenCount) => (loadedModel ? (tokenCount || 0).toLocaleString() : "—");
+    document.getElementById("loaded-model-context-window").textContent = formatTokens(loadedModel?.context_window);
+    document.getElementById("loaded-model-max-input").textContent = formatTokens(loadedModel?.max_input_tokens);
+    document.getElementById("loaded-model-max-output").textContent = formatTokens(loadedModel?.max_output_tokens);
+    const inputModalities = loadedModel?.input_modalities || [];
+    document.getElementById("loaded-model-modalities").textContent = !loadedModel
+        ? "—"
+        : inputModalities.indexOf("image") !== -1 ? "Text + Image" : "Text only";
 }
 
-function renderAboutEnhanced(data) {
+function renderLoadedModelFootprint(data) {
+    const residencyElement = document.getElementById("loaded-model-residency");
+    if (!data.ready_model_id) {
+        // Nothing is loaded, as after an idle unload: clear the last model's
+        // size and residency rather than leave them describing it.
+        document.getElementById("loaded-model-disk-size").textContent = "—";
+        residencyElement.textContent = "Not loaded";
+        return;
+    }
     const readyModelSizeBytes = data.ready_model_size_bytes;
     if (readyModelSizeBytes !== undefined && readyModelSizeBytes !== null) {
-        document.getElementById("about-disk-size").textContent = formatGigabytes(readyModelSizeBytes);
-    } else if (data.ready_model_id) {
-        document.getElementById("about-disk-size").textContent = "Not measured";
+        document.getElementById("loaded-model-disk-size").textContent = formatGigabytes(readyModelSizeBytes);
+    } else {
+        document.getElementById("loaded-model-disk-size").textContent = "Not measured";
     }
-    const residencyElement = document.getElementById("about-residency");
     const placement = readExpertPlacement(data);
     if (placement.stockSentence) {
         residencyElement.textContent = placement.stockSentence;
         return;
     }
-    const residencyPhrase = expertMemoryModePhrase(data.expert_memory_mode);
-    if (residencyPhrase) {
-        residencyElement.textContent = residencyPhrase;
-    } else if (data.status !== "ready") {
-        residencyElement.textContent = "Not loaded";
-    }
+    residencyElement.textContent = expertMemoryModePhrase(data.expert_memory_mode) || "—";
 }
 
 function setMlxSegmentWidth(elementId, byteCount, ceilingBytes) {
@@ -469,79 +480,21 @@ function renderSession(data) {
         boundedReusedCount.toLocaleString() + " reused · " + newTokenCount.toLocaleString() + " new";
 }
 
-function wireServerControls() {
-    const reloadButton = document.getElementById("control-reload");
-    const stopButton = document.getElementById("control-stop");
-    const revealConfigButton = document.getElementById("model-discovery-reveal-config");
-    reloadButton.addEventListener("click", reloadConfig);
-    stopButton.addEventListener("click", stopServer);
-    revealConfigButton.addEventListener("click", revealConfig);
+function wireConfigRevealControl() {
+    document.getElementById("model-discovery-reveal-config").addEventListener("click", revealConfig);
 }
 
+// The failure is shown inside the discovery warning that holds the button, so
+// it appears where the person clicked.
 async function revealConfig() {
+    const revealFeedback = document.getElementById("model-discovery-reveal-feedback");
+    revealFeedback.textContent = "";
     try {
         const response = await fetch(CONFIG_REVEAL_URL, { method: "POST" });
         if (!response.ok) {
-            showControlFeedback("Could not reveal the configuration file", "error");
+            revealFeedback.textContent = "Could not reveal the configuration file.";
         }
     } catch (fetchError) {
-        showControlFeedback("Could not reveal the configuration file", "error");
+        revealFeedback.textContent = "Could not reveal the configuration file.";
     }
-}
-
-async function reloadConfig() {
-    const reloadButton = document.getElementById("control-reload");
-    reloadButton.disabled = true;
-    showControlFeedback("Reloading configuration…", "progress");
-    try {
-        const response = await fetch(CONFIG_RELOAD_URL, { method: "POST" });
-        const responseBody = await response.text();
-        let parsedResponse;
-        try { parsedResponse = JSON.parse(responseBody); } catch (parseError) { parsedResponse = null; }
-        if (response.ok) {
-            if (parsedResponse && parsedResponse.status === "worker_restart_started") {
-                showControlFeedback(parsedResponse.message || "Config reloaded; worker restarting…", "progress");
-            } else if (parsedResponse && (
-                parsedResponse.rest_api_restart_required
-                || parsedResponse.candidate_generation !== parsedResponse.effective_generation
-            )) {
-                showControlFeedback(
-                    (parsedResponse.message || "Config reloaded") +
-                    " — a full server restart is required. Use the menu bar app to restart.",
-                    "progress"
-                );
-            } else {
-                showControlFeedback(parsedResponse ? parsedResponse.message : "Config reloaded", "success");
-            }
-        } else if (response.status === 409) {
-            showControlFeedback("A generation is active; reload aborted. Wait for it to finish.", "error");
-        } else if (parsedResponse && parsedResponse.message) {
-            showControlFeedback(parsedResponse.message, "error");
-        } else {
-            showControlFeedback("Config reload failed (HTTP " + response.status + ")", "error");
-        }
-    } catch (fetchError) {
-        showControlFeedback("Network error: " + fetchError.message, "error");
-    } finally {
-        reloadButton.disabled = false;
-    }
-}
-
-async function stopServer() {
-    const stopButton = document.getElementById("control-stop");
-    stopButton.disabled = true;
-    showControlFeedback("Stopping server… The console will go offline. Restart via the menu bar app or run astronomicald again.", "progress");
-    try {
-        await fetch(SERVER_SHUTDOWN_URL, { method: "POST" });
-    } catch (fetchError) {
-        // The server is shutting down; the fetch may fail. That's expected.
-    }
-    // The status polling will detect the daemon going offline and show "Unavailable".
-}
-
-function showControlFeedback(message, feedbackKind) {
-    const feedbackElement = document.getElementById("control-feedback");
-    feedbackElement.textContent = message;
-    feedbackElement.className = "control-feedback feedback-" + feedbackKind;
-    feedbackElement.hidden = false;
 }

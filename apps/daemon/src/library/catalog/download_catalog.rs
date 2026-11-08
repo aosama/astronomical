@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::library::DownloadPathSelection;
 
 // Version 3 adds per-entry memory footprint and measured streaming floor,
-// catalog role, the Get started pick, and the experimental flag. There are no downstream catalog
+// catalog role, the Get started pick, and the experimental and retiring flags. There are no downstream catalog
 // consumers, so the schema moves forward without compatibility shims.
 const DOWNLOAD_CATALOG_SCHEMA_VERSION: u32 = 3;
 const MAXIMUM_DOWNLOAD_CATALOG_BYTES: usize = 1_000_000;
@@ -42,6 +42,7 @@ pub struct DownloadCatalogEntry {
     role: DownloadCatalogRole,
     get_started: bool,
     experimental: bool,
+    retiring: bool,
     minimum_memory_bytes: Option<u64>,
     description: Option<String>,
     capabilities: DownloadCatalogCapabilities,
@@ -156,7 +157,7 @@ pub enum DownloadCatalogError {
     #[error("download catalog contains a duplicate or case-colliding Hugging Face identity")]
     DuplicateHuggingFaceId,
     #[error(
-        "download catalog entry {entry_index} cannot be the get_started pick: it is experimental or a helper"
+        "download catalog entry {entry_index} cannot be the get_started pick: it is experimental, retiring, or a helper"
     )]
     InvalidGetStartedPick { entry_index: usize },
     #[error("download catalog declares more than one get_started pick for role {role}")]
@@ -188,6 +189,10 @@ struct DownloadCatalogEntryDocument {
     get_started: bool,
     #[serde(default)]
     experimental: bool,
+    /// Marks a model that will leave the catalog in a later release; it stays
+    /// downloadable and installed copies keep working until then.
+    #[serde(default)]
+    retiring: bool,
     minimum_memory_bytes: Option<u64>,
     description: Option<String>,
     capabilities: Option<DownloadCatalogCapabilitiesDocument>,
@@ -320,6 +325,7 @@ fn parse_catalog_entry(
         role: entry_document.role,
         get_started: entry_document.get_started,
         experimental: entry_document.experimental,
+        retiring: entry_document.retiring,
         minimum_memory_bytes: entry_document.minimum_memory_bytes,
         description,
         capabilities,
@@ -413,8 +419,8 @@ fn validate_entry_memory_footprint(
 }
 
 /// The Get started pick is the single model steered to a first-time user for
-/// a role, so it must be stable (not experimental) and must serve a user-facing
-/// role (helpers run behind the scenes). A role can have only one pick, since
+/// a role, so it must be stable (not experimental), staying in the catalog (not
+/// retiring), and must serve a user-facing role (helpers run behind the scenes). A role can have only one pick, since
 /// two picks would make the Library's recommendation ambiguous.
 fn validate_get_started_pick(
     entry_document: &DownloadCatalogEntryDocument,
@@ -424,7 +430,10 @@ fn validate_get_started_pick(
     if !entry_document.get_started {
         return Ok(());
     }
-    if entry_document.experimental || entry_document.role == DownloadCatalogRole::Helper {
+    if entry_document.experimental
+        || entry_document.retiring
+        || entry_document.role == DownloadCatalogRole::Helper
+    {
         return Err(DownloadCatalogError::InvalidGetStartedPick { entry_index });
     }
     let role_name = entry_document.role.as_str();
@@ -569,6 +578,12 @@ impl DownloadCatalogEntry {
         self.experimental
     }
 
+    /// Whether the model will leave the catalog in a later release.
+    #[must_use]
+    pub const fn retiring(&self) -> bool {
+        self.retiring
+    }
+
     /// The smallest memory ceiling the daemon measured this model running at by
     /// streaming weights from the SSD, or `None` when no streaming floor was
     /// measured and the model must fit in memory whole.
@@ -643,3 +658,7 @@ fn is_valid_hugging_face_component(component: &str) -> bool {
 #[cfg(test)]
 #[path = "download_catalog_parse_tests.rs"]
 mod download_catalog_parse_tests;
+
+#[cfg(test)]
+#[path = "download_catalog_flag_tests.rs"]
+mod download_catalog_flag_tests;

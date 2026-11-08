@@ -38,7 +38,7 @@ final class MaximumMlxMemoryControlPresentationTests: XCTestCase {
     let controlPresentation = MaximumMlxMemoryControlPresentation(
       statusDocument: servedStatusDocument, editableMaximumWholeGigabytes: 34)
 
-    XCTAssertEqual(controlPresentation.reachableMaximumCaption, "Up to 36 GB on this Mac")
+    XCTAssertEqual(controlPresentation.reachableMaximumCaption, "of 36 GB")
     XCTAssertFalse(controlPresentation.shouldOfferApply)
     XCTAssertTrue(controlPresentation.shouldOfferMacMaximum)
     XCTAssertNil(controlPresentation.cappedCeilingCaption)

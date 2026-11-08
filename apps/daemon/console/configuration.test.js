@@ -210,3 +210,54 @@ test("should_load_the_page_scripts_before_the_console_script_that_wires_them", (
     assert.ok(shell.indexOf("/configuration.js") < shell.indexOf("/console.js"));
     assert.ok(shell.indexOf("/configuration-model.js") < shell.indexOf("/configuration.js"));
 });
+
+test("should_leave_the_memory_limit_row_to_its_dedicated_live_control", () => {
+    assert.equal(call("hasDedicatedConfigurationControl", descriptorAt(["runtime", "maximum_mlx_memory_gb"])), true);
+});
+
+test("should_keep_a_generic_row_for_settings_without_a_dedicated_control", () => {
+    assert.equal(call("hasDedicatedConfigurationControl", descriptorAt(["runtime", "idle_model_unload_seconds"])), false);
+    assert.equal(call("hasDedicatedConfigurationControl", descriptorAt(["runtime", "model_directories"])), false);
+});
+
+test("should_match_only_the_exact_path_not_a_setting_with_the_same_key_elsewhere", () => {
+    assert.equal(call("hasDedicatedConfigurationControl", { path: ["models", "example", "maximum_mlx_memory_gb"] }), false);
+});
+
+function createEditorContext() {
+    const editorContext = vm.createContext({});
+    vm.runInContext(fs.readFileSync(modelScriptPath, "utf8"), editorContext, { filename: modelScriptPath });
+    const editorScriptPath = path.join(__dirname, "configuration.js");
+    vm.runInContext(fs.readFileSync(editorScriptPath, "utf8"), editorContext, { filename: editorScriptPath });
+    editorContext.editorLoadCount = 0;
+    vm.runInContext("loadConfigurationDocument = () => { editorLoadCount += 1; };", editorContext);
+    return editorContext;
+}
+
+test("should_reload_an_unedited_editor_after_another_control_wrote_the_file", () => {
+    const editorContext = createEditorContext();
+    vm.runInContext(`configurationEditorState.savedDocument = { schema_version: 1 };
+        configurationEditorState.workingDocument = { schema_version: 1 };`, editorContext);
+
+    vm.runInContext("refreshConfigurationDocumentIfUnedited()", editorContext);
+
+    assert.equal(editorContext.editorLoadCount, 1);
+});
+
+test("should_keep_unsaved_edits_when_another_control_wrote_the_file", () => {
+    const editorContext = createEditorContext();
+    vm.runInContext(`configurationEditorState.savedDocument = { schema_version: 1 };
+        configurationEditorState.workingDocument = { schema_version: 1, runtime: { default_model: "edited" } };`, editorContext);
+
+    vm.runInContext("refreshConfigurationDocumentIfUnedited()", editorContext);
+
+    assert.equal(editorContext.editorLoadCount, 0, "the Save conflict check reports the newer file instead");
+});
+
+test("should_load_an_editor_that_was_never_opened_when_another_control_wrote_the_file", () => {
+    const editorContext = createEditorContext();
+
+    vm.runInContext("refreshConfigurationDocumentIfUnedited()", editorContext);
+
+    assert.equal(editorContext.editorLoadCount, 1);
+});

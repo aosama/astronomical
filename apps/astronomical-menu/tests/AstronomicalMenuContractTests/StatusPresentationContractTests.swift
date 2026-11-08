@@ -241,7 +241,6 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertEqual(statusDocument.menuBarTitle, "GEN 27.0 tok/s")
     XCTAssertEqual(statusDocument.phaseTitle, "Generating")
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Size not measured")
-    XCTAssertEqual(statusDocument.replyReadTitle, "This reply is streaming experts from the SSD.")
     XCTAssertEqual(statusDocument.progressTitle, "27 / 512 tokens")
     XCTAssertEqual(statusDocument.elapsedTimeMetricTitle, "Elapsed")
     XCTAssertEqual(statusDocument.elapsedTimeTitle, "1.0 s")
@@ -313,9 +312,9 @@ final class StatusPresentationContractTests: XCTestCase {
     XCTAssertTrue(statusDocument.isActive)
   }
 
-  func test_should_present_the_daemon_sentence_for_a_fully_seated_library() throws {
-    // Seated bytes own the residency row. The daemon sentence is displayed
-    // as published, including when the reply-scoped mode is still hybrid.
+  func test_should_present_the_daemon_label_for_a_fully_seated_library() throws {
+    // Seated bytes own the residency row, and the daemon's label is displayed
+    // as published even when the reply-scoped mode is still hybrid.
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(
@@ -325,10 +324,9 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertEqual(statusDocument.modelFootprintTitle, "40 layers in RAM")
-    XCTAssertEqual(statusDocument.replyReadTitle, "Experts are being served from RAM.")
   }
 
-  func test_should_show_each_hybrid_library_sentence_from_the_daemon() throws {
+  func test_should_show_each_hybrid_library_label_from_the_daemon() throws {
     let partialLibrary = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(
@@ -337,7 +335,6 @@ final class StatusPresentationContractTests: XCTestCase {
         """.utf8)
     )
     XCTAssertEqual(partialLibrary.modelFootprintTitle, "2.00 GB on SSD")
-    XCTAssertEqual(partialLibrary.replyReadTitle, "The last reply read experts from the SSD.")
 
     let coldLibrary = try JSONDecoder().decode(
       DaemonStatusDocument.self,
@@ -347,13 +344,11 @@ final class StatusPresentationContractTests: XCTestCase {
         """.utf8)
     )
     XCTAssertEqual(coldLibrary.modelFootprintTitle, "All on SSD")
-    XCTAssertEqual(coldLibrary.replyReadTitle, "The last reply read experts from the SSD.")
   }
 
   func test_should_follow_unmeasured_bytes_when_paging_has_no_library_size() throws {
     // A mode event can arrive before the next residency sample. The residency
-    // row follows the last measured bytes. Unmeasured paging says so, and the
-    // reply line keeps the request-scoped mode.
+    // row follows the last measured bytes, and unmeasured paging says so.
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
       from: Data(
@@ -363,10 +358,6 @@ final class StatusPresentationContractTests: XCTestCase {
     )
 
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Size not measured")
-    XCTAssertEqual(
-      statusDocument.replyReadTitle,
-      "Experts stream from the SSD when a reply needs them."
-    )
   }
 
   func test_should_label_each_worker_owned_mlx_memory_snapshot_source() throws {

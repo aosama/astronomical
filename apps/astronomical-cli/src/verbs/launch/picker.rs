@@ -5,17 +5,17 @@ use std::io::{BufRead, Write};
 
 use crate::verbs::launch::LaunchError;
 
-use super::chat_models::LibraryChatModel;
+use super::chat_models::InstalledChatModel;
 
 const PREFERRED_LAUNCH_CONTEXT_WINDOW_TOKENS: u32 = 65_536;
 
 pub fn select_chat_model(
-    chat_models: &[LibraryChatModel],
+    chat_models: &[InstalledChatModel],
     requested_model_id: Option<&str>,
     is_interactive: bool,
     stdin: &mut dyn BufRead,
     stderr: &mut dyn Write,
-) -> Result<LibraryChatModel, LaunchError> {
+) -> Result<InstalledChatModel, LaunchError> {
     if chat_models.is_empty() {
         return Err(LaunchError::NoChatModels);
     }
@@ -64,7 +64,7 @@ pub fn select_chat_model(
 
 pub fn warn_if_context_window_is_narrow(
     harness_display_name: &str,
-    chat_model: &LibraryChatModel,
+    chat_model: &InstalledChatModel,
     stderr: &mut dyn Write,
 ) {
     let Some(context_window_tokens) = chat_model.context_window_tokens else {

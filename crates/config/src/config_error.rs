@@ -119,4 +119,10 @@ pub enum AstronomicalConfigError {
     },
     #[error("diagnostics.retained_log_files must be positive")]
     InvalidRetainedLogFileCount,
+    #[error(
+        "runtime.idle_model_unload_seconds must be at most {maximum_idle_model_unload_seconds} (one week); 0 keeps a model loaded"
+    )]
+    IdleModelUnloadSecondsAboveMaximum {
+        maximum_idle_model_unload_seconds: u64,
+    },
 }

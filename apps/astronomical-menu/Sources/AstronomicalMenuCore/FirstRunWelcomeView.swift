@@ -5,12 +5,12 @@ import SwiftUI
 /// sees exactly one next step. The content observes the same live telemetry
 /// store as the popover, so the running claim is truthful rather than a static
 /// splash, and the one call to action follows the popover's existing branch:
-/// Library when no model is discovered, Observatory when one is.
+/// Download Models when no model is discovered, Observatory when one is.
 struct FirstRunWelcomeView: View {
   @ObservedObject var telemetryStore: TelemetryStore
   let applicationIdentity: ApplicationIdentity
   let openObservatory: () -> Void
-  let openLibrary: () -> Void
+  let openDownloadModels: () -> Void
   let restartServer: () -> Void
   let dismissWelcome: () -> Void
 
@@ -101,6 +101,6 @@ struct FirstRunWelcomeView: View {
   }
 
   private var primaryAction: () -> Void {
-    telemetryStore.hasDiscoveredModels ? openObservatory : openLibrary
+    telemetryStore.hasDiscoveredModels ? openObservatory : openDownloadModels
   }
 }

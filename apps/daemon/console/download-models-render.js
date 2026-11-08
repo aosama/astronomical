@@ -1,9 +1,9 @@
-// Astronomical Observatory Library rendering engine.
+// Astronomical Observatory Download Models rendering engine.
 // Owns model card construction, capability badges, download hero, expandable
 // details, hero summary, and filter bar. All catalog values enter the document
 // only through textContent and created elements.
 
-function libraryFamilyLabel(family) {
+function downloadModelsFamilyLabel(family) {
     if (family === "qwen3_5") return "Qwen 3.5";
     if (family === "flux2_klein") return "FLUX.2 Klein";
     if (family === "modernbert") return "ModernBERT";
@@ -12,38 +12,43 @@ function libraryFamilyLabel(family) {
 
 // Plain-language copy for each role. The same wording labels the Get started
 // cards and the More models groups, so a model reads the same on both pages.
-const LIBRARY_ROLE_TITLES = {
+const DOWNLOAD_MODELS_ROLE_TITLES = {
     chat: "Chat",
     coding: "Code",
-    image_generation: "Pictures",
+    image_generation: "Image Generation",
     helper: "Helpers"
 };
-const LIBRARY_ROLE_DESCRIPTIONS = {
+const DOWNLOAD_MODELS_ROLE_DESCRIPTIONS = {
     chat: "Talk, write, and ask about photos.",
     coding: "Help writing, reading, and fixing code.",
     image_generation: "Turn a written description into a picture."
 };
-const LIBRARY_GET_STARTED_ROLES = ["chat", "coding", "image_generation"];
-const LIBRARY_MORE_MODEL_GROUPS = [
-    { key: "chat", title: "Chat", explanation: LIBRARY_ROLE_DESCRIPTIONS.chat },
-    { key: "coding", title: "Code", explanation: LIBRARY_ROLE_DESCRIPTIONS.coding },
-    { key: "image_generation", title: "Pictures", explanation: LIBRARY_ROLE_DESCRIPTIONS.image_generation },
+const DOWNLOAD_MODELS_GET_STARTED_ROLES = ["chat", "coding", "image_generation"];
+const DOWNLOAD_MODELS_MORE_MODEL_GROUPS = [
+    { key: "chat", title: DOWNLOAD_MODELS_ROLE_TITLES.chat, explanation: DOWNLOAD_MODELS_ROLE_DESCRIPTIONS.chat },
+    { key: "coding", title: DOWNLOAD_MODELS_ROLE_TITLES.coding, explanation: DOWNLOAD_MODELS_ROLE_DESCRIPTIONS.coding },
+    { key: "image_generation", title: DOWNLOAD_MODELS_ROLE_TITLES.image_generation, explanation: DOWNLOAD_MODELS_ROLE_DESCRIPTIONS.image_generation },
     {
         key: "helper",
-        title: "Helpers",
+        title: DOWNLOAD_MODELS_ROLE_TITLES.helper,
         explanation: "Background helpers other features use. You don't chat with these."
     },
     {
         key: "experimental",
         title: "Experimental",
         explanation: "Early builds that may be slower or less reliable."
+    },
+    {
+        key: "retiring",
+        title: "Retiring soon",
+        explanation: "These models will leave the catalog in a future release. A copy already on this Mac keeps working."
     }
 ];
-const LIBRARY_TABS = [
+const DOWNLOAD_MODELS_TABS = [
     { name: "get-started", label: "Get started" },
     { name: "more-models", label: "More models" }
 ];
-const LIBRARY_FIT_LABELS = {
+const DOWNLOAD_MODELS_FIT_LABELS = {
     fits: "Runs in memory on this Mac",
     streams: "Streams from your SSD on this Mac (slower)",
     slow: "May be slow on this Mac",
@@ -52,8 +57,10 @@ const LIBRARY_FIT_LABELS = {
 
 // Plain-language size for download decisions: one decimal in 2^30-byte gigabytes,
 // the unit Apple prints on the box, so a teenager can compare two picks at a glance.
-function formatLibraryDownloadSize(approximateSizeBytes) {
-    return (approximateSizeBytes / 1073741824).toFixed(1) + " GB download";
+// Just the number and unit: beside a model name "GB" already reads as its size,
+// and the word "download" added nothing. The tooltip says what the size is.
+function formatDownloadModelsCardSize(approximateSizeBytes) {
+    return (approximateSizeBytes / 1073741824).toFixed(1) + " GB";
 }
 
 // Fit compares the model's fully loaded memory with the serving ceiling, the
@@ -63,7 +70,7 @@ function formatLibraryDownloadSize(approximateSizeBytes) {
 // from the SSD; any other model still runs, with macOS paging the rest, so it is
 // labelled as possibly slow: the Mac's size never stops a model (#1902). Only
 // a maximum the user set themself can hold a model back, and the label names it.
-function libraryFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
+function downloadModelsFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
     if (!(servingCeilingBytes > 0)) return null;
     if (catalogRow.approximateMemoryBytes <= servingCeilingBytes) return "fits";
     const streamingFloorBytes = catalogRow.minimumMemoryBytes;
@@ -73,64 +80,67 @@ function libraryFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit =
     return ceilingIsUserLimit ? "over-your-limit" : "slow";
 }
 
-function libraryFitLabel(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
-    const fitOutcome = libraryFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit);
-    return fitOutcome === null ? null : LIBRARY_FIT_LABELS[fitOutcome];
+function downloadModelsFitLabel(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
+    const fitOutcome = downloadModelsFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit);
+    return fitOutcome === null ? null : DOWNLOAD_MODELS_FIT_LABELS[fitOutcome];
 }
 
-function libraryStarterRowForRole(catalogRows, role) {
+function downloadModelsStarterRowForRole(catalogRows, role) {
     return catalogRows.find(
         (catalogRow) => catalogRow.role === role && catalogRow.getStarted
     ) || null;
 }
 
-// Experimental wins over role so an early build never appears in a stable group.
-function libraryMoreModelsGroupKey(catalogRow) {
+// Retiring wins over everything so a model on its way out is never offered
+// beside the ones replacing it; experimental wins over role so an early build
+// never appears in a stable group.
+function downloadModelsMoreModelsGroupKey(catalogRow) {
+    if (catalogRow.retiring) return "retiring";
     return catalogRow.experimental ? "experimental" : catalogRow.role;
 }
 
-function createLibraryTabPanel(tabName, pageChildren) {
+function createDownloadModelsTabPanel(tabName, pageChildren) {
     const panel = document.createElement("section");
-    panel.id = "library-panel-" + tabName;
-    panel.className = "library-tab-panel";
+    panel.id = "download-models-panel-" + tabName;
+    panel.className = "download-models-tab-panel";
     panel.setAttribute("role", "tabpanel");
-    panel.setAttribute("aria-labelledby", "library-tab-" + tabName);
+    panel.setAttribute("aria-labelledby", "download-models-tab-" + tabName);
     panel.replaceChildren(...pageChildren);
     return panel;
 }
 
-function createLibraryTabBar() {
+function createDownloadModelsTabBar() {
     const tabBar = document.createElement("div");
-    tabBar.className = "library-tab-bar";
+    tabBar.className = "download-models-tab-bar";
     tabBar.setAttribute("role", "tablist");
-    tabBar.setAttribute("aria-label", "Library pages");
-    tabBar.replaceChildren(...LIBRARY_TABS.map(createLibraryTabButton));
+    tabBar.setAttribute("aria-label", "Download Models pages");
+    tabBar.replaceChildren(...DOWNLOAD_MODELS_TABS.map(createDownloadModelsTabButton));
     return tabBar;
 }
 
-function createLibraryTabButton(tabDefinition) {
-    const isSelected = libraryActiveTab === tabDefinition.name;
+function createDownloadModelsTabButton(tabDefinition) {
+    const isSelected = downloadModelsActiveTab === tabDefinition.name;
     const tabButton = document.createElement("button");
-    tabButton.className = isSelected ? "library-tab library-tab-selected" : "library-tab";
+    tabButton.className = isSelected ? "download-models-tab download-models-tab-selected" : "download-models-tab";
     tabButton.type = "button";
-    tabButton.id = "library-tab-" + tabDefinition.name;
+    tabButton.id = "download-models-tab-" + tabDefinition.name;
     tabButton.setAttribute("role", "tab");
     tabButton.setAttribute("aria-selected", String(isSelected));
-    tabButton.setAttribute("aria-controls", "library-panel-" + tabDefinition.name);
+    tabButton.setAttribute("aria-controls", "download-models-panel-" + tabDefinition.name);
     // Roving tabindex: only the selected tab sits in the Tab order, as the ARIA tabs pattern expects.
     tabButton.tabIndex = isSelected ? 0 : -1;
     tabButton.textContent = tabDefinition.label;
-    tabButton.addEventListener("click", () => selectLibraryTab(tabDefinition.name));
-    tabButton.addEventListener("keydown", (keyboardEvent) => handleLibraryTabKeydown(keyboardEvent, tabDefinition.name));
+    tabButton.addEventListener("click", () => selectDownloadModelsTab(tabDefinition.name));
+    tabButton.addEventListener("keydown", (keyboardEvent) => handleDownloadModelsTabKeydown(keyboardEvent, tabDefinition.name));
     return tabButton;
 }
 
 // WAI-ARIA tabs pattern: arrows step through the tabs with wrap-around, and
 // Home and End jump to the ends. Returns the target tab name, or null for keys
 // the tablist does not handle, so those keep their default behavior.
-function libraryTabNameForKey(currentTabName, pressedKey) {
-    const tabCount = LIBRARY_TABS.length;
-    const currentIndex = LIBRARY_TABS.findIndex((tab) => tab.name === currentTabName);
+function downloadModelsTabNameForKey(currentTabName, pressedKey) {
+    const tabCount = DOWNLOAD_MODELS_TABS.length;
+    const currentIndex = DOWNLOAD_MODELS_TABS.findIndex((tab) => tab.name === currentTabName);
     const targetIndexByKey = {
         ArrowRight: (currentIndex + 1) % tabCount,
         ArrowLeft: (currentIndex - 1 + tabCount) % tabCount,
@@ -138,68 +148,68 @@ function libraryTabNameForKey(currentTabName, pressedKey) {
         End: tabCount - 1
     };
     if (!Object.hasOwn(targetIndexByKey, pressedKey)) return null;
-    return LIBRARY_TABS[targetIndexByKey[pressedKey]].name;
+    return DOWNLOAD_MODELS_TABS[targetIndexByKey[pressedKey]].name;
 }
 
 // Keyboard selection uses the same path as a click, so focus follows the newly selected tab.
-function handleLibraryTabKeydown(keyboardEvent, tabName) {
-    const targetTabName = libraryTabNameForKey(tabName, keyboardEvent.key);
+function handleDownloadModelsTabKeydown(keyboardEvent, tabName) {
+    const targetTabName = downloadModelsTabNameForKey(tabName, keyboardEvent.key);
     if (targetTabName === null) return;
     keyboardEvent.preventDefault();
-    selectLibraryTab(targetTabName);
+    selectDownloadModelsTab(targetTabName);
 }
 
-function createLibraryActivePage(catalogRows, catalogDocument) {
-    if (libraryActiveTab === "more-models") {
-        return createLibraryMoreModelsPage(catalogRows, catalogDocument);
+function createDownloadModelsActivePage(catalogRows, catalogDocument) {
+    if (downloadModelsActiveTab === "more-models") {
+        return createDownloadModelsMoreModelsPage(catalogRows, catalogDocument);
     }
-    return createLibraryGetStartedPage(catalogRows);
+    return createDownloadModelsGetStartedPage(catalogRows);
 }
 
-function createLibraryGetStartedPage(catalogRows) {
+function createDownloadModelsGetStartedPage(catalogRows) {
     const intro = document.createElement("p");
-    intro.className = "library-intro";
+    intro.className = "download-models-intro";
     intro.textContent = "Pick what you want to do. Each is one download.";
-    const roleCards = LIBRARY_GET_STARTED_ROLES
-        .map((role) => libraryStarterRowForRole(catalogRows, role))
+    const roleCards = DOWNLOAD_MODELS_GET_STARTED_ROLES
+        .map((role) => downloadModelsStarterRowForRole(catalogRows, role))
         .filter((starterRow) => starterRow !== null)
-        .map(createLibraryRoleCard);
+        .map(createDownloadModelsRoleCard);
     const cardGrid = document.createElement("div");
-    cardGrid.className = "library-role-grid";
+    cardGrid.className = "download-models-role-grid";
     cardGrid.replaceChildren(...roleCards);
-    return createLibraryTabPanel("get-started", [intro, cardGrid]);
+    return createDownloadModelsTabPanel("get-started", [intro, cardGrid]);
 }
 
-function createLibraryRoleCard(catalogRow) {
+function createDownloadModelsRoleCard(catalogRow) {
     const card = document.createElement("article");
     card.className = catalogRow.readyOnThisMac
-        ? "library-role-card library-role-card-ready"
-        : "library-role-card";
+        ? "download-models-role-card download-models-role-card-ready"
+        : "download-models-role-card";
     const cardChildren = [
-        createLibraryRoleHeading(catalogRow),
-        createLibraryRoleFacts(catalogRow)
+        createDownloadModelsRoleHeading(catalogRow),
+        createDownloadModelsRoleFacts(catalogRow)
     ];
-    const progress = createLibraryProgress(catalogRow);
+    const progress = createDownloadModelsProgress(catalogRow);
     if (progress.firstChild) cardChildren.push(progress);
-    const detailText = libraryProgressDetail(catalogRow);
+    const detailText = downloadModelsProgressDetail(catalogRow);
     if (detailText) {
-        cardChildren.push(createLibraryParagraph("library-download-detail", detailText));
+        cardChildren.push(createDownloadModelsParagraph("download-models-download-detail", detailText));
     }
-    cardChildren.push(createLibraryStartActions(catalogRow));
+    cardChildren.push(createDownloadModelsStartActions(catalogRow));
     card.replaceChildren(...cardChildren);
     return card;
 }
 
-function createLibraryRoleHeading(catalogRow) {
+function createDownloadModelsRoleHeading(catalogRow) {
     const heading = document.createElement("div");
-    heading.className = "library-role-heading";
+    heading.className = "download-models-role-heading";
     const roleTitle = document.createElement("h3");
-    roleTitle.className = "library-role-title";
-    roleTitle.textContent = LIBRARY_ROLE_TITLES[catalogRow.role];
+    roleTitle.className = "download-models-role-title";
+    roleTitle.textContent = DOWNLOAD_MODELS_ROLE_TITLES[catalogRow.role];
     heading.appendChild(roleTitle);
     if (catalogRow.readyOnThisMac) {
         const availability = document.createElement("span");
-        availability.className = "library-availability library-availability-ready";
+        availability.className = "download-models-availability download-models-availability-ready";
         availability.textContent = "On this Mac";
         heading.appendChild(availability);
     }
@@ -208,21 +218,21 @@ function createLibraryRoleHeading(catalogRow) {
 
 // Get started shows only plain facts: no Hugging Face id, quantization, context
 // size, or capability badges. Those stay on More models for people who look for them.
-function createLibraryRoleFacts(catalogRow) {
+function createDownloadModelsRoleFacts(catalogRow) {
     const facts = document.createElement("div");
-    facts.className = "library-role-facts";
+    facts.className = "download-models-role-facts";
     const factElements = [
-        createLibraryParagraph("library-role-description", LIBRARY_ROLE_DESCRIPTIONS[catalogRow.role]),
-        createLibraryParagraph("library-role-model", catalogRow.displayName),
-        createLibraryParagraph("library-role-size", formatLibraryDownloadSize(catalogRow.approximateSizeBytes))
+        createDownloadModelsParagraph("download-models-role-description", DOWNLOAD_MODELS_ROLE_DESCRIPTIONS[catalogRow.role]),
+        createDownloadModelsParagraph("download-models-role-model", catalogRow.displayName),
+        createDownloadModelsParagraph("download-models-role-size", formatDownloadModelsCardSize(catalogRow.approximateSizeBytes))
     ];
-    const fitLabel = createLibraryFitLabel(catalogRow);
+    const fitLabel = createDownloadModelsFitLabel(catalogRow);
     if (fitLabel) factElements.push(fitLabel);
     facts.replaceChildren(...factElements);
     return facts;
 }
 
-function createLibraryParagraph(className, text) {
+function createDownloadModelsParagraph(className, text) {
     const paragraph = document.createElement("p");
     paragraph.className = className;
     paragraph.textContent = text;
@@ -230,76 +240,76 @@ function createLibraryParagraph(className, text) {
 }
 
 // The modifier class carries the outcome so CSS can color fits, streams and slow apart.
-function createLibraryFitLabel(catalogRow) {
-    const fitOutcome = libraryFitOutcome(
+function createDownloadModelsFitLabel(catalogRow) {
+    const fitOutcome = downloadModelsFitOutcome(
         catalogRow,
-        libraryServingCeilingBytes,
-        libraryCeilingIsUserLimit
+        downloadModelsServingCeilingBytes,
+        downloadModelsCeilingIsUserLimit
     );
     if (fitOutcome === null) return null;
-    return createLibraryParagraph(
-        "library-fit-label library-fit-" + fitOutcome,
-        LIBRARY_FIT_LABELS[fitOutcome]
+    return createDownloadModelsParagraph(
+        "download-models-fit-label download-models-fit-" + fitOutcome,
+        DOWNLOAD_MODELS_FIT_LABELS[fitOutcome]
     );
 }
 
-function createLibraryStartActions(catalogRow) {
+function createDownloadModelsStartActions(catalogRow) {
     const actions = document.createElement("div");
-    actions.className = "library-primary-actions";
-    if (catalogRow.readyOnThisMac && catalogRow.role !== "image_generation") {
-        actions.appendChild(createLibraryOpenInChatButton());
+    actions.className = "download-models-primary-actions";
+    if (canChatWithCatalogModel(catalogRow)) {
+        actions.appendChild(createDownloadModelsOpenInChatButton());
     }
-    for (const button of libraryActionButtons(catalogRow)) {
+    for (const button of downloadModelsActionButtons(catalogRow)) {
         actions.appendChild(button);
     }
     return actions;
 }
 
-function createLibraryMoreModelsPage(catalogRows, catalogDocument) {
-    const filteredRows = filterLibraryRows(catalogRows);
+function createDownloadModelsMoreModelsPage(catalogRows, catalogDocument) {
+    const filteredRows = filterDownloadModelsRows(catalogRows);
     const catalogList = document.createElement("div");
-    catalogList.className = "library-catalog-list";
+    catalogList.className = "download-models-catalog-list";
     if (filteredRows.length === 0) {
         const noMatches = document.createElement("p");
-        noMatches.className = "library-no-matches";
+        noMatches.className = "download-models-no-matches";
         noMatches.textContent = "No models match the current filter.";
         catalogList.replaceChildren(noMatches);
     } else {
-        catalogList.replaceChildren(...createLibraryGroupSections(filteredRows));
+        catalogList.replaceChildren(...createDownloadModelsGroupSections(filteredRows));
     }
-    return createLibraryTabPanel("more-models", [
-        createLibraryHeroSummary(catalogRows, catalogDocument),
-        createLibraryFilterBar(catalogRows),
+    return createDownloadModelsTabPanel("more-models", [
+        createDownloadModelsHeroSummary(catalogRows, catalogDocument),
+        createDownloadModelsFilterBar(catalogRows),
         catalogList
     ]);
 }
 
-function createLibraryGroupSections(filteredRows) {
-    return LIBRARY_MORE_MODEL_GROUPS
+function createDownloadModelsGroupSections(filteredRows) {
+    return DOWNLOAD_MODELS_MORE_MODEL_GROUPS
         .map((group) => {
             const groupRows = filteredRows.filter(
-                (catalogRow) => libraryMoreModelsGroupKey(catalogRow) === group.key
+                (catalogRow) => downloadModelsMoreModelsGroupKey(catalogRow) === group.key
             );
-            return groupRows.length === 0 ? null : createLibraryGroupSection(group, groupRows);
+            return groupRows.length === 0 ? null : createDownloadModelsGroupSection(group, groupRows);
         })
         .filter((groupSection) => groupSection !== null);
 }
 
-function createLibraryGroupSection(group, groupRows) {
+function createDownloadModelsGroupSection(group, groupRows) {
     const section = document.createElement("section");
-    section.className = "library-group";
+    section.className = "download-models-group";
     const heading = document.createElement("h3");
-    heading.className = "library-group-heading";
+    heading.className = "download-models-group-heading";
     heading.textContent = group.title;
     section.replaceChildren(
         heading,
-        createLibraryParagraph("library-group-explanation", group.explanation),
-        ...groupRows.map((catalogRow) => createLibraryCatalogRow(catalogRow, groupRows))
+        createDownloadModelsParagraph("download-models-group-explanation", group.explanation),
+        ...groupRows.map((catalogRow) => createDownloadModelsCatalogRow(catalogRow, groupRows))
     );
     return section;
 }
 
-function formatLibraryContextTokens(tokenCount) {
+function formatDownloadModelsContextTokens(tokenCount) {
     if (!tokenCount || tokenCount <= 0) return null;
     if (tokenCount >= 1_000_000) {
         return (tokenCount / 1_000_000).toFixed(0) + "M context";
@@ -310,56 +320,56 @@ function formatLibraryContextTokens(tokenCount) {
     return tokenCount + " context";
 }
 
-function createLibraryHeroSummary(catalogRows, catalogDocument) {
+function createDownloadModelsHeroSummary(catalogRows, catalogDocument) {
     const summary = document.createElement("div");
-    summary.className = "library-hero-summary";
+    summary.className = "download-models-hero-summary";
     const readyCount = catalogRows.filter((row) => row.readyOnThisMac).length;
     const downloadableCount = catalogRows.length - readyCount;
     const totalSizeBytes = catalogRows.reduce(
         (total, row) => total + (row.approximateSizeBytes || 0), 0
     );
     const headline = document.createElement("p");
-    headline.className = "library-hero-headline";
+    headline.className = "download-models-hero-headline";
     const readySpan = document.createElement("span");
-    readySpan.className = "library-hero-ready-count";
+    readySpan.className = "download-models-hero-ready-count";
     readySpan.textContent = readyCount + " model" + (readyCount === 1 ? "" : "s") + " on this Mac";
     const downloadSpan = document.createElement("span");
-    downloadSpan.className = "library-hero-downloadable-count";
+    downloadSpan.className = "download-models-hero-downloadable-count";
     downloadSpan.textContent = " · " + downloadableCount + " ready to download";
     headline.replaceChildren(readySpan, downloadSpan);
     summary.appendChild(headline);
     const downloadLocation = catalogDocument?.models_download_directory;
     if (typeof downloadLocation === "string" && downloadLocation.trim().length > 0) {
         const locationNote = document.createElement("p");
-        locationNote.className = "library-hero-location";
+        locationNote.className = "download-models-hero-location";
         locationNote.textContent = "New downloads are saved to " + downloadLocation;
         summary.appendChild(locationNote);
     }
     if (totalSizeBytes > 0 && readyCount > 0) {
         const sizeNote = document.createElement("p");
-        sizeNote.className = "library-hero-size";
-        sizeNote.textContent = formatLibrarySizeGigabytes(totalSizeBytes) + " total across all catalog models";
+        sizeNote.className = "download-models-hero-size";
+        sizeNote.textContent = formatDownloadModelsSizeGigabytes(totalSizeBytes) + " total across all catalog models";
         summary.appendChild(sizeNote);
     }
     return summary;
 }
 
-function createLibraryFilterBar(catalogRows) {
+function createDownloadModelsFilterBar(catalogRows) {
     const bar = document.createElement("div");
-    bar.className = "library-filter-bar";
+    bar.className = "download-models-filter-bar";
     const searchInput = document.createElement("input");
-    searchInput.id = "library-search";
+    searchInput.id = "download-models-search";
     searchInput.type = "search";
     searchInput.placeholder = "Search models";
     // The filter state stores only the normalized lowercase query used for
     // filtering; the input keeps the exact text the user is typing.
-    const previousSearchInput = document.getElementById("library-search");
+    const previousSearchInput = document.getElementById("download-models-search");
     searchInput.value = previousSearchInput
         ? previousSearchInput.value
-        : librarySearchQuery;
+        : downloadModelsSearchQuery;
     searchInput.setAttribute("aria-label", "Search models");
     const readinessFilter = document.createElement("select");
-    readinessFilter.id = "library-readiness-filter";
+    readinessFilter.id = "download-models-readiness-filter";
     readinessFilter.setAttribute("aria-label", "Filter by readiness");
     const readinessAll = document.createElement("option");
     readinessAll.value = "all";
@@ -371,9 +381,9 @@ function createLibraryFilterBar(catalogRows) {
     readinessDownloadable.value = "downloadable";
     readinessDownloadable.textContent = "Downloadable";
     readinessFilter.replaceChildren(readinessAll, readinessReady, readinessDownloadable);
-    readinessFilter.value = libraryReadinessFilter;
+    readinessFilter.value = downloadModelsReadinessFilter;
     const familyFilter = document.createElement("select");
-    familyFilter.id = "library-family-filter";
+    familyFilter.id = "download-models-family-filter";
     familyFilter.setAttribute("aria-label", "Filter by family");
     const familyAll = document.createElement("option");
     familyAll.value = "all";
@@ -383,104 +393,109 @@ function createLibraryFilterBar(catalogRows) {
     for (const catalogFamily of catalogFamilies) {
         const familyOption = document.createElement("option");
         familyOption.value = catalogFamily;
-        familyOption.textContent = libraryFamilyLabel(catalogFamily);
+        familyOption.textContent = downloadModelsFamilyLabel(catalogFamily);
         familyFilter.appendChild(familyOption);
     }
-    familyFilter.value = libraryFamilyFilter;
+    familyFilter.value = downloadModelsFamilyFilter;
     bar.replaceChildren(searchInput, readinessFilter, familyFilter);
     // Wire controls after insertion so the coordinator's listeners attach.
-    setTimeout(wireLibraryControls, 0);
+    setTimeout(wireDownloadModelsControls, 0);
     return bar;
 }
 
-function createLibraryCatalogRow(catalogRow, allRows) {
-    const isExpanded = libraryExpandedModelId === catalogRow.huggingfaceId;
-    const isActiveDownload = libraryCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
+function createDownloadModelsCatalogRow(catalogRow, allRows) {
+    const isExpanded = downloadModelsExpandedModelId === catalogRow.huggingfaceId;
+    const isActiveDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
     const downloadState = isActiveDownload
-        ? libraryCurrentDownload.state
+        ? downloadModelsCurrentDownload.state
         : catalogRow.downloadState;
     const isDownloading = downloadState === "downloading" || downloadState === "paused";
     const row = document.createElement("article");
-    const rowClasses = ["library-model-card"];
-    if (catalogRow.readyOnThisMac) rowClasses.push("library-model-card-ready");
-    if (isDownloading) rowClasses.push("library-model-card-downloading");
-    if (isExpanded) rowClasses.push("library-model-card-expanded");
+    const rowClasses = ["download-models-model-card"];
+    if (catalogRow.readyOnThisMac) rowClasses.push("download-models-model-card-ready");
+    if (isDownloading) rowClasses.push("download-models-model-card-downloading");
+    if (isExpanded) rowClasses.push("download-models-model-card-expanded");
     row.className = rowClasses.join(" ");
 
-    row.appendChild(createLibraryCardHeader(catalogRow));
+    row.appendChild(createDownloadModelsCardHeader(catalogRow));
     if (catalogRow.description) {
         const description = document.createElement("p");
-        description.className = "library-model-description";
+        description.className = "download-models-model-description";
         description.textContent = catalogRow.description;
         row.appendChild(description);
     }
-    row.appendChild(createLibraryCapabilityBadges(catalogRow));
-
-    const progress = createLibraryProgress(catalogRow);
+    const progress = createDownloadModelsProgress(catalogRow);
     if (progress.firstChild) row.appendChild(progress);
-    const detailText = libraryProgressDetail(catalogRow);
+    const detailText = downloadModelsProgressDetail(catalogRow);
     if (detailText) {
         const detail = document.createElement("p");
-        detail.className = "library-download-detail";
+        detail.className = "download-models-download-detail";
         detail.textContent = detailText;
         row.appendChild(detail);
     }
 
-    row.appendChild(createLibraryPrimaryActions(catalogRow, isExpanded));
+    row.appendChild(createDownloadModelsCardFooter(catalogRow, isExpanded));
     if (isExpanded) {
-        row.appendChild(createLibraryDetailsPanel(catalogRow, allRows));
+        row.appendChild(createDownloadModelsDetailsPanel(catalogRow, allRows));
     }
     return row;
 }
 
-function createLibraryCardHeader(catalogRow) {
+function createDownloadModelsCardHeader(catalogRow) {
     const header = document.createElement("header");
-    header.className = "library-model-heading";
+    header.className = "download-models-model-heading";
     const identity = document.createElement("div");
-    identity.className = "library-model-identity";
-    const displayName = document.createElement("h4");
-    displayName.textContent = catalogRow.displayName;
+    identity.className = "download-models-model-identity";
     const providerIdentity = document.createElement("p");
-    providerIdentity.className = "library-model-provider-id";
+    providerIdentity.className = "download-models-model-provider-id";
     providerIdentity.textContent = catalogRow.huggingfaceId;
+    const fitLabel = createDownloadModelsFitLabel(catalogRow);
     identity.replaceChildren(
-        displayName,
+        createDownloadModelsCardTitleLine(catalogRow),
         providerIdentity,
-        createLibraryCardFacts(catalogRow)
+        ...(fitLabel ? [fitLabel] : [])
     );
-    const availability = document.createElement("span");
-    availability.className = catalogRow.readyOnThisMac
-        ? "library-availability library-availability-ready"
-        : isLibraryRowDownloading(catalogRow)
-            ? "library-availability library-availability-downloading"
-            : "library-availability";
-    availability.textContent = catalogRow.readyOnThisMac
-        ? "On this Mac"
-        : isLibraryRowDownloading(catalogRow)
-            ? "Downloading"
-            : "Available";
-    header.replaceChildren(identity, availability);
+    const availability = createDownloadModelsAvailabilityBadge(catalogRow);
+    header.replaceChildren(identity, ...(availability ? [availability] : []));
     return header;
 }
 
-// The size and fit line sit under the title so the decision inputs are visible
-// before the reader reaches the actions.
-function createLibraryCardFacts(catalogRow) {
-    const facts = document.createElement("div");
-    facts.className = "library-model-facts";
-    const sizeLine = createLibraryParagraph(
-        "library-model-size",
-        formatLibraryDownloadSize(catalogRow.approximateSizeBytes)
-    );
-    const fitLabel = createLibraryFitLabel(catalogRow);
-    facts.replaceChildren(sizeLine, ...(fitLabel ? [fitLabel] : []));
-    return facts;
+// A badge only where it tells something: the model is on this Mac, or is on
+// its way. A model that is neither already shows a Download button, so an
+// "Available" badge beside it repeated the button and was dropped.
+function createDownloadModelsAvailabilityBadge(catalogRow) {
+    const isDownloading = isDownloadModelsRowDownloading(catalogRow);
+    if (!catalogRow.readyOnThisMac && !isDownloading) {
+        return null;
+    }
+    const availability = document.createElement("span");
+    availability.className = catalogRow.readyOnThisMac
+        ? "download-models-availability download-models-availability-ready"
+        : "download-models-availability download-models-availability-downloading";
+    availability.textContent = catalogRow.readyOnThisMac ? "On this Mac" : "Downloading";
+    return availability;
 }
 
-function isLibraryRowDownloading(catalogRow) {
-    const isActiveDownload = libraryCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
+// The download size is the first thing someone weighs when picking between two
+// versions of a model, so it sits on the title line in large type, right beside
+// the name, rather than in small print underneath.
+function createDownloadModelsCardTitleLine(catalogRow) {
+    const titleLine = document.createElement("div");
+    titleLine.className = "download-models-model-title-line";
+    const displayName = document.createElement("h4");
+    displayName.textContent = catalogRow.displayName;
+    const downloadSize = document.createElement("span");
+    downloadSize.className = "download-models-model-size";
+    downloadSize.textContent = formatDownloadModelsCardSize(catalogRow.approximateSizeBytes);
+    downloadSize.title = "Download size";
+    titleLine.replaceChildren(displayName, downloadSize);
+    return titleLine;
+}
+
+function isDownloadModelsRowDownloading(catalogRow) {
+    const isActiveDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
     const downloadState = isActiveDownload
-        ? libraryCurrentDownload.state
+        ? downloadModelsCurrentDownload.state
         : catalogRow.downloadState;
     return downloadState === "downloading"
         || downloadState === "paused"
@@ -488,103 +503,40 @@ function isLibraryRowDownloading(catalogRow) {
         || downloadState === "publishing";
 }
 
-function createLibraryCapabilityBadges(catalogRow) {
-    const badgeContainer = document.createElement("div");
-    badgeContainer.className = "library-capability-badges";
-    const badges = [];
-    if (catalogRow.supportsReasoning) badges.push("Reasoning");
-    if (catalogRow.supportsVision) badges.push("Vision");
-    if (catalogRow.supportsToolCalls) badges.push("Tools");
-    if (catalogRow.supportsImageGeneration) badges.push("Image generation");
-    if (catalogRow.supportsEmbeddings) badges.push("Embeddings");
-    const contextLabel = formatLibraryContextTokens(catalogRow.contextWindow);
-    if (contextLabel) badges.push(contextLabel);
-    for (const badgeText of badges) {
-        const badge = document.createElement("span");
-        badge.className = "library-capability-badge";
-        badge.textContent = badgeText;
-        badgeContainer.appendChild(badge);
-    }
-    return badgeContainer;
-}
-
-function createLibraryProgress(catalogRow) {
-    const isActiveDownload = libraryCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
+function createDownloadModelsProgress(catalogRow) {
+    const isActiveDownload = downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
     const downloadState = isActiveDownload
-        ? libraryCurrentDownload.state
+        ? downloadModelsCurrentDownload.state
         : catalogRow.downloadState;
     const track = document.createElement("div");
-    track.className = "library-download-progress";
-    if (!isActiveDownload || !(libraryCurrentDownload.bytes_total > 0)
+    track.className = "download-models-download-progress";
+    if (!isActiveDownload || !(downloadModelsCurrentDownload.bytes_total > 0)
         || !["downloading", "paused", "verifying", "publishing"].includes(downloadState)) {
         return track;
     }
     const percent = downloadState === "publishing" || downloadState === "verifying"
         ? 100
-        : libraryProgressPercent(libraryCurrentDownload);
+        : downloadModelsProgressPercent(downloadModelsCurrentDownload);
     track.setAttribute("role", "progressbar");
     track.setAttribute("aria-valuemin", "0");
     track.setAttribute("aria-valuemax", "100");
     track.setAttribute("aria-valuenow", String(percent));
     const fill = document.createElement("div");
-    fill.className = "library-download-progress-fill";
+    fill.className = "download-models-download-progress-fill";
     fill.style.width = percent + "%";
     track.appendChild(fill);
     return track;
 }
 
-function createLibraryPrimaryActions(catalogRow, isExpanded) {
-    const actions = document.createElement("div");
-    actions.className = "library-primary-actions";
-    if (catalogRow.readyOnThisMac && !catalogRow.supportsImageGeneration) {
-        actions.appendChild(createLibraryOpenInChatButton());
-    }
-    for (const button of libraryActionButtons(catalogRow)) {
-        actions.appendChild(button);
-    }
-    const detailsButton = document.createElement("button");
-    detailsButton.className = "button button-secondary library-details-toggle";
-    detailsButton.type = "button";
-    detailsButton.textContent = isExpanded ? "Hide details" : "Details";
-    detailsButton.setAttribute("aria-expanded", String(isExpanded));
-    detailsButton.addEventListener("click", () => {
-        libraryExpandedModelId = isExpanded
-            ? null
-            : catalogRow.huggingfaceId;
-        renderLibraryCatalogDocument(libraryCatalogDocument);
-    });
-    actions.appendChild(detailsButton);
-    return actions;
-}
-
-function createLibraryOpenInChatButton() {
-    const openInChatButton = document.createElement("button");
-    openInChatButton.className = "button button-primary library-open-in-chat";
-    openInChatButton.type = "button";
-    openInChatButton.textContent = "Open in Thin Talk";
-    openInChatButton.addEventListener("click", openThinTalkFromLibrary);
-    return openInChatButton;
-}
-
-// Thin Talk picks the model inside its own model chooser, so opening the
-// conversation window is all the handoff needs; there is no in-Observatory
-// chat to preselect a model for anymore.
-function openThinTalkFromLibrary() {
-    const chatLink = thinTalkChatLink(document.body.dataset.applicationChannel);
-    if (chatLink) {
-        window.location.assign(chatLink);
-    }
-}
-
-function createLibraryDetailsPanel(catalogRow, allRows) {
+function createDownloadModelsDetailsPanel(catalogRow, allRows) {
     const panel = document.createElement("section");
-    panel.className = "library-model-details";
+    panel.className = "download-models-model-details";
     const heading = document.createElement("p");
-    heading.className = "library-details-heading";
+    heading.className = "download-models-details-heading";
     heading.textContent = "Details";
     panel.appendChild(heading);
     const detailList = document.createElement("dl");
-    detailList.className = "library-detail-list";
+    detailList.className = "download-models-detail-list";
     const detailEntries = [];
     if (catalogRow.contextWindow) {
         detailEntries.push(["Context window", catalogRow.contextWindow.toLocaleString() + " tokens"]);
@@ -607,52 +559,52 @@ function createLibraryDetailsPanel(catalogRow, allRows) {
         detailList.appendChild(definition);
     }
     panel.appendChild(detailList);
-    const destinationPath = libraryDestinationPath(catalogRow);
+    const destinationPath = downloadModelsDestinationPath(catalogRow);
     if (destinationPath) {
-        panel.appendChild(createLibraryLocationSection(destinationPath, catalogRow));
+        panel.appendChild(createDownloadModelsLocationSection(destinationPath, catalogRow));
     }
     return panel;
 }
 
-function createLibraryLocationSection(destinationPath, catalogRow) {
+function createDownloadModelsLocationSection(destinationPath, catalogRow) {
     const location = document.createElement("section");
-    location.className = "library-model-location";
+    location.className = "download-models-model-location";
     const locationLabel = document.createElement("p");
-    locationLabel.className = "library-model-location-label";
+    locationLabel.className = "download-models-model-location-label";
     locationLabel.textContent = "Model location";
     const locationValue = document.createElement("code");
-    locationValue.className = "library-download-path";
+    locationValue.className = "download-models-download-path";
     locationValue.textContent = destinationPath;
     const actionRow = document.createElement("div");
-    actionRow.className = "library-location-actions";
+    actionRow.className = "download-models-location-actions";
     const copyButton = document.createElement("button");
-    copyButton.className = "button button-secondary library-copy-path-button";
+    copyButton.className = "button button-secondary download-models-copy-path-button";
     copyButton.type = "button";
     copyButton.textContent = "Copy Path";
-    copyButton.addEventListener("click", () => copyLibraryPathToClipboard(destinationPath));
+    copyButton.addEventListener("click", () => copyDownloadModelsPathToClipboard(destinationPath));
     // Finder can only show a folder that exists, so the button appears once the
     // model is on this Mac; before that the path is where it will be saved.
     const actionButtons = catalogRow.readyOnThisMac
-        ? [createLibraryRevealButton(catalogRow.huggingfaceId), copyButton]
+        ? [createDownloadModelsRevealButton(catalogRow.huggingfaceId), copyButton]
         : [copyButton];
     actionRow.replaceChildren(...actionButtons);
     location.replaceChildren(locationLabel, locationValue, actionRow);
     return location;
 }
 
-function createLibraryRevealButton(huggingfaceId) {
+function createDownloadModelsRevealButton(huggingfaceId) {
     const revealButton = document.createElement("button");
-    revealButton.className = "button button-secondary library-reveal-button";
+    revealButton.className = "button button-secondary download-models-reveal-button";
     revealButton.type = "button";
     revealButton.textContent = "Show in Finder";
     revealButton.addEventListener("click", async () => {
-        const isRevealed = await revealLibraryModelInFinder(huggingfaceId);
+        const isRevealed = await revealDownloadModelsModelInFinder(huggingfaceId);
         if (!isRevealed) revealButton.textContent = "Could not open Finder";
     });
     return revealButton;
 }
 
-async function copyLibraryPathToClipboard(destinationPath) {
+async function copyDownloadModelsPathToClipboard(destinationPath) {
     try {
         await navigator.clipboard.writeText(destinationPath);
     } catch {

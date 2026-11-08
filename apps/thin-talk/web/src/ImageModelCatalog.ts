@@ -54,7 +54,7 @@ function parseLibraryImageEntry(rawEntry: unknown): LibraryImageEntry | null {
 
 /**
  * The installed image models in the order the picker shows them: the Library's
- * Pictures pick first, then the rest in the server's order. A model the Library
+ * Image Generation pick first, then the rest in the server's order. A model the Library
  * does not list keeps its id as its name.
  */
 export function buildImageModels(imageModelIDs: readonly string[], libraryImageEntries: readonly LibraryImageEntry[]): ImageModel[] {
@@ -67,10 +67,10 @@ export function buildImageModels(imageModelIDs: readonly string[], libraryImageE
     return new ImageModel({
       id: imageModelID,
       name: libraryImageEntry != null ? libraryImageEntry.displayName : imageModelID,
-      isPicturesPick: libraryImageEntry != null && libraryImageEntry.isGetStartedPick,
+      isImageGenerationPick: libraryImageEntry != null && libraryImageEntry.isGetStartedPick,
     });
   });
-  const picturesPicks = imageModels.filter((imageModel) => imageModel.isPicturesPick);
-  const otherImageModels = imageModels.filter((imageModel) => !imageModel.isPicturesPick);
-  return [...picturesPicks, ...otherImageModels];
+  const imageGenerationPicks = imageModels.filter((imageModel) => imageModel.isImageGenerationPick);
+  const otherImageModels = imageModels.filter((imageModel) => !imageModel.isImageGenerationPick);
+  return [...imageGenerationPicks, ...otherImageModels];
 }

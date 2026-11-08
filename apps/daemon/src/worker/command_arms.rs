@@ -28,6 +28,7 @@ use crate::worker::idle_drain::{
     drain_pending_idle_work, wait_for_embeddings_execution_deadline,
     wait_for_image_execution_deadline,
 };
+use crate::worker::idle_model_unload::{should_unload_idle_model, unload_idle_model};
 use crate::worker::image_request::handle_generate_image_command;
 use crate::worker::loop_types::{
     ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopRuntime, WorkerLoopState,
@@ -126,6 +127,9 @@ pub(in crate::worker) async fn run_worker_iteration(
         &runtime.generation_queue_permits,
     )
     .await;
+    // Read before the select waits: the request's final event can arrive long
+    // after this point, and the clock must restart when it does, not before.
+    let was_serving_a_request = runtime.active_generation.is_some();
     let WorkerLoopIterationInputs {
         chat_stream_event_sender,
         image_result_sender,
@@ -183,8 +187,14 @@ pub(in crate::worker) async fn run_worker_iteration(
             && runtime.active_generation.is_none()
             && (has_loaded_model || runtime.pending_prompt_cache_clear.is_some()) => {
             sample_idle_mlx_memory_telemetry(runtime, has_loaded_model).await;
+            if should_unload_idle_model(runtime, has_loaded_model, tokio::time::Instant::now()) {
+                unload_idle_model(runtime).await;
+            }
         }
     }
+    runtime
+        .idle_model_unload
+        .observe_iteration_end(was_serving_a_request, tokio::time::Instant::now());
     WorkerLoopFlow::Continue
 }
 
@@ -552,6 +562,11 @@ async fn execute_worker_replacement(
         &mut runtime.completion_log,
     )
     .await;
+    // A replacement can come back with a model loaded; restarting the idle
+    // clock keeps the next idle check from unloading it straight away.
+    runtime
+        .idle_model_unload
+        .record_activity(tokio::time::Instant::now());
     let _send_outcome = restart_sender.send(replacement_result);
 }
 
@@ -599,6 +614,11 @@ async fn execute_memory_demotion_restart(
         &mut runtime.completion_log,
     )
     .await;
+    // The demotion has just reloaded the model on purpose; restarting the idle
+    // clock keeps the next idle check from unloading it straight away.
+    runtime
+        .idle_model_unload
+        .record_activity(tokio::time::Instant::now());
     let _send_outcome = demotion_sender.send(demotion_result);
 }
 

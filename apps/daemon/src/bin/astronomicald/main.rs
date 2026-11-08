@@ -363,7 +363,11 @@ async fn launch_daemon_worker(
     )
     .await
     {
-        Ok(worker_handle) => Ok(worker_handle),
+        Ok(worker_handle) => {
+            worker_handle
+                .set_idle_model_unload_seconds(resolved_runtime_config.idle_model_unload_seconds);
+            Ok(worker_handle)
+        }
         Err(worker_start_error) => {
             eprintln!("astronomicald worker unavailable: {worker_start_error}");
             Ok(WorkerHandle::unavailable())

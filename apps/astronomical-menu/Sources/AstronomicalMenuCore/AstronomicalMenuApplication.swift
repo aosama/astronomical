@@ -52,7 +52,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         telemetryStore: telemetryStore,
         applicationIdentity: applicationIdentity,
         openObservatory: { [weak self] in self?.openObservatory() },
-        openLibrary: { [weak self] in self?.openLibrary() },
+        openDownloadModels: { [weak self] in self?.openDownloadModels() },
         openChat: { [weak self] in self?.showChatWindow() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
@@ -273,7 +273,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       telemetryStore: telemetryStore,
       applicationIdentity: applicationIdentity,
       openObservatory: { [weak self] in self?.openObservatory() },
-      openLibrary: { [weak self] in self?.openLibrary() },
+      openDownloadModels: { [weak self] in self?.openDownloadModels() },
       restartServer: { [weak self] in self?.restartServer() },
       handleClose: { [weak self] in self?.welcomeWindowDidClose() }
     )
@@ -299,10 +299,10 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     }
   }
 
-  private func openLibrary() {
+  private func openDownloadModels() {
     do {
-      let libraryURL = try applicationIdentity.endpointURL(path: "/library")
-      guard NSWorkspace.shared.open(libraryURL) else {
+      let downloadModelsURL = try applicationIdentity.endpointURL(path: "/download-models")
+      guard NSWorkspace.shared.open(downloadModelsURL) else {
         throw ObservatoryLaunchError.defaultBrowserUnavailable
       }
     } catch {

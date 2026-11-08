@@ -129,13 +129,13 @@ const previewFaviconSVG =
   `</svg>`;
 
 /** Two image models, so the composer's picture pill appears, and the Library
- * entries that name them and mark the Pictures pick. */
+ * entries that name them and mark the Image Generation pick. */
 const previewImageModels = [
   { id: "FLUX.2-klein-4B", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
   { id: "flux2-klein-4b-4bit", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
 ];
 const previewLibraryImageEntries = [
-  { display_name: "FLUX.2 Klein 4B", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+  { display_name: "FLUX.2 Klein 4B full precision", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
   { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
 ];
 

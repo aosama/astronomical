@@ -46,6 +46,7 @@ pub(in crate::worker) struct WorkerLoopRuntime {
     pub cancellation_acknowledgement_timeout: Duration,
     pub image_generation_timeouts: crate::ImageGenerationTimeouts,
     pub contained_failure_relaunch: ContainedFailureRelaunch,
+    pub idle_model_unload: crate::worker::idle_model_unload::IdleModelUnloadClock,
 }
 
 /// The work kind is defined beside the executor contract it belongs to; the

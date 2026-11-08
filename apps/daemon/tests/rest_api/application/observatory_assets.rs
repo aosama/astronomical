@@ -82,6 +82,7 @@ async fn should_serve_the_observatory_shell_at_each_named_deep_link() {
         "/chat",
         "/model",
         "/experts",
+        "/download-models",
         "/library",
         "/connect",
         "/configuration",
@@ -506,4 +507,59 @@ async fn should_serve_the_embedded_observatory_stylesheet_with_correct_content_t
         !response_body.is_empty(),
         "the console stylesheet should not be empty"
     );
+}
+
+async fn observatory_shell_text() -> String {
+    let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/")
+                .body(Body::empty())
+                .expect("the root request should be valid"),
+        )
+        .await
+        .expect("the application should return the observatory shell");
+    let shell_bytes = to_bytes(response.into_body(), 1024 * 1024)
+        .await
+        .expect("the observatory shell should be readable");
+    String::from_utf8(shell_bytes.to_vec()).expect("the observatory shell should be UTF-8")
+}
+
+#[tokio::test]
+async fn should_serve_the_memory_limit_control_inside_the_configuration_view() {
+    let shell_text = observatory_shell_text().await;
+    let configuration_view_start = shell_text
+        .find("id=\"configuration-view\"")
+        .expect("the shell should have a Configuration view");
+
+    for control_id in [
+        "id=\"maximum-mlx-memory-gb\"",
+        "id=\"maximum-mlx-memory-feedback\"",
+    ] {
+        let control_position = shell_text
+            .find(control_id)
+            .unwrap_or_else(|| panic!("the shell should carry {control_id}"));
+        assert!(
+            control_position > configuration_view_start,
+            "{control_id} should live on the Configuration page"
+        );
+    }
+}
+
+#[tokio::test]
+async fn should_serve_no_settings_page_or_server_controls_after_the_merge() {
+    let shell_text = observatory_shell_text().await;
+
+    for retired_marker in [
+        "data-observatory-view=\"settings\"",
+        "data-observatory-destination=\"settings\"",
+        "id=\"control-reload\"",
+        "id=\"control-stop\"",
+    ] {
+        assert!(
+            !shell_text.contains(retired_marker),
+            "the shell should no longer carry {retired_marker}"
+        );
+    }
 }

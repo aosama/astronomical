@@ -238,3 +238,12 @@ function neuralEnginePrefillStatusMessage(neuralEnginePrefill) {
     }
     return "Off for the loaded model.";
 }
+
+// Settings edited by their own live control at the top of the Configuration
+// page. Their generic row is left out so the page offers one place to change
+// each of them.
+const CONFIGURATION_PATHS_WITH_DEDICATED_CONTROLS = ["runtime.maximum_mlx_memory_gb"];
+
+function hasDedicatedConfigurationControl(descriptor) {
+    return CONFIGURATION_PATHS_WITH_DEDICATED_CONTROLS.includes(descriptor.path.join("."));
+}

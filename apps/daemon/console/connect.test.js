@@ -63,9 +63,10 @@ function runPublishedCommand(command) {
 }
 
 // The shell boot test exercises the whole shipped console, so its elements carry
-// every property the other Observatory scripts touch. The Library-named fixture
-// module is deliberately not reused here: coupling the connection view's coverage
-// to another view's fixture would break it whenever the Library view changes.
+// every property the other Observatory scripts touch. The Download Models
+// fixture module is deliberately not reused here: coupling the connection view's
+// coverage to another view's fixture would break it whenever the Download Models
+// view changes.
 function createObservatoryShellElement(tagName) {
     return {
         tagName: String(tagName).toUpperCase(),
@@ -397,7 +398,7 @@ test("names an obviously fictional example model when nothing is installed", () 
     assert.match(elements["connect-opencode-snippet"].textContent, new RegExp(exampleModelIdentifier));
     assert.match(elements["connect-pi-snippet"].textContent, new RegExp(exampleModelIdentifier));
     assert.match(elements["connect-verification-command"].textContent, new RegExp(exampleModelIdentifier));
-    assert.match(elements["connect-model-guidance"].textContent, /Library/);
+    assert.match(elements["connect-model-guidance"].textContent, /Download Models/);
     assert.deepEqual(renderedLineTexts(elements["connect-model-identifiers"]), []);
 });
 

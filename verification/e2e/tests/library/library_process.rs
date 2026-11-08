@@ -39,9 +39,11 @@ async fn should_serve_the_library_and_discover_instance_models_without_configure
                 .expect("the process catalog response should contain JSON");
         assert_eq!(catalog_document["schema_version"], 3);
         assert!(catalog_document["entries"].is_array());
-        let library_response = get_endpoint(daemon_address, "/library").await;
-        assert!(library_response.starts_with("HTTP/1.1 200 OK"));
-        assert!(library_response.contains("data-observatory-view=\"library\""));
+        let download_models_page_response = get_endpoint(daemon_address, "/download-models").await;
+        assert!(download_models_page_response.starts_with("HTTP/1.1 200 OK"));
+        assert!(
+            download_models_page_response.contains("data-observatory-view=\"download-models\"")
+        );
 
         eprintln!("[library-process] checking automatic model discovery");
         let models_response = get_endpoint(daemon_address, "/v1/models").await;

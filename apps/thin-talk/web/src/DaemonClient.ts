@@ -20,7 +20,7 @@ export class LibraryDownloadRefusal extends Error {
   public readonly refusalCode: string | null;
 
   public constructor(refusalCode: string | null) {
-    super(refusalCode != null ? `the Library refused the download: ${refusalCode}` : "the Library could not be reached");
+    super(refusalCode != null ? `the daemon refused the download: ${refusalCode}` : "Download Models could not be reached");
     this.refusalCode = refusalCode;
   }
 }

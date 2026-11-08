@@ -45,7 +45,6 @@ final class ModelLoadInFlightPresentationTests: XCTestCase {
     XCTAssertEqual(statusDocument.modelLoadInFlight?.headlineTitle, "Loading second-model")
     XCTAssertEqual(statusDocument.modelFootprintTitle, "Being prepared")
     XCTAssertEqual(statusDocument.modelDiskSizeTitle, "Being prepared")
-    XCTAssertEqual(statusDocument.replyReadTitle, "")
   }
 
   func test_should_name_a_load_generically_when_the_model_is_not_reported() throws {

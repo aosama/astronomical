@@ -1,4 +1,4 @@
-//! Selects Library chat models from `/v1/models` for one harness. A model is
+//! Selects installed chat models from `/v1/models` for one harness. A model is
 //! a launch target only when it advertises the endpoint that harness speaks,
 //! so image and embedding models, and any chat model serving another
 //! protocol only, never reach a harness that could not talk to them.
@@ -9,16 +9,16 @@ use crate::verbs::launch::LaunchError;
 
 /// One chat model the launched session may use.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LibraryChatModel {
+pub struct InstalledChatModel {
     pub model_id: String,
     pub context_window_tokens: Option<u32>,
 }
 
-/// Keeps advertised order so the picker matches Library listing.
+/// Keeps advertised order so the picker matches the installed-model listing.
 pub fn chat_models_from_models_document(
     models_document: &Value,
     harness_endpoint: &str,
-) -> Result<Vec<LibraryChatModel>, LaunchError> {
+) -> Result<Vec<InstalledChatModel>, LaunchError> {
     let Some(advertised_models) = models_document.get("data").and_then(Value::as_array) else {
         return Err(LaunchError::ModelListUnavailable);
     };
@@ -30,7 +30,7 @@ pub fn chat_models_from_models_document(
         if !advertises_endpoint(advertised_model, harness_endpoint) {
             continue;
         }
-        chat_models.push(LibraryChatModel {
+        chat_models.push(InstalledChatModel {
             model_id: model_id.to_owned(),
             context_window_tokens: advertised_context_window(advertised_model),
         });

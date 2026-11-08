@@ -207,11 +207,9 @@ struct DaemonStatusDocument: Codable, Equatable {
 
   struct ExpertPlacementCopy: Codable, Equatable {
     let stockSentence: String?
-    let replySentence: String?
 
     enum CodingKeys: String, CodingKey {
       case stockSentence = "stock_sentence"
-      case replySentence = "reply_sentence"
     }
   }
 

@@ -91,6 +91,14 @@
           "default": false,
           "description": "Whether the inference worker re-requests Metal residency for its wired memory once per second, because macOS can release residency while the GPU is idle. Meant to avoid a slow first prompt after idle, and can keep that memory wired through long idle periods.",
           "x-astronomical-apply-mode": "worker-replacement"
+        },
+        "idle_model_unload_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 604800,
+          "default": 60,
+          "description": "Seconds a loaded model may stay unused before Astronomical unloads it and frees its memory; the next request loads it again. 0 keeps a model loaded until another model is requested.",
+          "x-astronomical-apply-mode": "live"
         }
       }
     },

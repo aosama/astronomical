@@ -28,8 +28,9 @@ func appliedMaximumMlxMemoryWholeGigabytes(for statusDocument: DaemonStatusDocum
 
 /// What the "Maximum model RAM" control shows.
 ///
-/// The panel is quiet when the engine serves what was asked for: one control
-/// row and one grey caption naming the single limit that matters. Buttons
+/// The panel is quiet when the engine serves what was asked for: one row
+/// holding the label, the stepper and a short grey "of N GB" naming the
+/// single limit that matters, so the control costs one line of the popover. Buttons
 /// appear only when pressing them would change something, and colour appears
 /// only when the live ceiling falls short of an explicit request, so orange
 /// keeps meaning "look at this".
@@ -41,7 +42,7 @@ struct MaximumMlxMemoryControlPresentation: Equatable {
 
   init(statusDocument: DaemonStatusDocument, editableMaximumWholeGigabytes: UInt64) {
     let reachableWholeGigabytes = reachableMaximumMlxMemoryWholeGigabytes(for: statusDocument)
-    reachableMaximumCaption = "Up to \(reachableWholeGigabytes) GB on this Mac"
+    reachableMaximumCaption = "of \(reachableWholeGigabytes) GB"
     // A configuration above the reachable maximum also earns Apply: the
     // stepper already rests on the reachable value, so one click replaces the
     // request the engine can never serve and clears the cap notice.

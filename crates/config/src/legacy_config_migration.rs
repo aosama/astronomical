@@ -212,6 +212,7 @@ fn build_migrated_config(
             model_download_directory: None,
             neural_engine_program_directory: None,
             metal_residency_refresh_enabled: None,
+            idle_model_unload_seconds: None,
         },
         prompt_cache: Some(PromptCacheConfigFile {
             enabled: legacy_config.persistent_prompt_cache_enabled,

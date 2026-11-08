@@ -5,7 +5,7 @@ import { bootJourney, waitUntilReady } from "./support/journey";
 
 /**
  * The composer's picture pill: which installed image model draws the next
- * picture. It starts on the Library's Pictures pick, remembers the person's
+ * picture. It starts on the Download Models Image Generation pick, remembers the person's
  * choice across a relaunch, and stays out of the way with one image model or
  * when tools cannot run.
  */
@@ -13,9 +13,9 @@ import { bootJourney, waitUntilReady } from "./support/journey";
 const CHAT_MODEL = { id: "model-alpha", input_modalities: ["text"], supported_endpoints: ["/v1/chat/completions"], supports_tool_calls: true };
 const FULL_PRECISION_IMAGE_MODEL = { id: "FLUX.2-klein-4B", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
-const PICTURES_LIBRARY = {
+const IMAGE_GENERATION_CATALOG = {
   entries: [
-    { display_name: "FLUX.2 Klein 4B", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+    { display_name: "FLUX.2 Klein 4B full precision", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
     { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
   ],
 };
@@ -47,35 +47,35 @@ function chooseImageModel(imageModelID: string): void {
   choice.dispatchEvent(new window.Event("click", { bubbles: true }));
 }
 
-test("should_start_the_picture_pill_on_the_library_pictures_pick", async () => {
-  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY });
+test("should_start_the_picture_pill_on_the_image_generation_pick", async () => {
+  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: IMAGE_GENERATION_CATALOG });
   await waitUntilReady();
   await waitFor(() => !imageModelPill().hidden, "the picture pill to appear");
 
   assert.equal(imageModelLabel(), "FLUX.2 Klein 4B 4-bit");
   assert.equal(imageModelChoice("flux2-klein-4b-4bit")?.getAttribute("aria-checked"), "true");
-  assert.equal(imageModelChoice("FLUX.2-klein-4B")?.textContent, "FLUX.2 Klein 4B");
+  assert.equal(imageModelChoice("FLUX.2-klein-4B")?.textContent, "FLUX.2 Klein 4B full precision");
 }, { timeout: 30_000 });
 
 test("should_remember_the_chosen_image_model_after_a_relaunch", async () => {
-  const first = bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY });
+  const first = bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: IMAGE_GENERATION_CATALOG });
   await waitUntilReady();
   await waitFor(() => !imageModelPill().hidden, "the picture pill to appear");
   chooseImageModel("FLUX.2-klein-4B");
-  await waitFor(() => imageModelLabel() === "FLUX.2 Klein 4B", "the pill to show the chosen model");
+  await waitFor(() => imageModelLabel() === "FLUX.2 Klein 4B full precision", "the pill to show the chosen model");
   await waitFor(
     () => first.host.receivedRequests.some((request) => request.op === "savePrefs"),
     "the picture choice to be persisted",
   );
 
-  bootJourney(first, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY });
+  bootJourney(first, { models: TWO_IMAGE_MODELS, libraryCatalog: IMAGE_GENERATION_CATALOG });
   await waitUntilReady();
-  await waitFor(() => imageModelLabel() === "FLUX.2 Klein 4B", "the relaunched pill to show the saved choice");
+  await waitFor(() => imageModelLabel() === "FLUX.2 Klein 4B full precision", "the relaunched pill to show the saved choice");
   assert.equal(imageModelChoice("FLUX.2-klein-4B")?.getAttribute("aria-checked"), "true");
 }, { timeout: 30_000 });
 
 test("should_keep_only_one_composer_menu_open", async () => {
-  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY });
+  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: IMAGE_GENERATION_CATALOG });
   await waitUntilReady();
   await waitFor(() => !imageModelPill().hidden, "the picture pill to appear");
   const chatModelPill = document.querySelector<HTMLButtonElement>('[data-testid="composer-model"]');
@@ -88,14 +88,14 @@ test("should_keep_only_one_composer_menu_open", async () => {
 
 test("should_hide_the_picture_pill_with_one_or_no_image_model", async () => {
   for (const installedModels of [[CHAT_MODEL, FOUR_BIT_IMAGE_MODEL], [CHAT_MODEL]]) {
-    bootJourney(undefined, { models: installedModels, libraryCatalog: PICTURES_LIBRARY });
+    bootJourney(undefined, { models: installedModels, libraryCatalog: IMAGE_GENERATION_CATALOG });
     await waitUntilReady();
     assert.equal(imageModelPill().hidden, true, JSON.stringify(installedModels.map((model) => model.id)));
   }
 }, { timeout: 30_000 });
 
 test("should_close_the_picture_menu_on_escape_and_on_a_click_outside", async () => {
-  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY });
+  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: IMAGE_GENERATION_CATALOG });
   await waitUntilReady();
   await waitFor(() => !imageModelPill().hidden, "the picture pill to appear");
   const pictureMenu = document.querySelector<HTMLElement>('[data-testid="composer-image-model-menu"]');
@@ -126,7 +126,7 @@ test("should_show_a_model_name_with_markup_as_plain_text", async () => {
 }, { timeout: 30_000 });
 
 test("should_hide_the_picture_pill_when_tools_are_off", async () => {
-  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: PICTURES_LIBRARY, seedPreferences: { toolsEnabled: false } });
+  bootJourney(undefined, { models: TWO_IMAGE_MODELS, libraryCatalog: IMAGE_GENERATION_CATALOG, seedPreferences: { toolsEnabled: false } });
   await waitUntilReady();
   await new Promise((resolve) => setTimeout(resolve, 64));
 

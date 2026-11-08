@@ -16,7 +16,7 @@ final class MenuStructureContractTests: XCTestCase {
 
     let openObservatoryButtonStart = try XCTUnwrap(
       popoverSource.range(
-        of: "Button(action: telemetryStore.hasDiscoveredModels ? openObservatory : openLibrary)"))
+        of: "Button(action: telemetryStore.hasDiscoveredModels ? openObservatory : openDownloadModels)"))
     let overflowMenuStart = try XCTUnwrap(popoverSource.range(of: "Menu {"))
 
     XCTAssertLessThan(openObservatoryButtonStart.lowerBound, overflowMenuStart.lowerBound)

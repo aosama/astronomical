@@ -18,7 +18,7 @@ struct OrbitalTelemetryPopover: View {
   @ObservedObject var telemetryStore: TelemetryStore
   let applicationIdentity: ApplicationIdentity
   let openObservatory: () -> Void
-  let openLibrary: () -> Void
+  let openDownloadModels: () -> Void
   let openChat: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
@@ -173,7 +173,7 @@ struct OrbitalTelemetryPopover: View {
           .font(.caption)
           .foregroundStyle(.secondary)
       }
-      Button(action: telemetryStore.hasDiscoveredModels ? openObservatory : openLibrary) {
+      Button(action: telemetryStore.hasDiscoveredModels ? openObservatory : openDownloadModels) {
         Label(
           telemetryStore.hasDiscoveredModels ? "Open Observatory" : "Download a model",
           systemImage: telemetryStore.hasDiscoveredModels ? "safari" : "arrow.down.circle"
@@ -257,12 +257,9 @@ struct OrbitalTelemetryPopover: View {
         .font(PopoverTypography.monospacedBody)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
-      if !statusDocument.replyReadTitle.isEmpty {
-        Text(statusDocument.replyReadTitle)
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
+      // The daemon's reply sentence ("Experts are being served from RAM.")
+      // is left to Observatory: it wrapped to two more lines here and the
+      // popover is already long, while the label above says the same thing.
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -273,9 +270,15 @@ struct OrbitalTelemetryPopover: View {
       telemetryStore.maximumWholeGigabytes > 0
     {
       let controlPresentation = telemetryStore.maximumMlxMemoryControlPresentation
-      VStack(alignment: .leading, spacing: 6) {
-        Text("Maximum model RAM").foregroundStyle(.secondary)
-        HStack {
+      VStack(alignment: .leading, spacing: 4) {
+        // One row: the popover is long, so the label, the stepper and the
+        // reachable maximum share a line instead of stacking three.
+        HStack(spacing: 6) {
+          // The label is the one piece allowed to shrink, so Apply and Use Max
+          // showing together still fit the 358pt row instead of clipping.
+          Text("Maximum model RAM").foregroundStyle(.secondary)
+            .lineLimit(1).minimumScaleFactor(0.7)
+          Spacer(minLength: 4)
           Stepper(
             value: $telemetryStore.editableMaximumMlxMemoryGigabytes,
             in: telemetryStore.minimumWholeGigabytes...telemetryStore.maximumWholeGigabytes
@@ -283,18 +286,19 @@ struct OrbitalTelemetryPopover: View {
             Text("\(telemetryStore.editableMaximumMlxMemoryGigabytes) GB")
               .font(PopoverTypography.monospacedBody)
           }
+          .fixedSize()
+          Text(controlPresentation.reachableMaximumCaption)
+            .font(.caption).foregroundStyle(.secondary).lineLimit(1).fixedSize()
           if controlPresentation.shouldOfferApply {
             Button("Apply", action: telemetryStore.updateMaximumMlxMemoryLimit)
+              .controlSize(.small)
           }
-          Spacer()
           if controlPresentation.shouldOfferMacMaximum {
             Button("Use Max", action: telemetryStore.restoreMacMaximumMlxMemoryLimit)
               .controlSize(.small)
               .accessibilityLabel("Use the Mac maximum")
           }
         }
-        Text(controlPresentation.reachableMaximumCaption)
-          .font(.caption).foregroundStyle(.secondary)
         if let cappedCeilingCaption = controlPresentation.cappedCeilingCaption {
           Text(cappedCeilingCaption).font(.caption).foregroundStyle(.orange)
         }

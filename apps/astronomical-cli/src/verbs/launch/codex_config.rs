@@ -14,7 +14,7 @@ use std::{io, net::SocketAddr, path::Path};
 
 use tempfile::TempDir;
 
-use super::chat_models::LibraryChatModel;
+use super::chat_models::InstalledChatModel;
 
 pub const CODEX_HOME_VARIABLE: &str = "CODEX_HOME";
 const CODEX_PROVIDER_ID: &str = "astronomical";
@@ -31,7 +31,7 @@ const CODEX_PROVIDER_ID: &str = "astronomical";
 /// never leaks an ownerless directory.
 pub fn codex_process_home(
     bind_address: SocketAddr,
-    chat_model: &LibraryChatModel,
+    chat_model: &InstalledChatModel,
 ) -> io::Result<String> {
     let codex_home = TempDir::with_prefix("astronomical-codex-home-")?;
     write_codex_config(codex_home.path(), bind_address, chat_model)?;
@@ -57,7 +57,7 @@ pub fn codex_process_home(
 fn write_codex_config(
     codex_home_path: &Path,
     bind_address: SocketAddr,
-    chat_model: &LibraryChatModel,
+    chat_model: &InstalledChatModel,
 ) -> io::Result<()> {
     std::fs::write(
         codex_home_path.join("config.toml"),
@@ -65,7 +65,7 @@ fn write_codex_config(
     )
 }
 
-pub fn codex_config_toml(bind_address: SocketAddr, chat_model: &LibraryChatModel) -> String {
+pub fn codex_config_toml(bind_address: SocketAddr, chat_model: &InstalledChatModel) -> String {
     let openai_compatible_base_url = format!("http://{bind_address}/v1");
     format!(
         "model = {}\n\

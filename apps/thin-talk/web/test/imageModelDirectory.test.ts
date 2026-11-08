@@ -7,9 +7,9 @@ import { DAEMON_BASE_URL } from "./support/scriptedChatFetch";
 
 const FULL_PRECISION_IMAGE_MODEL = { id: "FLUX.2-klein-4B", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
-const PICTURES_LIBRARY = {
+const IMAGE_GENERATION_CATALOG = {
   entries: [
-    { display_name: "FLUX.2 Klein 4B", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+    { display_name: "FLUX.2 Klein 4B full precision", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
     { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
   ],
 };
@@ -47,22 +47,22 @@ function names(imageModels: { name: string }[]): string[] {
 }
 
 test("should_name_and_order_installed_models_as_the_library_does", async () => {
-  installLibraryDaemon([FULL_PRECISION_IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], [PICTURES_LIBRARY]);
-  assert.deepEqual(names(await imageModelDirectory().load()), ["FLUX.2 Klein 4B 4-bit", "FLUX.2 Klein 4B"]);
+  installLibraryDaemon([FULL_PRECISION_IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], [IMAGE_GENERATION_CATALOG]);
+  assert.deepEqual(names(await imageModelDirectory().load()), ["FLUX.2 Klein 4B 4-bit", "FLUX.2 Klein 4B full precision"]);
 });
 
 test("should_keep_the_last_library_answer_when_a_later_read_fails", async () => {
-  installLibraryDaemon([FULL_PRECISION_IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], [PICTURES_LIBRARY, 503, "not a catalog"]);
+  installLibraryDaemon([FULL_PRECISION_IMAGE_MODEL, FOUR_BIT_IMAGE_MODEL], [IMAGE_GENERATION_CATALOG, 503, "not a catalog"]);
   const directory = imageModelDirectory();
   await directory.load();
 
   const afterFailedRead = await directory.load();
   const afterUnreadableRead = await directory.load();
 
-  // Without the kept answer the Pictures pick would silently become the first installed model.
-  assert.equal(afterFailedRead[0]?.isPicturesPick, true);
-  assert.deepEqual(names(afterFailedRead), ["FLUX.2 Klein 4B 4-bit", "FLUX.2 Klein 4B"]);
-  assert.deepEqual(names(afterUnreadableRead), ["FLUX.2 Klein 4B 4-bit", "FLUX.2 Klein 4B"]);
+  // Without the kept answer the Image Generation pick would silently become the first installed model.
+  assert.equal(afterFailedRead[0]?.isImageGenerationPick, true);
+  assert.deepEqual(names(afterFailedRead), ["FLUX.2 Klein 4B 4-bit", "FLUX.2 Klein 4B full precision"]);
+  assert.deepEqual(names(afterUnreadableRead), ["FLUX.2 Klein 4B 4-bit", "FLUX.2 Klein 4B full precision"]);
 });
 
 test("should_use_model_ids_when_the_library_has_never_answered", async () => {
@@ -71,7 +71,7 @@ test("should_use_model_ids_when_the_library_has_never_answered", async () => {
 });
 
 test("should_not_read_the_library_when_no_image_model_is_installed", async () => {
-  const requestedPaths = installLibraryDaemon([], [PICTURES_LIBRARY]);
+  const requestedPaths = installLibraryDaemon([], [IMAGE_GENERATION_CATALOG]);
   assert.deepEqual(await imageModelDirectory().load(), []);
   assert.equal(requestedPaths.includes("/v1/library/catalog"), false);
 });

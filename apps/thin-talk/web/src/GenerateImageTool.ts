@@ -31,7 +31,7 @@ const IMAGE_MODEL_RECHECK_DELAY_MILLISECONDS = 1_000;
 /**
  * Makes an image and shows it in the answer. The model is the one
  * `ImageModelSelection` names: the person's choice while it is installed, else
- * the Library's Pictures pick, else the first installed image model. The image
+ * the Download Models Image Generation pick, else the first installed image model. The image
  * is kept by the app, so the conversation still shows it after a relaunch.
  * Running it only calls the local daemon, so it runs without asking.
  *

@@ -15393,26 +15393,26 @@
       "crate": "astronomical-daemon"
     },
     {
-      "file": "apps/daemon/tests/rest_api/application/observatory_library.rs",
+      "file": "apps/daemon/tests/rest_api/application/observatory_download_models.rs",
       "function": "opening_tag_with_attribute",
-      "line": 66,
+      "line": 73,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
       "crate": "astronomical-daemon"
     },
     {
-      "file": "apps/daemon/tests/rest_api/application/observatory_library.rs",
+      "file": "apps/daemon/tests/rest_api/application/observatory_download_models.rs",
       "function": "opening_tag_with_id",
-      "line": 62,
+      "line": 69,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
       "crate": "astronomical-daemon"
     },
     {
-      "file": "apps/daemon/tests/rest_api/application/observatory_library.rs",
-      "function": "should_serve_a_labelled_library_destination_at_its_deep_link",
+      "file": "apps/daemon/tests/rest_api/application/observatory_download_models.rs",
+      "function": "should_serve_a_labelled_download_models_destination_at_its_deep_link",
       "line": 15,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -15420,9 +15420,9 @@
       "crate": "astronomical-daemon"
     },
     {
-      "file": "apps/daemon/tests/rest_api/application/observatory_library.rs",
-      "function": "should_serve_the_embedded_library_javascript",
-      "line": 81,
+      "file": "apps/daemon/tests/rest_api/application/observatory_download_models.rs",
+      "function": "should_serve_the_embedded_download_models_javascript",
+      "line": 88,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,

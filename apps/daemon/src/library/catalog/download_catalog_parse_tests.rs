@@ -18,12 +18,12 @@ use super::{
     parse_and_shape_check_document, parse_catalog_entry, parse_entry_capabilities,
     parse_optional_entry_description, parse_optional_entry_quantization_label,
     parse_optional_entry_upstream_license, validate_entry_display_metadata,
-    validate_entry_identity, validate_entry_memory_footprint, validate_get_started_pick,
+    validate_entry_identity, validate_entry_memory_footprint,
 };
 
-const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
+pub(super) const VALID_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 
-fn baseline_entry_document() -> Value {
+pub(super) fn baseline_entry_document() -> Value {
     json!({
         "huggingface_id": "astronomical-test/example-qwen",
         "revision": VALID_REVISION,
@@ -36,7 +36,9 @@ fn baseline_entry_document() -> Value {
     })
 }
 
-fn entry_document_with(field_overrides: &[(&str, Value)]) -> DownloadCatalogEntryDocument {
+pub(super) fn entry_document_with(
+    field_overrides: &[(&str, Value)],
+) -> DownloadCatalogEntryDocument {
     let mut catalog_entry = baseline_entry_document();
     for (field_name, field_value) in field_overrides {
         catalog_entry[field_name] = field_value.clone();
@@ -49,11 +51,11 @@ fn baseline_entry_document_unchanged() -> DownloadCatalogEntryDocument {
         .expect("the baseline entry document should deserialize")
 }
 
-fn empty_normalized_huggingface_ids() -> BTreeSet<String> {
+pub(super) fn empty_normalized_huggingface_ids() -> BTreeSet<String> {
     BTreeSet::new()
 }
 
-fn empty_get_started_role_names() -> BTreeSet<&'static str> {
+pub(super) fn empty_get_started_role_names() -> BTreeSet<&'static str> {
     BTreeSet::new()
 }
 
@@ -564,47 +566,6 @@ fn should_report_included_path_failures_last_in_the_entry_order() {
 }
 
 #[test]
-fn should_parse_role_memory_and_flags_into_the_public_entry_type() {
-    let flagged_entry = entry_document_with(&[
-        ("role", json!("coding")),
-        ("approximate_memory_bytes", json!(25_769_803_680_u64)),
-        ("get_started", json!(true)),
-        ("experimental", json!(false)),
-        ("minimum_memory_bytes", json!(4_451_287_808_u64)),
-    ]);
-
-    let catalog_entry = parse_catalog_entry(
-        flagged_entry,
-        0,
-        &mut empty_normalized_huggingface_ids(),
-        &mut empty_get_started_role_names(),
-    )
-    .expect("a flagged coding entry should parse");
-
-    assert_eq!(catalog_entry.role(), DownloadCatalogRole::Coding);
-    assert_eq!(catalog_entry.role().as_str(), "coding");
-    assert_eq!(catalog_entry.approximate_memory_bytes(), 25_769_803_680);
-    assert!(catalog_entry.get_started());
-    assert!(!catalog_entry.experimental());
-    assert_eq!(catalog_entry.minimum_memory_bytes(), Some(4_451_287_808));
-}
-
-#[test]
-fn should_default_flags_to_false_and_the_streaming_floor_to_none() {
-    let plain_entry = parse_catalog_entry(
-        entry_document_with(&[]),
-        0,
-        &mut empty_normalized_huggingface_ids(),
-        &mut empty_get_started_role_names(),
-    )
-    .expect("an entry without optional flags should parse");
-
-    assert!(!plain_entry.get_started());
-    assert!(!plain_entry.experimental());
-    assert_eq!(plain_entry.minimum_memory_bytes(), None);
-}
-
-#[test]
 fn should_accept_memory_at_one_byte_and_the_javascript_safe_maximum() {
     for accepted_memory_bytes in [1_u64, MAXIMUM_JAVASCRIPT_SAFE_INTEGER] {
         let memory_entry =
@@ -623,55 +584,6 @@ fn should_reject_zero_or_unsafe_approximate_memory() {
             Err(DownloadCatalogError::InvalidApproximateMemory { entry_index: 4 })
         ));
     }
-}
-
-#[test]
-fn should_accept_one_get_started_pick_per_role() {
-    let mut get_started_role_names = empty_get_started_role_names();
-    let chat_pick = entry_document_with(&[("role", json!("chat")), ("get_started", json!(true))]);
-    let coding_pick =
-        entry_document_with(&[("role", json!("coding")), ("get_started", json!(true))]);
-    let chat_non_pick = entry_document_with(&[("role", json!("chat"))]);
-
-    assert!(validate_get_started_pick(&chat_pick, 0, &mut get_started_role_names).is_ok());
-    assert!(validate_get_started_pick(&coding_pick, 1, &mut get_started_role_names).is_ok());
-    assert!(validate_get_started_pick(&chat_non_pick, 2, &mut get_started_role_names).is_ok());
-}
-
-#[test]
-fn should_reject_two_get_started_picks_for_one_role() {
-    let mut get_started_role_names = empty_get_started_role_names();
-    let first_chat_pick =
-        entry_document_with(&[("role", json!("chat")), ("get_started", json!(true))]);
-    let second_chat_pick =
-        entry_document_with(&[("role", json!("chat")), ("get_started", json!(true))]);
-    assert!(validate_get_started_pick(&first_chat_pick, 0, &mut get_started_role_names).is_ok());
-
-    assert!(matches!(
-        validate_get_started_pick(&second_chat_pick, 1, &mut get_started_role_names),
-        Err(DownloadCatalogError::DuplicateGetStartedPick { role: "chat" })
-    ));
-}
-
-#[test]
-fn should_reject_an_experimental_or_helper_get_started_pick() {
-    let mut get_started_role_names = empty_get_started_role_names();
-    let experimental_pick = entry_document_with(&[
-        ("role", json!("chat")),
-        ("get_started", json!(true)),
-        ("experimental", json!(true)),
-    ]);
-    let helper_pick =
-        entry_document_with(&[("role", json!("helper")), ("get_started", json!(true))]);
-
-    assert!(matches!(
-        validate_get_started_pick(&experimental_pick, 3, &mut get_started_role_names),
-        Err(DownloadCatalogError::InvalidGetStartedPick { entry_index: 3 })
-    ));
-    assert!(matches!(
-        validate_get_started_pick(&helper_pick, 5, &mut get_started_role_names),
-        Err(DownloadCatalogError::InvalidGetStartedPick { entry_index: 5 })
-    ));
 }
 
 #[test]

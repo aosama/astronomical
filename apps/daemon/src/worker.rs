@@ -18,6 +18,7 @@ pub(crate) mod event_handler;
 pub(crate) mod handle;
 pub(crate) mod health;
 pub(crate) mod idle_drain;
+pub(crate) mod idle_model_unload;
 pub(crate) mod image_event;
 pub(crate) mod image_request;
 pub(crate) mod loop_types;
@@ -34,6 +35,7 @@ mod event_reaction_tests;
 #[cfg(test)]
 mod loop_types_tests;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -42,6 +44,7 @@ use tokio::time::{Instant, MissedTickBehavior, interval};
 
 use crate::worker::command_arms::{WorkerLoopFlow, run_worker_iteration};
 use crate::worker::health::publish_health;
+use crate::worker::idle_model_unload::IdleModelUnloadClock;
 use crate::worker::loop_types::{WorkerLoopCommand, WorkerLoopRuntime};
 use crate::worker::process::failure_relaunch::ContainedFailureRelaunch;
 use crate::{
@@ -66,6 +69,7 @@ pub(crate) async fn run_worker(
     model_policy_catalog: Arc<HashMap<String, RuntimeModelPolicy>>,
     active_generation_permits: Arc<Semaphore>,
     generation_queue_permits: Arc<Semaphore>,
+    idle_model_unload_seconds: Arc<AtomicU64>,
 ) {
     publish_health(
         &health_snapshot,
@@ -88,6 +92,7 @@ pub(crate) async fn run_worker(
         cancellation_acknowledgement_timeout,
         image_generation_timeouts,
         contained_failure_relaunch: ContainedFailureRelaunch::new(),
+        idle_model_unload: IdleModelUnloadClock::new(idle_model_unload_seconds, Instant::now()),
     };
     let mut idle_control_interval = interval(Duration::from_secs(1));
     idle_control_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);

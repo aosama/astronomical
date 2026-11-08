@@ -1,4 +1,4 @@
-// Shared fixtures for the Library Observatory behavior tests.
+// Shared fixtures for the Download Models Observatory behavior tests.
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -6,27 +6,30 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const libraryScriptPath = path.join(__dirname, "library.js");
-const libraryScript = fs.readFileSync(libraryScriptPath, "utf8");
-const libraryRenderScriptPath = path.join(__dirname, "library-render.js");
-const libraryRenderScript = fs.readFileSync(libraryRenderScriptPath, "utf8");
+const downloadModelsScriptPath = path.join(__dirname, "download-models.js");
+const downloadModelsScript = fs.readFileSync(downloadModelsScriptPath, "utf8");
+const downloadModelsRenderScriptPath = path.join(__dirname, "download-models-render.js");
+const downloadModelsRenderScript = fs.readFileSync(downloadModelsRenderScriptPath, "utf8");
+const downloadModelsCardFooterScriptPath = path.join(__dirname, "download-models-card-footer.js");
+const downloadModelsCardFooterScript = fs.readFileSync(downloadModelsCardFooterScriptPath, "utf8");
 const observatoryShellPath = path.join(__dirname, "index.html");
 const observatoryShell = fs.readFileSync(observatoryShellPath, "utf8");
 const ASYNC_TEST_OPTIONS = { timeout: 5_000 };
 
-function createLibraryContext() {
+function createDownloadModelsContext() {
     const scriptContext = vm.createContext({
         AbortController,
         clearTimeout,
         document: { getElementById() { return null; } },
         setTimeout
     });
-    vm.runInContext(libraryScript, scriptContext, { filename: libraryScriptPath });
-    vm.runInContext(libraryRenderScript, scriptContext, { filename: libraryRenderScriptPath });
+    vm.runInContext(downloadModelsScript, scriptContext, { filename: downloadModelsScriptPath });
+    vm.runInContext(downloadModelsRenderScript, scriptContext, { filename: downloadModelsRenderScriptPath });
+    vm.runInContext(downloadModelsCardFooterScript, scriptContext, { filename: downloadModelsCardFooterScriptPath });
     return scriptContext;
 }
 
-function createLibraryElement(tagName, onElementRegistered, onElementFocused) {
+function createDownloadModelsElement(tagName, onElementRegistered, onElementFocused) {
     return {
         tagName: tagName.toUpperCase(),
         className: "",
@@ -80,14 +83,14 @@ function createLibraryElement(tagName, onElementRegistered, onElementFocused) {
     };
 }
 
-function createLibraryDocument() {
+function createDownloadModelsDocument() {
     const elementByIdRegistry = {};
     const registerElementById = (element) => {
         if (element.id) elementByIdRegistry[element.id] = element;
     };
-    const catalogContainer = createLibraryElement("div", registerElementById);
-    const catalogStatus = createLibraryElement("p");
-    catalogStatus.id = "library-catalog-status";
+    const catalogContainer = createDownloadModelsElement("div", registerElementById);
+    const catalogStatus = createDownloadModelsElement("p");
+    catalogStatus.id = "download-models-catalog-status";
     catalogStatus.setAttribute("role", "status");
     catalogStatus.setAttribute("aria-live", "polite");
     catalogContainer.replaceChildren(catalogStatus);
@@ -97,14 +100,14 @@ function createLibraryDocument() {
         activeElement: null,
         lastFocusOptions: null,
         createElement(tagName) {
-            return createLibraryElement(tagName, registerElementById, (element, options) => {
+            return createDownloadModelsElement(tagName, registerElementById, (element, options) => {
                 shell.activeElement = element;
                 shell.lastFocusOptions = options;
             });
         },
         createTextNode(text) { return { tagName: "#text", textContent: text, children: [] }; },
         getElementById(elementId) {
-            if (elementId === "library-catalog") { return catalogContainer; }
+            if (elementId === "download-models-catalog") { return catalogContainer; }
             return elementByIdRegistry[elementId] || null;
         }
     };
@@ -129,7 +132,7 @@ function findRenderedElementsByClass(rootElement, className) {
     while (pendingElements.length > 0) {
         const renderedElement = pendingElements.shift();
         // Match one class token, because a card carries modifiers such as
-        // library-model-card-ready next to its base class.
+        // download-models-model-card-ready next to its base class.
         if (String(renderedElement.className).split(" ").includes(className)) matches.push(renderedElement);
         pendingElements.unshift(...renderedElement.children);
     }
@@ -150,7 +153,7 @@ function validCatalogEntry(overrides = {}) {
         get_started: false,
         experimental: false,
         public: true,
-        description: "A test model for exercising Library rendering.",
+        description: "A test model for exercising Download Models rendering.",
         capabilities: {
             supports_reasoning: true,
             supports_vision: false,
@@ -180,9 +183,9 @@ function renderedTexts(rootElement) {
 module.exports = {
     ASYNC_TEST_OPTIONS,
     assert,
-    createLibraryContext,
-    createLibraryDocument,
-    createLibraryElement,
+    createDownloadModelsContext,
+    createDownloadModelsDocument,
+    createDownloadModelsElement,
     findRenderedElement,
     findRenderedElementsByClass,
     fs,
