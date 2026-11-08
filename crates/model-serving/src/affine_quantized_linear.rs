@@ -117,6 +117,26 @@ impl AffineQuantizedLinear {
         )?)
     }
 
+    /// Rows `row_ids` of the weight, dequantized. The weight, scales and biases
+    /// share axis 0, so an embedding table gathers only the prompt's rows before
+    /// expanding them instead of holding the whole table in floating point.
+    pub(crate) fn gather_dequantized_rows(
+        &self,
+        runtime: &MlxRuntime,
+        row_ids: &MlxArray,
+    ) -> Result<MlxArray, AffineQuantizedLinearError> {
+        let packed_rows = runtime.take_axis(&self.weight, row_ids, 0)?;
+        let scale_rows = runtime.take_axis(&self.scales, row_ids, 0)?;
+        let bias_rows = runtime.take_axis(&self.biases, row_ids, 0)?;
+        Ok(runtime.dequantize_affine(
+            &packed_rows,
+            &scale_rows,
+            &bias_rows,
+            AFFINE_QUANTIZATION_GROUP_SIZE as i32,
+            AFFINE_QUANTIZATION_BITS,
+        )?)
+    }
+
     /// The three packed arrays, for callers that materialize retained weights.
     pub(crate) fn arrays(&self) -> Vec<&MlxArray> {
         vec![&self.weight, &self.scales, &self.biases]

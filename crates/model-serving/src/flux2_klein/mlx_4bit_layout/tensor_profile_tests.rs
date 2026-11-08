@@ -110,7 +110,7 @@ fn should_describe_a_quantized_transformer_projection_by_diffusers_name_and_pack
 }
 
 #[test]
-fn should_describe_a_quantized_text_projection_at_its_dequantized_bf16_size() {
+fn should_describe_a_quantized_text_projection_at_its_packed_size() {
     let descriptors = validate(
         Flux2KleinComponent::TextEncoder,
         &expected(&[("model.layers.0.mlp.down_proj.weight", None)]),
@@ -118,9 +118,25 @@ fn should_describe_a_quantized_text_projection_at_its_dequantized_bf16_size() {
     )
     .expect("a correctly packed text projection should validate");
 
-    assert_eq!(descriptors[0].dtype(), Dtype::BF16);
+    assert_eq!(descriptors[0].dtype(), Dtype::U32);
     assert_eq!(descriptors[0].shape(), [2_560, 9_728]);
-    assert_eq!(descriptors[0].payload_bytes(), 2_560 * 9_728 * 2);
+    assert_eq!(
+        descriptors[0].payload_bytes(),
+        2_560 * 1_216 * 4 + 2 * 2_560 * 152 * 2
+    );
+}
+
+#[test]
+fn should_describe_a_quantized_vae_projection_at_its_dequantized_bf16_size() {
+    let descriptors = validate(
+        Flux2KleinComponent::Vae,
+        &expected(&[("decoder.mid_block.attentions.0.to_q.weight", None)]),
+        packed("decoder.mid_block.attentions.0.to_q", 512, 512),
+    )
+    .expect("a correctly packed VAE projection should validate");
+
+    assert_eq!(descriptors[0].dtype(), Dtype::BF16);
+    assert_eq!(descriptors[0].payload_bytes(), 512 * 512 * 2);
 }
 
 #[test]

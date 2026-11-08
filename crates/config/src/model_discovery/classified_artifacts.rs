@@ -62,9 +62,7 @@ fn scan_classified_artifacts(
     if depth > MAXIMUM_CLASSIFIED_SCAN_DEPTH {
         return Ok(());
     }
-    if current_directory.join("config.json").is_file()
-        || current_directory.join("model_index.json").is_file()
-    {
+    if super::model_family::has_model_root_marker(current_directory) {
         if let Ok(Some(model_family)) = super::classify_model_directory(current_directory)
             && let Some(model_id) = model_identity(current_directory)
         {
@@ -185,12 +183,22 @@ fn is_valid_provider_model_id(provider_model_id: &str) -> bool {
 
 /// Returns artifact provenance only when its source records an immutable revision candidate.
 pub(super) fn immutable_model_revision(model_directory: &Path) -> Option<String> {
-    let authoritative_file_name = if model_directory.join("model_index.json").is_file() {
+    immutable_file_revision(model_directory, authoritative_file_name(model_directory))
+}
+
+/// The file whose download metadata records the artifact's revision: the one
+/// its family classifies from.
+fn authoritative_file_name(model_directory: &Path) -> &'static str {
+    if model_directory.join("model_index.json").is_file() {
         "model_index.json"
+    } else if model_directory
+        .join(super::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME)
+        .is_file()
+    {
+        super::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME
     } else {
         "config.json"
-    };
-    immutable_file_revision(model_directory, authoritative_file_name)
+    }
 }
 
 pub(super) fn immutable_file_revision(

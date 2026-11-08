@@ -1,4 +1,4 @@
-//! Exact dense Qwen3 decoder layer using native MLX fused attention and RoPE.
+//! Exact Qwen3 decoder layer using native MLX fused attention and RoPE.
 
 use astronomical_runtime_integration::MlxRuntime;
 
@@ -6,6 +6,7 @@ use super::Flux2KleinTextConditioningError;
 use super::weights::{
     Flux2KleinDecoderLayerWeights, HEAD_WIDTH, KEY_VALUE_HEAD_COUNT, QUERY_HEAD_COUNT,
 };
+use crate::flux2_klein::tensor_store::Flux2KleinWeight;
 use mlx_c_rust::{MlxArray, MlxDtype};
 
 const RMS_NORM_EPSILON: f32 = 0.000_001;
@@ -140,7 +141,7 @@ pub(super) fn build_causal_padding_mask(
 fn project_heads(
     runtime: &MlxRuntime,
     hidden_states: &MlxArray,
-    weight: &MlxArray,
+    weight: &Flux2KleinWeight,
     batch_size: i32,
     sequence_length: i32,
     head_count: i32,
@@ -153,11 +154,11 @@ fn project_heads(
     Ok(runtime.transpose_axes(&token_major, &[0, 2, 1, 3])?)
 }
 
+/// `activations @ weightᵀ`, on packed weights in the 4-bit build.
 fn linear(
     runtime: &MlxRuntime,
     activations: &MlxArray,
-    weight: &MlxArray,
+    weight: &Flux2KleinWeight,
 ) -> Result<MlxArray, Flux2KleinTextConditioningError> {
-    let transposed_weight = runtime.transpose_axes(weight, &[1, 0])?;
-    Ok(runtime.matmul(activations, &transposed_weight)?)
+    Ok(weight.project(runtime, activations)?)
 }

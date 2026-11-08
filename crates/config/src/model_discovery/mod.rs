@@ -14,6 +14,8 @@ mod classified_artifacts;
 mod effective_models;
 mod flux2_klein;
 mod flux2_klein_documents;
+mod flux2_klein_mlx_4bit;
+mod model_card_front_matter;
 mod model_family;
 mod modernbert;
 mod prism_hadamard_qwen35;
@@ -32,9 +34,10 @@ pub use flux2_klein::{
     Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError,
     verify_model_directory as verify_flux2_klein_model_directory,
 };
+pub use flux2_klein_mlx_4bit::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME;
 pub use model_family::{
-    ModelFamily, ModelFamilyClassificationError, classify_model_directory,
-    classify_pipeline_index_bytes,
+    ModelFamily, ModelFamilyClassificationError, classify_mflux_transformer_index_bytes,
+    classify_model_directory, classify_pipeline_index_bytes,
 };
 pub use qwen_image_21::{
     QwenImage21DirectoryEvidence, QwenImage21DirectoryVerificationError,
@@ -409,8 +412,8 @@ fn scan_directory_recursive(
         return Ok(());
     }
 
-    let has_pipeline_index = current_directory.join("model_index.json").is_file();
-    if (current_directory.join("config.json").is_file() || has_pipeline_index)
+    let is_pipeline_root = model_family::is_pipeline_root(current_directory);
+    if model_family::has_model_root_marker(current_directory)
         && let Some(discovered_model) = try_discover_model(current_directory)
     {
         discovered_models.push(discovered_model);
@@ -419,7 +422,7 @@ fn scan_directory_recursive(
     }
     // A Diffusers pipeline root is terminal even when unsupported or incomplete;
     // nested component configs are not independently requestable artifacts.
-    if has_pipeline_index {
+    if is_pipeline_root {
         return Ok(());
     }
 

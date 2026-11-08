@@ -1,8 +1,8 @@
 //! Which published builds an artifact may claim to be, and their license.
 
 use super::super::mlx_4bit_layout::{
-    FLUX2_KLEIN_MLX_4BIT_PROVIDER_MODEL_ID, FLUX2_KLEIN_MLX_4BIT_REVISION,
-    identifies_mlx_4bit_build,
+    FLUX2_KLEIN_MLX_4BIT_MODEL_ID, FLUX2_KLEIN_MLX_4BIT_PROVIDER_MODEL_ID,
+    FLUX2_KLEIN_MLX_4BIT_REVISION, identifies_mlx_4bit_build,
 };
 use super::super::weight_layout::Flux2KleinWeightLayout;
 use super::Flux2KleinArtifactError;
@@ -60,6 +60,17 @@ impl Flux2KleinArtifactProvenance {
     #[must_use]
     pub fn revision(&self) -> &str {
         &self.revision
+    }
+
+    /// The model id the build serves under, as discovery names it, so the
+    /// engine and the worker's selected configuration agree on one identity.
+    #[must_use]
+    pub fn serving_model_id(&self) -> &'static str {
+        if identifies_mlx_4bit_build(&self.model_id) {
+            FLUX2_KLEIN_MLX_4BIT_MODEL_ID
+        } else {
+            FLUX2_KLEIN_OFFICIAL_MODEL_ID
+        }
     }
 
     pub(super) fn into_revision(self) -> String {
@@ -161,6 +172,18 @@ mod tests {
                 Flux2KleinWeightLayout::DiffusersBf16
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn should_serve_each_build_under_its_discovered_model_id() {
+        assert_eq!(
+            Flux2KleinArtifactProvenance::official().serving_model_id(),
+            "FLUX.2-klein-4B"
+        );
+        assert_eq!(
+            Flux2KleinArtifactProvenance::mlx_4bit().serving_model_id(),
+            "flux2-klein-4b-4bit"
         );
     }
 

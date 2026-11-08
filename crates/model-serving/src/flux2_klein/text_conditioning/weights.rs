@@ -1,12 +1,15 @@
-//! BF16 tensor binding with complete or descriptor-streamed layer ownership.
-//! Tensors come through the tensor store, which dequantizes the 4-bit build's
-//! projections, so the encoder's arithmetic is the same for both builds.
+//! Tensor binding with complete or descriptor-streamed layer ownership.
+//! Tensors come through the tensor store: projections and the embedding stay
+//! packed in the 4-bit build (a quarter of the BF16 memory), norm scales are
+//! dense BF16 in both builds.
 
 use std::collections::VecDeque;
 
 use astronomical_runtime_integration::MlxRuntime;
 
-use crate::flux2_klein::tensor_store::{Flux2KleinTensorStore, map_component_weight_files};
+use crate::flux2_klein::tensor_store::{
+    Flux2KleinTensorStore, Flux2KleinWeight, map_component_weight_files,
+};
 use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -24,7 +27,7 @@ const VOCABULARY_SIZE: i32 = 151_936;
 
 #[derive(Debug)]
 pub(super) struct Flux2KleinTextWeights {
-    pub(super) embedding: Option<MlxArray>,
+    pub(super) embedding: Option<Flux2KleinWeight>,
     complete_layers: VecDeque<Flux2KleinDecoderLayerWeights>,
     descriptor_source: Option<Flux2KleinComponentWeightFiles>,
     streamed_layer_is_retained: bool,
@@ -34,16 +37,16 @@ pub(super) struct Flux2KleinTextWeights {
 #[derive(Debug)]
 pub(super) struct Flux2KleinDecoderLayerWeights {
     pub(super) input_norm: MlxArray,
-    pub(super) query: MlxArray,
-    pub(super) key: MlxArray,
-    pub(super) value: MlxArray,
-    pub(super) output: MlxArray,
+    pub(super) query: Flux2KleinWeight,
+    pub(super) key: Flux2KleinWeight,
+    pub(super) value: Flux2KleinWeight,
+    pub(super) output: Flux2KleinWeight,
     pub(super) query_norm: MlxArray,
     pub(super) key_norm: MlxArray,
     pub(super) post_attention_norm: MlxArray,
-    pub(super) gate: MlxArray,
-    pub(super) up: MlxArray,
-    pub(super) down: MlxArray,
+    pub(super) gate: Flux2KleinWeight,
+    pub(super) up: Flux2KleinWeight,
+    pub(super) down: Flux2KleinWeight,
 }
 
 impl Flux2KleinTextWeights {
@@ -73,11 +76,11 @@ impl Flux2KleinTextWeights {
                     map_text_encoder(&descriptor_source, runtime, performance_attribution)?;
                 let embedding = performance_attribution.measure_operation(
                     PerformanceOperation::ImageTextComponentLoading,
-                    |_performance_attribution| bind_embedding(runtime, &model_shards),
+                    |_performance_attribution| bind_embedding(&model_shards),
                 )?;
                 performance_attribution.measure_operation(
                     PerformanceOperation::ImageTextComponentLoading,
-                    |_performance_attribution| runtime.evaluate_arrays(&[&embedding]),
+                    |_performance_attribution| runtime.evaluate_arrays(&embedding.arrays()),
                 )?;
                 drop(model_shards);
                 Ok(Self {
@@ -153,7 +156,7 @@ impl Flux2KleinTextWeights {
     ) -> Result<(), Flux2KleinTextConditioningError> {
         let mut arrays = Vec::with_capacity(1 + self.complete_layers.len() * 11);
         if let Some(embedding) = &self.embedding {
-            arrays.push(embedding);
+            arrays.extend(embedding.arrays());
         }
         for layer in &self.complete_layers {
             layer.append_arrays(&mut arrays);
@@ -174,17 +177,17 @@ impl Flux2KleinDecoderLayerWeights {
     fn append_arrays<'weights>(&'weights self, arrays: &mut Vec<&'weights MlxArray>) {
         arrays.extend([
             &self.input_norm,
-            &self.query,
-            &self.key,
-            &self.value,
-            &self.output,
             &self.query_norm,
             &self.key_norm,
             &self.post_attention_norm,
-            &self.gate,
-            &self.up,
-            &self.down,
         ]);
+        arrays.extend(self.query.arrays());
+        arrays.extend(self.key.arrays());
+        arrays.extend(self.value.arrays());
+        arrays.extend(self.output.arrays());
+        arrays.extend(self.gate.arrays());
+        arrays.extend(self.up.arrays());
+        arrays.extend(self.down.arrays());
     }
 }
 
@@ -192,7 +195,7 @@ fn bind_complete_weights(
     runtime: &MlxRuntime,
     model_shards: &Flux2KleinTensorStore,
 ) -> Result<Flux2KleinTextWeights, Flux2KleinTextConditioningError> {
-    let embedding = bind_embedding(runtime, model_shards)?;
+    let embedding = bind_embedding(model_shards)?;
     let mut complete_layers = VecDeque::with_capacity(EXECUTED_LAYER_COUNT);
     for layer_index in 0..EXECUTED_LAYER_COUNT {
         complete_layers.push_back(bind_decoder_layer(runtime, model_shards, layer_index)?);
@@ -227,11 +230,9 @@ fn map_text_encoder(
 }
 
 fn bind_embedding(
-    runtime: &MlxRuntime,
     model_shards: &Flux2KleinTensorStore,
-) -> Result<MlxArray, Flux2KleinTextConditioningError> {
-    load_bf16_tensor(
-        runtime,
+) -> Result<Flux2KleinWeight, Flux2KleinTextConditioningError> {
+    load_projection(
         model_shards,
         "model.embed_tokens.weight",
         &[VOCABULARY_SIZE, HIDDEN_WIDTH],
@@ -251,26 +252,22 @@ fn bind_decoder_layer(
             &format!("{prefix}.input_layernorm.weight"),
             &[HIDDEN_WIDTH],
         )?,
-        query: load_bf16_tensor(
-            runtime,
+        query: load_projection(
             model_shards,
             &format!("{prefix}.self_attn.q_proj.weight"),
             &[QUERY_HEAD_COUNT * HEAD_WIDTH, HIDDEN_WIDTH],
         )?,
-        key: load_bf16_tensor(
-            runtime,
+        key: load_projection(
             model_shards,
             &format!("{prefix}.self_attn.k_proj.weight"),
             &[KEY_VALUE_HEAD_COUNT * HEAD_WIDTH, HIDDEN_WIDTH],
         )?,
-        value: load_bf16_tensor(
-            runtime,
+        value: load_projection(
             model_shards,
             &format!("{prefix}.self_attn.v_proj.weight"),
             &[KEY_VALUE_HEAD_COUNT * HEAD_WIDTH, HIDDEN_WIDTH],
         )?,
-        output: load_bf16_tensor(
-            runtime,
+        output: load_projection(
             model_shards,
             &format!("{prefix}.self_attn.o_proj.weight"),
             &[HIDDEN_WIDTH, QUERY_HEAD_COUNT * HEAD_WIDTH],
@@ -293,25 +290,41 @@ fn bind_decoder_layer(
             &format!("{prefix}.post_attention_layernorm.weight"),
             &[HIDDEN_WIDTH],
         )?,
-        gate: load_bf16_tensor(
-            runtime,
+        gate: load_projection(
             model_shards,
             &format!("{prefix}.mlp.gate_proj.weight"),
             &[INTERMEDIATE_WIDTH, HIDDEN_WIDTH],
         )?,
-        up: load_bf16_tensor(
-            runtime,
+        up: load_projection(
             model_shards,
             &format!("{prefix}.mlp.up_proj.weight"),
             &[INTERMEDIATE_WIDTH, HIDDEN_WIDTH],
         )?,
-        down: load_bf16_tensor(
-            runtime,
+        down: load_projection(
             model_shards,
             &format!("{prefix}.mlp.down_proj.weight"),
             &[HIDDEN_WIDTH, INTERMEDIATE_WIDTH],
         )?,
     })
+}
+
+/// A projection (or the embedding) as stored: packed in the 4-bit build, whose
+/// packed shapes the store checks against `expected_shape`; dense BF16 in the
+/// BF16 build, checked here like every other dense tensor.
+fn load_projection(
+    model_shards: &Flux2KleinTensorStore,
+    tensor_name: &str,
+    expected_shape: &[i32],
+) -> Result<Flux2KleinWeight, Flux2KleinTextConditioningError> {
+    let logical_shape = expected_shape
+        .iter()
+        .map(|dimension| usize::try_from(*dimension).unwrap_or_default())
+        .collect::<Vec<_>>();
+    let projection = model_shards.weight(tensor_name, &logical_shape)?;
+    if let Some(dense_projection) = projection.dense() {
+        validate_bf16_tensor(tensor_name, dense_projection, expected_shape)?;
+    }
+    Ok(projection)
 }
 
 fn load_bf16_tensor(
@@ -321,6 +334,15 @@ fn load_bf16_tensor(
     expected_shape: &[i32],
 ) -> Result<MlxArray, Flux2KleinTextConditioningError> {
     let tensor = model_shards.dense(runtime, tensor_name)?;
+    validate_bf16_tensor(tensor_name, &tensor, expected_shape)?;
+    Ok(tensor)
+}
+
+fn validate_bf16_tensor(
+    tensor_name: &str,
+    tensor: &MlxArray,
+    expected_shape: &[i32],
+) -> Result<(), Flux2KleinTextConditioningError> {
     if tensor.dtype() != MlxDtype::BFloat16 {
         return Err(Flux2KleinTextConditioningError::InvalidTensor {
             tensor_name: tensor_name.to_owned(),
@@ -333,5 +355,5 @@ fn load_bf16_tensor(
             description: "shape disagrees with the official Qwen3-4B profile",
         });
     }
-    Ok(tensor)
+    Ok(())
 }

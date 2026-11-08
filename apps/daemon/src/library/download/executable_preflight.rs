@@ -10,7 +10,8 @@
 use std::collections::BTreeSet;
 
 use astronomical_config::{
-    MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS, ModelFamily, classify_pipeline_index_bytes,
+    FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, MINIMUM_SERVABLE_CONTEXT_WINDOW_TOKENS,
+    ModelFamily, classify_mflux_transformer_index_bytes, classify_pipeline_index_bytes,
     context_window_tokens, required_shard_file_names,
 };
 use serde_json::Value;
@@ -64,13 +65,27 @@ impl DownloadExecutablePreflight {
         if manifest_file_paths.contains(PIPELINE_INDEX_FILE_PATH) {
             return self.validate_pipeline_artifact(manifest).await;
         }
+        self.validate_non_pipeline_artifact(manifest, &manifest_file_paths)
+            .await
+    }
+
+    /// Artifacts without a pipeline index classify from `config.json`, or, for
+    /// the 4-bit FLUX.2 Klein build, from its transformer weight index.
+    async fn validate_non_pipeline_artifact(
+        &self,
+        manifest: &HuggingFaceManifest,
+        manifest_file_paths: &BTreeSet<String>,
+    ) -> Result<(), DownloadExecutablePreflightError> {
         if manifest_file_paths.contains(CONFIG_FILE_PATH) {
             return self
-                .validate_config_artifact(manifest, &manifest_file_paths)
+                .validate_config_artifact(manifest, manifest_file_paths)
                 .await;
         }
+        if manifest_file_paths.contains(FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME) {
+            return self.validate_quantized_pipeline_artifact(manifest).await;
+        }
         Err(DownloadExecutablePreflightError::NotExecutable(
-            "the manifest has neither model_index.json nor config.json, so no model family can classify it"
+            "the manifest has neither model_index.json, config.json, nor a 4-bit transformer index, so no model family can classify it"
                 .to_owned(),
         ))
     }
@@ -102,6 +117,33 @@ impl DownloadExecutablePreflight {
             None => Err(DownloadExecutablePreflightError::NotExecutable(
                 "model_index.json does not describe a supported text-to-image pipeline".to_owned(),
             )),
+        }
+    }
+
+    /// A quantized pipeline without `model_index.json` (the 4-bit FLUX.2 Klein
+    /// build) classifies from its transformer weight index, by the same rule
+    /// disk discovery applies.
+    async fn validate_quantized_pipeline_artifact(
+        &self,
+        manifest: &HuggingFaceManifest,
+    ) -> Result<(), DownloadExecutablePreflightError> {
+        let transformer_index_bytes = self
+            .hub
+            .fetch_bounded_repository_file(
+                manifest.repository_id(),
+                manifest.revision(),
+                FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME,
+            )
+            .await?;
+        match classify_mflux_transformer_index_bytes(&transformer_index_bytes) {
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => Err(DownloadExecutablePreflightError::NotExecutable(
+                "the transformer weight index does not describe the reviewed 4-bit FLUX.2 Klein 4B build"
+                    .to_owned(),
+            )),
+            Err(parse_error) => Err(DownloadExecutablePreflightError::NotExecutable(format!(
+                "the transformer weight index is not a classifiable document: {parse_error}"
+            ))),
         }
     }
 

@@ -4,6 +4,7 @@ use std::path::Path;
 mod classified_artifacts;
 mod family_classification;
 mod flux2_klein;
+mod flux2_klein_mlx_4bit;
 mod modernbert;
 mod prism_hadamard_qwen35;
 mod qwen3_5;

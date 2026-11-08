@@ -72,6 +72,21 @@ impl Flux2KleinWeight {
         }
     }
 
+    /// Rows `row_ids` as a dense array: an embedding lookup that never expands
+    /// a packed table beyond the rows asked for.
+    pub(crate) fn gather_rows(
+        &self,
+        runtime: &MlxRuntime,
+        row_ids: &MlxArray,
+    ) -> Result<MlxArray, Flux2KleinTensorStoreError> {
+        match self {
+            Self::Dense(weight) => Ok(runtime.take_axis(weight, row_ids, 0)?),
+            Self::Affine4Bit(quantized_linear) => {
+                Ok(quantized_linear.gather_dequantized_rows(runtime, row_ids)?)
+            }
+        }
+    }
+
     /// The dense array, for tensors that are never quantized (norm scales).
     #[must_use]
     pub(crate) const fn dense(&self) -> Option<&MlxArray> {

@@ -9,9 +9,10 @@
 //! The descriptors this produces are logical: one per Diffusers tensor, named
 //! and shaped as in the BF16 build, so memory geometry and admission need no
 //! layout branches. Their payload is what the engine keeps resident for that
-//! tensor: the packed triple for the transformer, which multiplies on packed
-//! weights, and the dequantized BF16 size for the text encoder and VAE, which
-//! dequantize at load. The offsets are those of the stored `weight` tensor.
+//! tensor: the packed triple for the transformer and text encoder, which
+//! multiply on packed weights, and the dequantized BF16 size for the VAE,
+//! which dequantizes its few attention projections at load. The offsets are
+//! those of the stored `weight` tensor.
 
 use std::collections::BTreeMap;
 
@@ -187,7 +188,8 @@ fn quantized_logical_tensor(
     let [output_width, input_width] =
         packed_projection_widths(&weight.descriptor, &scales.descriptor, &biases.descriptor)
             .ok_or_else(|| packing_error(component, diffusers_name))?;
-    let resident_payload_bytes = if component == Flux2KleinComponent::Transformer {
+    let dequantizes_at_load = component == Flux2KleinComponent::Vae;
+    let resident_payload_bytes = if !dequantizes_at_load {
         checked_payload_sum(&[
             weight.descriptor.tensor_payload_bytes,
             scales.descriptor.tensor_payload_bytes,
@@ -197,7 +199,7 @@ fn quantized_logical_tensor(
         dequantized_payload_bytes(output_width, input_width)
     }
     .ok_or(Flux2KleinArtifactError::PayloadAccountingOverflow)?;
-    if component != Flux2KleinComponent::Transformer {
+    if dequantizes_at_load {
         weight.descriptor.dtype = Dtype::BF16;
     }
     weight.descriptor.shape = vec![output_width, input_width];

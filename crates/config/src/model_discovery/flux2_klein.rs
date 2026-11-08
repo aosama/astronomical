@@ -1,7 +1,9 @@
-//! Shallow discovery for a distilled FLUX.2 Klein 4B Diffusers pipeline.
+//! Shallow discovery for FLUX.2 Klein 4B, in either reviewed build: the BF16
+//! Diffusers pipeline (here) or the 4-bit MLX build (`flux2_klein_mlx_4bit`).
 //!
-//! Geometry, Apache-2.0 license, and required modular files prove the family.
-//! An immutable revision is recorded when present; serving does not pin one Hub SHA.
+//! For the BF16 build, geometry, the Apache-2.0 license, and the required
+//! modular files prove the family. An immutable revision is recorded when
+//! present; serving does not pin one Hub SHA.
 
 use std::collections::BTreeSet;
 use std::fs::{self, File};
@@ -16,6 +18,7 @@ use super::flux2_klein_documents::{
     PipelineClass, PipelineIndex, SchedulerGeometry, TextEncoderGeometry, TextEncoderIndex,
     TransformerGeometry, VaeGeometry,
 };
+use super::flux2_klein_mlx_4bit;
 use super::{ImageGenerationCapabilities, ModelLicense};
 
 pub(super) const CANONICAL_MODEL_ID: &str = "FLUX.2-klein-4B";
@@ -72,6 +75,8 @@ pub enum Flux2KleinDirectoryVerificationError {
     ModelSizeOverflow,
     #[error("FLUX.2 Klein immutable revision evidence is missing")]
     MissingRevision,
+    #[error("FLUX.2 Klein {component} 4-bit weight index is missing, malformed, or not Klein 4B")]
+    InvalidQuantizedWeightIndex { component: &'static str },
 }
 
 pub(super) fn classifies_pipeline_index(
@@ -86,10 +91,38 @@ pub(super) fn classifies_pipeline_index(
 }
 
 /// Rereads one exact directory without walking its parents, children, or configured scan roots.
+/// A directory with a pipeline index is the BF16 build; any other is checked as the 4-bit build.
 pub fn verify_model_directory(
     model_directory: &Path,
 ) -> Result<Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError> {
-    verify_model_directory_evidence(model_directory)
+    build_verifier(model_directory)(model_directory)
+}
+
+type BuildVerifier =
+    fn(&Path) -> Result<Flux2KleinDirectoryEvidence, Flux2KleinDirectoryVerificationError>;
+
+fn build_verifier(model_directory: &Path) -> BuildVerifier {
+    if model_directory.join("model_index.json").is_file() {
+        verify_model_directory_evidence
+    } else {
+        flux2_klein_mlx_4bit::verify_model_directory_evidence
+    }
+}
+
+/// What both builds can do: the same pipeline, so the same reviewed envelope.
+pub(super) fn flux2_klein_capabilities() -> ImageGenerationCapabilities {
+    ImageGenerationCapabilities {
+        supports_text_to_image: true,
+        supports_image_editing: false,
+        supports_multiple_reference_images: false,
+        // FLUX.2 Klein is a distilled turbo model whose reference schedule is four steps.
+        default_steps: 4,
+        // The serving profile's reviewed envelope: 64-pixel minimum side, 1024-pixel
+        // maximum, and the 16-pixel latent alignment.
+        minimum_dimension_pixels: 64,
+        maximum_dimension_pixels: 1_024,
+        dimension_multiple_pixels: 16,
+    }
 }
 
 /// Requires the authoritative modular package rather than its duplicate single-file export.
@@ -130,18 +163,7 @@ fn verify_model_directory_evidence(
             .unwrap_or_else(|| PROVIDER_MODEL_ID.to_owned()),
         revision,
         license: ModelLicense::Apache20,
-        capabilities: ImageGenerationCapabilities {
-            supports_text_to_image: true,
-            supports_image_editing: false,
-            supports_multiple_reference_images: false,
-            // FLUX.2 Klein is a distilled turbo model whose reference schedule is four steps.
-            default_steps: 4,
-            // The serving profile's reviewed envelope: 64-pixel minimum side, 1024-pixel
-            // maximum, and the 16-pixel latent alignment.
-            minimum_dimension_pixels: 64,
-            maximum_dimension_pixels: 1_024,
-            dimension_multiple_pixels: 16,
-        },
+        capabilities: flux2_klein_capabilities(),
         model_size_bytes,
     })
 }
@@ -385,7 +407,7 @@ fn required_safetensors_payload_size(
         .ok_or(Flux2KleinDirectoryVerificationError::InvalidTextEncoderWeightIndex)
 }
 
-fn required_weight_size(
+pub(super) fn required_weight_size(
     weight_path: &Path,
     component: &'static str,
 ) -> Result<u64, Flux2KleinDirectoryVerificationError> {
@@ -397,7 +419,7 @@ fn required_weight_size(
         .ok_or(Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component })
 }
 
-fn is_safe_safetensors_path(shard_path: &str) -> bool {
+pub(super) fn is_safe_safetensors_path(shard_path: &str) -> bool {
     let shard_file_path = Path::new(shard_path);
     !shard_path.is_empty()
         && !shard_path.contains('\\')

@@ -73,7 +73,7 @@ impl Flux2KleinTextConditioningState {
             .embedding
             .take()
             .ok_or(Flux2KleinTextConditioningError::WeightsUnavailable)?;
-        let hidden_states = runtime.take_axis(&embedding, &token_ids, 0)?;
+        let hidden_states = embedding.gather_rows(runtime, &token_ids)?;
         performance_attribution
             .measure_operation(PerformanceOperation::ImageTextComponentLoading, |_| {
                 runtime.evaluate_arrays(&[&hidden_states])
