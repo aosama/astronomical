@@ -24,7 +24,6 @@ use crate::worker::event_reaction::{
     sample_idle_mlx_memory_telemetry, send_image_deadline_exceeded,
 };
 use crate::worker::generation::generate::handle_generate_command;
-use crate::worker::health::publish_pending_mlx_memory_ceiling;
 use crate::worker::idle_drain::{
     drain_pending_idle_work, wait_for_embeddings_execution_deadline,
     wait_for_image_execution_deadline,
@@ -34,10 +33,8 @@ use crate::worker::loop_types::{
     ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopRuntime, WorkerLoopState,
 };
 use crate::worker::memory::demotion::MemoryDemotionRestart;
-use crate::worker::memory::limit::{
-    MlxMemoryLimitUpdateOutcome, PendingMlxMemoryLimitUpdate, apply_mlx_memory_limit,
-    take_generation_start_after_pending_memory_limit,
-};
+use crate::worker::memory::idle_limit_update::queue_or_apply_mlx_memory_limit_update;
+use crate::worker::memory::limit::take_generation_start_after_pending_memory_limit;
 use crate::worker::process::containment::{
     close_worker_if_running, contain_worker_failure, shutdown_worker,
 };
@@ -556,49 +553,6 @@ async fn execute_worker_replacement(
     )
     .await;
     let _send_outcome = restart_sender.send(replacement_result);
-}
-
-/// Queues the MLX memory-limit update while a generation is active, or applies
-/// it immediately when idle. Mirrors the inlined `UpdateMlxMemoryLimit` arm,
-/// including the pending-ceiling health publish on the queued path.
-async fn queue_or_apply_mlx_memory_limit_update(
-    runtime: &mut WorkerLoopRuntime,
-    routed_command: WorkerLoopCommand,
-) {
-    let WorkerLoopCommand::UpdateMlxMemoryLimit {
-        effective_mlx_memory_ceiling_bytes,
-        configuration_generation,
-        update_sender,
-    } = routed_command
-    else {
-        return;
-    };
-    if runtime.active_generation.is_some() {
-        runtime.pending_mlx_memory_limit_update = Some(PendingMlxMemoryLimitUpdate {
-            effective_mlx_memory_ceiling_bytes,
-            configuration_generation,
-        });
-        publish_pending_mlx_memory_ceiling(
-            &runtime.health_snapshot,
-            Some(effective_mlx_memory_ceiling_bytes),
-        );
-        let _send_outcome = update_sender.send(Ok(MlxMemoryLimitUpdateOutcome::Queued));
-        return;
-    }
-    let update_outcome = apply_mlx_memory_limit(
-        &mut runtime.worker_process,
-        effective_mlx_memory_ceiling_bytes,
-        configuration_generation,
-        runtime.model_load_timeout,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
-    )
-    .await;
-    let _send_outcome = update_sender.send(update_outcome);
 }
 
 /// Runs a memory-demotion restart and reports its result. Mirrors the inlined

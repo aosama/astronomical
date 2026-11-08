@@ -93,6 +93,16 @@ pub enum WorkerControlError {
         /// Maximum interval permitted for the worker-side adjustment.
         memory_limit_update_timeout_millis: u128,
     },
+    /// A live memory-limit update failed and the worker was contained; the
+    /// failure loop relaunches a replacement, so the caller only reports it.
+    #[error(
+        "worker failed while adopting the memory limit and was stopped for relaunch: {failure_description}"
+    )]
+    ContainedMlxMemoryLimitFailure {
+        /// The original failure, kept as text because the error was consumed
+        /// by containment, which logs it in full.
+        failure_description: String,
+    },
     /// The worker did not acknowledge a prompt-cache clear in time.
     #[error(
         "worker prompt-cache clear acknowledgement did not arrive within the {cache_clear_timeout_millis}-millisecond timeout"

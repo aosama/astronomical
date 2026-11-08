@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamErrorCode, ChatGenerationStreamEvent,
-    GenerationStartError, WorkerHandle, WorkerHealthStatus,
+    GenerationStartError, WorkerControlError, WorkerHandle, WorkerHealthStatus,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationSettings, ChatMessage, ChatToolChoice, RequestId,
@@ -58,6 +58,49 @@ async fn should_serve_the_next_chat_request_after_one_worker_crash() {
         .shutdown()
         .await
         .expect("the replacement worker should shut down");
+}
+
+/// The scripted worker exits when asked to adopt exactly this many bytes, the
+/// way a real worker does on a fatal engine error during a ceiling change.
+const SCRIPTED_WORKER_EXIT_ON_MLX_MEMORY_LIMIT_BYTES: u64 = 13;
+
+#[tokio::test]
+async fn should_relaunch_and_serve_after_the_worker_dies_during_a_memory_limit_change() {
+    let worker_executor = launch_scripted_worker().await;
+
+    let memory_limit_error = worker_executor
+        .update_mlx_memory_limit(
+            SCRIPTED_WORKER_EXIT_ON_MLX_MEMORY_LIMIT_BYTES,
+            "memory-change-that-kills-the-worker".to_owned(),
+        )
+        .await
+        .expect_err("a worker that exits mid change must fail the update");
+    assert!(
+        matches!(
+            memory_limit_error,
+            WorkerControlError::ContainedMlxMemoryLimitFailure { .. }
+        ),
+        "the caller must learn the worker was contained, got {memory_limit_error}"
+    );
+
+    wait_for_health(
+        &worker_executor,
+        WorkerHealthStatus::Ready,
+        Duration::from_secs(5),
+    )
+    .await;
+    let mut followup_stream = worker_executor
+        .start_chat_generation(command_for_model("astronomical/test-worker"))
+        .await
+        .expect("the relaunched worker should admit the next request");
+    assert!(matches!(
+        receive_event(&mut followup_stream).await,
+        ChatGenerationStreamEvent::Completed { .. }
+    ));
+    worker_executor
+        .shutdown()
+        .await
+        .expect("the relaunched worker should shut down");
 }
 
 #[tokio::test]
