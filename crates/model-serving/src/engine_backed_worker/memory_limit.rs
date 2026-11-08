@@ -189,7 +189,8 @@ where
         let Some(model_factory) = self.model_factory.as_mut() else {
             return FactoryMemoryLimitOutcome::FactoryUnavailable;
         };
-        model_factory.adopt_mlx_memory_limits_with_no_model_loaded(
+        model_factory.update_mlx_memory_limits(
+            effective_requested_mlx_memory_ceiling_bytes,
             effective_requested_mlx_memory_ceiling_bytes,
         );
         self.effective_mlx_memory_ceiling_bytes = effective_requested_mlx_memory_ceiling_bytes;

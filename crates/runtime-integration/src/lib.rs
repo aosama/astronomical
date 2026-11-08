@@ -89,8 +89,7 @@ pub use mlx_runtime_types::{
 #[cfg(feature = "mlx")]
 pub use mlx_runtime::{
     MlxRuntime, classify_mlx_error, compiled_metallib_path,
-    maximum_recommended_gpu_working_set_size_bytes, reinstall_process_memory_limits_while_idle,
-    validate_metallib_path,
+    maximum_recommended_gpu_working_set_size_bytes, validate_metallib_path,
 };
 #[cfg(feature = "mlx")]
 pub use safetensors::file_writer::{MlxSafetensorsWriteOutcome, MlxSafetensorsWriterError};
