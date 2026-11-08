@@ -1,38 +1,25 @@
 //! Resolution of the effective MLX memory ceiling from the user's
 //! configuration and the machine bound.
 //!
-//! One source of truth governs the maximum: physical RAM minus the
-//! operating-system survival reserve. The user's configured value may cap
-//! below that bound; with no configuration the machine bound itself is the
-//! ceiling. No graphics-memory recommendation from the kernel or the device
-//! participates in the bound.
-
-/// End-user-facing memory values use the gigabyte convention Apple uses to
-/// market the machine: 1 GB = 1,073,741,824 bytes (2³⁰), so a
-/// 51,539,607,552-byte machine is the "48 GB" on the purchase sticker.
-const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
-/// What macOS keeps for itself so the machine stays usable while a model
-/// holds the rest of RAM.
-const OPERATING_SYSTEM_SURVIVAL_RESERVE_BYTES: u64 = 8 * BYTES_PER_MARKETED_GIGABYTE;
-/// Smallest machine ceiling so very small computers remain servable instead
-/// of resolving to a zero ceiling that rejects every configuration.
-const MINIMUM_MACHINE_MLX_MEMORY_CEILING_BYTES: u64 = BYTES_PER_MARKETED_GIGABYTE;
+//! One source of truth governs the maximum: the machine's physical memory.
+//! Astronomical keeps no reserve of its own for the operating system and
+//! refuses nothing because a Mac is small (#1902): MLX's own allocation
+//! limits and macOS (compression, then swap) handle memory pressure, so an
+//! 8 GB Mac may serve slowly but is never turned away. The user's configured
+//! value may cap below the bound; with no configuration the machine bound is
+//! the ceiling. No graphics-memory recommendation from the kernel or the
+//! device participates in the bound; the wired-residency cap below is applied
+//! separately, because that one is Metal's own limit.
 
 /// Resolves the machine MLX memory ceiling from the physical memory size.
 ///
-/// The ceiling is the total RAM minus the 8 GB operating-system survival
-/// reserve, floored at 1 GB. Example: a 51,539,607,552-byte machine (sold
-/// as 48 GB) resolves to 42,949,672,960 bytes — the 40 GB on the same
-/// sticker scale.
+/// The ceiling is the whole of physical memory. A fixed operating-system
+/// reserve used to be subtracted here, which left an 8 GB Mac a 1 GB ceiling
+/// and so refused every catalog model on the machines the project most wants
+/// to reach; that reserve is gone on purpose.
 #[must_use]
 pub const fn machine_ceiling_from_physical_ram_bytes(physical_ram_bytes: u64) -> u64 {
-    let ceiling_after_reserve_bytes =
-        physical_ram_bytes.saturating_sub(OPERATING_SYSTEM_SURVIVAL_RESERVE_BYTES);
-    if ceiling_after_reserve_bytes < MINIMUM_MACHINE_MLX_MEMORY_CEILING_BYTES {
-        MINIMUM_MACHINE_MLX_MEMORY_CEILING_BYTES
-    } else {
-        ceiling_after_reserve_bytes
-    }
+    physical_ram_bytes
 }
 
 /**
