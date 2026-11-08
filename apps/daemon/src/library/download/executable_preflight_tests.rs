@@ -150,6 +150,102 @@ async fn should_pass_a_qwen_image_pipeline_artifact_past_the_gate() {
 }
 
 #[tokio::test]
+async fn should_pass_the_4bit_flux_build_past_the_gate_by_its_transformer_index() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        // The 4-bit FLUX.2 Klein build ships neither model_index.json nor config.json;
+        // the gate classifies it from the transformer weight index, as disk discovery does.
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            quantized_pipeline_tree_response(),
+            mflux_transformer_index_response(5, 20),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey.start_download_and_await_transfer_attempt().await;
+
+        assert_eq!(
+            transport.metadata_request_count(),
+            3,
+            "the gate must classify the 4-bit build from its transformer index alone"
+        );
+        assert!(
+            transport.payload_request_count() >= 1,
+            "the 4-bit build must reach payload transfer"
+        );
+    })
+    .await
+    .expect("4-bit FLUX preflight journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_reject_a_quantized_pipeline_that_is_not_klein_4b_before_transfer() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            quantized_pipeline_tree_response(),
+            mflux_transformer_index_response(8, 24),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey
+            .start_download_and_await_failure()
+            .await
+            .expect_public_error(DownloadJobPublicErrorCode::ModelNotExecutable);
+
+        assert_eq!(
+            transport.payload_request_count(),
+            0,
+            "no payload byte may be requested for a build discovery would not serve"
+        );
+    })
+    .await
+    .expect("non-Klein-4B quantized pipeline journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_reject_a_malformed_4bit_transformer_index_before_transfer() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            quantized_pipeline_tree_response(),
+            json_response(serde_json::json!(["not", "an", "index"])),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey
+            .start_download_and_await_failure()
+            .await
+            .expect_public_error(DownloadJobPublicErrorCode::ModelNotExecutable);
+
+        assert_eq!(transport.payload_request_count(), 0);
+    })
+    .await
+    .expect("malformed 4-bit index journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_reject_a_manifest_with_no_classifiable_document() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            tree_response(serde_json::json!([
+                {"type":"file","size":7,"path":"weights.safetensors","oid":GIT_BLOB_SHA1}
+            ])),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey
+            .start_download_and_await_failure()
+            .await
+            .expect_public_error(DownloadJobPublicErrorCode::ModelNotExecutable);
+
+        assert_eq!(transport.payload_request_count(), 0);
+    })
+    .await
+    .expect("unclassifiable manifest journey should remain bounded");
+}
+
+#[tokio::test]
 async fn should_surface_a_gate_retrieval_failure_as_a_transport_failure() {
     tokio::time::timeout(Duration::from_secs(5), async {
         // The response queue runs out at the gate's config.json fetch, which is a transport
@@ -390,6 +486,44 @@ fn pipeline_tree_response() -> HubHttpResponse {
         {"type":"file","size":9,"path":"config.json","oid":GIT_BLOB_SHA1},
         {"type":"file","size":60,"path":"model_index.json","oid":GIT_BLOB_SHA1}
     ]))
+}
+
+fn quantized_pipeline_tree_response() -> HubHttpResponse {
+    tree_response(serde_json::json!([
+        {"type":"file","size":60,"path":"transformer/model.safetensors.index.json","oid":GIT_BLOB_SHA1},
+        {"type":"file","size":7,"path":"transformer/0.safetensors","oid":GIT_BLOB_SHA1}
+    ]))
+}
+
+fn mflux_transformer_index_response(
+    double_stream_block_count: usize,
+    single_stream_block_count: usize,
+) -> HubHttpResponse {
+    let mut weight_map = serde_json::Map::new();
+    weight_map.insert(
+        "time_guidance_embed.linear_1.weight".to_owned(),
+        serde_json::json!("0.safetensors"),
+    );
+    for block_index in 0..double_stream_block_count {
+        weight_map.insert(
+            format!("transformer_blocks.{block_index}.attn.to_q.weight"),
+            serde_json::json!("0.safetensors"),
+        );
+    }
+    for block_index in 0..single_stream_block_count {
+        weight_map.insert(
+            format!("single_transformer_blocks.{block_index}.attn.to_out.weight"),
+            serde_json::json!("0.safetensors"),
+        );
+    }
+    json_response(serde_json::json!({
+        "metadata": {
+            "quantization_level": "4",
+            "quantization_group_size": "64",
+            "mflux_version": "0.17.5"
+        },
+        "weight_map": weight_map
+    }))
 }
 
 fn qwen_image_pipeline_index_response() -> HubHttpResponse {

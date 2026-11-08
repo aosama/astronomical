@@ -157,7 +157,7 @@ impl Flux2KleinTransformer {
 
     pub(crate) fn load_with_geometry_and_performance_attribution(
         runtime: MlxRuntime,
-        weights_file: crate::artifact_validation::validated_artifact::ValidatedWeightsFile,
+        weight_files: crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles,
         geometry: Flux2KleinTransformerGeometry,
         retained_block_indices: &[usize],
         performance_attribution: &mut PerformanceAttribution,
@@ -167,7 +167,7 @@ impl Flux2KleinTransformer {
             |_| {
                 Flux2KleinTransformerWeights::load_with_residency(
                     &runtime,
-                    weights_file,
+                    weight_files,
                     &geometry,
                     retained_block_indices,
                 )
@@ -523,7 +523,7 @@ impl Flux2KleinTransformer {
         let final_modulation = math::linear(
             &self.runtime,
             &self.runtime.silu(&timestep_embedding)?,
-            self.weights.tensor("norm_out.linear.weight")?,
+            self.weights.linear("norm_out.linear.weight")?,
         )?;
         let final_parts = split_modulation(
             &self.runtime,
@@ -542,7 +542,7 @@ impl Flux2KleinTransformer {
         let sample = math::linear(
             &self.runtime,
             &adaptive_normalized,
-            self.weights.tensor("proj_out.weight")?,
+            self.weights.linear("proj_out.weight")?,
         )?;
         Ok(Flux2KleinTransformerOutput { sample })
     }

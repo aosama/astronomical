@@ -13,6 +13,7 @@ use thiserror::Error;
 
 use super::bounded_artifact_file;
 use super::classified_artifacts;
+use super::model_card_front_matter::has_front_matter_value;
 use super::qwen_image_21_documents::{
     ComponentSafetensorsIndex, PipelineClass, PipelineIndex, QwenImage21SchedulerGeometry,
     QwenImage21TextEncoderGeometry, QwenImage21TransformerGeometry, QwenImage21VaeGeometry,
@@ -326,23 +327,6 @@ fn validate_license_provenance(
         && has_front_matter_value(readme, "base_model", "Qwen/Qwen-Image-2.1"))
     .then_some(())
     .ok_or(QwenImage21DirectoryVerificationError::InvalidLicenseProvenance)
-}
-
-fn has_front_matter_value(readme: &str, key: &str, expected_value: &str) -> bool {
-    let expected_line = format!("{key}: {expected_value}");
-    let mut lines = readme.lines().map(str::trim);
-    if lines.next() != Some("---") {
-        return false;
-    }
-    for line in lines {
-        if line == "---" {
-            break;
-        }
-        if line == expected_line {
-            return true;
-        }
-    }
-    false
 }
 
 fn measure_reviewed_weight_bytes(

@@ -155,8 +155,8 @@ impl Flux2KleinMlxComponents {
             self.conditioning = None;
             self.image_position_ids = None;
             self.text_position_ids = None;
-            let vae_file = self
-                .vae_file
+            let vae_weight_files = self
+                .vae_weight_files
                 .take()
                 .ok_or_else(|| "the validated VAE descriptor is unavailable".to_owned())?;
             performance_attribution.measure_operation(
@@ -169,7 +169,7 @@ impl Flux2KleinMlxComponents {
             )?;
             let decoder = Flux2KleinVaeDecoder::load_with_performance_attribution(
                 self.runtime()?,
-                vae_file.into_file(),
+                vae_weight_files,
                 performance_attribution,
             )
             .map_err(|error| error.to_string())?;

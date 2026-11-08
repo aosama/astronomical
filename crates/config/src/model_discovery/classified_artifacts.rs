@@ -62,15 +62,13 @@ fn scan_classified_artifacts(
     if depth > MAXIMUM_CLASSIFIED_SCAN_DEPTH {
         return Ok(());
     }
-    if current_directory.join("config.json").is_file()
-        || current_directory.join("model_index.json").is_file()
-    {
+    if super::model_family::has_model_root_marker(current_directory) {
         if let Ok(Some(model_family)) = super::classify_model_directory(current_directory)
             && let Some(model_id) = model_identity(current_directory)
         {
             classified_artifacts.push(ClassifiedModelArtifact {
                 model_id,
-                upstream_revision: immutable_model_revision(current_directory),
+                upstream_revision: immutable_model_revision(current_directory, model_family),
                 model_directory: current_directory.to_path_buf(),
                 model_family,
             });
@@ -184,13 +182,27 @@ fn is_valid_provider_model_id(provider_model_id: &str) -> bool {
 }
 
 /// Returns artifact provenance only when its source records an immutable revision candidate.
-pub(super) fn immutable_model_revision(model_directory: &Path) -> Option<String> {
-    let authoritative_file_name = if model_directory.join("model_index.json").is_file() {
+pub(super) fn immutable_model_revision(
+    model_directory: &Path,
+    model_family: ModelFamily,
+) -> Option<String> {
+    immutable_file_revision(
+        model_directory,
+        authoritative_file_name(model_directory, model_family),
+    )
+}
+
+/// The file whose download metadata records the artifact's revision: the one
+/// the directory was classified from. FLUX.2 Klein without a pipeline index
+/// can only be the 4-bit build, classified from its transformer index.
+fn authoritative_file_name(model_directory: &Path, model_family: ModelFamily) -> &'static str {
+    if model_directory.join("model_index.json").is_file() {
         "model_index.json"
+    } else if model_family == ModelFamily::Flux2Klein {
+        super::FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME
     } else {
         "config.json"
-    };
-    immutable_file_revision(model_directory, authoritative_file_name)
+    }
 }
 
 pub(super) fn immutable_file_revision(

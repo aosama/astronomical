@@ -46,13 +46,10 @@ pub enum Flux2KleinTransformerError {
     ZeroBlockGroupSize,
     #[error("FLUX.2 Klein transformer execution was cancelled at a block-group boundary")]
     Cancelled,
-    #[error("failed to clone the FLUX.2 Klein transformer descriptor for bounded block loading")]
-    DescriptorClone {
-        #[source]
-        source: std::io::Error,
-    },
     #[error(transparent)]
     Mlx(#[from] MlxRuntimeError),
+    #[error(transparent)]
+    TensorStore(#[from] crate::flux2_klein::tensor_store::Flux2KleinTensorStoreError),
 }
 
 #[cfg(feature = "direct-mlx")]

@@ -100,12 +100,11 @@
             "display_name": "FLUX.2 Klein 4B",
             "family": "flux2_klein",
             "approximate_size_bytes": 15980141329,
-            "approximate_memory_bytes": 18146236758,
+            "approximate_memory_bytes": 8897394184,
             "minimum_memory_bytes": 2249870406,
             "role": "image_generation",
-            "get_started": true,
             "public": true,
-            "description": "A local image generator that turns a written description into one high-quality image, all on your Mac - no uploads, and no internet needed for the drawing itself.",
+            "description": "The full-precision original of the FLUX.2 Klein 4B 4-bit image generator: the same model, all on your Mac, from a download about three times larger.",
             "capabilities": {
                 "supports_image_generation": true
             },
@@ -118,6 +117,31 @@
                 "transformer/",
                 "vae/"
             ],
+            "upstream_license": "Apache-2.0"
+        },
+        {
+            "huggingface_id": "mlx-community/flux2-klein-4b-4bit",
+            "revision": "860e87183ceb29e39627c0612ebd66d8ea66e68c",
+            "display_name": "FLUX.2 Klein 4B 4-bit",
+            "family": "flux2_klein",
+            "approximate_size_bytes": 4619700724,
+            "approximate_memory_bytes": 6644714346,
+            "minimum_memory_bytes": 2249870406,
+            "role": "image_generation",
+            "get_started": true,
+            "public": true,
+            "description": "A local image generator that turns a written description into one high-quality image, all on your Mac - no uploads, and no internet needed for the drawing itself.",
+            "capabilities": {
+                "supports_image_generation": true
+            },
+            "included_paths": [
+                "README.md",
+                "text_encoder/",
+                "tokenizer/",
+                "transformer/",
+                "vae/"
+            ],
+            "quantization_label": "MLX 4-bit (affine, group 64)",
             "upstream_license": "Apache-2.0"
         },
         {

@@ -1,6 +1,8 @@
 //! One-head spatial self-attention using MLX fused scaled dot-product attention.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
+
+use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 
 use super::convolution;
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinGroupNorm, Flux2KleinVaeError};
@@ -19,7 +21,7 @@ pub(super) struct Flux2KleinVaeMiddleAttention {
 impl Flux2KleinVaeMiddleAttention {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &MlxSafetensors,
+        vae_store: &Flux2KleinTensorStore,
         prefix: &str,
         channels: usize,
     ) -> Result<Self, Flux2KleinVaeError> {
@@ -27,31 +29,31 @@ impl Flux2KleinVaeMiddleAttention {
             channels,
             group_norm: Flux2KleinGroupNorm::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.group_norm"),
                 channels,
             )?,
             query: Flux2KleinChannelLastConv2d::load_linear_as_pointwise(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.to_q"),
                 channels,
             )?,
             key: Flux2KleinChannelLastConv2d::load_linear_as_pointwise(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.to_k"),
                 channels,
             )?,
             value: Flux2KleinChannelLastConv2d::load_linear_as_pointwise(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.to_v"),
                 channels,
             )?,
             output: Flux2KleinChannelLastConv2d::load_linear_as_pointwise(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.to_out.0"),
                 channels,
             )?,

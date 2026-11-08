@@ -1,6 +1,8 @@
 //! PyTorch-compatible GroupNorm expressed through MLX's fused non-affine LayerNorm.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
+
+use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 
 use super::Flux2KleinVaeError;
 use super::convolution;
@@ -19,7 +21,7 @@ pub(super) struct Flux2KleinGroupNorm {
 impl Flux2KleinGroupNorm {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &MlxSafetensors,
+        vae_store: &Flux2KleinTensorStore,
         prefix: &str,
         channels: usize,
     ) -> Result<Self, Flux2KleinVaeError> {
@@ -28,8 +30,8 @@ impl Flux2KleinGroupNorm {
                 "GroupNorm channels must be divisible by 32",
             ));
         }
-        let weight = tensors.tensor(&format!("{prefix}.weight"))?;
-        let bias = tensors.tensor(&format!("{prefix}.bias"))?;
+        let weight = vae_store.dense(runtime, &format!("{prefix}.weight"))?;
+        let bias = vae_store.dense(runtime, &format!("{prefix}.bias"))?;
         convolution::validate_shape(prefix, "weight", &weight, &[channels])?;
         convolution::validate_shape(prefix, "bias", &bias, &[channels])?;
         Ok(Self {

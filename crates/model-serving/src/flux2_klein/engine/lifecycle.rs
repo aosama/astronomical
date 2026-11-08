@@ -13,7 +13,7 @@ use crate::image_generation_engine::ImageGenerationEngineLoadResult;
 use crate::{ImageGenerationEngine, ImageGenerationEngineStep, PerformanceAttributionOutcome};
 
 #[cfg(feature = "direct-mlx")]
-use super::super::{FLUX2_KLEIN_OFFICIAL_MODEL_ID, Flux2KleinArtifactProvenance};
+use super::super::Flux2KleinArtifactProvenance;
 use super::super::{Flux2KleinFlowSchedule, Flux2KleinImageDimensions, Flux2KleinOfficialProfile};
 use super::components::Flux2KleinEngineComponents;
 use super::request_validation;
@@ -31,7 +31,8 @@ pub struct Flux2KleinImageEngine {
 }
 
 impl Flux2KleinImageEngine {
-    /// Factory-facing constructor for the exact official artifact profile.
+    /// Factory-facing constructor for either reviewed build; the provenance
+    /// decides which model id the engine serves under.
     #[cfg(feature = "direct-mlx")]
     pub fn new(
         model_directory: impl AsRef<Path>,
@@ -41,10 +42,11 @@ impl Flux2KleinImageEngine {
         performance_attribution_enabled: bool,
         performance_attribution_log_path: PathBuf,
     ) -> Self {
+        let serving_model_id = provenance.serving_model_id();
         Self::with_components_for_tests(
-            FLUX2_KLEIN_OFFICIAL_MODEL_ID,
+            serving_model_id,
             Box::new(super::mlx_components::Flux2KleinMlxComponents::new(
-                FLUX2_KLEIN_OFFICIAL_MODEL_ID.to_owned(),
+                serving_model_id.to_owned(),
                 model_directory.as_ref().to_path_buf(),
                 provenance,
                 effective_mlx_memory_ceiling_bytes,

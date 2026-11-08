@@ -43,9 +43,33 @@ const ROMEO_AND_JULIET_SOURCE: &str =
 #[serial_test::serial]
 #[ignore = "requires the official artifact; select an independent reference_artifact_path for reference comparison"]
 async fn should_generate_official_flux2_klein_through_rest() {
-    timeout(JOURNEY_TIMEOUT, run_flux_rgb_and_repetition_journey())
-        .await
-        .expect("the official FLUX.2 Klein RGB journey must finish within 115 seconds");
+    let acceptance_prompt = acceptance_prompt();
+    eprintln!(
+        "[flux-acceptance] phase=independent-reference prompt_sha256={}",
+        sha256_hex(acceptance_prompt.as_bytes())
+    );
+    let reference_oracle = optional_reference_oracle(&acceptance_prompt);
+    timeout(
+        JOURNEY_TIMEOUT,
+        run_flux_rgb_and_repetition_journey(
+            crate::support::flux2_klein_model_id(),
+            reference_oracle,
+        ),
+    )
+    .await
+    .expect("the official FLUX.2 Klein RGB journey must finish within 115 seconds");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial_test::serial]
+#[ignore = "requires the 4-bit MLX build of FLUX.2 Klein 4B (mlx-community/flux2-klein-4b-4bit)"]
+async fn should_generate_the_4bit_flux2_klein_build_through_rest() {
+    timeout(
+        JOURNEY_TIMEOUT,
+        run_flux_rgb_and_repetition_journey(crate::support::flux2_klein_4bit_model_id(), None),
+    )
+    .await
+    .expect("the 4-bit FLUX.2 Klein RGB journey must finish within 115 seconds");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -101,14 +125,14 @@ async fn run_initial_noise_journey() {
     }
 }
 
-async fn run_flux_rgb_and_repetition_journey() {
+/// Generates the same image twice through REST and requires the second to
+/// match the first, comparing with the independent reference when one is
+/// configured (the reference exists for the BF16 build only).
+async fn run_flux_rgb_and_repetition_journey(
+    canonical_flux_model_id: &str,
+    reference_oracle: Option<FluxReferenceOracle>,
+) {
     let acceptance_prompt = acceptance_prompt();
-    eprintln!(
-        "[flux-acceptance] phase=independent-reference prompt_sha256={}",
-        sha256_hex(acceptance_prompt.as_bytes())
-    );
-    let reference_oracle = optional_reference_oracle(&acceptance_prompt);
-    let canonical_flux_model_id = crate::support::flux2_klein_model_id();
     let rest_server = launch_flux_rest_server().await;
     let server_address = rest_server.server_address;
     let initial_status = get_status(server_address).await;
@@ -157,7 +181,11 @@ async fn run_flux_rgb_and_repetition_journey() {
         &configuration_generation,
     );
     assert_native_repetition(&first_pixels, &repeated_pixels);
-    assert_image_attribution(&rest_server, &["success", "success"]);
+    assert_image_attribution(
+        &rest_server,
+        canonical_flux_model_id,
+        &["success", "success"],
+    );
     rest_server.stop().await;
 }
 
@@ -200,7 +228,11 @@ async fn run_flux_cancellation_reuse_journey() {
         &configuration_generation,
     );
     wait_for_image_attribution_count(&rest_server, 2, "cancel-reuse-attribution").await;
-    assert_image_attribution(&rest_server, &["cancelled", "success"]);
+    assert_image_attribution(
+        &rest_server,
+        canonical_flux_model_id,
+        &["cancelled", "success"],
+    );
     rest_server.stop().await;
 }
 

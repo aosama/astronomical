@@ -1,8 +1,10 @@
-//! Strict contracts for the first Apache-2.0 FLUX.2 Klein image profile.
+//! FLUX.2 Klein 4B image generation, in its BF16 Diffusers build and its 4-bit
+//! MLX build (`mlx_4bit_build`).
 //!
-//! This domain validates immutable artifact ownership and computes engine inputs.
-//! It intentionally contains no MLX execution so the future engine cannot bypass
-//! configuration, transport, schedule, or unified-memory admission contracts.
+//! Artifact validation, configuration, schedules and memory admission carry no
+//! MLX dependency, so the engine cannot bypass their contracts; the MLX engine
+//! (`engine`, `transformer`, `text_conditioning`, `vae`, `tensor_store`) is
+//! built only with the `direct-mlx` feature.
 
 pub(crate) mod artifact;
 mod artifact_text_validation;
@@ -12,6 +14,7 @@ pub(crate) mod engine;
 pub(crate) mod image_encoding;
 pub(crate) mod inventory;
 pub(crate) mod memory_admission;
+pub(crate) mod mlx_4bit_build;
 #[cfg(test)]
 mod test_fixtures;
 // Image-lane utilization compose is called from the MLX component owner.
@@ -22,11 +25,14 @@ mod memory_utilization;
 pub(crate) mod official_profile;
 pub(crate) mod scheduler;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod tensor_store;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod text_conditioning;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod transformer;
 pub(crate) mod transformer_shape_profile;
 pub(crate) mod vae;
+pub(crate) mod weight_layout;
 
 #[cfg(feature = "direct-mlx")]
 pub use artifact::Flux2KleinArtifactValidator;
@@ -58,6 +64,10 @@ pub use memory_admission::Flux2KleinMemoryGeometry;
 pub use memory_admission::{
     Flux2KleinMemoryAdmission, Flux2KleinResidencyMode, Flux2KleinResidencyPlan,
 };
+pub use mlx_4bit_build::{
+    FLUX2_KLEIN_MLX_4BIT_MODEL_ID, FLUX2_KLEIN_MLX_4BIT_PROVIDER_MODEL_ID,
+    FLUX2_KLEIN_MLX_4BIT_REVISION,
+};
 pub use official_profile::Flux2KleinOfficialProfile;
 #[cfg(feature = "direct-mlx")]
 pub use scheduler::Flux2KleinFlowScheduler;
@@ -76,3 +86,6 @@ pub use vae::{
 };
 #[cfg(feature = "direct-mlx")]
 pub use vae::{Flux2KleinVaeDecodeMode, Flux2KleinVaeDecoder};
+pub use weight_layout::{
+    Flux2KleinComponent, Flux2KleinComponentWeightFiles, Flux2KleinWeightLayout,
+};

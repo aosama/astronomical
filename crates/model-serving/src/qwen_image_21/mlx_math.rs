@@ -15,29 +15,24 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
 
 use super::QwenImage21EngineError;
+use crate::affine_quantized_linear::{
+    AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AFFINE_QUANTIZED_VALUES_PER_WORD,
+    AffineQuantizedLinear, AffineQuantizedLinearError,
+};
 use mlx_c_rust::{MlxArray, MlxDtype};
 
-/// The artifact's affine quantization: 4-bit values in groups of 64 input channels.
-pub(in crate::qwen_image_21) const QUANT_GROUP_SIZE: usize = 64;
-pub(in crate::qwen_image_21) const QUANT_BITS: i32 = 4;
+/// The artifact's affine quantization: 4-bit values in groups of 64 input
+/// channels, defined once in the shared quantized-linear module.
+pub(in crate::qwen_image_21) const QUANT_GROUP_SIZE: usize = AFFINE_QUANTIZATION_GROUP_SIZE;
+pub(in crate::qwen_image_21) const QUANT_BITS: i32 = AFFINE_QUANTIZATION_BITS;
 /// Four-bit values packed into each uint32 word — the divisor every packed weight's inner axis
 /// carries (`in / 8`), including the token embedding whose packing runs along its output axis.
-pub(in crate::qwen_image_21) const QUANT_VALUES_PER_WORD: usize = 8;
+pub(in crate::qwen_image_21) const QUANT_VALUES_PER_WORD: usize = AFFINE_QUANTIZED_VALUES_PER_WORD;
 
-/// One 4-bit affine-quantized projection.
-///
-/// The reviewed artifact stores every projection as `weight` `[out, in/8]` uint32 (eight 4-bit
-/// values per word) plus `scales`/`biases` `[out, in/group_size]`. MLX consumes exactly this
-/// layout through `quantized_matmul_affine` with `transpose_weights = true`, so the tensors
-/// load without repacking. The affine `biases` are dequantization offsets, not layer biases —
-/// the reference models have no projection biases anywhere.
+/// One 4-bit affine-quantized projection of the reviewed artifact, bound from
+/// its safetensors and applied through the shared quantized linear.
 #[derive(Debug)]
-pub(in crate::qwen_image_21) struct QuantizedLinear {
-    input_width: usize,
-    weight: MlxArray,
-    scales: MlxArray,
-    biases: MlxArray,
-}
+pub(in crate::qwen_image_21) struct QuantizedLinear(AffineQuantizedLinear);
 
 impl QuantizedLinear {
     pub(in crate::qwen_image_21) fn load(
@@ -46,35 +41,17 @@ impl QuantizedLinear {
         input_width: usize,
         output_width: usize,
     ) -> Result<Self, QwenImage21EngineError> {
-        // The packed word count and group count come from the quantization scheme, not from a
-        // per-tensor choice, so a mismatch here means the manifest is not the reviewed artifact.
-        let weight = tensors.tensor(&format!("{prefix}.weight"))?;
-        let scales = tensors.tensor(&format!("{prefix}.scales"))?;
-        let biases = tensors.tensor(&format!("{prefix}.biases"))?;
-        validate_shape(
+        let packed_tensors = [
+            tensors.tensor(&format!("{prefix}.weight"))?,
+            tensors.tensor(&format!("{prefix}.scales"))?,
+            tensors.tensor(&format!("{prefix}.biases"))?,
+        ];
+        Ok(Self(AffineQuantizedLinear::bind(
             prefix,
-            "weight",
-            &weight,
-            &[output_width, input_width / QUANT_VALUES_PER_WORD],
-        )?;
-        validate_shape(
-            prefix,
-            "scales",
-            &scales,
-            &[output_width, input_width / QUANT_GROUP_SIZE],
-        )?;
-        validate_shape(
-            prefix,
-            "biases",
-            &biases,
-            &[output_width, input_width / QUANT_GROUP_SIZE],
-        )?;
-        Ok(Self {
+            packed_tensors,
             input_width,
-            weight,
-            scales,
-            biases,
-        })
+            output_width,
+        )?))
     }
 
     pub(in crate::qwen_image_21) fn forward(
@@ -82,26 +59,32 @@ impl QuantizedLinear {
         runtime: &MlxRuntime,
         activations: &MlxArray,
     ) -> Result<MlxArray, QwenImage21EngineError> {
-        let activation_shape = activations.shape();
-        if activation_shape.len() < 2
-            || activation_shape[activation_shape.len() - 1] != self.input_width as i32
-        {
-            return Err(QwenImage21EngineError::InvalidInput {
+        Ok(self.0.forward(runtime, activations)?)
+    }
+}
+
+impl From<AffineQuantizedLinearError> for QwenImage21EngineError {
+    fn from(quantized_linear_error: AffineQuantizedLinearError) -> Self {
+        match quantized_linear_error {
+            AffineQuantizedLinearError::TensorShape {
+                tensor_name,
+                actual_shape,
+                expected_shape,
+            } => Self::WeightShape {
+                tensor_name,
+                actual_shape,
+                expected_shape,
+            },
+            AffineQuantizedLinearError::InputWidth {
+                expected_width,
+                actual_shape,
+            } => Self::InvalidInput {
                 description: format!(
-                    "projection expected trailing width {}, received {activation_shape:?}",
-                    self.input_width
+                    "projection expected trailing width {expected_width}, received {actual_shape:?}"
                 ),
-            });
+            },
+            AffineQuantizedLinearError::Mlx(runtime_error) => Self::Mlx(runtime_error),
         }
-        Ok(runtime.quantized_matmul_affine(
-            activations,
-            &self.weight,
-            &self.scales,
-            &self.biases,
-            true,
-            QUANT_GROUP_SIZE as i32,
-            QUANT_BITS,
-        )?)
     }
 }
 

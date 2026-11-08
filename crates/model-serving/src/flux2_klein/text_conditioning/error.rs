@@ -25,9 +25,6 @@ pub(crate) enum Flux2KleinTextConditioningError {
     #[error("the FLUX.2 Klein text batch geometry exceeds native array limits")]
     BatchGeometryOverflow,
     #[cfg(feature = "direct-mlx")]
-    #[error("the FLUX.2 Klein text encoder is missing tensor '{tensor_name}'")]
-    MissingTensor { tensor_name: String },
-    #[cfg(feature = "direct-mlx")]
     #[error("the FLUX.2 Klein text encoder tensor '{tensor_name}' is incompatible: {description}")]
     InvalidTensor {
         tensor_name: String,
@@ -40,8 +37,8 @@ pub(crate) enum Flux2KleinTextConditioningError {
     #[error("the FLUX.2 Klein text encoder layer group must contain at least one layer")]
     EmptyLayerGroup,
     #[cfg(feature = "direct-mlx")]
-    #[error("the retained FLUX.2 Klein text weight descriptor could not be cloned")]
-    WeightDescriptorIo(#[source] std::io::Error),
+    #[error(transparent)]
+    TensorStore(#[from] crate::flux2_klein::tensor_store::Flux2KleinTensorStoreError),
     #[cfg(feature = "direct-mlx")]
     #[error("native MLX text conditioning failed")]
     Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),

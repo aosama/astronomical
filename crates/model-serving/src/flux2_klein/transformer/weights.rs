@@ -1,35 +1,57 @@
-//! Exact BF16 global, resident-block, and operation-local block ownership.
+//! Exact global, resident-block, and operation-local block ownership of the
+//! transformer's weights, in either artifact layout (BF16 or 4-bit MLX).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::File;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
 
-use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
+use crate::flux2_klein::tensor_store::{
+    Flux2KleinTensorStore, Flux2KleinWeight, map_component_weight_files,
+};
+use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
 use mlx_c_rust::{MlxArray, MlxDtype};
 
-#[derive(Debug)]
 enum TransformerTensorSource {
     Descriptor {
-        retained_map: MlxSafetensors,
-        streaming_file: File,
+        retained_store: Flux2KleinTensorStore,
+        streaming_files: Flux2KleinComponentWeightFiles,
     },
     Injected(BTreeMap<String, MlxArray>),
 }
 
-impl TransformerTensorSource {
-    fn tensor(&self, tensor_name: &str) -> Result<MlxArray, Flux2KleinTransformerError> {
+impl std::fmt::Debug for TransformerTensorSource {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Descriptor { retained_map, .. } => Ok(retained_map.tensor(tensor_name)?),
-            Self::Injected(tensors) => tensors
-                .get(tensor_name)
-                .ok_or_else(|| Flux2KleinTransformerError::MissingWeight {
-                    tensor_name: tensor_name.to_owned(),
-                })?
-                .retain()
-                .map_err(Flux2KleinTransformerError::from),
+            Self::Descriptor { .. } => formatter.write_str("TransformerTensorSource::Descriptor"),
+            Self::Injected(tensors) => formatter
+                .debug_tuple("TransformerTensorSource::Injected")
+                .field(&tensors.len())
+                .finish(),
+        }
+    }
+}
+
+impl TransformerTensorSource {
+    fn weight(
+        &self,
+        tensor_name: &str,
+        logical_shape: &[usize],
+    ) -> Result<Flux2KleinWeight, Flux2KleinTransformerError> {
+        match self {
+            Self::Descriptor { retained_store, .. } => {
+                Ok(retained_store.weight(tensor_name, logical_shape)?)
+            }
+            Self::Injected(tensors) => Ok(Flux2KleinWeight::Dense(
+                tensors
+                    .get(tensor_name)
+                    .ok_or_else(|| Flux2KleinTransformerError::MissingWeight {
+                        tensor_name: tensor_name.to_owned(),
+                    })?
+                    .retain()
+                    .map_err(Flux2KleinTransformerError::from)?,
+            )),
         }
     }
 
@@ -37,41 +59,36 @@ impl TransformerTensorSource {
         matches!(self, Self::Descriptor { .. })
     }
 
-    fn operation_local_tensors(
+    /// Maps one block's weights afresh from the files for a single operation,
+    /// so a block that is not retained costs memory only while it runs. The
+    /// mapping clones file descriptors once per operation, inside
+    /// `map_component_weight_files`, and nowhere else.
+    fn operation_local_weights(
         &self,
         runtime: &MlxRuntime,
-        tensor_names: &[String],
-    ) -> Result<BTreeMap<String, MlxArray>, Flux2KleinTransformerError> {
-        match self {
-            Self::Descriptor { streaming_file, .. } => {
-                let block_file = streaming_file
-                    .try_clone()
-                    .map_err(|source| Flux2KleinTransformerError::DescriptorClone { source })?;
-                let block_map = runtime.load_safetensors(block_file, None)?;
-                tensor_names
-                    .iter()
-                    .map(|tensor_name| {
-                        block_map
-                            .tensor(tensor_name)
-                            .map(|tensor| (tensor_name.clone(), tensor))
-                            .map_err(Flux2KleinTransformerError::from)
-                    })
-                    .collect()
-            }
-            Self::Injected(_) => tensor_names
-                .iter()
-                .map(|tensor_name| {
-                    self.tensor(tensor_name)
-                        .map(|tensor| (tensor_name.clone(), tensor))
-                })
-                .collect(),
+        block_weight_shapes: &[(String, Vec<usize>)],
+    ) -> Result<BTreeMap<String, Flux2KleinWeight>, Flux2KleinTransformerError> {
+        let operation_store = match self {
+            Self::Descriptor {
+                streaming_files, ..
+            } => Some(map_component_weight_files(streaming_files, runtime, None)?),
+            Self::Injected(_) => None,
+        };
+        let mut block_weights = BTreeMap::new();
+        for (tensor_name, logical_shape) in block_weight_shapes {
+            let block_weight = match &operation_store {
+                Some(store) => store.weight(tensor_name, logical_shape)?,
+                None => self.weight(tensor_name, logical_shape)?,
+            };
+            block_weights.insert(tensor_name.clone(), block_weight);
         }
+        Ok(block_weights)
     }
 }
 
 enum BlockTensorOwner<'a> {
-    Retained(&'a BTreeMap<String, MlxArray>),
-    OperationLocal(BTreeMap<String, MlxArray>),
+    Retained(&'a BTreeMap<String, Flux2KleinWeight>),
+    OperationLocal(BTreeMap<String, Flux2KleinWeight>),
 }
 
 pub(super) struct Flux2KleinBlockWeights<'a> {
@@ -79,15 +96,24 @@ pub(super) struct Flux2KleinBlockWeights<'a> {
 }
 
 impl Flux2KleinBlockWeights<'_> {
+    /// A dense tensor of this block, such as a norm scale.
     pub(super) fn tensor(
         &self,
         tensor_name: &str,
     ) -> Result<&MlxArray, Flux2KleinTransformerError> {
-        let tensors = match &self.tensors {
-            BlockTensorOwner::Retained(tensors) => *tensors,
-            BlockTensorOwner::OperationLocal(tensors) => tensors,
+        dense_weight_of_lookup(tensor_name, self.linear(tensor_name))
+    }
+
+    /// A projection of this block, dense or 4-bit.
+    pub(super) fn linear(
+        &self,
+        tensor_name: &str,
+    ) -> Result<&Flux2KleinWeight, Flux2KleinTransformerError> {
+        let weights = match &self.tensors {
+            BlockTensorOwner::Retained(weights) => *weights,
+            BlockTensorOwner::OperationLocal(weights) => weights,
         };
-        tensors
+        weights
             .get(tensor_name)
             .ok_or_else(|| Flux2KleinTransformerError::MissingWeight {
                 tensor_name: tensor_name.to_owned(),
@@ -101,9 +127,9 @@ impl Flux2KleinBlockWeights<'_> {
 
 #[derive(Debug)]
 pub struct Flux2KleinTransformerWeights {
-    global_tensors: BTreeMap<String, MlxArray>,
-    retained_blocks: BTreeMap<usize, BTreeMap<String, MlxArray>>,
-    block_tensor_names: Vec<Vec<String>>,
+    global_tensors: BTreeMap<String, Flux2KleinWeight>,
+    retained_blocks: BTreeMap<usize, BTreeMap<String, Flux2KleinWeight>>,
+    block_weight_shapes: Vec<Vec<(String, Vec<usize>)>>,
     source: TransformerTensorSource,
     payload_bytes: u64,
     resident_payload_bytes: u64,
@@ -113,26 +139,22 @@ pub struct Flux2KleinTransformerWeights {
 impl Flux2KleinTransformerWeights {
     pub fn load(
         runtime: &MlxRuntime,
-        weights_file: ValidatedWeightsFile,
+        weight_files: Flux2KleinComponentWeightFiles,
         geometry: &Flux2KleinTransformerGeometry,
     ) -> Result<Self, Flux2KleinTransformerError> {
         let retained_block_indices = (0..geometry.total_block_count()).collect::<Vec<_>>();
-        Self::load_with_residency(runtime, weights_file, geometry, &retained_block_indices)
+        Self::load_with_residency(runtime, weight_files, geometry, &retained_block_indices)
     }
 
     pub fn load_with_residency(
         runtime: &MlxRuntime,
-        weights_file: ValidatedWeightsFile,
+        weight_files: Flux2KleinComponentWeightFiles,
         geometry: &Flux2KleinTransformerGeometry,
         retained_block_indices: &[usize],
     ) -> Result<Self, Flux2KleinTransformerError> {
-        let weights_file = weights_file.into_file();
-        let streaming_file = weights_file
-            .try_clone()
-            .map_err(|source| Flux2KleinTransformerError::DescriptorClone { source })?;
         let source = TransformerTensorSource::Descriptor {
-            retained_map: runtime.load_safetensors(weights_file, None)?,
-            streaming_file,
+            retained_store: map_component_weight_files(&weight_files, runtime, None)?,
+            streaming_files: weight_files,
         };
         Self::bind(source, geometry, retained_block_indices)
     }
@@ -180,19 +202,15 @@ impl Flux2KleinTransformerWeights {
             validate_retained_block_indices(retained_block_indices, geometry.total_block_count())?;
         let mut global_tensors = BTreeMap::new();
         let mut retained_blocks = BTreeMap::new();
-        let mut block_tensor_names = vec![Vec::new(); geometry.total_block_count()];
+        let mut block_weight_shapes = vec![Vec::new(); geometry.total_block_count()];
         let mut payload_bytes = 0_u64;
         let mut resident_payload_bytes = 0_u64;
         let mut tensor_count = 0_usize;
 
         for (tensor_name, expected_shape) in geometry.expected_weight_shapes() {
-            let tensor = source.tensor(&tensor_name)?;
-            validate_tensor(&tensor_name, &tensor, expected_shape)?;
-            let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
-                Flux2KleinTransformerError::InvalidInput {
-                    description: "transformer tensor payload exceeds the u64 range",
-                }
-            })?;
+            let tensor = source.weight(&tensor_name, &expected_shape)?;
+            validate_weight(&tensor_name, &tensor, &expected_shape)?;
+            let tensor_payload_bytes = weight_payload_bytes(&tensor)?;
             payload_bytes = payload_bytes.checked_add(tensor_payload_bytes).ok_or(
                 Flux2KleinTransformerError::InvalidInput {
                     description: "transformer payload accounting overflowed",
@@ -201,7 +219,7 @@ impl Flux2KleinTransformerWeights {
             tensor_count = tensor_count.saturating_add(1);
 
             if let Some(block_index) = geometry.block_index_for_weight_name(&tensor_name) {
-                block_tensor_names[block_index].push(tensor_name.clone());
+                block_weight_shapes[block_index].push((tensor_name.clone(), expected_shape));
                 if retained_block_indices.contains(&block_index) {
                     retained_blocks
                         .entry(block_index)
@@ -226,7 +244,7 @@ impl Flux2KleinTransformerWeights {
         Ok(Self {
             global_tensors,
             retained_blocks,
-            block_tensor_names,
+            block_weight_shapes,
             source,
             payload_bytes,
             resident_payload_bytes,
@@ -234,7 +252,16 @@ impl Flux2KleinTransformerWeights {
         })
     }
 
+    /// A dense global tensor, such as a norm scale.
     pub fn tensor(&self, tensor_name: &str) -> Result<&MlxArray, Flux2KleinTransformerError> {
+        dense_weight_of_lookup(tensor_name, self.linear(tensor_name))
+    }
+
+    /// A global projection, dense or 4-bit.
+    pub(crate) fn linear(
+        &self,
+        tensor_name: &str,
+    ) -> Result<&Flux2KleinWeight, Flux2KleinTransformerError> {
         self.global_tensors.get(tensor_name).ok_or_else(|| {
             Flux2KleinTransformerError::MissingWeight {
                 tensor_name: tensor_name.to_owned(),
@@ -252,12 +279,14 @@ impl Flux2KleinTransformerWeights {
                 tensors: BlockTensorOwner::Retained(tensors),
             });
         }
-        let tensor_names = self.block_tensor_names.get(block_index).ok_or(
+        let block_weight_shapes = self.block_weight_shapes.get(block_index).ok_or(
             Flux2KleinTransformerError::InvalidInput {
                 description: "transformer block index exceeds geometry",
             },
         )?;
-        let tensors = self.source.operation_local_tensors(runtime, tensor_names)?;
+        let tensors = self
+            .source
+            .operation_local_weights(runtime, block_weight_shapes)?;
         Ok(Flux2KleinBlockWeights {
             tensors: BlockTensorOwner::OperationLocal(tensors),
         })
@@ -267,11 +296,16 @@ impl Flux2KleinTransformerWeights {
         &self,
         runtime: &MlxRuntime,
     ) -> Result<(), Flux2KleinTransformerError> {
-        let mut tensors = self.global_tensors.values().collect::<Vec<_>>();
+        let mut tensors = self
+            .global_tensors
+            .values()
+            .flat_map(Flux2KleinWeight::arrays)
+            .collect::<Vec<_>>();
         tensors.extend(
             self.retained_blocks
                 .values()
-                .flat_map(|block_tensors| block_tensors.values()),
+                .flat_map(|block_tensors| block_tensors.values())
+                .flat_map(Flux2KleinWeight::arrays),
         );
         runtime.evaluate_arrays(&tensors)?;
         Ok(())
@@ -322,11 +356,16 @@ fn validate_retained_block_indices(
     Ok(retained_indices)
 }
 
-fn validate_tensor(
+/// A dense weight must be BF16 with exactly its configured shape; a 4-bit
+/// projection was already checked against its logical shape when bound.
+fn validate_weight(
     tensor_name: &str,
-    tensor: &MlxArray,
-    expected_shape: Vec<usize>,
+    weight: &Flux2KleinWeight,
+    expected_shape: &[usize],
 ) -> Result<(), Flux2KleinTransformerError> {
+    let Flux2KleinWeight::Dense(tensor) = weight else {
+        return Ok(());
+    };
     if tensor.dtype() != MlxDtype::BFloat16 {
         return Err(Flux2KleinTransformerError::WeightDtype {
             tensor_name: tensor_name.to_owned(),
@@ -343,8 +382,51 @@ fn validate_tensor(
         return Err(Flux2KleinTransformerError::WeightShape {
             tensor_name: tensor_name.to_owned(),
             actual_shape: tensor.shape(),
-            expected_shape,
+            expected_shape: expected_shape.to_vec(),
         });
     }
     Ok(())
+}
+
+/// The bytes a weight occupies as stored: all three packed arrays of a 4-bit
+/// projection, so memory accounting sees what is actually resident.
+fn weight_payload_bytes(weight: &Flux2KleinWeight) -> Result<u64, Flux2KleinTransformerError> {
+    let mut payload_bytes = 0_u64;
+    for array in weight.arrays() {
+        let array_bytes = u64::try_from(array.byte_count()).map_err(|_| {
+            Flux2KleinTransformerError::InvalidInput {
+                description: "transformer tensor payload exceeds the u64 range",
+            }
+        })?;
+        payload_bytes = payload_bytes.checked_add(array_bytes).ok_or(
+            Flux2KleinTransformerError::InvalidInput {
+                description: "transformer payload accounting overflowed",
+            },
+        )?;
+    }
+    Ok(payload_bytes)
+}
+
+/// The dense array behind a looked-up weight; a missing weight stays missing.
+fn dense_weight_of_lookup<'weight>(
+    tensor_name: &str,
+    looked_up_weight: Result<&'weight Flux2KleinWeight, Flux2KleinTransformerError>,
+) -> Result<&'weight MlxArray, Flux2KleinTransformerError> {
+    match looked_up_weight {
+        Ok(weight) => dense_weight(tensor_name, weight),
+        Err(missing_weight) => Err(missing_weight),
+    }
+}
+
+/// The dense array behind `tensor_name`; a norm scale is never quantized, so a
+/// 4-bit weight here means the artifact does not match the engine.
+fn dense_weight<'weight>(
+    tensor_name: &str,
+    weight: &'weight Flux2KleinWeight,
+) -> Result<&'weight MlxArray, Flux2KleinTransformerError> {
+    weight
+        .dense()
+        .ok_or_else(|| Flux2KleinTransformerError::WeightDtype {
+            tensor_name: tensor_name.to_owned(),
+        })
 }
