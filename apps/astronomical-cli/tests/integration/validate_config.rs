@@ -152,11 +152,8 @@ fn should_render_json_report_for_scripts() {
         1
     );
     assert_eq!(
-        report_document["configured_model_ids"]
-            .as_array()
-            .expect("model ids list")
-            .len(),
-        0
+        report_document["model_settings"],
+        serde_json::json!({"checked": true, "problem": null, "entries": []})
     );
     for report_key in [
         "configuration_file_path",
@@ -171,4 +168,249 @@ fn should_render_json_report_for_scripts() {
             "report is missing {report_key}"
         );
     }
+}
+
+/// One installed model as a Library download publishes it under `models_root`: the model files
+/// plus the provenance file that records its full Hugging Face ID.
+fn install_library_model(models_root: &std::path::Path, provider_model_id: &str) {
+    const MODEL_SHARD_BYTES: &[u8] = b"fictional-shard";
+    let model_directory = models_root.join(provider_model_id);
+    std::fs::create_dir_all(&model_directory).expect("model directory");
+    let model_files = [
+        (
+            "config.json",
+            r#"{"model_type":"qwen3_5_moe","text_config":{"max_position_embeddings":262144}}"#
+                .to_owned(),
+        ),
+        (
+            "model.safetensors.index.json",
+            format!(
+                r#"{{"metadata":{{"total_size":{}}},"weight_map":{{"model.embed_tokens.weight":"model-00001.safetensors"}}}}"#,
+                MODEL_SHARD_BYTES.len()
+            ),
+        ),
+        (
+            "tokenizer.json",
+            r#"{"version":1,"model":{"type":"BPE"}}"#.to_owned(),
+        ),
+        (
+            ".astronomical-library-provenance.json",
+            format!(
+                r#"{{"provider_model_id":"{provider_model_id}","revision":"0123456789abcdef0123456789abcdef01234567","schema_version":1}}"#
+            ),
+        ),
+    ];
+    for (file_name, file_contents) in model_files {
+        std::fs::write(model_directory.join(file_name), file_contents).expect("model file");
+    }
+    std::fs::write(
+        model_directory.join("model-00001.safetensors"),
+        MODEL_SHARD_BYTES,
+    )
+    .expect("model shard");
+}
+
+fn config_with_models(
+    model_directories: &[&std::path::Path],
+    configured_model_ids: &[&str],
+) -> String {
+    let mut models_document = serde_json::Map::new();
+    for configured_model_id in configured_model_ids {
+        models_document.insert(
+            (*configured_model_id).to_owned(),
+            serde_json::json!({"generation_defaults": {"temperature": 0.5}}),
+        );
+    }
+    serde_json::json!({
+        "$schema": "./astronomical-config.schema.json",
+        "schema_version": 1,
+        "runtime": {"model_directories": model_directories},
+        "models": models_document,
+    })
+    .to_string()
+}
+
+struct ValidateConfigOutput {
+    stdout: String,
+    stderr: String,
+}
+
+fn validate_output(
+    instance_paths: &AstronomicalInstancePaths,
+    render_json: bool,
+) -> ValidateConfigOutput {
+    let mut rendered_output = Vec::new();
+    let mut rendered_warnings = Vec::new();
+    run_validate_config(
+        &ValidateConfigArguments {
+            runtime_instance: AstronomicalRuntimeInstance::Development,
+            render_json,
+        },
+        &mut ValidateConfigDependencies {
+            instance_paths: instance_paths.clone(),
+            stdout: &mut rendered_output,
+            stderr: &mut rendered_warnings,
+        },
+    )
+    .expect("a valid config validates even when models are missing");
+    ValidateConfigOutput {
+        stdout: String::from_utf8(rendered_output).expect("utf-8 report"),
+        stderr: String::from_utf8(rendered_warnings).expect("utf-8 warnings"),
+    }
+}
+
+/// #1925: the report says what each `models` entry does, by the same rule the daemon applies,
+/// without the daemon running.
+#[test]
+fn should_say_which_installed_model_each_entry_is_used_for() {
+    let sandbox_state = sandbox_instance_paths();
+    install_library_model(
+        &sandbox_state.instance_paths.models_directory(),
+        "astronomical-test/example-qwen",
+    );
+    write_config_file(
+        &sandbox_state.instance_paths,
+        &config_with_models(
+            &[],
+            &[
+                "astronomical-test/example-qwen",
+                "other-organisation/example-qwen",
+                "someorg/not-installed",
+            ],
+        ),
+    );
+
+    let validate_report = validate_output(&sandbox_state.instance_paths, false);
+
+    let rendered_text = validate_report.stdout;
+    assert!(
+        rendered_text.contains("Model settings: 3"),
+        "{rendered_text}"
+    );
+    assert!(
+        rendered_text.contains("astronomical-test/example-qwen: used for example-qwen"),
+        "{rendered_text}"
+    );
+    assert!(
+        rendered_text.contains(
+            "other-organisation/example-qwen: not used: your installed example-qwen is astronomical-test/example-qwen. Use that name instead."
+        ),
+        "{rendered_text}"
+    );
+    assert!(
+        rendered_text
+            .contains("someorg/not-installed: waiting: no installed model has this name yet."),
+        "{rendered_text}"
+    );
+    assert!(validate_report.stderr.is_empty());
+}
+
+#[test]
+fn should_find_models_in_configured_folders_and_by_short_name() {
+    let sandbox_state = sandbox_instance_paths();
+    let configured_root = sandbox_state
+        .instance_paths
+        .config_file_path()
+        .with_file_name("extra-models");
+    install_library_model(&configured_root, "astronomical-test/example-qwen");
+    write_config_file(
+        &sandbox_state.instance_paths,
+        &config_with_models(&[configured_root.as_path()], &["example-qwen"]),
+    );
+
+    let rendered_text = validate_output(&sandbox_state.instance_paths, false).stdout;
+
+    assert!(
+        rendered_text.contains("example-qwen: used for example-qwen"),
+        "{rendered_text}"
+    );
+}
+
+#[test]
+fn should_describe_each_entry_for_scripts_in_json() {
+    let sandbox_state = sandbox_instance_paths();
+    install_library_model(
+        &sandbox_state.instance_paths.models_directory(),
+        "astronomical-test/example-qwen",
+    );
+    write_config_file(
+        &sandbox_state.instance_paths,
+        &config_with_models(
+            &[],
+            &["astronomical-test/example-qwen", "someorg/not-installed"],
+        ),
+    );
+
+    let report_document: serde_json::Value =
+        serde_json::from_str(&validate_output(&sandbox_state.instance_paths, true).stdout)
+            .expect("json report");
+
+    assert_eq!(
+        report_document["model_settings"],
+        serde_json::json!({
+            "checked": true,
+            "problem": null,
+            "entries": [
+                {"configured_model_id": "astronomical-test/example-qwen", "outcome": "applies", "model_id": "example-qwen"},
+                {"configured_model_id": "someorg/not-installed", "outcome": "matches_no_installed_model"},
+            ],
+        })
+    );
+}
+
+/// Two installed models with the same short name stop the daemon from loading; validation still
+/// reads the document, but says plainly why the entries could not be checked.
+#[test]
+fn should_explain_in_plain_words_when_the_installed_models_cannot_be_listed() {
+    let sandbox_state = sandbox_instance_paths();
+    let models_directory = sandbox_state.instance_paths.models_directory();
+    install_library_model(&models_directory, "astronomical-test/example-qwen");
+    install_library_model(&models_directory, "other-organisation/example-qwen");
+    write_config_file(
+        &sandbox_state.instance_paths,
+        &config_with_models(&[], &["example-qwen"]),
+    );
+
+    let text_report = validate_output(&sandbox_state.instance_paths, false);
+    let json_report = validate_output(&sandbox_state.instance_paths, true);
+
+    assert!(
+        text_report
+            .stdout
+            .contains("two installed models are both called example-qwen"),
+        "{}",
+        text_report.stdout
+    );
+    assert!(
+        text_report
+            .stderr
+            .starts_with("warning: the model settings were not checked:"),
+        "{}",
+        text_report.stderr
+    );
+    let report_document: serde_json::Value =
+        serde_json::from_str(&json_report.stdout).expect("json report");
+    assert_eq!(report_document["model_settings"]["checked"], false);
+    assert!(
+        report_document["model_settings"]["problem"]
+            .as_str()
+            .is_some_and(|problem| problem.contains("both called example-qwen"))
+    );
+    assert_eq!(
+        report_document["model_settings"]["entries"][0]["outcome"],
+        "not_checked"
+    );
+}
+
+#[test]
+fn should_say_none_and_skip_the_scan_when_no_model_settings_exist() {
+    let sandbox_state = sandbox_instance_paths();
+    write_config_file(&sandbox_state.instance_paths, MINIMAL_VALID_CONFIG_JSON);
+
+    let rendered_text = validate_output(&sandbox_state.instance_paths, false).stdout;
+
+    assert!(
+        rendered_text.contains("Model settings: none"),
+        "{rendered_text}"
+    );
 }

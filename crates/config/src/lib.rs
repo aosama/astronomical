@@ -14,6 +14,7 @@ mod duplicate_key_json;
 mod legacy_config_migration;
 mod logging_config;
 mod maximum_mlx_memory;
+mod model_config_entries;
 mod model_discovery;
 mod model_discovery_huggingface_cache;
 mod model_identity;
@@ -51,6 +52,9 @@ pub use maximum_mlx_memory::{
     MaximumMlxMemoryConfigUpdate, commit_maximum_mlx_memory_gb_update,
     maximum_mlx_memory_gb_to_bytes, prepare_maximum_mlx_memory_gb_update,
     write_maximum_mlx_memory_gb,
+};
+pub use model_config_entries::{
+    ModelConfigEntryOutcome, ModelConfigEntryReport, SettingsFreeModelKind,
 };
 pub use model_discovery::{
     ChatModelCapabilities, ClassifiedModelArtifact, DiscoveredModel, DiscoveredModelError,
