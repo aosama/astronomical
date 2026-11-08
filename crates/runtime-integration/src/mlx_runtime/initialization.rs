@@ -42,7 +42,7 @@ impl MlxRuntime {
         let metallib_path = metallib::configured_metallib_path()?;
         metallib::configure_metallib_path(&metallib_path)?;
         memory_policy::configure_runtime_memory_limits(memory_limits)?;
-        let context = MlxBindingsContext::new().map_err(MlxRuntimeError::from)?;
+        let context = create_bindings_context_for_admitted_limits()?;
         Ok(Self {
             context,
             memory_limits,
@@ -73,5 +73,25 @@ impl MlxRuntime {
     #[must_use]
     pub fn metallib_path(&self) -> &Path {
         &self.metallib_path
+    }
+}
+
+/// Creates the bindings context after the memory limits were admitted and
+/// counted. If creation fails no runtime will exist to release that count on
+/// drop, so it is released here before the error returns.
+fn create_bindings_context_for_admitted_limits() -> Result<MlxBindingsContext, MlxRuntimeError> {
+    MlxBindingsContext::new().map_err(release_admitted_limits_on_failure)
+}
+
+fn release_admitted_limits_on_failure(context_error: mlx_c_rust::MlxCError) -> MlxRuntimeError {
+    memory_policy::release_runtime_memory_limits();
+    MlxRuntimeError::from(context_error)
+}
+
+impl Drop for MlxRuntime {
+    /// Ends this runtime's hold on the process memory policy, so once no
+    /// runtime is alive the next one may install different limits (#1906).
+    fn drop(&mut self) {
+        memory_policy::release_runtime_memory_limits();
     }
 }
