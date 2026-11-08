@@ -48,30 +48,35 @@ where
     where
         WriteTransport: AsyncWrite + Unpin,
     {
-        if is_mlx_memory_limit_request_out_of_bounds(
-            requested_mlx_memory_ceiling_bytes,
-            self.machine_mlx_memory_ceiling_bytes,
-        ) {
-            return self
-                .emit_mlx_memory_limit_rejection(
-                    requested_mlx_memory_ceiling_bytes,
-                    "requested memory ceiling is outside the worker machine limit",
-                    event_writer,
-                )
-                .await;
-        }
         // The wired-residency budget is claimed once for the worker lifetime,
         // so a live raise may never plan past it: admission above the wired
         // budget is the issue #1297 gap where Metal evicts GPU-resident
         // weights and the worker dies with an out-of-memory command buffer.
+        let floor_raise_limit_bytes = crate::floor_raise_limit_bytes(
+            Some(requested_mlx_memory_ceiling_bytes),
+            self.machine_mlx_memory_ceiling_bytes,
+        );
         let effective_requested_mlx_memory_ceiling_bytes = self.live_update_ceiling_bytes(
-            requested_mlx_memory_ceiling_bytes,
             effective_requested_ceiling_after_wired_claim(
                 requested_mlx_memory_ceiling_bytes,
                 self.machine_mlx_memory_ceiling_bytes,
                 self.wired_residency_budget_bytes,
             ),
+            floor_raise_limit_bytes,
         );
+        if let Some(rejection_reason) = self.mlx_memory_limit_rejection_before_planning(
+            requested_mlx_memory_ceiling_bytes,
+            effective_requested_mlx_memory_ceiling_bytes,
+        ) {
+            return self
+                .emit_mlx_memory_limit_rejection(
+                    requested_mlx_memory_ceiling_bytes,
+                    rejection_reason,
+                    event_writer,
+                )
+                .await;
+        }
+        self.adopt_floor_raise_limit(floor_raise_limit_bytes);
         let Some(loaded_runtime) = self.loaded_runtime.as_mut() else {
             return match self.plan_factory_memory_limit_adoption(
                 effective_requested_mlx_memory_ceiling_bytes,
@@ -199,31 +204,57 @@ where
     }
 
     /// The ceiling a live update applies: the requested ceiling after Metal's
-    /// wired clamp, raised to the loaded model's floor when the user set no
-    /// limit below it. Without the raise, choosing "Use Max" on a model served
-    /// at its floor would push it back under that floor and refuse it. The new
-    /// raise limit also reaches the factory for the next model's load.
+    /// wired clamp, raised to the loaded model's floor when that stays within
+    /// `floor_raise_limit_bytes`. Without the raise, choosing "Use Max" on a
+    /// model served at its floor would push it back under that floor.
     fn live_update_ceiling_bytes(
-        &mut self,
-        requested_mlx_memory_ceiling_bytes: u64,
+        &self,
         wired_clamped_ceiling_bytes: u64,
+        floor_raise_limit_bytes: u64,
     ) -> u64 {
-        self.floor_raise_limit_bytes = crate::floor_raise_limit_bytes(
-            Some(requested_mlx_memory_ceiling_bytes),
-            self.machine_mlx_memory_ceiling_bytes,
-        );
-        if let Some(model_factory) = self.model_factory.as_mut() {
-            model_factory.update_floor_raise_limit(self.floor_raise_limit_bytes);
-        }
         if self.loaded_runtime.is_none() {
             return wired_clamped_ceiling_bytes;
         }
         crate::floor_raised_ceiling_bytes(
             wired_clamped_ceiling_bytes,
             self.minimum_mlx_memory_ceiling_bytes,
-            self.floor_raise_limit_bytes,
+            floor_raise_limit_bytes,
         )
         .unwrap_or(wired_clamped_ceiling_bytes)
+    }
+
+    /// Keeps the raise limit of an accepted live update, and hands it to the
+    /// factory so the next model's load plans by the same rule. A rejected
+    /// update never reaches here, so it leaves the previous limit in place.
+    fn adopt_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
+        if let Some(model_factory) = self.model_factory.as_mut() {
+            model_factory.update_floor_raise_limit(floor_raise_limit_bytes);
+        }
+    }
+
+    /// Returns why a requested ceiling must be refused before any runtime sees it.
+    ///
+    /// Image engines plan their whole execution against the ceiling, so one
+    /// below the floor they reported at load cannot run at all, and their own
+    /// planners report that as a fatal failure that ends the worker (#1899).
+    /// Refusing it here instead keeps the loaded image model serving, the same
+    /// way chat engines already refuse a ceiling below their streaming floor.
+    fn mlx_memory_limit_rejection_before_planning(
+        &self,
+        requested_mlx_memory_ceiling_bytes: u64,
+        effective_requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Option<&'static str> {
+        if is_mlx_memory_limit_request_out_of_bounds(
+            requested_mlx_memory_ceiling_bytes,
+            self.machine_mlx_memory_ceiling_bytes,
+        ) {
+            return Some("requested memory ceiling is outside the worker machine limit");
+        }
+        let has_loaded_image_runtime = matches!(self.loaded_runtime, Some(LoadedRuntime::Image(_)));
+        (has_loaded_image_runtime
+            && effective_requested_mlx_memory_ceiling_bytes < self.minimum_mlx_memory_ceiling_bytes)
+            .then_some("the requested ceiling is below the image model's execution floor")
     }
 
     /// Dispatches the live memory-limit change to whichever runtime is loaded.
