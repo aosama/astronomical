@@ -11,13 +11,19 @@
 //! assertion is on successful streaming and visible text, never on an exact
 //! output count.
 //!
-//! The inventory comes from the Development configuration's model directories.
-//! Each model round trip must
-//! finish within its own 120-second budget.
+//! The inventory is what the Development daemon itself serves: its own
+//! Library models folder plus the configured model directories, discovered
+//! with the daemon's own effective-discovery rules. Scanning only the
+//! configured directories missed every model installed through the Library,
+//! and a fresh Development configuration lists none at all. Each model round
+//! trip must finish within its own 120-second budget.
 
 use std::time::Duration;
 
-use astronomical_config::{AstronomicalConfig, ModelCapabilities};
+use astronomical_config::{
+    AstronomicalConfig, AstronomicalInstancePaths, AstronomicalRuntimeInstance, ModelCapabilities,
+    discover_effective_models,
+};
 use serde_json::json;
 use tokio::time::timeout;
 
@@ -40,11 +46,12 @@ const PROMPT_WORD_COUNT: usize = 80;
 #[serial_test::serial]
 #[ignore = "loads every installed chat-capable model variant and streams a sampled reply from each"]
 async fn should_round_trip_every_installed_chat_model_variant() {
+    let development_models_directory = development_instance_paths().models_directory();
     let chat_model_variants = discovered_chat_model_variants();
     assert!(
         !chat_model_variants.is_empty(),
         "the release variant round trip needs a populated chat-model inventory; \
-         configure the Development model directories"
+         install a chat model in Development or configure its model directories"
     );
     for discovered_model in &chat_model_variants {
         eprintln!(
@@ -53,7 +60,7 @@ async fn should_round_trip_every_installed_chat_model_variant() {
         );
         timeout(
             Duration::from_secs(VARIANT_ROUND_TRIP_TIMEOUT_SECONDS),
-            round_trip_one_model_variant(discovered_model),
+            round_trip_one_model_variant(discovered_model, &development_models_directory),
         )
         .await
         .unwrap_or_else(|_| {
@@ -69,9 +76,16 @@ async fn should_round_trip_every_installed_chat_model_variant() {
     );
 }
 
-async fn round_trip_one_model_variant(discovered_model: &astronomical_config::DiscoveredModel) {
+async fn round_trip_one_model_variant(
+    discovered_model: &astronomical_config::DiscoveredModel,
+    development_models_directory: &std::path::Path,
+) {
     let model_id = discovered_model.model_id.as_str();
-    let isolated_development_home = crate::support::isolated_development_home_from_user_config();
+    // The server runs in an isolated home with its own empty Library folder,
+    // so Development's Library folder is listed there for Library-installed
+    // models to be served.
+    let isolated_development_home =
+        crate::support::isolated_development_home_serving_models_from(development_models_directory);
     let rest_server = launch_serving_rest_server_for_artifact_with_memory_limit(
         discovered_model.clone(),
         Some(isolated_development_home.path()),
@@ -111,22 +125,32 @@ async fn round_trip_one_model_variant(discovered_model: &astronomical_config::Di
     drop(isolated_development_home);
 }
 
-/// Every chat-capable model the release machine's roots discover, in a
-/// stable order so consecutive release runs report comparably.
+/// Every chat-capable model the Development daemon would serve, in a stable
+/// order so consecutive release runs report comparably.
 fn discovered_chat_model_variants() -> Vec<astronomical_config::DiscoveredModel> {
-    let astronomical_config = AstronomicalConfig::load_from_development_location()
-        .expect("the Development configuration should load for variant discovery");
+    let development_instance_paths = development_instance_paths();
+    let astronomical_config =
+        AstronomicalConfig::load_from_instance_paths(development_instance_paths.clone())
+            .expect("the Development configuration should load for variant discovery");
     let mut chat_model_variants: Vec<astronomical_config::DiscoveredModel> =
-        astronomical_config::discover_models(astronomical_config.model_directories())
-            .expect("variant discovery should complete")
-            .into_iter()
-            .flat_map(|configured_model_directory_scan| {
-                configured_model_directory_scan.discovered_models
-            })
-            .filter(|discovered_model| {
-                matches!(discovered_model.capabilities, ModelCapabilities::Chat(_))
-            })
-            .collect();
+        discover_effective_models(
+            &development_instance_paths.models_directory(),
+            astronomical_config.model_directories(),
+        )
+        .expect("variant discovery should complete")
+        .discovered_models
+        .into_iter()
+        .filter(|discovered_model| {
+            matches!(discovered_model.capabilities, ModelCapabilities::Chat(_))
+        })
+        .collect();
     chat_model_variants.sort_by(|first, second| first.model_id.cmp(&second.model_id));
     chat_model_variants
+}
+
+fn development_instance_paths() -> AstronomicalInstancePaths {
+    AstronomicalInstancePaths::default_location_instance_paths(
+        AstronomicalRuntimeInstance::Development,
+    )
+    .expect("the Development instance paths should resolve for variant discovery")
 }
