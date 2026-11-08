@@ -2,6 +2,7 @@
 
 use std::fs;
 
+use crate::library::yields_library_to;
 use crate::{
     DownloadJob, DownloadJobError, DownloadJobState, DownloadJobStore, DownloadJobStoreError,
 };
@@ -507,4 +508,27 @@ fn premanifest_job_json(state: &str, error_code: &str, updated_at_unix_millis: u
             \"updated_at\":{updated_at_unix_millis}\
         }}"
     )
+}
+
+#[test]
+fn should_let_only_another_models_failed_download_give_way() {
+    for existing_state in [
+        DownloadJobState::CheckingDisk,
+        DownloadJobState::FetchingManifest,
+        DownloadJobState::Downloading,
+        DownloadJobState::Paused,
+        DownloadJobState::Verifying,
+        DownloadJobState::Publishing,
+        DownloadJobState::Failed,
+    ] {
+        assert_eq!(
+            yields_library_to("org/failed-model", existing_state, "org/requested-model"),
+            existing_state == DownloadJobState::Failed,
+            "another model, {existing_state:?}"
+        );
+        assert!(
+            !yields_library_to("org/same-model", existing_state, "org/same-model"),
+            "the same model, {existing_state:?}, is resumed rather than replaced"
+        );
+    }
 }

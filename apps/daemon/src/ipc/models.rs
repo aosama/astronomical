@@ -21,7 +21,7 @@ use crate::{
     library::{
         CatalogEntryProjection, DownloadCatalog, DownloadCatalogEntry, DownloadJob,
         DownloadJobState, LibraryDownloadCoordinator, LibraryDownloadCoordinatorError,
-        requestable_model_id_from_huggingface_id,
+        requestable_model_id_from_huggingface_id, yields_library_to,
     },
     performance::attribution::{
         DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement, DaemonPerformanceOperation,
@@ -239,7 +239,8 @@ fn catalog_model_id_candidates(download_catalog: &DownloadCatalog) -> Vec<String
 /// What `DownloadStart` should do, given the job the daemon already holds.
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum DownloadStartAction {
-    /// No job exists: begin a fresh download.
+    /// No job exists, or another model's failed job gives way to this one
+    /// (`yields_library_to`): begin a fresh download.
     Start,
     /// The same model's job is paused or failed: continue it from the bytes
     /// already staged on disk.
@@ -247,8 +248,12 @@ pub(crate) enum DownloadStartAction {
     /// The same model's job is already running: there is nothing to start,
     /// and the caller should simply keep watching it.
     AlreadyRunning,
-    /// A different model's job holds the Library.
-    BusyWith { other_huggingface_id: String },
+    /// A different model's job holds the Library: it is running, or paused
+    /// (`is_paused`), which never finishes on its own.
+    BusyWith {
+        other_huggingface_id: String,
+        is_paused: bool,
+    },
 }
 
 /// Decides the start action from the existing job's identity and state.
@@ -266,9 +271,17 @@ pub(crate) fn download_start_action(
     let Some((existing_huggingface_id, existing_state)) = existing_job else {
         return DownloadStartAction::Start;
     };
+    if yields_library_to(
+        existing_huggingface_id,
+        existing_state,
+        requested_huggingface_id,
+    ) {
+        return DownloadStartAction::Start;
+    }
     if existing_huggingface_id != requested_huggingface_id {
         return DownloadStartAction::BusyWith {
             other_huggingface_id: existing_huggingface_id.to_owned(),
+            is_paused: existing_state == DownloadJobState::Paused,
         };
     }
     match existing_state {
@@ -355,9 +368,30 @@ async fn execute_download_start(
         },
         DownloadStartAction::BusyWith {
             other_huggingface_id,
-        } => Err(StartFailure::Refused(format!(
-            "a download of {other_huggingface_id} is already active; wait for it to finish or cancel it before downloading {huggingface_id}"
+            is_paused,
+        } => Err(StartFailure::Refused(busy_refusal_reason(
+            &other_huggingface_id,
+            is_paused,
+            huggingface_id,
         ))),
+    }
+}
+
+/// The CLI cannot cancel a download, so the refusal points at the Library; a
+/// paused download never finishes on its own, so it is not told to wait.
+fn busy_refusal_reason(
+    other_huggingface_id: &str,
+    is_paused: bool,
+    requested_huggingface_id: &str,
+) -> String {
+    if is_paused {
+        format!(
+            "a download of {other_huggingface_id} is paused; resume or cancel it in the Library before downloading {requested_huggingface_id}"
+        )
+    } else {
+        format!(
+            "a download of {other_huggingface_id} is already active; wait for it to finish, or cancel it in the Library, before downloading {requested_huggingface_id}"
+        )
     }
 }
 

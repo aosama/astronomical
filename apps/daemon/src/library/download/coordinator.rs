@@ -18,7 +18,7 @@ use crate::library::{
     DownloadJobStore, DownloadJobStoreError, DownloadManifestPreflight,
     DownloadManifestPreflightError, DownloadPayloadTransfer, DownloadPayloadTransferOutcome,
     DownloadProgressSnapshot, DownloadPublication, DownloadPublicationRefresh,
-    DownloadTransferControl, HubPayloadTransport, HubTransport, HuggingFaceHub,
+    DownloadTransferControl, HubPayloadTransport, HubTransport, HuggingFaceHub, yields_library_to,
 };
 
 #[derive(Clone)]
@@ -164,12 +164,14 @@ impl LibraryDownloadCoordinator {
         self.job_store.models_directory().join(huggingface_id)
     }
 
+    /// Starts a fresh download. A failed job of another model is discarded
+    /// first (see `yields_library_to`). Running and paused jobs still hold the
+    /// Library, and a failed job of the same model is continued through
+    /// `resume`, not `start`. The model is looked up before anything is
+    /// discarded, so a refused request deletes nothing.
     pub async fn start(&self, huggingface_id: &str) -> Result<(), LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
         self.clear_finished_task().await;
-        if self.has_active_task().await || self.current_job().await?.is_some() {
-            return Err(LibraryDownloadCoordinatorError::LibraryBusy);
-        }
         let catalog_entry = self
             .download_catalog
             .entries()
@@ -177,6 +179,7 @@ impl LibraryDownloadCoordinator {
             .find(|catalog_entry| catalog_entry.huggingface_id() == huggingface_id)
             .cloned()
             .ok_or(LibraryDownloadCoordinatorError::CatalogEntryNotFound)?;
+        self.make_room_for(huggingface_id).await?;
         self.spawn_download_task(catalog_entry).await;
         Ok(())
     }
@@ -233,6 +236,12 @@ impl LibraryDownloadCoordinator {
     pub async fn cancel(&self) -> Result<bool, LibraryDownloadCoordinatorError> {
         let _command_guard = self.command_lock.lock().await;
         self.abort_active_task().await;
+        self.remove_current_job().await
+    }
+
+    /// Removes the current job and its staged bytes; the caller holds the
+    /// command lock and has stopped any task working on it.
+    async fn remove_current_job(&self) -> Result<bool, LibraryDownloadCoordinatorError> {
         let job_store = self.job_store.clone();
         let cancel_join = tokio::task::spawn_blocking(move || job_store.cancel_current_job()).await;
         let cancel_outcome = match cancel_join {
@@ -242,6 +251,48 @@ impl LibraryDownloadCoordinator {
             }
         };
         Ok(cancel_outcome?)
+    }
+
+    /// Frees the Library for a fresh download of `huggingface_id`, or refuses
+    /// while a task runs or a job that may not be replaced remains.
+    async fn make_room_for(
+        &self,
+        huggingface_id: &str,
+    ) -> Result<(), LibraryDownloadCoordinatorError> {
+        if self.has_active_task().await {
+            return Err(LibraryDownloadCoordinatorError::LibraryBusy);
+        }
+        self.discard_failed_job_of_another_model(huggingface_id)
+            .await?;
+        if self.current_job().await?.is_some() {
+            return Err(LibraryDownloadCoordinatorError::LibraryBusy);
+        }
+        Ok(())
+    }
+
+    async fn discard_failed_job_of_another_model(
+        &self,
+        requested_huggingface_id: &str,
+    ) -> Result<(), LibraryDownloadCoordinatorError> {
+        let Some(existing_job) = self.current_job().await? else {
+            return Ok(());
+        };
+        if yields_library_to(
+            existing_job.huggingface_id(),
+            existing_job.state(),
+            requested_huggingface_id,
+        ) {
+            // The person chose another model over resuming this one; record
+            // what was discarded, since its staged bytes go with it.
+            tracing::info!(
+                discarded_model = existing_job.huggingface_id(),
+                discarded_bytes = existing_job.bytes_completed(),
+                requested_model = requested_huggingface_id,
+                "Library discarded a failed download to start another model"
+            );
+            self.remove_current_job().await?;
+        }
+        Ok(())
     }
 
     async fn spawn_download_task(&self, catalog_entry: DownloadCatalogEntry) {

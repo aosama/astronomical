@@ -403,11 +403,21 @@ function libraryProgressPercent(activeDownload) {
     );
 }
 
+/** The download state one row shows. The status poll is the live truth for the model it names.
+ * The catalog's copy is only a fallback from before that poll, and it is ignored once the poll
+ * names another model: only one download holds the Library, so the copy is stale, and its
+ * Resume and Cancel buttons would act on the other model's download. */
+function libraryRowDownloadState(catalogRow) {
+    const currentModelId = libraryCurrentDownload.huggingface_id;
+    if (currentModelId === catalogRow.huggingfaceId) return libraryCurrentDownload.state;
+    return currentModelId ? null : catalogRow.downloadState;
+}
+
 function libraryStateTitle(catalogRow) {
     if (catalogRow.readyOnThisMac) return "Ready to use";
     const activeDownload = libraryCurrentDownload.huggingface_id === catalogRow.huggingfaceId
         ? libraryCurrentDownload : null;
-    const downloadState = activeDownload?.state || catalogRow.downloadState;
+    const downloadState = libraryRowDownloadState(catalogRow);
     if (!downloadState) return "Available to download";
     if ((downloadState === "downloading" || downloadState === "paused")
         && activeDownload?.bytes_total > 0) {
@@ -527,7 +537,7 @@ function libraryFailureTitle(errorCode) {
 function libraryActionButtons(catalogRow) {
     if (catalogRow.readyOnThisMac) return [];
     const isCurrentDownload = libraryCurrentDownload.huggingface_id === catalogRow.huggingfaceId;
-    const state = isCurrentDownload ? libraryCurrentDownload.state : catalogRow.downloadState;
+    const state = libraryRowDownloadState(catalogRow);
     if (state === "verifying" || state === "publishing") return [];
     if (isCurrentDownload && state === "failed"
         && libraryCurrentDownload.error_code === "model_already_present") {
