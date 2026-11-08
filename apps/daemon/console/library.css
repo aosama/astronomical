@@ -1,11 +1,5 @@
 /* Astronomical Observatory Library styles. */
 
-/* Muted red for "needs more memory": no red token exists in console.css, and
-   a full-saturation red would shout at a reader who cannot run that model. */
-:root {
-    --library-muted-red: #e59a9a;
-}
-
 .library-catalog { padding: 0; overflow: hidden; }
 .library-catalog-state {
     min-height: 180px;
@@ -247,7 +241,8 @@
 }
 .library-fit-fits { color: var(--ok); }
 .library-fit-streams { color: var(--warn); }
-.library-fit-too-big { color: var(--library-muted-red); }
+.library-fit-slow { color: var(--text-dim); }
+.library-fit-over-your-limit { color: var(--warn); }
 
 /* Availability badge */
 .library-availability {

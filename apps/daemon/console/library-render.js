@@ -46,7 +46,8 @@ const LIBRARY_TABS = [
 const LIBRARY_FIT_LABELS = {
     fits: "Runs in memory on this Mac",
     streams: "Streams from your SSD on this Mac (slower)",
-    "too-big": "Needs more memory than this Mac has"
+    slow: "May be slow on this Mac",
+    "over-your-limit": "Above the memory limit you set"
 };
 
 // Plain-language size for download decisions: one decimal in 2^30-byte gigabytes,
@@ -57,21 +58,23 @@ function formatLibraryDownloadSize(approximateSizeBytes) {
 
 // Fit compares the model's fully loaded memory with the serving ceiling, the
 // limit the engine actually loads within. Equal counts as fitting because the
-// ceiling is the runtime's own resident limit. Below that, a model runs only if
-// the catalog carries a streaming floor measured on a real engine (experts or
-// image components paged from the SSD) and the ceiling still reaches it; a model
-// without a measured floor makes no streaming promise.
-function libraryFitOutcome(catalogRow, servingCeilingBytes) {
+// ceiling is the runtime's own resident limit. Below that, a model with a
+// streaming floor measured on a real engine streams experts or image components
+// from the SSD; any other model still runs, with macOS paging the rest, so it is
+// labelled as possibly slow: the Mac's size never stops a model (#1902). Only
+// a maximum the user set themself can hold a model back, and the label names it.
+function libraryFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
     if (!(servingCeilingBytes > 0)) return null;
     if (catalogRow.approximateMemoryBytes <= servingCeilingBytes) return "fits";
     const streamingFloorBytes = catalogRow.minimumMemoryBytes;
-    return streamingFloorBytes !== null && streamingFloorBytes <= servingCeilingBytes
-        ? "streams"
-        : "too-big";
+    if (streamingFloorBytes !== null && streamingFloorBytes <= servingCeilingBytes) {
+        return "streams";
+    }
+    return ceilingIsUserLimit ? "over-your-limit" : "slow";
 }
 
-function libraryFitLabel(catalogRow, servingCeilingBytes) {
-    const fitOutcome = libraryFitOutcome(catalogRow, servingCeilingBytes);
+function libraryFitLabel(catalogRow, servingCeilingBytes, ceilingIsUserLimit = false) {
+    const fitOutcome = libraryFitOutcome(catalogRow, servingCeilingBytes, ceilingIsUserLimit);
     return fitOutcome === null ? null : LIBRARY_FIT_LABELS[fitOutcome];
 }
 
@@ -226,9 +229,13 @@ function createLibraryParagraph(className, text) {
     return paragraph;
 }
 
-// The modifier class carries the outcome so CSS can color fits, streams and too-big apart.
+// The modifier class carries the outcome so CSS can color fits, streams and slow apart.
 function createLibraryFitLabel(catalogRow) {
-    const fitOutcome = libraryFitOutcome(catalogRow, libraryServingCeilingBytes);
+    const fitOutcome = libraryFitOutcome(
+        catalogRow,
+        libraryServingCeilingBytes,
+        libraryCeilingIsUserLimit
+    );
     if (fitOutcome === null) return null;
     return createLibraryParagraph(
         "library-fit-label library-fit-" + fitOutcome,

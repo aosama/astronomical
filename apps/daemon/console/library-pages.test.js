@@ -47,8 +47,8 @@ test("should_label_fit_at_the_exact_memory_boundary_and_stream_only_when_allowed
     );
     assert.equal(
         vm.runInContext("libraryFitLabel(catalogRow, 7_999_999_999)", scriptContext),
-        "Needs more memory than this Mac has",
-        "one byte over the ceiling does not fit"
+        "May be slow on this Mac",
+        "one byte over the ceiling no longer runs fully in memory"
     );
     scriptContext.catalogRow.minimumMemoryBytes = 4_000_000_000;
     assert.equal(
@@ -63,8 +63,8 @@ test("should_label_fit_at_the_exact_memory_boundary_and_stream_only_when_allowed
     );
     assert.equal(
         vm.runInContext("libraryFitLabel(catalogRow, 3_999_999_999)", scriptContext),
-        "Needs more memory than this Mac has",
-        "one byte under the streaming floor cannot run"
+        "May be slow on this Mac",
+        "one byte under the streaming floor is labelled as possibly slow, never as refused"
     );
 });
 
@@ -109,7 +109,7 @@ test("should_judge_fit_against_the_lower_serving_ceiling_not_the_machine_maximum
     vm.runInContext("libraryServingCeilingBytes = readLibraryServingCeilingBytes(statusDocument)", scriptContext);
     assert.equal(
         vm.runInContext("libraryFitLabel(catalogRow, libraryServingCeilingBytes)", scriptContext),
-        "Needs more memory than this Mac has",
+        "May be slow on this Mac",
         "a model between the serving and machine ceilings must not be labelled as fitting"
     );
 });
@@ -119,7 +119,7 @@ test("should_mark_each_fit_outcome_with_its_own_css_modifier_class", () => {
     const { libraryDocument, renderedState } = renderLibraryWithEntries([
         validCatalogEntry({ huggingface_id: "astronomical-test/fits", approximate_memory_bytes: 3_000_000_000 }),
         validCatalogEntry({ huggingface_id: "astronomical-test/streams", approximate_memory_bytes: 9_000_000_000, minimum_memory_bytes: 3_500_000_000 }),
-        validCatalogEntry({ huggingface_id: "astronomical-test/too-big", approximate_memory_bytes: 9_000_000_000 })
+        validCatalogEntry({ huggingface_id: "astronomical-test/slow", approximate_memory_bytes: 9_000_000_000 })
     ], { activeTab: "more-models", servingCeilingBytes: ceilingBytes });
 
     assert.equal(renderedState, "ready");
@@ -128,7 +128,7 @@ test("should_mark_each_fit_outcome_with_its_own_css_modifier_class", () => {
     assert.deepEqual(fitClasses, [
         "library-fit-label library-fit-fits",
         "library-fit-label library-fit-streams",
-        "library-fit-label library-fit-too-big"
+        "library-fit-label library-fit-slow"
     ]);
 });
 
@@ -262,4 +262,50 @@ test("should_leave_unhandled_keys_to_the_browser_and_select_on_handled_keys", ()
     vm.runInContext("handleLibraryTabKeydown(keyboardEvent, 'get-started')", scriptContext);
     assert.equal(preventedDefaultCount, 1);
     assert.equal(vm.runInContext("libraryActiveTab", scriptContext), "more-models");
+});
+
+test("should_name_a_user_set_limit_instead_of_promising_a_slow_run", () => {
+    const scriptContext = createLibraryContext();
+    scriptContext.catalogRow = { approximateMemoryBytes: 8_000_000_000, minimumMemoryBytes: null };
+    assert.equal(
+        vm.runInContext("libraryFitLabel(catalogRow, 4_000_000_000, true)", scriptContext),
+        "Above the memory limit you set"
+    );
+    assert.equal(
+        vm.runInContext("libraryFitLabel(catalogRow, 4_000_000_000, false)", scriptContext),
+        "May be slow on this Mac",
+        "the Mac's own size never blocks a model"
+    );
+    scriptContext.catalogRow.minimumMemoryBytes = 3_000_000_000;
+    assert.equal(
+        vm.runInContext("libraryFitLabel(catalogRow, 4_000_000_000, true)", scriptContext),
+        "Streams from your SSD on this Mac (slower)",
+        "a model that streams within the user's limit still streams"
+    );
+    assert.equal(
+        vm.runInContext("libraryFitLabel(catalogRow, 8_000_000_000, true)", scriptContext),
+        "Runs in memory on this Mac"
+    );
+});
+
+test("should_treat_only_a_configured_maximum_below_the_machine_as_a_user_limit", () => {
+    const scriptContext = createLibraryContext();
+    const machineCeilingBytes = 48 * 1073741824;
+    const isUserLimit = (configuredGigabytes) => {
+        scriptContext.statusDocument = {
+            configured_maximum_mlx_memory_gb: configuredGigabytes,
+            machine_mlx_memory_ceiling_bytes: machineCeilingBytes
+        };
+        return vm.runInContext("readLibraryCeilingIsUserLimit(statusDocument)", scriptContext);
+    };
+    assert.equal(isUserLimit(32), true);
+    assert.equal(isUserLimit(47), true, "one gigabyte under the machine is a user limit");
+    assert.equal(isUserLimit(48), false, "a maximum equal to the machine limits nothing");
+    assert.equal(isUserLimit(null), false, "no configured maximum is no user limit");
+    scriptContext.statusDocument = { configured_maximum_mlx_memory_gb: 32 };
+    assert.equal(
+        vm.runInContext("readLibraryCeilingIsUserLimit(statusDocument)", scriptContext),
+        false,
+        "without the machine ceiling nothing can be claimed"
+    );
 });
