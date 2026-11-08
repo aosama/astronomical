@@ -359,6 +359,47 @@ test("presents progress and only the controls valid for each durable download st
     );
 });
 
+test("should not show another model's download state or controls on a row", () => {
+    const scriptContext = createLibraryContext();
+    scriptContext.document = createLibraryDocument();
+    scriptContext.catalogRow = {
+        huggingfaceId: "astronomical-test/example-qwen",
+        displayName: "Example model",
+        family: "qwen3_5",
+        approximateSize: "4.00 GB",
+        readyOnThisMac: false,
+        downloadState: "failed"
+    };
+    const rowButtonLabels = () => JSON.parse(JSON.stringify(vm.runInContext(
+        "libraryActionButtons(catalogRow).map(button => button.textContent)",
+        scriptContext
+    )));
+
+    // Before the first status poll, the catalog's own copy is all there is.
+    assert.equal(vm.runInContext("libraryRowDownloadState(catalogRow)", scriptContext), "failed");
+    assert.deepEqual(rowButtonLabels(), ["Resume", "Cancel"]);
+
+    // The failed download was replaced by another model's: this row's copy is stale.
+    vm.runInContext(
+        `libraryCurrentDownload = {
+            state: "downloading",
+            huggingface_id: "astronomical-test/other-qwen",
+            bytes_completed: 1_000,
+            bytes_total: 4_000
+        }`,
+        scriptContext
+    );
+    assert.equal(
+        vm.runInContext("libraryStateTitle(catalogRow)", scriptContext),
+        "Available to download"
+    );
+    assert.deepEqual(rowButtonLabels(), ["Download"]);
+    assert.equal(
+        vm.runInContext("libraryActionButtons(catalogRow)[0].disabled", scriptContext),
+        true
+    );
+});
+
 test("accepts the largest catalog size that JavaScript can represent exactly", () => {
     const scriptContext = createLibraryContext();
     scriptContext.catalogEntry = validCatalogEntry({

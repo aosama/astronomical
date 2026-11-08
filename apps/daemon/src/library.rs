@@ -17,7 +17,9 @@ pub use catalog::{
     DownloadCatalogFamily, DownloadCatalogRole,
 };
 pub(crate) use catalog::{is_valid_huggingface_id, is_valid_immutable_revision};
-pub use download::job::{DownloadJob, DownloadJobError, DownloadJobFile, DownloadJobState};
+pub use download::job::{
+    DownloadJob, DownloadJobError, DownloadJobFile, DownloadJobState, yields_library_to,
+};
 pub use download::job::{DownloadJobPublicErrorCode, DownloadJobStore, DownloadJobStoreError};
 pub(crate) use download::library_download_routes;
 pub use download::transfer::payload_transfer::DownloadTransferControl;
