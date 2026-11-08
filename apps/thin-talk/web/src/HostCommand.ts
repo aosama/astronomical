@@ -11,6 +11,10 @@ export enum HostCommand {
   COPY_LAST_ANSWER = "copyLastAnswer",
   DELETE_CONVERSATION = "deleteConversation",
   FOCUS_COMPOSER = "focusComposer",
+  /** Replays Astro's first flight. */
+  MEET_ASTRO = "meetAstro",
+  /** The Focus switch: hides or shows Astro. */
+  TOGGLE_ASTRO = "toggleAstro",
   /** Carries `points`: the title bar height in CSS pixels at the current zoom. */
   SET_TITLEBAR_INSET = "setTitlebarInset",
 }

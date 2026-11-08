@@ -76,6 +76,7 @@ final class ThinTalkMainMenuTests: XCTestCase {
     let viewMenu = try submenu(mainMenu, "View")
     let expectedViewItems: [(String, String, NSEvent.ModifierFlags, Bool)] = [
       ("Toggle Sidebar", "s", [.command, .control], true),
+      ("Show or Hide Astro", "", [.command], true), ("Meet Astro Again", "", [.command], true),
       ("Zoom In", "=", [.command], true), ("Zoom Out", "-", [.command], true),
       ("Actual Size", "0", [.command], true),
       ("Enter Full Screen", "f", [.command, .control], false),

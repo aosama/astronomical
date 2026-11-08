@@ -11,7 +11,6 @@ import type { ChatStreamer, ChatStreamRequest } from "./ChatStreamer";
 import { DaemonClient } from "./DaemonClient";
 import { daemonModel } from "./DaemonModelDescription";
 import { DaemonStreamFunction } from "./DaemonStreamFunction";
-import { ThinkingEffort } from "./ThinkingEffort";
 import { ToolCatalog } from "./ToolCatalog";
 import { MAXIMUM_TOOL_ROUNDS_PER_TURN, TOOL_ROUND_LIMIT_REASON } from "./ToolLimits";
 import { ToolStepTracker } from "./ToolStepTracker";
@@ -92,11 +91,7 @@ export class AgentTurnRunner implements ChatStreamer {
     // busy. This turn-scoped signal is aborted once the run ends, whatever
     // ended it, so no daemon request outlives its turn.
     const turnLifetime = new AbortController();
-    const streamFunction = new DaemonStreamFunction(
-      this.client,
-      ThinkingEffort.thinkingBudgetTokens(request.thinkingEffort),
-      turnLifetime.signal,
-    );
+    const streamFunction = new DaemonStreamFunction(this.client, turnLifetime.signal);
     const turnProgress: TurnProgress = {
       toolSteps: new ToolStepTracker((toolName) => this.toolCatalog.labelFor(toolName)),
       paragraphBreakPending: false,

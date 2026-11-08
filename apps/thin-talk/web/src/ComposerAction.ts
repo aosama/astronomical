@@ -1,15 +1,15 @@
 /**
  * One intent the composer reported: sending the draft, stopping the stream,
- * retrying after a failure, choosing a thinking level, selecting the chat
- * model, or flipping the Tools switch. The detail carries the effort value,
- * the model id, or "on"/"off" for the switch.
+ * retrying after a failure, selecting the chat or image model, or flipping
+ * the Tools switch. The detail carries the model id, or "on"/"off" for the
+ * switch.
  */
 export class ComposerAction {
-  public readonly kind: "send" | "stop" | "retry" | "setEffort" | "selectModel" | "selectImageModel" | "openImageModels" | "setTools";
+  public readonly kind: "send" | "stop" | "retry" | "selectModel" | "selectImageModel" | "openImageModels" | "setTools";
   public readonly detail: string;
 
   public constructor(init: {
-    kind: "send" | "stop" | "retry" | "setEffort" | "selectModel" | "selectImageModel" | "openImageModels" | "setTools";
+    kind: "send" | "stop" | "retry" | "selectModel" | "selectImageModel" | "openImageModels" | "setTools";
     detail?: string;
   }) {
     const configuredDetail: string | undefined = init.detail;

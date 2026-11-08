@@ -288,7 +288,11 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
       case "list":
         let summaries = try sessionFileStore.list()
         let payloadJSON: [[String: String]] = summaries.map { summary in
-          ["id": summary.id, "title": summary.title, "updatedAt": summary.updatedAt]
+          var summaryJSON = ["id": summary.id, "title": summary.title, "updatedAt": summary.updatedAt]
+          if let skill = summary.skill {
+            summaryJSON["skill"] = skill
+          }
+          return summaryJSON
         }
         return .success(try encodedJSONString(payloadJSON))
       case "load":
@@ -326,6 +330,15 @@ final class CanvasCoordinator: NSObject, WKScriptMessageHandler, WKNavigationDel
           return .failure(.init(message: "savePrefs requires a preferences object"))
         }
         try sessionFileStore.savePreferences(JSONSerialization.data(withJSONObject: preferences))
+        return .success("null")
+      case "loadAstroProfile":
+        guard let astroProfileData = try sessionFileStore.loadAstroProfile() else { return .success("null") }
+        return .success(String(decoding: astroProfileData, as: UTF8.self))
+      case "saveAstroProfile":
+        guard let astroProfile = payloadObject else {
+          return .failure(.init(message: "saveAstroProfile requires a profile object"))
+        }
+        try sessionFileStore.saveAstroProfile(JSONSerialization.data(withJSONObject: astroProfile))
         return .success("null")
       case "storeGeneratedImage", "deleteGeneratedImages", "loadGeneratedImage":
         return try performGeneratedImageCall(op: op, payloadObject: payloadObject)

@@ -11,13 +11,10 @@ import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
 import { reasoningDisclosureIdentifier } from "./ReasoningDisclosure";
 import { ToolStep, ToolStepState } from "./ToolStep";
-
-/** The outcome shown after a tool step's label. */
-const TOOL_STEP_OUTCOME_LABELS: Record<ToolStepState, string> = {
-  [ToolStepState.RUNNING]: "running",
-  [ToolStepState.SUCCEEDED]: "done",
-  [ToolStepState.FAILED]: "failed",
-};
+import { TranscriptPersona } from "./TranscriptPersona";
+import { ClassicMessageChrome } from "./MessageChrome";
+import type { MessageChrome } from "./MessageChrome";
+import { AstroMessageChrome } from "./astro/AstroMessageChrome";
 
 /** The longest prompt excerpt used in an image's text alternative; a screen
  * reader reads the whole attribute, and prompts can run to paragraphs. */
@@ -50,12 +47,6 @@ export function toolStepIdentifier(messageID: string, toolCallID: string): strin
   return `tool-step:${messageID}:${toolCallID}`;
 }
 
-const VISIBLE_STATE_LABELS: Record<string, string> = {
-  streaming: "generating",
-  stopped: "stopped",
-  failed: "failed",
-};
-
 /**
  * Answer composition for the conversation canvas.
  *
@@ -69,6 +60,8 @@ export class Renderer {
   private readonly trust: TrustBoundary;
   private readonly math: MathPipeline;
   private readonly diagrams: DiagramPipeline;
+  private persona = TranscriptPersona.classic();
+  private chrome: MessageChrome;
 
   public constructor(init: {
     trust: TrustBoundary;
@@ -78,7 +71,20 @@ export class Renderer {
     this.trust = init.trust;
     this.math = init.math;
     this.diagrams = init.diagrams;
+    this.chrome = new ClassicMessageChrome((text) => this.trust.escapeHtml(text));
     marked.setOptions({ gfm: true, breaks: false });
+  }
+
+  /** Who the conversation is with. The transcript redraws every message after
+   * a change, since the signature it compares includes the persona. */
+  public setPersona(persona: TranscriptPersona): void {
+    this.persona = persona;
+    const escapeHtml = (text: string): string => this.trust.escapeHtml(text);
+    this.chrome = persona.isAstroShown ? new AstroMessageChrome(persona, escapeHtml) : new ClassicMessageChrome(escapeHtml);
+  }
+
+  public get currentPersona(): TranscriptPersona {
+    return this.persona;
   }
 
   public messageHtml(message: TranscriptMessage): string {
@@ -93,7 +99,7 @@ export class Renderer {
       // read as sent messages instead of extra compose fields.
       return (
         `<div class="message__answer message__answer--user">` +
-        `<span class="message__role">You</span>` +
+        this.chrome.userRoleHtml() +
         this.userStateHtml(message.state) +
         `<div class="markdown-body">${answerBody}</div>` +
         attachments +
@@ -102,10 +108,7 @@ export class Renderer {
       );
     }
     return (
-      `<div class="message__meta">` +
-      `<span class="message__role">Assistant</span>` +
-      `<span class="message__state">${this.stateLabel(message.state)}</span>` +
-      `</div>` +
+      this.chrome.assistantHeaderHtml(message) +
       `<div class="message__answer">` +
       reasoning +
       toolSteps +
@@ -128,14 +131,6 @@ export class Renderer {
     return "";
   }
 
-  private stateLabel(state: ChatMessageState): string {
-    if (state === ChatMessageState.STREAMING) {
-      return 'generating<span class="message__streaming-caret"></span>';
-    }
-    const configuredLabel: string | undefined = VISIBLE_STATE_LABELS[state];
-    return configuredLabel != null ? configuredLabel : "";
-  }
-
   /**
    * The reasoning disclosure carries a stable id plus a default-open state while
    * the message is streaming. The id is what lets TranscriptView re-apply the
@@ -148,7 +143,7 @@ export class Renderer {
     const openAttribute = message.state === ChatMessageState.STREAMING ? " open" : "";
     return (
       `<details class="reasoning" id="${disclosureIdentifier}" data-testid="${disclosureIdentifier}"${openAttribute}>` +
-      `<summary>Reasoning</summary>` +
+      `<summary>${this.chrome.reasoningSummary()}</summary>` +
       `<div class="reasoning__body">${this.trust.escapeHtml(message.reasoning ?? "")}</div>` +
       `</details>`
     );
@@ -200,8 +195,8 @@ export class Renderer {
     const argumentsText = toolStep.argumentsJSON.length === 0 || toolStep.argumentsJSON === "{}" ? "None" : toolStep.argumentsJSON;
     const resultText = toolStep.state === ToolStepState.RUNNING ? "Waiting for the result." : toolStep.resultText;
     return (
-      `<details class="tool-step" id="${stepIdentifier}" data-testid="${stepIdentifier}" data-state="${toolStep.state}">` +
-      `<summary>${this.trust.escapeHtml(toolStep.label)}: ${TOOL_STEP_OUTCOME_LABELS[toolStep.state]}${this.imageModelSuffix(toolStep)}</summary>` +
+      `<details class="tool-step" id="${stepIdentifier}" data-testid="${stepIdentifier}" data-state="${toolStep.state}"${this.chrome.toolStepAttributes(toolStep)}>` +
+      this.chrome.toolStepSummaryHtml(toolStep, this.imageModelSuffix(toolStep)) +
       `<div class="tool-step__body">` +
       `<span>Arguments</span><pre>${this.trust.escapeHtml(argumentsText)}</pre>` +
       `<span>Result</span><pre>${this.trust.escapeHtml(resultText)}</pre>` +

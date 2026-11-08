@@ -1,29 +1,32 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { installDom, waitFor } from "./support/dom";
-import { ThinkingEffort } from "../src/ThinkingEffort";
 import { bootJourney, sendUserMessage, waitUntilReady } from "./support/journey";
 
 // Issue 752: every interactive control of the conversation canvas carries a
 // stable, domain-meaningful identifier, so automation agents and assistive
 // technology share deterministic selectors that never derive from visible text
 // or layout position. The shell document carries an id equal to the
-// data-testid for each singleton control; the effort menu mints one mirrored
-// identifier per level at render time; each transcript bubble is keyed on the
-// message's own id as `message:<role>:<message id>`.
+// data-testid for each singleton control; each transcript bubble is keyed on
+// the message's own id as `message:<role>:<message id>`.
 
 const SINGLETON_CONTROL_IDENTIFIERS = [
   "composer-input",
   "composer-send",
   "composer-stop",
   "composer-retry",
-  "composer-effort",
-  "composer-effort-menu",
   "composer-model",
   "composer-model-menu",
   "composer-image-model",
   "composer-image-model-menu",
   "sidebar-new-chat",
+  "skill-launchers",
+  "composer-skill-pictures",
+  "composer-skill-look",
+  "composer-skill-read",
+  "composer-skill-voice",
+  "composer-astro",
+  "first-flight",
 ] as const;
 
 // Message ids are UUIDs minted by the conversation log, so a bubble identifier
@@ -48,25 +51,6 @@ test("should_resolve_every_core_control_identifier_to_exactly_one_element", () =
       `id "${controlIdentifier}" must resolve to exactly one element`);
     const element = byTestid[0] as HTMLElement;
     assert.equal(element.id, controlIdentifier, `id and data-testid must mirror on ${controlIdentifier}`);
-  }
-});
-
-test("should_give_every_thinking_effort_choice_a_mirrored_identifier", async () => {
-  bootJourney();
-  await waitUntilReady();
-
-  // The effort choices are minted at render time, not in the shell document,
-  // so the mirrored-identifier rule for them is enforced against the live page.
-  for (const effortOption of ThinkingEffort.ALL) {
-    const choiceIdentifier = `composer-effort-${effortOption}`;
-    const byTestid = document.querySelectorAll(`[data-testid="${choiceIdentifier}"]`);
-    assert.equal(
-      byTestid.length, 1,
-      `the thinking-effort choice ${choiceIdentifier} must resolve to exactly one element`);
-    const choice = byTestid[0] as HTMLElement;
-    assert.equal(
-      choice.id, choiceIdentifier,
-      `the thinking-effort choice ${choiceIdentifier} must mirror its id and data-testid`);
   }
 });
 

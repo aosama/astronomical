@@ -1,5 +1,3 @@
-import { ThinkingEffort } from "./ThinkingEffort";
-
 /** The sidebar's width range while dragging its edge, in CSS pixels: narrow
  * enough to give the conversation room, wide enough for long titles. */
 export const MIN_SIDEBAR_WIDTH_PIXELS = 180;
@@ -11,7 +9,6 @@ export const MAX_SIDEBAR_WIDTH_PIXELS = 520;
  * the defaults.
  */
 export class SessionPreferences {
-  public thinkingEffort: ThinkingEffort;
   /** The chat model the user chose last, or null before any choice. A stored id
    * that no longer appears in the daemon's catalog falls back to the first
    * model at load time. */
@@ -29,14 +26,11 @@ export class SessionPreferences {
   public sidebarWidthPixels: number | null;
 
   public constructor(init: {
-    thinkingEffort?: ThinkingEffort;
     modelID?: string | null;
     imageModelID?: string | null;
     toolsEnabled?: boolean;
     sidebarWidthPixels?: number | null;
   }) {
-    const configuredEffort: ThinkingEffort | undefined = init.thinkingEffort;
-    this.thinkingEffort = configuredEffort != null ? configuredEffort : ThinkingEffort.DEFAULT;
     const configuredModelID: string | null | undefined = init.modelID;
     this.modelID = configuredModelID != null ? configuredModelID : null;
     const configuredImageModelID: string | null | undefined = init.imageModelID;
@@ -55,14 +49,12 @@ export class SessionPreferences {
   }
 
   public toPlain(): {
-    thinkingEffort: string;
     modelID: string | null;
     imageModelID: string | null;
     toolsEnabled: boolean;
     sidebarWidthPixels: number | null;
   } {
     return {
-      thinkingEffort: this.thinkingEffort,
       modelID: this.modelID,
       imageModelID: this.imageModelID,
       toolsEnabled: this.toolsEnabled,
@@ -75,13 +67,13 @@ export class SessionPreferences {
       return SessionPreferences.default();
     }
     const record = plain as {
-      thinkingEffort?: unknown;
       modelID?: unknown;
       imageModelID?: unknown;
       toolsEnabled?: unknown;
       sidebarWidthPixels?: unknown;
     };
-    const effort = typeof record.thinkingEffort === "string" ? ThinkingEffort.parse(record.thinkingEffort) : ThinkingEffort.DEFAULT;
+    // A thinkingEffort saved by earlier versions is ignored: the model now
+    // thinks as long as it needs.
     const modelID = typeof record.modelID === "string" ? record.modelID : null;
     const imageModelID = typeof record.imageModelID === "string" ? record.imageModelID : null;
     // Only an explicit false turns tools off, so preferences saved before the
@@ -89,6 +81,6 @@ export class SessionPreferences {
     const toolsEnabled = record.toolsEnabled !== false;
     const storedSidebarWidth = record.sidebarWidthPixels;
     const sidebarWidthPixels = typeof storedSidebarWidth === "number" && Number.isFinite(storedSidebarWidth) ? storedSidebarWidth : null;
-    return new SessionPreferences({ thinkingEffort: effort, modelID, imageModelID, toolsEnabled, sidebarWidthPixels });
+    return new SessionPreferences({ modelID, imageModelID, toolsEnabled, sidebarWidthPixels });
   }
 }

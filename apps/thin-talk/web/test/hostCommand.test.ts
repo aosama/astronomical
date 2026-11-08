@@ -20,6 +20,8 @@ function recordingHandlers(calledCommands: string[]): HostCommandHandlers {
     copyLastAnswer: () => calledCommands.push("copyLastAnswer"),
     deleteConversation: () => calledCommands.push("deleteConversation"),
     focusComposer: () => calledCommands.push("focusComposer"),
+    meetAstro: () => calledCommands.push("meetAstro"),
+    toggleAstro: () => calledCommands.push("toggleAstro"),
     setTitlebarInset: (titlebarInsetPixels) => calledCommands.push(`setTitlebarInset:${titlebarInsetPixels}`),
   };
 }

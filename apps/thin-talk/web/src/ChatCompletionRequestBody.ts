@@ -25,16 +25,15 @@ export interface ChatCompletionRequestTool {
 }
 
 /**
- * The streaming chat completion request Thin Talk sends. `thinking_budget` is
- * the daemon's canonical spelling of the reasoning cap; the daemon ignores
- * fields it does not know, so a misspelt key would silently leave reasoning
- * uncapped rather than fail. `tools` is present only when the turn offers
- * tools, so a plain turn carries no declarations.
+ * The streaming chat completion request Thin Talk sends. It carries no
+ * `thinking_budget`: the model thinks as long as it needs, bounded only by its
+ * output limit, because a capped model can stop mid-thought and answer
+ * worse. `tools` is present only when the turn offers tools, so a plain turn
+ * carries no declarations.
  */
 export interface ChatCompletionRequestBody {
   model: string;
   stream: true;
   messages: ChatCompletionRequestMessage[];
-  thinking_budget: number;
   tools?: ChatCompletionRequestTool[];
 }

@@ -1,10 +1,12 @@
 import type { ConversationTool, ToolCallContext, ToolOutput, ToolParametersSchema } from "./ConversationTool";
 import { DaemonClient } from "./DaemonClient";
 import { GeneratedImageReview, imageMimeType } from "./GeneratedImageReview";
+import type { ImageModel } from "./ImageModel";
 import { ImageModelDirectory } from "./ImageModelDirectory";
 import { ImageModelSelection } from "./ImageModelSelection";
 import type { ImageGenerationRequestBody } from "./ImageGenerationRequestBody";
 import { SessionBridge } from "./SessionBridge";
+import { PictureModelGuidance } from "./PictureModelGuidance";
 
 /** Image shapes the model may ask for, as width and height in pixels. All are
  * within the daemon's 1024-pixel limit and multiples of 16. */
@@ -18,6 +20,13 @@ const IMAGE_SIZES_BY_SHAPE: Record<string, { width: number; height: number }> = 
  * to look at it can take well over the default tool timeout, especially on
  * the first image after a chat, when both models have to be loaded. */
 const IMAGE_GENERATION_TIMEOUT_MILLISECONDS = 10 * 60_000;
+
+/** How long to wait before reading the model list a second time when the
+ * first read lists no image model. A list read just as the daemon refreshes
+ * its models (a download landing, a restart) can come back short; one second
+ * is enough for that to settle and short enough not to be noticed. */
+const IMAGE_MODEL_RECHECK_DELAY_MILLISECONDS = 1_000;
+
 
 /**
  * Makes an image and shows it in the answer. The model is the one
@@ -53,18 +62,60 @@ export class GenerateImageTool implements ConversationTool {
   private readonly imageReview: GeneratedImageReview;
   private readonly imageModelDirectory: ImageModelDirectory;
   private readonly imageModelSelection: ImageModelSelection;
+  private readonly pictureModelGuidance: PictureModelGuidance;
 
   public constructor(
     client: DaemonClient,
     bridge: SessionBridge,
     imageModelDirectory: ImageModelDirectory,
     imageModelSelection: ImageModelSelection,
+    pictureModelGuidance: PictureModelGuidance = new PictureModelGuidance(),
   ) {
     this.client = client;
     this.bridge = bridge;
     this.imageModelDirectory = imageModelDirectory;
     this.imageModelSelection = imageModelSelection;
+    this.pictureModelGuidance = pictureModelGuidance;
     this.imageReview = new GeneratedImageReview(client);
+  }
+
+  /**
+   * The model to draw with, read afresh for each picture so a model added or
+   * removed since Thin Talk opened is honoured; writing the list back to the
+   * shared selection updates the composer's pill to match what draws. An
+   * empty list is read once more before giving up, since telling a child
+   * "I can't draw" when a picture model is installed is the worse mistake.
+   */
+  private async installedImageModel(signal: AbortSignal): Promise<ImageModel | null> {
+    for (let readNumber = 1; readNumber <= 2; readNumber += 1) {
+      if (readNumber > 1) {
+        await GenerateImageTool.pause(IMAGE_MODEL_RECHECK_DELAY_MILLISECONDS, signal);
+      }
+      this.imageModelSelection.updateInstalled(await this.imageModelDirectory.load(signal));
+      const imageModel = this.imageModelSelection.current();
+      if (imageModel != null) {
+        return imageModel;
+      }
+    }
+    return null;
+  }
+
+  private static pause(delayMilliseconds: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (signal.aborted) {
+        reject(signal.reason);
+        return;
+      }
+      const stopPause = (): void => {
+        clearTimeout(pauseTimer);
+        reject(signal.reason);
+      };
+      const pauseTimer = setTimeout(() => {
+        signal.removeEventListener("abort", stopPause);
+        resolve();
+      }, delayMilliseconds);
+      signal.addEventListener("abort", stopPause, { once: true });
+    });
   }
 
   public async execute(toolArguments: Record<string, unknown>, signal: AbortSignal, context: ToolCallContext): Promise<ToolOutput> {
@@ -72,13 +123,11 @@ export class GenerateImageTool implements ConversationTool {
     if (prompt.length === 0) {
       throw new Error("The image needs a description.");
     }
-    // The installed models are read afresh for each picture, so a model added
-    // or removed since Thin Talk opened is honoured. Writing the list back to
-    // the shared selection updates the composer's pill to match what draws.
-    this.imageModelSelection.updateInstalled(await this.imageModelDirectory.load(signal));
-    const imageModel = this.imageModelSelection.current();
+    const imageModel = await this.installedImageModel(signal);
     if (imageModel == null) {
-      throw new Error("No image model is installed. The user can add one from the Library.");
+      // A model left to guess where pictures come from invents settings
+      // screens that do not exist, so it is told the one real place.
+      throw new Error(this.pictureModelGuidance.noPictureModelResult());
     }
     const requestedShape = typeof toolArguments["shape"] === "string" ? toolArguments["shape"] : "square";
     const imageSize = IMAGE_SIZES_BY_SHAPE[requestedShape] ?? IMAGE_SIZES_BY_SHAPE["square"]!;

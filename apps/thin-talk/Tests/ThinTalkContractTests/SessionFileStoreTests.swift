@@ -115,12 +115,49 @@ final class SessionFileStoreTests: XCTestCase {
     let store = makeStore()
     XCTAssertNil(try store.loadPreferences())
 
-    let preferences = Data(#"{"thinkingEffort":"balanced","sidebarWidthPixels":300}"#.utf8)
+    let preferences = Data(#"{"modelID":"model-alpha","sidebarWidthPixels":300}"#.utf8)
     try store.savePreferences(preferences)
     XCTAssertEqual(try store.loadPreferences(), preferences)
 
-    let updated = Data(#"{"thinkingEffort":"high","sidebarWidthPixels":260}"#.utf8)
+    let updated = Data(#"{"modelID":"model-beta","sidebarWidthPixels":260}"#.utf8)
     try store.savePreferences(updated)
     XCTAssertEqual(try store.loadPreferences(), updated)
+  }
+
+  func test_should_pass_a_chats_saved_skill_through_the_list_and_nil_for_older_files() throws {
+    let store = makeStore()
+    try store.save(id: "drawn", documentData: Data(#"{"id":"drawn","title":"Moon","updatedAt":"2026-11-08T10:00:00Z","skill":"pictures","messages":[]}"#.utf8))
+    try store.save(id: "older", documentData: Data(#"{"id":"older","title":"Hi","updatedAt":"2026-11-07T10:00:00Z","messages":[]}"#.utf8))
+    try store.save(id: "odd", documentData: Data(#"{"id":"odd","title":"Odd","updatedAt":"2026-11-06T10:00:00Z","skill":7,"messages":[]}"#.utf8))
+
+    let skillByID = Dictionary(uniqueKeysWithValues: try store.list().map { ($0.id, $0.skill) })
+    XCTAssertEqual(skillByID["drawn"], "pictures")
+    XCTAssertEqual(skillByID["older"], .some(nil), "a file saved before skills were recorded lists without one")
+    XCTAssertEqual(skillByID["odd"], .some(nil), "a skill that is not text is ignored")
+  }
+
+  func test_should_return_nil_before_astro_has_a_profile_and_round_trip_it_after() throws {
+    let store = makeStore()
+    XCTAssertNil(try store.loadAstroProfile())
+
+    let firstProfile = Data(#"{"nickname":"Maya","style":"explorer","hasFinishedFirstFlight":true}"#.utf8)
+    try store.saveAstroProfile(firstProfile)
+    XCTAssertEqual(try store.loadAstroProfile(), firstProfile)
+
+    let changedProfile = Data(#"{"nickname":"","style":"pilot","hasFinishedFirstFlight":true}"#.utf8)
+    try store.saveAstroProfile(changedProfile)
+    XCTAssertEqual(try store.loadAstroProfile(), changedProfile)
+  }
+
+  func test_should_keep_astro_profile_and_chat_preferences_in_separate_files() throws {
+    let store = makeStore()
+    let preferences = Data(#"{"modelID":"model-alpha"}"#.utf8)
+    let astroProfile = Data(#"{"style":"pilot"}"#.utf8)
+    try store.savePreferences(preferences)
+    try store.saveAstroProfile(astroProfile)
+
+    XCTAssertNotEqual(store.preferencesFileURL, store.astroProfileFileURL)
+    XCTAssertEqual(try store.loadPreferences(), preferences, "saving Astro's profile must not touch chat preferences")
+    XCTAssertEqual(try store.loadAstroProfile(), astroProfile)
   }
 }

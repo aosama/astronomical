@@ -1,0 +1,621 @@
+/*
+ * Astro: the first flight and Astro's home. One deliberate space look, drawn
+ * from the concept art: deep navy, a pastel trail, and the skill cards'
+ * colours. SF Pro Rounded (ui-rounded) gives the friendly display type without
+ * bundling a font, which the page's content policy would have to allow.
+ */
+:root {
+  --astro-space: #0d0f2e;
+  --astro-space-deep: #080a22;
+  --astro-panel: #1a1d4a;
+  --astro-ink: #eef0ff;
+  --astro-muted: #a6acda;
+  --astro-violet: #8c6bff;
+  --astro-star: #ffe27a;
+  --astro-chat: #8467f0;
+  --astro-pictures: #4c8bf5;
+  --astro-look: #2fae8f;
+  --astro-read: #e39a55;
+  --astro-voice: #5d628c;
+  --astro-trail-1: #4fc3ff;
+  --astro-trail-2: #8c6bff;
+  --astro-trail-3: #ff6fb8;
+  --astro-trail-4: #ffd23f;
+  --astro-display: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+}
+
+.astro-trail--aurora {
+  --astro-trail-1: #3be8b0;
+  --astro-trail-2: #4fc3ff;
+  --astro-trail-3: #8c6bff;
+  --astro-trail-4: #3be8b0;
+}
+
+.astro-trail--sunset {
+  --astro-trail-1: #ff9a52;
+  --astro-trail-2: #ff6fb8;
+  --astro-trail-3: #ffd23f;
+  --astro-trail-4: #ff6f6f;
+}
+
+/* ---------- Astro's figure ---------- */
+
+.astro-figure {
+  position: relative;
+  width: var(--astro-size, 260px);
+  aspect-ratio: 1;
+  flex: none;
+  animation: astro-bob 4.5s ease-in-out infinite;
+}
+
+.astro-figure__body {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+  transition: filter 0.4s ease;
+}
+
+/* The trail streams out behind Astro and travels with it. */
+.astro-figure__trail {
+  position: absolute;
+  z-index: 0;
+  left: -120%;
+  right: 42%;
+  bottom: 8%;
+  height: 52%;
+  pointer-events: none;
+}
+
+.astro-figure__trail span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 8%;
+  border-radius: 999px;
+  filter: blur(1.5px);
+  transform-origin: right center;
+  opacity: 0.85;
+  animation: astro-stream 2.4s ease-in-out infinite;
+}
+
+.astro-figure__trail span:nth-child(1) { top: 28%; transform: rotate(-13deg); background: linear-gradient(90deg, transparent, var(--astro-trail-1)); }
+.astro-figure__trail span:nth-child(2) { top: 42%; transform: rotate(-9deg); background: linear-gradient(90deg, transparent, var(--astro-trail-2)); animation-delay: -0.6s; }
+.astro-figure__trail span:nth-child(3) { top: 56%; transform: rotate(-5deg); background: linear-gradient(90deg, transparent, var(--astro-trail-3)); animation-delay: -1.2s; }
+.astro-figure__trail span:nth-child(4) { top: 70%; transform: rotate(-1deg); background: linear-gradient(90deg, transparent, var(--astro-trail-4)); animation-delay: -1.8s; }
+
+.astro-figure--hop {
+  animation: astro-hop 0.6s ease, astro-bob 4.5s ease-in-out 0.6s infinite;
+}
+
+/* Charging up: a pulsing glow and a brighter, faster trail, so the download
+   reads as Astro doing something rather than a bar to stare at. */
+.astro-figure--charging .astro-figure__body {
+  animation: astro-charge 1.6s ease-in-out infinite;
+}
+
+.astro-figure--charging .astro-figure__trail span {
+  opacity: 1;
+  animation-duration: 0.9s;
+}
+
+@keyframes astro-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -10px; } }
+@keyframes astro-hop { 0% { translate: 0 0; } 35% { translate: 0 -34px; } 70% { translate: 0 4px; } 100% { translate: 0 0; } }
+@keyframes astro-stream { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+@keyframes astro-charge {
+  0%, 100% { filter: drop-shadow(0 0 6px rgb(140 107 255 / 50%)); }
+  50% { filter: drop-shadow(0 0 26px rgb(255 226 122 / 85%)); }
+}
+@keyframes astro-twinkle { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* ---------- Shared controls ---------- */
+
+.astro-button {
+  font: 600 17px/1 var(--astro-display);
+  border: 0;
+  border-radius: 999px;
+  padding: 15px 26px;
+  cursor: pointer;
+  background: var(--astro-violet);
+  color: #fff;
+  box-shadow: 0 8px 22px rgb(140 107 255 / 45%);
+}
+
+.astro-button--quiet {
+  background: rgb(255 255 255 / 10%);
+  color: var(--astro-ink);
+  box-shadow: none;
+}
+
+.astro-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.astro-button:focus-visible,
+.astro-chip:focus-visible,
+.skill-card:focus-visible,
+.first-flight__choice:focus-visible,
+.first-flight__name-field:focus-visible {
+  outline: 3px solid var(--astro-star);
+  outline-offset: 3px;
+}
+
+.astro-chip {
+  font: 500 14px/1.2 -apple-system, system-ui, sans-serif;
+  padding: 10px 15px;
+  border: 1px solid rgb(255 255 255 / 16%);
+}
+
+.astro-chip[aria-pressed="true"] {
+  background: var(--astro-ink);
+  color: var(--astro-space);
+}
+
+/* ---------- The first flight ---------- */
+
+.first-flight {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: calc(var(--titlebar-inset, 0px) + 12px) 24px 5vh;
+  overflow: hidden;
+  color: var(--astro-ink);
+  background:
+    radial-gradient(1200px 520px at 70% 110%, rgb(140 107 255 / 28%), transparent 60%),
+    radial-gradient(640px 420px at 8% 0%, rgb(76 139 245 / 18%), transparent 60%),
+    var(--astro-space);
+}
+
+.first-flight[hidden] {
+  display: none;
+}
+
+/* Stars as layered tiny gradients: no canvas and no script to keep in sync
+   with the window size. */
+.first-flight__sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.5px 1.5px at 20px 30px, #fff, transparent),
+    radial-gradient(1px 1px at 120px 80px, rgb(255 255 255 / 80%), transparent),
+    radial-gradient(1.5px 1.5px at 200px 160px, rgb(255 255 255 / 70%), transparent),
+    radial-gradient(1px 1px at 60px 190px, #fff, transparent),
+    radial-gradient(1px 1px at 250px 40px, rgb(255 255 255 / 60%), transparent);
+  background-size: 280px 220px;
+  animation: astro-twinkle 6s ease-in-out infinite;
+}
+
+.first-flight__skip {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--titlebar-inset, 0px) + 14px);
+  right: 20px;
+  font-size: 13px;
+  padding: 9px 14px;
+}
+
+.first-flight__stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  min-height: 0;
+}
+
+.first-flight__astro {
+  --astro-size: clamp(180px, 34vh, 300px);
+}
+
+.first-flight__bubble {
+  position: relative;
+  max-width: 360px;
+  margin: 0 0 18% 0;
+  padding: 15px 20px;
+  border-radius: 22px;
+  background: #fff;
+  color: #1c1b3a;
+  font: 600 19px/1.4 var(--astro-display);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 30%);
+}
+
+.first-flight__bubble::after {
+  content: "";
+  position: absolute;
+  left: -9px;
+  top: 22px;
+  border: 10px solid transparent;
+  border-right-color: #fff;
+  border-left: 0;
+}
+
+.first-flight__controls {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  min-height: 150px;
+}
+
+.first-flight__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.first-flight__note {
+  margin: 0;
+  color: var(--astro-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.first-flight__name {
+  display: grid;
+  gap: 10px;
+  width: min(420px, 100%);
+}
+
+.first-flight__name-field {
+  font: 600 22px/1 var(--astro-display);
+  text-align: center;
+  padding: 16px 20px;
+  border-radius: 16px;
+  border: 2px solid rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 8%);
+  color: var(--astro-ink);
+}
+
+.first-flight__choices {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  width: min(880px, 100%);
+}
+
+.first-flight__choice {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border: 2px solid rgb(255 255 255 / 12%);
+  border-radius: 20px;
+  background: rgb(20 22 60 / 85%);
+  color: var(--astro-ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.first-flight__choice:hover {
+  border-color: var(--astro-star);
+}
+
+.first-flight__choice strong {
+  font: 600 20px/1.2 var(--astro-display);
+}
+
+.first-flight__choice span {
+  color: var(--astro-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.first-flight__panel {
+  max-width: 62ch;
+  padding: 18px 22px;
+  border-radius: 18px;
+  background: var(--astro-panel);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.first-flight__panel h2 {
+  margin: 0 0 6px;
+  font: 600 19px/1.2 var(--astro-display);
+}
+
+.first-flight__panel p {
+  margin: 0;
+}
+
+.first-flight__follow-up {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.first-flight--drop-armed .first-flight__astro .astro-figure__body,
+.astro-home--drop-armed .astro-home__astro .astro-figure__body {
+  filter: drop-shadow(0 0 22px rgb(255 226 122 / 90%));
+}
+
+/* Pilot: the same journey, quieter and denser for teenagers. */
+.first-flight--pilot .first-flight__bubble {
+  font-size: 16px;
+  border-radius: 14px;
+}
+
+.first-flight--pilot .astro-button {
+  font-size: 15px;
+  padding: 13px 22px;
+}
+
+/* ---------- Waking Astro ---------- */
+
+.wake-up,
+.sketchbook-offer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(560px, 100%);
+}
+
+.wake-up__trails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.wake-up__trails-label {
+  color: var(--astro-muted);
+  font-size: 13px;
+}
+
+.sketchbook-offer__status {
+  margin: 0;
+  color: var(--astro-muted);
+  font-size: 14px;
+}
+
+.sketchbook-offer__status:empty {
+  display: none;
+}
+
+.download-meter {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.download-meter__track {
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgb(255 255 255 / 10%);
+}
+
+.download-meter__fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--astro-trail-1), var(--astro-trail-2), var(--astro-trail-3), var(--astro-trail-4));
+  transition: width 0.4s linear;
+}
+
+.download-meter__labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--astro-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Skill cards ---------- */
+
+.skill-shelf {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  width: min(1000px, 100%);
+}
+
+.skill-card {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 2px 12px;
+  align-items: center;
+  width: 176px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 18px;
+  color: #fff;
+  text-align: left;
+  font: inherit;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 35%), inset 0 0 0 1px rgb(255 255 255 / 18%);
+  transition: transform 0.2s ease;
+}
+
+.skill-card:hover {
+  transform: translateY(-3px) rotate(-1deg);
+}
+
+.skill-card--dragging {
+  position: relative;
+  z-index: 9;
+  cursor: grabbing;
+  transition: none;
+}
+
+.skill-card__icon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 22%);
+}
+
+.skill-card__icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.skill-card strong {
+  font: 600 17px/1.1 var(--astro-display);
+}
+
+.skill-card small {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.skill-card--chat { background: var(--astro-chat); }
+.skill-card--pictures { background: var(--astro-pictures); }
+.skill-card--look { background: var(--astro-look); }
+.skill-card--read { background: var(--astro-read); }
+.skill-card--voice { background: var(--astro-voice); opacity: 0.75; cursor: default; }
+
+/* ---------- Astro's home ---------- */
+
+.empty-state--astro .empty-state__title,
+.empty-state--astro .empty-state__subtitle {
+  display: none;
+}
+
+/* Home offers the brain itself, so the classic notice about the Library is
+   hidden; a notice about anything else (a daemon that cannot be reached)
+   still shows. */
+.empty-state--astro-offers-brain .empty-state__notice {
+  display: none;
+}
+
+.astro-home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: min(var(--reading-column), 100%);
+  padding: 0 28px;
+  pointer-events: auto;
+}
+
+.astro-home[hidden] {
+  display: none;
+}
+
+.astro-home__header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.astro-home__astro {
+  --astro-size: 150px;
+}
+
+.astro-home__astro .astro-figure__trail {
+  left: -70%;
+}
+
+.astro-home__words {
+  text-align: left;
+}
+
+.astro-home__greeting {
+  margin: 0;
+  font: 700 32px/1.15 var(--astro-display);
+}
+
+.astro-home__prompt {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 17px;
+}
+
+.astro-home__ideas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.astro-home__ideas .astro-button {
+  font-weight: 500;
+}
+
+/* Five cards fit the reading column on one row: 5 x 132 px plus the gaps. */
+.astro-home .skill-card {
+  width: 132px;
+  padding: 10px 12px;
+}
+
+.astro-home .skill-card small {
+  display: none;
+}
+
+.astro-home__follow-up {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+  width: min(560px, 100%);
+}
+
+.astro-home__reply {
+  margin: 0;
+  font: 600 16px/1.4 var(--astro-display);
+  color: var(--astro-ink);
+}
+
+.empty-state--pilot .astro-home__greeting {
+  font-size: 26px;
+}
+
+@media (max-width: 760px) {
+  .first-flight__choices {
+    grid-template-columns: 1fr;
+  }
+  .first-flight__stage {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .first-flight__bubble {
+    margin: 0;
+  }
+  .first-flight__bubble::after {
+    display: none;
+  }
+}
+
+/* Reduce Motion: Astro still turns toward the pointer (a change of pose, not
+   movement), but nothing bobs, hops, twinkles or streams. */
+@media (prefers-reduced-motion: reduce) {
+  .astro-figure,
+  .astro-figure--hop,
+  .astro-figure__trail span,
+  .astro-figure--charging .astro-figure__body,
+  .first-flight__sky {
+    animation: none;
+  }
+  .skill-card,
+  .download-meter__fill {
+    transition: none;
+  }
+}

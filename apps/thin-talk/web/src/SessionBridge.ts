@@ -6,6 +6,7 @@ import { SessionBridgeError, SessionBridgeTimeoutError } from "./SessionBridgeEr
 import { SessionDocument } from "./SessionDocument";
 import { SessionSummary } from "./SessionSummary";
 import { SessionPreferences } from "./SessionPreferences";
+import { parseConversationSkill } from "./ConversationSkill";
 import { isGeneratedImageName } from "./ToolStep";
 
 interface PendingSessionCall {
@@ -88,6 +89,16 @@ export class SessionBridge {
 
   public savePrefs(preferences: SessionPreferences): Promise<void> {
     return this.call(SessionBridgeOp.SAVE_PREFS, preferences.toPlain()).then(() => undefined);
+  }
+
+  /** Astro's saved profile as stored, or null before the first save; the
+   * astro module reads it, so the bridge stays free of Astro's rules. */
+  public loadAstroProfile(): Promise<unknown> {
+    return this.call(SessionBridgeOp.LOAD_ASTRO_PROFILE, null);
+  }
+
+  public saveAstroProfile(plainProfile: Record<string, unknown>): Promise<void> {
+    return this.call(SessionBridgeOp.SAVE_ASTRO_PROFILE, plainProfile).then(() => undefined);
   }
 
   /** Hands a generated image (base64 PNG or JPEG) to the host to keep, and
@@ -256,7 +267,7 @@ export class SessionBridge {
         throw new SessionBridgeError("a session list entry is missing its id or timestamp");
       }
       const title = typeof record["title"] === "string" ? record["title"] : "";
-      return new SessionSummary({ id: record["id"], title, updatedAt: record["updatedAt"] });
+      return new SessionSummary({ id: record["id"], title, updatedAt: record["updatedAt"], skill: parseConversationSkill(record["skill"]) });
     });
   }
 }

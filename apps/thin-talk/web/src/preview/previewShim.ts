@@ -19,6 +19,7 @@ export interface PreviewWindowLike {
 
 const SESSIONS_KEY = "thintalk.preview.sessions";
 const PREFERENCES_KEY = "thintalk.preview.preferences";
+const ASTRO_PROFILE_KEY = "thintalk.preview.astro-profile";
 
 /** JSON-backed persistence the adapter reads and writes, keyed by session id. */
 function makeStorageAdapter(storage: Storage): SessionStoreAdapter {
@@ -63,6 +64,14 @@ function makeStorageAdapter(storage: Storage): SessionStoreAdapter {
     },
     savePreferences: (value) => {
       storage.setItem(PREFERENCES_KEY, JSON.stringify(value));
+    },
+    // Null before the first save, as the Swift store answers, so the preview
+    // also opens on Astro's first flight.
+    loadAstroProfile: () => {
+      return storage.getItem(ASTRO_PROFILE_KEY) ? JSON.parse(storage.getItem(ASTRO_PROFILE_KEY) as string) : null;
+    },
+    saveAstroProfile: (value) => {
+      storage.setItem(ASTRO_PROFILE_KEY, JSON.stringify(value));
     },
   };
 }

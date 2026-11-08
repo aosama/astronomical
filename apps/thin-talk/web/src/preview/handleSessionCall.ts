@@ -7,6 +7,8 @@ export interface SessionStoreRecord {
   title: string;
   updatedAt: string;
   messages: unknown[];
+  /** The chat's main skill as the page saved it, passed back in the list. */
+  skill?: string;
 }
 
 /**
@@ -25,6 +27,8 @@ export interface SessionStoreAdapter {
   renameSession(id: string, title: string): void;
   loadPreferences(): unknown;
   savePreferences(value: unknown): void;
+  loadAstroProfile(): unknown;
+  saveAstroProfile(value: unknown): void;
 }
 
 function stringField(payload: unknown, key: string): string {
@@ -48,6 +52,7 @@ function normalizeSave(payload: unknown): SessionStoreRecord {
     title: typeof record["title"] === "string" ? record["title"] : "",
     updatedAt: typeof record["updatedAt"] === "string" ? record["updatedAt"] : "",
     messages: Array.isArray(record["messages"]) ? record["messages"] : [],
+    ...(typeof record["skill"] === "string" ? { skill: record["skill"] } : {}),
   };
 }
 
@@ -80,6 +85,11 @@ export function handleSessionCall(op: string, payload: unknown, adapter: Session
       return adapter.loadPreferences();
     case SessionBridgeOp.SAVE_PREFS:
       adapter.savePreferences(payload);
+      return null;
+    case SessionBridgeOp.LOAD_ASTRO_PROFILE:
+      return adapter.loadAstroProfile();
+    case SessionBridgeOp.SAVE_ASTRO_PROFILE:
+      adapter.saveAstroProfile(payload);
       return null;
     default:
       throw new SessionBridgeError(`host does not know op "${op}"`);

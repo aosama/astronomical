@@ -5,6 +5,13 @@ import { bootChatClient } from "../../src/boot";
 
 export const DAEMON_BASE_URL = "http://127.0.0.1:6733";
 
+/** A person who already finished Astro's first flight with Astro shown. */
+export const MET_ASTRO_PROFILE = { nickname: "Maya", style: "explorer", hasFinishedFirstFlight: true, isAstroShown: true };
+
+/** Someone who met Astro and then hid it: classic Thin Talk, the default for
+ * journeys about chat itself, so they test the plain look. */
+export const CLASSIC_PROFILE = { ...MET_ASTRO_PROFILE, isAstroShown: false };
+
 export interface Journey {
   host: FakeSessionHost;
   daemon: FakeDaemon;
@@ -23,6 +30,13 @@ export function bootJourney(
     titlebarInset?: number;
     chatReplySequence?: string[][];
     libraryCatalog?: unknown;
+    libraryDownloadSequence?: unknown[];
+    libraryDownloadRefusal?: { status: number; code: string };
+    installsWhenDownloadFinishes?: { huggingfaceID: string; model: unknown };
+    /** Astro's saved profile; omitted means someone who met Astro and hid
+     * it, so journeys about chat neither click through the welcome nor see
+     * Astro's look. */
+    astroProfile?: unknown;
   },
 ): Journey {
   installDom();
@@ -39,6 +53,9 @@ export function bootJourney(
   if (seededPreferences !== undefined) {
     host.seedPreferences(seededPreferences);
   }
+  if (previousHost == null) {
+    host.astroProfile = options?.astroProfile !== undefined ? options.astroProfile : CLASSIC_PROFILE;
+  }
   const previousDaemon: FakeDaemon | undefined = previous?.daemon;
   const daemon = previousDaemon != null
     ? previousDaemon
@@ -49,6 +66,9 @@ export function bootJourney(
       models: options?.models,
       chatReplySequence: options?.chatReplySequence,
       libraryCatalog: options?.libraryCatalog,
+      libraryDownloadSequence: options?.libraryDownloadSequence,
+      libraryDownloadRefusal: options?.libraryDownloadRefusal,
+      installsWhenDownloadFinishes: options?.installsWhenDownloadFinishes,
     });
   daemon.install();
   bootChatClient();

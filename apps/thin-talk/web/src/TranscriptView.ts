@@ -4,6 +4,7 @@ import { TranscriptAction } from "./TranscriptAction";
 import { ChatRole } from "./ChatRole";
 import { ChatMessageState } from "./ChatMessageState";
 import { reasoningDisclosureIdentifier } from "./ReasoningDisclosure";
+import type { TranscriptPersona } from "./TranscriptPersona";
 import morphdom from "morphdom";
 
 /** The transcript half of one surface refresh. */
@@ -55,6 +56,11 @@ export class TranscriptView {
   private pendingMessages: TranscriptMessage[] = [];
   private flushRequested = false;
   private followScroll = true;
+  // The last snapshot drawn, so a persona change can redraw the conversation
+  // without waiting for the controller to publish again.
+  private latestSnapshot: TranscriptSnapshot | null = null;
+  // The newest answer: only its Astro animates, so a long chat stays calm.
+  private latestAssistantMessageID: string | null = null;
 
   public constructor(init: {
     transcript: HTMLElement;
@@ -104,6 +110,8 @@ export class TranscriptView {
   /** Renders one snapshot: removes articles the snapshot no longer carries,
    * patches the rest, and updates the empty state. */
   public render(snapshot: TranscriptSnapshot): void {
+    this.latestSnapshot = snapshot;
+    this.markLatestAssistantMessage(snapshot);
     const incomingIDs = new Set(snapshot.messages.map((message) => message.id));
     for (const [messageID, article] of this.articlesByMessageID) {
       if (!incomingIDs.has(messageID)) {
@@ -129,10 +137,36 @@ export class TranscriptView {
     this.scheduleFlush();
   }
 
+  /** Switches between classic Thin Talk and Astro. The persona is part of every
+   * message's signature, so the redraw below repaints each message once. */
+  public setPersona(persona: TranscriptPersona): void {
+    this.renderer.setPersona(persona);
+    if (this.latestSnapshot !== null) {
+      this.render(this.latestSnapshot);
+    }
+  }
+
+  private markLatestAssistantMessage(snapshot: TranscriptSnapshot): void {
+    const assistantMessages = snapshot.messages.filter((message) => message.role === ChatRole.ASSISTANT);
+    const newestAssistantMessage = assistantMessages[assistantMessages.length - 1];
+    const newestAssistantMessageID = newestAssistantMessage !== undefined ? newestAssistantMessage.id : null;
+    if (newestAssistantMessageID === this.latestAssistantMessageID) {
+      return;
+    }
+    const previousLatestID = this.latestAssistantMessageID;
+    if (previousLatestID !== null) {
+      this.articlesByMessageID.get(previousLatestID)?.classList.remove("message--latest");
+    }
+    this.latestAssistantMessageID = newestAssistantMessageID;
+    if (newestAssistantMessageID !== null) {
+      this.articlesByMessageID.get(newestAssistantMessageID)?.classList.add("message--latest");
+    }
+  }
+
   /**
-   * A message re-renders only when something the renderer reads — role,
-   * content, reasoning, state, attachments, or tool steps — changed since it was last
-   * drawn. Every value Renderer.messageHtml consumes must appear here: a
+   * A message re-renders only when something the renderer reads — the
+   * persona (classic or Astro), role, content, reasoning, state, attachments,
+   * or tool steps — changed since it was last drawn. Every value Renderer.messageHtml consumes must appear here: a
    * missing field would let a changed message keep its stale node.
    *
    * Without this gate every published snapshot re-ran the markdown parse and
@@ -155,6 +189,7 @@ export class TranscriptView {
    * silently skip a needed re-render. */
   private messageSignature(message: TranscriptMessage): string {
     return JSON.stringify([
+      this.renderer.currentPersona.signature(),
       message.role,
       message.markdown,
       message.reasoning,
@@ -283,6 +318,7 @@ export class TranscriptView {
       this.articlesByMessageID.set(message.id, article);
     }
     article.className = `message message--${message.role === ChatRole.USER ? "user" : "assistant"}`;
+    article.classList.toggle("message--latest", message.id === this.latestAssistantMessageID);
     const probe = document.createElement("div");
     probe.className = "message__probe";
     probe.innerHTML = this.renderer.messageHtml(message);

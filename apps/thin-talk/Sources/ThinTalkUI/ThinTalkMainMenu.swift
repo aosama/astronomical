@@ -80,6 +80,10 @@ public enum ThinTalkMainMenu {
       conversationActions)
     sidebarItem.keyEquivalentModifierMask = [.command, .control]
     viewMenu.addItem(sidebarItem)
+    viewMenu.addItem(
+      menuItem("Show or Hide Astro", #selector(ThinTalkConversationActions.toggleAstro(_:)), "", conversationActions))
+    viewMenu.addItem(
+      menuItem("Meet Astro Again", #selector(ThinTalkConversationActions.meetAstro(_:)), "", conversationActions))
     viewMenu.addItem(.separator())
     // "=" rather than "+": AppKit matches key equivalents against the key's
     // unshifted character, which is "=" for ⌘+ as well (the canvas also answers

@@ -57,15 +57,18 @@ export class ImageModelPillView {
 
   /** `canDraw` is whether the chat model may use the image tool at all (tools
    * on, and a model that can call them); a pill that could not take effect is
-   * not shown, as the composer never promises tools that will not run. */
-  public render(imageModels: readonly ImageModel[], selectedImageModelID: string | null, canDraw: boolean): void {
+   * not shown, as the composer never promises tools that will not run.
+   * `friendlyLabel` replaces the model's name on the pill itself ("Sketchbook"
+   * for younger people); the tooltip, accessible name and menu keep the real name. */
+  public render(imageModels: readonly ImageModel[], selectedImageModelID: string | null, canDraw: boolean, friendlyLabel: string | null = null): void {
     const offersChoice = canDraw && imageModels.length >= MINIMUM_IMAGE_MODELS_TO_OFFER_A_CHOICE;
     this.pill.hidden = !offersChoice;
     if (!offersChoice) {
       this.close();
     }
     const selectedImageModel = imageModels.find((imageModel) => imageModel.id === selectedImageModelID);
-    this.label.textContent = selectedImageModel != null ? selectedImageModel.name : "Pictures";
+    const pillName = selectedImageModel != null ? selectedImageModel.name : "Pictures";
+    this.label.textContent = friendlyLabel !== null ? friendlyLabel : pillName;
     this.pill.title = selectedImageModel != null ? `Pictures are drawn with ${selectedImageModel.name}` : "";
     // The accessible name carries the choice, as the visible label does.
     this.pill.setAttribute("aria-label", selectedImageModel != null ? `Image model: ${selectedImageModel.name}` : "Image model");

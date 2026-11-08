@@ -1,0 +1,322 @@
+/*
+ * The conversation while Astro is shown (#app.app--astro): Astro's face beside
+ * each answer, skill tags and skill moments in the skill cards' colours, the
+ * skill buttons above the message field, and chat colours in the sidebar.
+ * Every rule is scoped to the class, so View > Show or Hide Astro returns the
+ * classic Thin Talk look untouched.
+ */
+:root {
+  --astro-search: #d46fd0;
+  --astro-maths: #4fc3ff;
+  /* White line icons for the skill moments, as data URIs: the page may load
+     images only from its own bundle or data:, and a mask keeps one shape per
+     skill whatever the colour behind it. */
+  --astro-icon-chat: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5h16v10H9l-5 4z'/%3E%3C/svg%3E");
+  --astro-icon-pictures: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4h18v16H3zM3 18l6-5 4 3 3-2 5 4'/%3E%3C/svg%3E");
+  --astro-icon-look: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6'/%3E%3C/svg%3E");
+  --astro-icon-read: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h9l4 4v14H6zM9 13h7M9 17h5'/%3E%3C/svg%3E");
+  --astro-icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4'/%3E%3C/svg%3E");
+  --astro-icon-maths: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M5 12h14M12 5v14'/%3E%3C/svg%3E");
+  --astro-icon-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z'/%3E%3C/svg%3E");
+}
+
+/* ---------- Astro beside each answer ---------- */
+
+#app.app--astro .message--assistant {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 8px;
+  align-items: start;
+}
+
+#app.app--astro .message--assistant > * {
+  grid-column: 2;
+}
+
+#app.app--astro .message--assistant > .astro-avatar {
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  position: relative;
+  width: 60px;
+  height: 60px;
+}
+
+.astro-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.astro-avatar__stars {
+  position: absolute;
+  left: 34px;
+  top: -6px;
+  display: none;
+  gap: 3px;
+}
+
+.astro-avatar__stars i {
+  display: block;
+  width: 7px;
+  height: 7px;
+  background: var(--astro-star);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: astro-twinkle 1s ease-in-out infinite;
+}
+
+.astro-avatar__stars i:nth-child(2) { animation-delay: 0.2s; }
+.astro-avatar__stars i:nth-child(3) { animation-delay: 0.4s; }
+
+/* Only the newest answer's Astro moves: thinking tilts under twinkling stars,
+   working glows, talking bobs, and finishing hops once. */
+.message--latest .astro-avatar[data-mood="thinking"] .astro-avatar__stars { display: flex; }
+.message--latest .astro-avatar[data-mood="thinking"] img { animation: astro-think 1.6s ease-in-out infinite; }
+.message--latest .astro-avatar[data-mood="working"] img { animation: astro-charge 1.4s ease-in-out infinite; }
+.message--latest .astro-avatar[data-mood="talking"] img { animation: astro-avatar-bob 2.2s ease-in-out infinite; }
+.message--latest .astro-avatar[data-mood="done"] img { animation: astro-avatar-hop 0.6s ease; }
+
+/* Gentler than the welcome's moves: a 52px face only needs a few pixels. */
+@keyframes astro-think { 0%, 100% { rotate: -5deg; } 50% { rotate: 5deg; } }
+@keyframes astro-avatar-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -3px; } }
+@keyframes astro-avatar-hop { 0% { translate: 0 0; } 40% { translate: 0 -10px; } 100% { translate: 0 0; } }
+
+#app.app--astro .message__meta--astro {
+  padding-left: 0;
+  gap: 8px;
+}
+
+#app.app--astro .message__meta--astro .message__role {
+  font: 800 17px/1 var(--astro-display);
+  color: var(--text-primary);
+}
+
+.astro-skill-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font: 700 12.5px/1.1 var(--astro-display);
+  color: #fff;
+  background: var(--astro-chat);
+}
+
+.astro-skill-tag--pictures { background: var(--astro-pictures); }
+.astro-skill-tag--look { background: var(--astro-look); }
+.astro-skill-tag--read { background: var(--astro-read); }
+.astro-skill-tag--search { background: var(--astro-search); }
+.astro-skill-tag--maths { background: var(--astro-maths); color: #0d0f2e; }
+
+#app.app--astro .message--assistant .message__answer {
+  border-radius: 6px 20px 20px 20px;
+}
+
+/* The person's own bubble, with their initial. */
+#app.app--astro .message--user .message__answer {
+  background: rgb(140 107 255 / 28%);
+  border-color: rgb(140 107 255 / 55%);
+  border-radius: 20px 20px 6px 20px;
+}
+
+.message__role--named {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.astro-you-badge {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--astro-star);
+  color: #2b2350;
+  font: 800 13px/1 var(--astro-display);
+}
+
+/* "How I worked it out" */
+#app.app--astro .reasoning {
+  border-radius: 14px;
+  background: rgb(255 255 255 / 3%);
+}
+
+#app.app--astro .reasoning > summary::before {
+  content: "▸ ";
+  color: var(--text-secondary);
+}
+
+#app.app--astro .reasoning[open] > summary::before {
+  content: "▾ ";
+}
+
+/* ---------- Skill moments: tool steps in the cards' colours ---------- */
+
+#app.app--astro .tool-step {
+  --skill-colour: var(--astro-violet);
+  --skill-icon: var(--astro-icon-star);
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--skill-colour) 45%, transparent);
+  background: color-mix(in srgb, var(--skill-colour) 16%, var(--panel));
+}
+
+#app.app--astro .tool-step[data-skill="pictures"] { --skill-colour: var(--astro-pictures); --skill-icon: var(--astro-icon-pictures); }
+#app.app--astro .tool-step[data-skill="look"] { --skill-colour: var(--astro-look); --skill-icon: var(--astro-icon-look); }
+#app.app--astro .tool-step[data-skill="read"] { --skill-colour: var(--astro-read); --skill-icon: var(--astro-icon-read); }
+#app.app--astro .tool-step[data-skill="search"] { --skill-colour: var(--astro-search); --skill-icon: var(--astro-icon-search); }
+
+#app.app--astro .tool-step > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--text-primary);
+  font: 700 16px/1.3 var(--astro-display);
+}
+
+.skill-moment__icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--skill-colour) var(--skill-icon) center / 18px no-repeat;
+}
+
+#app.app--astro .tool-step[data-state="running"] .skill-moment__icon {
+  animation: astro-moment-pulse 1.2s ease-in-out infinite;
+}
+
+#app.app--astro .tool-step[data-state="failed"] {
+  --skill-colour: var(--danger);
+}
+
+@keyframes astro-moment-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--skill-colour) 70%, transparent); }
+  50% { box-shadow: 0 0 0 8px transparent; }
+}
+
+#app.app--astro .generated-image img {
+  border-radius: 18px;
+}
+
+/* ---------- The message field ---------- */
+
+.skill-launchers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 24px 8px;
+}
+
+.skill-launchers[hidden] {
+  display: none;
+}
+
+.skill-launcher {
+  --skill-colour: var(--astro-chat);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 14px 7px 8px;
+  color: #fff;
+  font: 700 14px/1 var(--astro-display);
+  cursor: pointer;
+  background: color-mix(in srgb, var(--skill-colour) 82%, #000);
+}
+
+.skill-launcher:hover { background: var(--skill-colour); }
+.skill-launcher:focus-visible { outline: 3px solid var(--astro-star); outline-offset: 2px; }
+.skill-launcher--pictures { --skill-colour: var(--astro-pictures); }
+.skill-launcher--look { --skill-colour: var(--astro-look); }
+.skill-launcher--read { --skill-colour: var(--astro-read); }
+.skill-launcher--voice { --skill-colour: var(--astro-voice); opacity: 0.55; cursor: default; }
+.skill-launcher--voice:hover { background: color-mix(in srgb, var(--skill-colour) 82%, #000); }
+
+.skill-launcher__icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 22%);
+}
+
+.skill-launcher__icon svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Pilot keeps the buttons as icons only, with their names as tooltips. */
+#app.app--astro-pilot .skill-launcher__name { display: none; }
+#app.app--astro-pilot .skill-launcher { padding: 7px; }
+
+/* Astro listening beside the field. */
+.composer__astro {
+  display: none;
+}
+
+#app.app--astro .composer {
+  position: relative;
+  padding-left: 62px;
+}
+
+#app.app--astro .composer__astro {
+  display: block;
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 46px;
+  height: 46px;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---------- Chat colours in the sidebar ---------- */
+
+.sidebar__session-skill {
+  display: none;
+}
+
+#app.app--astro .sidebar__session-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#app.app--astro .sidebar__session-skill {
+  --skill-colour: var(--astro-chat);
+  --skill-icon: var(--astro-icon-chat);
+  display: block;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--skill-colour) var(--skill-icon) center / 13px no-repeat;
+}
+
+#app.app--astro .sidebar__session-skill[data-skill="pictures"] { --skill-colour: var(--astro-pictures); --skill-icon: var(--astro-icon-pictures); }
+#app.app--astro .sidebar__session-skill[data-skill="look"] { --skill-colour: var(--astro-look); --skill-icon: var(--astro-icon-look); }
+#app.app--astro .sidebar__session-skill[data-skill="read"] { --skill-colour: var(--astro-read); --skill-icon: var(--astro-icon-read); }
+#app.app--astro .sidebar__session-skill[data-skill="search"] { --skill-colour: var(--astro-search); --skill-icon: var(--astro-icon-search); }
+#app.app--astro .sidebar__session-skill[data-skill="maths"] { --skill-colour: var(--astro-maths); --skill-icon: var(--astro-icon-maths); }
+
+#app.app--astro .sidebar__session-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message--latest .astro-avatar img,
+  .astro-avatar__stars i,
+  #app.app--astro .tool-step[data-state="running"] .skill-moment__icon {
+    animation: none;
+  }
+}

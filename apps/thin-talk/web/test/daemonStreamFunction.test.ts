@@ -29,7 +29,7 @@ function assistantReply(content: AssistantMessage["content"]): AssistantMessage 
 test("should_send_only_the_fields_and_header_the_daemon_reads", async () => {
   const scriptedFetch = new ScriptedChatFetch([{ lines: [chunkLine({ content: "Hi." }, "stop"), "data: [DONE]"] }]);
   scriptedFetch.install();
-  const streamFunction = new DaemonStreamFunction(daemonClient(), 512, new AbortController().signal);
+  const streamFunction = new DaemonStreamFunction(daemonClient(), new AbortController().signal);
   const finalMessage = await streamFunction
     .stream(DAEMON_MODEL, transcript([{ role: "user", content: "Hello", timestamp: 0 }]))
     .result();
@@ -40,8 +40,8 @@ test("should_send_only_the_fields_and_header_the_daemon_reads", async () => {
     model: "fake-chat-model",
     stream: true,
     messages: [{ role: "user", content: "Hello" }],
-    thinking_budget: 512,
   });
+  assert.equal("thinking_budget" in sentRequest.body, false, "the model thinks as long as it needs");
   assert.deepEqual(sentRequest.headerNames, ["content-type"]);
 });
 
@@ -79,7 +79,7 @@ test("should_send_tool_calls_and_their_results_in_the_daemon_shape", () => {
 test("should_keep_the_classified_failure_behind_an_http_error", async () => {
   const scriptedFetch = new ScriptedChatFetch([{ status: 503, errorBody: '{"error":{"message":"not ready"}}' }]);
   scriptedFetch.install();
-  const streamFunction = new DaemonStreamFunction(daemonClient(), 256, new AbortController().signal);
+  const streamFunction = new DaemonStreamFunction(daemonClient(), new AbortController().signal);
   const finalMessage = await streamFunction
     .stream(DAEMON_MODEL, transcript([{ role: "user", content: "Hello", timestamp: 0 }]))
     .result();
@@ -90,7 +90,7 @@ test("should_keep_the_classified_failure_behind_an_http_error", async () => {
 test("should_end_as_aborted_when_the_turn_is_stopped_mid_stream", async () => {
   const scriptedFetch = new ScriptedChatFetch([{ lines: [chunkLine({ content: "Once upon" })], holdOpenUntilAborted: true }]);
   scriptedFetch.install();
-  const streamFunction = new DaemonStreamFunction(daemonClient(), 256, new AbortController().signal);
+  const streamFunction = new DaemonStreamFunction(daemonClient(), new AbortController().signal);
   const stopController = new AbortController();
   const eventStream = streamFunction.stream(
     DAEMON_MODEL,
@@ -111,7 +111,7 @@ test("should_end_as_aborted_when_the_turn_is_stopped_mid_stream", async () => {
 test("should_report_an_unexpected_error_as_an_unknown_failure", async () => {
   const scriptedFetch = new ScriptedChatFetch([]);
   scriptedFetch.install();
-  const streamFunction = new DaemonStreamFunction(daemonClient(), 256, new AbortController().signal);
+  const streamFunction = new DaemonStreamFunction(daemonClient(), new AbortController().signal);
   const finalMessage = await streamFunction
     .stream(DAEMON_MODEL, transcript([
       // A BigInt cannot be written as JSON, so building the request throws a
@@ -128,7 +128,7 @@ test("should_cancel_the_request_when_its_turn_ends_first", async () => {
   const scriptedFetch = new ScriptedChatFetch([{ lines: [chunkLine({ content: "Still going" })], holdOpenUntilAborted: true }]);
   scriptedFetch.install();
   const turnLifetime = new AbortController();
-  const streamFunction = new DaemonStreamFunction(daemonClient(), 256, turnLifetime.signal);
+  const streamFunction = new DaemonStreamFunction(daemonClient(), turnLifetime.signal);
   const eventStream = streamFunction.stream(DAEMON_MODEL, transcript([{ role: "user", content: "Hello", timestamp: 0 }]));
   for await (const streamEvent of eventStream) {
     if (streamEvent.type === "text_delta") {
@@ -145,7 +145,7 @@ test("should_declare_the_transcripts_tools_and_omit_tools_when_there_are_none", 
     { lines: [chunkLine({ content: "ok" }, "stop")] },
   ]);
   scriptedFetch.install();
-  const streamFunction = new DaemonStreamFunction(daemonClient(), 256, new AbortController().signal);
+  const streamFunction = new DaemonStreamFunction(daemonClient(), new AbortController().signal);
   const clockTool = { name: "get_current_time", description: "Reads the clock.", parameters: { type: "object", properties: {} } };
   await streamFunction
     .stream(DAEMON_MODEL, transcript([
