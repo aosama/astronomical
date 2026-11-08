@@ -6,6 +6,7 @@ pub(crate) mod crypto_provider;
 pub(crate) mod download;
 pub(crate) mod hub;
 pub(crate) mod model_discovery_refresh;
+mod reveal_endpoint;
 
 pub(crate) use catalog::{
     CatalogEntryProjection, library_catalog_routes, project_catalog_entries,
@@ -39,3 +40,4 @@ pub use hub::{
     HuggingFaceHubError, HuggingFaceHubLimits, HuggingFaceManifest,
 };
 pub use hub::{ReqwestHubTransport, ReqwestHubTransportBuildError};
+pub(crate) use reveal_endpoint::library_reveal_routes;

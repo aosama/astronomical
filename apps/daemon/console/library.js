@@ -10,6 +10,7 @@ const LIBRARY_DOWNLOAD_URL = "/v1/library/download";
 // fetch error.
 const LIBRARY_CATALOG_TIMEOUT_MILLIS = 10_000;
 const LIBRARY_STATUS_URL = "/v1/status";
+const LIBRARY_REVEAL_URL = "/v1/library/reveal";
 // Schema 3 adds the role, get-started, experimental, and memory fields that
 // the Get started and More models pages are built from.
 const LIBRARY_CATALOG_SCHEMA_VERSION = 3;
@@ -622,6 +623,22 @@ async function refetchLibraryCatalogDocument(nowMillis = Date.now()) {
     if (libraryServingCeilingBytes === null || isCeilingStale) {
         await refreshLibraryServingCeiling();
         libraryServingCeilingReadAtMillis = nowMillis;
+    }
+}
+
+// The page names the model, never a path: the daemon resolves the folder from
+// its own discovery and download state and asks Finder to select it. Returns
+// whether Finder accepted the request.
+async function revealLibraryModelInFinder(huggingfaceId) {
+    try {
+        const revealResponse = await fetch(LIBRARY_REVEAL_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ huggingface_id: huggingfaceId })
+        });
+        return revealResponse.ok;
+    } catch {
+        return false;
     }
 }
 

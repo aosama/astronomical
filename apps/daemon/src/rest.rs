@@ -20,6 +20,7 @@ pub(crate) mod config_reload_memory;
 pub(crate) mod config_reveal;
 pub(crate) mod expert_placement;
 pub(crate) mod experts;
+pub(crate) mod finder_reveal;
 pub(crate) mod loopback_browser_guard;
 pub(crate) mod maximum_mlx_memory;
 pub(crate) mod request_body_budget;
