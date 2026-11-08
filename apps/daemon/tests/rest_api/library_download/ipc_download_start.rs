@@ -301,3 +301,71 @@ async fn should_let_two_simultaneous_requests_share_one_fresh_download() {
     .await
     .expect("the simultaneous-start journey should remain bounded");
 }
+
+/// Polls the job the way the CLI does until it reports `Failed`.
+async fn wait_until_failed(service: &DaemonIpcService) {
+    for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
+        if let DaemonResponse::DownloadStatus { job: Some(job) } =
+            ask(service, DaemonRequest::DownloadStatus).await
+            && job.state == "failed"
+        {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the download never failed");
+}
+
+/// Polls until the job names `huggingface_id`. The started task records its
+/// job a moment after the start is answered, so one poll is not enough.
+async fn wait_until_job_names(service: &DaemonIpcService, huggingface_id: &str) {
+    for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
+        if let DaemonResponse::DownloadStatus { job: Some(job) } =
+            ask(service, DaemonRequest::DownloadStatus).await
+            && job.huggingface_id == huggingface_id
+        {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the download of {huggingface_id} never held the Library");
+}
+
+/// The reported journey (#1897) through the CLI's own door: one model's
+/// download fails its checksum, and `astronomical download` of another model
+/// must start instead of answering that a download is already active.
+#[tokio::test]
+async fn should_start_another_model_over_a_failed_download_through_download_start() {
+    timeout(Duration::from_secs(10), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let catalog = two_model_catalog();
+        let coordinator = build_test_coordinator(
+            test_directory.path(),
+            Arc::clone(&catalog),
+            Arc::new(ScriptedHub::checksum_mismatch()),
+        );
+        let service = start_ipc_service(test_directory.path(), catalog, coordinator).await;
+        assert_download_started(&ask(&service, download_start()).await, "the first model");
+        wait_until_failed(&service).await;
+
+        let other_model_response = ask(
+            &service,
+            DaemonRequest::DownloadStart {
+                model_id: OTHER_REPOSITORY_ID.to_owned(),
+            },
+        )
+        .await;
+
+        assert_eq!(
+            other_model_response,
+            DaemonResponse::DownloadStarted {
+                huggingface_id: OTHER_REPOSITORY_ID.to_owned()
+            },
+            "another model must replace the failed download"
+        );
+        wait_until_job_names(&service, OTHER_REPOSITORY_ID).await;
+        service.shutdown().await.expect("clean shutdown");
+    })
+    .await
+    .expect("the failed-then-other-model journey should remain bounded");
+}

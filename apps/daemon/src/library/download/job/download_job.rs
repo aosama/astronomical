@@ -56,6 +56,21 @@ pub enum DownloadJobState {
     Failed,
 }
 
+/// Whether a job of `existing_huggingface_id` in `existing_state` gives way to
+/// a fresh download of `requested_huggingface_id`. Only a failed download of
+/// another model does: it is not running, and nothing else could clear it
+/// from the CLI, so it blocked every other download (issue #1897). A failed
+/// job of the same model is resumed instead, keeping its staged bytes.
+#[must_use]
+pub fn yields_library_to(
+    existing_huggingface_id: &str,
+    existing_state: DownloadJobState,
+    requested_huggingface_id: &str,
+) -> bool {
+    existing_state == DownloadJobState::Failed
+        && existing_huggingface_id != requested_huggingface_id
+}
+
 /// Stable public failures that Observatory can present without local path disclosure.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

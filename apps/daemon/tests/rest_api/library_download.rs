@@ -1,6 +1,11 @@
 //! Complete REST journey for daemon-owned download, verification, and publication.
 
-use std::{io, path::Path, sync::Arc, time::Duration};
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
+};
 
 use astronomical_daemon::{
     DaemonPerformanceAttributionLog, DiskCapacityQuery, DownloadCatalog, DownloadJobStore,
@@ -26,6 +31,11 @@ mod support;
 use support::ScriptedHub;
 
 const REPOSITORY_ID: &str = "astronomical-test/example-qwen";
+/// Polls for a download state every 10 ms for up to four seconds, inside each
+/// journey's five-second bound. The download journeys run in parallel and each
+/// syncs its files to disk, so a one-second wait was sometimes too short on a
+/// busy machine even though nothing was wrong.
+const STATE_POLL_ATTEMPTS: u32 = 400;
 const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 const MODEL_CONFIG: &[u8] =
     br#"{"model_type":"qwen3_5_moe","text_config":{"max_position_embeddings":262144}}"#;
@@ -34,6 +44,9 @@ const CORRUPT_MODEL_CONFIG: &[u8] =
 const TOKENIZER_CONFIG: &[u8] = br#"{"version":1,"model":{"type":"BPE"}}"#;
 const MODEL_WEIGHTS: &[u8] = b"fictional-shard";
 const MODEL_INDEX: &[u8] = br#"{"metadata":{"total_size":15},"weight_map":{"model.embed_tokens.weight":"model-00001.safetensors"}}"#;
+/// The two-model catalog's second model, asked for after the first one's
+/// download failed (issue #1897).
+const OTHER_REPOSITORY_ID: &str = "astronomical-test/other-qwen";
 
 #[tokio::test]
 async fn should_download_publish_and_report_ready_through_the_library_rest_journey() {
@@ -76,7 +89,7 @@ async fn should_download_publish_and_report_ready_through_the_library_rest_journ
         assert_eq!(start_response.status(), StatusCode::ACCEPTED);
 
         let mut ready_catalog = None;
-        for _poll_attempt in 0..100 {
+        for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
             let catalog_response = application
                 .clone()
                 .oneshot(
@@ -226,7 +239,7 @@ async fn should_report_streaming_progress_without_persisting_every_ui_refresh() 
 
         assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
         let mut live_download = None;
-        for _poll_attempt in 0..100 {
+        for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
             let download_document = get_download_document(&application).await;
             let completed_bytes = download_document["bytes_completed"].as_u64().unwrap_or(0);
             let total_bytes = download_document["bytes_total"].as_u64().unwrap_or(0);
@@ -341,6 +354,128 @@ async fn should_redownload_the_invalid_file_when_resuming_after_checksum_error()
     .expect("checksum retry REST journey should remain bounded");
 }
 
+/// One model's download fails on every attempt (checksum mismatch); the
+/// catalog also lists a second model. Returns the application and the failed
+/// model's staged-bytes folder.
+async fn application_with_a_failed_download(test_directory: &Path) -> (Router, PathBuf) {
+    let catalog = two_model_catalog();
+    let coordinator = build_test_coordinator(
+        test_directory,
+        Arc::clone(&catalog),
+        Arc::new(ScriptedHub::checksum_mismatch()),
+    );
+    let application = build_application_with_library_download(
+        ScriptedExecutor::unavailable(),
+        catalog,
+        coordinator,
+    );
+    assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
+    wait_for_download_state(&application, "failed").await;
+    let failed_staging_directory =
+        test_directory.join(format!("models/.incomplete/{REPOSITORY_ID}"));
+    assert!(
+        failed_staging_directory.is_dir(),
+        "the failed download kept its staged bytes"
+    );
+    (application, failed_staging_directory)
+}
+
+#[tokio::test]
+async fn should_start_another_model_after_a_failed_download_through_rest() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let (application, failed_staging_directory) =
+            application_with_a_failed_download(test_directory.path()).await;
+
+        let other_model_response = start_download_of(&application, OTHER_REPOSITORY_ID).await;
+
+        // The failed job is not running, so it no longer holds the Library.
+        assert_eq!(other_model_response, StatusCode::ACCEPTED);
+        wait_for_download_model(&application, OTHER_REPOSITORY_ID).await;
+        assert!(
+            !failed_staging_directory.exists(),
+            "the failed model's staged bytes are discarded with its job"
+        );
+        // Stop the replacing download so no transfer outlives this test.
+        let cancel_response = post_without_body(&application, "/v1/library/download/cancel").await;
+        assert!(cancel_response.status().is_success());
+        wait_for_download_state(&application, "idle").await;
+    })
+    .await
+    .expect("the failed-then-other-model journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_keep_a_failed_download_when_the_requested_model_is_not_in_the_catalog() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let (application, failed_staging_directory) =
+            application_with_a_failed_download(test_directory.path()).await;
+
+        let unknown_model_response =
+            start_download_of(&application, "astronomical-test/not-in-catalog").await;
+
+        assert!(unknown_model_response.is_client_error());
+        assert!(
+            failed_staging_directory.is_dir(),
+            "a refused request deletes nothing"
+        );
+        assert_eq!(get_download_document(&application).await["state"], "failed");
+    })
+    .await
+    .expect("the unknown-model journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_refuse_to_start_the_failed_model_again_and_keep_its_bytes_for_resume() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let (application, failed_staging_directory) =
+            application_with_a_failed_download(test_directory.path()).await;
+
+        let same_model_response = start_download(&application).await;
+
+        assert_eq!(same_model_response, StatusCode::CONFLICT);
+        assert!(
+            failed_staging_directory.is_dir(),
+            "the same model resumes, keeping its bytes"
+        );
+    })
+    .await
+    .expect("the same-model journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_refuse_another_model_while_a_download_is_paused() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let catalog = two_model_catalog();
+        let coordinator = build_test_coordinator(
+            test_directory.path(),
+            Arc::clone(&catalog),
+            Arc::new(ScriptedHub::delayed(Duration::from_millis(250))),
+        );
+        let application = build_application_with_library_download(
+            ScriptedExecutor::unavailable(),
+            catalog,
+            coordinator,
+        );
+        assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
+        wait_for_download_state(&application, "downloading").await;
+        let pause_response = post_without_body(&application, "/v1/library/download/pause").await;
+        assert_eq!(pause_response.status(), StatusCode::OK);
+
+        let other_model_response = start_download_of(&application, OTHER_REPOSITORY_ID).await;
+
+        assert_eq!(other_model_response, StatusCode::CONFLICT);
+        let paused_job = get_download_document(&application).await;
+        assert_eq!(paused_job["state"], "paused");
+        assert_eq!(paused_job["huggingface_id"], REPOSITORY_ID);
+    })
+    .await
+    .expect("the paused journey should remain bounded");
+}
+
 struct AvailableCapacity;
 
 impl DiskCapacityQuery for AvailableCapacity {
@@ -415,13 +550,33 @@ fn build_test_application(test_directory: &Path, hub: Arc<ScriptedHub>) -> Route
     )
 }
 
+/// The test catalog plus a second model, so one model's failed job can meet a
+/// request for a different model.
+fn two_model_catalog() -> Arc<DownloadCatalog> {
+    catalog_of(&[
+        catalog_entry_json(REPOSITORY_ID, "Example Qwen"),
+        catalog_entry_json(OTHER_REPOSITORY_ID, "Other Qwen"),
+    ])
+}
+
 fn test_catalog() -> Arc<DownloadCatalog> {
+    catalog_of(&[catalog_entry_json(REPOSITORY_ID, "Example Qwen")])
+}
+
+fn catalog_of(entry_documents: &[String]) -> Arc<DownloadCatalog> {
     Arc::new(
         DownloadCatalog::parse_json(&format!(
-            "{{\"schema_version\":3,\"entries\":[{{\"huggingface_id\":\"{REPOSITORY_ID}\",\"revision\":\"{REVISION}\",\"display_name\":\"Example Qwen\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}]}}",
-            repository_bytes()
+            "{{\"schema_version\":3,\"entries\":[{}]}}",
+            entry_documents.join(",")
         ))
         .expect("fictional catalog should parse"),
+    )
+}
+
+fn catalog_entry_json(huggingface_id: &str, display_name: &str) -> String {
+    format!(
+        "{{\"huggingface_id\":\"{huggingface_id}\",\"revision\":\"{REVISION}\",\"display_name\":\"{display_name}\",\"family\":\"qwen3_5\",\"approximate_memory_bytes\":100,\"role\":\"chat\",\"approximate_size_bytes\":{},\"public\":true}}",
+        repository_bytes()
     )
 }
 
@@ -453,13 +608,17 @@ const fn repository_bytes() -> usize {
 }
 
 async fn start_download(application: &Router) -> StatusCode {
+    start_download_of(application, REPOSITORY_ID).await
+}
+
+async fn start_download_of(application: &Router, huggingface_id: &str) -> StatusCode {
     application
         .clone()
         .oneshot(
             Request::post("/v1/library/download")
                 .header("content-type", "application/json")
                 .body(Body::from(format!(
-                    "{{\"huggingface_id\":\"{REPOSITORY_ID}\"}}"
+                    "{{\"huggingface_id\":\"{huggingface_id}\"}}"
                 )))
                 .expect("start request should be valid"),
         )
@@ -481,7 +640,7 @@ async fn post_without_body(application: &Router, path: &str) -> axum::response::
 }
 
 async fn wait_for_download_state(application: &Router, expected_state: &str) -> serde_json::Value {
-    for _poll_attempt in 0..100 {
+    for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
         let download_document = get_download_document(application).await;
         if download_document["state"] == expected_state {
             return download_document;
@@ -489,6 +648,18 @@ async fn wait_for_download_state(application: &Router, expected_state: &str) -> 
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("download did not reach expected state {expected_state}");
+}
+
+/// Waits for the current job to be `huggingface_id`'s; a new job is recorded a
+/// moment after its download task starts.
+async fn wait_for_download_model(application: &Router, huggingface_id: &str) {
+    for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
+        if get_download_document(application).await["huggingface_id"] == huggingface_id {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the download of {huggingface_id} never became the current job");
 }
 
 async fn get_download_document(application: &Router) -> serde_json::Value {

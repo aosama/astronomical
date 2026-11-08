@@ -10,6 +10,7 @@ mod store_tests;
 
 pub use download_job::{
     DownloadJob, DownloadJobError, DownloadJobFile, DownloadJobPublicErrorCode, DownloadJobState,
+    yields_library_to,
 };
 pub use store::DownloadJobStore;
 pub use store::error::DownloadJobStoreError;
