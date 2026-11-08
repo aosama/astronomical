@@ -4,7 +4,7 @@
 //! runtime config and a candidate config into one of three decisions:
 //! no worker restart, worker restart, or full REST API restart.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -129,10 +129,6 @@ impl ResolvedRuntimeConfigResolver {
             &configured_model_directories,
             &model_discovery_diagnostics,
         );
-        let discovered_model_ids = discovered_models
-            .iter()
-            .map(|discovered_model| discovered_model.model_id.clone())
-            .collect::<std::collections::HashSet<_>>();
         let artifact_context_windows = discovered_models
             .iter()
             .filter_map(|model| match &model.capabilities {
@@ -142,16 +138,13 @@ impl ResolvedRuntimeConfigResolver {
                 ModelCapabilities::ImageGeneration(_) | ModelCapabilities::Embeddings(_) => None,
             })
             .collect::<HashMap<_, _>>();
-        let unmatched_model_config_ids = user_config
-            .configured_model_ids()
-            .into_iter()
-            .filter(|configured_model_id| !discovered_model_ids.contains(*configured_model_id))
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
+        let unmatched_model_config_ids =
+            unmatched_model_config_ids(user_config, &discovered_models);
         for discovered_model in &mut discovered_models {
             if let ModelCapabilities::Chat(capabilities) = &discovered_model.capabilities {
-                let resolved_model_config = user_config.resolved_model_config(
+                let resolved_model_config = user_config.resolved_discovered_model_config(
                     &discovered_model.model_id,
+                    discovered_model.provider_model_id.as_deref(),
                     capabilities.context_window,
                 )?;
                 apply_effective_model_limits(discovered_model, &resolved_model_config);
@@ -469,4 +462,29 @@ fn log_unavailable_model_directories(
             );
         }
     }
+}
+
+/// The `models` entries that configure no discovered model: neither keyed by a discovered
+/// model's ID, nor by a full Hugging Face ID that resolves to one. An entry shadowed by an
+/// exact entry for the same model is reported too, since it has no effect.
+fn unmatched_model_config_ids(
+    user_config: &AstronomicalConfig,
+    discovered_models: &[DiscoveredModel],
+) -> Vec<String> {
+    let mut applied_entry_ids = HashSet::new();
+    for discovered_model in discovered_models {
+        if let Some(configured_model_id) = user_config.configured_model_id_for(
+            &discovered_model.model_id,
+            discovered_model.provider_model_id.as_deref(),
+        ) {
+            applied_entry_ids.insert(configured_model_id);
+        }
+    }
+    let mut unmatched_ids = Vec::new();
+    for configured_model_id in user_config.configured_model_ids() {
+        if !applied_entry_ids.contains(configured_model_id) {
+            unmatched_ids.push(configured_model_id.to_owned());
+        }
+    }
+    unmatched_ids
 }

@@ -10,7 +10,8 @@ use astronomical_ipc_protocol::{
 use crate::{
     DaemonIpcGenerationContext, DaemonPerformanceAttributionLog, DaemonPerformanceMeasurement,
     DaemonPerformanceOperation, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
-    application::allocate_chat_request_id, ipc::service::generation_start_rejection_reason,
+    application::allocate_chat_request_id,
+    ipc::{chat::catalog_model_id_or_requested, service::generation_start_rejection_reason},
     worker::health::WorkerHealthSnapshot,
 };
 
@@ -59,11 +60,15 @@ async fn resolve_embeddings_terminal_response(
     dimensions: Option<u32>,
 ) -> DaemonResponse {
     let health_snapshot = generation_context.executor.worker_health_snapshot();
-    let Some(resolved_model_id) = resolve_embeddings_model(&health_snapshot, model) else {
+    let Some(requested_model_id) = resolve_embeddings_model(&health_snapshot, model) else {
         return DaemonResponse::GenerationRejected {
             reason: "no model is resident; load a model or pass --model".to_owned(),
         };
     };
+    // The worker compares against and looks up the exact catalog key, so a full Hugging Face
+    // ID must be dispatched under the installed leaf key (#1898).
+    let resolved_model_id =
+        catalog_model_id_or_requested(&generation_context.reloadable_config, &requested_model_id);
     let Some(request_id_raw) = allocate_chat_request_id(&generation_context.next_chat_request_id)
     else {
         return DaemonResponse::GenerationRejected {

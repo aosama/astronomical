@@ -59,8 +59,11 @@ impl ResolvedModelPolicyCatalog {
         chat_capabilities: &ChatModelCapabilities,
         artifact_context_windows: &HashMap<String, u32>,
     ) -> Result<RuntimeModelPolicy, AstronomicalConfigError> {
-        let resolved_model_config = user_config
-            .resolved_model_config(&discovered_model.model_id, chat_capabilities.context_window)?;
+        let resolved_model_config = user_config.resolved_discovered_model_config(
+            &discovered_model.model_id,
+            discovered_model.provider_model_id.as_deref(),
+            chat_capabilities.context_window,
+        )?;
         let worker_model_configuration = Self::worker_model_configuration(
             discovered_model,
             chat_capabilities,

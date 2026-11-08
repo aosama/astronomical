@@ -150,3 +150,38 @@ fn should_say_image_generation_when_a_chat_model_is_asked_to_draw() {
 
     assert!(reason.contains("image-generation models"), "{reason}");
 }
+
+#[test]
+fn should_map_a_full_huggingface_id_to_the_installed_models_own_id() {
+    let installed_models = vec![listed_model("Custom-4bit", Some(32_768), false)];
+
+    assert_eq!(
+        model_lifecycle::installed_model_id_for(
+            &installed_models,
+            "someorg/Custom-4bit".to_owned()
+        ),
+        "Custom-4bit"
+    );
+    assert_eq!(
+        model_lifecycle::installed_model_id_for(&installed_models, "Custom-4bit".to_owned()),
+        "Custom-4bit"
+    );
+}
+
+#[test]
+fn should_leave_an_id_that_names_no_installed_model_unchanged() {
+    let installed_models = vec![listed_model("Custom-4bit", Some(32_768), false)];
+
+    assert_eq!(
+        model_lifecycle::installed_model_id_for(&installed_models, "someorg/Other-4bit".to_owned()),
+        "someorg/Other-4bit"
+    );
+    assert_eq!(
+        model_lifecycle::installed_model_id_for(&installed_models, String::new()),
+        ""
+    );
+    assert_eq!(
+        model_lifecycle::installed_model_id_for(&[], "someorg/Custom-4bit".to_owned()),
+        "someorg/Custom-4bit"
+    );
+}

@@ -62,6 +62,75 @@ fn should_resolve_reload_config_from_the_config_file() {
     );
 }
 
+/// #1898: a `models` entry keyed by the full Hugging Face ID, as the Library names the model,
+/// configures the installed model that the daemon knows by its leaf ID, and only an entry that
+/// configures nothing is reported as unmatched.
+#[test]
+fn should_apply_a_full_huggingface_id_entry_and_report_only_entries_that_match_nothing() {
+    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
+    write_minimal_qwen_model(
+        &config_home_directory
+            .path()
+            .join(".astronomical-dev/models/astronomical-test/example-qwen"),
+    );
+    write_development_config_with_models(
+        config_home_directory.path(),
+        &[],
+        &serde_json::json!({
+            "astronomical-test/example-qwen": {"generation_defaults": {"temperature": 0.7}},
+            "astronomical-test/not-installed": {"generation_defaults": {"temperature": 0.1}},
+        }),
+    );
+
+    let resolved_config = development_resolver(config_home_directory.path())
+        .load()
+        .expect("the config should resolve");
+
+    assert_eq!(
+        resolved_config.model_policy_catalog["example-qwen"]
+            .generation_defaults
+            .temperature_thousandths,
+        Some(700)
+    );
+    assert_eq!(
+        resolved_config.unmatched_model_config_ids,
+        ["astronomical-test/not-installed"]
+    );
+}
+
+#[test]
+fn should_report_an_entry_shadowed_by_an_exact_entry_as_unmatched() {
+    let config_home_directory = tempfile::tempdir().expect("a config home should be created");
+    write_minimal_qwen_model(
+        &config_home_directory
+            .path()
+            .join(".astronomical-dev/models/astronomical-test/example-qwen"),
+    );
+    write_development_config_with_models(
+        config_home_directory.path(),
+        &[],
+        &serde_json::json!({
+            "astronomical-test/example-qwen": {"generation_defaults": {"temperature": 0.7}},
+            "example-qwen": {"generation_defaults": {"temperature": 0.2}},
+        }),
+    );
+
+    let resolved_config = development_resolver(config_home_directory.path())
+        .load()
+        .expect("the config should resolve");
+
+    assert_eq!(
+        resolved_config.model_policy_catalog["example-qwen"]
+            .generation_defaults
+            .temperature_thousandths,
+        Some(200)
+    );
+    assert_eq!(
+        resolved_config.unmatched_model_config_ids,
+        ["astronomical-test/example-qwen"]
+    );
+}
+
 #[test]
 fn should_treat_a_missing_automatic_models_directory_as_an_empty_library_without_creating_it() {
     let config_home_directory = tempfile::tempdir().expect("a config home should be created");
@@ -325,6 +394,18 @@ fn development_resolver(config_home_directory: &Path) -> ResolvedRuntimeConfigRe
 }
 
 fn write_development_config(config_home_directory: &Path, model_directories: &[PathBuf]) {
+    write_development_config_with_models(
+        config_home_directory,
+        model_directories,
+        &serde_json::json!({}),
+    );
+}
+
+fn write_development_config_with_models(
+    config_home_directory: &Path,
+    model_directories: &[PathBuf],
+    models_document: &serde_json::Value,
+) {
     let config_file_path = config_home_directory
         .join(".astronomical-dev")
         .join("config.json");
@@ -338,6 +419,7 @@ fn write_development_config(config_home_directory: &Path, model_directories: &[P
         "$schema": "./astronomical-config.schema.json",
         "schema_version": 1,
         "runtime": {"model_directories": model_directories},
+        "models": models_document,
     });
     fs::write(
         config_file_path,

@@ -45,28 +45,22 @@ pub(super) async fn stream_chat_generation(
     streaming_response_writer: StreamingResponseWriter,
 ) -> Result<(), DaemonTransportError> {
     let DaemonIpcChatRequest {
-        model,
+        model: requested_model_id,
         messages,
         settings,
         schema_json,
     } = chat_request;
     // A malformed schema is a request-shape error, so it rejects before the
     // worker-health gate: the request cannot be served regardless of state.
-    let structured_generation_constraint = match schema_json.as_deref() {
-        Some(schema_text) => match validated_chat_schema_constraint(schema_text) {
-            Ok(validated_constraint) => Some(validated_constraint),
-            Err(schema_rejection_reason) => {
-                let rejection_response = DaemonResponse::GenerationRejected {
-                    reason: schema_rejection_reason,
-                };
-                return send_terminal_streaming_response(
-                    streaming_response_writer,
-                    &rejection_response,
-                )
-                .await;
-            }
-        },
-        None => None,
+    let structured_generation_constraint = match schema_json
+        .as_deref()
+        .map(validated_chat_schema_constraint)
+        .transpose()
+    {
+        Ok(validated_constraint) => validated_constraint,
+        Err(schema_rejection_reason) => {
+            return reject_generation(streaming_response_writer, schema_rejection_reason).await;
+        }
     };
     // The token mask clamps the visible channel but never tells the model
     // what shape to plan, so the enforced schema constraint pairs with a
@@ -82,30 +76,34 @@ pub(super) async fn stream_chat_generation(
         );
     }
     let health_snapshot = generation_context.executor.worker_health_snapshot();
-    if let Some(rejection_reason) = ipc_generation_rejection_reason(
+    let dispatched_model_id = match admitted_catalog_model_id(
         &health_snapshot,
         &generation_context.reloadable_config,
-        &model,
+        &requested_model_id,
     ) {
-        let rejection_response = DaemonResponse::GenerationRejected {
-            reason: rejection_reason,
-        };
-        return send_terminal_streaming_response(streaming_response_writer, &rejection_response)
-            .await;
-    }
+        Ok(catalog_model_id) => catalog_model_id,
+        Err(rejection_reason) => {
+            return reject_generation(streaming_response_writer, rejection_reason).await;
+        }
+    };
     let Some(request_id_raw) = allocate_chat_request_id(&generation_context.next_chat_request_id)
     else {
-        let rejection_response = DaemonResponse::GenerationRejected {
-            reason: "the local request identifier space is exhausted".to_owned(),
-        };
-        return send_terminal_streaming_response(streaming_response_writer, &rejection_response)
-            .await;
+        return reject_generation(
+            streaming_response_writer,
+            "the local request identifier space is exhausted".to_owned(),
+        )
+        .await;
     };
     let mut settings = settings;
-    apply_ipc_generation_defaults(generation_context, &health_snapshot, &model, &mut settings);
+    apply_ipc_generation_defaults(
+        generation_context,
+        &health_snapshot,
+        &dispatched_model_id,
+        &mut settings,
+    );
     let generation_command = ChatGenerationCommand {
         request_id: RequestId::new(request_id_raw),
-        model: model.clone(),
+        model: dispatched_model_id,
         messages,
         tools: vec![],
         tool_choice: ChatToolChoice::Auto,
@@ -119,12 +117,9 @@ pub(super) async fn stream_chat_generation(
     {
         Ok(stream_event_receiver) => stream_event_receiver,
         Err(start_error) => {
-            let rejection_response = DaemonResponse::GenerationRejected {
-                reason: generation_start_rejection_reason(start_error),
-            };
-            return send_terminal_streaming_response(
+            return reject_generation(
                 streaming_response_writer,
-                &rejection_response,
+                generation_start_rejection_reason(start_error),
             )
             .await;
         }
@@ -132,43 +127,78 @@ pub(super) async fn stream_chat_generation(
     relay_stream_events(stream_event_receiver, streaming_response_writer).await
 }
 
-/// Rejects a generation the daemon cannot serve: an unavailable worker, or a
-/// requested model that is unknown to the live model policy catalog (checked
-/// as either a full catalog key or a leaf alias). A known model that is not
-/// resident is admitted on purpose: the worker loop swaps or loads it on
-/// demand, which is how the CLI auto-loads from a cold daemon.
-fn ipc_generation_rejection_reason(
-    health_snapshot: &WorkerHealthSnapshot,
+/// Answers the client with a terminal rejection frame.
+async fn reject_generation(
+    streaming_response_writer: StreamingResponseWriter,
+    rejection_reason: String,
+) -> Result<(), DaemonTransportError> {
+    let rejection_response = DaemonResponse::GenerationRejected {
+        reason: rejection_reason,
+    };
+    send_terminal_streaming_response(streaming_response_writer, &rejection_response).await
+}
+
+/// The catalog key a request names, for surfaces that do not reject unknown models themselves:
+/// a full Hugging Face ID resolves to the installed leaf key, and anything else comes back
+/// unchanged. The worker looks models up by the exact catalog key, so every IPC surface must
+/// dispatch under it.
+pub(super) fn catalog_model_id_or_requested(
     reloadable_config: &Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
     requested_model_id: &str,
-) -> Option<String> {
-    if health_snapshot.status == WorkerHealthStatus::Unavailable {
-        return Some("the daemon worker is not ready to serve chat generation".to_owned());
-    }
+) -> String {
     let Some(reloadable_config) = reloadable_config else {
-        // No policy catalog wired: the worker loop applies its own unknown-model guard.
-        return None;
+        return requested_model_id.to_owned();
     };
     let Ok(live_config) = reloadable_config.read() else {
-        return Some("the daemon configuration is temporarily unavailable".to_owned());
+        return requested_model_id.to_owned();
     };
     let known_model_ids: Vec<&str> = live_config
         .model_policy_catalog
         .keys()
         .map(String::as_str)
         .collect();
-    let requested_is_known = known_model_ids.contains(&requested_model_id)
-        || known_model_ids.contains(&astronomical_config::leaf_model_id(requested_model_id));
-    if !requested_is_known {
-        let suggested_model_ids =
-            astronomical_config::near_model_matches(requested_model_id, &known_model_ids);
-        return Some(unknown_model_rejection_reason(
-            requested_model_id,
-            &suggested_model_ids,
-            "the daemon knows no such model; run `astronomical models list` to see installed models or `astronomical models supported` to see downloadable ones",
-        ));
+    astronomical_config::resolve_model_id(requested_model_id, &known_model_ids).to_owned()
+}
+
+/// Admits a generation the daemon can serve and names the model to dispatch, or returns the
+/// reason to reject it: an unavailable worker, or a requested model that is unknown to the live
+/// model policy catalog (checked as either a full Hugging Face ID or a leaf alias). The returned
+/// ID is the catalog key the request matched, because the worker looks the model up by that exact
+/// string: dispatching the full ID the person typed would fail as "the worker is unavailable"
+/// with no model loaded (#1898). A known model that is not resident is admitted on purpose: the
+/// worker loop swaps or loads it on demand, which is how the CLI auto-loads from a cold daemon.
+fn admitted_catalog_model_id(
+    health_snapshot: &WorkerHealthSnapshot,
+    reloadable_config: &Option<Arc<RwLock<ResolvedRuntimeConfig>>>,
+    requested_model_id: &str,
+) -> Result<String, String> {
+    if health_snapshot.status == WorkerHealthStatus::Unavailable {
+        return Err("the daemon worker is not ready to serve chat generation".to_owned());
     }
-    None
+    let Some(reloadable_config) = reloadable_config else {
+        // No policy catalog wired: the worker loop applies its own unknown-model guard.
+        return Ok(requested_model_id.to_owned());
+    };
+    let Ok(live_config) = reloadable_config.read() else {
+        return Err("the daemon configuration is temporarily unavailable".to_owned());
+    };
+    let known_model_ids: Vec<&str> = live_config
+        .model_policy_catalog
+        .keys()
+        .map(String::as_str)
+        .collect();
+    let catalog_model_id =
+        astronomical_config::resolve_model_id(requested_model_id, &known_model_ids);
+    if known_model_ids.contains(&catalog_model_id) {
+        return Ok(catalog_model_id.to_owned());
+    }
+    let suggested_model_ids =
+        astronomical_config::near_model_matches(requested_model_id, &known_model_ids);
+    Err(unknown_model_rejection_reason(
+        requested_model_id,
+        &suggested_model_ids,
+        "the daemon knows no such model; run `astronomical models list` to see installed models or `astronomical models supported` to see downloadable ones",
+    ))
 }
 fn apply_ipc_generation_defaults(
     generation_context: &DaemonIpcGenerationContext,
@@ -281,3 +311,7 @@ fn stream_error_code_to_failure_reason(stream_error_code: ChatGenerationStreamEr
         }
     }
 }
+
+#[cfg(test)]
+#[path = "chat_tests.rs"]
+mod chat_tests;
