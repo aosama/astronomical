@@ -20,6 +20,7 @@ where
             minimum_mlx_memory_ceiling_bytes: 1,
             wired_residency_budget_bytes: None,
             floor_raise_limit_bytes: 0,
+            factory_mlx_memory_ceiling_bytes: 0,
             worker_runtime_feature_configuration: None,
             selected_model: None,
             // A directly injected engine is treated as complete-resident:
@@ -64,6 +65,7 @@ where
             minimum_mlx_memory_ceiling_bytes: 1,
             wired_residency_budget_bytes: None,
             floor_raise_limit_bytes: 0,
+            factory_mlx_memory_ceiling_bytes: effective_mlx_memory_ceiling_bytes,
             worker_runtime_feature_configuration: None,
             selected_model: None,
             // No autoregressive engine is loaded, so there is no placement.

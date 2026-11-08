@@ -3,8 +3,9 @@
 //!
 //! One number bounds everything a user may dedicate to model serving, and
 //! it is `hw.memsize` itself: Astronomical keeps no operating-system reserve
-//! of its own and leaves memory pressure to MLX and macOS (#1902). No graphics-memory policy value
-//! from the kernel and no device recommendation participate in the bound,
+//! of its own and leaves memory pressure to MLX and macOS (#1902). No
+//! graphics-memory policy value from the kernel and no device recommendation
+//! participate in the bound,
 //! so the daemon, the worker, and the menu share a single source of truth.
 //! `tests/gpu/wired_limit_claim_probe.rs` measures how much a healthy
 //! machine can actually wire. On machines where Metal's

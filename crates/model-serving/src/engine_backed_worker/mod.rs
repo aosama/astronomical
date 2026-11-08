@@ -24,6 +24,10 @@ pub struct EngineBackedWorker<
     /// machine, otherwise unbounded. Zero until startup reports it, which
     /// never raises.
     pub(crate) floor_raise_limit_bytes: u64,
+    /// The ceiling the model factory holds: never raised to a model's floor,
+    /// so each newly loaded model is judged against it rather than against a
+    /// floor an earlier model was raised to.
+    pub(crate) factory_mlx_memory_ceiling_bytes: u64,
     pub(crate) worker_runtime_feature_configuration:
         Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
     pub(crate) selected_model: Option<support::SelectedModel>,

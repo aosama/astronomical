@@ -23,8 +23,8 @@
 //! what a boundary is: geometric probes (512 MiB step granularity, 2 GiB
 //! cap), one probe is "slow" past 2 s, two consecutive slow probes confirm
 //! the crawl boundary, each walk carries a 20 s budget, and the whole test
-//! a 60 s budget. Holding the walk target briefly (~RAM minus 8 GB) is the
-//! measurement; the two-slow-probe rule bounds any crawl window.
+//! a 60 s budget. Holding the walk target briefly (RAM minus the probe's own
+//! 8 GB safety headroom) is the measurement; the two-slow-probe rule bounds any crawl window.
 //!
 //! Machine-state validity: run while the daemon holds no model so nothing
 //! else contends for the wired pool. A claim is process-local and is
@@ -119,7 +119,7 @@ fn should_extend_the_wired_boundary_beyond_default_policy_when_mlx_claims_a_wire
 
     if walk_reached_target(&unclaimed_walk, walk_target_bytes) {
         eprintln!(
-            "verdict: the default kernel policy wires the full product target of RAM minus 8 GB; no wired-limit claim and no elevation are needed"
+            "verdict: the default kernel policy wires the probe target of RAM minus its 8 GB safety headroom; no wired-limit claim and no elevation are needed"
         );
         return;
     }
@@ -155,7 +155,7 @@ fn should_extend_the_wired_boundary_beyond_default_policy_when_mlx_claims_a_wire
     assert!(
         walk_reached_target(&claimed_walk, walk_target_bytes)
             || boundary_advanced_bytes >= PROBE_STEP_BYTES,
-        "neither the default policy nor a wired-limit claim wires RAM minus 8 GB (unclaimed {} bytes, claimed {} bytes)",
+        "neither the default policy nor a wired-limit claim wires the probe target of RAM minus its 8 GB safety headroom (unclaimed {} bytes, claimed {} bytes)",
         unclaimed_walk.healthy_wired_bytes,
         claimed_walk.healthy_wired_bytes
     );
