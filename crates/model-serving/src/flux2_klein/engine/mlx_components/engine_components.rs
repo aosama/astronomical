@@ -73,7 +73,8 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
                     retained_files.tokenizer_sidecars(),
                 )
                 .map_err(|error| error.to_string())?;
-                let (text_shards, transformer_file, vae_file) = retained_files.into_weight_files();
+                let (text_encoder_weight_files, transformer_weight_files, vae_weight_files) =
+                    retained_files.into_weight_files();
                 let text_encoder_mode = self
                     .residency_plan
                     .as_ref()
@@ -82,7 +83,7 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
                 let conditioner = Flux2KleinTextConditioner::load(
                     self.runtime()?,
                     tokenizer,
-                    text_shards,
+                    text_encoder_weight_files,
                     text_encoder_mode,
                     &mut attribution,
                 )
@@ -91,8 +92,8 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
                     .start(self.runtime()?, &[prompt.to_owned()], &mut attribution)
                     .map_err(|error| error.to_string())?;
                 self.text_conditioning_state = Some(conditioning_state);
-                self.transformer_file = Some(transformer_file);
-                self.vae_file = Some(vae_file);
+                self.transformer_weight_files = Some(transformer_weight_files);
+                self.vae_weight_files = Some(vae_weight_files);
             }
             let conditioning_state = self
                 .text_conditioning_state

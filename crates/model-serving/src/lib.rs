@@ -10,6 +10,10 @@
 
 pub(crate) mod artifact_validation;
 
+pub(crate) mod affine_quantization_scheme;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod affine_quantized_linear;
+
 mod attention;
 
 mod decoder_cache;
@@ -144,10 +148,13 @@ pub use expert_paging::{
 };
 
 pub use flux2_klein::{
-    FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION, FLUX2_KLEIN_PROVIDER_MODEL_ID,
-    Flux2KleinArtifactProvenance, Flux2KleinFlowSchedulerError, Flux2KleinImageDimensions,
+    FLUX2_KLEIN_MLX_4BIT_MODEL_ID, FLUX2_KLEIN_MLX_4BIT_PROVIDER_MODEL_ID,
+    FLUX2_KLEIN_MLX_4BIT_REVISION, FLUX2_KLEIN_OFFICIAL_MODEL_ID, FLUX2_KLEIN_OFFICIAL_REVISION,
+    FLUX2_KLEIN_PROVIDER_MODEL_ID, Flux2KleinArtifactProvenance, Flux2KleinComponent,
+    Flux2KleinComponentWeightFiles, Flux2KleinFlowSchedulerError, Flux2KleinImageDimensions,
     Flux2KleinImageEngine, Flux2KleinLicense, Flux2KleinRetainedArtifactFiles,
-    Flux2KleinTensorDescriptor, Flux2KleinTensorInventory, ValidatedFlux2KleinArtifact,
+    Flux2KleinTensorDescriptor, Flux2KleinTensorInventory, Flux2KleinWeightLayout,
+    ValidatedFlux2KleinArtifact,
 };
 
 #[cfg(feature = "direct-mlx")]

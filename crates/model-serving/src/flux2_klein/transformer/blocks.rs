@@ -130,7 +130,7 @@ pub(super) fn single_stream_block(
     let fused = math::linear(
         runtime,
         &normalized,
-        weights.tensor(&format!("{prefix}.to_qkv_mlp_proj.weight"))?,
+        weights.linear(&format!("{prefix}.to_qkv_mlp_proj.weight"))?,
     )?;
     let hidden_width = geometry.hidden_width() as i32;
     let feed_forward_width = geometry.feed_forward_width() as i32;
@@ -159,7 +159,7 @@ pub(super) fn single_stream_block(
     let projected = math::linear(
         runtime,
         &parallel,
-        weights.tensor(&format!("{prefix}.to_out.weight"))?,
+        weights.linear(&format!("{prefix}.to_out.weight"))?,
     )?;
     Ok(runtime.add(
         hidden_states,
@@ -181,32 +181,32 @@ fn joint_attention(
     let image_q = math::linear(
         runtime,
         image,
-        weights.tensor(&format!("{prefix}.attn.to_q.weight"))?,
+        weights.linear(&format!("{prefix}.attn.to_q.weight"))?,
     )?;
     let image_k = math::linear(
         runtime,
         image,
-        weights.tensor(&format!("{prefix}.attn.to_k.weight"))?,
+        weights.linear(&format!("{prefix}.attn.to_k.weight"))?,
     )?;
     let image_v = math::linear(
         runtime,
         image,
-        weights.tensor(&format!("{prefix}.attn.to_v.weight"))?,
+        weights.linear(&format!("{prefix}.attn.to_v.weight"))?,
     )?;
     let text_q = math::linear(
         runtime,
         text,
-        weights.tensor(&format!("{prefix}.attn.add_q_proj.weight"))?,
+        weights.linear(&format!("{prefix}.attn.add_q_proj.weight"))?,
     )?;
     let text_k = math::linear(
         runtime,
         text,
-        weights.tensor(&format!("{prefix}.attn.add_k_proj.weight"))?,
+        weights.linear(&format!("{prefix}.attn.add_k_proj.weight"))?,
     )?;
     let text_v = math::linear(
         runtime,
         text,
-        weights.tensor(&format!("{prefix}.attn.add_v_proj.weight"))?,
+        weights.linear(&format!("{prefix}.attn.add_v_proj.weight"))?,
     )?;
     // Text and image Q/K scales are separate parameters. Apply them before
     // concatenation by selecting the matching stream rather than broadcasting
@@ -247,12 +247,12 @@ fn joint_attention(
         math::linear(
             runtime,
             &image_attention,
-            weights.tensor(&format!("{prefix}.attn.to_out.0.weight"))?,
+            weights.linear(&format!("{prefix}.attn.to_out.0.weight"))?,
         )?,
         math::linear(
             runtime,
             &text_attention,
-            weights.tensor(&format!("{prefix}.attn.to_add_out.weight"))?,
+            weights.linear(&format!("{prefix}.attn.to_add_out.weight"))?,
         )?,
     ))
 }
@@ -407,13 +407,13 @@ fn feed_forward(
     let fused = math::linear(
         runtime,
         input,
-        weights.tensor(&format!("{prefix}.linear_in.weight"))?,
+        weights.linear(&format!("{prefix}.linear_in.weight"))?,
     )?;
     let activated = math::swiglu(runtime, &fused, width as i32)?;
     math::linear(
         runtime,
         &activated,
-        weights.tensor(&format!("{prefix}.linear_out.weight"))?,
+        weights.linear(&format!("{prefix}.linear_out.weight"))?,
     )
 }
 

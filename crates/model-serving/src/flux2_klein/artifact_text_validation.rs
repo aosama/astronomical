@@ -62,8 +62,8 @@ impl TextShardIndex {
             .map_err(Flux2KleinArtifactError::MalformedTextShardIndex)?;
         let mut supported_names = BTreeSet::new();
         for shard_file_name in document.weight_map.values() {
-            if !is_safe_text_shard_path(shard_file_name) {
-                return Err(Flux2KleinArtifactError::UnsupportedTextShardName {
+            if !is_safe_weight_shard_path(shard_file_name) {
+                return Err(Flux2KleinArtifactError::UnsupportedShardName {
                     shard_file_name: shard_file_name.clone(),
                 });
             }
@@ -236,7 +236,7 @@ fn validate_text_shards(
     ))
 }
 
-fn is_safe_text_shard_path(shard_file_name: &str) -> bool {
+pub(super) fn is_safe_weight_shard_path(shard_file_name: &str) -> bool {
     let shard_path = Path::new(shard_file_name);
     !shard_file_name.is_empty()
         && !shard_file_name.contains('\\')

@@ -13,10 +13,10 @@ pub use request_execution::{
 use std::path::PathBuf;
 use std::time::Instant;
 
+use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 use astronomical_ipc_protocol::RequestId;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 
-use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
 use crate::{
     MemoryCeilingUtilization, ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution,
     PerformanceAttributionLog, PerformanceAttributionOutcome, PerformanceOperation,
@@ -73,8 +73,8 @@ pub(super) struct Flux2KleinMlxComponents {
     request_start_memory: Option<(u64, u64, u64)>,
     dimensions: Option<Flux2KleinImageDimensions>,
     latent_layout: Option<Flux2KleinPackedLatentLayout>,
-    transformer_file: Option<ValidatedWeightsFile>,
-    vae_file: Option<ValidatedWeightsFile>,
+    transformer_weight_files: Option<Flux2KleinComponentWeightFiles>,
+    vae_weight_files: Option<Flux2KleinComponentWeightFiles>,
     text_conditioning_state: Option<Flux2KleinTextConditioningState>,
     conditioning: Option<Flux2KleinTextConditioning>,
     transformer: Option<Flux2KleinTransformer>,
@@ -199,8 +199,8 @@ impl Flux2KleinMlxComponents {
             .runtime
             .take()
             .ok_or_else(|| "the MLX runtime is unavailable".to_owned())?;
-        let transformer_file = self
-            .transformer_file
+        let transformer_weight_files = self
+            .transformer_weight_files
             .take()
             .ok_or_else(|| "the validated transformer descriptor is unavailable".to_owned())?;
         let transformer_geometry = self
@@ -209,7 +209,7 @@ impl Flux2KleinMlxComponents {
             .ok_or_else(|| "the validated transformer geometry is unavailable".to_owned())?;
         match Flux2KleinTransformer::load_with_geometry_and_performance_attribution(
             runtime,
-            transformer_file,
+            transformer_weight_files,
             transformer_geometry,
             &retained_block_indices,
             performance_attribution,
@@ -255,8 +255,8 @@ impl Flux2KleinMlxComponents {
         self.conditioning = None;
         self.image_position_ids = None;
         self.text_position_ids = None;
-        self.transformer_file = None;
-        self.vae_file = None;
+        self.transformer_weight_files = None;
+        self.vae_weight_files = None;
         self.latent_layout = None;
         self.dimensions = None;
         self.request_id = None;

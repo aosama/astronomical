@@ -1,8 +1,9 @@
 //! Complete native MLX FLUX.2 Klein decoder.
 
-use std::fs::File;
+use astronomical_runtime_integration::MlxRuntime;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use crate::flux2_klein::tensor_store::{Flux2KleinTensorStore, map_component_weight_files};
+use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 
@@ -41,20 +42,23 @@ pub struct Flux2KleinVaeDecoder {
 }
 
 impl Flux2KleinVaeDecoder {
-    pub fn load(runtime: &MlxRuntime, vae_weights_file: File) -> Result<Self, Flux2KleinVaeError> {
+    pub fn load(
+        runtime: &MlxRuntime,
+        vae_weight_files: Flux2KleinComponentWeightFiles,
+    ) -> Result<Self, Flux2KleinVaeError> {
         let mut attribution = PerformanceAttribution::disabled();
-        Self::load_with_performance_attribution(runtime, vae_weights_file, &mut attribution)
+        Self::load_with_performance_attribution(runtime, vae_weight_files, &mut attribution)
     }
 
     pub fn load_with_performance_attribution(
         runtime: &MlxRuntime,
-        vae_weights_file: File,
+        vae_weight_files: Flux2KleinComponentWeightFiles,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Flux2KleinVaeError> {
         let file_read_metrics = performance_attribution.positional_file_read_metrics();
         let tensors = performance_attribution
             .measure_operation(PerformanceOperation::ImageVaeComponentMapping, |_| {
-                runtime.load_safetensors(vae_weights_file, file_read_metrics)
+                map_component_weight_files(&vae_weight_files, runtime, file_read_metrics.as_ref())
             })?;
         performance_attribution
             .measure_operation(PerformanceOperation::ImageVaeComponentLoading, |_| {
@@ -62,9 +66,12 @@ impl Flux2KleinVaeDecoder {
             })
     }
 
-    fn bind(runtime: &MlxRuntime, tensors: &MlxSafetensors) -> Result<Self, Flux2KleinVaeError> {
-        let running_mean = tensors.tensor("bn.running_mean")?;
-        let running_variance = tensors.tensor("bn.running_var")?;
+    fn bind(
+        runtime: &MlxRuntime,
+        tensors: &Flux2KleinTensorStore,
+    ) -> Result<Self, Flux2KleinVaeError> {
+        let running_mean = tensors.dense(runtime, "bn.running_mean")?;
+        let running_variance = tensors.dense(runtime, "bn.running_var")?;
         convolution::validate_shape(
             "bn",
             "running_mean",

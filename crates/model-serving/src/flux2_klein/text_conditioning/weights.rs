@@ -1,11 +1,13 @@
 //! BF16 tensor binding with complete or descriptor-streamed layer ownership.
+//! Tensors come through the tensor store, which dequantizes the 4-bit build's
+//! projections, so the encoder's arithmetic is the same for both builds.
 
-use std::collections::{BTreeMap, VecDeque};
-use std::fs::File;
+use std::collections::VecDeque;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
 
-use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
+use crate::flux2_klein::tensor_store::{Flux2KleinTensorStore, map_component_weight_files};
+use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 use crate::{PerformanceAttribution, PerformanceOperation};
 
 use super::super::Flux2KleinResidencyMode;
@@ -24,7 +26,7 @@ const VOCABULARY_SIZE: i32 = 151_936;
 pub(super) struct Flux2KleinTextWeights {
     pub(super) embedding: Option<MlxArray>,
     complete_layers: VecDeque<Flux2KleinDecoderLayerWeights>,
-    descriptor_source: Option<Flux2KleinTextDescriptorSource>,
+    descriptor_source: Option<Flux2KleinComponentWeightFiles>,
     streamed_layer_is_retained: bool,
     peak_streamed_layer_count: usize,
 }
@@ -44,30 +46,20 @@ pub(super) struct Flux2KleinDecoderLayerWeights {
     pub(super) down: MlxArray,
 }
 
-#[derive(Debug)]
-struct Flux2KleinTextDescriptorSource {
-    shard_files: Vec<File>,
-}
-
 impl Flux2KleinTextWeights {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        text_shard_files: BTreeMap<String, ValidatedWeightsFile>,
+        descriptor_source: Flux2KleinComponentWeightFiles,
         residency_mode: Flux2KleinResidencyMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Flux2KleinTextConditioningError> {
-        let descriptor_source = Flux2KleinTextDescriptorSource {
-            shard_files: text_shard_files
-                .into_values()
-                .map(ValidatedWeightsFile::into_file)
-                .collect(),
-        };
         match residency_mode {
             Flux2KleinResidencyMode::Complete => {
-                let model_shards = descriptor_source.map(runtime, performance_attribution)?;
+                let model_shards =
+                    map_text_encoder(&descriptor_source, runtime, performance_attribution)?;
                 let weights = performance_attribution.measure_operation(
                     PerformanceOperation::ImageTextComponentLoading,
-                    |_performance_attribution| bind_complete_weights(&model_shards),
+                    |_performance_attribution| bind_complete_weights(runtime, &model_shards),
                 )?;
                 performance_attribution.measure_operation(
                     PerformanceOperation::ImageTextComponentLoading,
@@ -77,10 +69,11 @@ impl Flux2KleinTextWeights {
                 Ok(weights)
             }
             Flux2KleinResidencyMode::Streamed => {
-                let model_shards = descriptor_source.map(runtime, performance_attribution)?;
+                let model_shards =
+                    map_text_encoder(&descriptor_source, runtime, performance_attribution)?;
                 let embedding = performance_attribution.measure_operation(
                     PerformanceOperation::ImageTextComponentLoading,
-                    |_performance_attribution| bind_embedding(&model_shards),
+                    |_performance_attribution| bind_embedding(runtime, &model_shards),
                 )?;
                 performance_attribution.measure_operation(
                     PerformanceOperation::ImageTextComponentLoading,
@@ -112,10 +105,13 @@ impl Flux2KleinTextWeights {
             if self.streamed_layer_is_retained {
                 return Err(Flux2KleinTextConditioningError::WeightsUnavailable);
             }
-            let descriptor_maps = descriptor_source.map(runtime, performance_attribution)?;
+            let descriptor_maps =
+                map_text_encoder(descriptor_source, runtime, performance_attribution)?;
             let layer_weights = performance_attribution.measure_operation(
                 PerformanceOperation::ImageTextComponentLoading,
-                |_performance_attribution| bind_decoder_layer(&descriptor_maps, layer_index),
+                |_performance_attribution| {
+                    bind_decoder_layer(runtime, &descriptor_maps, layer_index)
+                },
             )?;
             performance_attribution.measure_operation(
                 PerformanceOperation::ImageTextComponentLoading,
@@ -193,12 +189,13 @@ impl Flux2KleinDecoderLayerWeights {
 }
 
 fn bind_complete_weights(
-    model_shards: &[MlxSafetensors],
+    runtime: &MlxRuntime,
+    model_shards: &Flux2KleinTensorStore,
 ) -> Result<Flux2KleinTextWeights, Flux2KleinTextConditioningError> {
-    let embedding = bind_embedding(model_shards)?;
+    let embedding = bind_embedding(runtime, model_shards)?;
     let mut complete_layers = VecDeque::with_capacity(EXECUTED_LAYER_COUNT);
     for layer_index in 0..EXECUTED_LAYER_COUNT {
-        complete_layers.push_back(bind_decoder_layer(model_shards, layer_index)?);
+        complete_layers.push_back(bind_decoder_layer(runtime, model_shards, layer_index)?);
     }
     Ok(Flux2KleinTextWeights {
         embedding: Some(embedding),
@@ -209,42 +206,32 @@ fn bind_complete_weights(
     })
 }
 
-impl Flux2KleinTextDescriptorSource {
-    fn map(
-        &self,
-        runtime: &MlxRuntime,
-        performance_attribution: &mut PerformanceAttribution,
-    ) -> Result<Vec<MlxSafetensors>, Flux2KleinTextConditioningError> {
-        performance_attribution.measure_operation(
-            PerformanceOperation::ImageTextComponentMapping,
-            |performance_attribution| {
-                let positional_file_read_metrics =
-                    performance_attribution.positional_file_read_metrics();
-                self.shard_files
-                    .iter()
-                    .map(|shard_file| {
-                        let cloned_file = shard_file
-                            .try_clone()
-                            .map_err(Flux2KleinTextConditioningError::WeightDescriptorIo)?;
-                        runtime
-                            .load_safetensors(
-                                cloned_file,
-                                positional_file_read_metrics
-                                    .as_ref()
-                                    .map(std::sync::Arc::clone),
-                            )
-                            .map_err(Flux2KleinTextConditioningError::from)
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-            },
-        )
-    }
+/// Maps the text encoder's shards, attributed to the text mapping operation.
+fn map_text_encoder(
+    descriptor_source: &Flux2KleinComponentWeightFiles,
+    runtime: &MlxRuntime,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<Flux2KleinTensorStore, Flux2KleinTextConditioningError> {
+    performance_attribution.measure_operation(
+        PerformanceOperation::ImageTextComponentMapping,
+        |performance_attribution| {
+            let positional_file_read_metrics =
+                performance_attribution.positional_file_read_metrics();
+            Ok(map_component_weight_files(
+                descriptor_source,
+                runtime,
+                positional_file_read_metrics.as_ref(),
+            )?)
+        },
+    )
 }
 
 fn bind_embedding(
-    model_shards: &[MlxSafetensors],
+    runtime: &MlxRuntime,
+    model_shards: &Flux2KleinTensorStore,
 ) -> Result<MlxArray, Flux2KleinTextConditioningError> {
     load_bf16_tensor(
+        runtime,
         model_shards,
         "model.embed_tokens.weight",
         &[VOCABULARY_SIZE, HIDDEN_WIDTH],
@@ -252,62 +239,74 @@ fn bind_embedding(
 }
 
 fn bind_decoder_layer(
-    model_shards: &[MlxSafetensors],
+    runtime: &MlxRuntime,
+    model_shards: &Flux2KleinTensorStore,
     layer_index: usize,
 ) -> Result<Flux2KleinDecoderLayerWeights, Flux2KleinTextConditioningError> {
     let prefix = format!("model.layers.{layer_index}");
     Ok(Flux2KleinDecoderLayerWeights {
         input_norm: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.input_layernorm.weight"),
             &[HIDDEN_WIDTH],
         )?,
         query: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.self_attn.q_proj.weight"),
             &[QUERY_HEAD_COUNT * HEAD_WIDTH, HIDDEN_WIDTH],
         )?,
         key: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.self_attn.k_proj.weight"),
             &[KEY_VALUE_HEAD_COUNT * HEAD_WIDTH, HIDDEN_WIDTH],
         )?,
         value: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.self_attn.v_proj.weight"),
             &[KEY_VALUE_HEAD_COUNT * HEAD_WIDTH, HIDDEN_WIDTH],
         )?,
         output: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.self_attn.o_proj.weight"),
             &[HIDDEN_WIDTH, QUERY_HEAD_COUNT * HEAD_WIDTH],
         )?,
         query_norm: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.self_attn.q_norm.weight"),
             &[HEAD_WIDTH],
         )?,
         key_norm: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.self_attn.k_norm.weight"),
             &[HEAD_WIDTH],
         )?,
         post_attention_norm: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.post_attention_layernorm.weight"),
             &[HIDDEN_WIDTH],
         )?,
         gate: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.mlp.gate_proj.weight"),
             &[INTERMEDIATE_WIDTH, HIDDEN_WIDTH],
         )?,
         up: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.mlp.up_proj.weight"),
             &[INTERMEDIATE_WIDTH, HIDDEN_WIDTH],
         )?,
         down: load_bf16_tensor(
+            runtime,
             model_shards,
             &format!("{prefix}.mlp.down_proj.weight"),
             &[HIDDEN_WIDTH, INTERMEDIATE_WIDTH],
@@ -316,16 +315,12 @@ fn bind_decoder_layer(
 }
 
 fn load_bf16_tensor(
-    model_shards: &[MlxSafetensors],
+    runtime: &MlxRuntime,
+    model_shards: &Flux2KleinTensorStore,
     tensor_name: &str,
     expected_shape: &[i32],
 ) -> Result<MlxArray, Flux2KleinTextConditioningError> {
-    let tensor = model_shards
-        .iter()
-        .find_map(|model_shard| model_shard.tensor(tensor_name).ok())
-        .ok_or_else(|| Flux2KleinTextConditioningError::MissingTensor {
-            tensor_name: tensor_name.to_owned(),
-        })?;
+    let tensor = model_shards.dense(runtime, tensor_name)?;
     if tensor.dtype() != MlxDtype::BFloat16 {
         return Err(Flux2KleinTextConditioningError::InvalidTensor {
             tensor_name: tensor_name.to_owned(),

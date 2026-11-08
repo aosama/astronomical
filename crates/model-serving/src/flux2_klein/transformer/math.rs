@@ -3,15 +3,17 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
+use crate::flux2_klein::tensor_store::Flux2KleinWeight;
 use mlx_c_rust::{MlxArray, MlxDtype};
 
+/// `input @ weightᵀ`, dense or on 4-bit packed weights depending on how the
+/// artifact stores the projection.
 pub(super) fn linear(
     runtime: &MlxRuntime,
     input: &MlxArray,
-    weight: &MlxArray,
+    weight: &Flux2KleinWeight,
 ) -> Result<MlxArray, Flux2KleinTransformerError> {
-    let transposed_weight = runtime.transpose_axes(weight, &[1, 0])?;
-    Ok(runtime.matmul(input, &transposed_weight)?)
+    Ok(weight.project(runtime, input)?)
 }
 
 pub(super) fn fp32_layer_norm(

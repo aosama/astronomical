@@ -53,6 +53,8 @@ pub enum Flux2KleinTransformerError {
     },
     #[error(transparent)]
     Mlx(#[from] MlxRuntimeError),
+    #[error(transparent)]
+    TensorStore(#[from] crate::flux2_klein::tensor_store::Flux2KleinTensorStoreError),
 }
 
 #[cfg(feature = "direct-mlx")]

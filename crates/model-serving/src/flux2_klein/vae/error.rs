@@ -12,6 +12,9 @@ pub enum Flux2KleinVaeError {
     #[cfg(feature = "direct-mlx")]
     #[error("FLUX.2 Klein VAE MLX execution failed")]
     Mlx(#[from] astronomical_runtime_integration::MlxRuntimeError),
+    #[cfg(feature = "direct-mlx")]
+    #[error(transparent)]
+    TensorStore(#[from] crate::flux2_klein::tensor_store::Flux2KleinTensorStoreError),
 }
 
 impl Flux2KleinVaeError {

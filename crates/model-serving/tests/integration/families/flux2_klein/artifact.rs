@@ -78,9 +78,9 @@ fn should_validate_the_nested_official_artifact_and_retain_runtime_descriptors()
         .into_retained_files()
         .expect("descriptor identities should transfer");
     fs::remove_dir_all(model_directory.path()).expect("the model paths should be removable");
-    assert_eq!(retained_files.text_shards().len(), 2);
-    assert!(retained_files.transformer().size_bytes() > 0);
-    assert!(retained_files.vae().size_bytes() > 0);
+    assert_eq!(retained_files.text_encoder_weights().shard_count(), 2);
+    assert!(retained_files.transformer_weights().size_bytes() > 0);
+    assert!(retained_files.vae_weights().size_bytes() > 0);
     assert_eq!(retained_files.tokenizer_sidecars().len(), 7);
 }
 

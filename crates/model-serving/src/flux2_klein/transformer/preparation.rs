@@ -70,12 +70,12 @@ impl Flux2KleinTransformer {
         let image_projection = math::linear(
             &self.runtime,
             inputs.image_hidden_states,
-            self.weights.tensor("x_embedder.weight")?,
+            self.weights.linear("x_embedder.weight")?,
         )?;
         let text_projection = math::linear(
             &self.runtime,
             inputs.text_hidden_states,
-            self.weights.tensor("context_embedder.weight")?,
+            self.weights.linear("context_embedder.weight")?,
         )?;
         let (rope_cosines, rope_sines) =
             self.build_joint_rope(inputs.text_position_ids, inputs.image_position_ids)?;
@@ -134,13 +134,13 @@ impl Flux2KleinTransformer {
             &self.runtime,
             &sinusoidal,
             self.weights
-                .tensor("time_guidance_embed.timestep_embedder.linear_1.weight")?,
+                .linear("time_guidance_embed.timestep_embedder.linear_1.weight")?,
         )?;
         math::linear(
             &self.runtime,
             &self.runtime.silu(&first)?,
             self.weights
-                .tensor("time_guidance_embed.timestep_embedder.linear_2.weight")?,
+                .linear("time_guidance_embed.timestep_embedder.linear_2.weight")?,
         )
     }
 
@@ -154,19 +154,19 @@ impl Flux2KleinTransformer {
                 &self.runtime,
                 &activated,
                 self.weights
-                    .tensor("double_stream_modulation_img.linear.weight")?,
+                    .linear("double_stream_modulation_img.linear.weight")?,
             )?,
             text_double: math::linear(
                 &self.runtime,
                 &activated,
                 self.weights
-                    .tensor("double_stream_modulation_txt.linear.weight")?,
+                    .linear("double_stream_modulation_txt.linear.weight")?,
             )?,
             single: math::linear(
                 &self.runtime,
                 &activated,
                 self.weights
-                    .tensor("single_stream_modulation.linear.weight")?,
+                    .linear("single_stream_modulation.linear.weight")?,
             )?,
         })
     }

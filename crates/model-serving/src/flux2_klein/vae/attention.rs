@@ -1,6 +1,8 @@
 //! One-head spatial self-attention using MLX fused scaled dot-product attention.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
+
+use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 
 use super::convolution;
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinGroupNorm, Flux2KleinVaeError};
@@ -19,7 +21,7 @@ pub(super) struct Flux2KleinVaeMiddleAttention {
 impl Flux2KleinVaeMiddleAttention {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &MlxSafetensors,
+        tensors: &Flux2KleinTensorStore,
         prefix: &str,
         channels: usize,
     ) -> Result<Self, Flux2KleinVaeError> {

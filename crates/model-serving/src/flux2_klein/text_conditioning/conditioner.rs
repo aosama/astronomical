@@ -23,16 +23,13 @@ impl Flux2KleinTextConditioner {
     pub(crate) fn load(
         runtime: &MlxRuntime,
         tokenizer: Flux2KleinTokenizer,
-        text_shards: std::collections::BTreeMap<
-            String,
-            crate::artifact_validation::validated_artifact::ValidatedWeightsFile,
-        >,
+        text_encoder_weight_files: crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles,
         residency_mode: Flux2KleinResidencyMode,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Flux2KleinTextConditioningError> {
         let weights = Flux2KleinTextWeights::load(
             runtime,
-            text_shards,
+            text_encoder_weight_files,
             residency_mode,
             performance_attribution,
         )?;

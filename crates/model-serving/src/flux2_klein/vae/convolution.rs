@@ -1,6 +1,8 @@
 //! Channel-last MLX convolution with one-time PyTorch weight-layout conversion.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
+
+use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 
 use super::Flux2KleinVaeError;
 use mlx_c_rust::MlxArray;
@@ -15,15 +17,15 @@ pub(super) struct Flux2KleinChannelLastConv2d {
 impl Flux2KleinChannelLastConv2d {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &MlxSafetensors,
+        tensors: &Flux2KleinTensorStore,
         prefix: &str,
         input_channels: usize,
         output_channels: usize,
         kernel_edge: usize,
         padding: i32,
     ) -> Result<Self, Flux2KleinVaeError> {
-        let pytorch_weight = tensors.tensor(&format!("{prefix}.weight"))?;
-        let bias = tensors.tensor(&format!("{prefix}.bias"))?;
+        let pytorch_weight = tensors.dense(runtime, &format!("{prefix}.weight"))?;
+        let bias = tensors.dense(runtime, &format!("{prefix}.bias"))?;
         validate_shape(
             prefix,
             "weight",
@@ -42,12 +44,12 @@ impl Flux2KleinChannelLastConv2d {
 
     pub(super) fn load_linear_as_pointwise(
         runtime: &MlxRuntime,
-        tensors: &MlxSafetensors,
+        tensors: &Flux2KleinTensorStore,
         prefix: &str,
         channels: usize,
     ) -> Result<Self, Flux2KleinVaeError> {
-        let linear_weight = tensors.tensor(&format!("{prefix}.weight"))?;
-        let bias = tensors.tensor(&format!("{prefix}.bias"))?;
+        let linear_weight = tensors.dense(runtime, &format!("{prefix}.weight"))?;
+        let bias = tensors.dense(runtime, &format!("{prefix}.bias"))?;
         validate_shape(prefix, "weight", &linear_weight, &[channels, channels])?;
         validate_shape(prefix, "bias", &bias, &[channels])?;
         let channels_i32 = as_i32(channels, "attention channel count")?;

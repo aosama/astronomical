@@ -242,7 +242,10 @@ fn validate_exact_names(
     Ok(())
 }
 
-fn transformer_tensor_names(double_count: usize, single_count: usize) -> BTreeSet<String> {
+pub(super) fn transformer_tensor_names(
+    double_count: usize,
+    single_count: usize,
+) -> BTreeSet<String> {
     let mut names = [
         "context_embedder.weight",
         "double_stream_modulation_img.linear.weight",
@@ -294,7 +297,7 @@ fn transformer_tensor_names(double_count: usize, single_count: usize) -> BTreeSe
     names
 }
 
-fn vae_tensor_names() -> BTreeSet<String> {
+pub(super) fn vae_tensor_names() -> BTreeSet<String> {
     let mut names = [
         "decoder.conv_in",
         "decoder.conv_norm_out",

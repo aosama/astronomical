@@ -1,6 +1,8 @@
 //! Three residual layers followed by optional nearest-neighbor upsampling and convolution.
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
+
+use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinVaeError, Flux2KleinVaeResnetBlock};
 use mlx_c_rust::MlxArray;
@@ -14,7 +16,7 @@ pub(super) struct Flux2KleinVaeUpBlock {
 impl Flux2KleinVaeUpBlock {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &MlxSafetensors,
+        tensors: &Flux2KleinTensorStore,
         block_index: usize,
         input_channels: usize,
         output_channels: usize,
