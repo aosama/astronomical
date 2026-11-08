@@ -7,10 +7,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::library::DownloadJobStoreError;
 use crate::library::download::job::store::filesystem::{
     metadata_without_symlink, synchronize_directory,
 };
+use crate::library::{DownloadJob, DownloadJobStoreError};
 
 pub(in crate::library::download) fn open_staged_file_for_append(
     models_directory: &Path,
@@ -62,6 +62,25 @@ pub(in crate::library::download) fn open_staged_file_for_append(
         })?;
     synchronize_directory(staged_parent)?;
     Ok(staged_file)
+}
+
+/// Creates the staged copy of every zero-byte file in `download_job`. The
+/// transfer window only schedules files with bytes left to fetch, so an empty
+/// file (an `__init__.py`, say) would otherwise never be created, and
+/// verification would refuse the download as missing it on every attempt
+/// (issue #1896). Creating it is the whole download of such a file.
+pub(in crate::library::download) fn create_empty_staged_files(
+    models_directory: &Path,
+    download_job: &DownloadJob,
+) -> Result<(), DownloadJobStoreError> {
+    let staging_directory = download_job.staging_directory(models_directory);
+    for download_file in download_job.files() {
+        if download_file.expected_bytes() == 0 {
+            let staged_file_path = staging_directory.join(download_file.relative_path());
+            open_staged_file_for_append(models_directory, &staged_file_path, 0)?;
+        }
+    }
+    Ok(())
 }
 
 pub(in crate::library::download) fn create_descendant_directories(

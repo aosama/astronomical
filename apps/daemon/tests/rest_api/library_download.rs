@@ -23,9 +23,14 @@ mod ipc_download_start;
 mod restart;
 mod support;
 
-use support::ScriptedHub;
+use support::{EMPTY_FILE_PATH, ScriptedHub};
 
 const REPOSITORY_ID: &str = "astronomical-test/example-qwen";
+/// Polls for a download state every 10 ms for up to four seconds, inside each
+/// journey's five-second bound. The download journeys run in parallel and each
+/// syncs its files to disk, so a one-second wait was sometimes too short on a
+/// busy machine even though nothing was wrong.
+const STATE_POLL_ATTEMPTS: u32 = 400;
 const REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 const MODEL_CONFIG: &[u8] =
     br#"{"model_type":"qwen3_5_moe","text_config":{"max_position_embeddings":262144}}"#;
@@ -76,7 +81,7 @@ async fn should_download_publish_and_report_ready_through_the_library_rest_journ
         assert_eq!(start_response.status(), StatusCode::ACCEPTED);
 
         let mut ready_catalog = None;
-        for _poll_attempt in 0..100 {
+        for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
             let catalog_response = application
                 .clone()
                 .oneshot(
@@ -183,6 +188,46 @@ async fn should_remain_publishing_until_discovery_validates_the_published_model(
     .expect("discovery failure readiness journey should remain bounded");
 }
 
+/// Issue #1896: an empty file is never fetched, since there is nothing to
+/// fetch, so it must still be created; otherwise verification refused every
+/// attempt as a checksum mismatch.
+#[tokio::test]
+async fn should_download_and_publish_a_repository_with_an_empty_file() {
+    timeout(Duration::from_secs(5), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let application = build_test_application(
+            test_directory.path(),
+            Arc::new(ScriptedHub::with_empty_file()),
+        );
+
+        assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
+        let published_directory = test_directory
+            .path()
+            .join(format!("models/{REPOSITORY_ID}"));
+        for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
+            let download_document = get_download_document(&application).await;
+            assert_ne!(
+                download_document["state"], "failed",
+                "the download failed with {}",
+                download_document["error_code"]
+            );
+            if published_directory.is_dir() && download_document["state"] == "idle" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        let published_empty_file = published_directory.join(EMPTY_FILE_PATH);
+        let empty_file_metadata = std::fs::metadata(&published_empty_file)
+            .expect("the empty file should be published with the model");
+        assert!(empty_file_metadata.is_file());
+        assert_eq!(empty_file_metadata.len(), 0);
+        assert!(published_directory.join("config.json").is_file());
+    })
+    .await
+    .expect("the empty-file REST journey should remain bounded");
+}
+
 #[tokio::test]
 async fn should_pause_survive_a_new_coordinator_and_resume_the_same_rest_job() {
     timeout(Duration::from_secs(5), async {
@@ -226,7 +271,7 @@ async fn should_report_streaming_progress_without_persisting_every_ui_refresh() 
 
         assert_eq!(start_download(&application).await, StatusCode::ACCEPTED);
         let mut live_download = None;
-        for _poll_attempt in 0..100 {
+        for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
             let download_document = get_download_document(&application).await;
             let completed_bytes = download_document["bytes_completed"].as_u64().unwrap_or(0);
             let total_bytes = download_document["bytes_total"].as_u64().unwrap_or(0);
@@ -481,7 +526,7 @@ async fn post_without_body(application: &Router, path: &str) -> axum::response::
 }
 
 async fn wait_for_download_state(application: &Router, expected_state: &str) -> serde_json::Value {
-    for _poll_attempt in 0..100 {
+    for _poll_attempt in 0..STATE_POLL_ATTEMPTS {
         let download_document = get_download_document(application).await;
         if download_document["state"] == expected_state {
             return download_document;

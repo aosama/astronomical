@@ -194,7 +194,7 @@ impl DownloadPayloadTransfer {
         updated_at_unix_millis: u64,
     ) -> Result<ResumeDownloadOutcome, DownloadPayloadTransferError> {
         match self
-            .download_pending_files_within_bounded_window(download_job, updated_at_unix_millis)
+            .download_all_pending_files(download_job, updated_at_unix_millis)
             .await
         {
             Ok(()) => Ok(ResumeDownloadOutcome::Completed),

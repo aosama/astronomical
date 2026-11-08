@@ -34,6 +34,12 @@ impl ScriptedHub {
         Self::with_payload_behavior(Duration::ZERO, true)
     }
 
+    /// A repository that also ships an empty file, as Hugging Face repositories
+    /// with Python tooling often do (`__init__.py`); issue #1896.
+    pub(super) fn with_empty_file() -> Self {
+        Self::with_repository_files(Duration::ZERO, false, true)
+    }
+
     pub(super) fn progressive(payload_delay: Duration) -> Self {
         let mut hub = Self::with_payload_behavior(payload_delay, false);
         hub.publishes_payload_in_two_chunks = true;
@@ -54,7 +60,14 @@ impl ScriptedHub {
     }
 
     fn with_payload_behavior(payload_delay: Duration, corrupt_model_config: bool) -> Self {
-        let config_git_blob_sha1 = git_blob_sha1_hex(MODEL_CONFIG);
+        Self::with_repository_files(payload_delay, corrupt_model_config, false)
+    }
+
+    fn with_repository_files(
+        payload_delay: Duration,
+        corrupt_model_config: bool,
+        includes_empty_file: bool,
+    ) -> Self {
         Self {
             metadata_responses: Mutex::new(
                 [
@@ -73,33 +86,8 @@ impl ScriptedHub {
                     HubHttpResponse::try_new(
                         200,
                         [],
-                        [serde_json::to_vec(&serde_json::json!([
-                            {
-                                "type": "file",
-                                "size": MODEL_CONFIG.len(),
-                                "path": "config.json",
-                                "oid": config_git_blob_sha1
-                            },
-                            {
-                                "type": "file",
-                                "size": TOKENIZER_CONFIG.len(),
-                                "path": "tokenizer.json",
-                                "oid": git_blob_sha1_hex(TOKENIZER_CONFIG)
-                            },
-                            {
-                                "type": "file",
-                                "size": MODEL_WEIGHTS.len(),
-                                "path": "model-00001.safetensors",
-                                "oid": git_blob_sha1_hex(MODEL_WEIGHTS)
-                            },
-                            {
-                                "type": "file",
-                                "size": MODEL_INDEX.len(),
-                                "path": "model.safetensors.index.json",
-                                "oid": git_blob_sha1_hex(MODEL_INDEX)
-                            }
-                        ]))
-                        .expect("tree fixture should serialize")],
+                        [serde_json::to_vec(&repository_tree(includes_empty_file))
+                            .expect("tree fixture should serialize")],
                     )
                     .expect("tree response should be valid"),
                 ]
@@ -111,6 +99,32 @@ impl ScriptedHub {
         }
     }
 }
+
+/// The repository's file listing, as the Hub's tree endpoint returns it.
+fn repository_tree(includes_empty_file: bool) -> serde_json::Value {
+    let mut tree_entries = vec![
+        tree_entry("config.json", MODEL_CONFIG),
+        tree_entry("tokenizer.json", TOKENIZER_CONFIG),
+        tree_entry("model-00001.safetensors", MODEL_WEIGHTS),
+        tree_entry("model.safetensors.index.json", MODEL_INDEX),
+    ];
+    if includes_empty_file {
+        tree_entries.push(tree_entry(EMPTY_FILE_PATH, b""));
+    }
+    serde_json::Value::Array(tree_entries)
+}
+
+fn tree_entry(path: &str, contents: &[u8]) -> serde_json::Value {
+    serde_json::json!({
+        "type": "file",
+        "size": contents.len(),
+        "path": path,
+        "oid": git_blob_sha1_hex(contents)
+    })
+}
+
+/// Where the empty file sits in the `with_empty_file` repository.
+pub(super) const EMPTY_FILE_PATH: &str = "tools/__init__.py";
 
 impl HubTransport for ScriptedHub {
     fn execute(&self, request: HubHttpRequest) -> HubTransportFuture<'_> {
