@@ -108,6 +108,26 @@ fn is_klein_4b_transformer_index(transformer_index: &MfluxWeightIndex) -> bool {
             .contains_key("time_guidance_embed.linear_1.weight")
 }
 
+/// Whether `directory` carries the build's transformer index. Such a folder is
+/// a pipeline root even without `model_index.json`, so scans stop there.
+pub(super) fn has_build_marker(directory: &Path) -> bool {
+    directory
+        .join(FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME)
+        .is_file()
+}
+
+/// Whether `directory` holds this build. An unreadable or foreign index is not
+/// this build, so classification can still fall back to `config.json`.
+pub(super) fn classifies_directory(directory: &Path) -> bool {
+    let Ok(index_bytes) = bounded_artifact_file::read_bounded_nonempty_file(
+        &directory.join(FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME),
+        MAXIMUM_INDEX_BYTES,
+    ) else {
+        return false;
+    };
+    classifies_transformer_index(&index_bytes).unwrap_or(false)
+}
+
 /// Rereads one exact directory as the 4-bit build.
 pub(super) fn verify_model_directory_evidence(
     model_directory: &Path,
@@ -143,9 +163,9 @@ pub(super) fn verify_model_directory_evidence(
     let model_size_bytes = measure_weight_bytes(
         model_directory,
         [
-            ("transformer", &transformer_index),
-            ("text_encoder", &text_encoder_index),
-            ("vae", &vae_index),
+            ("transformer", "transformer", &transformer_index),
+            ("text_encoder", "text encoder", &text_encoder_index),
+            ("vae", "VAE", &vae_index),
         ],
     )?;
     let (provider_model_id, revision) = provenance(model_directory)?;
@@ -219,22 +239,20 @@ fn validate_tokenizer_files(
 /// Bytes on disk across every shard the three indexes name.
 fn measure_weight_bytes(
     model_directory: &Path,
-    component_indexes: [(&'static str, &MfluxWeightIndex); 3],
+    component_indexes: [(&'static str, &'static str, &MfluxWeightIndex); 3],
 ) -> Result<u64, Flux2KleinDirectoryVerificationError> {
     let mut model_size_bytes = 0_u64;
-    for (component_folder, component_index) in component_indexes {
+    for (component_folder, component, component_index) in component_indexes {
         let shard_file_names = component_index.weight_map.values().collect::<BTreeSet<_>>();
         for shard_file_name in shard_file_names {
             if !is_safe_safetensors_path(shard_file_name) {
                 return Err(
-                    Flux2KleinDirectoryVerificationError::InvalidQuantizedWeightIndex {
-                        component: component_folder,
-                    },
+                    Flux2KleinDirectoryVerificationError::InvalidQuantizedWeightIndex { component },
                 );
             }
             let shard_path = model_directory.join(component_folder).join(shard_file_name);
             model_size_bytes = model_size_bytes
-                .checked_add(required_weight_size(&shard_path, component_folder)?)
+                .checked_add(required_weight_size(&shard_path, component)?)
                 .ok_or(Flux2KleinDirectoryVerificationError::ModelSizeOverflow)?;
         }
     }
@@ -242,14 +260,18 @@ fn measure_weight_bytes(
 }
 
 /// The library's provenance record when Astronomical downloaded the build,
-/// else the Hugging Face snapshot the directory sits in.
+/// else the Hugging Face snapshot the directory sits in. A record naming a
+/// repository other than this build's is refused here, because serving would
+/// refuse that provenance at load.
 fn provenance(
     model_directory: &Path,
 ) -> Result<(String, String), Flux2KleinDirectoryVerificationError> {
-    if let Some(library_provenance) =
+    if let Some((provider_model_id, revision)) =
         classified_artifacts::immutable_model_provenance(model_directory)
     {
-        return Ok(library_provenance);
+        return names_this_build(&provider_model_id)
+            .then_some((provider_model_id, revision))
+            .ok_or(Flux2KleinDirectoryVerificationError::UnsupportedProviderModelId);
     }
     let revision = classified_artifacts::immutable_file_revision(
         model_directory,
@@ -257,6 +279,10 @@ fn provenance(
     )
     .ok_or(Flux2KleinDirectoryVerificationError::MissingRevision)?;
     Ok((PROVIDER_MODEL_ID.to_owned(), revision))
+}
+
+fn names_this_build(provider_model_id: &str) -> bool {
+    provider_model_id.rsplit('/').next() == Some(CANONICAL_MODEL_ID)
 }
 
 #[cfg(test)]

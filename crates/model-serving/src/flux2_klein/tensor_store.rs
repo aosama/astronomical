@@ -4,7 +4,7 @@
 //! Two layouts exist: the BF16 Diffusers build, and the 4-bit MLX build whose
 //! names, packing and convolution layout differ (issue #1904). Components ask
 //! this store for tensors by Diffusers name and never see the layout, so the
-//! layout-specific knowledge stays in `mlx_4bit_layout` and this file.
+//! layout-specific knowledge stays in `mlx_4bit_build` and this file.
 
 use std::sync::Arc;
 
@@ -19,8 +19,8 @@ use crate::affine_quantized_linear::{
     AffineQuantizedLinearError,
 };
 
-use super::mlx_4bit_layout::mlx_4bit_tensor_name;
-pub(crate) use super::weight_layout::{
+use super::mlx_4bit_build::{MLX_TO_DIFFUSERS_KERNEL_AXES, mlx_4bit_tensor_name};
+use super::weight_layout::{
     Flux2KleinComponent, Flux2KleinComponentWeightFiles, Flux2KleinWeightLayout,
 };
 
@@ -96,8 +96,8 @@ impl Flux2KleinWeight {
         }
     }
 
-    /// Ensures the stored arrays are materialized, so a retained weight is
-    /// resident before the first request rather than during it.
+    /// The arrays backing this weight, for callers that evaluate retained
+    /// weights so they are resident before the first request.
     pub(crate) fn arrays(&self) -> Vec<&MlxArray> {
         match self {
             Self::Dense(weight) => vec![weight],
@@ -200,7 +200,7 @@ impl Flux2KleinTensorStore {
         }
         let stored_tensor = self.stored(&stored_name)?;
         if self.component == Flux2KleinComponent::Vae && stored_tensor.shape().len() == 4 {
-            return Ok(runtime.transpose_axes(&stored_tensor, &[0, 3, 1, 2])?);
+            return Ok(runtime.transpose_axes(&stored_tensor, &MLX_TO_DIFFUSERS_KERNEL_AXES)?);
         }
         Ok(stored_tensor)
     }
@@ -223,9 +223,16 @@ impl Flux2KleinTensorStore {
             })
     }
 
+    /// The tensor from whichever shard holds it. A shard that cannot produce
+    /// the tensor counts as not holding it, so every failure surfaces as the
+    /// tensor being missing; validation has already proven each name's shard.
     fn lookup(&self, stored_name: &str) -> Option<MlxArray> {
         self.shards
             .iter()
             .find_map(|shard| shard.tensor(stored_name).ok())
     }
 }
+
+#[cfg(test)]
+#[path = "tensor_store_tests.rs"]
+mod tests;

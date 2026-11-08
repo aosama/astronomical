@@ -77,6 +77,8 @@ pub enum Flux2KleinDirectoryVerificationError {
     MissingRevision,
     #[error("FLUX.2 Klein {component} 4-bit weight index is missing, malformed, or not Klein 4B")]
     InvalidQuantizedWeightIndex { component: &'static str },
+    #[error("FLUX.2 Klein provenance names a repository other than the 4-bit build")]
+    UnsupportedProviderModelId,
 }
 
 pub(super) fn classifies_pipeline_index(

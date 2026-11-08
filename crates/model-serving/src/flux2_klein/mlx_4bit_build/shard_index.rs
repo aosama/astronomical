@@ -9,11 +9,12 @@ use serde::Deserialize;
 use crate::affine_quantization_scheme::{AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE};
 use crate::strict_json::DuplicateAwareJsonValue;
 
-use super::super::artifact::Flux2KleinArtifactError;
-use super::super::artifact_text_validation::is_safe_weight_shard_path;
+use super::super::artifact::{Flux2KleinArtifactError, is_safe_weight_shard_path};
 
+/// Unknown fields are ignored, as discovery ignores them, so a newer mflux that
+/// records more metadata stays both discoverable and servable. The fields
+/// below remain required.
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ShardIndexDocument {
     metadata: ShardIndexMetadata,
     weight_map: BTreeMap<String, String>,
@@ -22,7 +23,6 @@ struct ShardIndexDocument {
 /// mflux records the scheme as strings; any other scheme would need different
 /// packed shapes, so it is refused rather than reinterpreted.
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ShardIndexMetadata {
     quantization_level: String,
     quantization_group_size: String,
@@ -126,10 +126,16 @@ mod tests {
     }
 
     #[test]
-    fn should_refuse_an_index_with_unknown_fields_or_no_shards() {
-        let unknown_field = r#"{"metadata":{"quantization_level":"4","quantization_group_size":"64","mflux_version":"1","extra":1},"weight_map":{"a":"0.safetensors"}}"#;
+    fn should_accept_metadata_a_newer_mflux_adds() {
+        let newer_index = r#"{"metadata":{"quantization_level":"4","quantization_group_size":"64","mflux_version":"0.18","quantization_mode":"affine"},"weight_map":{"a":"0.safetensors"},"format":"mlx"}"#;
+        assert!(Mlx4BitShardIndex::parse("i.json", newer_index.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn should_refuse_an_index_without_shards_or_without_the_scheme() {
         let no_shards = r#"{"metadata":{"quantization_level":"4","quantization_group_size":"64","mflux_version":"1"},"weight_map":{}}"#;
-        for malformed in [unknown_field, no_shards] {
+        let no_scheme = r#"{"metadata":{"mflux_version":"1"},"weight_map":{"a":"0.safetensors"}}"#;
+        for malformed in [no_shards, no_scheme] {
             assert!(matches!(
                 Mlx4BitShardIndex::parse("i.json", malformed.as_bytes()),
                 Err(Flux2KleinArtifactError::ArtifactFile { .. })

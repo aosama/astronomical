@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use crate::artifact_validation::{
     RawSafetensorsInventory, RequiredFileProfile, ValidatedRequiredFile, ValidatedWeightsFile,
@@ -14,7 +14,7 @@ use crate::artifact_validation::{
 };
 use crate::{PerformanceAttribution, PerformanceOperation};
 
-use super::mlx_4bit_layout::validate_mlx_4bit_artifact;
+use super::mlx_4bit_build::validate_mlx_4bit_artifact;
 use super::weight_layout::{Flux2KleinComponentWeightFiles, Flux2KleinWeightLayout};
 use super::{
     Flux2KleinPipelineConfig, Flux2KleinSchedulerConfig, Flux2KleinTensorInventory,
@@ -325,4 +325,20 @@ fn transfer_documents(
                 .map_err(|_| Flux2KleinArtifactError::ArtifactFile { file_name })
         })
         .collect()
+}
+
+/// Whether an index names a shard file safely: a relative `.safetensors` path
+/// that stays inside the component folder.
+pub(super) fn is_safe_weight_shard_path(shard_file_name: &str) -> bool {
+    let shard_path = Path::new(shard_file_name);
+    !shard_file_name.is_empty()
+        && !shard_file_name.contains('\\')
+        && !shard_path.is_absolute()
+        && shard_path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+        && shard_path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("safetensors")
 }

@@ -17,15 +17,15 @@ pub(super) struct Flux2KleinChannelLastConv2d {
 impl Flux2KleinChannelLastConv2d {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &Flux2KleinTensorStore,
+        vae_store: &Flux2KleinTensorStore,
         prefix: &str,
         input_channels: usize,
         output_channels: usize,
         kernel_edge: usize,
         padding: i32,
     ) -> Result<Self, Flux2KleinVaeError> {
-        let pytorch_weight = tensors.dense(runtime, &format!("{prefix}.weight"))?;
-        let bias = tensors.dense(runtime, &format!("{prefix}.bias"))?;
+        let pytorch_weight = vae_store.dense(runtime, &format!("{prefix}.weight"))?;
+        let bias = vae_store.dense(runtime, &format!("{prefix}.bias"))?;
         validate_shape(
             prefix,
             "weight",
@@ -44,12 +44,12 @@ impl Flux2KleinChannelLastConv2d {
 
     pub(super) fn load_linear_as_pointwise(
         runtime: &MlxRuntime,
-        tensors: &Flux2KleinTensorStore,
+        vae_store: &Flux2KleinTensorStore,
         prefix: &str,
         channels: usize,
     ) -> Result<Self, Flux2KleinVaeError> {
-        let linear_weight = tensors.dense(runtime, &format!("{prefix}.weight"))?;
-        let bias = tensors.dense(runtime, &format!("{prefix}.bias"))?;
+        let linear_weight = vae_store.dense(runtime, &format!("{prefix}.weight"))?;
+        let bias = vae_store.dense(runtime, &format!("{prefix}.bias"))?;
         validate_shape(prefix, "weight", &linear_weight, &[channels, channels])?;
         validate_shape(prefix, "bias", &bias, &[channels])?;
         let channels_i32 = as_i32(channels, "attention channel count")?;

@@ -195,6 +195,14 @@ measure-paged-prefill = "run -p xtask -- test-run --package astronomical-accepta
 # interval pair; each run prints one `[graph-submission-interval]` line.
 measure-paging-submission-intervals = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter should_measure_serving_rates_for_the_configured_graph_submission_intervals"
 
+# FLUX.2 Klein REST journeys on real models, for both the BF16 build and the
+# 4-bit MLX build (mlx-community/flux2-klein-4b-4bit): generation and exact
+# repetition, cancellation and reuse, initial noise, and the chat swap. Each
+# journey finds its build through the Development configuration's model
+# directories and fails at discovery when that build is not installed; append
+# --configuration PATH with reference_artifact_path to compare the BF16 image
+# with the independent reference.
+test-flux2-klein-rest = "run -p xtask -- test-run --package astronomical-acceptance --features serving-acceptance --test chat_serving --filter flux2_klein_rest --ignored"
 # Prism-Hadamard lanes: real-pack contracts and upstream greedy parity,
 # performance tiers, serving throughput, and real-worker chat; append
 # --configuration PATH containing model_directory and, for parity,

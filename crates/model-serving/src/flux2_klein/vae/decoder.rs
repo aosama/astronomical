@@ -56,22 +56,22 @@ impl Flux2KleinVaeDecoder {
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Flux2KleinVaeError> {
         let file_read_metrics = performance_attribution.positional_file_read_metrics();
-        let tensors = performance_attribution
+        let vae_store = performance_attribution
             .measure_operation(PerformanceOperation::ImageVaeComponentMapping, |_| {
                 map_component_weight_files(&vae_weight_files, runtime, file_read_metrics.as_ref())
             })?;
         performance_attribution
             .measure_operation(PerformanceOperation::ImageVaeComponentLoading, |_| {
-                Self::bind(runtime, &tensors)
+                Self::bind(runtime, &vae_store)
             })
     }
 
     fn bind(
         runtime: &MlxRuntime,
-        tensors: &Flux2KleinTensorStore,
+        vae_store: &Flux2KleinTensorStore,
     ) -> Result<Self, Flux2KleinVaeError> {
-        let running_mean = tensors.dense(runtime, "bn.running_mean")?;
-        let running_variance = tensors.dense(runtime, "bn.running_var")?;
+        let running_mean = vae_store.dense(runtime, "bn.running_mean")?;
+        let running_variance = vae_store.dense(runtime, "bn.running_var")?;
         convolution::validate_shape(
             "bn",
             "running_mean",
@@ -90,7 +90,7 @@ impl Flux2KleinVaeDecoder {
             running_variance,
             post_quant_conv: Flux2KleinChannelLastConv2d::load(
                 runtime,
-                tensors,
+                vae_store,
                 "post_quant_conv",
                 FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT,
                 FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT,
@@ -99,7 +99,7 @@ impl Flux2KleinVaeDecoder {
             )?,
             conv_in: Flux2KleinChannelLastConv2d::load(
                 runtime,
-                tensors,
+                vae_store,
                 "decoder.conv_in",
                 FLUX2_KLEIN_VAE_LATENT_CHANNEL_COUNT,
                 DECODER_CHANNELS[0],
@@ -108,39 +108,39 @@ impl Flux2KleinVaeDecoder {
             )?,
             middle_resnet_before_attention: Flux2KleinVaeResnetBlock::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{middle_prefix}.resnets.0"),
                 DECODER_CHANNELS[0],
                 DECODER_CHANNELS[0],
             )?,
             middle_attention: Flux2KleinVaeMiddleAttention::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{middle_prefix}.attentions.0"),
                 DECODER_CHANNELS[0],
             )?,
             middle_resnet_after_attention: Flux2KleinVaeResnetBlock::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{middle_prefix}.resnets.1"),
                 DECODER_CHANNELS[0],
                 DECODER_CHANNELS[0],
             )?,
             up_blocks: [
-                Flux2KleinVaeUpBlock::load(runtime, tensors, 0, 512, 512, true)?,
-                Flux2KleinVaeUpBlock::load(runtime, tensors, 1, 512, 512, true)?,
-                Flux2KleinVaeUpBlock::load(runtime, tensors, 2, 512, 256, true)?,
-                Flux2KleinVaeUpBlock::load(runtime, tensors, 3, 256, 128, false)?,
+                Flux2KleinVaeUpBlock::load(runtime, vae_store, 0, 512, 512, true)?,
+                Flux2KleinVaeUpBlock::load(runtime, vae_store, 1, 512, 512, true)?,
+                Flux2KleinVaeUpBlock::load(runtime, vae_store, 2, 512, 256, true)?,
+                Flux2KleinVaeUpBlock::load(runtime, vae_store, 3, 256, 128, false)?,
             ],
             output_norm: Flux2KleinGroupNorm::load(
                 runtime,
-                tensors,
+                vae_store,
                 "decoder.conv_norm_out",
                 DECODER_CHANNELS[3],
             )?,
             conv_out: Flux2KleinChannelLastConv2d::load(
                 runtime,
-                tensors,
+                vae_store,
                 "decoder.conv_out",
                 DECODER_CHANNELS[3],
                 OUTPUT_CHANNELS,

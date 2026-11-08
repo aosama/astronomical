@@ -19,7 +19,7 @@ pub(super) struct Flux2KleinVaeResnetBlock {
 impl Flux2KleinVaeResnetBlock {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &Flux2KleinTensorStore,
+        vae_store: &Flux2KleinTensorStore,
         prefix: &str,
         input_channels: usize,
         output_channels: usize,
@@ -27,13 +27,13 @@ impl Flux2KleinVaeResnetBlock {
         Ok(Self {
             norm1: Flux2KleinGroupNorm::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.norm1"),
                 input_channels,
             )?,
             conv1: Flux2KleinChannelLastConv2d::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.conv1"),
                 input_channels,
                 output_channels,
@@ -42,13 +42,13 @@ impl Flux2KleinVaeResnetBlock {
             )?,
             norm2: Flux2KleinGroupNorm::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.norm2"),
                 output_channels,
             )?,
             conv2: Flux2KleinChannelLastConv2d::load(
                 runtime,
-                tensors,
+                vae_store,
                 &format!("{prefix}.conv2"),
                 output_channels,
                 output_channels,
@@ -59,7 +59,7 @@ impl Flux2KleinVaeResnetBlock {
                 .then(|| {
                     Flux2KleinChannelLastConv2d::load(
                         runtime,
-                        tensors,
+                        vae_store,
                         &format!("{prefix}.conv_shortcut"),
                         input_channels,
                         output_channels,

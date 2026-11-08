@@ -21,7 +21,7 @@ pub(super) struct Flux2KleinGroupNorm {
 impl Flux2KleinGroupNorm {
     pub(super) fn load(
         runtime: &MlxRuntime,
-        tensors: &Flux2KleinTensorStore,
+        vae_store: &Flux2KleinTensorStore,
         prefix: &str,
         channels: usize,
     ) -> Result<Self, Flux2KleinVaeError> {
@@ -30,8 +30,8 @@ impl Flux2KleinGroupNorm {
                 "GroupNorm channels must be divisible by 32",
             ));
         }
-        let weight = tensors.dense(runtime, &format!("{prefix}.weight"))?;
-        let bias = tensors.dense(runtime, &format!("{prefix}.bias"))?;
+        let weight = vae_store.dense(runtime, &format!("{prefix}.weight"))?;
+        let bias = vae_store.dense(runtime, &format!("{prefix}.bias"))?;
         convolution::validate_shape(prefix, "weight", &weight, &[channels])?;
         convolution::validate_shape(prefix, "bias", &bias, &[channels])?;
         Ok(Self {

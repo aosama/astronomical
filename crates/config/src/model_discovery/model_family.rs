@@ -4,12 +4,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use thiserror::Error;
 
-use super::flux2_klein_mlx_4bit::{
-    FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME, classifies_transformer_index,
-};
-use super::{
-    bounded_artifact_file, flux2_klein, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
-};
+use super::flux2_klein_mlx_4bit;
+use super::{flux2_klein, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -93,28 +89,19 @@ pub enum ModelFamilyClassificationError {
         actual_bytes: u64,
         maximum_bytes: u64,
     },
-    #[error("failed to read the transformer 4-bit weight index, or it is empty or oversized")]
-    ReadQuantizedWeightIndex { model_directory: PathBuf },
-    #[error("failed to parse the transformer 4-bit weight index: {source}")]
-    ParseQuantizedWeightIndex {
-        model_directory: PathBuf,
-        #[source]
-        source: serde_json::Error,
-    },
 }
 
-/// The mflux transformer index is a few hundred names; anything near this is not one.
-const MAXIMUM_QUANTIZED_WEIGHT_INDEX_BYTES: u64 = 4 * 1024 * 1024;
-
-/// Reads only model_type from a selected artifact directory.
+/// Classifies a selected artifact directory from the one file its family is
+/// known by. The order is the download preflight's too: the pipeline index,
+/// then the 4-bit FLUX.2 Klein transformer index, then `config.json`.
 pub fn classify_model_directory(
     model_directory: &Path,
 ) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
     if model_directory.join("model_index.json").is_file() {
         return classify_pipeline_directory(model_directory);
     }
-    if let Some(model_family) = classify_quantized_pipeline_directory(model_directory)? {
-        return Ok(Some(model_family));
+    if flux2_klein_mlx_4bit::classifies_directory(model_directory) {
+        return Ok(Some(ModelFamily::Flux2Klein));
     }
     classify_config_directory(model_directory)
 }
@@ -228,41 +215,13 @@ fn classify_pipeline_directory(
 /// pipeline index. Its component folders are never separate models.
 pub(super) fn is_pipeline_root(directory: &Path) -> bool {
     directory.join("model_index.json").is_file()
-        || directory
-            .join(FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME)
-            .is_file()
+        || flux2_klein_mlx_4bit::has_build_marker(directory)
 }
 
 /// Whether `directory` carries the file a model family classifies from, so a
 /// scan stops there instead of descending into it.
 pub(super) fn has_model_root_marker(directory: &Path) -> bool {
     directory.join("config.json").is_file() || is_pipeline_root(directory)
-}
-
-/// A quantized Diffusers tree without a pipeline index (the 4-bit FLUX.2 Klein
-/// build) is recognized by its transformer weight index.
-fn classify_quantized_pipeline_directory(
-    model_directory: &Path,
-) -> Result<Option<ModelFamily>, ModelFamilyClassificationError> {
-    let index_path = model_directory.join(FLUX2_KLEIN_MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME);
-    if !index_path.is_file() {
-        return Ok(None);
-    }
-    let index_bytes = bounded_artifact_file::read_bounded_nonempty_file(
-        &index_path,
-        MAXIMUM_QUANTIZED_WEIGHT_INDEX_BYTES,
-    )
-    .map_err(
-        |_| ModelFamilyClassificationError::ReadQuantizedWeightIndex {
-            model_directory: model_directory.to_path_buf(),
-        },
-    )?;
-    classify_mflux_transformer_index_bytes(&index_bytes).map_err(|source| {
-        ModelFamilyClassificationError::ParseQuantizedWeightIndex {
-            model_directory: model_directory.to_path_buf(),
-            source,
-        }
-    })
 }
 
 /// Classifies an mflux transformer weight index without a file-system read, so
@@ -273,7 +232,10 @@ fn classify_quantized_pipeline_directory(
 pub fn classify_mflux_transformer_index_bytes(
     index_bytes: &[u8],
 ) -> Result<Option<ModelFamily>, serde_json::Error> {
-    Ok(classifies_transformer_index(index_bytes)?.then_some(ModelFamily::Flux2Klein))
+    Ok(
+        flux2_klein_mlx_4bit::classifies_transformer_index(index_bytes)?
+            .then_some(ModelFamily::Flux2Klein),
+    )
 }
 
 /// Classifies a Diffusers pipeline index document without a file-system read, reusing the exact

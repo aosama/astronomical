@@ -263,6 +263,7 @@ struct TextEncoderDocument {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Flux2KleinTextEncoderConfig {
     conditioning_width: usize,
+    decoder_layer_count: usize,
 }
 
 impl Flux2KleinTextEncoderConfig {
@@ -316,11 +317,16 @@ impl Flux2KleinTextEncoderConfig {
         require_checks("text_encoder/config.json", &checks)?;
         Ok(Self {
             conditioning_width: document.hidden_size * HIDDEN_STATE_TAPS.len(),
+            decoder_layer_count: document.num_hidden_layers,
         })
     }
 
     pub const fn hidden_state_taps(&self) -> &[usize; 3] {
         &HIDDEN_STATE_TAPS
+    }
+    /// Decoder layers the checkpoint stores; conditioning executes fewer.
+    pub const fn decoder_layer_count(&self) -> usize {
+        self.decoder_layer_count
     }
     pub const fn conditioning_width(&self) -> usize {
         self.conditioning_width
@@ -359,6 +365,7 @@ struct VaeDocument {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Flux2KleinVaeConfig {
     latent_channel_count: usize,
+    up_block_count: usize,
 }
 
 impl Flux2KleinVaeConfig {
@@ -400,10 +407,14 @@ impl Flux2KleinVaeConfig {
         require_checks("vae/config.json", &checks)?;
         Ok(Self {
             latent_channel_count: document.latent_channels,
+            up_block_count: document.up_block_types.len(),
         })
     }
     pub const fn latent_channel_count(&self) -> usize {
         self.latent_channel_count
+    }
+    pub const fn up_block_count(&self) -> usize {
+        self.up_block_count
     }
 }
 

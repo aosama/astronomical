@@ -59,6 +59,81 @@ fn should_classify_the_4bit_tree_as_flux2_klein_without_a_pipeline_index() {
 }
 
 #[test]
+fn should_classify_by_the_4bit_index_before_config_json() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    write_mlx_4bit_artifact(temporary_directory.path());
+    write_json(
+        &temporary_directory.path().join("config.json"),
+        json!({ "model_type": "qwen3_5" }),
+    );
+
+    assert_eq!(
+        classify_model_directory(temporary_directory.path())
+            .expect("the 4-bit tree should classify"),
+        Some(ModelFamily::Flux2Klein)
+    );
+}
+
+#[test]
+fn should_fall_back_to_config_json_when_the_transformer_index_is_not_the_4bit_build() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    write_json(
+        &temporary_directory
+            .path()
+            .join("transformer/model.safetensors.index.json"),
+        json!({ "weight_map": {} }),
+    );
+    write_json(
+        &temporary_directory.path().join("config.json"),
+        json!({ "model_type": "qwen3_5" }),
+    );
+
+    assert_eq!(
+        classify_model_directory(temporary_directory.path()).expect("config.json should classify"),
+        Some(ModelFamily::Qwen3_5)
+    );
+}
+
+#[test]
+fn should_stop_the_scan_at_a_4bit_root_that_fails_verification() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    let model_directory = temporary_directory.path().join("flux2-klein-4b-4bit");
+    write_mlx_4bit_artifact(&model_directory);
+    invalidate_artifact(&model_directory, InvalidArtifact::Klein9BBlocks);
+    write_json(
+        &model_directory.join("text_encoder/config.json"),
+        json!({ "model_type": "qwen3" }),
+    );
+
+    let directory_scans = super::discover_configured_models(&temporary_directory);
+
+    assert!(
+        directory_scans[0].discovered_models.is_empty(),
+        "neither the refused build nor its text encoder folder may be advertised"
+    );
+}
+
+#[test]
+fn should_discover_both_builds_side_by_side_under_distinct_ids() {
+    let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
+    super::flux2_klein::write_executable_flux2_klein_artifact(
+        &temporary_directory.path().join("FLUX.2-klein-4B"),
+    );
+    write_mlx_4bit_artifact(&temporary_directory.path().join("flux2-klein-4b-4bit"));
+
+    let directory_scans = super::discover_configured_models(&temporary_directory);
+    let discovered_model_ids = directory_scans[0]
+        .discovered_models
+        .iter()
+        .map(|discovered_model| discovered_model.model_id.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(discovered_model_ids.len(), 2);
+    assert!(discovered_model_ids.contains(&"FLUX.2-klein-4B"));
+    assert!(discovered_model_ids.contains(&CANONICAL_MODEL_ID));
+}
+
+#[test]
 fn should_take_the_revision_from_the_hugging_face_snapshot_folder() {
     let temporary_directory = tempfile::tempdir().expect("temporary directory should be created");
     let snapshot_directory = temporary_directory
@@ -107,11 +182,15 @@ fn should_reject_a_4bit_tree_that_does_not_prove_the_reviewed_build() {
         ),
         (
             InvalidArtifact::MissingShard,
-            Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component: "vae" },
+            Flux2KleinDirectoryVerificationError::MissingOrInvalidWeightFile { component: "VAE" },
         ),
         (
             InvalidArtifact::NoRevision,
             Flux2KleinDirectoryVerificationError::MissingRevision,
+        ),
+        (
+            InvalidArtifact::ForeignProvider,
+            Flux2KleinDirectoryVerificationError::UnsupportedProviderModelId,
         ),
     ] {
         let temporary_directory =
@@ -136,6 +215,7 @@ enum InvalidArtifact {
     MissingTokenizer,
     MissingShard,
     NoRevision,
+    ForeignProvider,
 }
 
 fn invalidate_artifact(model_directory: &Path, invalid_artifact: InvalidArtifact) {
@@ -159,6 +239,13 @@ fn invalidate_artifact(model_directory: &Path, invalid_artifact: InvalidArtifact
         InvalidArtifact::NoRevision => {
             remove(model_directory, ".astronomical-library-provenance.json");
         }
+        InvalidArtifact::ForeignProvider => fs::write(
+            model_directory.join(".astronomical-library-provenance.json"),
+            format!(
+                "{{\"schema_version\":1,\"provider_model_id\":\"someone/klein-mirror\",\"revision\":\"{REVIEWED_REVISION}\"}}"
+            ),
+        )
+        .expect("the Library provenance should be rewritten"),
     }
 }
 

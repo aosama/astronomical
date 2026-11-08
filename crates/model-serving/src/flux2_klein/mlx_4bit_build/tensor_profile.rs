@@ -26,6 +26,7 @@ use crate::artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDe
 use super::super::artifact::Flux2KleinArtifactError;
 use super::super::inventory::{Flux2KleinTensorDescriptor, public_descriptor};
 use super::super::weight_layout::Flux2KleinComponent;
+use super::kernel_layout::diffusers_kernel_shape;
 use super::mlx_4bit_tensor_name;
 use super::shard_index::Mlx4BitShardIndex;
 
@@ -168,10 +169,10 @@ fn dense_logical_tensor(
             tensor_name: diffusers_name.to_owned(),
         });
     }
-    if let (Flux2KleinComponent::Vae, &[output, kernel_height, kernel_width, input]) =
-        (component, stored.descriptor.shape.as_slice())
+    if component == Flux2KleinComponent::Vae
+        && let Some(diffusers_shape) = diffusers_kernel_shape(&stored.descriptor.shape)
     {
-        stored.descriptor.shape = vec![output, input, kernel_height, kernel_width];
+        stored.descriptor.shape = diffusers_shape;
     }
     diffusers_name.clone_into(&mut stored.descriptor.tensor_name);
     Ok(stored)
@@ -188,7 +189,7 @@ fn quantized_logical_tensor(
     let [output_width, input_width] =
         packed_projection_widths(&weight.descriptor, &scales.descriptor, &biases.descriptor)
             .ok_or_else(|| packing_error(component, diffusers_name))?;
-    let dequantizes_at_load = component == Flux2KleinComponent::Vae;
+    let dequantizes_at_load = !component.keeps_projections_packed();
     let resident_payload_bytes = if !dequantizes_at_load {
         checked_payload_sum(&[
             weight.descriptor.tensor_payload_bytes,

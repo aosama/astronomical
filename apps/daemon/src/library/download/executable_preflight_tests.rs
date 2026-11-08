@@ -203,6 +203,49 @@ async fn should_reject_a_quantized_pipeline_that_is_not_klein_4b_before_transfer
 }
 
 #[tokio::test]
+async fn should_reject_a_malformed_4bit_transformer_index_before_transfer() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            quantized_pipeline_tree_response(),
+            json_response(serde_json::json!(["not", "an", "index"])),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey
+            .start_download_and_await_failure()
+            .await
+            .expect_public_error(DownloadJobPublicErrorCode::ModelNotExecutable);
+
+        assert_eq!(transport.payload_request_count(), 0);
+    })
+    .await
+    .expect("malformed 4-bit index journey should remain bounded");
+}
+
+#[tokio::test]
+async fn should_reject_a_manifest_with_no_classifiable_document() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let transport = Arc::new(MetadataCountingTransport::new([
+            repository_metadata_response(),
+            tree_response(serde_json::json!([
+                {"type":"file","size":7,"path":"weights.safetensors","oid":GIT_BLOB_SHA1}
+            ])),
+        ]));
+        let journey = DownloadJourney::new(transport.clone()).await;
+
+        journey
+            .start_download_and_await_failure()
+            .await
+            .expect_public_error(DownloadJobPublicErrorCode::ModelNotExecutable);
+
+        assert_eq!(transport.payload_request_count(), 0);
+    })
+    .await
+    .expect("unclassifiable manifest journey should remain bounded");
+}
+
+#[tokio::test]
 async fn should_surface_a_gate_retrieval_failure_as_a_transport_failure() {
     tokio::time::timeout(Duration::from_secs(5), async {
         // The response queue runs out at the gate's config.json fetch, which is a transport

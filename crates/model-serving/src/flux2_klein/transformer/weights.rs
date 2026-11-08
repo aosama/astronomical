@@ -6,9 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::flux2_klein::tensor_store::{
-    Flux2KleinComponentWeightFiles, Flux2KleinTensorStore, Flux2KleinWeight,
-    map_component_weight_files,
+    Flux2KleinTensorStore, Flux2KleinWeight, map_component_weight_files,
 };
+use crate::flux2_klein::weight_layout::Flux2KleinComponentWeightFiles;
 
 use super::{Flux2KleinTransformerError, Flux2KleinTransformerGeometry};
 use mlx_c_rust::{MlxArray, MlxDtype};
@@ -60,35 +60,29 @@ impl TransformerTensorSource {
     }
 
     /// Maps one block's weights afresh from the files for a single operation,
-    /// so a block that is not retained costs memory only while it runs.
+    /// so a block that is not retained costs memory only while it runs. The
+    /// mapping clones file descriptors once per operation, inside
+    /// `map_component_weight_files`, and nowhere else.
     fn operation_local_weights(
         &self,
         runtime: &MlxRuntime,
         block_weight_shapes: &[(String, Vec<usize>)],
     ) -> Result<BTreeMap<String, Flux2KleinWeight>, Flux2KleinTransformerError> {
-        let operation_store;
-        let lookup_source = match self {
+        let operation_store = match self {
             Self::Descriptor {
                 streaming_files, ..
-            } => {
-                operation_store = TransformerTensorSource::Descriptor {
-                    retained_store: map_component_weight_files(streaming_files, runtime, None)?,
-                    streaming_files: streaming_files
-                        .try_clone()
-                        .map_err(|source| Flux2KleinTransformerError::DescriptorClone { source })?,
-                };
-                &operation_store
-            }
-            Self::Injected(_) => self,
+            } => Some(map_component_weight_files(streaming_files, runtime, None)?),
+            Self::Injected(_) => None,
         };
-        block_weight_shapes
-            .iter()
-            .map(|(tensor_name, logical_shape)| {
-                lookup_source
-                    .weight(tensor_name, logical_shape)
-                    .map(|weight| (tensor_name.clone(), weight))
-            })
-            .collect()
+        let mut block_weights = BTreeMap::new();
+        for (tensor_name, logical_shape) in block_weight_shapes {
+            let block_weight = match &operation_store {
+                Some(store) => store.weight(tensor_name, logical_shape)?,
+                None => self.weight(tensor_name, logical_shape)?,
+            };
+            block_weights.insert(tensor_name.clone(), block_weight);
+        }
+        Ok(block_weights)
     }
 }
 
@@ -107,7 +101,7 @@ impl Flux2KleinBlockWeights<'_> {
         &self,
         tensor_name: &str,
     ) -> Result<&MlxArray, Flux2KleinTransformerError> {
-        dense_global_weight(tensor_name, self.linear(tensor_name))
+        dense_weight_of_lookup(tensor_name, self.linear(tensor_name))
     }
 
     /// A projection of this block, dense or 4-bit.
@@ -260,7 +254,7 @@ impl Flux2KleinTransformerWeights {
 
     /// A dense global tensor, such as a norm scale.
     pub fn tensor(&self, tensor_name: &str) -> Result<&MlxArray, Flux2KleinTransformerError> {
-        dense_global_weight(tensor_name, self.linear(tensor_name))
+        dense_weight_of_lookup(tensor_name, self.linear(tensor_name))
     }
 
     /// A global projection, dense or 4-bit.
@@ -413,10 +407,8 @@ fn weight_payload_bytes(weight: &Flux2KleinWeight) -> Result<u64, Flux2KleinTran
     Ok(payload_bytes)
 }
 
-/// The dense array behind `tensor_name`; a norm scale is never quantized, so a
-/// 4-bit weight here means the artifact does not match the engine.
-/// The dense array of a looked-up global weight; a missing weight stays missing.
-fn dense_global_weight<'weight>(
+/// The dense array behind a looked-up weight; a missing weight stays missing.
+fn dense_weight_of_lookup<'weight>(
     tensor_name: &str,
     looked_up_weight: Result<&'weight Flux2KleinWeight, Flux2KleinTransformerError>,
 ) -> Result<&'weight MlxArray, Flux2KleinTransformerError> {
@@ -426,6 +418,8 @@ fn dense_global_weight<'weight>(
     }
 }
 
+/// The dense array behind `tensor_name`; a norm scale is never quantized, so a
+/// 4-bit weight here means the artifact does not match the engine.
 fn dense_weight<'weight>(
     tensor_name: &str,
     weight: &'weight Flux2KleinWeight,

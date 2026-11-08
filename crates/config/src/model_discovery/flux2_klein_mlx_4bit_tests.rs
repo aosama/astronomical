@@ -68,3 +68,26 @@ fn should_not_classify_an_index_without_mflux_metadata() {
 fn should_report_bytes_that_are_not_json() {
     assert!(classifies_transformer_index(b"not json").is_err());
 }
+
+#[test]
+fn should_not_classify_an_index_without_the_flattened_timestep_embedder() {
+    let mut index = transformer_index("4", 5, 20);
+    index["weight_map"]
+        .as_object_mut()
+        .expect("the weight map should be an object")
+        .remove("time_guidance_embed.linear_1.weight");
+    assert!(!classifies(&index));
+}
+
+#[test]
+fn should_not_classify_an_index_with_a_block_beyond_klein_4b() {
+    let mut index = transformer_index("4", 5, 20);
+    index["weight_map"]
+        .as_object_mut()
+        .expect("the weight map should be an object")
+        .insert(
+            "transformer_blocks.7.attn.to_q.weight".into(),
+            json!("0.safetensors"),
+        );
+    assert!(!classifies(&index));
+}

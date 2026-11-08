@@ -1,4 +1,4 @@
-//! Physical transformer and VAE inventory contracts with retained source intervals.
+//! Transformer, text encoder and VAE inventory contracts with retained source intervals.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,7 +8,13 @@ use crate::artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDe
 
 use super::{Flux2KleinArtifactError, Flux2KleinTransformerConfig};
 
-/// One exact physical tensor source interval for future native loading.
+/// One tensor of a validated inventory, named as in the Diffusers build.
+///
+/// In the BF16 build this is one exact physical tensor and its source
+/// interval. In the 4-bit build it is one logical tensor: a packed projection's
+/// `weight`, `scales` and `biases` are described once, with the logical
+/// `[out, in]` shape, the payload the engine keeps resident (see
+/// `mlx_4bit_build::tensor_profile`), and the interval of the packed `weight`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Flux2KleinTensorDescriptor {
     source_file_name: String,

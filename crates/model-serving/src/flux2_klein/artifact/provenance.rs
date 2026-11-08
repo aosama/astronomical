@@ -1,6 +1,6 @@
 //! Which published builds an artifact may claim to be, and their license.
 
-use super::super::mlx_4bit_layout::{
+use super::super::mlx_4bit_build::{
     FLUX2_KLEIN_MLX_4BIT_MODEL_ID, FLUX2_KLEIN_MLX_4BIT_PROVIDER_MODEL_ID,
     FLUX2_KLEIN_MLX_4BIT_REVISION, identifies_mlx_4bit_build,
 };

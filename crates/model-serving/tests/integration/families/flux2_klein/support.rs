@@ -19,10 +19,10 @@ pub(super) struct SyntheticFlux2KleinArtifact {
 }
 
 #[derive(Clone)]
-struct SyntheticTensor {
-    name: String,
-    dtype: &'static str,
-    shape: Vec<usize>,
+pub(super) struct SyntheticTensor {
+    pub(super) name: String,
+    pub(super) dtype: &'static str,
+    pub(super) shape: Vec<usize>,
 }
 
 impl SyntheticFlux2KleinArtifact {
@@ -175,7 +175,7 @@ impl SyntheticFlux2KleinArtifact {
     }
 }
 
-fn transformer_tensors() -> Vec<SyntheticTensor> {
+pub(super) fn transformer_tensors() -> Vec<SyntheticTensor> {
     Flux2KleinTransformerConfig::parse(&transformer_config_json())
         .expect("the official transformer fixture config should parse")
         .expected_weight_shapes()
@@ -187,7 +187,7 @@ fn transformer_tensors() -> Vec<SyntheticTensor> {
         .collect()
 }
 
-fn vae_tensors() -> Vec<SyntheticTensor> {
+pub(super) fn vae_tensors() -> Vec<SyntheticTensor> {
     let mut tensors = vec![
         typed_tensor("bn.num_batches_tracked", "I64", vec![]),
         tensor("bn.running_mean", vec![4]),
@@ -267,7 +267,7 @@ fn tensor(name: &str, shape: Vec<usize>) -> SyntheticTensor {
     typed_tensor(name, "BF16", shape)
 }
 
-fn typed_tensor(name: &str, dtype: &'static str, shape: Vec<usize>) -> SyntheticTensor {
+pub(super) fn typed_tensor(name: &str, dtype: &'static str, shape: Vec<usize>) -> SyntheticTensor {
     SyntheticTensor {
         name: name.to_owned(),
         dtype,
@@ -295,7 +295,7 @@ fn safetensors_bytes(tensors: &[SyntheticTensor]) -> Vec<u8> {
     file_bytes
 }
 
-fn write_sparse_safetensors(
+pub(super) fn write_sparse_safetensors(
     model_directory: &Path,
     relative_name: &str,
     tensors: &[SyntheticTensor],
@@ -328,13 +328,16 @@ impl SyntheticTensor {
     }
 
     fn payload_bytes(&self) -> usize {
-        let bytes_per_element = match self.dtype {
-            "BF16" => 2,
-            "F16" => 2,
-            "I64" => 8,
-            _ => panic!("the synthetic tensor dtype must have a byte width"),
-        };
-        self.shape.iter().product::<usize>() * bytes_per_element
+        self.shape.iter().product::<usize>() * dtype_byte_width(self.dtype)
+    }
+}
+
+fn dtype_byte_width(dtype: &str) -> usize {
+    match dtype {
+        "BF16" | "F16" => 2,
+        "U32" | "F32" => 4,
+        "I64" => 8,
+        _ => panic!("the synthetic tensor dtype must have a byte width"),
     }
 }
 
@@ -342,7 +345,7 @@ fn apache_license_bytes() -> Vec<u8> {
     b"Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/\nEND OF TERMS AND CONDITIONS\n".to_vec()
 }
 
-fn write(model_directory: &Path, relative_name: &str, bytes: &[u8]) {
+pub(super) fn write(model_directory: &Path, relative_name: &str, bytes: &[u8]) {
     fs::write(model_directory.join(relative_name), bytes)
         .expect("the synthetic artifact file should be written");
 }

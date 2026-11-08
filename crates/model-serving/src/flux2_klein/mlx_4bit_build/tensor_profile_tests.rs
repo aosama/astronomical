@@ -6,7 +6,7 @@ use super::{ExpectedTensors, validate_component_tensors};
 use crate::artifact_validation::{RawSafetensorsInventory, RawSafetensorsTensorDescriptor};
 use crate::flux2_klein::artifact::Flux2KleinArtifactError;
 use crate::flux2_klein::inventory::Flux2KleinTensorDescriptor;
-use crate::flux2_klein::mlx_4bit_layout::shard_index::Mlx4BitShardIndex;
+use crate::flux2_klein::mlx_4bit_build::shard_index::Mlx4BitShardIndex;
 use crate::flux2_klein::weight_layout::Flux2KleinComponent;
 
 const SHARD_FILE_NAME: &str = "0.safetensors";
@@ -306,5 +306,52 @@ fn should_refuse_a_tensor_the_index_places_in_another_shard() {
     assert!(matches!(
         refusal,
         Err(Flux2KleinArtifactError::ShardIndexDisagreement { .. })
+    ));
+}
+
+#[test]
+fn should_refuse_a_tensor_stored_in_two_shards() {
+    let index = Mlx4BitShardIndex {
+        weight_map: BTreeMap::from([("proj_out.weight".to_owned(), SHARD_FILE_NAME.to_owned())]),
+        shard_file_names: vec![SHARD_FILE_NAME.to_owned()],
+    };
+    let shard_inventory = || RawSafetensorsInventory {
+        tensor_descriptors: vec![stored("proj_out.weight", Dtype::BF16, &[128, 3_072])],
+        shard_payload_bytes: 0,
+    };
+
+    let refusal = validate_component_tensors(
+        Flux2KleinComponent::Transformer,
+        &expected(&[("proj_out.weight", None)]),
+        &index,
+        vec![
+            (SHARD_FILE_NAME.to_owned(), shard_inventory()),
+            (SHARD_FILE_NAME.to_owned(), shard_inventory()),
+        ],
+    );
+
+    assert!(matches!(
+        refusal,
+        Err(Flux2KleinArtifactError::ShardIndexDisagreement { .. })
+    ));
+}
+
+#[test]
+fn should_refuse_a_packed_projection_with_no_input_width() {
+    let stored_tensors = vec![
+        stored("proj_out.weight", Dtype::U32, &[128, 0]),
+        stored("proj_out.scales", Dtype::BF16, &[128, 0]),
+        stored("proj_out.biases", Dtype::BF16, &[128, 0]),
+    ];
+
+    let refusal = validate(
+        Flux2KleinComponent::Transformer,
+        &expected(&[("proj_out.weight", None)]),
+        stored_tensors,
+    );
+
+    assert!(matches!(
+        refusal,
+        Err(Flux2KleinArtifactError::QuantizedTensorPacking { .. })
     ));
 }

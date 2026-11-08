@@ -1,7 +1,7 @@
 //! Strict text-encoder sidecar and shard validation for the official artifact.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Component, Path};
+use std::path::Path;
 
 use ::safetensors::Dtype;
 use serde::Deserialize;
@@ -13,7 +13,7 @@ use crate::artifact_validation::{
 use crate::strict_json::DuplicateAwareJsonValue;
 
 use super::Flux2KleinTensorInventory;
-use super::artifact::Flux2KleinArtifactError;
+use super::artifact::{Flux2KleinArtifactError, is_safe_weight_shard_path};
 use super::inventory;
 
 pub(super) const TEXT_INDEX_FILE_NAME: &str = "text_encoder/model.safetensors.index.json";
@@ -234,20 +234,6 @@ fn validate_text_shards(
             up_block_count: 0,
         },
     ))
-}
-
-pub(super) fn is_safe_weight_shard_path(shard_file_name: &str) -> bool {
-    let shard_path = Path::new(shard_file_name);
-    !shard_file_name.is_empty()
-        && !shard_file_name.contains('\\')
-        && !shard_path.is_absolute()
-        && shard_path
-            .components()
-            .all(|component| matches!(component, Component::Normal(_)))
-        && shard_path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            == Some("safetensors")
 }
 
 fn open_weights(

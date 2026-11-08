@@ -5,6 +5,7 @@
 //! configuration is the embedded upstream one; the license is established by
 //! provenance, which discovery derives from the model card, before this runs.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::artifact_validation::ValidatedWeightsFile;
@@ -28,7 +29,7 @@ const SHARD_INDEX_FILE_NAME: &str = "model.safetensors.index.json";
 /// The tokenizer loads from `tokenizer.json` alone; the other two complete the
 /// published tokenizer folder and are proven present so a partial download is
 /// refused here rather than at the first request.
-const TOKENIZER_SIDECAR_FILE_NAMES: [&str; 3] = [
+const TOKENIZER_FILE_NAMES: [&str; 3] = [
     "tokenizer/chat_template.jinja",
     "tokenizer/tokenizer.json",
     "tokenizer/tokenizer_config.json",
@@ -36,8 +37,6 @@ const TOKENIZER_SIDECAR_FILE_NAMES: [&str; 3] = [
 /// The BF16 build counts its batch-norm updates; mflux does not store the
 /// counter, and the decoder never reads it.
 const VAE_BATCH_COUNTER_TENSOR_NAME: &str = "bn.num_batches_tracked";
-/// The embedded text encoder configuration pins 36 decoder layers.
-const TEXT_ENCODER_LAYER_COUNT: usize = 36;
 const TEXT_ENCODER_LAYER_TENSOR_SUFFIXES: [&str; 11] = [
     "input_layernorm.weight",
     "mlp.down_proj.weight",
@@ -51,40 +50,53 @@ const TEXT_ENCODER_LAYER_TENSOR_SUFFIXES: [&str; 11] = [
     "self_attn.q_proj.weight",
     "self_attn.v_proj.weight",
 ];
-const VAE_UP_BLOCK_COUNT: usize = 4;
+
+/// The block topology an inventory reports, taken from the parsed configuration.
+#[derive(Clone, Copy, Default)]
+struct InventoryBlockCounts {
+    double_stream_block_count: usize,
+    single_stream_block_count: usize,
+    up_block_count: usize,
+}
 
 pub(in crate::flux2_klein) fn validate_mlx_4bit_artifact(
     model_directory: &Path,
 ) -> Result<Flux2KleinValidatedParts, Flux2KleinArtifactError> {
     let configs = parse_upstream_configs()?;
-    let tokenizer_sidecars = open_named_files(model_directory, &TOKENIZER_SIDECAR_FILE_NAMES)?;
+    let tokenizer_files = open_named_files(model_directory, &TOKENIZER_FILE_NAMES)?;
     let text_encoder = validate_component(
         model_directory,
         Flux2KleinComponent::TextEncoder,
-        &text_encoder_expected_tensors(),
+        &text_encoder_expected_tensors(configs.text_encoder.decoder_layer_count()),
+        InventoryBlockCounts::default(),
     )?;
     let transformer = validate_component(
         model_directory,
         Flux2KleinComponent::Transformer,
         &transformer_expected_tensors(&configs.transformer),
+        InventoryBlockCounts {
+            double_stream_block_count: configs.transformer.double_stream_block_count(),
+            single_stream_block_count: configs.transformer.single_stream_block_count(),
+            up_block_count: 0,
+        },
     )?;
     let vae = validate_component(
         model_directory,
         Flux2KleinComponent::Vae,
         &vae_expected_tensors(),
+        InventoryBlockCounts {
+            up_block_count: configs.vae.up_block_count(),
+            ..InventoryBlockCounts::default()
+        },
     )?;
     Ok(Flux2KleinValidatedParts {
-        transformer: with_block_counts(
-            transformer,
-            configs.transformer.double_stream_block_count(),
-            configs.transformer.single_stream_block_count(),
-            0,
-        ),
-        vae: with_block_counts(vae, 0, 0, VAE_UP_BLOCK_COUNT),
         configs,
-        document_files: std::collections::BTreeMap::new(),
-        tokenizer_sidecars,
+        // The build ships no configuration or license documents to retain.
+        document_files: BTreeMap::new(),
+        tokenizer_sidecars: tokenizer_files,
         text_encoder,
+        transformer,
+        vae,
     })
 }
 
@@ -93,6 +105,7 @@ fn validate_component(
     model_directory: &Path,
     component: Flux2KleinComponent,
     expected_tensors: &ExpectedTensors,
+    block_counts: InventoryBlockCounts,
 ) -> Result<Flux2KleinValidatedComponent, Flux2KleinArtifactError> {
     let folder_name = component.folder_name();
     let index_file_name = format!("{folder_name}/{SHARD_INDEX_FILE_NAME}");
@@ -117,7 +130,7 @@ fn validate_component(
             component,
             shard_files,
         ),
-        inventory: logical_inventory(descriptors)?,
+        inventory: logical_inventory(descriptors, block_counts)?,
     })
 }
 
@@ -125,6 +138,7 @@ fn validate_component(
 /// `tensor_profile`), so admission budgets the 4-bit build by its real cost.
 fn logical_inventory(
     descriptors: Vec<Flux2KleinTensorDescriptor>,
+    block_counts: InventoryBlockCounts,
 ) -> Result<Flux2KleinTensorInventory, Flux2KleinArtifactError> {
     let mut payload_bytes = 0_u64;
     for descriptor in &descriptors {
@@ -135,22 +149,10 @@ fn logical_inventory(
     Ok(Flux2KleinTensorInventory {
         descriptors,
         payload_bytes,
-        double_stream_block_count: 0,
-        single_stream_block_count: 0,
-        up_block_count: 0,
+        double_stream_block_count: block_counts.double_stream_block_count,
+        single_stream_block_count: block_counts.single_stream_block_count,
+        up_block_count: block_counts.up_block_count,
     })
-}
-
-fn with_block_counts(
-    mut component: Flux2KleinValidatedComponent,
-    double_stream_block_count: usize,
-    single_stream_block_count: usize,
-    up_block_count: usize,
-) -> Flux2KleinValidatedComponent {
-    component.inventory.double_stream_block_count = double_stream_block_count;
-    component.inventory.single_stream_block_count = single_stream_block_count;
-    component.inventory.up_block_count = up_block_count;
-    component
 }
 
 fn transformer_expected_tensors(config: &Flux2KleinTransformerConfig) -> ExpectedTensors {
@@ -170,12 +172,12 @@ fn transformer_expected_tensors(config: &Flux2KleinTransformerConfig) -> Expecte
 }
 
 /// Shapes are checked when the text encoder binds each tensor, as in the BF16 build.
-fn text_encoder_expected_tensors() -> ExpectedTensors {
+fn text_encoder_expected_tensors(decoder_layer_count: usize) -> ExpectedTensors {
     let mut expected_tensors = ExpectedTensors::from([
         ("model.embed_tokens.weight".to_owned(), None),
         ("model.norm.weight".to_owned(), None),
     ]);
-    for layer_index in 0..TEXT_ENCODER_LAYER_COUNT {
+    for layer_index in 0..decoder_layer_count {
         for suffix in TEXT_ENCODER_LAYER_TENSOR_SUFFIXES {
             expected_tensors.insert(format!("model.layers.{layer_index}.{suffix}"), None);
         }

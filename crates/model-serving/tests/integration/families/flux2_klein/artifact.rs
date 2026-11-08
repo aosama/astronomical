@@ -275,3 +275,23 @@ fn should_reject_wrong_model_derived_shape_and_non_bf16_storage_during_deep_vali
         })
     ));
 }
+
+#[test]
+fn should_refuse_a_bf16_tree_without_its_pipeline_index_for_that_missing_file() {
+    let model_directory = tempfile::tempdir().expect("the test should create a model directory");
+    SyntheticFlux2KleinArtifact::official().write(model_directory.path());
+    fs::remove_file(model_directory.path().join("model_index.json"))
+        .expect("the pipeline index should be removable");
+
+    let refusal = Flux2KleinArtifactValidator::new()
+        .validate(
+            model_directory.path(),
+            Flux2KleinArtifactProvenance::official(),
+        )
+        .expect_err("a BF16 tree without its pipeline index must be refused");
+
+    assert!(matches!(
+        refusal,
+        Flux2KleinArtifactError::ArtifactFile { file_name } if file_name == "model_index.json"
+    ));
+}

@@ -100,7 +100,7 @@
             "display_name": "FLUX.2 Klein 4B",
             "family": "flux2_klein",
             "approximate_size_bytes": 15980141329,
-            "approximate_memory_bytes": 9032574976,
+            "approximate_memory_bytes": 8897394184,
             "minimum_memory_bytes": 2249870406,
             "role": "image_generation",
             "get_started": true,

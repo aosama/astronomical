@@ -7,8 +7,9 @@ use std::path::Path;
 
 use crate::artifact_validation::validated_artifact::ValidatedWeightsFile;
 
-/// The file only the 4-bit build has at its root level: the BF16 build is a
-/// Diffusers pipeline and always carries `model_index.json`.
+use super::mlx_4bit_build::MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME;
+
+/// The pipeline index only the BF16 Diffusers build has; the 4-bit build ships none.
 const DIFFUSERS_PIPELINE_INDEX_FILE_NAME: &str = "model_index.json";
 
 /// How an artifact stores its weights on disk.
@@ -25,15 +26,21 @@ pub enum Flux2KleinWeightLayout {
 impl Flux2KleinWeightLayout {
     /// The layout the files in `model_directory` claim. This only chooses which
     /// validator runs; that validator then proves the claim tensor by tensor.
+    /// The 4-bit layout needs positive evidence (its transformer index without
+    /// a pipeline index); anything else is validated as the BF16 build, so an
+    /// incomplete BF16 tree is refused for the file it lacks.
     #[must_use]
     pub fn detect(model_directory: &Path) -> Self {
-        if model_directory
+        let has_pipeline_index = model_directory
             .join(DIFFUSERS_PIPELINE_INDEX_FILE_NAME)
-            .is_file()
-        {
-            Self::DiffusersBf16
-        } else {
+            .is_file();
+        let has_4bit_transformer_index = model_directory
+            .join(MLX_4BIT_TRANSFORMER_INDEX_FILE_NAME)
+            .is_file();
+        if has_4bit_transformer_index && !has_pipeline_index {
             Self::MlxAffine4Bit
+        } else {
+            Self::DiffusersBf16
         }
     }
 }
@@ -55,6 +62,17 @@ impl Flux2KleinComponent {
             Self::TextEncoder => "text_encoder",
             Self::Vae => "vae",
         }
+    }
+
+    /// Whether the engine multiplies this component's projections on packed
+    /// 4-bit weights. The transformer and text encoder bind their projections
+    /// with `Flux2KleinTensorStore::weight`; the VAE binds its four attention
+    /// projections with `dense`, dequantizing at load so its arithmetic is
+    /// unchanged. The 4-bit memory accounting follows this rule, so a change in
+    /// how a component binds its projections belongs here too.
+    #[must_use]
+    pub const fn keeps_projections_packed(self) -> bool {
+        !matches!(self, Self::Vae)
     }
 
     /// The component as rejection messages name it.
@@ -127,14 +145,57 @@ impl Flux2KleinComponentWeightFiles {
     pub(crate) fn clone_shard_files(&self) -> std::io::Result<Vec<File>> {
         self.shard_files.iter().map(File::try_clone).collect()
     }
+}
 
-    #[cfg(feature = "direct-mlx")]
-    pub(crate) fn try_clone(&self) -> std::io::Result<Self> {
-        Ok(Self {
-            layout: self.layout,
-            component: self.component,
-            shard_files: self.clone_shard_files()?,
-            size_bytes: self.size_bytes,
-        })
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::Flux2KleinWeightLayout;
+
+    fn write(model_directory: &std::path::Path, relative_path: &str) {
+        let file_path = model_directory.join(relative_path);
+        fs::create_dir_all(file_path.parent().expect("the file should have a folder"))
+            .expect("the folder should be created");
+        fs::write(file_path, "{}").expect("the marker file should be written");
+    }
+
+    #[test]
+    fn should_detect_the_4bit_layout_from_its_transformer_index() {
+        let model_directory = tempfile::tempdir().expect("a model folder should exist");
+        write(
+            model_directory.path(),
+            "transformer/model.safetensors.index.json",
+        );
+
+        assert_eq!(
+            Flux2KleinWeightLayout::detect(model_directory.path()),
+            Flux2KleinWeightLayout::MlxAffine4Bit
+        );
+    }
+
+    #[test]
+    fn should_detect_the_bf16_layout_from_its_pipeline_index() {
+        let model_directory = tempfile::tempdir().expect("a model folder should exist");
+        write(model_directory.path(), "model_index.json");
+        write(
+            model_directory.path(),
+            "transformer/model.safetensors.index.json",
+        );
+
+        assert_eq!(
+            Flux2KleinWeightLayout::detect(model_directory.path()),
+            Flux2KleinWeightLayout::DiffusersBf16
+        );
+    }
+
+    #[test]
+    fn should_validate_a_folder_without_either_index_as_the_bf16_build() {
+        let model_directory = tempfile::tempdir().expect("a model folder should exist");
+
+        assert_eq!(
+            Flux2KleinWeightLayout::detect(model_directory.path()),
+            Flux2KleinWeightLayout::DiffusersBf16
+        );
     }
 }

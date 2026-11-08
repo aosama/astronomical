@@ -164,3 +164,7 @@ fn expect_shape(
         expected_shape: expected_shape.to_vec(),
     })
 }
+
+#[cfg(test)]
+#[path = "affine_quantized_linear_tests.rs"]
+mod tests;
