@@ -204,15 +204,11 @@ async fn run_fixture() -> Result<(), Box<dyn Error + Send + Sync>> {
                 effective_mlx_memory_ceiling_bytes,
                 configuration_generation: _,
             } => {
-                event_writer
-                    .send_event(&WorkerEvent::MlxMemoryLimitChanged {
-                        effective_mlx_memory_ceiling_bytes,
-                        minimum_mlx_memory_ceiling_bytes: 1,
-                        expert_memory_mode: ExpertMemoryMode::Resident,
-                        mlx_memory_snapshot: None,
-                        expert_residency: None,
-                    })
-                    .await?;
+                answer_mlx_memory_limit_update(
+                    effective_mlx_memory_ceiling_bytes,
+                    &mut event_writer,
+                )
+                .await?;
             }
             WorkerCommand::ClearPromptCache { model_id } => {
                 event_writer
@@ -594,4 +590,32 @@ async fn dispatch_unstructured_chat(
         _ => scripted_worker_chat::send_simple_completion(request_id, &mut *event_writer).await?,
     }
     Ok(false)
+}
+
+/// A ceiling of this many bytes makes the fixture exit the way a real worker
+/// does when an engine fails fatally while adopting a new ceiling (#1900).
+/// The integration test that drives it repeats the value, since this fixture
+/// is a separate binary.
+const EXIT_ON_MLX_MEMORY_LIMIT_BYTES: u64 = 13;
+
+/// Applies any other ceiling as the scripted worker always has. The exit lives
+/// here, not in the command loop, so the loop's branch count stays unchanged.
+async fn answer_mlx_memory_limit_update(
+    effective_mlx_memory_ceiling_bytes: u64,
+    event_writer: &mut ProtocolWriter<tokio::io::Stdout>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    if effective_mlx_memory_ceiling_bytes == EXIT_ON_MLX_MEMORY_LIMIT_BYTES {
+        eprintln!("model worker stopped with an error: scripted fatal memory-limit failure");
+        std::process::exit(1);
+    }
+    event_writer
+        .send_event(&WorkerEvent::MlxMemoryLimitChanged {
+            effective_mlx_memory_ceiling_bytes,
+            minimum_mlx_memory_ceiling_bytes: 1,
+            expert_memory_mode: ExpertMemoryMode::Resident,
+            mlx_memory_snapshot: None,
+            expert_residency: None,
+        })
+        .await?;
+    Ok(())
 }
