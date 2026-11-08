@@ -48,6 +48,9 @@ export class ToolStep {
   public readonly roundIndex: number;
   /** The stored image the call produced (the image tool), shown in the answer. */
   public readonly generatedImageName: string | null;
+  /** The display name of the model that made the image, shown on the row;
+   * null for other tools and for steps saved before it was recorded. */
+  public readonly generatedImageModelName: string | null;
 
   public constructor(init: {
     toolCallID: string;
@@ -58,6 +61,7 @@ export class ToolStep {
     state: ToolStepState;
     roundIndex?: number;
     generatedImageName?: string | null;
+    generatedImageModelName?: string | null;
   }) {
     this.toolCallID = init.toolCallID;
     this.toolName = init.toolName;
@@ -69,11 +73,29 @@ export class ToolStep {
     this.roundIndex = configuredRoundIndex != null ? configuredRoundIndex : 0;
     const configuredImageName: string | null | undefined = init.generatedImageName;
     this.generatedImageName = configuredImageName != null && isGeneratedImageName(configuredImageName) ? configuredImageName : null;
+    const configuredImageModelName: string | null | undefined = init.generatedImageModelName;
+    this.generatedImageModelName = this.generatedImageName != null && configuredImageModelName != null ? configuredImageModelName : null;
+  }
+
+  /** This step with the name of the model that made its image. */
+  public withGeneratedImageModelName(generatedImageModelName: string | null): ToolStep {
+    return new ToolStep({
+      toolCallID: this.toolCallID,
+      toolName: this.toolName,
+      label: this.label,
+      argumentsJSON: this.argumentsJSON,
+      resultText: this.resultText,
+      state: this.state,
+      roundIndex: this.roundIndex,
+      generatedImageName: this.generatedImageName,
+      generatedImageModelName,
+    });
   }
 
   public toPlain(): Record<string, string | number | null> {
     return {
       generatedImageName: this.generatedImageName,
+      generatedImageModelName: this.generatedImageModelName,
       toolCallID: this.toolCallID,
       toolName: this.toolName,
       label: this.label,
@@ -109,6 +131,8 @@ export class ToolStep {
     const roundIndex = typeof savedRoundIndex === "number" && Number.isInteger(savedRoundIndex) && savedRoundIndex >= 0 ? savedRoundIndex : 0;
     const savedImageName = record["generatedImageName"];
     const generatedImageName = typeof savedImageName === "string" ? savedImageName : null;
-    return new ToolStep({ toolCallID, toolName, label, argumentsJSON, resultText, state, roundIndex, generatedImageName });
+    const savedImageModelName = record["generatedImageModelName"];
+    const generatedImageModelName = typeof savedImageModelName === "string" ? savedImageModelName : null;
+    return new ToolStep({ toolCallID, toolName, label, argumentsJSON, resultText, state, roundIndex, generatedImageName, generatedImageModelName });
   }
 }

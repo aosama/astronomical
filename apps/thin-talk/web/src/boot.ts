@@ -1,3 +1,4 @@
+import { ImageModelSelection } from "./ImageModelSelection";
 import { AppConfig } from "./AppConfig";
 import { HostChannel } from "./HostChannel";
 import { SessionBridge } from "./SessionBridge";
@@ -77,6 +78,9 @@ export function bootChatClient(): AppShell {
     onError: (detail) => host.postError(detail),
   });
 
+  // One choice of image model, shared by the composer's picker (through the
+  // controller) and the image tool that draws with it.
+  const imageModelSelection = new ImageModelSelection();
   const composerField = requireElement<HTMLTextAreaElement>("#composer-input");
   const composer = new ComposerView({
     field: composerField,
@@ -89,6 +93,9 @@ export function bootChatClient(): AppShell {
     modelPill: requireElement<HTMLButtonElement>('[data-testid="composer-model"]'),
     modelLabel: requireElement<HTMLElement>('[data-testid="composer-model-label"]'),
     modelMenu: requireElement<HTMLElement>('[data-testid="composer-model-menu"]'),
+    imageModelPill: requireElement<HTMLButtonElement>('[data-testid="composer-image-model"]'),
+    imageModelLabel: requireElement<HTMLElement>('[data-testid="composer-image-model-label"]'),
+    imageModelMenu: requireElement<HTMLElement>('[data-testid="composer-image-model-menu"]'),
     banner: requireElement<HTMLElement>('[data-testid="composer-banner"]'),
     bannerMessage: requireElement<HTMLElement>('[data-testid="banner-message"]'),
     bannerNextAction: requireElement<HTMLElement>('[data-testid="banner-next-action"]'),
@@ -108,6 +115,9 @@ export function bootChatClient(): AppShell {
           return;
         case "selectModel":
           controller.selectModel(action.detail);
+          return;
+        case "selectImageModel":
+          controller.selectImageModel(action.detail);
           return;
         case "setTools":
           controller.setToolsEnabled(action.detail === "on");
@@ -136,7 +146,7 @@ export function bootChatClient(): AppShell {
       client,
       new ToolCatalog([
         new CurrentTimeTool(),
-        new GenerateImageTool(client, bridge),
+        new GenerateImageTool(client, bridge, imageModelSelection),
         new ReadChosenFileTool(bridge),
         new DescribeChosenImageTool(client, bridge),
         new SearchConversationsTool(bridge),
@@ -145,6 +155,7 @@ export function bootChatClient(): AppShell {
     ),
     bridge,
     store,
+    imageModelSelection,
   });
   const shell = new AppShell({ controller, transcript, composer, sidebar, host, sidebarResizer });
   shell.start();

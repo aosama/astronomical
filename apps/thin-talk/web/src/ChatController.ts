@@ -1,3 +1,5 @@
+import { ImageModel } from "./ImageModel";
+import { ImageModelSelection } from "./ImageModelSelection";
 import { DaemonClient } from "./DaemonClient";
 import type { ChatStreamer } from "./ChatStreamer";
 import { SessionBridge } from "./SessionBridge";
@@ -54,12 +56,23 @@ export class ChatController {
   private failure: ChatFailure | null = null;
   private models: ChatModel[] = [];
   private selectedModelID: string | null = null;
+  private imageModels: ImageModel[] = [];
+  private readonly imageModelSelection: ImageModelSelection;
   private isStreaming = false;
   /** Tool calls of the current turn that have started and not yet finished. */
   private readonly runningToolCallIDs = new Set<string>();
 
-  public constructor(init: { client: DaemonClient; streamer: ChatStreamer; bridge: SessionBridge; store: SessionStore }) {
+  /** `imageModelSelection` is shared with the image tool: choosing here is what
+   * the next picture is drawn with. */
+  public constructor(init: {
+    client: DaemonClient;
+    streamer: ChatStreamer;
+    bridge: SessionBridge;
+    store: SessionStore;
+    imageModelSelection?: ImageModelSelection;
+  }) {
     this.client = init.client;
+    this.imageModelSelection = init.imageModelSelection != null ? init.imageModelSelection : new ImageModelSelection();
     this.streamer = init.streamer;
     this.bridge = init.bridge;
     this.store = init.store;
@@ -83,10 +96,12 @@ export class ChatController {
     } catch {
       this.preferences = SessionPreferences.default();
     }
+    this.imageModelSelection.prefer(this.preferences.imageModelID);
     try {
       await this.client.handshake();
       this.models = await this.client.fetchModels();
       this.selectedModelID = this.initialModelID();
+      this.imageModels = await this.installedImageModelsOrNone();
       this.loadPhase = this.models.length === 0 ? "empty" : "ready";
     } catch (error) {
       this.loadPhase = "failed";
@@ -160,6 +175,16 @@ export class ChatController {
     await this.activeStreamPromise?.catch(() => undefined);
   }
 
+  /** The installed image models, or none when they cannot be listed: chat
+   * must still open, and the image tool lists them again when it runs. */
+  private async installedImageModelsOrNone(): Promise<ImageModel[]> {
+    try {
+      return await this.client.fetchImageModels();
+    } catch {
+      return [];
+    }
+  }
+
   // MARK: - Preferences
 
   /** The model to start with: the user's saved choice when the catalog still
@@ -186,6 +211,26 @@ export class ChatController {
     this.preferences.modelID = modelID;
     void this.bridge.savePrefs(this.preferences).catch(() => undefined);
     this.publish();
+  }
+
+  /** Switches the image model the next picture is drawn with. An unknown or
+   * unchanged id is ignored, as for the chat model. */
+  public selectImageModel(imageModelID: string): void {
+    if (imageModelID === this.selectedImageModelID()) {
+      return;
+    }
+    if (!this.imageModels.some((imageModel) => imageModel.id === imageModelID)) {
+      return;
+    }
+    this.imageModelSelection.prefer(imageModelID);
+    this.preferences.imageModelID = imageModelID;
+    void this.bridge.savePrefs(this.preferences).catch(() => undefined);
+    this.publish();
+  }
+
+  private selectedImageModelID(): string | null {
+    const selectedImageModel = this.imageModelSelection.resolve(this.imageModels);
+    return selectedImageModel != null ? selectedImageModel.id : null;
   }
 
   public setEffort(effort: ThinkingEffort): void {
@@ -531,6 +576,8 @@ export class ChatController {
       selectedModelID: this.selectedModelID,
       toolsEnabled: this.preferences.toolsEnabled,
       toolsAvailable: this.selectedModelSupportsToolCalls(),
+      imageModels: this.imageModels,
+      selectedImageModelID: this.selectedImageModelID(),
       failure: this.failure
         ? { message: this.failure.message, nextAction: this.failure.nextAction }
         : null,

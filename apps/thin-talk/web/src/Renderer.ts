@@ -189,13 +189,19 @@ export class Renderer {
     );
   }
 
+  /** "· FLUX.2 Klein 4B 4-bit" after an image call's outcome, so the person
+   * sees which model drew the picture without opening the row. */
+  private imageModelSuffix(toolStep: ToolStep): string {
+    return toolStep.generatedImageModelName != null ? ` · ${this.trust.escapeHtml(toolStep.generatedImageModelName)}` : "";
+  }
+
   private toolStepHtml(messageID: string, toolStep: ToolStep): string {
     const stepIdentifier = this.trust.escapeHtml(toolStepIdentifier(messageID, toolStep.toolCallID));
     const argumentsText = toolStep.argumentsJSON.length === 0 || toolStep.argumentsJSON === "{}" ? "None" : toolStep.argumentsJSON;
     const resultText = toolStep.state === ToolStepState.RUNNING ? "Waiting for the result." : toolStep.resultText;
     return (
       `<details class="tool-step" id="${stepIdentifier}" data-testid="${stepIdentifier}" data-state="${toolStep.state}">` +
-      `<summary>${this.trust.escapeHtml(toolStep.label)}: ${TOOL_STEP_OUTCOME_LABELS[toolStep.state]}</summary>` +
+      `<summary>${this.trust.escapeHtml(toolStep.label)}: ${TOOL_STEP_OUTCOME_LABELS[toolStep.state]}${this.imageModelSuffix(toolStep)}</summary>` +
       `<div class="tool-step__body">` +
       `<span>Arguments</span><pre>${this.trust.escapeHtml(argumentsText)}</pre>` +
       `<span>Result</span><pre>${this.trust.escapeHtml(resultText)}</pre>` +

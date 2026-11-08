@@ -3,7 +3,7 @@ import { Agent, type AgentEvent, type AgentMessage, type AgentTurnContext, type 
 import type { Message } from "@earendil-works/pi-ai";
 import { trimToContextBudget } from "./AgentContextTrimmer";
 import { agentHistory } from "./AgentHistoryReplay";
-import { agentTool, generatedImageNameFromToolResult } from "./AgentToolAdapter";
+import { agentTool, generatedImageModelNameFromToolResult, generatedImageNameFromToolResult } from "./AgentToolAdapter";
 import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ChatRole } from "./ChatRole";
@@ -253,6 +253,7 @@ export class AgentTurnRunner implements ChatStreamer {
             event.result,
             event.isError,
             generatedImageNameFromToolResult(event.result),
+            generatedImageModelNameFromToolResult(event.result),
           ),
         );
         break;

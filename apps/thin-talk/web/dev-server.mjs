@@ -11,8 +11,8 @@
  *   `window.__thintalkConfig` (read by `boot.ts`) and the session-bridge double
  *   is the prebuilt `preview/preview-shim.js` (the compiled `installPreviewShim`
  *   glue). Both load as `<script src=...>` and pass the CSP.
- * - The daemon endpoints (`/v1/status`, `/v1/models`, `/v1/chat/completions`)
- *   are served by this same process, with the chat completion streamed over real
+ * - The daemon endpoints (`/v1/status`, `/v1/models`, `/v1/chat/completions`,
+ *   and the Library catalog's image entries) are served by this same process, with the chat completion streamed over real
  *   SSE so token rendering is visible in the browser.
  * - The port is taken from an environment variable and, if busy, falls back to a
  *   free ephemeral port instead of crashing; a source edit is picked up on the
@@ -123,6 +123,17 @@ const previewFaviconSVG =
   `<path d="M5 12l-2 3 0-3z" fill="#7aa2f7"/>` +
   `</svg>`;
 
+/** Two image models, so the composer's picture pill appears, and the Library
+ * entries that name them and mark the Pictures pick. */
+const previewImageModels = [
+  { id: "FLUX.2-klein-4B", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
+  { id: "flux2-klein-4b-4bit", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
+];
+const previewLibraryImageEntries = [
+  { display_name: "FLUX.2 Klein 4B", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+  { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
+];
+
 const server = http.createServer((request, response) => {
   const requestTarget = request.url != null ? request.url : "/";
   const url = new URL(requestTarget, daemonBaseURL);
@@ -142,7 +153,12 @@ const server = http.createServer((request, response) => {
   }
   if (url.pathname === "/v1/models") {
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ data: [chatModel] }));
+    response.end(JSON.stringify({ data: [chatModel, ...previewImageModels] }));
+    return;
+  }
+  if (url.pathname === "/v1/library/catalog") {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ entries: previewLibraryImageEntries }));
     return;
   }
   if (url.pathname === "/v1/chat/completions" && request.method === "POST") {

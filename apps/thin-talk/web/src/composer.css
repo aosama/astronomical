@@ -96,15 +96,17 @@
   height: 14px;
 }
 
-.composer__chevron {
+.composer__chevron,
+.composer__pill-icon {
   color: var(--text-secondary);
 }
 
-/* The model name is shown in full. Only when the window is too narrow for
- * the whole row does the name give way, with an ellipsis, so the pill never
- * pushes the send button out of the composer. The chain of min-width: 0 lets
- * the flex row shrink the name instead of overflowing. */
-[data-testid="composer-model-label"] {
+/* The model names are shown in full. Only when the window is too narrow for
+ * the whole row does a name give way, with an ellipsis, so the pills never
+ * push the send button out of the composer. The chain of min-width: 0 lets
+ * the flex row shrink the names instead of overflowing. */
+[data-testid="composer-model-label"],
+[data-testid="composer-image-model-label"] {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -113,11 +115,14 @@
 
 .composer__actions > .composer__group:first-child,
 .composer__actions > .composer__group:first-child > .composer__menu-anchor:first-child,
-#composer-model {
+.composer__actions > .composer__group:first-child > .composer__menu-anchor:last-child,
+#composer-model,
+#composer-image-model {
   min-width: 0;
 }
 
-#composer-model {
+#composer-model,
+#composer-image-model {
   max-width: 100%;
 }
 

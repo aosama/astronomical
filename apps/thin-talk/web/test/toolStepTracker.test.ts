@@ -51,6 +51,13 @@ test("should_record_the_generated_image_name_it_is_given", () => {
   assert.equal(tracker().finished("call-3", "generate_image", { content: [] }, false).generatedImageName, null);
 });
 
+test("should_record_the_name_of_the_model_that_made_the_image", () => {
+  const storedName = "0f3c2a51-7d7e-4c55-9e1a-2b8d4f6a9c10.png";
+  const imageStep = tracker().finished("call-1", "generate_image", { content: [] }, false, storedName, "FLUX.2 Klein 4B 4-bit");
+  assert.equal(imageStep.generatedImageModelName, "FLUX.2 Klein 4B 4-bit");
+  assert.equal(tracker().finished("call-2", "generate_image", { content: [] }, false, storedName).generatedImageModelName, null);
+});
+
 test("should_count_rounds_afresh_for_each_answer", () => {
   const toolSteps = tracker();
   toolSteps.started("call-1", "get_current_time", {});

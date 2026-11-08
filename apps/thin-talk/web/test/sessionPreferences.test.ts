@@ -60,3 +60,11 @@ test("should_use_the_default_sidebar_width_when_none_or_a_damaged_one_was_saved"
   assert.equal(SessionPreferences.fromPlain({ sidebarWidthPixels: Number.NaN }).sidebarWidthPixels, null);
   assert.equal(SessionPreferences.default().toPlain().sidebarWidthPixels, null);
 });
+
+test("should_round_trip_the_chosen_image_model_and_drop_one_that_is_not_text", () => {
+  const preferences = new SessionPreferences({ imageModelID: "flux2-klein-4b-4bit" });
+  assert.equal(SessionPreferences.fromPlain(preferences.toPlain()).imageModelID, "flux2-klein-4b-4bit");
+  assert.equal(SessionPreferences.default().imageModelID, null);
+  assert.equal(SessionPreferences.fromPlain({ imageModelID: 42 }).imageModelID, null);
+  assert.equal(SessionPreferences.fromPlain({ modelID: "chat" }).imageModelID, null, "preferences saved before the picker load without one");
+});

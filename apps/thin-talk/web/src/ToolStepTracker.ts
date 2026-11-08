@@ -29,13 +29,21 @@ export class ToolStepTracker {
     return this.step(toolCallID, toolName, argumentsJSON, "", ToolStepState.RUNNING);
   }
 
-  /** `generatedImageName` is the image the call produced, if any; the
-   * transcript shows it. */
-  public finished(toolCallID: string, toolName: string, toolResult: unknown, isError: boolean, generatedImageName: string | null = null): ToolStep {
+  /** `generatedImageName` is the image the call produced, if any, and
+   * `generatedImageModelName` the model that made it; the transcript shows both. */
+  public finished(
+    toolCallID: string,
+    toolName: string,
+    toolResult: unknown,
+    isError: boolean,
+    generatedImageName: string | null = null,
+    generatedImageModelName: string | null = null,
+  ): ToolStep {
     const recordedArgumentsJSON = this.argumentsJSONByToolCallID.get(toolCallID);
     const argumentsJSON = recordedArgumentsJSON != null ? recordedArgumentsJSON : "{}";
     const resultState = isError ? ToolStepState.FAILED : ToolStepState.SUCCEEDED;
-    return this.step(toolCallID, toolName, argumentsJSON, ToolStepTracker.resultText(toolResult), resultState, generatedImageName);
+    const toolStep = this.step(toolCallID, toolName, argumentsJSON, ToolStepTracker.resultText(toolResult), resultState, generatedImageName);
+    return toolStep.withGeneratedImageModelName(generatedImageModelName);
   }
 
   /** Starts counting rounds afresh for the answer to a queued message: each

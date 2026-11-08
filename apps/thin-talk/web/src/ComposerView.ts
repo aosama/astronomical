@@ -1,5 +1,6 @@
 import { ComposerState } from "./ComposerState";
 import { ComposerAction } from "./ComposerAction";
+import { ImageModelPillView } from "./ImageModelPillView";
 import { ThinkingEffort } from "./ThinkingEffort";
 
 /** The field's hint while an answer streams: a message sent now is read as
@@ -9,8 +10,8 @@ const MAX_FIELD_HEIGHT_PX = 160;
 const FIELD_HEIGHT_ROUNDING_ALLOWANCE_PX = 2;
 
 /**
- * Composer layer: the ask field, the thinking-effort pill, and the failure
- * banner.
+ * Composer layer: the ask field, the model, thinking-effort and picture
+ * pills, and the failure banner.
  *
  * This class renders the state the controller pushes and reports every intent
  * back; it owns no chat behaviour and holds no chat state beyond the field's
@@ -27,6 +28,7 @@ export class ComposerView {
   private readonly modelPill: HTMLButtonElement;
   private readonly modelLabel: HTMLElement;
   private readonly modelMenu: HTMLElement;
+  private readonly imageModelPicker: ImageModelPillView;
   /** What the model menu last drew, so an unchanged menu is not rebuilt. */
   /** The hint the page's markup gives the field, restored when no answer is
    * streaming; the markup stays the one place that wording lives. */
@@ -57,6 +59,9 @@ export class ComposerView {
     modelPill: HTMLButtonElement;
     modelLabel: HTMLElement;
     modelMenu: HTMLElement;
+    imageModelPill: HTMLButtonElement;
+    imageModelLabel: HTMLElement;
+    imageModelMenu: HTMLElement;
     banner: HTMLElement;
     bannerMessage: HTMLElement;
     bannerNextAction: HTMLElement;
@@ -73,6 +78,16 @@ export class ComposerView {
     this.modelPill = init.modelPill;
     this.modelLabel = init.modelLabel;
     this.modelMenu = init.modelMenu;
+    this.imageModelPicker = new ImageModelPillView({
+      pill: init.imageModelPill,
+      label: init.imageModelLabel,
+      menu: init.imageModelMenu,
+      onOpen: () => {
+        this.closeEffortMenu();
+        this.closeModelMenu();
+      },
+      onSelect: (imageModelID) => this.onAction(new ComposerAction({ kind: "selectImageModel", detail: imageModelID })),
+    });
     this.banner = init.banner;
     this.bannerMessage = init.bannerMessage;
     this.bannerNextAction = init.bannerNextAction;
@@ -134,6 +149,7 @@ export class ComposerView {
       if (event.key === "Escape") {
         this.closeEffortMenu();
         this.closeModelMenu();
+        this.imageModelPicker.close();
       }
     });
     document.addEventListener("click", (event) => {
@@ -143,6 +159,9 @@ export class ComposerView {
       }
       if (!this.modelMenu.hidden && target instanceof Element && !target.closest(".composer__menu-anchor")) {
         this.closeModelMenu();
+      }
+      if (this.imageModelPicker.isOpen && target instanceof Element && !target.closest(".composer__menu-anchor")) {
+        this.imageModelPicker.close();
       }
     });
   }
@@ -160,9 +179,11 @@ export class ComposerView {
     this.effortPill.title = ThinkingEffort.budgetSummary(state.effort);
     this.buildEffortMenu();
     this.renderModelControls(state);
+    this.imageModelPicker.render(state.imageModels, state.selectedImageModelID);
     if (!state.isReady) {
       this.closeEffortMenu();
       this.closeModelMenu();
+      this.imageModelPicker.close();
     }
     this.refreshControls();
   }
@@ -225,6 +246,7 @@ export class ComposerView {
 
   private toggleEffortMenu(): void {
     this.closeModelMenu();
+    this.imageModelPicker.close();
     const opening = this.effortMenu.hidden;
     this.effortMenu.hidden = !opening;
     this.effortPill.setAttribute("aria-expanded", opening ? "true" : "false");
@@ -257,6 +279,7 @@ export class ComposerView {
 
   private toggleModelMenu(): void {
     this.closeEffortMenu();
+    this.imageModelPicker.close();
     const opening = this.modelMenu.hidden;
     this.modelMenu.hidden = !opening;
     this.modelPill.setAttribute("aria-expanded", opening ? "true" : "false");

@@ -7,6 +7,8 @@ import { ChatFailure } from "./ChatFailure";
 import { ChatFailureClassifier } from "./ChatFailureClassifier";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { ModelCatalogEntry } from "./ModelCatalogEntry";
+import { ImageModel } from "./ImageModel";
+import { buildImageModels, parseLibraryImageEntries } from "./ImageModelCatalog";
 import { DaemonStatus } from "./DaemonStatus";
 
 /** How long a readiness/model request may take before the page gives up. */
@@ -88,6 +90,25 @@ export class DaemonClient {
   public async fetchImageModelIDs(signal?: AbortSignal): Promise<string[]> {
     const catalogEntries = await this.fetchCatalogEntries(signal);
     return catalogEntries.filter((entry) => entry.generatesImages).map((entry) => entry.id);
+  }
+
+  /** The installed image models, named and ordered as the Library presents
+   * them. The Library catalog only adds names and the Pictures pick, so when it
+   * cannot be read the models are still returned, under their ids. */
+  public async fetchImageModels(signal?: AbortSignal): Promise<ImageModel[]> {
+    const imageModelIDs = await this.fetchImageModelIDs(signal);
+    if (imageModelIDs.length === 0) {
+      return [];
+    }
+    let libraryCatalogText = "";
+    try {
+      libraryCatalogText = await this.requestText("/v1/library/catalog", signal);
+    } catch (catalogFailure) {
+      if (signal?.aborted === true) {
+        throw catalogFailure;
+      }
+    }
+    return buildImageModels(imageModelIDs, parseLibraryImageEntries(libraryCatalogText));
   }
 
   /** The ids of the installed chat models that can look at images. */

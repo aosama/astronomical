@@ -1,6 +1,7 @@
 import type { ConversationTool, ToolCallContext, ToolOutput, ToolParametersSchema } from "./ConversationTool";
 import { DaemonClient } from "./DaemonClient";
 import { GeneratedImageReview, imageMimeType } from "./GeneratedImageReview";
+import { ImageModelSelection } from "./ImageModelSelection";
 import type { ImageGenerationRequestBody } from "./ImageGenerationRequestBody";
 import { SessionBridge } from "./SessionBridge";
 
@@ -18,8 +19,8 @@ const IMAGE_SIZES_BY_SHAPE: Record<string, { width: number; height: number }> = 
 const IMAGE_GENERATION_TIMEOUT_MILLISECONDS = 10 * 60_000;
 
 /**
- * Makes an image with the first installed image model and shows it in the
- * answer. The image is kept by the app (so the conversation still shows it
+ * Makes an image with the image model the person chose (see
+ * `ImageModelSelection`) and shows it in the answer. The image is kept by the app (so the conversation still shows it
  * after a relaunch). Running it only calls the local daemon, so it runs
  * without asking.
  *
@@ -48,10 +49,12 @@ export class GenerateImageTool implements ConversationTool {
   private readonly client: DaemonClient;
   private readonly bridge: SessionBridge;
   private readonly imageReview: GeneratedImageReview;
+  private readonly imageModelSelection: ImageModelSelection;
 
-  public constructor(client: DaemonClient, bridge: SessionBridge) {
+  public constructor(client: DaemonClient, bridge: SessionBridge, imageModelSelection: ImageModelSelection) {
     this.client = client;
     this.bridge = bridge;
+    this.imageModelSelection = imageModelSelection;
     this.imageReview = new GeneratedImageReview(client);
   }
 
@@ -60,15 +63,16 @@ export class GenerateImageTool implements ConversationTool {
     if (prompt.length === 0) {
       throw new Error("The image needs a description.");
     }
-    const imageModelIDs = await this.client.fetchImageModelIDs(signal);
-    const imageModelID = imageModelIDs[0];
-    if (imageModelID == null) {
+    // The installed models are read afresh for each picture, so a model
+    // added or removed since Thin Talk opened is honoured.
+    const imageModel = this.imageModelSelection.resolve(await this.client.fetchImageModels(signal));
+    if (imageModel == null) {
       throw new Error("No image model is installed. The user can add one from the Library.");
     }
     const requestedShape = typeof toolArguments["shape"] === "string" ? toolArguments["shape"] : "square";
     const imageSize = IMAGE_SIZES_BY_SHAPE[requestedShape] ?? IMAGE_SIZES_BY_SHAPE["square"]!;
     const requestBody: ImageGenerationRequestBody = {
-      model: imageModelID,
+      model: imageModel.id,
       prompt,
       width: imageSize.width,
       height: imageSize.height,
@@ -77,18 +81,19 @@ export class GenerateImageTool implements ConversationTool {
     };
     const encodedImage = await this.client.generateImage(requestBody, signal);
     const generatedImageName = await this.bridge.storeGeneratedImage(encodedImage);
-    const generationReport = `Generated a ${imageSize.width}×${imageSize.height} image with ${imageModelID} and showed it to the user.`;
+    const generationReport = `Generated a ${imageSize.width}×${imageSize.height} image with ${imageModel.name} and showed it to the user.`;
     const visionModelIDs = await this.visionModelIDsOrNone(signal);
     if (visionModelIDs.includes(context.modelID)) {
       return {
         text: `${generationReport} The image is attached right after this result: look at it yourself before you talk about it, `
           + "and check it against what was asked for.",
         generatedImageName,
+        generatedImageModelName: imageModel.name,
         imageForModel: { base64: encodedImage, mimeType: imageMimeType(encodedImage) },
       };
     }
     const imageAccount = await this.imageReview.accountForTextOnlyModel(prompt, encodedImage, visionModelIDs[0] ?? null, signal);
-    return { text: `${generationReport}\n\n${imageAccount}`, generatedImageName };
+    return { text: `${generationReport}\n\n${imageAccount}`, generatedImageName, generatedImageModelName: imageModel.name };
   }
 
   /** The installed vision models, or none when the list cannot be read: the

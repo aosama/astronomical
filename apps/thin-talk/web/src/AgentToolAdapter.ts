@@ -1,6 +1,6 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
-import type { ConversationTool, ToolCallContext } from "./ConversationTool";
+import type { ConversationTool, ToolCallContext, ToolOutput } from "./ConversationTool";
 import { executeWithinLimits } from "./ToolLimits";
 
 /**
@@ -22,10 +22,11 @@ export function agentTool(conversationTool: ConversationTool, context: ToolCallC
     execute: async (_toolCallID, toolArguments, signal) => {
       const toolSignal = signal != null ? signal : new AbortController().signal;
       const toolOutput = await executeWithinLimits(conversationTool, toolArguments as Record<string, unknown>, toolSignal, context);
-      // The image name rides in the result's details, which Pi hands to the
-      // end-of-call report; the model never sees the name. An image for the
-      // model rides in the content, which DaemonStreamFunction sends on.
-      const details = toolOutput.generatedImageName != null ? { [GENERATED_IMAGE_DETAIL]: toolOutput.generatedImageName } : undefined;
+      // The image name and its model's name ride in the result's details,
+      // which Pi hands to the end-of-call report; the model never sees them.
+      // An image for the model rides in the content, which
+      // DaemonStreamFunction sends on.
+      const details = generatedImageDetails(toolOutput);
       const imageForModel = toolOutput.imageForModel;
       const resultContent: (TextContent | ImageContent)[] = [{ type: "text", text: toolOutput.text }];
       if (imageForModel != null) {
@@ -36,16 +37,38 @@ export function agentTool(conversationTool: ConversationTool, context: ToolCallC
   };
 }
 
-/** The key under which a result's details carry a generated image's name;
- * written and read only in this file, so the two sides cannot drift. */
+/** The keys under which a result's details carry a generated image's name and
+ * its model's name; written and read only in this file, so the two sides
+ * cannot drift. */
 const GENERATED_IMAGE_DETAIL = "generatedImageName";
+const GENERATED_IMAGE_MODEL_DETAIL = "generatedImageModelName";
+
+function generatedImageDetails(toolOutput: ToolOutput): Record<string, string> | undefined {
+  if (toolOutput.generatedImageName == null) {
+    return undefined;
+  }
+  const details: Record<string, string> = { [GENERATED_IMAGE_DETAIL]: toolOutput.generatedImageName };
+  if (toolOutput.generatedImageModelName != null) {
+    details[GENERATED_IMAGE_MODEL_DETAIL] = toolOutput.generatedImageModelName;
+  }
+  return details;
+}
 
 /** The generated image name a finished call reported, or null. Reads Pi's
  * result shape here so the rest of Thin Talk receives a plain value. */
 export function generatedImageNameFromToolResult(toolResult: unknown): string | null {
+  return stringDetail(toolResult, GENERATED_IMAGE_DETAIL);
+}
+
+/** The name of the model that made a finished call's image, or null. */
+export function generatedImageModelNameFromToolResult(toolResult: unknown): string | null {
+  return stringDetail(toolResult, GENERATED_IMAGE_MODEL_DETAIL);
+}
+
+function stringDetail(toolResult: unknown, detailKey: string): string | null {
   const resultRecord = typeof toolResult === "object" && toolResult !== null ? (toolResult as Record<string, unknown>) : {};
   const details = resultRecord["details"];
   const detailsRecord = typeof details === "object" && details !== null ? (details as Record<string, unknown>) : {};
-  const imageName = detailsRecord[GENERATED_IMAGE_DETAIL];
-  return typeof imageName === "string" ? imageName : null;
+  const detailValue = detailsRecord[detailKey];
+  return typeof detailValue === "string" ? detailValue : null;
 }
