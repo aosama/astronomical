@@ -434,3 +434,33 @@ async fn should_start_another_model_over_a_failed_download_left_before_a_restart
     .await
     .expect("the restart journey should remain bounded");
 }
+
+/// Startup clears the empty staging folders earlier versions left behind (#1929), and keeps a
+/// paused download's staged bytes so it can still be resumed.
+#[tokio::test]
+async fn should_clear_old_empty_staging_folders_at_startup() {
+    timeout(Duration::from_secs(10), async {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        interrupt_a_running_download(test_directory.path()).await;
+        let leftover_directory = test_directory.path().join("models/.incomplete/araysuter");
+        std::fs::create_dir_all(&leftover_directory)
+            .expect("the leftover folder should be created");
+
+        let restarted_service = start_a_restarted_daemon(test_directory.path()).await;
+
+        assert!(
+            !leftover_directory.exists(),
+            "the empty leftover folder is removed"
+        );
+        assert!(
+            test_directory
+                .path()
+                .join(format!("models/.incomplete/{REPOSITORY_ID}"))
+                .is_dir(),
+            "the paused download keeps its staged bytes"
+        );
+        restarted_service.shutdown().await.expect("clean shutdown");
+    })
+    .await
+    .expect("the startup cleanup journey should remain bounded");
+}
