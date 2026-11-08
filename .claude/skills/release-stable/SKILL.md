@@ -41,7 +41,7 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 
 1. Fetch remote state; require clean synchronized `main`, successful latest `main` CI, no existing `$TAG`, and no existing GitHub release for `$TAG`.
 2. Set `PREVIOUS_TAG` to the highest existing semantic release tag and review `git log` and `git diff` from it to `main`.
-3. Create one public issue titled `Release Astronomical ${VERSION}`. State the exact user-visible changes, compatibility, signing requirements, digest-bound publication, signed-feed activation, and public verification. Do not include private environment details.
+3. Create one public issue titled `Release Astronomical ${VERSION}`. State all changes, enhancements, bug fixes, compatibility, signing requirements, digest-bound publication, signed-feed activation, and public verification. Do not include private environment details. Also in the release notes acknowledge contributors who opened GitHub issues that this release addressed.
 4. Save the returned issue number as `ISSUE_NUMBER`. Both release pull requests must link only this issue.
 5. Compare `site/schemas/config/v1/astronomical-config.schema.json` at `PREVIOUS_TAG` with `main`, and require every removed property to be in `strip_retired_config_fields` (`RETIRED_CHUNKING_FIELD_NAMES` for chunking fields).
 6. Merge any fix the release needs on its own branch and pull request before starting section 2, so the bump stays version-only.
