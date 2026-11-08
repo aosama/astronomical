@@ -10,7 +10,7 @@
             "approximate_memory_bytes": 536870910,
             "role": "helper",
             "public": true,
-            "description": "A small helper that turns text into a compact numerical fingerprint, which is what powers local search, finding similar text, and organizing text on your Mac. It is tiny (about 0.16 GB of memory) and runs quietly in the background. Each piece of text is limited to about 2,000 words.",
+            "description": "A small helper that turns text into a compact numerical fingerprint, which is what powers local search, finding similar text, and organizing text on your Mac. It is tiny and runs quietly in the background. Each piece of text is limited to about 2,000 words.",
             "capabilities": {
                 "supports_embeddings": true
             },
@@ -26,7 +26,7 @@
             "approximate_memory_bytes": 1825361094,
             "role": "chat",
             "public": true,
-            "description": "A small, fast, all-around model for daily tasks - chatting, solving problems, using tools, and looking at pictures. It fits comfortably on most Macs (about 0.65 GB of memory), answers quickly, and keeps a large memory window for long conversations. Doubles as a lightweight assistant that helps bigger models respond faster.",
+            "description": "A small, fast, all-around model for daily tasks - chatting, solving problems, using tools, and looking at pictures. It fits comfortably on most Macs, answers quickly, and keeps a large memory window for long conversations. Doubles as a lightweight assistant that helps bigger models respond faster.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -45,7 +45,7 @@
             "approximate_memory_bytes": 2899102914,
             "role": "chat",
             "public": true,
-            "description": "A slightly larger all-around model for everyday use - chatting, reasoning, using tools, and understanding images. Runs on most Macs (about 1.75 GB of memory), balances speed and capability, and keeps a large memory window for long conversations and documents.",
+            "description": "A slightly larger all-around model for everyday use - chatting, reasoning, using tools, and understanding images. Runs on most Macs, balances speed and capability, and keeps a large memory window for long conversations and documents.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_vision": true,
@@ -305,6 +305,7 @@
             "approximate_size_bytes": 40646996157,
             "approximate_memory_bytes": 41768556798,
             "role": "chat",
+            "experimental": true,
             "public": true,
             "description": "The largest model in the Library, built for the heaviest writing, reasoning, and coding work. This experimental 2-bit mixed-precision build is the leanest way to run the full Ornith 122B - it takes about 37.9 GB on disk and needs a Mac with a large amount of memory. Favors deep, thoughtful answers over fast ones. Reads text only.",
             "capabilities": {

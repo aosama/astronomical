@@ -35,6 +35,10 @@ let libraryExpandedModelId = null;
 // within, which can sit below the machine's RAM when the user configured a lower
 // maximum. Null means unknown, and the cards then show no fit label rather than a guess.
 let libraryServingCeilingBytes = null;
+// True when the user set a maximum below what this Mac allows. A model that
+// cannot fit under such a limit is held back by the user's own choice, so its
+// label says so instead of promising it will merely run slowly.
+let libraryCeilingIsUserLimit = false;
 let libraryServingCeilingReadAtMillis = 0;
 const LIBRARY_CEILING_REFRESH_MILLIS = 30_000;
 // Which Library page is showing: "get-started" (default) or "more-models".
@@ -99,7 +103,7 @@ async function loadLibraryCatalog(
         }
         const catalogDocument = await catalogResponse.json();
         libraryCatalogDocument = catalogDocument;
-        libraryServingCeilingBytes = await fetchLibraryServingCeilingBytes();
+        await refreshLibraryServingCeiling();
         libraryServingCeilingReadAtMillis = Date.now();
         return renderLibraryCatalogDocument(catalogDocument, catalogContainer);
     } catch {
@@ -127,6 +131,7 @@ function renderLibraryCatalogDocument(catalogDocument, catalogContainer) {
         libraryExpandedModelId,
         libraryActiveTab,
         libraryServingCeilingBytes,
+        libraryCeilingIsUserLimit,
     ]);
     if (renderStateFingerprint === libraryRenderedStateFingerprint) {
         return libraryRenderedStateOutcome;
@@ -318,9 +323,15 @@ function isRenderableLibraryCatalogEntry(catalogEntry) {
         && catalogEntry.public === true;
 }
 
+async function refreshLibraryServingCeiling() {
+    const statusDocument = await fetchLibraryStatusDocument();
+    libraryServingCeilingBytes = readLibraryServingCeilingBytes(statusDocument);
+    libraryCeilingIsUserLimit = readLibraryCeilingIsUserLimit(statusDocument);
+}
+
 // Memory ceiling is advisory: any failure leaves it unknown rather than
 // failing the catalog, so the page still renders without fit labels.
-async function fetchLibraryServingCeilingBytes() {
+async function fetchLibraryStatusDocument() {
     const statusAbortController = new AbortController();
     const statusTimeout = setTimeout(
         () => statusAbortController.abort(),
@@ -332,7 +343,7 @@ async function fetchLibraryServingCeilingBytes() {
             { signal: statusAbortController.signal }
         );
         if (!statusResponse.ok) return null;
-        return readLibraryServingCeilingBytes(await statusResponse.json());
+        return await statusResponse.json();
     } catch {
         return null;
     } finally {
@@ -355,6 +366,17 @@ function readLibraryServingCeilingBytes(statusDocument) {
 // never turn into a streaming promise.
 function isLibraryStreamingFloor(minimumMemoryBytes) {
     return Number.isSafeInteger(minimumMemoryBytes) && minimumMemoryBytes > 0;
+}
+
+// A configured maximum below the machine's own ceiling is a limit the user
+// chose; a missing configuration, or one at or above the machine, is not.
+function readLibraryCeilingIsUserLimit(statusDocument) {
+    const configuredGigabytes = statusDocument?.configured_maximum_mlx_memory_gb;
+    const machineCeilingBytes = statusDocument?.machine_mlx_memory_ceiling_bytes;
+    if (!Number.isFinite(configuredGigabytes) || !isPositiveFiniteByteCount(machineCeilingBytes)) {
+        return false;
+    }
+    return configuredGigabytes * 1073741824 < machineCeilingBytes;
 }
 
 function isPositiveFiniteByteCount(byteCount) {
@@ -598,7 +620,7 @@ async function refetchLibraryCatalogDocument(nowMillis = Date.now()) {
     const isCeilingStale = nowMillis - libraryServingCeilingReadAtMillis
         >= LIBRARY_CEILING_REFRESH_MILLIS;
     if (libraryServingCeilingBytes === null || isCeilingStale) {
-        libraryServingCeilingBytes = await fetchLibraryServingCeilingBytes();
+        await refreshLibraryServingCeiling();
         libraryServingCeilingReadAtMillis = nowMillis;
     }
 }

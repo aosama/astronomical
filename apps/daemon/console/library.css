@@ -242,6 +242,7 @@
 .library-fit-fits { color: var(--ok); }
 .library-fit-streams { color: var(--warn); }
 .library-fit-slow { color: var(--text-dim); }
+.library-fit-over-your-limit { color: var(--warn); }
 
 /* Availability badge */
 .library-availability {
