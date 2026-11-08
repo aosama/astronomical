@@ -33,8 +33,8 @@ use crate::worker::loop_types::{
     ActiveWorkerRequest, WorkerLoopCommand, WorkerLoopRuntime, WorkerLoopState,
 };
 use crate::worker::memory::demotion::MemoryDemotionRestart;
-use crate::worker::memory::idle_limit_update::queue_or_apply_mlx_memory_limit_update;
 use crate::worker::memory::limit::take_generation_start_after_pending_memory_limit;
+use crate::worker::memory::limit_update_command::queue_or_apply_mlx_memory_limit_update;
 use crate::worker::process::containment::{
     close_worker_if_running, contain_worker_failure, shutdown_worker,
 };
