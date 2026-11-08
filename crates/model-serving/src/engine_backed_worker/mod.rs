@@ -19,6 +19,11 @@ pub struct EngineBackedWorker<
     /// serving is pageable. Reported in the idle event so the daemon can
     /// name the operating-system bound whenever it clamps the ceiling.
     pub(crate) wired_residency_budget_bytes: Option<u64>,
+    /// The highest ceiling a loaded model may be raised to so it can serve at
+    /// its floor (#1902): the user's own limit when they set one below the
+    /// machine, otherwise unbounded. Zero until startup reports it, which
+    /// never raises.
+    pub(crate) floor_raise_limit_bytes: u64,
     pub(crate) worker_runtime_feature_configuration:
         Option<astronomical_ipc_protocol::WorkerRuntimeFeatureConfiguration>,
     pub(crate) selected_model: Option<support::SelectedModel>,

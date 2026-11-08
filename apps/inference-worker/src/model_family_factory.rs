@@ -48,11 +48,11 @@ pub struct ModelFamilyFactory {
     persistent_prompt_cache_enabled: bool,
     diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride,
     diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: Option<u64>,
-    /// What the hardware allows (physical memory or Metal's plannable wired
-    /// residency), fixed for the worker's lifetime. Image engines plan a load
-    /// at their floor when the ceiling they receive is this bound (#1902).
-    /// `u64::MAX` until startup reports it, which keeps loads refusing.
-    hardware_mlx_memory_ceiling_bytes: u64,
+    /// The highest ceiling an image engine may plan its load at to reach its
+    /// floor (#1902): the user's own limit, or unbounded when they set none.
+    /// Startup sets it and live limit changes update it; zero until then,
+    /// which keeps loads refusing below their floor.
+    floor_raise_limit_bytes: u64,
 }
 
 pub(crate) type InferenceWorker = EngineBackedWorker<
@@ -95,17 +95,14 @@ impl ModelFamilyFactory {
             persistent_prompt_cache_enabled,
             diagnostic_qwen3_5_engine_override: WorkerDiagnosticQwen3_5EngineOverride::Automatic,
             diagnostic_qwen3_5_resident_prefill_activation_floor_bytes: None,
-            hardware_mlx_memory_ceiling_bytes: u64::MAX,
+            floor_raise_limit_bytes: 0,
         }
     }
 
-    /// Records the ceiling the hardware itself allows; see the field.
+    /// Records how far an image load may plan above its ceiling; see the field.
     #[must_use]
-    pub(crate) fn with_hardware_mlx_memory_ceiling_bytes(
-        mut self,
-        hardware_mlx_memory_ceiling_bytes: u64,
-    ) -> Self {
-        self.hardware_mlx_memory_ceiling_bytes = hardware_mlx_memory_ceiling_bytes;
+    pub(crate) fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
         self
     }
 
@@ -344,6 +341,10 @@ impl
             usize::try_from(allocator_cache_memory_limit_bytes).unwrap_or(usize::MAX);
     }
 
+    fn update_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
+    }
+
     fn global_prompt_cache_root_directory(&self) -> Option<&std::path::Path> {
         Some(
             self.prompt_cache_config
@@ -438,7 +439,7 @@ impl ModelFamilyFactory {
                     self.performance_attribution_enabled,
                     self.performance_attribution_log_path.clone(),
                 )
-                .with_hardware_mlx_memory_ceiling_bytes(self.hardware_mlx_memory_ceiling_bytes),
+                .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
             ),
         ))
     }
@@ -494,7 +495,7 @@ impl ModelFamilyFactory {
                     self.performance_attribution_enabled,
                     self.performance_attribution_log_path.clone(),
                 )
-                .with_hardware_mlx_memory_ceiling_bytes(self.hardware_mlx_memory_ceiling_bytes),
+                .with_floor_raise_limit_bytes(self.floor_raise_limit_bytes),
             ),
         ))
     }

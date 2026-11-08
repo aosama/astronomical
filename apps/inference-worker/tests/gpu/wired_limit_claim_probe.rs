@@ -46,9 +46,9 @@ const PROBE_MAXIMUM_BYTES: usize = 2 * 1024 * 1024 * 1024;
 const PROBE_LATENCY_BUDGET: Duration = Duration::from_secs(2);
 const WALK_TOTAL_BUDGET: Duration = Duration::from_secs(20);
 const WHOLE_TEST_BUDGET: Duration = Duration::from_secs(60);
-/// The operating system keeps this much of physical RAM for itself — 8 GB
-/// on the same sticker scale users know; the walk never aims beyond it so
-/// the probe cannot starve the host.
+/// A safety bound for this measurement only, not product policy (the serving
+/// ceiling is the whole of physical memory, #1902): the walk stops 8 GB short
+/// of physical memory so the probe cannot starve the developer's own Mac.
 const OPERATING_SYSTEM_SURVIVAL_HEADROOM_BYTES: usize = 8 * 1_073_741_824;
 /// Marker from the vendored active-memory-ceiling patch; hitting it means
 /// the walk reached its own configured MLX limit, not a kernel boundary.

@@ -43,9 +43,10 @@ pub struct QwenImage21MlxComponents {
     model_directory: PathBuf,
     provenance: QwenImage21ArtifactProvenance,
     effective_mlx_memory_ceiling_bytes: usize,
-    /// What the hardware allows; `u64::MAX` until the factory reports it,
-    /// which keeps the load refusing below its floor as before.
-    hardware_mlx_memory_ceiling_bytes: u64,
+    /// The highest ceiling a load may plan at to reach its floor (#1902): the
+    /// user's own limit, or unbounded when they set none. Zero until the
+    /// factory reports it, which keeps the load refusing below its floor.
+    floor_raise_limit_bytes: u64,
     allocator_cache_memory_limit_bytes: usize,
     minimum_mlx_memory_ceiling_bytes: Option<u64>,
     performance_attribution_enabled: bool,
@@ -85,7 +86,7 @@ impl QwenImage21MlxComponents {
             model_directory: model_directory.into(),
             provenance,
             effective_mlx_memory_ceiling_bytes,
-            hardware_mlx_memory_ceiling_bytes: u64::MAX,
+            floor_raise_limit_bytes: 0,
             allocator_cache_memory_limit_bytes,
             minimum_mlx_memory_ceiling_bytes: None,
             performance_attribution_enabled,
@@ -100,15 +101,15 @@ impl QwenImage21MlxComponents {
         }
     }
 
-    /// Serves the artifact at its floor when the hardware set a ceiling below
-    /// it (#1902): the runtime initializes lazily at the raised ceiling and
-    /// macOS pages the rest. Only a ceiling the user configured below the floor
-    /// is refused, which keeps the load honest about a limit the user chose.
+    /// Serves the artifact at its floor when the ceiling is below it and the
+    /// user set no limit below it (#1902); the runtime initializes lazily at
+    /// the raised ceiling. Only a limit the user chose below the floor is
+    /// refused, which keeps the load honest about that choice.
     fn admit_load_ceiling(&mut self, minimum_mlx_memory_ceiling_bytes: u64) -> Result<(), String> {
-        if let Some(floor_ceiling_bytes) = crate::hardware_bound_model_floor_ceiling_bytes(
+        if let Some(floor_ceiling_bytes) = crate::floor_raised_ceiling_bytes(
             self.effective_mlx_memory_ceiling_bytes as u64,
-            self.hardware_mlx_memory_ceiling_bytes,
             minimum_mlx_memory_ceiling_bytes,
+            self.floor_raise_limit_bytes,
         ) {
             self.effective_mlx_memory_ceiling_bytes =
                 usize::try_from(floor_ceiling_bytes).unwrap_or(usize::MAX);
@@ -441,8 +442,8 @@ impl QwenImage21EngineComponents for QwenImage21MlxComponents {
         self.memory_telemetry()
     }
 
-    fn adopt_hardware_mlx_memory_ceiling(&mut self, hardware_mlx_memory_ceiling_bytes: u64) {
-        self.hardware_mlx_memory_ceiling_bytes = hardware_mlx_memory_ceiling_bytes;
+    fn adopt_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
     }
 
     fn update_mlx_memory_limit(

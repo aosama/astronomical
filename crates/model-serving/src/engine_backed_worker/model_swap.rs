@@ -190,8 +190,7 @@ where
             model_configuration: model_configuration.clone(),
         });
         self.minimum_mlx_memory_ceiling_bytes = minimum_mlx_memory_ceiling_bytes;
-        self.serve_loaded_model_at_its_floor_when_hardware_bound()
-            .await;
+        self.serve_loaded_model_at_its_floor_when_allowed().await;
         self.engine_placement = engine_placement;
         self.startup_residency_facts = startup_residency_facts;
         tracing::info!(

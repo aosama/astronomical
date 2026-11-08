@@ -1,6 +1,6 @@
 use crate::serving_ceiling::{
     effective_mlx_memory_ceiling_after_wired_claim, effective_mlx_memory_ceiling_bytes,
-    hardware_bound_model_floor_ceiling_bytes, plannable_wired_residency_bytes,
+    floor_raise_limit_bytes, floor_raised_ceiling_bytes, plannable_wired_residency_bytes,
 };
 
 /// The claim the 48 GB incident machine received on 2026-10-24.
@@ -120,71 +120,106 @@ fn should_keep_the_ceiling_when_the_wired_budget_is_absent_or_larger() {
 const BYTES_PER_MARKETED_GIGABYTE: u64 = 1_073_741_824;
 
 #[test]
-fn should_serve_a_model_at_its_floor_when_the_hardware_sets_the_ceiling() {
+fn should_treat_no_configured_maximum_or_one_at_the_machine_as_no_user_limit() {
+    let machine_ceiling_bytes = 16 * BYTES_PER_MARKETED_GIGABYTE;
+    assert_eq!(
+        floor_raise_limit_bytes(None, machine_ceiling_bytes),
+        u64::MAX
+    );
+    assert_eq!(
+        floor_raise_limit_bytes(Some(machine_ceiling_bytes), machine_ceiling_bytes),
+        u64::MAX
+    );
+    assert_eq!(
+        floor_raise_limit_bytes(Some(machine_ceiling_bytes - 1), machine_ceiling_bytes),
+        machine_ceiling_bytes - 1,
+        "one byte under the machine is a limit the user chose"
+    );
+}
+
+#[test]
+fn should_serve_a_model_at_its_floor_when_the_user_set_no_limit() {
     // An 8 GB Mac whose plannable wired residency is about 5.4 GB, loading a
     // dense chat model whose floor is 6.6 GB (#1902).
-    let hardware_ceiling_bytes = 5_400_000_000;
     assert_eq!(
-        hardware_bound_model_floor_ceiling_bytes(
-            hardware_ceiling_bytes,
-            hardware_ceiling_bytes,
-            6_600_000_000
-        ),
+        floor_raised_ceiling_bytes(5_400_000_000, 6_600_000_000, u64::MAX),
         Some(6_600_000_000)
     );
 }
 
 #[test]
-fn should_keep_a_user_configured_ceiling_below_the_hardware_bound() {
-    // A 48 GB Mac whose user chose 4 GB: their limit stands even though the
-    // model's floor is above it.
+fn should_raise_only_up_to_a_user_limit_above_the_wired_clamp() {
+    // A 16 GB Mac: the wired clamp leaves about 10.4 GB, the user chose 12 GB.
+    // A 11 GB floor fits the user's limit and is raised; a 14 GB floor would
+    // pass it and is not.
+    let wired_clamped_ceiling_bytes = 10_400_000_000;
+    let user_limit_bytes = 12 * BYTES_PER_MARKETED_GIGABYTE;
     assert_eq!(
-        hardware_bound_model_floor_ceiling_bytes(
-            4 * BYTES_PER_MARKETED_GIGABYTE,
-            40 * BYTES_PER_MARKETED_GIGABYTE,
-            6_600_000_000
+        floor_raised_ceiling_bytes(
+            wired_clamped_ceiling_bytes,
+            11 * BYTES_PER_MARKETED_GIGABYTE,
+            user_limit_bytes
         ),
+        Some(11 * BYTES_PER_MARKETED_GIGABYTE)
+    );
+    assert_eq!(
+        floor_raised_ceiling_bytes(
+            wired_clamped_ceiling_bytes,
+            14 * BYTES_PER_MARKETED_GIGABYTE,
+            user_limit_bytes
+        ),
+        None
+    );
+    assert_eq!(
+        floor_raised_ceiling_bytes(
+            wired_clamped_ceiling_bytes,
+            user_limit_bytes,
+            user_limit_bytes
+        ),
+        Some(user_limit_bytes),
+        "a floor exactly at the user's limit is within it"
+    );
+}
+
+#[test]
+fn should_keep_a_user_limit_below_the_model_floor() {
+    // A 48 GB Mac whose user chose 4 GB: the model's 6.6 GB floor stays refused.
+    let user_limit_bytes = 4 * BYTES_PER_MARKETED_GIGABYTE;
+    assert_eq!(
+        floor_raised_ceiling_bytes(user_limit_bytes, 6_600_000_000, user_limit_bytes),
         None
     );
 }
 
 #[test]
-fn should_leave_the_ceiling_alone_when_the_floor_fits_exactly_or_below() {
-    let hardware_ceiling_bytes = 8 * BYTES_PER_MARKETED_GIGABYTE;
-    for model_floor_bytes in [1, hardware_ceiling_bytes - 1, hardware_ceiling_bytes] {
+fn should_leave_the_ceiling_alone_when_the_floor_fits_or_no_raise_is_allowed() {
+    let ceiling_bytes = 8 * BYTES_PER_MARKETED_GIGABYTE;
+    for model_floor_bytes in [1, ceiling_bytes - 1, ceiling_bytes] {
         assert_eq!(
-            hardware_bound_model_floor_ceiling_bytes(
-                hardware_ceiling_bytes,
-                hardware_ceiling_bytes,
-                model_floor_bytes
-            ),
+            floor_raised_ceiling_bytes(ceiling_bytes, model_floor_bytes, u64::MAX),
             None,
-            "floor {model_floor_bytes} fits under the hardware ceiling"
+            "floor {model_floor_bytes} fits under the ceiling"
         );
     }
     assert_eq!(
-        hardware_bound_model_floor_ceiling_bytes(
-            hardware_ceiling_bytes,
-            hardware_ceiling_bytes,
-            hardware_ceiling_bytes + 1
-        ),
-        Some(hardware_ceiling_bytes + 1),
-        "one byte above the hardware ceiling is served at the floor"
+        floor_raised_ceiling_bytes(ceiling_bytes, ceiling_bytes + 1, 0),
+        None,
+        "a zero raise limit (not yet known) never raises"
     );
 }
 
 #[test]
-fn should_treat_each_machine_size_by_whether_its_own_memory_binds() {
+fn should_raise_on_each_machine_size_only_when_its_own_memory_binds() {
     for sticker_gigabytes in [8_u64, 16, 24, 48] {
-        let hardware_ceiling_bytes = sticker_gigabytes * BYTES_PER_MARKETED_GIGABYTE;
+        let machine_ceiling_bytes = sticker_gigabytes * BYTES_PER_MARKETED_GIGABYTE;
         let model_floor_bytes = 12 * BYTES_PER_MARKETED_GIGABYTE;
         let expected_ceiling =
-            (model_floor_bytes > hardware_ceiling_bytes).then_some(model_floor_bytes);
+            (model_floor_bytes > machine_ceiling_bytes).then_some(model_floor_bytes);
         assert_eq!(
-            hardware_bound_model_floor_ceiling_bytes(
-                hardware_ceiling_bytes,
-                hardware_ceiling_bytes,
-                model_floor_bytes
+            floor_raised_ceiling_bytes(
+                machine_ceiling_bytes,
+                model_floor_bytes,
+                floor_raise_limit_bytes(None, machine_ceiling_bytes)
             ),
             expected_ceiling,
             "{sticker_gigabytes} GB Mac with a 12 GB floor"

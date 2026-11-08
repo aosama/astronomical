@@ -75,15 +75,12 @@ impl Flux2KleinImageEngine {
         )
     }
 
-    /// Tells the engine what the hardware itself allows, so a load whose
-    /// floor is above a hardware-set ceiling plans at its floor (#1902).
+    /// Tells the engine how far a load may plan above its ceiling to reach its
+    /// floor (#1902): the user's own limit, or unbounded when they set none.
     #[must_use]
-    pub fn with_hardware_mlx_memory_ceiling_bytes(
-        mut self,
-        hardware_mlx_memory_ceiling_bytes: u64,
-    ) -> Self {
+    pub fn with_floor_raise_limit_bytes(mut self, floor_raise_limit_bytes: u64) -> Self {
         self.components
-            .adopt_hardware_mlx_memory_ceiling(hardware_mlx_memory_ceiling_bytes);
+            .adopt_floor_raise_limit(floor_raise_limit_bytes);
         self
     }
 

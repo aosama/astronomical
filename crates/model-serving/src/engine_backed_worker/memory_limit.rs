@@ -64,12 +64,14 @@ where
         // so a live raise may never plan past it: admission above the wired
         // budget is the issue #1297 gap where Metal evicts GPU-resident
         // weights and the worker dies with an out-of-memory command buffer.
-        let effective_requested_mlx_memory_ceiling_bytes =
+        let effective_requested_mlx_memory_ceiling_bytes = self.live_update_ceiling_bytes(
+            requested_mlx_memory_ceiling_bytes,
             effective_requested_ceiling_after_wired_claim(
                 requested_mlx_memory_ceiling_bytes,
                 self.machine_mlx_memory_ceiling_bytes,
                 self.wired_residency_budget_bytes,
-            );
+            ),
+        );
         let Some(loaded_runtime) = self.loaded_runtime.as_mut() else {
             return match self.plan_factory_memory_limit_adoption(
                 effective_requested_mlx_memory_ceiling_bytes,
@@ -154,29 +156,21 @@ where
         }
     }
 
-    /// Serves the just-loaded model at its floor when the hardware, not the
-    /// user, set a ceiling below that floor (#1902).
+    /// Serves the just-loaded model at its floor when its floor is above the
+    /// ceiling and raising it would not pass a limit the user set (#1902).
     ///
     /// Engines report their floor at load and size every request against the
     /// ceiling they were given, so without this a dense model larger than an
     /// 8 GB Mac's wired budget loads and then refuses even a one-token request.
-    /// Only the loaded engine is raised: the factory keeps the hardware
-    /// ceiling, so the next model is planned against the machine again. A
-    /// raise the engine cannot adopt is logged and the model keeps its
-    /// original ceiling, exactly as before this rule existed.
-    pub(super) async fn serve_loaded_model_at_its_floor_when_hardware_bound(&mut self) {
-        if self.machine_mlx_memory_ceiling_bytes == 0 {
-            return;
-        }
-        let hardware_mlx_memory_ceiling_bytes = effective_requested_ceiling_after_wired_claim(
-            self.machine_mlx_memory_ceiling_bytes,
-            self.machine_mlx_memory_ceiling_bytes,
-            self.wired_residency_budget_bytes,
-        );
-        let Some(floor_ceiling_bytes) = crate::hardware_bound_model_floor_ceiling_bytes(
+    /// The worker adopts the raised ceiling and floor so later live updates
+    /// and status see them; the factory keeps its own ceiling, so the next
+    /// model is planned against the machine again. A raise the engine cannot
+    /// adopt is logged and the model keeps its original ceiling.
+    pub(super) async fn serve_loaded_model_at_its_floor_when_allowed(&mut self) {
+        let Some(floor_ceiling_bytes) = crate::floor_raised_ceiling_bytes(
             self.effective_mlx_memory_ceiling_bytes,
-            hardware_mlx_memory_ceiling_bytes,
             self.minimum_mlx_memory_ceiling_bytes,
+            self.floor_raise_limit_bytes,
         ) else {
             return;
         };
@@ -186,17 +180,50 @@ where
         match Self::adjust_loaded_runtime_mlx_memory_limit(loaded_runtime, floor_ceiling_bytes)
             .await
         {
-            Ok(_) => tracing::info!(
-                hardware_mlx_memory_ceiling_bytes,
-                floor_ceiling_bytes,
-                "serving the loaded model at its floor above the hardware ceiling; macOS pages the rest"
-            ),
+            Ok(mlx_memory_limit_adjustment) => {
+                self.effective_mlx_memory_ceiling_bytes =
+                    mlx_memory_limit_adjustment.effective_mlx_memory_ceiling_bytes();
+                self.minimum_mlx_memory_ceiling_bytes =
+                    mlx_memory_limit_adjustment.minimum_mlx_memory_ceiling_bytes();
+                tracing::info!(
+                    floor_ceiling_bytes,
+                    "serving the loaded model at its floor above the ceiling"
+                );
+            }
             Err(raise_error) => tracing::warn!(
                 error = %raise_error,
                 floor_ceiling_bytes,
-                "the loaded model could not be raised to its floor; it keeps the hardware ceiling"
+                "the loaded model could not be raised to its floor; it keeps its ceiling"
             ),
         }
+    }
+
+    /// The ceiling a live update applies: the requested ceiling after Metal's
+    /// wired clamp, raised to the loaded model's floor when the user set no
+    /// limit below it. Without the raise, choosing "Use Max" on a model served
+    /// at its floor would push it back under that floor and refuse it. The new
+    /// raise limit also reaches the factory for the next model's load.
+    fn live_update_ceiling_bytes(
+        &mut self,
+        requested_mlx_memory_ceiling_bytes: u64,
+        wired_clamped_ceiling_bytes: u64,
+    ) -> u64 {
+        self.floor_raise_limit_bytes = crate::floor_raise_limit_bytes(
+            Some(requested_mlx_memory_ceiling_bytes),
+            self.machine_mlx_memory_ceiling_bytes,
+        );
+        if let Some(model_factory) = self.model_factory.as_mut() {
+            model_factory.update_floor_raise_limit(self.floor_raise_limit_bytes);
+        }
+        if self.loaded_runtime.is_none() {
+            return wired_clamped_ceiling_bytes;
+        }
+        crate::floor_raised_ceiling_bytes(
+            wired_clamped_ceiling_bytes,
+            self.minimum_mlx_memory_ceiling_bytes,
+            self.floor_raise_limit_bytes,
+        )
+        .unwrap_or(wired_clamped_ceiling_bytes)
     }
 
     /// Dispatches the live memory-limit change to whichever runtime is loaded.

@@ -239,8 +239,8 @@ impl Flux2KleinEngineComponents for Flux2KleinMlxComponents {
                 telemetry
             })
     }
-    fn adopt_hardware_mlx_memory_ceiling(&mut self, hardware_mlx_memory_ceiling_bytes: u64) {
-        self.hardware_mlx_memory_ceiling_bytes = hardware_mlx_memory_ceiling_bytes;
+    fn adopt_floor_raise_limit(&mut self, floor_raise_limit_bytes: u64) {
+        self.floor_raise_limit_bytes = floor_raise_limit_bytes;
     }
 
     fn update_mlx_memory_limit(
