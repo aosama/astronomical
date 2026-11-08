@@ -46,7 +46,7 @@ const LIBRARY_TABS = [
 const LIBRARY_FIT_LABELS = {
     fits: "Runs in memory on this Mac",
     streams: "Streams from your SSD on this Mac (slower)",
-    "too-big": "Needs more memory than this Mac has"
+    slow: "May be slow on this Mac"
 };
 
 // Plain-language size for download decisions: one decimal in 2^30-byte gigabytes,
@@ -57,17 +57,17 @@ function formatLibraryDownloadSize(approximateSizeBytes) {
 
 // Fit compares the model's fully loaded memory with the serving ceiling, the
 // limit the engine actually loads within. Equal counts as fitting because the
-// ceiling is the runtime's own resident limit. Below that, a model runs only if
-// the catalog carries a streaming floor measured on a real engine (experts or
-// image components paged from the SSD) and the ceiling still reaches it; a model
-// without a measured floor makes no streaming promise.
+// ceiling is the runtime's own resident limit. Below that, a model with a
+// streaming floor measured on a real engine streams experts or image components
+// from the SSD; any other model still runs, with macOS paging the rest, so it is
+// labelled as possibly slow. Nothing here ever says a model cannot run (#1902).
 function libraryFitOutcome(catalogRow, servingCeilingBytes) {
     if (!(servingCeilingBytes > 0)) return null;
     if (catalogRow.approximateMemoryBytes <= servingCeilingBytes) return "fits";
     const streamingFloorBytes = catalogRow.minimumMemoryBytes;
     return streamingFloorBytes !== null && streamingFloorBytes <= servingCeilingBytes
         ? "streams"
-        : "too-big";
+        : "slow";
 }
 
 function libraryFitLabel(catalogRow, servingCeilingBytes) {
@@ -226,7 +226,7 @@ function createLibraryParagraph(className, text) {
     return paragraph;
 }
 
-// The modifier class carries the outcome so CSS can color fits, streams and too-big apart.
+// The modifier class carries the outcome so CSS can color fits, streams and slow apart.
 function createLibraryFitLabel(catalogRow) {
     const fitOutcome = libraryFitOutcome(catalogRow, libraryServingCeilingBytes);
     if (fitOutcome === null) return null;

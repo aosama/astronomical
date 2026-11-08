@@ -47,8 +47,8 @@ test("should_label_fit_at_the_exact_memory_boundary_and_stream_only_when_allowed
     );
     assert.equal(
         vm.runInContext("libraryFitLabel(catalogRow, 7_999_999_999)", scriptContext),
-        "Needs more memory than this Mac has",
-        "one byte over the ceiling does not fit"
+        "May be slow on this Mac",
+        "one byte over the ceiling no longer runs fully in memory"
     );
     scriptContext.catalogRow.minimumMemoryBytes = 4_000_000_000;
     assert.equal(
@@ -63,8 +63,8 @@ test("should_label_fit_at_the_exact_memory_boundary_and_stream_only_when_allowed
     );
     assert.equal(
         vm.runInContext("libraryFitLabel(catalogRow, 3_999_999_999)", scriptContext),
-        "Needs more memory than this Mac has",
-        "one byte under the streaming floor cannot run"
+        "May be slow on this Mac",
+        "one byte under the streaming floor is labelled as possibly slow, never as refused"
     );
 });
 
@@ -109,7 +109,7 @@ test("should_judge_fit_against_the_lower_serving_ceiling_not_the_machine_maximum
     vm.runInContext("libraryServingCeilingBytes = readLibraryServingCeilingBytes(statusDocument)", scriptContext);
     assert.equal(
         vm.runInContext("libraryFitLabel(catalogRow, libraryServingCeilingBytes)", scriptContext),
-        "Needs more memory than this Mac has",
+        "May be slow on this Mac",
         "a model between the serving and machine ceilings must not be labelled as fitting"
     );
 });
@@ -119,7 +119,7 @@ test("should_mark_each_fit_outcome_with_its_own_css_modifier_class", () => {
     const { libraryDocument, renderedState } = renderLibraryWithEntries([
         validCatalogEntry({ huggingface_id: "astronomical-test/fits", approximate_memory_bytes: 3_000_000_000 }),
         validCatalogEntry({ huggingface_id: "astronomical-test/streams", approximate_memory_bytes: 9_000_000_000, minimum_memory_bytes: 3_500_000_000 }),
-        validCatalogEntry({ huggingface_id: "astronomical-test/too-big", approximate_memory_bytes: 9_000_000_000 })
+        validCatalogEntry({ huggingface_id: "astronomical-test/slow", approximate_memory_bytes: 9_000_000_000 })
     ], { activeTab: "more-models", servingCeilingBytes: ceilingBytes });
 
     assert.equal(renderedState, "ready");
@@ -128,7 +128,7 @@ test("should_mark_each_fit_outcome_with_its_own_css_modifier_class", () => {
     assert.deepEqual(fitClasses, [
         "library-fit-label library-fit-fits",
         "library-fit-label library-fit-streams",
-        "library-fit-label library-fit-too-big"
+        "library-fit-label library-fit-slow"
     ]);
 });
 
