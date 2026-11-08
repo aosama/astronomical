@@ -452,15 +452,57 @@ async fn should_clear_old_empty_staging_folders_at_startup() {
             !leftover_directory.exists(),
             "the empty leftover folder is removed"
         );
-        assert!(
-            test_directory
+        let staged_byte_count = staged_byte_count(
+            &test_directory
                 .path()
-                .join(format!("models/.incomplete/{REPOSITORY_ID}"))
-                .is_dir(),
+                .join(format!("models/.incomplete/{REPOSITORY_ID}")),
+        );
+        assert!(
+            staged_byte_count > 0,
             "the paused download keeps its staged bytes"
         );
         restarted_service.shutdown().await.expect("clean shutdown");
     })
     .await
     .expect("the startup cleanup journey should remain bounded");
+}
+
+/// Total bytes staged under `staging_directory`, counted recursively.
+fn staged_byte_count(staging_directory: &Path) -> u64 {
+    let mut total_bytes = 0;
+    for staging_entry in std::fs::read_dir(staging_directory).expect("staging should be readable") {
+        let staging_entry = staging_entry.expect("staging entry");
+        let entry_metadata = staging_entry.metadata().expect("staging entry metadata");
+        total_bytes += if entry_metadata.is_dir() {
+            staged_byte_count(&staging_entry.path())
+        } else {
+            entry_metadata.len()
+        };
+    }
+    total_bytes
+}
+
+/// Startup cleanup is housekeeping: when it cannot run (a symlinked staging folder, which the
+/// store refuses to follow), startup still succeeds.
+#[tokio::test]
+async fn should_start_even_when_the_staging_folder_cannot_be_tidied() {
+    let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+    let models_directory = test_directory.path().join("models");
+    let outside_directory = test_directory.path().join("outside");
+    std::fs::create_dir_all(&models_directory).expect("the models folder should be created");
+    std::fs::create_dir_all(&outside_directory).expect("the outside folder should be created");
+    std::os::unix::fs::symlink(&outside_directory, models_directory.join(".incomplete"))
+        .expect("the symlink should be created");
+    let coordinator = build_test_coordinator(
+        test_directory.path(),
+        test_catalog(),
+        Arc::new(ScriptedHub::new()),
+    );
+
+    coordinator
+        .recover_startup_state()
+        .await
+        .expect("a failed tidy-up must not stop startup");
+
+    assert!(outside_directory.is_dir());
 }

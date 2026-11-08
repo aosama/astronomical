@@ -119,6 +119,9 @@ pub enum DownloadJobError {
     InvalidStateTransition,
 }
 
+/// The hidden folder under the models folder where downloads are staged until they verify.
+pub(crate) const STAGING_DIRECTORY_NAME: &str = ".incomplete";
+
 impl DownloadJob {
     /// Creates the durable admission state before any Hub metadata request is allowed.
     pub fn new_checking_disk(
@@ -373,7 +376,7 @@ impl DownloadJob {
         let organization = identity_components.next().unwrap_or_default();
         let model_name = identity_components.next().unwrap_or_default();
         models_directory
-            .join(".incomplete")
+            .join(STAGING_DIRECTORY_NAME)
             .join(organization)
             .join(model_name)
     }

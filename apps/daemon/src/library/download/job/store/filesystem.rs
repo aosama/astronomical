@@ -106,3 +106,39 @@ pub(in crate::library::download) fn synchronize_directory(
             source,
         })
 }
+
+/// Finder writes this file into any folder someone opens; it holds view settings, never data.
+const FINDER_METADATA_FILE_NAME: &str = ".DS_Store";
+
+/// Removes `folder` when it holds nothing, or nothing but Finder's `.DS_Store`, and returns
+/// whether it was removed. Every entry is listed before anything is deleted, so a folder with any
+/// other entry is left exactly as it was. Other macOS metadata (`._*` AppleDouble files on
+/// non-APFS volumes) is deliberately kept: it is clutter at worst, and widening the rule risks
+/// deleting a file someone meant to keep.
+pub(in crate::library::download) fn remove_directory_if_only_finder_metadata(
+    folder: &Path,
+) -> Result<bool, DownloadJobStoreError> {
+    let mut finder_metadata_files = Vec::new();
+    for folder_entry in read_directory_entries(folder)? {
+        if folder_entry.file_name() != FINDER_METADATA_FILE_NAME {
+            return Ok(false);
+        }
+        finder_metadata_files.push(folder_entry.path());
+    }
+    for finder_metadata_file in finder_metadata_files {
+        remove_file_if_present(&finder_metadata_file)?;
+    }
+    remove_directory_if_empty(folder)
+}
+
+/// Lists `folder`'s entries without following any of them.
+pub(in crate::library::download) fn read_directory_entries(
+    folder: &Path,
+) -> Result<Vec<fs::DirEntry>, DownloadJobStoreError> {
+    fs::read_dir(folder)
+        .and_then(Iterator::collect::<std::io::Result<Vec<_>>>)
+        .map_err(|source| DownloadJobStoreError::InspectPath {
+            path: folder.to_path_buf(),
+            source,
+        })
+}

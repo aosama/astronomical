@@ -146,10 +146,14 @@ impl LibraryDownloadCoordinator {
         match cleanup_join {
             Ok(Ok(())) => {}
             Ok(Err(cleanup_error)) => {
-                tracing::warn!(%cleanup_error, "could not remove empty download staging folders");
+                tracing::warn!(
+                    %cleanup_error,
+                    models_directory = %self.job_store.models_directory().display(),
+                    "could not remove empty download staging folders"
+                );
             }
             Err(join_error) => {
-                tracing::warn!(%join_error, "the staging folder cleanup task did not finish");
+                tracing::warn!(%join_error, "the staging folder cleanup task panicked or was cancelled");
             }
         }
     }
