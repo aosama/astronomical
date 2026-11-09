@@ -13,6 +13,13 @@ enum PopoverTypography {
   static let headline = Font.system(size: headlinePointSize, weight: .semibold)
 }
 
+enum PopoverLayout {
+  static let width: CGFloat = 390
+  static let edgePadding: CGFloat = 16
+  /// The width rows lay out in, which contract tests measure against.
+  static let contentWidth: CGFloat = width - 2 * edgePadding
+}
+
 struct OrbitalTelemetryPopover: View {
   @Environment(\.colorScheme) private var colorScheme
   @ObservedObject var telemetryStore: TelemetryStore
@@ -87,18 +94,7 @@ struct OrbitalTelemetryPopover: View {
       }
       Divider()
       metricRow("Flight", statusDocument.flightTitle)
-      // The bar's slot is always reserved so the rows below stay still as the
-      // daemon moves between phases; the bar itself shows only when
-      // `showsProgressBar` says there is something to show. There is no
-      // spinner: the Flight and Progress rows already say what is happening.
-      ProgressView(
-        value: Double(statusDocument.progressCompletedUnitCount),
-        total: Double(max(statusDocument.progressTotalUnitCount, 1))
-      )
-      .tint(.cyan)
-      .opacity(statusDocument.showsProgressBar ? 1 : 0)
-      .accessibilityHidden(!statusDocument.showsProgressBar)
-      metricRow("Progress", statusDocument.progressTitle)
+      PopoverProgressRow(statusDocument: statusDocument)
       metricRow(statusDocument.elapsedTimeMetricTitle, statusDocument.elapsedTimeTitle)
       if let neuralEngineTitle = statusDocument.neuralEnginePrefill?.metricTitle(
         showsEstimate: !statusDocument.isActive)
@@ -222,17 +218,13 @@ struct OrbitalTelemetryPopover: View {
       }
     }
     .font(PopoverTypography.body)
-    .padding(16).frame(width: 390).background(
+    .padding(PopoverLayout.edgePadding).frame(width: PopoverLayout.width).background(
       orbitalTelemetryBackgroundColor(colorScheme: colorScheme)
     )
   }
 
   private func metricRow(_ metricLabel: String, _ metricText: String) -> some View {
-    HStack {
-      Text(metricLabel).foregroundStyle(.secondary)
-      Spacer()
-      Text(metricText).font(PopoverTypography.monospacedBody)
-    }
+    PopoverMetricRow(metricLabel: metricLabel, metricText: metricText)
   }
 
   private func summaryMetric(_ metricLabel: String, _ metricText: String) -> some View {

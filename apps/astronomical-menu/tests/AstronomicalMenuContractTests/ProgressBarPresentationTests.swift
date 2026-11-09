@@ -41,6 +41,33 @@ final class ProgressBarPresentationTests: XCTestCase {
     XCTAssertEqual(statusDocument.progressTitle, "27 tokens")
   }
 
+  func test_should_fill_the_bar_by_the_completed_fraction() throws {
+    let statusDocument = try generationStatus(processedTokens: 128, totalTokens: 512)
+
+    XCTAssertEqual(statusDocument.progressBarFillFraction, 0.25)
+    XCTAssertEqual(statusDocument.progressBarAccessibilityValue, "25 percent")
+  }
+
+  func test_should_fill_the_bar_fully_when_completed_equals_total() throws {
+    let statusDocument = try generationStatus(processedTokens: 512, totalTokens: 512)
+
+    XCTAssertEqual(statusDocument.progressBarFillFraction, 1)
+    XCTAssertEqual(statusDocument.progressBarAccessibilityValue, "100 percent")
+  }
+
+  func test_should_clamp_the_fill_when_completed_exceeds_total() throws {
+    let statusDocument = try generationStatus(processedTokens: 600, totalTokens: 512)
+
+    XCTAssertEqual(statusDocument.progressBarFillFraction, 1)
+  }
+
+  func test_should_fill_nothing_when_the_total_is_zero() throws {
+    let statusDocument = try generationStatus(processedTokens: 0, totalTokens: 0)
+
+    XCTAssertEqual(statusDocument.progressBarFillFraction, 0)
+    XCTAssertEqual(statusDocument.progressBarAccessibilityValue, "0 percent")
+  }
+
   func test_should_draw_an_empty_bar_while_idle() throws {
     let statusDocument = try JSONDecoder().decode(
       DaemonStatusDocument.self,
