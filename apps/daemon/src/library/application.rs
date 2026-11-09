@@ -8,7 +8,10 @@ use tokio::sync::Mutex as AsyncMutex;
 use crate::{
     ImageGenerationExecutor, ResolvedRuntimeConfig, ResolvedRuntimeConfigResolver, WorkerHandle,
     application::{ApplicationState, application_router},
-    library::{DownloadCatalog, LibraryDownloadCoordinator},
+    library::{
+        DownloadCatalog, LibraryDownloadCoordinator,
+        model_folder_trash::{MacTrashCommand, ModelFolderTrash},
+    },
 };
 
 pub fn build_application_with_full_control_and_library_download(
@@ -36,6 +39,7 @@ pub fn build_application_with_full_control_and_library_download(
         worker_control: Some(worker_handle),
         download_catalog,
         library_download_coordinator: Some(library_download_coordinator),
+        model_folder_trash: Arc::new(MacTrashCommand::new()),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         configured_config_snapshot,
@@ -51,6 +55,22 @@ pub fn build_application_with_library_download(
     generation_executor: impl ImageGenerationExecutor,
     download_catalog: Arc<DownloadCatalog>,
     library_download_coordinator: Arc<LibraryDownloadCoordinator>,
+) -> Router {
+    build_application_with_library_download_and_trash(
+        generation_executor,
+        download_catalog,
+        library_download_coordinator,
+        Arc::new(MacTrashCommand::new()),
+    )
+}
+
+/// The Library test application with a chosen Trash mover, so removal tests
+/// never touch the real Trash.
+pub fn build_application_with_library_download_and_trash(
+    generation_executor: impl ImageGenerationExecutor,
+    download_catalog: Arc<DownloadCatalog>,
+    library_download_coordinator: Arc<LibraryDownloadCoordinator>,
+    model_folder_trash: Arc<dyn ModelFolderTrash>,
 ) -> Router {
     let discovered_models = astronomical_config::discover_models(&[library_download_coordinator
         .models_directory()
@@ -69,6 +89,7 @@ pub fn build_application_with_library_download(
         worker_control: None,
         download_catalog,
         library_download_coordinator: Some(library_download_coordinator),
+        model_folder_trash,
         discovered_models,
         reloadable_config: None,
         configured_config_snapshot: None,

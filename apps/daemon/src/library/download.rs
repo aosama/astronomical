@@ -19,6 +19,7 @@ mod manifest_preflight_tests;
 pub(crate) mod job;
 pub(crate) mod transfer;
 
+pub use coordinator::installed_model_removal::InstalledModelRemovalError;
 pub use coordinator::{LibraryDownloadCoordinator, LibraryDownloadCoordinatorError};
 pub use disk_preflight::{
     DiskCapacityQuery, DownloadDiskCapacityCheck, DownloadDiskPreflight,

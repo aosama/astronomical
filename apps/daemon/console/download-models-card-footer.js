@@ -54,6 +54,11 @@ function createDownloadModelsPrimaryActions(catalogRow, isExpanded) {
     for (const button of downloadModelsActionButtons(catalogRow)) {
         actions.appendChild(button);
     }
+    if (canRemoveDownloadModelsModelFromDisk(catalogRow)) {
+        for (const removalControl of createDownloadModelsRemovalControls(catalogRow)) {
+            actions.appendChild(removalControl);
+        }
+    }
     const detailsButton = document.createElement("button");
     detailsButton.className = "button button-secondary download-models-details-toggle";
     detailsButton.type = "button";

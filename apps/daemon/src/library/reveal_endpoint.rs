@@ -14,7 +14,12 @@ use crate::library::{CatalogEntryProjection, project_catalog_entries};
 use crate::rest::finder_reveal::reveal_path_in_finder;
 
 pub(crate) fn library_reveal_routes() -> Router<ApplicationState> {
-    Router::new().route("/v1/library/reveal", post(reveal_library_model))
+    // Opening Finder on a local folder answers only this instance's own page.
+    Router::new()
+        .route("/v1/library/reveal", post(reveal_library_model))
+        .route_layer(axum::middleware::from_fn(
+            crate::rest::loopback_browser_guard::refuse_foreign_browser_requests,
+        ))
 }
 
 #[derive(Debug, Deserialize)]

@@ -133,6 +133,7 @@ function renderDownloadModelsCatalogDocument(catalogDocument, catalogContainer) 
         downloadModelsActiveTab,
         downloadModelsServingCeilingBytes,
         downloadModelsCeilingIsUserLimit,
+        ...downloadModelsRemovalRenderState(), // changes no catalog field, so it counts here
     ]);
     if (renderStateFingerprint === downloadModelsRenderedStateFingerprint) {
         return downloadModelsRenderedStateOutcome;
@@ -276,6 +277,7 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
             ? catalogEntry.minimum_memory_bytes
             : null,
         readyOnThisMac: catalogEntry.ready_on_this_mac === true,
+        removableFromDisk: catalogEntry.removable_from_disk === true,
         destinationDirectory: typeof catalogEntry.destination_directory === "string"
             ? catalogEntry.destination_directory
             : null,

@@ -457,6 +457,10 @@ impl DownloadPublicationRefresh for IgnoreDiscoveryRefresh {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
+
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
 }
 
 fn repository_metadata_response() -> HubHttpResponse {

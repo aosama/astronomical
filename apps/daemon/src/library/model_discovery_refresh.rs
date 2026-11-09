@@ -44,10 +44,43 @@ impl DownloadPublicationRefresh for LibraryModelDiscoveryRefresh {
             )
             .into());
         }
+        // An added model gets its policies before it becomes requestable, so a
+        // request never names a model the worker has no policy for.
+        self.update_worker_policies(&candidate_config)?;
+        self.make_discovery_live(candidate_config)
+    }
+
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        let candidate_config = self.runtime_config_resolver.load()?;
+        let shrunk_config_policies = Arc::clone(&candidate_config.model_policy_catalog);
+        // The reverse order for a removed model: it stops being requestable
+        // first, so no new request can pick a model whose files are already in
+        // the Trash, and only then does the worker drop its policy.
+        self.make_discovery_live(candidate_config)?;
+        self.runtime_handle.block_on(
+            self.worker_handle
+                .update_model_policy_catalog(shrunk_config_policies),
+        )?;
+        Ok(())
+    }
+}
+
+impl LibraryModelDiscoveryRefresh {
+    fn update_worker_policies(
+        &self,
+        candidate_config: &ResolvedRuntimeConfig,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         self.runtime_handle.block_on(
             self.worker_handle
                 .update_model_policy_catalog(Arc::clone(&candidate_config.model_policy_catalog)),
         )?;
+        Ok(())
+    }
+
+    fn make_discovery_live(
+        &self,
+        candidate_config: ResolvedRuntimeConfig,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let mut live_config = self
             .reloadable_config
             .write()

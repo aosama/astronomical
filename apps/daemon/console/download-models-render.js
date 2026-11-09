@@ -426,7 +426,8 @@ function createDownloadModelsCatalogRow(catalogRow, allRows) {
     }
     const progress = createDownloadModelsProgress(catalogRow);
     if (progress.firstChild) row.appendChild(progress);
-    const detailText = downloadModelsProgressDetail(catalogRow);
+    // A download's progress outranks an older removal notice on the same card.
+    const detailText = downloadModelsProgressDetail(catalogRow) || downloadModelsRemovalNoticeFor(catalogRow);
     if (detailText) {
         const detail = document.createElement("p");
         detail.className = "download-models-download-detail";

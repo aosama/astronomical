@@ -88,6 +88,19 @@ pub(crate) fn refusal_for_foreign_request(headers: &HeaderMap) -> Option<Respons
     )
 }
 
+/// The same refusal as a route layer, for routers whose every endpoint acts on
+/// this Mac (downloads, Finder reveals, moving models to the Trash), so a new
+/// handler on such a router cannot forget the check.
+pub(crate) async fn refuse_foreign_browser_requests(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    match refusal_for_foreign_request(request.headers()) {
+        Some(refusal) => refusal,
+        None => next.run(request).await,
+    }
+}
+
 #[cfg(test)]
 #[path = "loopback_browser_guard_tests.rs"]
 mod tests;

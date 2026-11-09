@@ -96,3 +96,31 @@ fn write_atomic_provenance_file(
     }
     synchronize_directory(provenance_directory)
 }
+
+/// Whether `model_directory` holds the provenance record a Download Models
+/// publication writes, naming `huggingface_id`. Only such a folder may be
+/// removed from disk: a model discovered anywhere else (a configured folder,
+/// the Hugging Face cache) was put there by the person, not by Astronomical.
+pub(crate) fn publication_provenance_names_model(
+    model_directory: &Path,
+    huggingface_id: &str,
+) -> bool {
+    let provenance_file_path = model_directory.join(LIBRARY_PROVENANCE_FILE_NAME);
+    let Ok(Some(provenance_metadata)) = metadata_without_symlink(&provenance_file_path) else {
+        return false;
+    };
+    if !provenance_metadata.is_file() {
+        return false;
+    }
+    let Ok(provenance_bytes) = fs::read(&provenance_file_path) else {
+        return false;
+    };
+    serde_json::from_slice::<serde_json::Value>(&provenance_bytes)
+        .ok()
+        .and_then(|provenance_document| {
+            provenance_document["provider_model_id"]
+                .as_str()
+                .map(|provider_model_id| provider_model_id == huggingface_id)
+        })
+        .unwrap_or(false)
+}

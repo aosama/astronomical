@@ -324,7 +324,17 @@
     gap: 12px 20px;
     margin-top: 14px;
 }
-.download-models-card-footer .download-models-primary-actions { margin-top: 0; margin-left: auto; }
+.download-models-card-footer .download-models-primary-actions { margin-top: 0; margin-left: auto; justify-content: flex-end; }
+/* The in-card removal question takes its own line just above the buttons, in
+   the warning colour, so the person reads it right where they clicked and the
+   buttons keep one row. */
+.download-models-removal-question {
+    flex-basis: 100%;
+    order: -1;
+    color: var(--warn);
+    font-size: var(--text-md);
+    text-align: right;
+}
 /* The arrow-into-tray icon is a CSS mask, so it takes the button's own text
    colour and the button's text stays the plain word the tests and screen
    readers see. */

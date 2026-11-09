@@ -43,6 +43,7 @@ async fn get_library_catalog(
         entries.push(LibraryCatalogEntryResponse::from_entry(
             projection,
             destination_directory,
+            is_removable_from_disk(&application_state, projection),
         ));
     }
     let models_download_directory =
@@ -60,6 +61,25 @@ async fn get_library_catalog(
         models_download_directory,
         entries,
     })
+}
+
+/// Offered only for a model on this Mac whose folder Download Models itself
+/// published, so the page never offers to remove a copy the person placed,
+/// and only where this Mac can move folders to the Trash; elsewhere the page
+/// keeps showing the folder in Finder instead of a button that can only fail.
+fn is_removable_from_disk(
+    application_state: &ApplicationState,
+    projection: &super::CatalogEntryProjection,
+) -> bool {
+    projection.ready_on_this_mac
+        && application_state.model_folder_trash.is_available()
+        && application_state
+            .library_download_coordinator
+            .as_ref()
+            .is_some_and(|download_coordinator| {
+                download_coordinator
+                    .is_removable_installation(projection.catalog_entry.huggingface_id())
+            })
 }
 
 #[derive(Debug, Serialize)]
@@ -88,6 +108,7 @@ struct LibraryCatalogEntryResponse {
     minimum_memory_bytes: Option<u64>,
     public: bool,
     ready_on_this_mac: bool,
+    removable_from_disk: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     destination_directory: Option<String>,
     download_state: Option<&'static str>,
@@ -119,6 +140,7 @@ impl LibraryCatalogEntryResponse {
     fn from_entry(
         projection: &super::CatalogEntryProjection,
         destination_directory: Option<String>,
+        removable_from_disk: bool,
     ) -> Self {
         let catalog_entry = projection.catalog_entry;
         let capabilities = &projection.capabilities;
@@ -136,6 +158,7 @@ impl LibraryCatalogEntryResponse {
             minimum_memory_bytes: catalog_entry.minimum_memory_bytes(),
             public: true,
             ready_on_this_mac: projection.ready_on_this_mac,
+            removable_from_disk,
             destination_directory,
             download_state: projection.download_state,
             description: catalog_entry.description().map(str::to_owned),

@@ -25,6 +25,11 @@ pub(crate) fn library_download_routes() -> Router<ApplicationState> {
         .route("/v1/library/download/resume", post(resume_download))
         .route("/v1/library/download/cancel", post(cancel_download))
         .layer(DefaultBodyLimit::max(MAXIMUM_DOWNLOAD_CONTROL_BODY_BYTES))
+        // Starting a multi-gigabyte download is not something any web page on
+        // this Mac may trigger; tools that send no Origin still pass.
+        .route_layer(axum::middleware::from_fn(
+            crate::rest::loopback_browser_guard::refuse_foreign_browser_requests,
+        ))
 }
 
 #[derive(Debug, Deserialize)]
@@ -206,7 +211,7 @@ fn coordinator_error_response(download_error: LibraryDownloadCoordinatorError) -
         | LibraryDownloadCoordinatorError::BackgroundTask(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "download_failed",
-            "The model download could not be updated. Retry from Library.",
+            "The model download could not be updated. Retry from Download Models.",
         ),
     };
     (

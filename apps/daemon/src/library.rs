@@ -6,6 +6,8 @@ pub(crate) mod crypto_provider;
 pub(crate) mod download;
 pub(crate) mod hub;
 pub(crate) mod model_discovery_refresh;
+pub(crate) mod model_folder_trash;
+mod removal_endpoint;
 mod reveal_endpoint;
 
 pub(crate) use catalog::{
@@ -42,4 +44,5 @@ pub use hub::{
     HuggingFaceHubError, HuggingFaceHubLimits, HuggingFaceManifest,
 };
 pub use hub::{ReqwestHubTransport, ReqwestHubTransportBuildError};
+pub(crate) use removal_endpoint::library_removal_routes;
 pub(crate) use reveal_endpoint::library_reveal_routes;

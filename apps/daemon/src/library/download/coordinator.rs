@@ -46,6 +46,10 @@ impl DownloadPublicationRefresh for ProgressPublishingRefresh {
         self.progress_snapshot.publish(self.publishing_job.clone());
         self.discovery_refresh.refresh(published_directory)
     }
+
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.discovery_refresh.refresh_after_removal()
+    }
 }
 
 /// Coordinates REST controls with one restart-safe background journey.
@@ -526,3 +530,6 @@ fn current_unix_millis() -> u64 {
         .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
         .unwrap_or_default()
 }
+
+#[path = "installed_model_removal.rs"]
+pub(crate) mod installed_model_removal;

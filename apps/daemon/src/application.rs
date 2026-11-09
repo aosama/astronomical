@@ -50,6 +50,8 @@ pub(crate) struct ApplicationState {
     /// Immutable release-bundled model catalog validated before production startup.
     pub(crate) download_catalog: Arc<DownloadCatalog>,
     pub(crate) library_download_coordinator: Option<Arc<LibraryDownloadCoordinator>>,
+    /// Moves a removed model's folder to the Trash; tests substitute a fake.
+    pub(crate) model_folder_trash: Arc<dyn crate::library::model_folder_trash::ModelFolderTrash>,
     /// Executable models discovered from configured directories at startup.
     pub(crate) discovered_models: Vec<DiscoveredModel>,
     /// Reloadable runtime config shared by the config-reload endpoint and the
@@ -125,6 +127,7 @@ pub fn build_application_with_discovered_models(
         worker_control: None,
         download_catalog: Arc::new(DownloadCatalog::empty()),
         library_download_coordinator: None,
+        model_folder_trash: Arc::new(crate::library::model_folder_trash::MacTrashCommand::new()),
         discovered_models,
         reloadable_config: None,
         configured_config_snapshot: None,
@@ -150,6 +153,7 @@ pub fn build_application_with_download_catalog(
         worker_control: None,
         download_catalog: Arc::new(download_catalog),
         library_download_coordinator: None,
+        model_folder_trash: Arc::new(crate::library::model_folder_trash::MacTrashCommand::new()),
         discovered_models: Vec::new(),
         reloadable_config: None,
         configured_config_snapshot: None,
@@ -177,6 +181,7 @@ pub fn build_application_with_shutdown(
         worker_control: None,
         download_catalog: Arc::new(DownloadCatalog::empty()),
         library_download_coordinator: None,
+        model_folder_trash: Arc::new(crate::library::model_folder_trash::MacTrashCommand::new()),
         discovered_models: Vec::new(),
         reloadable_config: None,
         configured_config_snapshot: None,
@@ -223,6 +228,7 @@ pub fn build_development_application_with_reload(
         worker_control: None,
         download_catalog: Arc::new(DownloadCatalog::empty()),
         library_download_coordinator: None,
+        model_folder_trash: Arc::new(crate::library::model_folder_trash::MacTrashCommand::new()),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         configured_config_snapshot,
@@ -351,6 +357,7 @@ pub fn build_application_with_full_control_and_download_catalog(
         worker_control: Some(worker_handle),
         download_catalog: Arc::new(download_catalog),
         library_download_coordinator: None,
+        model_folder_trash: Arc::new(crate::library::model_folder_trash::MacTrashCommand::new()),
         discovered_models: initial_models,
         reloadable_config: Some(reloadable_config),
         configured_config_snapshot,
@@ -394,6 +401,7 @@ fn core_api_routes() -> Router<ApplicationState> {
         .merge(console_routes())
         .merge(library_catalog_routes())
         .merge(crate::library::library_reveal_routes())
+        .merge(crate::library::library_removal_routes())
         .merge(library_download_routes())
         .merge(crate::rest::config_reveal::config_reveal_routes())
         .merge(system_telemetry_routes())

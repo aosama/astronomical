@@ -179,6 +179,10 @@ impl DownloadPublicationRefresh for RecordingRefresh {
             .push(published_directory.to_path_buf());
         Ok(())
     }
+
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
 }
 
 pub(super) struct FailingRefresh;
@@ -188,6 +192,10 @@ impl DownloadPublicationRefresh for FailingRefresh {
         &self,
         _published_directory: &Path,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Err("scripted discovery refresh failure".into())
+    }
+
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Err("scripted discovery refresh failure".into())
     }
 }
