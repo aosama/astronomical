@@ -18,7 +18,7 @@ use thiserror::Error;
 use super::LibraryDownloadCoordinator;
 use crate::library::DownloadJobState;
 use crate::library::download::job::store::filesystem::{
-    ensure_descendant_directory_or_absent, metadata_without_symlink,
+    ensure_descendant_directory_or_absent, metadata_without_symlink, remove_directory_if_empty,
 };
 use crate::library::download::publication::provenance::publication_provenance_names_model;
 use crate::library::model_folder_trash::{ModelFolderTrash, ModelFolderTrashError};
@@ -78,6 +78,7 @@ impl LibraryDownloadCoordinator {
         self.refuse_while_this_model_downloads(huggingface_id)
             .await?;
         let model_folder = self.installed_model_folder(huggingface_id)?;
+        let publisher_folder = model_folder.parent().map(Path::to_path_buf);
         let trash_outcome = tokio::task::spawn_blocking(move || {
             model_folder_trash.move_to_trash(&model_folder)
         })
@@ -90,6 +91,7 @@ impl LibraryDownloadCoordinator {
             InstalledModelRemovalError::Trash(ModelFolderTrashError::Failed)
         })?;
         trash_outcome?;
+        self.remove_empty_publisher_folder(publisher_folder.as_deref());
         self.validated_publications
             .lock()
             .await
@@ -115,6 +117,22 @@ impl LibraryDownloadCoordinator {
                 Err(InstalledModelRemovalError::DownloadInProgress)
             }
             _ => Ok(()),
+        }
+    }
+
+    /// A model's folder sits under its publisher's folder (`<models>/<org>/<name>`);
+    /// once the last model of that publisher moves to the Trash the empty
+    /// publisher folder is removed too, so Finder shows no leftover. A folder
+    /// holding anything else, even Finder's own `.DS_Store`, stays.
+    fn remove_empty_publisher_folder(&self, publisher_folder: Option<&Path>) {
+        let Some(publisher_folder) = publisher_folder else {
+            return;
+        };
+        if publisher_folder.parent() != Some(self.job_store.models_directory()) {
+            return;
+        }
+        if let Err(removal_error) = remove_directory_if_empty(publisher_folder) {
+            tracing::warn!(%removal_error, "the empty publisher folder could not be removed");
         }
     }
 

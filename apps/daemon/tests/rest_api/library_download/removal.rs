@@ -163,6 +163,18 @@ async fn should_move_a_downloaded_model_to_the_trash_and_stop_listing_it_on_this
         let catalog_entry = first_catalog_entry(&application).await;
         assert_eq!(catalog_entry["ready_on_this_mac"], false);
         assert_eq!(catalog_entry["removable_from_disk"], false);
+        let publisher_folder = installed_model_folder(test_directory.path())
+            .parent()
+            .expect("the model folder should have a publisher folder")
+            .to_path_buf();
+        assert!(
+            !publisher_folder.exists(),
+            "the publisher folder left empty by the removal is tidied away"
+        );
+        assert!(
+            test_directory.path().join("models").is_dir(),
+            "the models folder itself stays"
+        );
     })
     .await
     .expect("the removal journey must finish within five seconds");
