@@ -41,7 +41,7 @@ use std::{
 use crate::{MlxRuntimeError, safetensors::read_metrics::PositionalFileReadMetrics};
 use mlx_c_rust::raw;
 
-use super::bounded_range_read_concurrency::read_source_interval;
+use super::bounded_range_read_concurrency::{SourcePiece, read_source_pieces};
 use super::lazy_map::BoundedReadInterval;
 
 /// Label MLX-C can surface for this reader in diagnostics.
@@ -52,7 +52,7 @@ pub(super) struct BoundedMultiRangeReaderState {
     source_file: File,
     synthetic_header_bytes: Vec<u8>,
     /// Sorted by virtual payload offset; the binary search in
-    /// `read_payload_at_offset` relies on that ordering.
+    /// `plan_interval_pieces` relies on that ordering.
     intervals: Vec<BoundedReadInterval>,
     total_payload_bytes: u64,
     cursor: Mutex<BoundedReaderCursor>,
@@ -325,63 +325,92 @@ unsafe extern "C" fn bounded_reader_read_at_offset(
     .unwrap_or(0)
 }
 
-/// Serves `byte_count` virtual bytes at `offset_bytes`, header first.
+/// Serves `byte_count` virtual bytes at `offset_bytes`, header first, and
+/// returns how many were served.
 ///
-/// A read may straddle the header/payload boundary; the two-phase copy below
-/// serves the header remainder from memory and immediately continues into
-/// payload bytes so the caller still receives exactly `bytes_to_read`.
+/// A failed payload read returns zero bytes. MLX-C's reader checks only the
+/// returned count and MLX's Load never asks `is_good`, so returning the full
+/// count after a failed source read would hand MLX whatever its (possibly
+/// recycled) buffer already held as expert weights, with no error anywhere.
 fn read_virtual_bytes(
     reader_state: &BoundedMultiRangeReaderState,
     destination: *mut c_char,
     byte_count: usize,
     offset_bytes: u64,
 ) -> usize {
+    let Some(destination_bytes) =
+        claim_virtual_destination(reader_state, destination, byte_count, offset_bytes)
+    else {
+        return 0;
+    };
+    if serve_virtual_bytes(reader_state, destination_bytes, offset_bytes) {
+        destination_bytes.len()
+    } else {
+        0
+    }
+}
+
+/// The destination trimmed to the virtual bytes that exist at `offset_bytes`,
+/// or `None` when there is nothing to serve. An offset past the end or a null
+/// destination also latches the reader's error state.
+fn claim_virtual_destination<'destination>(
+    reader_state: &BoundedMultiRangeReaderState,
+    destination: *mut c_char,
+    byte_count: usize,
+    offset_bytes: u64,
+) -> Option<&'destination mut [u8]> {
     let virtual_size_bytes = reader_state.total_virtual_size();
     if offset_bytes >= virtual_size_bytes {
         reader_state.is_good.store(false, Ordering::Release);
-        return 0;
+        return None;
     }
     let bytes_to_read = byte_count.min((virtual_size_bytes - offset_bytes) as usize);
     if bytes_to_read == 0 {
-        return 0;
+        return None;
     }
     if destination.is_null() {
         reader_state.is_good.store(false, Ordering::Release);
-        return 0;
+        return None;
     }
+    // SAFETY: MLX supplies writable storage for exactly `byte_count` bytes,
+    // of which this borrows the first `bytes_to_read`, for this callback only.
+    Some(unsafe { std::slice::from_raw_parts_mut(destination.cast::<u8>(), bytes_to_read) })
+}
 
-    // SAFETY: MLX supplies writable storage for exactly `byte_count` bytes.
-    let destination_bytes =
-        unsafe { std::slice::from_raw_parts_mut(destination.cast::<u8>(), bytes_to_read) };
+/// Fills `destination_bytes` from virtual offset `offset_bytes`. A read may
+/// straddle the header/payload boundary: the header remainder is copied from
+/// memory and the read continues straight into payload bytes.
+fn serve_virtual_bytes(
+    reader_state: &BoundedMultiRangeReaderState,
+    destination_bytes: &mut [u8],
+    offset_bytes: u64,
+) -> bool {
     let header_byte_count = reader_state.synthetic_header_bytes.len() as u64;
-    if offset_bytes < header_byte_count {
+    let header_bytes_to_copy = if offset_bytes < header_byte_count {
         let header_offset = offset_bytes as usize;
-        let header_bytes_remaining = header_byte_count as usize - header_offset;
-        let header_bytes_to_read = bytes_to_read.min(header_bytes_remaining);
-        destination_bytes[..header_bytes_to_read].copy_from_slice(
+        let header_bytes_to_copy = destination_bytes
+            .len()
+            .min(header_byte_count as usize - header_offset);
+        destination_bytes[..header_bytes_to_copy].copy_from_slice(
             &reader_state.synthetic_header_bytes
-                [header_offset..header_offset + header_bytes_to_read],
+                [header_offset..header_offset + header_bytes_to_copy],
         );
-        if header_bytes_to_read < bytes_to_read {
-            read_payload_at_offset(
-                reader_state,
-                destination_bytes,
-                header_bytes_to_read,
-                bytes_to_read - header_bytes_to_read,
-                offset_bytes + header_bytes_to_read as u64 - header_byte_count,
-            );
-        }
-        return bytes_to_read;
-    }
-
+        header_bytes_to_copy
+    } else {
+        0
+    };
+    let payload_byte_count = destination_bytes.len() - header_bytes_to_copy;
+    // Saturating: a read that ends inside the header has no payload bytes,
+    // and its payload offset is never used.
+    let virtual_payload_offset =
+        (offset_bytes + header_bytes_to_copy as u64).saturating_sub(header_byte_count);
     read_payload_at_offset(
         reader_state,
         destination_bytes,
-        0,
-        bytes_to_read,
-        offset_bytes - header_byte_count,
-    );
-    bytes_to_read
+        header_bytes_to_copy,
+        payload_byte_count,
+        virtual_payload_offset,
+    )
 }
 
 /// Writes are structurally impossible on a virtual payload: there is no
@@ -430,65 +459,121 @@ unsafe fn with_bounded_reader_state<Output>(
     Some(operation(reader_state))
 }
 
-/// Translates one contiguous virtual-payload span into source-file reads.
+/// One source read that fills part of a virtual-payload span.
+#[derive(Debug)]
+struct IntervalPiece {
+    destination_offset: usize,
+    byte_count: usize,
+    source_file_offset: u64,
+}
+
+/// Translates one contiguous virtual-payload span into source-file reads and
+/// performs them, returning whether every byte was read.
 ///
-/// Walks interval by interval: a binary search finds the interval containing
-/// the current offset, the overlap is read positionally (through the
-/// concurrency-limited path), and the walk repeats until the span is
-/// satisfied. Any offset that lands between intervals — impossible after
-/// construction validation, but defensive here — fails the reader rather
-/// than inventing bytes.
+/// The span is cut into one piece per interval it touches, then the pieces
+/// are read by `read_source_pieces`, concurrently when the span is large
+/// enough (see its documentation for the measurement). A failure latches the
+/// reader's error state as well as returning `false`.
 fn read_payload_at_offset(
     reader_state: &BoundedMultiRangeReaderState,
     destination: &mut [u8],
     destination_offset: usize,
     byte_count: usize,
-    payload_offset: u64,
-) {
+    virtual_payload_offset: u64,
+) -> bool {
     if byte_count == 0 {
-        return;
+        return true;
     }
-    let mut bytes_remaining = byte_count;
-    let mut current_payload_offset = payload_offset;
-    let mut current_destination_offset = destination_offset;
-
-    while bytes_remaining > 0 {
-        let interval_index = match reader_state.intervals.binary_search_by(|interval| {
-            let interval_start = interval.virtual_payload_offset;
-            let interval_end = interval.virtual_payload_offset + interval.source_byte_count as u64;
-            if current_payload_offset < interval_start {
-                std::cmp::Ordering::Greater
-            } else if current_payload_offset >= interval_end {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Equal
-            }
-        }) {
-            Ok(interval_index) => interval_index,
-            Err(_) => {
-                reader_state.is_good.store(false, Ordering::Release);
-                return;
-            }
-        };
-        let interval = &reader_state.intervals[interval_index];
-        let offset_within_interval = current_payload_offset - interval.virtual_payload_offset;
-        let bytes_available_in_interval =
-            interval.source_byte_count - offset_within_interval as usize;
-        let bytes_from_interval = bytes_remaining.min(bytes_available_in_interval);
-        let source_offset = interval.source_file_offset + offset_within_interval;
-        let destination_end = current_destination_offset + bytes_from_interval;
-        let read_succeeded = read_source_interval(
+    let payload_was_read = plan_interval_pieces(
+        &reader_state.intervals,
+        destination_offset,
+        byte_count,
+        virtual_payload_offset,
+    )
+    .is_some_and(|interval_pieces| {
+        read_source_pieces(
             &reader_state.source_file,
-            &mut destination[current_destination_offset..destination_end],
-            source_offset,
+            claim_piece_destinations(destination, &interval_pieces),
             reader_state.expert_file_read_metrics.as_deref(),
-        );
-        if !read_succeeded {
-            reader_state.is_good.store(false, Ordering::Release);
-            return;
-        }
-        current_payload_offset += bytes_from_interval as u64;
-        current_destination_offset = destination_end;
+        )
+    });
+    if !payload_was_read {
+        reader_state.is_good.store(false, Ordering::Release);
+    }
+    payload_was_read
+}
+
+/// The pieces that tile the span, in destination order, or `None` when an
+/// offset lands between intervals or past the last one: impossible after
+/// construction validation, but defensive here so the reader fails rather
+/// than inventing bytes.
+fn plan_interval_pieces(
+    intervals: &[BoundedReadInterval],
+    destination_offset: usize,
+    byte_count: usize,
+    virtual_payload_offset: u64,
+) -> Option<Vec<IntervalPiece>> {
+    let mut interval_pieces = Vec::new();
+    let mut bytes_remaining = byte_count;
+    let mut current_virtual_offset = virtual_payload_offset;
+    let mut current_destination_offset = destination_offset;
+    while bytes_remaining > 0 {
+        let interval_index = intervals
+            .binary_search_by(|interval| {
+                interval_order_for_offset(interval, current_virtual_offset)
+            })
+            .ok()?;
+        let interval = &intervals[interval_index];
+        let offset_within_interval = current_virtual_offset - interval.virtual_payload_offset;
+        let bytes_from_interval =
+            bytes_remaining.min(interval.source_byte_count - offset_within_interval as usize);
+        interval_pieces.push(IntervalPiece {
+            destination_offset: current_destination_offset,
+            byte_count: bytes_from_interval,
+            source_file_offset: interval.source_file_offset + offset_within_interval,
+        });
+        current_virtual_offset += bytes_from_interval as u64;
+        current_destination_offset += bytes_from_interval;
         bytes_remaining -= bytes_from_interval;
     }
+    Some(interval_pieces)
 }
+
+fn interval_order_for_offset(
+    interval: &BoundedReadInterval,
+    virtual_payload_offset: u64,
+) -> std::cmp::Ordering {
+    let interval_end = interval.virtual_payload_offset + interval.source_byte_count as u64;
+    if virtual_payload_offset < interval.virtual_payload_offset {
+        std::cmp::Ordering::Greater
+    } else if virtual_payload_offset >= interval_end {
+        std::cmp::Ordering::Less
+    } else {
+        std::cmp::Ordering::Equal
+    }
+}
+
+/// Splits `destination` into one disjoint mutable slice per piece. The
+/// planner emits pieces that tile the span in order, so each slice starts
+/// where the previous one ended.
+fn claim_piece_destinations<'destination>(
+    destination: &'destination mut [u8],
+    interval_pieces: &[IntervalPiece],
+) -> Vec<SourcePiece<'destination>> {
+    let mut unclaimed_destination = &mut destination[interval_pieces[0].destination_offset..];
+    let mut source_pieces = Vec::with_capacity(interval_pieces.len());
+    for interval_piece in interval_pieces {
+        let (piece_destination, remaining_destination) =
+            std::mem::take(&mut unclaimed_destination).split_at_mut(interval_piece.byte_count);
+        source_pieces.push(SourcePiece {
+            destination: piece_destination,
+            source_file_offset: interval_piece.source_file_offset,
+        });
+        unclaimed_destination = remaining_destination;
+    }
+    source_pieces
+}
+
+#[cfg(test)]
+#[path = "bounded_range_reader_tests.rs"]
+mod bounded_range_reader_tests;

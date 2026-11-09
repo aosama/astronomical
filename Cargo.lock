@@ -59,6 +59,7 @@ dependencies = [
  "base64 0.23.1",
  "futures-util",
  "image",
+ "libc",
  "mlx-c-rust",
  "serde",
  "serde_json",

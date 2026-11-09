@@ -1,14 +1,22 @@
-//! Bounds parallel positional reads for large virtual SafeTensors intervals.
+//! Bounds parallel positional reads for virtual SafeTensors spans.
 //!
 //! # Why parallelism lives here and nowhere else
 //!
 //! The bounded reader must borrow MLX-owned destination storage (the raw
 //! pointer MLX passed to the vtable callback), so it cannot copy into an
 //! intermediate buffer and hand that to a thread pool. Instead, scoped
-//! workers partition one large contiguous destination slice and read
-//! positionally straight into it — no intermediate copy, and `thread::scope`
-//! guarantees every worker has exited before the callback returns the
-//! destination to MLX.
+//! workers read positionally straight into disjoint slices of that
+//! destination — no intermediate copy, and `thread::scope` guarantees every
+//! worker has exited before the callback returns the destination to MLX.
+//!
+//! Two shapes of parallelism live here:
+//!
+//! - **One large interval** is partitioned across workers
+//!   (`read_source_interval`).
+//! - **One span made of many intervals** — MLX asks for one span per tensor,
+//!   and a routed page's span holds one interval per run of selected
+//!   experts — has its pieces claimed by a bounded set of workers
+//!   (`read_source_pieces`).
 //!
 //! # The measured numbers behind the constants
 //!
@@ -39,16 +47,26 @@
 use std::{
     fs::File,
     os::unix::fs::FileExt,
-    sync::{Condvar, Mutex, MutexGuard, OnceLock},
+    sync::{
+        Condvar, Mutex, MutexGuard, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
     thread,
 };
 
 use crate::safetensors::read_metrics::PositionalFileReadMetrics;
 
 // MLX's path reader uses this threshold and four readers. Matching the threshold
-// boundary avoids thread setup for routed expert pages while retaining
+// boundary keeps one routed interval on a single read while retaining
 // large-layer parallelism.
 const PARALLEL_READ_MINIMUM_BYTES: usize = 1 << 25;
+// One piece worker per this many span bytes. Cold, even a routed page's small
+// scales and biases spans (eight 32 KiB slices) gain from reads in flight
+// together, but a page the file cache still holds copies 32 KiB faster than a
+// thread starts. Measured on an 8-expert page (see `read_source_pieces`):
+// a worker per piece took the cold page from 4.40 to 2.88 ms but the warm page
+// from 0.69 to 0.80 ms; a worker per 64 KiB keeps 2.88 ms cold and 0.64 ms warm.
+const SPAN_BYTES_PER_PIECE_WORKER: usize = 64 * 1024;
 // See the module documentation for the measurements behind this value.
 const MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT: usize = 16;
 static POSITIONAL_READ_CONCURRENCY_LIMITER: OnceLock<PositionalReadConcurrencyLimiter> =
@@ -186,6 +204,109 @@ fn measure_source_read(
     }
 }
 
+/// One source read that fills one disjoint slice of MLX's destination.
+pub(super) struct SourcePiece<'destination> {
+    pub(super) destination: &'destination mut [u8],
+    pub(super) source_file_offset: u64,
+}
+
+/// Reads every piece of one virtual span, on as many workers as
+/// `piece_worker_count` allows.
+///
+/// MLX's Load hands the reader one span per tensor; for a routed page it is
+/// one interval per selected expert. Reading those one after another kept the
+/// SSD at a queue depth of one per tensor. Measured through MLX on an 8-expert
+/// page of a 35B A3B 8-bit model (26.7 MB; `cargo
+/// measure-cold-expert-page-reads`), the production page load went from
+/// 4.40 to 2.88 ms read from the SSD, and from 0.69 to 0.64 ms read from the
+/// file cache.
+///
+/// The calling thread is one of the workers. A worker the operating system
+/// refuses to start is skipped and its share is drained by the others. Every
+/// piece is attempted and every worker joined even after a failure; the
+/// result is `true` only when all pieces read exactly.
+pub(super) fn read_source_pieces(
+    source_file: &File,
+    source_pieces: Vec<SourcePiece<'_>>,
+    positional_file_read_metrics: Option<&PositionalFileReadMetrics>,
+) -> bool {
+    let span_byte_count: usize = source_pieces
+        .iter()
+        .map(|source_piece| source_piece.destination.len())
+        .sum();
+    let worker_count = piece_worker_count(
+        source_pieces.len(),
+        positional_read_concurrency_limiter().maximum_concurrent_read_count,
+        span_byte_count,
+    );
+    let pending_pieces = Mutex::new(source_pieces.into_iter());
+    let all_pieces_read = AtomicBool::new(true);
+    if worker_count <= 1 {
+        drain_source_pieces(
+            &pending_pieces,
+            source_file,
+            positional_file_read_metrics,
+            &all_pieces_read,
+        );
+        return all_pieces_read.load(Ordering::Acquire);
+    }
+    thread::scope(|scope| {
+        for _ in 1..worker_count {
+            let worker_started = thread::Builder::new().spawn_scoped(scope, || {
+                drain_source_pieces(
+                    &pending_pieces,
+                    source_file,
+                    positional_file_read_metrics,
+                    &all_pieces_read,
+                );
+            });
+            if worker_started.is_err() {
+                break;
+            }
+        }
+        drain_source_pieces(
+            &pending_pieces,
+            source_file,
+            positional_file_read_metrics,
+            &all_pieces_read,
+        );
+    });
+    all_pieces_read.load(Ordering::Acquire)
+}
+
+/// Workers for one span: never more than its pieces, never more than the
+/// permit pool could serve at once (so a span does not park idle threads),
+/// and one per `SPAN_BYTES_PER_PIECE_WORKER` bytes. Zero only for an empty
+/// span.
+fn piece_worker_count(piece_count: usize, permit_count: usize, span_byte_count: usize) -> usize {
+    piece_count
+        .min(permit_count)
+        .min(span_byte_count.div_ceil(SPAN_BYTES_PER_PIECE_WORKER))
+}
+
+/// Claims and reads pieces until none are left.
+fn drain_source_pieces<'destination>(
+    pending_pieces: &Mutex<std::vec::IntoIter<SourcePiece<'destination>>>,
+    source_file: &File,
+    positional_file_read_metrics: Option<&PositionalFileReadMetrics>,
+    all_pieces_read: &AtomicBool,
+) {
+    loop {
+        let Some(source_piece) = lock_after_possible_poison(pending_pieces).next() else {
+            return;
+        };
+        let piece_was_read = read_source_interval(
+            source_file,
+            source_piece.destination,
+            source_piece.source_file_offset,
+            positional_file_read_metrics,
+        );
+        if !piece_was_read {
+            all_pieces_read.store(false, Ordering::Release);
+        }
+    }
+}
+
 fn positional_read_concurrency_limiter() -> &'static PositionalReadConcurrencyLimiter {
     POSITIONAL_READ_CONCURRENCY_LIMITER.get_or_init(|| {
         let available_parallelism = thread::available_parallelism()
@@ -199,7 +320,7 @@ fn automatic_read_parallelism(available_parallelism: usize) -> usize {
     available_parallelism.clamp(1, MAXIMUM_CONCURRENT_POSITIONAL_READ_COUNT)
 }
 
-fn lock_after_possible_poison(mutex: &Mutex<usize>) -> MutexGuard<'_, usize> {
+fn lock_after_possible_poison<Guarded>(mutex: &Mutex<Guarded>) -> MutexGuard<'_, Guarded> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner())
@@ -210,10 +331,146 @@ mod bounded_range_read_concurrency_tests {
     use std::sync::mpsc::{self, RecvTimeoutError};
     use std::time::Duration;
 
+    use std::io::Write;
+
     use super::{
-        PositionalReadConcurrencyLimiter, automatic_read_parallelism, lock_after_possible_poison,
-        positional_read_concurrency_limiter,
+        PositionalReadConcurrencyLimiter, SPAN_BYTES_PER_PIECE_WORKER, SourcePiece,
+        automatic_read_parallelism, lock_after_possible_poison, piece_worker_count,
+        positional_read_concurrency_limiter, read_source_pieces,
     };
+
+    #[test]
+    fn should_start_no_worker_for_an_empty_span() {
+        assert_eq!(piece_worker_count(0, 16, 0), 0);
+    }
+
+    #[test]
+    fn should_read_a_span_below_one_worker_share_on_a_single_worker() {
+        assert_eq!(piece_worker_count(8, 16, SPAN_BYTES_PER_PIECE_WORKER), 1);
+    }
+
+    #[test]
+    fn should_give_a_small_span_one_worker_per_share_of_its_bytes() {
+        let scales_span_byte_count = 8 * 32 * 1024;
+        assert_eq!(piece_worker_count(8, 16, scales_span_byte_count), 4);
+    }
+
+    #[test]
+    fn should_cap_workers_at_the_piece_count_and_the_permit_count() {
+        let weight_span_byte_count = 8 * 1024 * 1024;
+        assert_eq!(piece_worker_count(8, 16, weight_span_byte_count), 8);
+        assert_eq!(piece_worker_count(64, 16, 64 * weight_span_byte_count), 16);
+    }
+
+    const PIECE_BYTES: usize = 64 * 1024;
+
+    /// A source file whose every byte names its 64 KiB block, so a misplaced
+    /// piece shows up as the wrong block number.
+    fn numbered_block_source(block_count: usize) -> tempfile::NamedTempFile {
+        let mut source_file = tempfile::NamedTempFile::new().expect("a scratch source file");
+        for block_index in 0..block_count {
+            source_file
+                .write_all(&vec![block_index as u8; PIECE_BYTES])
+                .expect("the source block writes");
+        }
+        source_file.flush().expect("the source flushes");
+        source_file
+    }
+
+    /// Reads source blocks in reverse into consecutive destination slices.
+    fn read_blocks_in_reverse(
+        source_file: &std::fs::File,
+        block_count: usize,
+        destination: &mut [u8],
+    ) -> bool {
+        let source_pieces = destination
+            .as_chunks_mut::<PIECE_BYTES>()
+            .0
+            .iter_mut()
+            .enumerate()
+            .map(|(destination_block_index, piece_destination)| SourcePiece {
+                destination: piece_destination,
+                source_file_offset: ((block_count - 1 - destination_block_index) * PIECE_BYTES)
+                    as u64,
+            })
+            .collect();
+        read_source_pieces(source_file, source_pieces, None)
+    }
+
+    #[test]
+    fn should_place_every_piece_when_pieces_outnumber_read_permits() {
+        let block_count = 64;
+        let source_file = numbered_block_source(block_count);
+        let mut destination = vec![0u8; block_count * PIECE_BYTES];
+        assert!(read_blocks_in_reverse(
+            source_file.as_file(),
+            block_count,
+            &mut destination
+        ));
+        for (destination_block_index, destination_block) in
+            destination.as_chunks::<PIECE_BYTES>().0.iter().enumerate()
+        {
+            let expected_block_number = (block_count - 1 - destination_block_index) as u8;
+            assert!(
+                destination_block
+                    .iter()
+                    .all(|&block_number| block_number == expected_block_number)
+            );
+        }
+    }
+
+    #[test]
+    fn should_place_every_piece_of_a_small_span_read_on_few_workers() {
+        let block_count = 4;
+        let source_file = numbered_block_source(block_count);
+        let mut destination = vec![0u8; block_count * PIECE_BYTES];
+        assert!(read_blocks_in_reverse(
+            source_file.as_file(),
+            block_count,
+            &mut destination
+        ));
+        assert_eq!(destination[0], 3);
+        assert_eq!(destination[3 * PIECE_BYTES], 0);
+    }
+
+    #[test]
+    fn should_report_success_for_an_empty_span() {
+        let source_file = numbered_block_source(1);
+        assert!(read_source_pieces(source_file.as_file(), Vec::new(), None));
+    }
+
+    #[test]
+    fn should_fail_the_span_but_read_every_other_piece_when_one_piece_is_past_the_end() {
+        let block_count = 32;
+        let source_file = numbered_block_source(block_count);
+        let mut destination = vec![0xAAu8; block_count * PIECE_BYTES];
+        let mut source_pieces: Vec<SourcePiece<'_>> = destination
+            .as_chunks_mut::<PIECE_BYTES>()
+            .0
+            .iter_mut()
+            .enumerate()
+            .map(|(block_index, piece_destination)| SourcePiece {
+                destination: piece_destination,
+                source_file_offset: (block_index * PIECE_BYTES) as u64,
+            })
+            .collect();
+        source_pieces[5].source_file_offset = (block_count * PIECE_BYTES) as u64;
+        assert!(!read_source_pieces(
+            source_file.as_file(),
+            source_pieces,
+            None
+        ));
+        assert_eq!(
+            destination[31 * PIECE_BYTES],
+            31,
+            "pieces after the failed one are still read"
+        );
+        assert_eq!(
+            destination[4 * PIECE_BYTES],
+            4,
+            "pieces before the failed one are read"
+        );
+    }
 
     #[test]
     fn should_follow_available_parallelism_below_the_ceiling() {

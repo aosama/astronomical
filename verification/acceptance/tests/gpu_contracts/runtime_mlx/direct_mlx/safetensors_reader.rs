@@ -139,6 +139,127 @@ fn should_async_evaluate_multiple_tensors_from_independent_bounded_source_interv
     assert_eq!(expert_file_read_snapshot.read_failure_count, 0);
 }
 
+/// Four 256 KiB blocks per scattered tensor: 1 MiB is the smallest span the
+/// reader reads concurrently, so this tensor takes the concurrent path.
+const SCATTERED_BLOCK_BYTE_COUNT: usize = 256 * 1024;
+const SCATTERED_BLOCK_COUNT: usize = 4;
+
+#[test]
+fn should_assemble_one_tensor_from_scattered_source_intervals_in_virtual_order() {
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let weights_path = temporary_directory.path().join("scattered-source.bin");
+    fs::write(&weights_path, reversed_numbered_blocks_with_gaps())
+        .expect("the test should write scattered tensor blocks");
+    let runtime = scattered_tensor_runtime();
+    let scattered_load = runtime
+        .load_safetensors_from_bounded_ranges(
+            File::open(&weights_path).expect("the test should open its scattered source"),
+            one_byte_tensor_synthetic_safetensors_header(
+                SCATTERED_BLOCK_COUNT * SCATTERED_BLOCK_BYTE_COUNT,
+            ),
+            scattered_block_intervals(),
+            (SCATTERED_BLOCK_COUNT * SCATTERED_BLOCK_BYTE_COUNT) as u64,
+            None,
+        )
+        .expect("the bounded reader should construct the scattered tensor");
+    let scattered_tensor = scattered_load
+        .tensor("scattered.weight")
+        .expect("the scattered tensor should exist");
+    let tensor_bytes = scattered_tensor
+        .to_vec_u8()
+        .expect("the scattered tensor should evaluate");
+    for (block_index, block_bytes) in tensor_bytes.chunks(SCATTERED_BLOCK_BYTE_COUNT).enumerate() {
+        assert!(
+            block_bytes
+                .iter()
+                .all(|&block_number| usize::from(block_number) == block_index + 1),
+            "virtual block {block_index} must hold source block {}",
+            block_index + 1
+        );
+    }
+}
+
+#[test]
+fn should_fail_evaluation_instead_of_returning_stale_bytes_when_a_source_read_fails() {
+    let temporary_directory =
+        tempfile::tempdir().expect("the test should create a temporary directory");
+    let weights_path = temporary_directory.path().join("truncated-source.bin");
+    fs::write(&weights_path, reversed_numbered_blocks_with_gaps())
+        .expect("the test should write scattered tensor blocks");
+    let runtime = scattered_tensor_runtime();
+    let scattered_load = runtime
+        .load_safetensors_from_bounded_ranges(
+            File::open(&weights_path).expect("the test should open its scattered source"),
+            one_byte_tensor_synthetic_safetensors_header(
+                SCATTERED_BLOCK_COUNT * SCATTERED_BLOCK_BYTE_COUNT,
+            ),
+            scattered_block_intervals(),
+            (SCATTERED_BLOCK_COUNT * SCATTERED_BLOCK_BYTE_COUNT) as u64,
+            None,
+        )
+        .expect("the bounded reader should construct the scattered tensor");
+    // Truncating after construction makes the first source block unreadable
+    // when MLX finally evaluates, the shape of an I/O error mid-serving.
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&weights_path)
+        .and_then(|truncating_handle| truncating_handle.set_len(SCATTERED_BLOCK_BYTE_COUNT as u64))
+        .expect("the test should truncate its source");
+    let scattered_tensor = scattered_load
+        .tensor("scattered.weight")
+        .expect("the scattered tensor should exist");
+    assert!(
+        scattered_tensor.evaluate().is_err(),
+        "a failed source read must fail evaluation rather than hand MLX stale bytes"
+    );
+}
+
+fn scattered_tensor_runtime() -> MlxRuntime {
+    let memory_limits = MlxMemoryLimits::new(
+        ACTIVE_MEMORY_LIMIT_BYTES,
+        ALLOCATOR_CACHE_MEMORY_LIMIT_BYTES,
+    )
+    .expect("the test memory limits should be valid");
+    MlxRuntime::initialize(memory_limits).expect("the pinned MLX runtime should initialize")
+}
+
+/// Source blocks numbered 4, 3, 2, 1 in file order, each followed by a gap,
+/// so the virtual tensor (1, 2, 3, 4) reads every block from elsewhere.
+fn reversed_numbered_blocks_with_gaps() -> Vec<u8> {
+    let mut source_bytes =
+        Vec::with_capacity(2 * SCATTERED_BLOCK_COUNT * SCATTERED_BLOCK_BYTE_COUNT);
+    for block_number in (1..=SCATTERED_BLOCK_COUNT).rev() {
+        source_bytes.extend(std::iter::repeat_n(
+            block_number as u8,
+            SCATTERED_BLOCK_BYTE_COUNT,
+        ));
+        source_bytes.extend(std::iter::repeat_n(0_u8, SCATTERED_BLOCK_BYTE_COUNT));
+    }
+    source_bytes
+}
+
+fn scattered_block_intervals() -> Vec<BoundedReadInterval> {
+    (0..SCATTERED_BLOCK_COUNT)
+        .map(|virtual_block_index| BoundedReadInterval {
+            virtual_payload_offset: (virtual_block_index * SCATTERED_BLOCK_BYTE_COUNT) as u64,
+            source_file_offset: ((SCATTERED_BLOCK_COUNT - 1 - virtual_block_index)
+                * 2
+                * SCATTERED_BLOCK_BYTE_COUNT) as u64,
+            source_byte_count: SCATTERED_BLOCK_BYTE_COUNT,
+        })
+        .collect()
+}
+
+fn one_byte_tensor_synthetic_safetensors_header(tensor_byte_count: usize) -> Vec<u8> {
+    let header_json = format!(
+        r#"{{"scattered.weight":{{"dtype":"U8","shape":[{tensor_byte_count}],"data_offsets":[0,{tensor_byte_count}]}}}}"#
+    );
+    let mut header_bytes = (header_json.len() as u64).to_le_bytes().to_vec();
+    header_bytes.extend_from_slice(header_json.as_bytes());
+    header_bytes
+}
+
 #[test]
 #[ignore = "measures positional file-read concurrency through one bounded MLX safetensors reader"]
 fn should_preserve_large_bounded_model_weight_intervals_during_parallel_positional_reads() {
