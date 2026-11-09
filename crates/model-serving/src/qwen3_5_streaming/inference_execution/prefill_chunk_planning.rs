@@ -10,6 +10,7 @@ use crate::{
 
 use super::Qwen3_5EngineState;
 use super::engine_request::Qwen3_5EngineRequest;
+use super::layer_major_span_plan::LayerMajorSpanPlan;
 use super::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 /// Immutable decisions computed before memory admission and forward execution.
@@ -41,6 +42,10 @@ pub(super) struct PrefillChunkPlan {
 
     /// Adaptive-RAM growth context derived from this plan's decisions.
     pub(super) adaptive_ram_growth_context: AdaptiveRamGrowthContext,
+
+    /// The spans a dense model runs layer by layer, when this forward
+    /// covers several chunks at once.
+    pub(super) layer_major_span_plan: Option<LayerMajorSpanPlan>,
 }
 
 impl Qwen3_5EngineState {
@@ -54,6 +59,7 @@ impl Qwen3_5EngineState {
         active_request: &Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
+        layer_major_span_plan: Option<LayerMajorSpanPlan>,
     ) -> Result<PrefillChunkPlan, PromptPrefillChunkAttemptError> {
         let model = self
             .model
@@ -131,6 +137,12 @@ impl Qwen3_5EngineState {
 
         let exact_temporary_workspace_bytes = boundary_checkpoint_workspace_bytes
             .checked_add(direct_publication_workspace_bytes)
+            .and_then(|workspace_bytes| {
+                workspace_bytes.checked_add(layer_major_hidden_state_bytes(
+                    model,
+                    layer_major_span_plan.as_ref(),
+                ))
+            })
             .ok_or_else(|| {
                 super::fatal_engine_error("prompt-cache publication workspace bytes overflowed")
             })?;
@@ -162,6 +174,29 @@ impl Qwen3_5EngineState {
             direct_publication_workspace_bytes,
             exact_temporary_workspace_bytes,
             adaptive_ram_growth_context,
+            layer_major_span_plan,
         })
     }
+}
+
+/// Hidden states a layer-major prefill holds between layers: every span's,
+/// plus the output of the span being computed. A chunk's forward never
+/// holds more than its own, which the measured working memory covers.
+fn layer_major_hidden_state_bytes(
+    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
+    layer_major_span_plan: Option<&LayerMajorSpanPlan>,
+) -> usize {
+    let Some(layer_major_span_plan) = layer_major_span_plan else {
+        return 0;
+    };
+    let mut held_token_count = 0_usize;
+    let mut largest_span_token_count = 0_usize;
+    for span in &layer_major_span_plan.spans {
+        let span_token_count = span.end_token - span.start_token;
+        held_token_count = held_token_count.saturating_add(span_token_count);
+        largest_span_token_count = largest_span_token_count.max(span_token_count);
+    }
+    held_token_count
+        .saturating_add(largest_span_token_count)
+        .saturating_mul(model.hidden_state_bytes_per_token())
 }

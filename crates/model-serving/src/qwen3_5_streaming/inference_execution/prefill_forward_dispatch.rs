@@ -20,6 +20,9 @@ use super::terminal_prefill_seed::{
 
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::Qwen3_5Model;
+use crate::qwen3_5_streaming::model::layer_major_prefill::{
+    LayerMajorCheckpointContract, LayerMajorPrefillRequest,
+};
 
 /// Outcome of visual, history-capture, or text prefill.
 pub(super) struct ForwardDispatchOutcome {
@@ -84,6 +87,30 @@ fn dispatch_non_speculative_forward(
     prefill_end: usize,
     plan: &PrefillChunkPlan,
 ) -> Result<NonSpeculativeOutcome, PrefillForwardError> {
+    let boundary_checkpoints = match plan.layer_major_span_plan.as_ref() {
+        Some(layer_major_span_plan) => dispatch_layer_major_prefill(
+            active_request,
+            model,
+            prefill_start,
+            prefill_end,
+            layer_major_span_plan,
+            plan.persistent_prompt_cache_block_token_count,
+        )?,
+        None => dispatch_chunk_forward(active_request, model, prefill_start, prefill_end, plan)?,
+    };
+    Ok(NonSpeculativeOutcome {
+        boundary_checkpoints,
+    })
+}
+
+/// One chunk's forward: visual when it holds image pads, text otherwise.
+fn dispatch_chunk_forward(
+    active_request: &mut Qwen3_5EngineRequest,
+    model: &Qwen3_5Model,
+    prefill_start: usize,
+    prefill_end: usize,
+    plan: &PrefillChunkPlan,
+) -> Result<Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, PrefillForwardError> {
     let boundary_checkpoints;
     // Request-owned visual embeddings stay attached after every image-pad in this
     // prompt has already been consumed. Dispatching on that tensor made a cached
@@ -125,9 +152,7 @@ fn dispatch_non_speculative_forward(
         )?;
     }
 
-    Ok(NonSpeculativeOutcome {
-        boundary_checkpoints,
-    })
+    Ok(boundary_checkpoints)
 }
 
 // ---------------------------------------------------------------------------
@@ -252,4 +277,48 @@ fn dispatch_text_prefill(
             )
             .map(|checkpoint_outcome| checkpoint_outcome.boundary_checkpoints)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Layer-major prefill (issue #1985)
+// ---------------------------------------------------------------------------
+
+/// Runs several chunks' spans one layer at a time, seeding the first
+/// generated token when the spans reach the end of the prompt, as the
+/// terminal chunk would.
+fn dispatch_layer_major_prefill(
+    active_request: &mut Qwen3_5EngineRequest,
+    model: &Qwen3_5Model,
+    prefill_start: usize,
+    prefill_end: usize,
+    layer_major_span_plan: &super::layer_major_span_plan::LayerMajorSpanPlan,
+    persistent_prompt_cache_block_token_count: Option<usize>,
+) -> Result<Vec<crate::Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+    let reaches_prompt_end = prefill_end == active_request.input_token_ids.len();
+    let checkpoint_contract = persistent_prompt_cache_block_token_count.map(|block_token_count| {
+        LayerMajorCheckpointContract {
+            boundary_tensor_count: model.decoder_cache_layout().boundary_tensor_count(),
+            block_token_count,
+        }
+    });
+    let layer_major_outcome = model.prefill_layer_major(
+        &active_request.input_token_ids[prefill_start..prefill_end],
+        active_request.next_position_tokens,
+        LayerMajorPrefillRequest {
+            spans: &layer_major_span_plan.spans,
+            checkpoint_contract,
+            should_materialize_logits: reaches_prompt_end,
+        },
+        &mut active_request.request_decoder_state,
+        &mut active_request.performance_attribution,
+    )?;
+    if let Some(final_prompt_logits) = layer_major_outcome.final_logits.as_ref() {
+        let first_generated_token = active_request
+            .build_generated_token(model, final_prompt_logits)
+            .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                description: "failed to sample the first generated token from layer-major prefill logits",
+            })?;
+        active_request.set_pending_generated_token(first_generated_token);
+    }
+    Ok(layer_major_outcome.boundary_checkpoints)
 }

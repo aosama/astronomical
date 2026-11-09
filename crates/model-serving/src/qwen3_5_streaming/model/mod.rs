@@ -33,6 +33,8 @@ mod expert_streaming_stats;
 #[cfg(feature = "direct-mlx")]
 mod forward_layer_weights;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod layer_major_prefill;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_submission;
 // Reads the next streamed layer while the graphics processor computes.
 pub(crate) mod prefill_complete_layer_prefetch;

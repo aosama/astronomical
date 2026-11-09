@@ -10,6 +10,7 @@ mod generation_finalization;
 mod generation_request_validation;
 mod initial_context_memory_admission;
 mod inject_input_tokens;
+mod layer_major_span_plan;
 pub(in crate::qwen3_5_streaming) mod memory_admission;
 mod memory_limit;
 mod model_loading;

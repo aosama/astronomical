@@ -571,6 +571,7 @@ impl Qwen3_5EngineState {
             has_opened_prefill_demand_window: false,
             reserved_context_tokens,
             completed_prefill_memory_recovery_attempt_count: 0,
+            layer_major_prefill_declined: false,
             first_decode_forward_elapsed_millis: None,
             generation_preparation_announced: false,
             structured_generation: inference_request.take_structured_generation(),

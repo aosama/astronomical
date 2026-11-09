@@ -38,6 +38,8 @@ const MEASURED_CHUNKS: [(usize, usize); 3] = [
 ];
 /// The final normalization and last-token logits, which no layer holds.
 const OUTSIDE_LAYER_SLACK_BYTES: u64 = 8 * 1024 * 1024;
+/// The streamed_dense model's hidden states are bfloat16.
+const HIDDEN_STATE_ELEMENT_BYTES: u64 = 2;
 const FORWARD_MEMORY_BUDGET: Duration = Duration::from_secs(120);
 
 #[tokio::test]
@@ -113,7 +115,68 @@ async fn assert_prompt_forwards_stay_within_reserve() {
                 residency_plan.streamed_forward_reserve_bytes
             );
         }
+        assert_layer_major_prefill_stays_within_reserve(
+            &streaming_model,
+            &qwen3_5_config,
+            &prompt_token_ids,
+            residency_plan.streamed_forward_reserve_bytes,
+            kept_layer_count,
+        );
     }
+}
+
+/// The whole prompt in one layer-major prefill over probe-sized spans holds
+/// one span's working memory plus every span's hidden states.
+fn assert_layer_major_prefill_stays_within_reserve(
+    streaming_model: &Qwen3_5StreamingModel,
+    qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
+    prompt_token_ids: &[u32],
+    streamed_forward_reserve_bytes: u64,
+    kept_layer_count: usize,
+) {
+    let runtime = streaming_model.runtime();
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(qwen3_5_config);
+    runtime
+        .synchronize_gpu_stream_and_clear_allocator_cache()
+        .expect("the allocator cache should clear");
+    runtime.reset_peak_memory().expect("the peak should reset");
+    let final_logits = streaming_model
+        .prefill_prompt_layer_major(
+            prompt_token_ids,
+            0,
+            PROBE_CHUNK_TOKEN_COUNT,
+            &mut request_decoder_state,
+        )
+        .expect("the layer-major prefill should run")
+        .to_vec_f32()
+        .expect("the final logits should be readable");
+    assert!(final_logits.iter().all(|logit| logit.is_finite()));
+    let peak_memory_bytes = runtime
+        .memory_snapshot()
+        .expect("the MLX memory snapshot should be readable")
+        .peak_memory_bytes() as u64;
+    runtime
+        .synchronize_gpu_stream_and_clear_allocator_cache()
+        .expect("the allocator cache should clear");
+    let active_bytes_with_state = runtime
+        .memory_snapshot()
+        .expect("the MLX memory snapshot should be readable")
+        .active_memory_bytes() as u64;
+    let prefill_growth = peak_memory_bytes.saturating_sub(active_bytes_with_state);
+    let held_token_count = (prompt_token_ids.len() + PROBE_CHUNK_TOKEN_COUNT) as u64;
+    let hidden_state_bytes =
+        held_token_count * qwen3_5_config.hidden_size() as u64 * HIDDEN_STATE_ELEMENT_BYTES;
+    let allowed_growth =
+        streamed_forward_reserve_bytes + hidden_state_bytes + OUTSIDE_LAYER_SLACK_BYTES;
+    eprintln!(
+        "[dense-forward-memory] kept={kept_layer_count} layer_major_tokens={} growth_beyond_state={prefill_growth} allowed={allowed_growth}",
+        prompt_token_ids.len()
+    );
+    assert!(
+        prefill_growth <= allowed_growth,
+        "a {}-token layer-major prefill with {kept_layer_count} kept layers grew {prefill_growth} bytes beyond its state; it may hold {allowed_growth}",
+        prompt_token_ids.len()
+    );
 }
 
 /// Peak bytes the chunk after `preceding_token_count` tokens held beyond
