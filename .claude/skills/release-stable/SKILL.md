@@ -73,7 +73,13 @@ cargo xtask release accept-sparkle-update; echo EXIT=$?
 
 Its transcript is long, so the explicit exit code keeps the result in reach. Near the end of a passing run it prints `Error: Update has failed due to error 4005 (SUSparkleErrorDomain)…`: that is the deliberate corrupted-update probe being rejected. The run passed when it ends with `Sparkle acceptance passed: …` and `EXIT=0`.
 
-2. Run the installed-variant round trip — the gate that catches pack variants the single-pack journeys structurally miss (a real installed export whose config shape the loader refuses must fail here, before the release ships). First read `cargo xtask app instance status`: if the Development instance holds a model, ask the user before stopping it with `cargo xtask app instance stop`, because the round trip loads every installed model onto the same graphics processor. The test launches the real worker and daemon binaries from `target/release`, so build them first:
+2. Run the installed-variant round trip only when the release changes how models load. It is the one gate that loads real installed models (a real installed export whose config shape the loader refuses must fail here, before the release ships), but it can only catch a model-loading regression and it costs stopping Development, a release build and an installed model, so a release that touches no model-loading code skips it. Decide from the diff:
+
+```sh
+git diff --quiet "$PREVIOUS_TAG"..HEAD -- apps/inference-worker crates/model-serving crates/config crates/astronomical-jangtq2-qwen35 crates/quantization crates/vision-tower crates/neural-engine crates/mlx-c-fork crates/runtime-integration crates/astronomical-memory-policy crates/native-build-orchestration crates/native-build-tool crates/native-identity third-party/pins third-party/patches third-party/native-dependency-manifest.cmake registry; echo MODEL_LOADING_UNCHANGED=$?
+```
+
+`MODEL_LOADING_UNCHANGED=0` means none of those paths changed: skip the round trip and say so in the section 4 report. `1` means run it. A dependency update in `Cargo.lock` that moves MLX or a model-format crate also counts as a change. To run it, first read `cargo xtask app instance status`: if the Development instance holds a model, ask the user before stopping it with `cargo xtask app instance stop`, because the round trip loads every installed model onto the same graphics processor. The test launches the real worker and daemon binaries from `target/release`, so build them first:
 
 ```sh
 cargo build --release --locked -p astronomical-inference-worker -p astronomical-daemon --bins
