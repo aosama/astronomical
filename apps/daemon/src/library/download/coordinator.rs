@@ -531,5 +531,8 @@ fn current_unix_millis() -> u64 {
         .unwrap_or_default()
 }
 
+// A child of the coordinator rather than its own module under `download/`:
+// removal must share the coordinator's private command lock, job store and
+// validated publications, which a sibling module could not reach.
 #[path = "installed_model_removal.rs"]
 pub(crate) mod installed_model_removal;

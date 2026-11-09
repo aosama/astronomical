@@ -21,6 +21,7 @@ use crate::library::download::job::store::filesystem::{
     ensure_descendant_directory_or_absent, metadata_without_symlink, remove_directory_if_empty,
 };
 use crate::library::download::publication::provenance::publication_provenance_names_model;
+use crate::library::model_folder_busy::{ModelFolderBusy, ModelFolderBusyCheck};
 use crate::library::model_folder_trash::{ModelFolderTrash, ModelFolderTrashError};
 
 /// Why a model could not be removed from disk.
@@ -36,6 +37,8 @@ pub enum InstalledModelRemovalError {
     UnsafeFolder,
     #[error("a download of this model is still in progress")]
     DownloadInProgress,
+    #[error("the worker is using a model from this folder: {0:?}")]
+    ModelFolderBusy(ModelFolderBusy),
     #[error("the download state could not be read: {0}")]
     DownloadState(String),
     #[error(transparent)]
@@ -64,6 +67,7 @@ impl LibraryDownloadCoordinator {
     pub async fn remove_installed_model(
         &self,
         huggingface_id: &str,
+        model_folder_busy_check: Arc<dyn ModelFolderBusyCheck>,
         model_folder_trash: Arc<dyn ModelFolderTrash>,
     ) -> Result<(), InstalledModelRemovalError> {
         let _command_guard = self.command_lock.lock().await;
@@ -78,6 +82,13 @@ impl LibraryDownloadCoordinator {
         self.refuse_while_this_model_downloads(huggingface_id)
             .await?;
         let model_folder = self.installed_model_folder(huggingface_id)?;
+        // Asked last, under the command lock and right before the move, so a
+        // load cannot start between the check and the move's own decision.
+        if let Some(folder_busy) =
+            model_folder_busy_check.busy_reason(&model_folder, huggingface_id)
+        {
+            return Err(InstalledModelRemovalError::ModelFolderBusy(folder_busy));
+        }
         let publisher_folder = model_folder.parent().map(Path::to_path_buf);
         let trash_outcome = tokio::task::spawn_blocking(move || {
             model_folder_trash.move_to_trash(&model_folder)

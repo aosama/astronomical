@@ -115,3 +115,36 @@ fn should_accept_a_models_folder_that_is_itself_reached_through_a_link() {
         Some(linked_models_directory.join(MODEL_ID))
     );
 }
+
+#[test]
+fn should_refuse_a_plain_file_where_the_model_folder_should_be() {
+    let (_test_directory, models_directory) = models_directory_fixture();
+    fs::create_dir_all(models_directory.join("astronomical-test"))
+        .expect("the publisher folder should be created");
+    fs::write(models_directory.join(MODEL_ID), "not a folder")
+        .expect("the stand-in file should be written");
+
+    assert!(matches!(
+        installed_model_folder_in(&models_directory, MODEL_ID),
+        Err(InstalledModelRemovalError::UnsafeFolder)
+    ));
+}
+
+#[test]
+fn should_refuse_a_folder_whose_provenance_file_is_a_link() {
+    let (test_directory, models_directory) = models_directory_fixture();
+    let model_folder = models_directory.join(MODEL_ID);
+    fs::create_dir_all(&model_folder).expect("the model folder should be created");
+    let outside_provenance = test_directory.path().join("outside-provenance.json");
+    fs::write(&outside_provenance, OWN_PROVENANCE).expect("the outside record should be written");
+    std::os::unix::fs::symlink(
+        &outside_provenance,
+        model_folder.join(".astronomical-library-provenance.json"),
+    )
+    .expect("the provenance symlink should be created");
+
+    assert!(matches!(
+        installed_model_folder_in(&models_directory, MODEL_ID),
+        Err(InstalledModelRemovalError::NotInstalledByDownloadModels)
+    ));
+}

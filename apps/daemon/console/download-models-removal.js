@@ -10,16 +10,17 @@
 
 const DOWNLOAD_MODELS_REMOVE_URL = "/v1/library/remove";
 
-// The outcome, if any, shown on the card of the model it is about; cleared by
-// the next attempt.
+// The outcome, if any, shown on the card of the model it is about:
+// { huggingfaceId, message, movedToTrash }. Cleared by the next attempt.
 let downloadModelsRemovalNotice = null;
 // The model whose card is asking "Move it to the Trash?", or null.
 let downloadModelsRemovalConfirmingId = null;
 // The model whose removal request is on its way, or null. A second click on a
 // card that is already moving its folder must not send a second request.
 let downloadModelsRemovalInFlightId = null;
-// Which control to focus once the card is drawn again ("keep" or "remove"), so
-// keyboard and VoiceOver users land on the question and come back from it.
+// Which control to focus once the card is drawn again ("keep", "remove" or
+// "download"), so keyboard and VoiceOver users land on the question, come back
+// from it, and are not dropped to the page top when the controls disappear.
 let downloadModelsRemovalFocusRequest = null;
 
 // The state the catalog's render fingerprint must include: none of it changes
@@ -55,6 +56,9 @@ function createDownloadModelsRemovalControls(catalogRow) {
             "Remove from disk", "button button-danger download-models-remove-button",
             () => askToRemoveDownloadModelsModel(catalogRow)
         );
+        // One removal at a time: another card's button waits, rather than
+        // opening a question whose Move to Trash could not act yet.
+        removeButton.disabled = downloadModelsRemovalInFlightId !== null;
         focusDownloadModelsRemovalControlIfRequested(catalogRow, "remove", removeButton);
         return [removeButton];
     }
@@ -122,7 +126,15 @@ async function confirmDownloadModelsRemoval(catalogRow) {
     renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
     try {
         downloadModelsRemovalNotice = await removeDownloadModelsModelFromDisk(catalogRow);
+        // After a move the card offers Download again; after a refusal it
+        // offers Remove from disk again. Focus follows to whichever remains.
+        downloadModelsRemovalFocusRequest = {
+            huggingfaceId: catalogRow.huggingfaceId,
+            controlName: downloadModelsRemovalNotice.movedToTrash ? "download" : "remove"
+        };
         await refetchDownloadModelsCatalogDocument();
+    } catch {
+        // The catalog stays as last fetched; the next poll brings it up to date.
     } finally {
         downloadModelsRemovalInFlightId = null;
         renderDownloadModelsCatalogDocument(downloadModelsCatalogDocument);
@@ -139,22 +151,32 @@ async function removeDownloadModelsModelFromDisk(catalogRow) {
             body: JSON.stringify({ huggingface_id: huggingfaceId })
         });
         if (removalResponse.ok) {
-            return { huggingfaceId, message: catalogRow.displayName + " was moved to the Trash." };
+            return { huggingfaceId, message: catalogRow.displayName + " was moved to the Trash.", movedToTrash: true };
         }
         // A proxy or a crash can answer with something other than JSON; the
         // card still says the removal did not happen.
         const removalDocument = await removalResponse.json().catch(() => null);
         return {
             huggingfaceId,
-            message: removalDocument?.error?.message || "The model could not be removed."
+            message: removalDocument?.error?.message || "The model could not be removed.",
+            movedToTrash: false
         };
     } catch {
-        return { huggingfaceId, message: "The model could not be removed: the local server did not answer." };
+        return {
+            huggingfaceId,
+            message: "The model could not be removed: the local server did not answer.",
+            movedToTrash: false
+        };
     }
 }
 
+// The notice for this card, or null. It gives way to any download of the model
+// (paused, verifying, publishing included), and "moved to the Trash" gives way
+// once the model is on this Mac again, so an old outcome never comes back.
 function downloadModelsRemovalNoticeFor(catalogRow) {
-    return downloadModelsRemovalNotice && downloadModelsRemovalNotice.huggingfaceId === catalogRow.huggingfaceId
-        ? downloadModelsRemovalNotice.message
-        : null;
+    const removalNotice = downloadModelsRemovalNotice;
+    if (!removalNotice || removalNotice.huggingfaceId !== catalogRow.huggingfaceId) return null;
+    if (downloadModelsCurrentDownload.huggingface_id === catalogRow.huggingfaceId) return null;
+    if (removalNotice.movedToTrash && catalogRow.readyOnThisMac) return null;
+    return removalNotice.message;
 }

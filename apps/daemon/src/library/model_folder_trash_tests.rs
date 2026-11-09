@@ -55,3 +55,10 @@ fn should_report_unavailable_where_this_macos_has_no_trash_command() {
     );
     assert!(model_folder.is_dir());
 }
+
+#[test]
+fn should_not_count_a_directory_as_the_trash_command() {
+    let (fixture_root, _model_folder) = model_folder_fixture();
+
+    assert!(!MacTrashCommand::at_path(fixture_root.path().to_path_buf()).is_available());
+}

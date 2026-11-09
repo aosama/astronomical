@@ -67,6 +67,11 @@ async fn get_library_catalog(
 /// published, so the page never offers to remove a copy the person placed,
 /// and only where this Mac can move folders to the Trash; elsewhere the page
 /// keeps showing the folder in Finder instead of a button that can only fail.
+///
+/// The check reads metadata, resolves two paths and reads a small provenance
+/// file, synchronously inside this async handler. That is a few cached
+/// filesystem calls per downloaded model, well below what a blocking task
+/// hand-off would cost, so it runs inline.
 fn is_removable_from_disk(
     application_state: &ApplicationState,
     projection: &super::CatalogEntryProjection,

@@ -6,6 +6,7 @@ pub(crate) mod crypto_provider;
 pub(crate) mod download;
 pub(crate) mod hub;
 pub(crate) mod model_discovery_refresh;
+pub(crate) mod model_folder_busy;
 pub(crate) mod model_folder_trash;
 mod removal_endpoint;
 mod reveal_endpoint;

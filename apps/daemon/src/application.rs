@@ -522,7 +522,7 @@ fn capability_conditional_routes(
 /// target, and the methods/headers the client uses are allowed.
 fn canvas_cors_layer() -> CorsLayer {
     let canvas_origins = [
-        "thintalk-asset://shell".to_string(),
+        crate::rest::loopback_browser_guard::THIN_TALK_CANVAS_ORIGIN.to_string(),
         "http://127.0.0.1".to_string(),
         "http://localhost".to_string(),
     ];

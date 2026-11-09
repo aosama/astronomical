@@ -393,3 +393,265 @@ async fn should_say_a_catalog_model_without_a_folder_is_not_on_this_mac() {
     );
     assert!(recording_trash.moved_folders().is_empty());
 }
+
+const OWN_PROVENANCE: &str =
+    r#"{"schema_version":1,"provider_model_id":"astronomical-test/example-qwen","revision":"r"}"#;
+
+/// A model folder Download Models published, written directly so a journey can
+/// pair it with a refresh or worker state that a real download could not reach.
+fn place_published_model(test_directory: &Path) -> PathBuf {
+    let model_folder = installed_model_folder(test_directory);
+    std::fs::create_dir_all(&model_folder).expect("the model folder should be created");
+    std::fs::write(model_folder.join("config.json"), MODEL_CONFIG)
+        .expect("the model file should be written");
+    std::fs::write(
+        model_folder.join(".astronomical-library-provenance.json"),
+        OWN_PROVENANCE,
+    )
+    .expect("the provenance record should be written");
+    model_folder
+}
+
+fn removal_application_with(
+    test_directory: &Path,
+    executor: ScriptedExecutor,
+    discovery_refresh: Arc<dyn DownloadPublicationRefresh>,
+    model_folder_trash: Arc<RecordingTrash>,
+) -> Router {
+    let download_catalog = test_catalog();
+    let hub = Arc::new(ScriptedHub::new());
+    let coordinator = Arc::new(LibraryDownloadCoordinator::new(
+        Arc::clone(&download_catalog),
+        test_directory.join("models"),
+        Arc::new(AvailableCapacity),
+        hub.clone(),
+        hub,
+        discovery_refresh,
+        DaemonPerformanceAttributionLog::open(test_directory, false)
+            .expect("disabled attribution should construct"),
+    ));
+    build_application_with_library_download_and_trash(
+        executor,
+        download_catalog,
+        coordinator,
+        model_folder_trash,
+    )
+}
+
+fn executor_with_worker(
+    ready_model_id: Option<&str>,
+    loading_model: Option<Option<&str>>,
+) -> ScriptedExecutor {
+    let mut executor = ScriptedExecutor::unavailable();
+    executor.health_snapshot.ready_model_id = ready_model_id.map(str::to_owned);
+    executor.health_snapshot.model_load_in_flight =
+        loading_model.map(
+            |loading_model_id| astronomical_ipc_protocol::ModelLoadInFlight {
+                model_id: loading_model_id.map(str::to_owned),
+            },
+        );
+    executor
+}
+
+#[tokio::test]
+async fn should_refuse_while_a_model_from_the_folder_is_loaded_or_loading() {
+    for (executor, expected_code) in [
+        (
+            executor_with_worker(Some("example-qwen"), None),
+            "model_loaded",
+        ),
+        (
+            executor_with_worker(Some("other-model"), Some(None)),
+            "model_loading",
+        ),
+        (
+            executor_with_worker(None, Some(Some("example-qwen"))),
+            "model_loading",
+        ),
+    ] {
+        let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+        let model_folder = place_published_model(test_directory.path());
+        let recording_trash = RecordingTrash::succeeding();
+        let application = removal_application_with(
+            test_directory.path(),
+            executor,
+            Arc::new(ValidatingDiscoveryRefresh),
+            Arc::clone(&recording_trash),
+        );
+
+        let removal_response = remove_model(
+            &application,
+            &format!(r#"{{"huggingface_id":"{REPOSITORY_ID}"}}"#),
+        )
+        .await;
+
+        assert_eq!(removal_response.status(), StatusCode::CONFLICT);
+        assert_eq!(
+            response_json(removal_response).await["error"]["code"],
+            expected_code
+        );
+        assert!(recording_trash.moved_folders().is_empty());
+        assert!(model_folder.is_dir(), "a busy model's folder stays");
+    }
+}
+
+#[tokio::test]
+async fn should_report_removal_even_when_the_discovery_refresh_fails() {
+    let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+    let model_folder = place_published_model(test_directory.path());
+    let recording_trash = RecordingTrash::succeeding();
+    let application = removal_application_with(
+        test_directory.path(),
+        ScriptedExecutor::unavailable(),
+        Arc::new(FailingDiscoveryRefresh),
+        Arc::clone(&recording_trash),
+    );
+
+    let removal_response = remove_model(
+        &application,
+        &format!(r#"{{"huggingface_id":"{REPOSITORY_ID}"}}"#),
+    )
+    .await;
+
+    assert_eq!(
+        removal_response.status(),
+        StatusCode::OK,
+        "the folder is gone; the next discovery catches up"
+    );
+    assert_eq!(recording_trash.moved_folders(), vec![model_folder.clone()]);
+    assert!(!model_folder.exists());
+}
+
+#[tokio::test]
+async fn should_keep_a_publisher_folder_that_still_holds_something() {
+    let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+    let model_folder = place_published_model(test_directory.path());
+    let publisher_folder = model_folder
+        .parent()
+        .expect("the model has a publisher folder")
+        .to_path_buf();
+    std::fs::write(publisher_folder.join(".DS_Store"), b"finder state")
+        .expect("the Finder file should be written");
+    let recording_trash = RecordingTrash::succeeding();
+    let application = removal_application_with(
+        test_directory.path(),
+        ScriptedExecutor::unavailable(),
+        Arc::new(ValidatingDiscoveryRefresh),
+        Arc::clone(&recording_trash),
+    );
+
+    let removal_response = remove_model(
+        &application,
+        &format!(r#"{{"huggingface_id":"{REPOSITORY_ID}"}}"#),
+    )
+    .await;
+
+    assert_eq!(removal_response.status(), StatusCode::OK);
+    assert!(
+        publisher_folder.join(".DS_Store").is_file(),
+        "only an empty publisher folder is removed"
+    );
+}
+
+async fn send_with_origin(
+    application: &Router,
+    method: &str,
+    request_path: &str,
+    host: &str,
+    origin: &str,
+) -> StatusCode {
+    let request_builder = Request::builder()
+        .method(method)
+        .uri(request_path)
+        .header("content-type", "application/json")
+        .header("host", host)
+        .header("origin", origin);
+    let request_body = if method == "GET" {
+        Body::empty()
+    } else {
+        Body::from(format!(r#"{{"huggingface_id":"{REPOSITORY_ID}"}}"#))
+    };
+    application
+        .clone()
+        .oneshot(
+            request_builder
+                .body(request_body)
+                .expect("the request should be valid"),
+        )
+        .await
+        .expect("the response should be available")
+        .status()
+}
+
+/// Astro drives downloads from the Thin Talk canvas, whose page origin is the
+/// app's own `thintalk-asset://shell`; it may download but never remove.
+#[tokio::test]
+async fn should_let_the_thin_talk_canvas_drive_downloads_but_not_remove_models() {
+    let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+    let application = removal_application(
+        test_directory.path(),
+        Arc::new(ScriptedHub::new()),
+        RecordingTrash::succeeding(),
+    );
+    let canvas_origin = "thintalk-asset://shell";
+
+    assert_eq!(
+        send_with_origin(
+            &application,
+            "GET",
+            "/v1/library/download",
+            "127.0.0.1:6733",
+            canvas_origin
+        )
+        .await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        send_with_origin(
+            &application,
+            "POST",
+            "/v1/library/download",
+            "127.0.0.1:6733",
+            canvas_origin
+        )
+        .await,
+        StatusCode::ACCEPTED
+    );
+    assert_eq!(
+        send_with_origin(
+            &application,
+            "POST",
+            "/v1/library/remove",
+            "127.0.0.1:6733",
+            canvas_origin
+        )
+        .await,
+        StatusCode::FORBIDDEN
+    );
+}
+
+/// DNS rebinding: the hostile domain resolves to this Mac, so the browser
+/// names it in `Host` as well as `Origin` and treats the request as same-site.
+#[tokio::test]
+async fn should_refuse_a_rebound_domain_that_names_itself_in_host_and_origin() {
+    let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+    let application = removal_application(
+        test_directory.path(),
+        Arc::new(ScriptedHub::new()),
+        RecordingTrash::succeeding(),
+    );
+    for request_path in ["/v1/library/download", "/v1/library/remove"] {
+        assert_eq!(
+            send_with_origin(
+                &application,
+                "POST",
+                request_path,
+                "rebound.example:6733",
+                "http://rebound.example:6733"
+            )
+            .await,
+            StatusCode::FORBIDDEN,
+            "{request_path} answered a rebound domain"
+        );
+    }
+}

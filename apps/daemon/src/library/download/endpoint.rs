@@ -25,10 +25,11 @@ pub(crate) fn library_download_routes() -> Router<ApplicationState> {
         .route("/v1/library/download/resume", post(resume_download))
         .route("/v1/library/download/cancel", post(cancel_download))
         .layer(DefaultBodyLimit::max(MAXIMUM_DOWNLOAD_CONTROL_BODY_BYTES))
-        // Starting a multi-gigabyte download is not something any web page on
-        // this Mac may trigger; tools that send no Origin still pass.
+        // Reading, starting, pausing or cancelling a multi-gigabyte download
+        // answers only this instance's own page, the Thin Talk canvas (Astro
+        // drives downloads from it) and tools that send no Origin.
         .route_layer(axum::middleware::from_fn(
-            crate::rest::loopback_browser_guard::refuse_foreign_browser_requests,
+            crate::rest::loopback_browser_guard::refuse_foreign_browser_requests_except_thin_talk,
         ))
 }
 
