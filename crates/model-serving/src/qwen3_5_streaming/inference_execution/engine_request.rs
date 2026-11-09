@@ -74,6 +74,9 @@ pub(in crate::qwen3_5_streaming) struct Qwen3_5EngineRequest {
     /// Prefill memory recoveries already spent; bounds recovery to one so a
     /// genuinely oversized prompt still fails instead of looping.
     pub(super) completed_prefill_memory_recovery_attempt_count: u8,
+    /// Set when a layer-major prefill did not fit, so this request's prompt
+    /// runs chunk by chunk from then on (issue #1985).
+    pub(super) layer_major_prefill_declined: bool,
     /// First decode-forward latency waiting to be emitted with its generated token.
     pub(super) first_decode_forward_elapsed_millis: Option<u64>,
     /// Ensures the worker observes generation preparation before blocking handoff work.

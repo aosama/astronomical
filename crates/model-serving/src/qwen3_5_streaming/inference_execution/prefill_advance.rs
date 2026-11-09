@@ -1,9 +1,12 @@
-//! Advances one user-visible prompt-processing chunk.
+//! Advances one user-visible prompt-processing chunk, or, for a dense model
+//! that streams layers, one layer-major group of chunks (issue #1985).
 //!
 //! The order in this file is a correctness contract:
 //!
 //! 1. Choose a deterministic fixed chunk from resolved configuration.
 //! 2. Clamp it at semantic control-span and durable prompt-cache boundaries.
+//!    A layer-major group is the run of such chunks, each still clamped, so
+//!    it may publish several blocks, each from the state its chunk left.
 //! 3. Execute that unchanged chunk under adaptive memory admission.
 //! 4. Publish required prompt-cache state before advancing the in-memory cursor.
 //! 5. Synchronize the chunk tape and reclaim allocator cache only above threshold.
@@ -15,7 +18,9 @@
 //! dozens of forwards that re-paid complete-layer storage reads while making no
 //! visible progress. Instead, the first memory failure of a text request sheds
 //! retained expert residency and re-seeds from the persistent prompt cache
-//! (`prefill_memory_recovery`); only a second failure is terminal.
+//! (`prefill_memory_recovery`); only a second failure is terminal. The one
+//! exception is a layer-major group that does not fit: its tokens run again as
+//! the chunks it was made of, which fit before, and never as smaller ones.
 
 use std::time::Instant;
 
@@ -45,23 +50,22 @@ impl Qwen3_5EngineState {
         // Target-only prefill consumes every prompt token and samples first
         // output from the last chunk.
         let prefill_end_exclusive = active_request.input_token_ids.len();
-        let Some(prefill_chunk_span) =
-            self.resolve_next_prefill_chunk_span(active_request, prefill_end_exclusive)
+        let Some(PrefillAttempt {
+            prefill_start,
+            attempted_prefill_chunk_token_count,
+            layer_major_span_plan,
+        }) = self.resolve_next_prefill_attempt(active_request, prefill_end_exclusive)
         else {
             return Ok(None);
         };
-        let crate::persistent_cache::ResolvedPrefillChunkSpan {
-            prefill_start,
-            attempted_prefill_chunk_token_count,
-            ..
-        } = prefill_chunk_span;
+        let is_layer_major_attempt = layer_major_span_plan.is_some();
         self.refresh_prefill_residency_plan(active_request)?;
         let forward_chunk_started_at = Instant::now();
-        tracing::info!(
-            request_id = request_id.value(),
+        log_prefill_attempt(
+            request_id,
             prefill_start,
             attempted_prefill_chunk_token_count,
-            "executing prompt-prefill chunk"
+            layer_major_span_plan.as_ref(),
         );
         self.open_expert_demand_window_for_prefill(
             active_request,
@@ -71,19 +75,26 @@ impl Qwen3_5EngineState {
         );
         let prefill_end = self
             .prefill_end_for_attempted_chunk(prefill_start, attempted_prefill_chunk_token_count)?;
-        let prompt_prefill_chunk_outcome =
-            match self.execute_prompt_prefill_chunk(active_request, prefill_start, prefill_end) {
-                Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
-                Err(prompt_prefill_chunk_attempt_error) => {
-                    return self.handle_prompt_prefill_chunk_attempt_failure(
-                        request_id,
-                        active_request,
+        let prompt_prefill_chunk_outcome = match self.execute_prompt_prefill_chunk(
+            active_request,
+            prefill_start,
+            prefill_end,
+            layer_major_span_plan,
+        ) {
+            Ok(prompt_prefill_chunk_outcome) => prompt_prefill_chunk_outcome,
+            Err(prompt_prefill_chunk_attempt_error) => {
+                return self.handle_prefill_attempt_failure(
+                    request_id,
+                    active_request,
+                    PrefillAttemptFailure {
                         prefill_start,
                         attempted_prefill_chunk_token_count,
-                        prompt_prefill_chunk_attempt_error,
-                    );
-                }
-            };
+                        is_layer_major_attempt,
+                    },
+                    prompt_prefill_chunk_attempt_error,
+                );
+            }
+        };
         // No post-chunk weight reset is needed: decode evidence ignores the
         // prefill multiplier entirely (see `demand_phase`), and the next
         // chunk's window-open sets its own weight before recording.
@@ -130,7 +141,91 @@ impl Qwen3_5EngineState {
     }
 }
 
+/// Where a failed prefill attempt stood.
+#[derive(Clone, Copy)]
+struct PrefillAttemptFailure {
+    prefill_start: usize,
+    attempted_prefill_chunk_token_count: usize,
+    is_layer_major_attempt: bool,
+}
+
+fn log_prefill_attempt(
+    request_id: RequestId,
+    prefill_start: usize,
+    attempted_prefill_chunk_token_count: usize,
+    layer_major_span_plan: Option<&super::layer_major_span_plan::LayerMajorSpanPlan>,
+) {
+    tracing::info!(
+        request_id = request_id.value(),
+        prefill_start,
+        attempted_prefill_chunk_token_count,
+        layer_major_span_count = layer_major_span_plan.map_or(0, |span_plan| span_plan.spans.len()),
+        "executing prompt-prefill chunk"
+    );
+}
+
+/// What the next prefill attempt runs: one chunk, or a layer-major group of
+/// several chunks' spans.
+struct PrefillAttempt {
+    prefill_start: usize,
+    attempted_prefill_chunk_token_count: usize,
+    layer_major_span_plan: Option<super::layer_major_span_plan::LayerMajorSpanPlan>,
+}
+
 impl Qwen3_5EngineState {
+    /// Routes a failed attempt: a layer-major group falls back to chunks and
+    /// tries again; a chunk goes through the chunk path's recovery.
+    fn handle_prefill_attempt_failure(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+        prefill_attempt_failure: PrefillAttemptFailure,
+        prompt_prefill_chunk_attempt_error: PromptPrefillChunkAttemptError,
+    ) -> Result<Option<GeneratedToken>, InferenceEngineError> {
+        if prefill_attempt_failure.is_layer_major_attempt {
+            self.decline_layer_major_prefill_after_failure(
+                request_id,
+                active_request,
+                prefill_attempt_failure.prefill_start,
+                prompt_prefill_chunk_attempt_error,
+            )?;
+            return self.advance_prompt_prefill_if_pending(request_id, active_request);
+        }
+        self.handle_prompt_prefill_chunk_attempt_failure(
+            request_id,
+            active_request,
+            prefill_attempt_failure.prefill_start,
+            prefill_attempt_failure.attempted_prefill_chunk_token_count,
+            prompt_prefill_chunk_attempt_error,
+        )
+    }
+
+    /// The next chunk, widened to a layer-major group when a dense model
+    /// that streams layers would run several chunks' spans: one layer at a
+    /// time over all of them reads each streamed layer once.
+    fn resolve_next_prefill_attempt(
+        &self,
+        active_request: &super::engine_request::Qwen3_5EngineRequest,
+        prefill_end_exclusive: usize,
+    ) -> Option<PrefillAttempt> {
+        let crate::persistent_cache::ResolvedPrefillChunkSpan {
+            prefill_start,
+            attempted_prefill_chunk_token_count,
+            ..
+        } = self.resolve_next_prefill_chunk_span(active_request, prefill_end_exclusive)?;
+        let layer_major_span_plan =
+            self.layer_major_span_plan_for(active_request, prefill_start, prefill_end_exclusive);
+        Some(PrefillAttempt {
+            prefill_start,
+            attempted_prefill_chunk_token_count: layer_major_span_plan
+                .as_ref()
+                .map_or(attempted_prefill_chunk_token_count, |span_plan| {
+                    span_plan.group_end_token - prefill_start
+                }),
+            layer_major_span_plan,
+        })
+    }
+
     /// Resolves the next prompt-prefill chunk span through the shared pure
     /// resolver: the configured chunk end from the sizer, clamped at the
     /// durable prompt-cache boundary when one applies.

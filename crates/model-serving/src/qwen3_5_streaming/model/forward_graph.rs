@@ -427,7 +427,7 @@ impl Qwen3_5Model {
     /// Builds the final vocabulary logits for the last token position:
     /// normalize, slice the final token, project through the language-model
     /// head, and widen to Float32 for host sampling.
-    fn final_vocabulary_logits(
+    pub(super) fn final_vocabulary_logits(
         &self,
         hidden_states: &MlxArray,
         token_count: i32,

@@ -27,6 +27,7 @@ use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_streaming::model::reclaim_retained_payload_for_request_memory_pressure;
 
 use super::engine_request::Qwen3_5EngineRequest;
+use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 
 /// One recovery per request: after it, retained experts stay frozen at zero
@@ -154,6 +155,96 @@ impl Qwen3_5EngineState {
             "recovered prefill memory exhaustion by shedding expert residency and re-seeding from the persistent prompt cache"
         );
         Ok(())
+    }
+}
+
+/// How a layer-major prefill failed, which decides how the request goes on.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum LayerMajorDecline {
+    /// Admission refused the group before any forward ran: the decoder
+    /// state is intact, though admission may have released kept layers.
+    NotAdmitted,
+    /// The forward ran out of memory and may have half-updated the state.
+    RanOutOfMemory,
+}
+
+/// Classifies a layer-major failure, or `None` for an engine failure that
+/// ends the request whatever path it took.
+pub(super) const fn layer_major_decline_for(
+    prompt_prefill_chunk_attempt_error: &PromptPrefillChunkAttemptError,
+) -> Option<LayerMajorDecline> {
+    match prompt_prefill_chunk_attempt_error {
+        PromptPrefillChunkAttemptError::Engine(_) => None,
+        PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { .. } => {
+            Some(LayerMajorDecline::NotAdmitted)
+        }
+        PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded { .. }
+        | PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { .. } => {
+            Some(LayerMajorDecline::RanOutOfMemory)
+        }
+    }
+}
+
+impl Qwen3_5EngineState {
+    /// Sends a request's prompt chunk by chunk after its layer-major prefill
+    /// failed (issue #1985).
+    ///
+    /// Holding every span's hidden states and checkpoints at once can need
+    /// more than one chunk did, so a failure means the group did not fit, not
+    /// that the prompt cannot run. A refusal ran nothing, so the decoder
+    /// state stands. A failure inside the forward may have half-updated it,
+    /// so that is rebuilt from the prompt cache like any recovery, without
+    /// spending the chunk path's own one recovery. Either way admission or
+    /// recovery may have given kept layers back, so the planned layers are
+    /// kept again; if that cannot fit beside this request's state, the
+    /// layers stream until the request ends, which is still correct.
+    pub(super) fn decline_layer_major_prefill_after_failure(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut Qwen3_5EngineRequest,
+        prefill_start: usize,
+        prompt_prefill_chunk_attempt_error: PromptPrefillChunkAttemptError,
+    ) -> Result<(), InferenceEngineError> {
+        let layer_major_decline = match prompt_prefill_chunk_attempt_error {
+            PromptPrefillChunkAttemptError::Engine(generation_error) => {
+                return Err(generation_error);
+            }
+            memory_failure => layer_major_decline_for(&memory_failure)
+                .ok_or_else(|| fatal_engine_error("a layer-major memory failure had no decline"))?,
+        };
+        tracing::warn!(
+            request_id = request_id.value(),
+            prefill_start,
+            ?layer_major_decline,
+            "layer-major prefill did not fit; continuing chunk by chunk"
+        );
+        active_request.layer_major_prefill_declined = true;
+        if layer_major_decline == LayerMajorDecline::RanOutOfMemory {
+            let completed_recovery_attempt_count =
+                active_request.completed_prefill_memory_recovery_attempt_count;
+            self.recover_prefill_after_memory_exhaustion(
+                request_id,
+                active_request,
+                prefill_start,
+            )?;
+            active_request.completed_prefill_memory_recovery_attempt_count =
+                completed_recovery_attempt_count;
+        }
+        self.keep_planned_dense_layers_after_decline(request_id);
+        Ok(())
+    }
+
+    fn keep_planned_dense_layers_after_decline(&self, request_id: RequestId) {
+        let Some(model) = self.model.as_ref() else {
+            return;
+        };
+        if let Err(replan_error) = model.replan_kept_dense_layers_under_installed_limit() {
+            tracing::warn!(
+                request_id = request_id.value(),
+                error = %replan_error,
+                "could not keep the planned dense layers beside this request; they stream until it ends"
+            );
+        }
     }
 }
 
