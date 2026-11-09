@@ -461,14 +461,24 @@ impl Qwen3_5EngineState {
             visual_embedding_model_contract,
             persistent_prompt_cache: self.persistent_prompt_cache.as_deref(),
         };
-        crate::qwen3_5_core::vision::resolve_visual_embeddings_for_processed_images(
-            visual_embedding_context,
-            &mut self.persistent_prompt_cache_counters,
-            inference_request.request_id(),
-            inference_request.processed_visual_images(),
-            &visual_embedding_suffix_plan,
-            performance_attribution,
-        )
+        let visual_embedding_resolution =
+            crate::qwen3_5_core::vision::resolve_visual_embeddings_for_processed_images(
+                visual_embedding_context,
+                &mut self.persistent_prompt_cache_counters,
+                inference_request.request_id(),
+                inference_request.processed_visual_images(),
+                &visual_embedding_suffix_plan,
+                performance_attribution,
+            );
+        self.release_loaded_vision_tower();
+        visual_embedding_resolution
+    }
+
+    /// Releases the loaded model's vision tower once its embeddings are resolved.
+    fn release_loaded_vision_tower(&mut self) {
+        if let Some(model) = self.model.as_mut() {
+            model.base.release_vision_tower_after_image_request();
+        }
     }
 
     /// Installs the assembled session as the engine's active request and

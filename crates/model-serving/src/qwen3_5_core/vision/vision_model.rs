@@ -23,9 +23,14 @@ use super::{
 };
 use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 
+#[cfg(test)]
+#[path = "vision_model_tests.rs"]
+mod tests;
+
 const LAYER_NORM_EPSILON: f32 = 1e-6;
 
-/// Resident Qwen3.5 vision configuration and indexed visual weights.
+/// Qwen3.5 vision configuration and its visual weights, which hold memory only
+/// between an image request's first use and the release that follows it.
 #[derive(Debug)]
 pub struct Qwen3_5VisionModel {
     config: Qwen3_5VisionConfig,
@@ -66,22 +71,23 @@ impl Qwen3_5VisionModel {
         }))
     }
 
-    /// Loads vision weights from model shards with embedded vision tensors.
-    pub fn load_from_model_shards(
+    /// Loads vision weights embedded in the model shard files, read through
+    /// `model_shard_files` in model-shard order.
+    pub fn load_from_model_shard_files(
         runtime: &astronomical_runtime_integration::MlxRuntime,
         vision_config: &Qwen3_5VisionConfig,
         qwen3_5_config: &crate::qwen3_5_core::configuration::Qwen3_5Config,
-        model_shards: &[astronomical_runtime_integration::MlxSafetensors],
-        vision_tensor_name_to_shard_location: &std::collections::HashMap<
+        model_shard_files: Vec<std::fs::File>,
+        vision_tensor_name_to_shard_location: std::collections::HashMap<
             String,
-            super::EmbeddedVisionTensorLocation,
+            super::VisionTensorLocation,
         >,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let weights = Qwen3_5VisionWeights::load_from_model_shards(
+        let weights = Qwen3_5VisionWeights::load_from_model_shard_files(
             runtime,
             vision_config,
             qwen3_5_config,
-            model_shards,
+            model_shard_files,
             vision_tensor_name_to_shard_location,
         )?;
         Ok(Self {
@@ -90,6 +96,30 @@ impl Qwen3_5VisionModel {
             weights_have_been_used: Cell::new(false),
             padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
         })
+    }
+
+    /// The tower's complete payload, whether or not it is in memory right now.
+    #[must_use]
+    pub(crate) const fn tower_payload_bytes(&self) -> u64 {
+        self.weights.total_payload_bytes()
+    }
+
+    /// Releases the tower's evaluated weights once an image request no longer
+    /// needs them, so text requests carry none of the tower's memory.
+    ///
+    /// Visual embeddings are evaluated and cached before this runs, and the
+    /// next image request reads the weights from the SSD again. Returns
+    /// whether anything was released.
+    pub(crate) fn release_used_weights(
+        &mut self,
+        runtime: &MlxRuntime,
+    ) -> Result<bool, Qwen3_5ExecutionError> {
+        if !self.weights_have_been_used.get() {
+            return Ok(false);
+        }
+        self.weights.rebind_lazily(runtime)?;
+        self.weights_have_been_used.set(false);
+        Ok(true)
     }
 
     /// Projects preprocessed images into text-model-width visual embeddings.

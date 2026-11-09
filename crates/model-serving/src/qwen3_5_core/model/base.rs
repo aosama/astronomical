@@ -121,6 +121,40 @@ impl Qwen3_5ModelBase {
         self.vision_model.as_ref()
     }
 
+    /// Releases the vision tower's weights once an image request has resolved
+    /// its embeddings, and returns their bytes to the system.
+    ///
+    /// The allocator cache is cleared here rather than at request end, so the
+    /// freed bytes are available to this request's own prefill: on a small
+    /// Mac that prefill is the peak that matters. A failed release only logs,
+    /// because the request already has its embeddings; the tower then stays
+    /// resident and counted, and the next image request tries again.
+    pub(crate) fn release_vision_tower_after_image_request(&mut self) {
+        let Some(vision_model) = self.vision_model.as_mut() else {
+            return;
+        };
+        match vision_model.release_used_weights(&self.runtime) {
+            Ok(false) => {}
+            Ok(true) => match self
+                .runtime
+                .synchronize_gpu_stream_and_clear_allocator_cache()
+            {
+                Ok(()) => tracing::debug!(
+                    released_vision_payload_bytes = vision_model.tower_payload_bytes(),
+                    "released the vision tower weights after the image request"
+                ),
+                Err(cache_clear_error) => tracing::warn!(
+                    error = %cache_clear_error,
+                    "released the vision tower weights but could not clear the allocator cache"
+                ),
+            },
+            Err(release_error) => tracing::warn!(
+                error = %release_error,
+                "vision tower weights stay resident because releasing them failed"
+            ),
+        }
+    }
+
     /// Returns the resident target payload bytes wired after materialization.
     #[must_use]
     pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {

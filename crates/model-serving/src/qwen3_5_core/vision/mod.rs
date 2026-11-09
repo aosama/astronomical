@@ -12,6 +12,8 @@ pub(crate) mod vision_input_plan;
 mod vision_model;
 #[cfg(feature = "direct-mlx")]
 mod vision_rotary_embedding;
+#[cfg(feature = "direct-mlx")]
+mod vision_tensor_source;
 pub(crate) mod vision_tensor_spec;
 #[cfg(feature = "direct-mlx")]
 mod vision_weights;
@@ -37,9 +39,9 @@ pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles;
 #[cfg(feature = "direct-mlx")]
 pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model;
 #[cfg(feature = "direct-mlx")]
-pub use vision_weights::EmbeddedVisionTensorLocation;
-#[cfg(feature = "direct-mlx")]
 pub use vision_weights::Qwen3_5VisionWeights;
+#[cfg(feature = "direct-mlx")]
+pub use vision_weights::VisionTensorLocation;
 #[cfg(feature = "direct-mlx")]
 pub use visual_embedding_injection::qwen3_5_inject_visual_embeddings;
 pub use visual_embeddings::{

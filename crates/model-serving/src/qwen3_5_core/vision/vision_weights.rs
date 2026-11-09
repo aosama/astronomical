@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::quantizations::mlx_quantization::{
@@ -8,41 +8,42 @@ use crate::qwen3_5_core::quantizations::mlx_quantization::{
 };
 use crate::{TensorDtype, TensorProfile};
 
+use super::vision_tensor_source::Qwen3_5VisionTensorSource;
 use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
 use mlx_c_rust::{MlxArray, MlxDtype};
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
-/// Where one canonical vision tensor physically lives inside the loaded model
-/// shards, including its stored spelling for unified-naming checkpoints
+/// Where one canonical vision tensor physically lives among the tower's
+/// source files (vision sidecars, or the model shards of an embedded tower),
+/// including its stored spelling for unified-naming checkpoints
 /// (`model.visual.*` shards read through canonical `vision_tower.*` names).
 #[derive(Clone, Debug)]
-pub struct EmbeddedVisionTensorLocation {
-    /// Position of the owning shard inside the loaded model shard list.
-    pub shard_position: usize,
-    /// Tensor spelling to use for the physical shard read.
+pub struct VisionTensorLocation {
+    /// Position of the owning file in the tower's source file list.
+    pub source_file_position: usize,
+    /// Tensor spelling to use for the physical read.
     pub stored_tensor_name: String,
 }
 
 /// Strict tensor binding for the Qwen3.5 vision tower.
 ///
-/// Vision tensors may come from one or more separate files, and
-/// `vision_sidecars` holds their owning `MlxSafetensors` values to keep the
-/// memory-mapped data alive.
-///
-/// For embedded vision, `Qwen3_5Weights::model_shards` keeps the source
-/// maps alive instead.
-/// In this case `vision_sidecars` is empty.
+/// The bound tensors are lazy until the first image request evaluates them.
+/// After that they hold the tower's bytes, so [`Self::rebind_lazily`] swaps in
+/// fresh lazy handles from the retained source files and lets the evaluated
+/// ones go: the tower then costs memory only while an image is encoded.
 #[derive(Debug)]
 pub struct Qwen3_5VisionWeights {
     bound_tensors: HashMap<String, MlxArray>,
     quantization_profiles: HashMap<String, ModuleQuantizationProfile>,
-    /// The safetensors sources that own the memory-mapped data backing the
-    /// bound tensors. Empty for embedded-vision models where the model shards
-    /// in `Qwen3_5Weights` keep the data alive.
-    #[allow(dead_code)]
-    vision_sidecars: Vec<MlxSafetensors>,
+    tensor_profiles: Vec<TensorProfile>,
+    /// The tower's own source files. Its lazy maps are loaded apart from the
+    /// language shards even for embedded towers, because a map entry keeps an
+    /// evaluated tensor alive: sharing the language maps would pin the tower's
+    /// bytes for the model's lifetime. The maps themselves are dropped right
+    /// after binding; each bound handle keeps its reader alive on its own.
+    tensor_source: Qwen3_5VisionTensorSource,
     total_payload_bytes: u64,
 }
 
@@ -62,16 +63,6 @@ impl Qwen3_5VisionWeights {
             })?
             .clone();
         let qwen3_5_config = validated_artifact.config().clone();
-        let vision_tensor_profiles =
-            super::qwen3_5_vision_tensor_profiles_for_model(&vision_config, &qwen3_5_config)
-                .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
-                    description: artifact_error.to_string(),
-                })?;
-        let quantization_profiles =
-            super::vision_tensor_spec::qwen3_5_vision_linear_quantization_profiles(
-                &vision_config,
-                &qwen3_5_config,
-            );
         let vision_sidecar_file_names = validated_artifact
             .shard_index()
             .vision_sidecar_file_names()
@@ -84,84 +75,62 @@ impl Qwen3_5VisionWeights {
             // The artifact either embeds visual weights or has none.
             return Ok(None);
         }
-        let mut vision_sidecars = Vec::with_capacity(vision_sidecar_files.len());
-        for vision_sidecar_file in vision_sidecar_files {
-            vision_sidecars.push(runtime.load_safetensors(vision_sidecar_file.into_file(), None)?);
-        }
-
-        let mut bound_tensors = HashMap::with_capacity(vision_tensor_profiles.len());
-        let mut actual_payload_bytes = 0_u64;
-        for tensor_profile in &vision_tensor_profiles {
-            let vision_sidecar_file_name = validated_artifact
-                .shard_index()
-                .vision_tensor_name_to_shard_file_name()
-                .get(&tensor_profile.name)
-                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                })?;
-            let vision_sidecar_index = vision_sidecar_file_names
+        let mut vision_tensor_name_to_location = HashMap::new();
+        for (vision_tensor_name, vision_sidecar_file_name) in validated_artifact
+            .shard_index()
+            .vision_tensor_name_to_shard_file_name()
+        {
+            let Some(source_file_position) = vision_sidecar_file_names
                 .iter()
                 .position(|indexed_file_name| indexed_file_name == vision_sidecar_file_name)
-                .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor resolves outside loaded sidecar files",
-                })?;
-            let vision_sidecar = vision_sidecars.get(vision_sidecar_index).ok_or_else(|| {
-                Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision sidecar file is missing",
-                }
-            })?;
-            let tensor = vision_sidecar.tensor(&tensor_profile.name)?;
-            let tensor = normalize_published_patch_embed_layout(runtime, tensor_profile, tensor)?;
-            validate_bound_vision_tensor(tensor_profile, &tensor)?;
-            let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor payload byte count exceeds the u64 range",
-                }
-            })?;
-            actual_payload_bytes = actual_payload_bytes
-                .checked_add(tensor_payload_bytes)
-                .ok_or(Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor total payload byte count overflowed",
-                })?;
-            if bound_tensors
-                .insert(tensor_profile.name.clone(), tensor)
-                .is_some()
-            {
-                return Err(Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor was bound more than once",
-                });
-            }
+            else {
+                continue;
+            };
+            vision_tensor_name_to_location.insert(
+                vision_tensor_name.clone(),
+                VisionTensorLocation {
+                    source_file_position,
+                    stored_tensor_name: vision_tensor_name.clone(),
+                },
+            );
         }
-
-        Ok(Some(Self {
-            bound_tensors,
-            quantization_profiles,
-            vision_sidecars,
-            total_payload_bytes: actual_payload_bytes,
-        }))
+        let tensor_source = Qwen3_5VisionTensorSource::new(
+            vision_sidecar_files
+                .into_iter()
+                .map(crate::artifact_validation::ValidatedWeightsFile::into_file)
+                .collect(),
+            vision_tensor_name_to_location,
+        );
+        Self::bind(runtime, &vision_config, &qwen3_5_config, tensor_source).map(Some)
     }
 
-    /// Loads vision weights from model shard safetensors.
+    /// Loads vision weights embedded in the model shard files.
     ///
-    /// Vision tensors can be embedded in the same shard files as language model
-    /// tensors or a dedicated vision-only model shard. The `model_shards`
-    /// parameter provides the already-loaded
-    /// safetensors objects that keep the memory-mapped data alive.
-    /// The `vision_tensor_name_to_shard_location` maps each canonical vision
-    /// tensor name to its shard position and stored tensor spelling.
-    pub fn load_from_model_shards(
+    /// `model_shard_files` are descriptors of the model shards in the order the
+    /// locations' `source_file_position` values index. Vision tensors can be
+    /// embedded in the same shard files as language model tensors or in a
+    /// dedicated vision-only model shard.
+    pub fn load_from_model_shard_files(
         runtime: &MlxRuntime,
         vision_config: &super::Qwen3_5VisionConfig,
         qwen3_5_config: &Qwen3_5Config,
-        model_shards: &[MlxSafetensors],
-        vision_tensor_name_to_shard_location: &HashMap<String, EmbeddedVisionTensorLocation>,
+        model_shard_files: Vec<std::fs::File>,
+        vision_tensor_name_to_shard_location: HashMap<String, VisionTensorLocation>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let vision_tensor_profiles =
+        let tensor_source = Qwen3_5VisionTensorSource::keeping_referenced_files(
+            model_shard_files,
+            vision_tensor_name_to_shard_location,
+        );
+        Self::bind(runtime, vision_config, qwen3_5_config, tensor_source)
+    }
+
+    fn bind(
+        runtime: &MlxRuntime,
+        vision_config: &super::Qwen3_5VisionConfig,
+        qwen3_5_config: &Qwen3_5Config,
+        tensor_source: Qwen3_5VisionTensorSource,
+    ) -> Result<Self, Qwen3_5ExecutionError> {
+        let tensor_profiles =
             super::qwen3_5_vision_tensor_profiles_for_model(vision_config, qwen3_5_config)
                 .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
                     description: artifact_error.to_string(),
@@ -171,52 +140,38 @@ impl Qwen3_5VisionWeights {
                 vision_config,
                 qwen3_5_config,
             );
-        let mut bound_tensors = HashMap::with_capacity(vision_tensor_profiles.len());
-        let mut actual_payload_bytes = 0_u64;
-        for tensor_profile in &vision_tensor_profiles {
-            let tensor_shard_location = vision_tensor_name_to_shard_location
-                .get(&tensor_profile.name)
-                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                })?;
-            let model_shard = model_shards
-                .get(tensor_shard_location.shard_position)
-                .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor resolves outside the loaded model shards",
-                })?;
-            let tensor = model_shard.tensor(&tensor_shard_location.stored_tensor_name)?;
-            let tensor = normalize_published_patch_embed_layout(runtime, tensor_profile, tensor)?;
-            validate_bound_vision_tensor(tensor_profile, &tensor)?;
-            let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor payload byte count exceeds the u64 range",
-                }
-            })?;
-            actual_payload_bytes = actual_payload_bytes
-                .checked_add(tensor_payload_bytes)
-                .ok_or(Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor total payload byte count overflowed",
-                })?;
-            if bound_tensors
-                .insert(tensor_profile.name.clone(), tensor)
-                .is_some()
-            {
-                return Err(Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "vision tensor was bound more than once",
-                });
-            }
-        }
-
+        let (bound_tensors, total_payload_bytes) =
+            bind_vision_tensors(runtime, &tensor_profiles, &tensor_source)?;
         Ok(Self {
             bound_tensors,
             quantization_profiles,
-            vision_sidecars: Vec::new(),
-            total_payload_bytes: actual_payload_bytes,
+            tensor_profiles,
+            tensor_source,
+            total_payload_bytes,
         })
+    }
+
+    /// Replaces every bound tensor with a fresh lazy handle read from the
+    /// retained source files, releasing the evaluated bytes.
+    ///
+    /// The bytes are freed once no graph still references the previous
+    /// handles, and results stay correct either way; the caller releases after
+    /// the visual embeddings were evaluated, when nothing does. On error the
+    /// previous handles stay bound.
+    pub(super) fn rebind_lazily(
+        &mut self,
+        runtime: &MlxRuntime,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        let (bound_tensors, total_payload_bytes) =
+            bind_vision_tensors(runtime, &self.tensor_profiles, &self.tensor_source)?;
+        if total_payload_bytes != self.total_payload_bytes {
+            return Err(Qwen3_5ExecutionError::TensorPayloadMismatch {
+                actual_payload_bytes: total_payload_bytes,
+                expected_payload_bytes: self.total_payload_bytes,
+            });
+        }
+        self.bound_tensors = bound_tensors;
+        Ok(())
     }
 
     /// Returns one exact vision tower tensor by name.
@@ -311,6 +266,53 @@ impl Qwen3_5VisionWeights {
         let bound_tensor_references = self.bound_tensors.values().collect::<Vec<_>>();
         Ok(runtime.evaluate_arrays(&bound_tensor_references)?)
     }
+}
+
+/// Binds every profiled vision tensor from fresh lazy maps of the source
+/// files, returning the bound handles and their total payload size. The maps
+/// are dropped on return; each bound handle keeps its reader alive.
+fn bind_vision_tensors(
+    runtime: &MlxRuntime,
+    tensor_profiles: &[TensorProfile],
+    tensor_source: &Qwen3_5VisionTensorSource,
+) -> Result<(HashMap<String, MlxArray>, u64), Qwen3_5ExecutionError> {
+    let source_safetensors = tensor_source.load_lazy_safetensors(runtime)?;
+    let mut bound_tensors = HashMap::with_capacity(tensor_profiles.len());
+    let mut total_payload_bytes = 0_u64;
+    for tensor_profile in tensor_profiles {
+        let tensor_location = tensor_source.location(&tensor_profile.name)?;
+        let source_map = source_safetensors
+            .get(tensor_location.source_file_position)
+            .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_profile.name.clone(),
+                description: "vision tensor resolves outside the loaded vision source files",
+            })?;
+        let tensor = source_map.tensor(&tensor_location.stored_tensor_name)?;
+        let tensor = normalize_published_patch_embed_layout(runtime, tensor_profile, tensor)?;
+        validate_bound_vision_tensor(tensor_profile, &tensor)?;
+        let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
+            Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_profile.name.clone(),
+                description: "vision tensor payload byte count exceeds the u64 range",
+            }
+        })?;
+        total_payload_bytes = total_payload_bytes
+            .checked_add(tensor_payload_bytes)
+            .ok_or(Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_profile.name.clone(),
+                description: "vision tensor total payload byte count overflowed",
+            })?;
+        if bound_tensors
+            .insert(tensor_profile.name.clone(), tensor)
+            .is_some()
+        {
+            return Err(Qwen3_5ExecutionError::InvalidTensor {
+                tensor_name: tensor_profile.name.clone(),
+                description: "vision tensor was bound more than once",
+            });
+        }
+    }
+    Ok((bound_tensors, total_payload_bytes))
 }
 
 /// Normalizes the patch-embed Conv3d weight into the MLX ODHWI execution
