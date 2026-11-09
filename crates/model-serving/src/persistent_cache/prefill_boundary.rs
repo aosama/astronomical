@@ -2,7 +2,10 @@
 //!
 //! Cache-enabled prefill is clamped to one boundary per forward. That keeps the
 //! captured decoder state and token slice at the same exact point, and ensures a
-//! required synchronous publication succeeds before processing can advance.
+//! required synchronous publication succeeds before processing can advance. A
+//! dense model's layer-major prefill runs several such chunks as one forward
+//! (issue #1985); it keeps each chunk's spans and checkpoints, so every block
+//! still captures the state at its own boundary, and publishes them in order.
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod tests;

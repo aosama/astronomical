@@ -7,6 +7,8 @@ mod dense_layer_admission;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_counts;
 #[cfg(feature = "direct-mlx")]
+mod dense_layer_measurement;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod dense_layer_reads;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod dense_layer_reads_tests;
@@ -32,6 +34,8 @@ mod expert_storage_streaming;
 mod expert_streaming_stats;
 #[cfg(feature = "direct-mlx")]
 mod forward_layer_weights;
+#[cfg(feature = "direct-mlx")]
+mod layer_major_checkpoint_parity;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_major_prefill;
 #[cfg(feature = "direct-mlx")]

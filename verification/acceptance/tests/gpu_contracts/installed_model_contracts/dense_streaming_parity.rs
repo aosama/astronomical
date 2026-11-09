@@ -66,7 +66,7 @@ async fn assert_dense_streaming_logit_parity() {
         .expect("the dense model should load on the streaming engine");
         let dense_forward = StreamingForward(&streaming_model);
         let active_bytes_after_load = dense_forward.materialized_active_bytes();
-        let mut answers_by_kept_layer_count = Vec::with_capacity(KEPT_LAYER_COUNTS.len() * 2);
+        let mut answers_by_streaming_variant = Vec::with_capacity(KEPT_LAYER_COUNTS.len() * 2);
         for kept_layer_count in KEPT_LAYER_COUNTS {
             streaming_model
                 .plan_dense_layer_residency(
@@ -77,11 +77,11 @@ async fn assert_dense_streaming_logit_parity() {
                     Some(kept_layer_count),
                 )
                 .expect("the dense layers should plan");
-            answers_by_kept_layer_count.push((
+            answers_by_streaming_variant.push((
                 format!("{kept_layer_count} kept layers, chunk by chunk"),
                 greedy_answer(&qwen3_5_config, &prompt_token_ids, &dense_forward),
             ));
-            answers_by_kept_layer_count.push((
+            answers_by_streaming_variant.push((
                 format!("{kept_layer_count} kept layers, layer by layer"),
                 greedy_answer_after_layer_major_prefill(
                     &qwen3_5_config,
@@ -90,7 +90,7 @@ async fn assert_dense_streaming_logit_parity() {
                 ),
             ));
         }
-        (active_bytes_after_load, answers_by_kept_layer_count)
+        (active_bytes_after_load, answers_by_streaming_variant)
     };
     eprintln!("[dense-parity] status=progress step=2/2 engine=resident");
     let resident_answer = {

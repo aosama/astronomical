@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use mlx_c_rust::MlxArray;
 
 use super::Qwen3_5Model;
+use super::forward_layer_weights::ForwardLayerWeights;
 use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use crate::qwen3_5_core::decoder::{
     Qwen3_5PersistentPromptCacheBoundaryCheckpoint,
@@ -46,7 +47,8 @@ impl LayerMajorSpan {
     }
 }
 
-/// Where a layer-major prefill's prompt-cache checkpoints come from.
+/// The shape of a layer-major prefill's prompt-cache checkpoints: how many
+/// tensors each holds, and the block size boundaries fall on.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct LayerMajorCheckpointContract {
     pub(crate) boundary_tensor_count: usize,
@@ -74,7 +76,7 @@ pub(crate) struct LayerMajorPrefillOutcome {
 }
 
 /// The per-span bookkeeping that lives across the layer loop.
-struct SpanProgress {
+struct SpanState {
     hidden_states: Option<MlxArray>,
     collector: Option<Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector>,
     end_state_snapshot: Option<HashMap<String, MlxArray>>,
@@ -94,7 +96,8 @@ impl Qwen3_5Model {
     /// Bytes one token's hidden state occupies between decoder layers, read
     /// from the shape and dtype of a one-token array, which MLX sizes
     /// without allocating it.
-    pub(crate) fn hidden_state_bytes_per_token(&self) -> usize {
+    #[doc(hidden)]
+    pub fn hidden_state_bytes_per_token(&self) -> usize {
         let hidden_size = self.config.hidden_size() as usize;
         super::decoder_cache_dtype_flow::embedded_hidden_state_dtype(&self.weights)
             .ok()
@@ -125,24 +128,26 @@ impl Qwen3_5Model {
             should_materialize_logits,
         } = layer_major_prefill_request;
         validate_layer_major_spans(token_ids.len(), spans)?;
-        let mut span_progress =
+        let mut span_states =
             self.embed_layer_major_spans(token_ids, spans, checkpoint_contract)?;
         let mut previous_dense_layer_output = None;
         for layer_index in 0..self.config.layer_count() as usize {
             self.run_layer_over_spans(
-                layer_index,
-                starting_position_tokens,
+                LayerPass {
+                    layer_index,
+                    starting_position_tokens,
+                },
                 spans,
-                &mut span_progress,
+                &mut span_states,
                 request_decoder_state,
                 &mut previous_dense_layer_output,
                 performance_attribution,
             )?;
         }
-        let final_logits = match (should_materialize_logits, span_progress.last()) {
+        let final_logits = match (should_materialize_logits, span_states.last()) {
             (
                 true,
-                Some(SpanProgress {
+                Some(SpanState {
                     hidden_states: Some(hidden_states),
                     ..
                 }),
@@ -161,7 +166,7 @@ impl Qwen3_5Model {
         self.runtime.evaluate_arrays(&evaluation_roots)?;
         Ok(LayerMajorPrefillOutcome {
             final_logits,
-            boundary_checkpoints: completed_checkpoints(spans, span_progress)?,
+            boundary_checkpoints: completed_checkpoints(spans, span_states, checkpoint_contract)?,
         })
     }
 
@@ -202,8 +207,8 @@ impl Qwen3_5Model {
         token_ids: &[u32],
         spans: &[LayerMajorSpan],
         checkpoint_contract: Option<LayerMajorCheckpointContract>,
-    ) -> Result<Vec<SpanProgress>, Qwen3_5ExecutionError> {
-        let mut span_progress = Vec::with_capacity(spans.len());
+    ) -> Result<Vec<SpanState>, Qwen3_5ExecutionError> {
+        let mut span_states = Vec::with_capacity(spans.len());
         for span in spans {
             let span_token_ids = &token_ids[span.start_token..span.end_token];
             let signed_token_ids = span_token_ids
@@ -222,94 +227,149 @@ impl Qwen3_5Model {
             let token_indices = self
                 .runtime
                 .array_from_i32(&signed_token_ids, &[1, span_token_count])?;
-            span_progress.push(SpanProgress {
+            span_states.push(SpanState {
                 hidden_states: Some(self.embedding_lookup(&token_indices)?),
                 collector: span_collector(span, checkpoint_contract)?,
                 end_state_snapshot: (span.ends_at_inner_boundary && checkpoint_contract.is_some())
                     .then(HashMap::new),
             });
         }
-        Ok(span_progress)
+        Ok(span_states)
     }
 
     /// Runs one decoder layer over every span in order, reading a streamed
     /// layer once for all of them.
-    #[allow(clippy::too_many_arguments)]
     fn run_layer_over_spans(
         &self,
-        layer_index: usize,
-        starting_position_tokens: u32,
+        layer_pass: LayerPass,
         spans: &[LayerMajorSpan],
-        span_progress: &mut [SpanProgress],
+        span_states: &mut [SpanState],
         request_decoder_state: &mut RequestDecoderStateStack,
         previous_dense_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        let forward_layer_weights = self.forward_layer_weights(layer_index)?;
-        for (span, progress) in spans.iter().zip(span_progress.iter_mut()) {
-            let span_input =
-                progress
-                    .hidden_states
-                    .take()
-                    .ok_or(Qwen3_5ExecutionError::InvalidInput {
-                        description: "a layer-major span lost its hidden states",
-                    })?;
-            let span_token_count = i32::try_from(span.token_count()).unwrap_or(i32::MAX);
-            let rope_offset_tokens =
-                i32::try_from(u64::from(starting_position_tokens) + span.start_token as u64)
-                    .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
-                        description: "a layer-major span starts beyond the MLX int32 range",
-                    })?;
-            let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
-                Qwen3_5ExecutionError::InvalidRequestDecoderState {
-                    layer_index,
-                    description: "decoder layer entry is missing",
-                },
-            )?;
-            let span_output = self.forward_decoder_layer(
-                &span_input,
-                span_token_count,
-                rope_offset_tokens,
-                layer_index,
-                forward_layer_weights.decoder_layer_weights(),
-                layer_model_state,
-                None,
-                progress.collector.as_mut(),
-                Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+        let forward_layer_weights = self.forward_layer_weights(layer_pass.layer_index)?;
+        for (span, span_state) in spans.iter().zip(span_states.iter_mut()) {
+            let span_output = self.run_span_through_layer(
+                layer_pass,
+                &forward_layer_weights,
+                span,
+                span_state,
+                request_decoder_state,
                 performance_attribution,
             )?;
-            drop(span_input);
-            let layer_state = request_decoder_state.layer(layer_index);
+            let layer_state = request_decoder_state.layer(layer_pass.layer_index);
+            if let (Some(end_state_snapshot), Some(layer_state)) =
+                (span_state.end_state_snapshot.as_mut(), layer_state)
+            {
+                record_end_state_snapshot(end_state_snapshot, layer_pass.layer_index, layer_state)?;
+            }
+            let mut boundary_checkpoint_states = span_state
+                .collector
+                .as_ref()
+                .map(|collector| collector.layer_evaluation_arrays(layer_pass.layer_index))
+                .unwrap_or_default();
+            // The end-state snapshot holds the layer's own state arrays, which
+            // this submission evaluates anyway; naming them keeps that true
+            // if the state ever stops being reachable from the output.
+            boundary_checkpoint_states.extend(
+                span_state
+                    .end_state_snapshot
+                    .as_ref()
+                    .map(|snapshot| layer_snapshot_arrays(snapshot, layer_pass.layer_index))
+                    .unwrap_or_default(),
+            );
             self.submit_completed_layer(
                 &forward_layer_weights,
                 CompletedLayerRoots {
                     layer_output: &span_output,
                     convolution_state: layer_state
                         .and_then(DecoderCacheState::convolution_state_array),
-                    boundary_checkpoint_states: progress
-                        .collector
-                        .as_ref()
-                        .map(|collector| collector.layer_evaluation_arrays(layer_index))
-                        .unwrap_or_default(),
+                    boundary_checkpoint_states,
                 },
                 previous_dense_layer_output,
                 LayerGroupSubmission {
-                    completed_layer_count: layer_index + 1,
+                    completed_layer_count: layer_pass.layer_index + 1,
                     decoder_layer_count: self.config.layer_count() as usize,
                     graph_submission_layer_interval: 0,
-                    forward_token_count: span_token_count,
+                    forward_token_count: i32::try_from(span.token_count()).unwrap_or(i32::MAX),
                 },
                 performance_attribution,
             )?;
-            if let (Some(end_state_snapshot), Some(layer_state)) =
-                (progress.end_state_snapshot.as_mut(), layer_state)
-            {
-                record_end_state_snapshot(end_state_snapshot, layer_index, layer_state)?;
-            }
-            progress.hidden_states = Some(span_output);
+            span_state.hidden_states = Some(span_output);
         }
         Ok(())
     }
+
+    /// Builds one span's pass through one layer from that span's hidden
+    /// states, at the span's own position.
+    fn run_span_through_layer(
+        &self,
+        layer_pass: LayerPass,
+        forward_layer_weights: &ForwardLayerWeights<'_>,
+        span: &LayerMajorSpan,
+        span_state: &mut SpanState,
+        request_decoder_state: &mut RequestDecoderStateStack,
+        performance_attribution: &mut PerformanceAttribution,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        let layer_index = layer_pass.layer_index;
+        let span_input =
+            span_state
+                .hidden_states
+                .take()
+                .ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "a layer-major span lost its hidden states",
+                })?;
+        let rope_offset_tokens =
+            i32::try_from(u64::from(layer_pass.starting_position_tokens) + span.start_token as u64)
+                .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
+                    description: "a layer-major span starts beyond the MLX int32 range",
+                })?;
+        let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
+            Qwen3_5ExecutionError::InvalidRequestDecoderState {
+                layer_index,
+                description: "decoder layer entry is missing",
+            },
+        )?;
+        if !layer_model_state.tensors_are_allocated_consistently() {
+            return Err(super::error::invalid_request_decoder_state(
+                layer_index,
+                "decoder layer tensors must be allocated together or absent together",
+            ));
+        }
+        self.forward_decoder_layer(
+            &span_input,
+            i32::try_from(span.token_count()).unwrap_or(i32::MAX),
+            rope_offset_tokens,
+            layer_index,
+            forward_layer_weights.decoder_layer_weights(),
+            layer_model_state,
+            None,
+            span_state.collector.as_mut(),
+            Qwen3_5MoEPagedExecutionMode::ProductionDefault,
+            performance_attribution,
+        )
+    }
+}
+
+/// Which layer one pass over the spans runs, and where the prompt starts.
+#[derive(Clone, Copy)]
+struct LayerPass {
+    layer_index: usize,
+    starting_position_tokens: u32,
+}
+
+/// One linear-attention layer's arrays within an end-state snapshot.
+fn layer_snapshot_arrays(
+    end_state_snapshot: &HashMap<String, MlxArray>,
+    layer_index: usize,
+) -> Vec<&MlxArray> {
+    let layer_tensor_prefix = format!("layer_{layer_index}_linear.");
+    end_state_snapshot
+        .iter()
+        .filter(|(tensor_name, _)| tensor_name.starts_with(&layer_tensor_prefix))
+        .map(|(_, snapshot_tensor)| snapshot_tensor)
+        .collect()
 }
 
 /// A span's checkpoint collector, when it has boundaries strictly inside it.
@@ -366,19 +426,30 @@ fn record_end_state_snapshot(
 }
 
 /// Every span's checkpoints, moved to positions relative to the first span.
+///
+/// An end-state snapshot must hold the full tensor layout, as a collector's
+/// checkpoints must.
 fn completed_checkpoints(
     spans: &[LayerMajorSpan],
-    span_progress: Vec<SpanProgress>,
+    span_states: Vec<SpanState>,
+    checkpoint_contract: Option<LayerMajorCheckpointContract>,
 ) -> Result<Vec<Qwen3_5PersistentPromptCacheBoundaryCheckpoint>, Qwen3_5ExecutionError> {
+    let expected_tensor_count =
+        checkpoint_contract.map_or(0, |contract| contract.boundary_tensor_count);
     let mut boundary_checkpoints = Vec::new();
-    for (span, progress) in spans.iter().zip(span_progress) {
-        if let Some(collector) = progress.collector {
+    for (span, span_state) in spans.iter().zip(span_states) {
+        if let Some(collector) = span_state.collector {
             for mut boundary_checkpoint in collector.complete()? {
                 boundary_checkpoint.completed_prefill_chunk_tokens += span.start_token;
                 boundary_checkpoints.push(boundary_checkpoint);
             }
         }
-        if let Some(recurrent_snapshot_tensors) = progress.end_state_snapshot {
+        if let Some(recurrent_snapshot_tensors) = span_state.end_state_snapshot {
+            if recurrent_snapshot_tensors.len() != expected_tensor_count {
+                return Err(Qwen3_5ExecutionError::InvalidInput {
+                    description: "a layer-major end-state snapshot lacks part of the decoder-cache tensor layout",
+                });
+            }
             boundary_checkpoints.push(Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
                 completed_prefill_chunk_tokens: span.end_token,
                 recurrent_snapshot_tensors,

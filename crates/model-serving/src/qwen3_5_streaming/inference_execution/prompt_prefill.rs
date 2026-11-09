@@ -118,7 +118,7 @@ impl Qwen3_5EngineState {
                 .streamed_expert_page_bytes_before_growth,
             forward_chunk_elapsed_millis: forward_elapsed.as_millis() as u64,
             adaptive_ram_growth_context: plan
-                .adaptive_ram_growth_context
+                .observed_growth_context
                 .with_execution_profile(crate::AdaptiveRamGrowthExecutionProfile::Paged),
             exact_temporary_workspace_bytes: plan.exact_temporary_workspace_bytes,
             boundary_checkpoints,

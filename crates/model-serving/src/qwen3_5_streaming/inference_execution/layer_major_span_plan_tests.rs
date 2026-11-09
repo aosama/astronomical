@@ -82,13 +82,65 @@ fn should_plan_from_a_restored_cursor_relative_to_it() {
 
     assert_eq!(span_plan.group_end_token, 9200);
     assert_eq!(
-        span_plan.spans.first().map(|first| first.start_token),
-        Some(0)
+        span_plan.spans,
+        vec![
+            span(0, 4096, Vec::new(), false),
+            span(4096, 8192, Vec::new(), false),
+            span(8192, 8200, Vec::new(), false),
+        ]
     );
+}
+
+#[test]
+fn should_keep_a_boundary_inside_a_span_when_chunks_exceed_one_block() {
+    let span_plan = layer_major_span_plan(0, 5000, 2048, Some(BLOCK_TOKENS))
+        .expect("several spans should make a layer-major plan");
+
+    let first_span = &span_plan.spans[0];
+    assert_eq!((first_span.start_token, first_span.end_token), (0, 2048));
+    assert_eq!(first_span.interior_boundary_tokens, vec![1792]);
+    assert!(!first_span.ends_at_inner_boundary);
+}
+
+#[test]
+fn should_start_with_a_one_token_span_from_a_cursor_one_short_of_a_block() {
+    let span_plan = layer_major_span_plan(1791, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS))
+        .expect("two spans should make a layer-major plan");
+
+    assert_eq!(span_plan.spans[0], span(0, 1, Vec::new(), true));
+    assert_eq!(span_plan.group_end_token, 4349);
+}
+
+#[test]
+fn should_run_to_the_prompt_end_from_a_block_cursor_when_one_span_remains() {
     assert_eq!(
-        span_plan.spans.last().map(|last| last.end_token),
-        Some(8200)
+        layer_major_span_plan(1792, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS)),
+        None
     );
+}
+
+#[test]
+fn should_treat_a_zero_block_as_no_prompt_cache() {
+    assert_eq!(
+        layer_major_span_plan(0, 10_000, CHUNK_TOKENS, Some(0)),
+        layer_major_span_plan(0, 10_000, CHUNK_TOKENS, None)
+    );
+}
+
+#[test]
+fn should_make_progress_with_a_zero_chunk_size() {
+    let span_plan = layer_major_span_plan(0, 3, 0, None)
+        .expect("one-token spans should make a layer-major plan");
+
+    assert_eq!(span_plan.spans.len(), 3);
+}
+
+#[test]
+fn should_report_the_largest_span() {
+    let span_plan = layer_major_span_plan(0, 4350, CHUNK_TOKENS, Some(BLOCK_TOKENS))
+        .expect("two spans should make a layer-major plan");
+
+    assert_eq!(span_plan.largest_span_token_count(), 2557);
 }
 
 #[test]

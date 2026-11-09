@@ -27,6 +27,7 @@ use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_streaming::model::reclaim_retained_payload_for_request_memory_pressure;
 
 use super::engine_request::Qwen3_5EngineRequest;
+use super::prompt_prefill_errors::PromptPrefillChunkAttemptError;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
 
 /// One recovery per request: after it, retained experts stay frozen at zero
@@ -154,6 +155,65 @@ impl Qwen3_5EngineState {
             "recovered prefill memory exhaustion by shedding expert residency and re-seeding from the persistent prompt cache"
         );
         Ok(())
+    }
+}
+
+impl Qwen3_5EngineState {
+    /// Sends a request's prompt chunk by chunk after its layer-major prefill
+    /// failed (issue #1985).
+    ///
+    /// Holding every span's hidden states and checkpoints at once can need
+    /// more than one chunk did, so a failure means the group did not fit, not
+    /// that the prompt cannot run. An admission refusal ran nothing, so the
+    /// request keeps its state and kept layers and simply continues in
+    /// chunks. A failure inside the forward may have half-updated the decoder
+    /// state, so that is rebuilt from the prompt cache like any recovery,
+    /// without spending the chunk path's own one recovery; recovery gives
+    /// back every kept dense layer, so the planned ones are read back after.
+    pub(super) fn decline_layer_major_prefill_after_failure(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut Qwen3_5EngineRequest,
+        prefill_start: usize,
+        prompt_prefill_chunk_attempt_error: PromptPrefillChunkAttemptError,
+    ) -> Result<(), InferenceEngineError> {
+        let forward_ran = match prompt_prefill_chunk_attempt_error {
+            PromptPrefillChunkAttemptError::Engine(generation_error) => {
+                return Err(generation_error);
+            }
+            PromptPrefillChunkAttemptError::AdaptiveMemoryLimitExceeded { ref reason, .. } => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    prefill_start,
+                    %reason,
+                    "layer-major prefill was not admitted; continuing chunk by chunk"
+                );
+                false
+            }
+            PromptPrefillChunkAttemptError::ActiveMemoryLimitExceeded { .. }
+            | PromptPrefillChunkAttemptError::GraphicsProcessorMemoryExhausted { .. } => {
+                tracing::warn!(
+                    request_id = request_id.value(),
+                    prefill_start,
+                    "layer-major prefill ran out of memory; continuing chunk by chunk"
+                );
+                true
+            }
+        };
+        active_request.layer_major_prefill_declined = true;
+        if !forward_ran {
+            return Ok(());
+        }
+        let completed_recovery_attempt_count =
+            active_request.completed_prefill_memory_recovery_attempt_count;
+        self.recover_prefill_after_memory_exhaustion(request_id, active_request, prefill_start)?;
+        active_request.completed_prefill_memory_recovery_attempt_count =
+            completed_recovery_attempt_count;
+        self.model
+            .as_ref()
+            .ok_or_else(|| fatal_engine_error("Qwen3.5 engine lost its loaded model"))?
+            .replan_kept_dense_layers_under_installed_limit()
+            .map_err(InferenceEngineError::from)
     }
 }
 

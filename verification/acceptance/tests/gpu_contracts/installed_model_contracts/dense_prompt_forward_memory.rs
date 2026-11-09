@@ -38,8 +38,6 @@ const MEASURED_CHUNKS: [(usize, usize); 3] = [
 ];
 /// The final normalization and last-token logits, which no layer holds.
 const OUTSIDE_LAYER_SLACK_BYTES: u64 = 8 * 1024 * 1024;
-/// The streamed_dense model's hidden states are bfloat16.
-const HIDDEN_STATE_ELEMENT_BYTES: u64 = 2;
 const FORWARD_MEMORY_BUDGET: Duration = Duration::from_secs(120);
 
 #[tokio::test]
@@ -165,7 +163,7 @@ fn assert_layer_major_prefill_stays_within_reserve(
     let prefill_growth = peak_memory_bytes.saturating_sub(active_bytes_with_state);
     let held_token_count = (prompt_token_ids.len() + PROBE_CHUNK_TOKEN_COUNT) as u64;
     let hidden_state_bytes =
-        held_token_count * qwen3_5_config.hidden_size() as u64 * HIDDEN_STATE_ELEMENT_BYTES;
+        held_token_count * streaming_model.hidden_state_bytes_per_token() as u64;
     let allowed_growth =
         streamed_forward_reserve_bytes + hidden_state_bytes + OUTSIDE_LAYER_SLACK_BYTES;
     eprintln!(

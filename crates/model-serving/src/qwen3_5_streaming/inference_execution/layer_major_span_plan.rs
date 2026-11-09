@@ -20,6 +20,19 @@ pub(crate) struct LayerMajorSpanPlan {
     pub(crate) spans: Vec<LayerMajorSpan>,
 }
 
+impl LayerMajorSpanPlan {
+    /// The most tokens one span runs, which bounds one forward's working
+    /// memory.
+    pub(crate) fn largest_span_token_count(&self) -> usize {
+        let mut largest_span_token_count = 0;
+        for span in &self.spans {
+            largest_span_token_count =
+                largest_span_token_count.max(span.end_token - span.start_token);
+        }
+        largest_span_token_count
+    }
+}
+
 /// Plans the spans from `prefill_cursor`, or `None` when fewer than two
 /// remain: a single span is exactly what the chunk path already runs.
 ///
@@ -31,6 +44,10 @@ pub(crate) fn layer_major_span_plan(
     chunk_token_count: usize,
     capture_block_token_count: Option<usize>,
 ) -> Option<LayerMajorSpanPlan> {
+    // A zero block holds no boundary; the cache contract never makes one,
+    // and the boundary arithmetic divides by it.
+    let capture_block_token_count =
+        capture_block_token_count.filter(|block_token_count| *block_token_count > 0);
     let tail_capture_end = capture_block_token_count.map(|block_token_count| {
         persistent_prompt_cache_partial_tail_capture_end(prompt_token_count, block_token_count)
     });
