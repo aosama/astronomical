@@ -30,6 +30,14 @@ pub(crate) enum EmbeddingResidency {
     RowsReadFromDisk,
 }
 
+/// Who holds a model's decoder layers in memory: the bound weights, or a
+/// dense layer streamer that reads them itself (issue #1985).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DecoderLayerResidency {
+    BoundWeights,
+    DenseLayerStreamer,
+}
+
 /// Strict typed ownership for the indexed executable Qwen3.5 language shards.
 #[derive(Debug)]
 pub struct Qwen3_5Weights {
@@ -38,6 +46,10 @@ pub struct Qwen3_5Weights {
     pub(crate) final_normalization_weight: MlxArray,
     pub(crate) language_model_head_weights: Qwen3_5AffineWeights,
     has_tied_embeddings: bool,
+    /// Whether the shards are a raw Hugging Face checkpoint whose RMSNorm
+    /// weights are stored as `gamma - 1`; layers bound later, such as streamed
+    /// dense layers, apply the same convention.
+    raw_hugging_face_norm_offsets_apply: bool,
     model_shards: Vec<MlxSafetensors>,
     tensor_count: usize,
     total_payload_bytes: u64,
@@ -196,6 +208,7 @@ impl Qwen3_5Weights {
             final_normalization_weight,
             language_model_head_weights,
             has_tied_embeddings: qwen3_5_config.has_tied_embeddings(),
+            raw_hugging_face_norm_offsets_apply,
             model_shards,
             tensor_count,
             total_payload_bytes: actual_payload_bytes,
@@ -227,14 +240,16 @@ impl Qwen3_5Weights {
     }
 
     /// Evaluates the bound tensors so they are resident. An embedding table
-    /// whose rows are read from the SSD stays lazy and never loads.
+    /// whose rows are read from the SSD, and decoder layers a streamer owns,
+    /// stay lazy and never load from these bindings.
     pub(crate) fn materialize(
         &self,
         runtime: &MlxRuntime,
         embedding_residency: EmbeddingResidency,
+        decoder_layer_residency: DecoderLayerResidency,
     ) -> Result<(), Qwen3_5ExecutionError> {
         let materialized_tensor_references =
-            self.materialized_tensor_references(embedding_residency)?;
+            self.materialized_tensor_references(embedding_residency, decoder_layer_residency)?;
         Ok(runtime.evaluate_arrays(&materialized_tensor_references)?)
     }
 
@@ -243,19 +258,26 @@ impl Qwen3_5Weights {
     fn materialized_tensor_references(
         &self,
         embedding_residency: EmbeddingResidency,
+        decoder_layer_residency: DecoderLayerResidency,
     ) -> Result<Vec<&MlxArray>, Qwen3_5ExecutionError> {
         let mut embedding_references = Vec::new();
         self.embedding_weights
             .append_array_references(&mut embedding_references);
-        let mut bound_tensor_references = Vec::with_capacity(self.tensor_count);
-        let expected_tensor_count = if embedding_residency == EmbeddingResidency::Resident {
-            bound_tensor_references.extend(embedding_references);
-            self.tensor_count
-        } else {
-            self.tensor_count.saturating_sub(embedding_references.len())
-        };
+        let mut decoder_layer_references = Vec::new();
         for decoder_layer_weights in &self.decoder_layer_weights {
-            decoder_layer_weights.append_array_references(&mut bound_tensor_references);
+            decoder_layer_weights.append_array_references(&mut decoder_layer_references);
+        }
+        let mut bound_tensor_references = Vec::with_capacity(self.tensor_count);
+        let mut expected_tensor_count = self.tensor_count;
+        if embedding_residency == EmbeddingResidency::Resident {
+            bound_tensor_references.extend(embedding_references);
+        } else {
+            expected_tensor_count -= embedding_references.len();
+        }
+        if decoder_layer_residency == DecoderLayerResidency::BoundWeights {
+            bound_tensor_references.extend(decoder_layer_references);
+        } else {
+            expected_tensor_count -= decoder_layer_references.len();
         }
         bound_tensor_references.push(&self.final_normalization_weight);
         if !self.has_tied_embeddings {
@@ -269,6 +291,12 @@ impl Qwen3_5Weights {
             });
         }
         Ok(bound_tensor_references)
+    }
+
+    /// Whether RMSNorm weights are stored as `gamma - 1` and need the unit
+    /// added at binding.
+    pub(crate) const fn raw_hugging_face_norm_offsets_apply(&self) -> bool {
+        self.raw_hugging_face_norm_offsets_apply
     }
 
     /// The text weight bytes that load into memory: every bound language
@@ -296,7 +324,7 @@ impl Qwen3_5Weights {
     }
 }
 
-fn take_decoder_layer_weights(
+pub(super) fn take_decoder_layer_weights(
     bound_tensors: &mut HashMap<String, MlxArray>,
     qwen3_5_config: &Qwen3_5Config,
     decoder_layer_index: usize,

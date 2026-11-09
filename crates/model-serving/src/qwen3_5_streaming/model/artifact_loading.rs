@@ -14,6 +14,7 @@ use crate::qwen3_5_core::model::loading_pipeline::{
 };
 use crate::qwen3_5_streaming;
 use crate::qwen3_5_streaming::Qwen3_5ExpertPager;
+use crate::qwen3_5_streaming::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer;
 use crate::{
     MlxRamBudget, MlxRamBudgetModelGeometry, PerformanceAttribution, PerformanceOperation,
 };
@@ -89,7 +90,8 @@ impl Qwen3_5Model {
     ) -> Result<Self, Qwen3_5ExecutionError> {
         // Both taken before binding, which consumes parts of the artifact.
         let expert_atlas = validated_artifact.expert_atlas().cloned();
-        let disk_embedding_rows = dense_disk_embedding_rows(&validated_artifact)?;
+        let (disk_embedding_rows, dense_layer_streamer) =
+            dense_streaming_sources(&validated_artifact)?;
         let BoundLanguageArtifact {
             config,
             shard_index,
@@ -146,6 +148,7 @@ impl Qwen3_5Model {
             embedding_residency_of(disk_embedding_rows.as_ref()),
             &vision_model,
             expert_pager.as_ref(),
+            dense_layer_streamer.as_ref(),
             &decoder_cache_layout,
             performance_attribution,
         )?;
@@ -172,6 +175,7 @@ impl Qwen3_5Model {
                 key_normalization_scale_weight,
             },
             expert_pager,
+            dense_layer_streamer,
             retained_experts,
             route_observation: RefCell::new(RouteObservationCollector::new()),
             deferred_expert_demand: RefCell::default(),
@@ -213,6 +217,75 @@ fn measured_decoder_cache_layout(
             decoder_cache_layout_at_tensor_binding(config, chunking, weights, expert_pager)
         },
     )
+}
+
+/// A streaming dense model's core and streaming workspace.
+struct DenseStreamingGeometry {
+    model_core_payload_bytes: u64,
+    dense_streaming_workspace_bytes: u64,
+}
+
+/// Leaves a dense model's decoder layers out of its fixed core: kept layers
+/// are given back under request pressure like retained experts, so only the
+/// tensors that never stream are fixed. The two layer slots a streamed
+/// forward reads into become the streaming workspace the floor reserves, in
+/// place of a sparse model's complete expert layer.
+fn dense_streaming_geometry(
+    bound_model_core_payload_bytes: u64,
+    dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
+) -> DenseStreamingGeometry {
+    let Some(dense_layer_streamer) = dense_layer_streamer else {
+        return DenseStreamingGeometry {
+            model_core_payload_bytes: bound_model_core_payload_bytes,
+            dense_streaming_workspace_bytes: 0,
+        };
+    };
+    let mut decoder_layer_payload_bytes = 0_u64;
+    for layer_payload_bytes in dense_layer_streamer.layer_payload_bytes() {
+        decoder_layer_payload_bytes =
+            decoder_layer_payload_bytes.saturating_add(*layer_payload_bytes);
+    }
+    DenseStreamingGeometry {
+        model_core_payload_bytes: bound_model_core_payload_bytes
+            .saturating_sub(decoder_layer_payload_bytes),
+        dense_streaming_workspace_bytes: dense_layer_streamer
+            .largest_layer_payload_bytes()
+            .saturating_mul(DENSE_STREAMING_LAYER_SLOT_COUNT),
+    }
+}
+
+/// Layers a streamed forward holds at once: the one computing and the one
+/// being read for it next.
+pub(crate) const DENSE_STREAMING_LAYER_SLOT_COUNT: u64 = 2;
+
+/// A dense model's on-disk embedding rows and decoder layer streamer, both
+/// planned from the validated headers before binding takes the sources.
+fn dense_streaming_sources(
+    validated_artifact: &ValidatedQwen3_5Artifact,
+) -> Result<
+    (
+        Option<Qwen3_5DiskEmbeddingRows>,
+        Option<Qwen3_5DenseLayerStreamer>,
+    ),
+    Qwen3_5ExecutionError,
+> {
+    Ok((
+        dense_disk_embedding_rows(validated_artifact)?,
+        dense_layer_streamer(validated_artifact)?,
+    ))
+}
+
+/// The decoder layer streamer of a dense model, which the streaming engine
+/// serves only when its text weights do not fit the limit.
+fn dense_layer_streamer(
+    validated_artifact: &ValidatedQwen3_5Artifact,
+) -> Result<Option<Qwen3_5DenseLayerStreamer>, Qwen3_5ExecutionError> {
+    match validated_artifact.config().feed_forward_architecture() {
+        Qwen3_5FeedForwardArchitecture::Dense => {
+            Qwen3_5DenseLayerStreamer::from_validated_artifact(validated_artifact).map(Some)
+        }
+        Qwen3_5FeedForwardArchitecture::MixtureOfExperts => Ok(None),
+    }
 }
 
 /// Whether the loaded model reads embedding rows from the SSD.
@@ -363,15 +436,21 @@ fn build_streaming_expert_budget(
     embedding_residency: crate::qwen3_5_core::model_math::weights::EmbeddingResidency,
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_pager: Option<&Qwen3_5ExpertPager>,
+    dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
     decoder_cache_layout: &crate::DecoderCacheLayout,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertBudgetOutcome, Qwen3_5ExecutionError> {
-    let model_core_payload_bytes =
+    let DenseStreamingGeometry {
+        model_core_payload_bytes,
+        dense_streaming_workspace_bytes,
+    } = dense_streaming_geometry(
         crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
             weights,
             embedding_residency,
             vision_model,
-        );
+        ),
+        dense_layer_streamer,
+    );
     let complete_expert_payload_bytes = match expert_pager {
         Some(expert_pager) => expert_pager
             .complete_expert_payload_byte_count()
@@ -389,7 +468,7 @@ fn build_streaming_expert_budget(
             .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
                 description: "complete expert source layer byte count overflowed during model load",
             })?,
-        None => 0,
+        None => dense_streaming_workspace_bytes,
     };
     let fused_jangtq2_gathered_projection_kernel = expert_pager.and_then(|expert_pager| {
         fused_jangtq2_gathered_projection_kernel_for_pager(

@@ -167,9 +167,23 @@ impl Qwen3_5ModelBase {
     }
 
     pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
-        // An embedding table read from the SSD stays lazy and never loads.
-        self.weights
-            .materialize(&self.runtime, self.embedding_residency())?;
+        self.materialize_target_weights_with(
+            crate::qwen3_5_core::model_math::weights::DecoderLayerResidency::BoundWeights,
+        )
+    }
+
+    /// Materializes the target weights, leaving the decoder layers lazy when
+    /// a dense layer streamer owns them. An embedding table read from the SSD
+    /// stays lazy too.
+    pub(crate) fn materialize_target_weights_with(
+        &self,
+        decoder_layer_residency: crate::qwen3_5_core::model_math::weights::DecoderLayerResidency,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        self.weights.materialize(
+            &self.runtime,
+            self.embedding_residency(),
+            decoder_layer_residency,
+        )?;
         self.runtime.evaluate_arrays(&[
             &self.inverse_linear_head_dimension_scale,
             &self.inverse_square_root_linear_head_dimension_scale,

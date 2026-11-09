@@ -60,7 +60,7 @@ impl Qwen3_5EngineState {
                 runtime,
                 validated_artifact,
                 &self.model_directory,
-                model_chunking,
+                (model_chunking, &self.chunking),
                 self.decode_expert_cache_policy,
                 &mut model_loading_performance_attribution,
             )?;
@@ -311,7 +311,10 @@ fn load_and_materialize_streaming_model(
     runtime: MlxRuntime,
     validated_artifact: ValidatedQwen3_5Artifact,
     model_directory: &std::path::Path,
-    model_chunking: Qwen3_5ModelChunkingConfiguration,
+    (model_chunking, worker_chunking): (
+        Qwen3_5ModelChunkingConfiguration,
+        &WorkerChunkingConfiguration,
+    ),
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Qwen3_5Model, InferenceEngineError> {
@@ -327,9 +330,17 @@ fn load_and_materialize_streaming_model(
     model_loading_performance_attribution
         .measure_operation(
             PerformanceOperation::ResidentWeightMaterializationSynchronizationWait,
-            |_performance_attribution| model.materialize_target_weights(),
+            |_performance_attribution| {
+                // A dense model then measures one streamed layer's working
+                // memory at the prefill chunk size it will serve and keeps the
+                // layers that fit beside it; a sparse model has none to plan.
+                model.materialize_target_weights_and_plan_dense_layers(
+                    worker_chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
+                        as usize,
+                )
+            },
         )
-        .map_err(qwen3_5_runtime_error)?;
+        .map_err(InferenceEngineError::from)?;
     Ok(model)
 }
 

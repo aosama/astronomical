@@ -1,3 +1,4 @@
+use super::dense_layer_residency::LayerGroupSubmission;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
@@ -340,12 +341,12 @@ impl Qwen3_5Model {
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
             ))
             .unwrap_or(0);
+        let mut previous_streamed_layer_output = None;
         for layer_index in 0..decoder_layer_count {
-            let decoder_layer_weights = self
-                .weights
-                .decoder_layer_weights
-                .get(layer_index)
-                .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+            // A dense model's streamer supplies its layers: a kept layer, or
+            // one read from the SSD for this forward alone.
+            let forward_layer_weights = self.forward_layer_weights(layer_index)?;
+            let decoder_layer_weights = forward_layer_weights.decoder_layer_weights();
             let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
                 Qwen3_5ExecutionError::InvalidRequestDecoderState {
                     layer_index,
@@ -370,19 +371,17 @@ impl Qwen3_5Model {
                 paged_execution_mode,
                 performance_attribution,
             )?;
-            if graph_submission_layer_interval > 0
-                && (layer_index + 1).is_multiple_of(graph_submission_layer_interval)
-                && layer_index + 1 < decoder_layer_count
-            {
-                // Intermediate mlx_async_eval commits the completed layer group.
-                // Do not submit after the final decoder layer: final
-                // normalization and logits extend that same graph and the
-                // caller owns the terminal evaluation.
-                performance_attribution.measure_operation(
-                    PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
-                    |_performance_attribution| self.runtime.async_eval_arrays(&[&hidden_states]),
-                )?;
-            }
+            self.submit_completed_layer(
+                &forward_layer_weights,
+                &hidden_states,
+                &mut previous_streamed_layer_output,
+                LayerGroupSubmission {
+                    completed_layer_count: layer_index + 1,
+                    decoder_layer_count,
+                    graph_submission_layer_interval,
+                },
+                performance_attribution,
+            )?;
             // Expert pages are lazy loads on MLX's own stream, so this read
             // overlaps the layers still computing instead of stalling graph
             // submission; its bytes are the plan's second prefill stream slot.

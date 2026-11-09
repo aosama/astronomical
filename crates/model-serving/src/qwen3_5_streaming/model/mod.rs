@@ -3,6 +3,16 @@ mod cached_plus_streamed_page_route;
 #[cfg(feature = "direct-mlx")]
 mod deferred_expert_demand;
 #[cfg(feature = "direct-mlx")]
+mod dense_layer_admission;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod dense_layer_reads;
+#[cfg(all(test, feature = "direct-mlx"))]
+mod dense_layer_reads_tests;
+#[cfg(feature = "direct-mlx")]
+mod dense_layer_residency;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod dense_layer_streamer;
+#[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;

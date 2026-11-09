@@ -35,6 +35,8 @@ pub(crate) mod output_combination;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod routing;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod streamed_layer_binding;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod tensor_slicing;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod weights;
