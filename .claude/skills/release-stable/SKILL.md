@@ -12,11 +12,11 @@ Release the version the user named. If they named none, ask for a numeric `MAJOR
 - Work from the repository root and follow `AGENTS.md`.
 - Never use chat history, chat-memex, memory, or guesswork for credential names.
 - Never commit or place credential values, local paths, Keychain output, or machine logs in GitHub content or the final report. Do not suppress authoritative release-command output merely because it contains local operator paths.
-- Use only `cargo xtask release prepare-and-publish` (or its credential-resolving front door `cargo xtask release prepare-signed`) to prepare or publish distribution artifacts.
+- Use only `cargo xtask release prepare-signed` to prepare or publish distribution artifacts. It is the credential-resolving front door of `cargo xtask release prepare-and-publish`, which takes the signing identity, team ID, and notary profile as explicit flags instead.
 - Never manually edit `site/appcast.xml`; it is a signed generated artifact.
 - Never move or replace a pushed release tag. Fix forward with a new patch version.
 - Read this whole procedure before the first step. Do not push the tag before section 4 passes, even when approval was given in advance: a pushed tag can never move, so anything section 3 or 4 finds afterwards costs a patch version.
-- Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by `cargo xtask release validate-dmg`, and installation and launch of the fictional fixture under `target/` by `cargo xtask release accept-sparkle-update`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
+- Do not promote the real release into `~/Applications` or launch it. Temporary mounting and copying by the DMG validation inside `cargo xtask release prepare-signed`, and installation and launch of the fictional fixture under `target/` by `cargo xtask release accept-sparkle-update`, are required isolated validation—not installation of the release. The developer must later receive the real app through the same public download or Sparkle update journey as every user.
 - Every test must use its built-in timeout of at most 120 seconds. The Sparkle acceptance's 120-second budget covers the acceptance itself; resolving its Swift and Xcode tools beforehand reports its own progress. The notarization operation is not a test and uses `cargo xtask release notarize-dmg`'s 180-second default, overridable with `--timeout-seconds N`.
 - Keep commands live and unfiltered. Never pipe long-running commands through `head`, `tail`, or another buffering filter.
 
@@ -29,11 +29,7 @@ Use these sources exactly; no other credential discovery is allowed:
 - **Notarization profile:** `Astronomical Notarization`.
 - **Sparkle private key:** the Keychain key automatically selected by Sparkle's `generate_appcast`. `cargo xtask release accept-sparkle-update` proves that it matches Astronomical's embedded public key.
 
-`cargo xtask release prepare-signed` resolves this map itself, failing closed unless exactly one Developer ID Application identity and a 10-character Team ID are found, and it checks the notarization profile is readable before any build starts. Use it instead of resolving the values by hand. To check the profile alone during preflight:
-
-```sh
-xcrun notarytool history --keychain-profile "Astronomical Notarization" >/dev/null
-```
+`cargo xtask release prepare-signed` resolves this map itself, failing closed unless exactly one Developer ID Application identity and a 10-character Team ID are found, and it checks the notarization profile is readable before any build starts, so no separate profile preflight is needed. Use it instead of resolving the values by hand.
 
 If any credential check fails, stop and ask the user to unlock the Mac or repair the Keychain. Do not search chats for alternatives.
 
@@ -44,7 +40,7 @@ If any credential check fails, stop and ask the user to unlock the Mac or repair
 3. Create one public issue titled `Release Astronomical ${VERSION}`. State all changes, enhancements, bug fixes, compatibility, signing requirements, digest-bound publication, signed-feed activation, and public verification. Do not include private environment details. Also in the release notes acknowledge contributors who opened GitHub issues that this release addressed.
 4. Save the returned issue number as `ISSUE_NUMBER`. Both release pull requests must link only this issue.
 5. Compare `site/schemas/config/v1/astronomical-config.schema.json` at `PREVIOUS_TAG` with `main`, and require every removed property to be in `strip_retired_config_fields` (`RETIRED_CHUNKING_FIELD_NAMES` for chunking fields).
-6. Merge any fix the release needs on its own branch and pull request before starting section 2, so the bump stays version-only.
+6. Merge any fix the release needs on its own branch and pull request before starting section 2, so the bump stays version-only. A fix mixed into the bump branch fails the version-only classifier, and the bump then pays for the full macOS lanes.
 
 ## 2. Merge the version bump
 
@@ -69,13 +65,13 @@ The packaging contracts are split three ways: the app icon renderer contract is 
 
 ## 3. Preflight and prepare locally
 
-1. Check the notarization profile as described above and run:
+1. Prove the Sparkle signing key matches the app's embedded public key. This is the only run of the acceptance in a release, because section 6 activates the appcast this key signed without changing it:
 
 ```sh
-cargo xtask release accept-sparkle-update
+cargo xtask release accept-sparkle-update; echo EXIT=$?
 ```
 
-Its transcript is long, so capture the exit code explicitly (`cargo xtask release accept-sparkle-update; echo EXIT=$?`); the terminal result otherwise scrolls out of reach.
+Its transcript is long, so the explicit exit code keeps the result in reach. Near the end of a passing run it prints `Error: Update has failed due to error 4005 (SUSparkleErrorDomain)…`: that is the deliberate corrupted-update probe being rejected. The run passed when it ends with `Sparkle acceptance passed: …` and `EXIT=0`.
 
 2. Run the installed-variant round trip — the gate that catches pack variants the single-pack journeys structurally miss (a real installed export whose config shape the loader refuses must fail here, before the release ships). First read `cargo xtask app instance status`: if the Development instance holds a model, ask the user before stopping it with `cargo xtask app instance stop`, because the round trip loads every installed model onto the same graphics processor. The test launches the real worker and daemon binaries from `target/release`, so build them first:
 
@@ -96,7 +92,7 @@ cargo xtask release prepare-signed \
   --notes-file "$RELEASE_NOTES_FILE"
 ```
 
-This authoritative command resolves the credential map, then signs nested Sparkle code and Astronomical executables inside-out, signs the app with Hardened Runtime and timestamps, creates and signs the DMG, submits it to Apple, staples and validates the ticket, validates the mounted installation layout, Sparkle-signs the final stapled bytes, signs the feed, and writes `target/releases/${TAG}/release-manifest.json`. This output is long and carries the notarization submission ID that section 4 requires; if you background the run, keep its log so that ID and the final `Prepared signed release` line stay retrievable.
+This authoritative command resolves the credential map, then signs nested Sparkle code and Astronomical executables inside-out, signs the app with Hardened Runtime and timestamps, creates and signs the DMG, submits it to Apple, staples and validates the ticket, validates the mounted installation layout, Sparkle-signs the final stapled bytes, signs the feed, and writes `target/releases/${TAG}/release-manifest.json`. Because it waits for Apple's `Accepted` verdict and validates the mounted DMG itself, section 4 does not repeat those checks. This output is long and carries the notarization submission ID that section 4 requires; if you background the run, keep its log so that ID and the final `Prepared signed release` line stay retrievable.
 
 ## 4. Mandatory publication approval gate
 
@@ -105,8 +101,7 @@ Validate `target/releases/${TAG}` without changing it:
 - Manifest tag, version, and commit equal `$TAG`, `$VERSION`, and `HEAD`.
 - DMG, notes, and appcast sizes and SHA-256 digests equal the manifest.
 - The DMG name is `Astronomical-${VERSION}-macOS-arm64.dmg`.
-- `cargo xtask release validate-dmg --dmg "target/releases/${TAG}/Astronomical-${VERSION}-macOS-arm64.dmg"` passes for that exact DMG. It accepts `--dmg`, not a positional path.
-- Record the notarization submission ID from preparation, query it with `xcrun notarytool log SUBMISSION_ID --keychain-profile "Astronomical Notarization"`, and require `Accepted` with zero issues. Parse only status and issue count; do not publish the complete log.
+- The notarization log for the submission ID from preparation reports zero issues: `xcrun notarytool log SUBMISSION_ID --keychain-profile "Astronomical Notarization"`. Preparation already required `Accepted`, so parse only the issue count; do not publish the complete log.
 - Appcast XML is valid and contains `$VERSION`, a build number greater than the previous release, macOS `14.0` and above, `arm64`, the exact GitHub release URL, an enclosure Ed25519 signature, and a signed-feed envelope.
 - The prepared directory contains exactly the DMG, copied Markdown notes, `appcast.xml`, and `release-manifest.json`.
 
@@ -133,19 +128,11 @@ Publication intentionally leaves the old public appcast active and writes the ne
 ## 6. Activate the signed appcast
 
 1. Create branch `release/v${VERSION}-appcast` without discarding the appcast worktree modification.
-2. Require `cmp site/appcast.xml target/releases/${TAG}/appcast.xml` to succeed. Do not format or edit the XML.
-3. Run:
-
-```sh
-cargo xtask release accept-sparkle-update
-cargo fmt --all -- --check
-cargo test-integration-and-rest
-```
-
-4. Inspect status, diff, and recent log; commit only `site/appcast.xml` with `release: activate v${VERSION} update feed`.
-5. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}`. This appcast-only change is maintenance work; `Fixes` is reserved for implementation work. Wait for required checks and merge it. The macOS build job and the tier lanes it feeds report `skipping` rather than `pass`, which is expected for a signed site artifact; the CI verdict check treats those skips as legitimate under the classifier's decision, and every other lane must still be terminal. The exact heading matters: placing `Refs #N` elsewhere in the body fails the repository validator.
-6. Synchronize local `main` with the squash-merged remote commit without rebasing. A clean local branch can diverge by one commit after the remote squash merge; fetch `origin/main`, then use a fast-forward or clean reset to the remote branch. Wait for the Pages workflow for the merge commit, and require success.
-7. Download the public `appcast.xml` to a temporary file. Require it to be byte-identical to `target/releases/${TAG}/appcast.xml` and to match the manifest digest. Verify its enclosure URL is reachable and the remote DMG still matches the manifest. Delete temporary files.
+2. Require `cmp site/appcast.xml target/releases/${TAG}/appcast.xml` to succeed. Do not format or edit the XML. No tests rerun here: the only change is this prepared file, the code it ships was tested in section 2, and its signing key was proven in section 3.
+3. Inspect status, diff, and recent log; commit only `site/appcast.xml` with `release: activate v${VERSION} update feed`.
+4. Push and open a PR whose `## Linked issue` section contains exactly `Refs #${ISSUE_NUMBER}` (see the gotchas for the validator's rules). Wait for required checks and merge it. The macOS build job and the tier lanes it feeds report `skipping`, which the CI verdict accepts for a signed site artifact; every other lane must still be terminal.
+5. Synchronize local `main` with the squash-merged remote commit without rebasing. A clean local branch can diverge by one commit after the remote squash merge; fetch `origin/main`, then use a fast-forward or clean reset to the remote branch. Wait for the Pages workflow for the merge commit, and require success.
+6. Download the public `appcast.xml` to a temporary file. Require it to be byte-identical to `target/releases/${TAG}/appcast.xml` and to match the manifest digest. Verify its enclosure URL answers with a success HTTP status; section 5 already proved the public DMG's digest. Delete temporary files.
 
 ## 7. Finish
 
@@ -169,29 +156,15 @@ Tell the user that Astronomical `$VERSION` is available through the normal publi
 - Conflicting remote release, asset, notes, digest, or tag: stop without clobbering anything.
 - Failed Pages deployment or public-byte comparison: keep the prior feed active when possible, do not declare success, and repair through a pull request.
 
-## Known gotchas (accumulated from release runs)
+## Known gotchas
 
-- `cargo xtask release accept-sparkle-update` rebuilds Sparkle's `sparkle-cli` with `xcodebuild` only when the prebuilt binary is missing. A refreshed checkout (wiped `build/` directory) therefore exposes a latent failure: Sparkle's Xcode project pins `MACOSX_DEPLOYMENT_TARGET=10.13`, which is below the minimum supported by current Xcode SDKs, and the build fails with exit 65. The command overrides the deployment target on the command line for this fixture-only build; release bytes are unaffected because the app and `generate_appcast` come from SwiftPM artifacts. If the acceptance preflight still fails at `resolve-sparkle-tools`, check for a new SDK minimum and bump the override in `resolve_sparkle_tools` (`xtask/src/release/sparkle_acceptance.rs`).
-- The release-notes `mktemp` template carries no `X` placeholders: macOS `mktemp` never expands placeholders that sit before a suffix, so the old suffix-bearing template produced a literal `XXXXXX` filename. The template is now deterministic per tag, which means an aborted earlier run can leave the file behind; `mktemp` creates exclusively and fails on it, so remove the stale file and rerun.
-- The PR issue compliance validator searches only the `## Linked issue` section once the heading exists: the section must carry at least one canonical reference (`Fixes|Closes|Resolves|Refs #N`; grouped forms like `Refs #N and #M` are accepted), and every `#N` inside it must use a canonical keyword — a bare `#N` in prose fails. Keep narrative above the heading. For release maintenance PRs (appcast activation, version bump) use `Refs #N`; `Fixes` is reserved for implementation work.
-- Expected CI duration for integration verification PRs is roughly 5-8 minutes (live runs since #1348: the macOS build job just under 5 minutes, macOS Swift and Node contracts around 2-3 minutes (its packaging contracts step is a few-second Swift icon contract), the macOS build job also running every xtask unit test, and the per-tier test lanes another minute or two after the build finishes); do not treat a pending job at the 2-3 minute mark as stuck. That budget assumes a native-build cache hit: a GitHub runner-image rollout re-fingerprints the native identity (the toolchain probes are identity inputs), so the next PR can miss the native-build cache and pay a ~5-minute CMake rebuild, producing a roughly 11-minute job (hit live in the 0.2.70 release run). Before suspecting the release change, check the job log for `Cache not found for input keys: astronomical-v2-native-build-…` and compare the logged `[native-build-identity] … identity=…` value against the cached keys (`gh cache list --key astronomical-v2-native-build`); a changed identity with an unchanged `crates/native-identity/src` tree means GitHub rolled the image, not that the release broke something. Toolchain pinning to stop this drift is tracked separately (#1261).
-- `cargo xtask release prepare-and-publish` takes the signing identity, team ID, and notary profile as explicit flags; `cargo xtask release prepare-signed` resolves them itself, which is why this procedure uses it.
-- A version bump leaves `third-party/RUST_DEPENDENCY_NOTICES.digest`'s `input_sha256` memo behind because the root `Cargo.toml` is one of its recorded inputs; the notices text itself is unchanged by a version bump. The check passes on the text-match contract (log line `digest_memo=behind`), so committing `cargo xtask notices` output in the bump branch is optional fast-path hygiene, not a merge requirement (previously a hard CI failure, hit live in the 0.2.66 release run, fixed by #1395).
-- The installed-variant round trip panics within a second with `workspace binary 'astronomical-inference-worker' was not found at …/target/release/…` when the release-profile binaries were never built: the test launches the real worker and daemon rather than building them. Run the `cargo build --release … --bins` line in section 3, step 2 first (hit live in the 0.2.89 release run). It also loads every installed chat model onto the graphics processor, so a model resident in the Development instance competes for the same memory; check `cargo xtask app instance status` and get the user's consent before stopping an instance that holds a model.
-- `cargo xtask notices` refuses to run when the local `cargo-about` differs from the pin in `third-party/tool-pins/Cargo.toml` (`requires cargo-about 0.9.3; found cargo-about 0.9.2`). Install the pinned tools without touching the machine-wide copies: `cargo xtask install-verification-tools --prefix DIR`, then run the notices commands with `DIR` first on `PATH`.
-- Any `Cargo.lock` change — including a dependency alignment that only removes a duplicate version — can leave `third-party/RUST_DEPENDENCY_NOTICES` stale; the nightly notices-freshness workflow then turns `main` red and blocks the "successful latest `main` CI" precondition (hit live in the 0.2.89 preparation: a tower-http alignment removed 0.7.1 from the lockfile without regenerating). Before the version bump, run `cargo xtask notices --check`; when it reports stale, it now lists the lines that moved (`+` only in the fresh harvest, `-` only in the committed file), so the cause is named rather than guessed. Regenerate with `cargo xtask notices` on a branch and merge that first.
-- `cargo xtask release accept-sparkle-update` prints `Error: Update has failed due to error 4005 (SUSparkleErrorDomain). The update is improperly signed…` near the end of a passing run. That line is the acceptance's deliberate corrupted-update probe being rejected, as it must be; the run passed when it ends with `Sparkle acceptance passed: …` and `EXIT=0`.
-- Before 0.2.89, `cargo xtask app package` (and so `prepare-signed`) had two latent failures that only a clean machine or the pinned toolchain exposed, both fixed in #1807 and now exercised weekly by the macOS packaging workflow (dispatch it before cutting a release: `gh workflow run macos-packaging.yml`): it only verified the pinned native archives and never downloaded them, so a fresh Mac must run `cargo xtask bootstrap-native-dependencies` first (the missing-archive error names that command); and it read the Thin Talk canvas resource bundle from `.build/out/Products/Release`, a layout only the swiftbuild backend creates, so a release built with the pinned Xcode's native SwiftPM failed at assembly. If a release build fails at a step the last weekly packaging run passed, compare the local Xcode and Swift versions with the pin before suspecting the release change.
+- The PR issue compliance validator searches only the `## Linked issue` section once the heading exists: the section must carry at least one canonical reference (`Fixes|Closes|Resolves|Refs #N`; grouped forms like `Refs #N and #M` are accepted), and every `#N` inside it must use a canonical keyword, so a bare `#N` in prose fails. Keep narrative above the heading. Release maintenance PRs (version bump, appcast activation) use `Refs #N`; `Fixes` is reserved for implementation work.
+- The version bump PR runs only the static, configuration-contract, and notices lanes. The change classifier (`xtask/src/version_only_bump.rs`) recognises a bump only when `Cargo.toml` differs solely in the `[workspace.package]` version, `Cargo.lock` solely in workspace packages' versions, and no file changes beyond those two and the notices digest; anything else, or any read failure, runs the full matrix. The macOS lanes therefore show `skipping` on the bump PR and on its merge to `main`, and the CI verdict accepts that. Section 2 step 5's local suite is the only full run on the bumped commit, so never skip it: a test that hard-codes the version string would pass CI and fail there.
 - A merge to `main` also shows the macOS lanes as `skipping` when its exact tree already passed them on its pull request and no cache input changed since `main` last ran them within five days (`xtask/src/verified_tree.rs`). Its CI verdict still counts as the successful latest `main` CI.
-- The version bump PR runs only the static, configuration-contract, and notices lanes. The change classifier (`xtask/src/version_only_bump.rs`) reads the base and head texts and recognises a bump only when `Cargo.toml` differs solely in the `[workspace.package]` version, `Cargo.lock` solely in workspace packages' versions, and no file changes beyond those two and the notices digest; anything else, or any read failure, runs the full matrix. The macOS lanes therefore show `skipping` on the bump PR and on its merge to `main`, and the CI verdict accepts that. The consequence is that step 5's local suite is the only full run on the bumped commit, so never skip it: a test that hard-codes the version string would pass CI and fail there. The previous `main` commit's CI, or the pull request whose tree it reused, is the proof for everything else.
-- Removing a config field from the Rust structs is not enough: add the removed field name to `strip_retired_config_fields` in `crates/config/src/config_file.rs` and drop any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change, or upgraded installs fail strict parsing and the daemon exits before readiness (hit live in the 0.2.66 release run, fixed by #1116).
-- Section 1's schema comparison exists because two settings removed during 0.2.91 were missing from the retired list, and every config holding them would have stopped loading on update.
-- A fix that must ship in the release belongs on its own branch and pull request before the bump. Mixed into the bump branch, it fails the version-only classifier, so the bump pays for the full macOS lanes (hit live in the 0.2.91 release run).
-
-## FAQ
-
-- Why did the Sparkle acceptance fail right after it worked in a previous release? The acceptance command skips `xcodebuild` when a prebuilt `sparkle-cli` exists. A prior release can succeed with the stale binary; the next checkout refresh deletes `build/`, forces the rebuild, and only then exposes the deployment-target incompatibility.
-- Why do the macOS jobs show "skipping" on the appcast PR? The classify workflow marks signed site-artifact-only changes as not requiring the full integration run. The CI verdict check accepts those skips as legitimate under the classifier's decision; every other lane must still reach a terminal success state.
-- Why does the `## Linked issue` section reject my body? Every `#N` inside the section must carry a canonical keyword (`Fixes|Closes|Resolves|Refs`); a bare `#N` buried in prose fails so release provenance stays auditable. Keyword-free narrative is accepted; keep it above the heading.
-- Can I rerun a partially completed publish? Yes. Rerun the same `--publish` command with `--output-directory` pointing at the prepared directory; it resumes the matching draft publication safely.
-- Why do verification steps run plain commands instead of a gate script? The commit-gate wrapper was retired (issue #983) in favor of the plain commands it wrapped: `cargo fmt --all -- --check` and `cargo test-integration-and-rest`. The Stable packaging contracts also stopped being explicit-only (issue #1346): every release step is now a typed `cargo xtask release` command whose decisions run as `cargo test -p xtask` unit tests on every pull request, alongside the icon renderer contract.
+- Integration verification PRs take roughly 5-8 minutes with a native-build cache hit; do not treat a pending job at the 2-3 minute mark as stuck. A GitHub runner-image rollout re-fingerprints the native identity, so the next PR can miss the cache and take about 11 minutes. Before suspecting the release change, look for `Cache not found for input keys: astronomical-v2-native-build-…` in the job log and compare the logged `[native-build-identity] … identity=…` with `gh cache list --key astronomical-v2-native-build`; a changed identity with an unchanged `crates/native-identity/src` tree means GitHub rolled the image (toolchain pinning is tracked in #1261).
+- Any `Cargo.lock` change, even one that only removes a duplicate version, can leave `third-party/RUST_DEPENDENCY_NOTICES` stale; the nightly notices-freshness workflow then turns `main` red and blocks section 1's CI precondition. Before the version bump, run `cargo xtask notices --check`; it lists the lines that moved. Regenerate with `cargo xtask notices` on a branch and merge that first.
+- `cargo xtask notices` refuses to run when the local `cargo-about` differs from the pin in `third-party/tool-pins/Cargo.toml`. Install the pinned tools without touching the machine-wide copies with `cargo xtask install-verification-tools --prefix DIR`, then run the notices commands with `DIR` first on `PATH`.
+- The release-notes path in section 2 step 4 is fixed per tag, so an aborted earlier run leaves the file behind and `mktemp` refuses to overwrite it; remove the stale file and rerun.
+- If `cargo xtask release accept-sparkle-update` fails at `resolve-sparkle-tools` after a checkout refresh, Xcode's SDK minimum has likely passed the deployment-target override used for the fixture-only `sparkle-cli` build; bump it in `resolve_sparkle_tools` (`xtask/src/release/sparkle_acceptance.rs`). Release bytes are unaffected.
+- Dispatch the macOS packaging workflow before cutting a release (`gh workflow run macos-packaging.yml`). A fresh Mac must run `cargo xtask bootstrap-native-dependencies` before packaging (the missing-archive error names that command). If a release build fails at a step the last packaging run passed, compare the local Xcode and Swift versions with the pin before suspecting the release change.
+- Section 1 step 5's schema comparison exists because a config field removed from the Rust structs but missing from `strip_retired_config_fields` (`crates/config/src/config_file.rs`) makes upgraded installs fail strict parsing, and the daemon exits before readiness. A removal adds the field there and drops any dangling reference from `site/schemas/config/v1/astronomical-config.schema.json` in the same change.
