@@ -50145,18 +50145,9 @@
       "file": "crates/model-serving/src/qwen3_5_resident/dflash_draft/draft_configuration.rs",
       "function": "DFlashDraftConfiguration::from_config_value",
       "line": 49,
-      "cyclomatic": 1.0,
+      "cyclomatic": 19.0,
       "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/dflash_draft/draft_configuration.rs",
-      "function": "DFlashDraftConfiguration::from_config_value_inner",
-      "line": 55,
-      "cyclomatic": 26.0,
-      "coverage": null,
-      "crap": 702.0,
+      "crap": 380.0,
       "crate": "astronomical-model-serving"
     },
     {
