@@ -2865,7 +2865,7 @@ Used by:
 Apache License 2.0
 
 Used by:
-- crc32fast 1.5.3
+- crc32fast 1.5.4
 - derive_builder 0.20.2
 - derive_builder_core 0.20.2
 - derive_builder_macro 0.20.2
@@ -4559,7 +4559,7 @@ Used by:
 - base64 0.23.1
 - bitflags 2.13.1
 - bumpalo 3.20.3
-- cc 1.10.0
+- cc 1.11.0
 - cexpr 0.6.0
 - cfg-if 1.0.4
 - core-foundation-sys 0.8.7
