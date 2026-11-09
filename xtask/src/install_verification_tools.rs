@@ -3,8 +3,9 @@
 //! minutes compiling cargo-about from crates.io and brewing sccache; both
 //! publishers already ship SHA-256-verified binaries. The versions come from
 //! the tool-pin manifest through `tool_pins`. The pure policy (host mapping,
-//! archive naming, sidecar digest parsing) is unit-tested beside this
-//! source; `curl` and the platform `tar` stay thin edges (issue #1250).
+//! archive naming, sidecar digest parsing, download retry arguments) is
+//! unit-tested beside this source; `curl` and the platform `tar` stay thin
+//! edges (issue #1250).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -138,19 +139,39 @@ fn tool_reports_expected_version(executable_path: &Path, expected_line: &str) ->
         .unwrap_or(false)
 }
 
+/// The download retry window must outlast a GitHub release-edge outage: a
+/// fixed one-second delay with three retries gave up after about three
+/// seconds and failed whole CI runs on a 504 (issue #1986). Leaving out
+/// `--retry-delay` gives curl's exponential backoff (1, 2, 4, 8, 16, 32 s,
+/// 63 s across six retries); `--retry-all-errors` also retries a 504 that
+/// arrives as a receive error (curl exit 56), which plain `--retry` does
+/// not. The cost is that a truly missing archive (404) is retried too:
+/// `--retry-max-time` stops starting new attempts after 120 s, and the
+/// per-attempt `--connect-timeout`/`--max-time` keep one stalled transfer
+/// from outliving that window, so even the worst case fails in about four
+/// minutes, inside the CI step timeout.
+pub fn curl_download_arguments() -> [&'static str; 14] {
+    [
+        "--fail",
+        "--location",
+        "--proto",
+        "=https",
+        "--tlsv1.2",
+        "--retry",
+        "6",
+        "--retry-all-errors",
+        "--retry-max-time",
+        "120",
+        "--connect-timeout",
+        "15",
+        "--max-time",
+        "120",
+    ]
+}
+
 fn download_with_curl(download_destination: &Path, download_url: &str) -> Result<(), String> {
     let curl_status = Command::new("curl")
-        .args([
-            "--fail",
-            "--location",
-            "--proto",
-            "=https",
-            "--tlsv1.2",
-            "--retry",
-            "3",
-            "--retry-delay",
-            "1",
-        ])
+        .args(curl_download_arguments())
         .arg("--output")
         .arg(download_destination)
         .arg(download_url)

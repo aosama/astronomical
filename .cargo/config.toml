@@ -148,6 +148,11 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # GitHub-owned addresses, `noreply@` service addresses, and reserved fixture
 # domains pass. A login-only no-reply address is refused because GitHub
 # credits it to whichever stranger owns that login.
+#
+# `cargo xtask install-verification-tools [--prefix DIR]` installs the pinned
+# cargo-about and sccache prebuilts, SHA-256 verified, into DIR (default
+# `$CARGO_HOME/bin`), and skips any binary already reporting its pinned
+# version. CI points DIR at a cached folder so warm runs download nothing.
 xtask = "run -p xtask --"
 
 # Compile the whole workspace across ALL targets without running anything;

@@ -194,6 +194,12 @@ fn cache_owners_are_disjoint_composite_users() {
         &mut restored_paths,
     );
     assert_composite_cache_owner(
+        &verification_steps,
+        "verification-tools-cache",
+        &["~/Library/Caches/Astronomical/verification-tools"],
+        &mut restored_paths,
+    );
+    assert_composite_cache_owner(
         &swift_steps,
         "swiftpm-cache",
         &["apps/astronomical-menu/.build"],

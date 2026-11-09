@@ -1,7 +1,75 @@
 use crate::install_verification_tools::{
-    cargo_about_archive_name, cargo_about_release_url, expected_version_line, host_rust_target,
-    published_digest_from_sidecar, sccache_archive_name, sccache_release_url,
+    cargo_about_archive_name, cargo_about_release_url, curl_download_arguments,
+    expected_version_line, host_rust_target, published_digest_from_sidecar, sccache_archive_name,
+    sccache_release_url,
 };
+
+fn curl_option_value(option_name: &str) -> Option<&'static str> {
+    let download_arguments = curl_download_arguments();
+    let option_position = download_arguments
+        .iter()
+        .position(|argument| *argument == option_name)?;
+    download_arguments.get(option_position + 1).copied()
+}
+
+#[test]
+fn should_back_off_exponentially_instead_of_retrying_on_a_fixed_delay() {
+    assert!(
+        !curl_download_arguments().contains(&"--retry-delay"),
+        "a fixed --retry-delay disables curl's exponential backoff"
+    );
+    let retry_attempts: u32 = curl_option_value("--retry")
+        .expect("downloads must retry")
+        .parse()
+        .expect("--retry takes a count");
+    assert!(
+        retry_attempts >= 6,
+        "six retries span about a minute of backoff, enough to outlast a release-edge 504"
+    );
+}
+
+/// The 1+2+4+8+16+32 s backoff of six retries.
+const SIX_RETRY_BACKOFF_SECONDS: u32 = 63;
+
+fn curl_seconds_option(option_name: &str) -> u32 {
+    curl_option_value(option_name)
+        .unwrap_or_else(|| panic!("{option_name} must be set"))
+        .parse()
+        .unwrap_or_else(|_| panic!("{option_name} takes seconds"))
+}
+
+#[test]
+fn should_retry_receive_errors_but_bound_the_whole_window() {
+    assert!(curl_download_arguments().contains(&"--retry-all-errors"));
+    let retry_window_seconds = curl_seconds_option("--retry-max-time");
+    assert!(
+        retry_window_seconds >= SIX_RETRY_BACKOFF_SECONDS,
+        "a window shorter than the backoff would silently drop retries"
+    );
+    assert!(
+        retry_window_seconds <= 180,
+        "the window must still fail a missing archive quickly"
+    );
+}
+
+#[test]
+fn should_bound_each_attempt_so_a_stalled_transfer_cannot_outlive_the_window() {
+    let connect_timeout_seconds = curl_seconds_option("--connect-timeout");
+    let attempt_timeout_seconds = curl_seconds_option("--max-time");
+    assert!(connect_timeout_seconds > 0 && connect_timeout_seconds < attempt_timeout_seconds);
+    assert!(
+        attempt_timeout_seconds <= curl_seconds_option("--retry-max-time"),
+        "one attempt must not run longer than the whole retry window"
+    );
+}
+
+#[test]
+fn should_keep_https_only_and_fail_on_http_errors() {
+    let download_arguments = curl_download_arguments();
+    assert!(download_arguments.contains(&"--fail"));
+    assert_eq!(curl_option_value("--proto"), Some("=https"));
+    assert!(download_arguments.contains(&"--tlsv1.2"));
+}
 
 #[test]
 fn host_mapping_covers_both_runner_platforms_and_fails_closed() {
