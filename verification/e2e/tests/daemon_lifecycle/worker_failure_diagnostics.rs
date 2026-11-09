@@ -72,20 +72,34 @@ async fn should_persist_the_exact_worker_stderr_when_the_worker_becomes_unavaila
         .expect("the diagnostic daemon should be reaped");
 }
 
+/// How long the daemon may take to launch the probe worker, see it exit and
+/// log its stderr. This journey proves the diagnostic is retained, not how
+/// fast: the worker is a freshly copied, unsigned binary, and macOS holds the
+/// first launch of such a binary for a security scan whose latency on a
+/// contended hosted runner reached past a 3-second deadline (one failure in
+/// 60 CI runs, at 3.14 s). The wait returns as soon as the line appears, so a
+/// wide deadline costs nothing when the journey passes.
+const WORKER_DIAGNOSTIC_DEADLINE: Duration = Duration::from_secs(20);
+
 async fn wait_for_daemon_log_diagnostic(
     state_directory: &Path,
     expected_diagnostic: &str,
 ) -> String {
-    let diagnostic_deadline = Instant::now() + Duration::from_secs(3);
+    let diagnostic_deadline = Instant::now() + WORKER_DIAGNOSTIC_DEADLINE;
     let log_directory = state_directory.join("logs");
+    let mut daemon_log_text = String::new();
     while Instant::now() < diagnostic_deadline {
-        let daemon_log_text = read_daemon_logs(&log_directory);
+        daemon_log_text = read_daemon_logs(&log_directory);
         if daemon_log_text.contains(expected_diagnostic) {
             return daemon_log_text;
         }
         sleep(Duration::from_millis(25)).await;
     }
-    panic!("daemon log did not retain the expected worker diagnostic");
+    // The log read so far tells a slow worker launch apart from a lost
+    // diagnostic, which the bare message could not.
+    panic!(
+        "daemon log did not retain the expected worker diagnostic within {WORKER_DIAGNOSTIC_DEADLINE:?}; daemon log so far:\n{daemon_log_text}"
+    );
 }
 
 fn read_daemon_logs(log_directory: &Path) -> String {
