@@ -15,7 +15,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 const TERMINATION_GRACE: Duration = Duration::from_secs(3);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(super) enum OutputStyle {
     Cargo,
     Test,
@@ -32,6 +32,11 @@ enum StreamEvent {
     Failed(String),
 }
 
+/// Runs `command` in its own process group until it exits, the budget runs
+/// out or a signal arrives, then stops whatever remains of that group.
+///
+/// Output is drained after the group stops as well as during the run, so
+/// lines written just before exit still reach the log and the capture.
 pub(super) fn run_command(
     command: &mut Command,
     log_path: &Path,
@@ -40,99 +45,177 @@ pub(super) fn run_command(
     output_style: OutputStyle,
     signals: &SignalPipe,
 ) -> Result<CommandOutput, String> {
-    let mut command_log = File::create(log_path)
-        .map_err(|log_error| format!("cannot create command log {log_path:?}: {log_error}"))?;
-    writeln!(command_log, "command={command:?}").map_err(|error| error.to_string())?;
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .process_group(0)
-        .spawn()
-        .map_err(|launch_error| format!("could not start {stage}: {launch_error}"))?;
+    let command_log = create_command_log(log_path, command)?;
+    let mut child = spawn_owned_process_group(command, stage)?;
     let process_group_id = i32::try_from(child.id())
         .map_err(|_| "the child process identifier exceeds the supported range".to_owned())?;
     let (stream_sender, stream_receiver) = mpsc::channel();
-    let stdout_reader = start_reader(
-        child.stdout.take().expect("piped stdout"),
-        true,
-        stream_sender.clone(),
-    );
-    let stderr_reader = start_reader(
-        child.stderr.take().expect("piped stderr"),
-        false,
-        stream_sender,
-    );
-    let started_at = Instant::now();
-    let mut last_progress_at = started_at;
-    let mut captured_stdout = String::new();
+    let output_readers = [
+        start_reader(
+            child.stdout.take().expect("piped stdout"),
+            true,
+            stream_sender.clone(),
+        ),
+        start_reader(
+            child.stderr.take().expect("piped stderr"),
+            false,
+            stream_sender,
+        ),
+    ];
+    let mut captured_output = CapturedOutput {
+        stream_receiver,
+        command_log,
+        captured_stdout: String::new(),
+        output_style,
+    };
+    let mut supervision_clock = SupervisionClock::start(Instant::now(), budget);
     eprintln!(
         "[test-run] stage={stage} status=start progress_percent=0 eta_seconds=unknown budget_seconds={}",
         budget.as_secs()
     );
-    let command_outcome = loop {
-        if let Err(read_error) = drain_output(
-            &stream_receiver,
-            &mut command_log,
-            &mut captured_stdout,
-            output_style,
-        ) {
-            break Err(read_error);
+    let command_outcome = supervise_until_finished(
+        &mut child,
+        stage,
+        signals,
+        &mut supervision_clock,
+        &mut captured_output,
+    );
+    stop_owned_process_group(process_group_id, &mut child)?;
+    for output_reader in output_readers {
+        output_reader
+            .join()
+            .map_err(|_| format!("the {stage} output reader panicked"))?;
+    }
+    captured_output.drain()?;
+    captured_output
+        .command_log
+        .flush()
+        .map_err(|error| error.to_string())?;
+    let exit_code = command_outcome?;
+    eprintln!(
+        "[test-run] stage={stage} status=finished progress_percent=100 elapsed_seconds={} eta_seconds=0 exit_code={exit_code}",
+        supervision_clock.started_at.elapsed().as_secs()
+    );
+    Ok(CommandOutput {
+        exit_code,
+        stdout: captured_output.captured_stdout,
+    })
+}
+
+fn create_command_log(log_path: &Path, command: &Command) -> Result<File, String> {
+    let mut command_log = File::create(log_path)
+        .map_err(|log_error| format!("cannot create command log {log_path:?}: {log_error}"))?;
+    writeln!(command_log, "command={command:?}").map_err(|error| error.to_string())?;
+    Ok(command_log)
+}
+
+/// A fresh process group lets the supervisor stop every descendant the
+/// command starts, not only the direct child.
+fn spawn_owned_process_group(command: &mut Command, stage: &str) -> Result<Child, String> {
+    command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .map_err(|launch_error| format!("could not start {stage}: {launch_error}"))
+}
+
+/// The command's output channel, its log and what it captured so far.
+struct CapturedOutput {
+    stream_receiver: Receiver<StreamEvent>,
+    command_log: File,
+    captured_stdout: String,
+    output_style: OutputStyle,
+}
+
+impl CapturedOutput {
+    fn drain(&mut self) -> Result<(), String> {
+        drain_output(
+            &self.stream_receiver,
+            &mut self.command_log,
+            &mut self.captured_stdout,
+            self.output_style,
+        )
+    }
+}
+
+/// When the run started, when it last reported progress, and its budget.
+pub(super) struct SupervisionClock {
+    started_at: Instant,
+    last_progress_at: Instant,
+    budget: Duration,
+}
+
+impl SupervisionClock {
+    pub(super) fn start(started_at: Instant, budget: Duration) -> Self {
+        Self {
+            started_at,
+            last_progress_at: started_at,
+            budget,
         }
+    }
+
+    pub(super) fn is_budget_exhausted(&self, now: Instant) -> bool {
+        now.saturating_duration_since(self.started_at) >= self.budget
+    }
+
+    /// Answers whether a progress line is due at `now`, and when it is,
+    /// restarts the progress interval from `now`.
+    pub(super) fn take_progress_due(&mut self, now: Instant) -> bool {
+        let is_progress_due =
+            now.saturating_duration_since(self.last_progress_at) >= PROGRESS_INTERVAL;
+        if is_progress_due {
+            self.last_progress_at = now;
+        }
+        is_progress_due
+    }
+}
+
+/// The exit code to report: the command's own, 124 for a timeout (as
+/// `timeout(1)` reports), or the signal's conventional status.
+fn supervise_until_finished(
+    child: &mut Child,
+    stage: &str,
+    signals: &SignalPipe,
+    supervision_clock: &mut SupervisionClock,
+    captured_output: &mut CapturedOutput,
+) -> Result<i32, String> {
+    loop {
+        captured_output.drain()?;
         if let Some(received_signal) = signals.received_signal() {
             eprintln!(
                 "[test-run] stage={stage} status=interrupted signal={}",
                 process_signals::signal_name(received_signal)
             );
-            break Ok(process_signals::signal_exit_status(received_signal));
+            return Ok(process_signals::signal_exit_status(received_signal));
         }
         match child.try_wait() {
             Ok(Some(exit_status)) => {
-                break Ok(crate::disposable_target::exit_code_from_status(
+                return Ok(crate::disposable_target::exit_code_from_status(
                     &exit_status,
                 ));
             }
             Ok(None) => {}
-            Err(wait_error) => break Err(format!("cannot observe {stage}: {wait_error}")),
+            Err(wait_error) => return Err(format!("cannot observe {stage}: {wait_error}")),
         }
-        if started_at.elapsed() >= budget {
+        let now = Instant::now();
+        if supervision_clock.is_budget_exhausted(now) {
             eprintln!(
                 "[test-run] stage={stage} status=timeout budget_seconds={}",
-                budget.as_secs()
+                supervision_clock.budget.as_secs()
             );
-            break Ok(124);
+            return Ok(124);
         }
-        if last_progress_at.elapsed() >= PROGRESS_INTERVAL {
+        if supervision_clock.take_progress_due(now) {
+            let elapsed = now.saturating_duration_since(supervision_clock.started_at);
             eprintln!(
                 "[test-run] stage={stage} status=running progress_percent=0 elapsed_seconds={} eta_seconds=unknown budget_remaining_seconds={}",
-                started_at.elapsed().as_secs(),
-                budget.saturating_sub(started_at.elapsed()).as_secs()
+                elapsed.as_secs(),
+                supervision_clock.budget.saturating_sub(elapsed).as_secs()
             );
-            last_progress_at = Instant::now();
         }
         thread::sleep(POLL_INTERVAL);
-    };
-    stop_owned_process_group(process_group_id, &mut child)?;
-    for output_reader in [stdout_reader, stderr_reader] {
-        output_reader
-            .join()
-            .map_err(|_| format!("the {stage} output reader panicked"))?;
     }
-    drain_output(
-        &stream_receiver,
-        &mut command_log,
-        &mut captured_stdout,
-        output_style,
-    )?;
-    command_log.flush().map_err(|error| error.to_string())?;
-    let exit_code = command_outcome?;
-    eprintln!(
-        "[test-run] stage={stage} status=finished progress_percent=100 elapsed_seconds={} eta_seconds=0 exit_code={exit_code}",
-        started_at.elapsed().as_secs()
-    );
-    Ok(CommandOutput {
-        exit_code,
-        stdout: captured_stdout,
-    })
 }
 
 fn start_reader(
@@ -173,26 +256,51 @@ fn drain_output(
                     captured_stdout.push_str(&text);
                     captured_stdout.push('\n');
                 }
-                match (output_style, stdout) {
-                    (OutputStyle::Quiet, _) => {}
-                    (OutputStyle::Cargo, true) => {
-                        if let Ok(cargo_message) = serde_json::from_str::<serde_json::Value>(&text)
-                        {
-                            if let Some(diagnostic) = cargo_message["message"]["rendered"].as_str()
-                            {
-                                eprint!("{diagnostic}");
-                            }
-                        } else {
-                            println!("{text}");
-                        }
-                    }
-                    (_, true) => println!("{text}"),
-                    (_, false) => eprintln!("{text}"),
+                match console_echo_for_line(output_style, stdout, &text) {
+                    ConsoleEcho::Stdout(echoed_text) => println!("{echoed_text}"),
+                    ConsoleEcho::StderrVerbatim(echoed_text) => eprint!("{echoed_text}"),
+                    ConsoleEcho::Stderr(echoed_text) => eprintln!("{echoed_text}"),
+                    ConsoleEcho::Silent => {}
                 }
             }
         }
     }
     Ok(())
+}
+
+/// Where one output line is echoed on the console.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum ConsoleEcho {
+    Stdout(String),
+    Stderr(String),
+    /// Cargo's rendered diagnostics already end in a newline.
+    StderrVerbatim(String),
+    Silent,
+}
+
+/// Cargo's JSON messages are shown only as their rendered diagnostics, so
+/// a build reads like a plain `cargo` run; artifact and build-script
+/// messages have nothing rendered and stay silent. A stdout line that is
+/// not JSON is an ordinary program line and passes through.
+pub(super) fn console_echo_for_line(
+    output_style: OutputStyle,
+    is_stdout: bool,
+    line_text: &str,
+) -> ConsoleEcho {
+    match (output_style, is_stdout) {
+        (OutputStyle::Quiet, _) => ConsoleEcho::Silent,
+        (OutputStyle::Cargo, true) => match serde_json::from_str::<serde_json::Value>(line_text) {
+            Ok(cargo_message) => match cargo_message["message"]["rendered"].as_str() {
+                Some(rendered_diagnostic) => {
+                    ConsoleEcho::StderrVerbatim(rendered_diagnostic.to_owned())
+                }
+                None => ConsoleEcho::Silent,
+            },
+            Err(_) => ConsoleEcho::Stdout(line_text.to_owned()),
+        },
+        (_, true) => ConsoleEcho::Stdout(line_text.to_owned()),
+        (_, false) => ConsoleEcho::Stderr(line_text.to_owned()),
+    }
 }
 
 fn stop_owned_process_group(process_group_id: i32, child: &mut Child) -> Result<(), String> {
@@ -218,3 +326,7 @@ fn stop_owned_process_group(process_group_id: i32, child: &mut Child) -> Result<
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "process_tests.rs"]
+mod process_tests;
