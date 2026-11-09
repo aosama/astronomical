@@ -116,13 +116,13 @@ impl Qwen3_5Model {
     /// longer fit. Returns whether any page was actually released.
     pub(crate) fn limit_expert_retention_for_request_memory_pressure(
         &self,
-        retained_expert_payload_reclamation_target_bytes: usize,
+        retained_payload_reclamation_target_bytes: usize,
     ) -> Result<bool, crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError> {
         let Some(retained_experts) = self.retained_experts.as_ref() else {
             return Ok(false);
         };
         Ok(retained_experts.borrow_mut().limit_for_request_pressure(
-            u64::try_from(retained_expert_payload_reclamation_target_bytes).unwrap_or(u64::MAX),
+            u64::try_from(retained_payload_reclamation_target_bytes).unwrap_or(u64::MAX),
         ))
     }
 
@@ -162,21 +162,32 @@ impl Qwen3_5Model {
     }
 }
 
-/// Shrinks retained pages, then proves the physical effect with a fresh sample.
+/// Limits retained experts and gives back a dense model's kept layers, whose
+/// bytes free the same way once they stream. Returns whether either released
+/// anything; both always run, since a model has one kind or the other.
+fn release_retained_payload(
+    model: &Qwen3_5Model,
+    reclamation_target_bytes: usize,
+) -> Result<bool, InferenceEngineError> {
+    let did_limit_expert_retention = model
+        .limit_expert_retention_for_request_memory_pressure(reclamation_target_bytes)
+        .map_err(InferenceEngineError::from)?;
+    let released_dense_layer_bytes = model
+        .release_kept_dense_layers(u64::try_from(reclamation_target_bytes).unwrap_or(u64::MAX));
+    Ok(did_limit_expert_retention | (released_dense_layer_bytes > 0))
+}
+
+/// Shrinks retained pages or kept dense layers, then proves the physical
+/// effect with a fresh sample.
 ///
 /// Order matters: retire pages, synchronize the graphics-processor stream,
 /// clear allocator cache, then snapshot. Sampling before cleanup would still
 /// count released buffers that the allocator has not given back.
-pub(crate) fn reclaim_retained_experts_for_request_memory_pressure(
+pub(crate) fn reclaim_retained_payload_for_request_memory_pressure(
     model: &Qwen3_5Model,
-    retained_expert_payload_reclamation_target_bytes: usize,
+    retained_payload_reclamation_target_bytes: usize,
 ) -> Result<Option<MlxMemorySnapshot>, InferenceEngineError> {
-    if !model
-        .limit_expert_retention_for_request_memory_pressure(
-            retained_expert_payload_reclamation_target_bytes,
-        )
-        .map_err(InferenceEngineError::from)?
-    {
+    if !release_retained_payload(model, retained_payload_reclamation_target_bytes)? {
         return Ok(None);
     }
     // The pager first retires streaming ownership and releases Rust-selected

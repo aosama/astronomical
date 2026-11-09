@@ -3,6 +3,7 @@
 
 mod complete_headroom;
 mod decode_seating;
+mod dense_layer_plan;
 mod foundation_overlay;
 mod observed_mode;
 mod ownership_mode;
@@ -16,6 +17,8 @@ mod validation;
 
 #[cfg(test)]
 mod complete_residency_headroom_boundary_tests;
+#[cfg(test)]
+mod dense_layer_plan_tests;
 #[cfg(test)]
 mod expert_residency_policy_tests;
 #[cfg(test)]
@@ -45,6 +48,7 @@ mod validation_boundary_tests;
 
 pub use complete_headroom::CompleteResidencyHeadroomBoundary;
 pub use decode_seating::complete_layer_indexes_required_before_decode;
+pub use dense_layer_plan::{DenseLayerResidencyPlan, DenseLayerResidencyRequirements};
 pub use observed_mode::observed_expert_memory_mode;
 pub use ownership_mode::classify_expert_memory_mode;
 pub use page_commit::{

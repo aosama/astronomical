@@ -256,15 +256,17 @@ impl Qwen3_5EngineState {
                     )
                 })?
         } else {
-            0
+            // A dense model's streamed layers occupy their slots during the
+            // forward the way routed pages do, and context admission already
+            // reserves them; the guard reserves the same bytes.
+            usize::try_from(model.dense_streaming_slot_reservation_bytes()).unwrap_or(usize::MAX)
         };
         let memory_snapshot_before_growth = model
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
-        let retained_expert_payload_bytes_before_growth = model
-            .expert_weight_memory_cache_statistics()
-            .resident_payload_byte_count;
+        let retained_expert_payload_bytes_before_growth =
+            model.reclaimable_retained_payload_bytes();
         let unobserved_scope_transient_floor_bytes = model
             .mlx_ram_budget()
             .adaptive_growth_unobserved_scope_transient_floor_bytes(adaptive_ram_growth_context);
@@ -387,8 +389,7 @@ impl Qwen3_5EngineState {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();
             let retained_expert_payload_bytes =
-                usize::try_from(expert_weight_memory_cache_statistics.resident_payload_byte_count)
-                    .unwrap_or(usize::MAX);
+                usize::try_from(model.reclaimable_retained_payload_bytes()).unwrap_or(usize::MAX);
             let expert_reclamation_plan = admission
                 .forward_projection
                 .expert_retention_reclamation_plan(retained_expert_payload_bytes);
@@ -531,7 +532,7 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let Some(memory_snapshot_after_reclamation) =
-            qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
+            qwen3_5_streaming::reclaim_retained_payload_for_request_memory_pressure(
                 model,
                 target_bytes,
             )?
@@ -572,7 +573,7 @@ impl Qwen3_5EngineState {
         *previous_pass_released_pages = Some(true);
         admission.memory_snapshot_before_growth = memory_snapshot_after_reclamation;
         admission.retained_expert_payload_bytes_before_growth =
-            expert_weight_memory_cache_statistics_after_reclamation.resident_payload_byte_count;
+            model.reclaimable_retained_payload_bytes();
         Ok(())
     }
 }

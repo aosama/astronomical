@@ -1,17 +1,20 @@
 //! Serving a dense model from the SSD must not change its answer (issue #1985).
 //!
 //! The streaming engine serves a dense model whose text weights do not fit
-//! the limit: it reads embedding rows from the SSD instead of keeping the
-//! table resident. The resident engine keeps everything in memory. For the
-//! same Shakespeare prompt, both must produce bit-identical final logits.
+//! the limit: it reads embedding rows from the SSD and streams the decoder
+//! layers it does not keep. The resident engine keeps everything in memory.
+//! For the same Shakespeare prompt and greedy decode, the streaming engine
+//! with every layer streamed, and with half kept, must produce the resident
+//! tokens and bit-identical final logits.
 //!
-//! The streaming model's on-disk embeddings do not depend on the limit, so
+//! The resident layer count is pinned rather than planned from the limit, so
 //! both models load in this one process, one after the other.
 
 use std::time::Duration;
 
 use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ResidentModel, Qwen3_5StreamingModel,
+    DenseLayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ResidentModel,
+    Qwen3_5StreamingModel,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -29,7 +32,7 @@ const PARITY_BUDGET: Duration = Duration::from_secs(120);
 #[tokio::test]
 #[ignore = "loads the streamed_dense model twice and requires exact final-logit parity"]
 #[serial]
-async fn should_give_the_resident_logits_when_dense_embeddings_are_read_from_disk() {
+async fn should_give_the_resident_logits_when_dense_weights_stream_from_disk() {
     timeout(PARITY_BUDGET, assert_dense_streaming_logit_parity())
         .await
         .expect("the dense streaming parity journey must finish within its budget");
@@ -39,7 +42,15 @@ async fn assert_dense_streaming_logit_parity() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
     let model_directory = crate::common::configured_streamed_dense_model_directory();
     let prompt_token_ids = shakespeare_prompt_token_ids(&model_directory);
-    let mlx_memory_limits = crate::common::sample_serving_acceptance_mlx_memory_limits().await;
+    // The kept layer count is pinned, so the journey runs under the machine's
+    // own limit rather than a configured one that might not fit 16 layers.
+    let machine_mlx_memory_ceiling_bytes =
+        crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
+    let mlx_memory_limits = astronomical_runtime_integration::MlxMemoryLimits::new(
+        machine_mlx_memory_ceiling_bytes,
+        machine_mlx_memory_ceiling_bytes,
+    )
+    .expect("the machine MLX memory limits should be valid");
 
     eprintln!("[dense-parity] status=progress step=1/2 engine=streaming");
     let streaming_answer = {
@@ -54,8 +65,23 @@ async fn assert_dense_streaming_logit_parity() {
         .expect("the dense model should load on the streaming engine");
         let dense_forward = StreamingForward(&streaming_model);
         let active_bytes_after_load = dense_forward.materialized_active_bytes();
-        let answer = greedy_answer(&qwen3_5_config, &prompt_token_ids, &dense_forward);
-        (active_bytes_after_load, answer)
+        let mut answers_by_kept_layer_count = Vec::with_capacity(KEPT_LAYER_COUNTS.len());
+        for kept_layer_count in KEPT_LAYER_COUNTS {
+            streaming_model
+                .plan_dense_layer_residency(
+                    DenseLayerProbeShape {
+                        prefill_chunk_token_count: PREFILL_CHUNK_TOKEN_COUNT,
+                        full_attention_kv_state_growth_tokens: PREFILL_CHUNK_TOKEN_COUNT as i32,
+                    },
+                    Some(kept_layer_count),
+                )
+                .expect("the dense layers should plan");
+            answers_by_kept_layer_count.push((
+                kept_layer_count,
+                greedy_answer(&qwen3_5_config, &prompt_token_ids, &dense_forward),
+            ));
+        }
+        (active_bytes_after_load, answers_by_kept_layer_count)
     };
     eprintln!("[dense-parity] status=progress step=2/2 engine=resident");
     let resident_answer = {
@@ -78,26 +104,30 @@ async fn assert_dense_streaming_logit_parity() {
     let saved_active_bytes = resident_answer.0.saturating_sub(streaming_answer.0);
     assert!(
         saved_active_bytes + EMBEDDING_ACCOUNTING_SLACK_BYTES >= embedding_table_bytes,
-        "the streaming engine must leave the {embedding_table_bytes}-byte embedding table out of memory; it saved {saved_active_bytes}"
+        "the streaming engine must leave at least the {embedding_table_bytes}-byte embedding table out of memory; it saved {saved_active_bytes}"
     );
-    assert_eq!(
-        streaming_answer.1.generated_token_ids, resident_answer.1.generated_token_ids,
-        "greedy decode must choose the same tokens on both engines"
-    );
-    assert!(
-        streaming_answer.1.final_logits == resident_answer.1.final_logits,
-        "reading dense embeddings from disk must give bit-identical final logits"
-    );
+    for (kept_layer_count, streaming_greedy_answer) in &streaming_answer.1 {
+        assert_eq!(
+            streaming_greedy_answer.generated_token_ids, resident_answer.1.generated_token_ids,
+            "greedy decode with {kept_layer_count} kept layers must choose the resident tokens"
+        );
+        assert!(
+            streaming_greedy_answer.final_logits == resident_answer.1.final_logits,
+            "streaming with {kept_layer_count} kept layers must give bit-identical final logits"
+        );
+    }
     eprintln!(
-        "[dense-parity] status=success prompt_tokens={} decode_tokens={} embedding_bytes_left_out={saved_active_bytes}",
+        "[dense-parity] status=success prompt_tokens={} decode_tokens={} bytes_left_out_of_memory={saved_active_bytes}",
         prompt_token_ids.len(),
-        streaming_answer.1.generated_token_ids.len()
+        resident_answer.1.generated_token_ids.len()
     );
 }
 
 /// Bytes the allocator may round a 0.8 GB table's absence by.
 const EMBEDDING_ACCOUNTING_SLACK_BYTES: u64 = 16 * 1024 * 1024;
 const DECODE_STEP_COUNT: usize = 8;
+/// Every layer streamed, and half of the 9B model's 32 layers kept.
+const KEPT_LAYER_COUNTS: [usize; 2] = [0, 16];
 const PREFILL_CHUNK_TOKEN_COUNT: usize = 256;
 
 /// The tokens a greedy decode chose and the logits of its last step.

@@ -26,9 +26,14 @@ pub use inference_execution::{
     safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
+pub use model::{
+    DenseLayerProbeShape, Qwen3_5Model as Qwen3_5StreamingModel,
+    Qwen3_5TargetForwardOutput as Qwen3_5StreamingTargetForwardOutput,
+};
+#[cfg(feature = "direct-mlx")]
 pub(crate) use model::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
-    reclaim_retained_experts_for_request_memory_pressure,
+    reclaim_retained_payload_for_request_memory_pressure,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{
@@ -37,11 +42,6 @@ pub use model::{
     qwen3_5_moe_restore_expert_assignment_order, qwen3_5_moe_route_experts,
     qwen3_5_moe_sort_expert_assignments, qwen3_5_moe_sorted_expert_weighted_sum,
     qwen3_5_moe_sorted_expert_weighted_sum_kernel, qwen3_5_moe_unsorted_expert_weighted_sum,
-};
-#[cfg(feature = "direct-mlx")]
-pub use model::{
-    Qwen3_5Model as Qwen3_5StreamingModel,
-    Qwen3_5TargetForwardOutput as Qwen3_5StreamingTargetForwardOutput,
 };
 
 /// Model identity constants for the frozen Ornith 1.0 sparse artifact; defined

@@ -24,7 +24,7 @@ use astronomical_ipc_protocol::RequestId;
 
 use crate::InferenceEngineError;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
-use crate::qwen3_5_streaming::model::reclaim_retained_experts_for_request_memory_pressure;
+use crate::qwen3_5_streaming::model::reclaim_retained_payload_for_request_memory_pressure;
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::{Qwen3_5EngineState, fatal_engine_error, qwen3_5_runtime_error};
@@ -80,7 +80,7 @@ impl Qwen3_5EngineState {
         // `usize::MAX` targets every retained byte; the freeze is re-applied
         // after the prompt-cache restore below.
         let memory_snapshot_after_shedding =
-            match reclaim_retained_experts_for_request_memory_pressure(model, usize::MAX)? {
+            match reclaim_retained_payload_for_request_memory_pressure(model, usize::MAX)? {
                 Some(memory_snapshot_after_shedding) => Some(memory_snapshot_after_shedding),
                 None => {
                     model

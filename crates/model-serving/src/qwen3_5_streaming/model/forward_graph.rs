@@ -1,9 +1,10 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5Model;
+use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use mlx_c_rust::{MlxArray, MlxDtype};
@@ -340,12 +341,12 @@ impl Qwen3_5Model {
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
             ))
             .unwrap_or(0);
+        let mut previous_dense_layer_output = None;
         for layer_index in 0..decoder_layer_count {
-            let decoder_layer_weights = self
-                .weights
-                .decoder_layer_weights
-                .get(layer_index)
-                .ok_or(Qwen3_5ExecutionError::MissingDecoderLayerWeights { layer_index })?;
+            // A dense model's streamer supplies its layers: a kept layer, or
+            // one read from the SSD for this forward alone.
+            let forward_layer_weights = self.forward_layer_weights(layer_index)?;
+            let decoder_layer_weights = forward_layer_weights.decoder_layer_weights();
             let layer_model_state = request_decoder_state.layer_mut(layer_index).ok_or(
                 Qwen3_5ExecutionError::InvalidRequestDecoderState {
                     layer_index,
@@ -370,19 +371,23 @@ impl Qwen3_5Model {
                 paged_execution_mode,
                 performance_attribution,
             )?;
-            if graph_submission_layer_interval > 0
-                && (layer_index + 1).is_multiple_of(graph_submission_layer_interval)
-                && layer_index + 1 < decoder_layer_count
-            {
-                // Intermediate mlx_async_eval commits the completed layer group.
-                // Do not submit after the final decoder layer: final
-                // normalization and logits extend that same graph and the
-                // caller owns the terminal evaluation.
-                performance_attribution.measure_operation(
-                    PerformanceOperation::PrefillStateAsyncEvaluationSubmission,
-                    |_performance_attribution| self.runtime.async_eval_arrays(&[&hidden_states]),
-                )?;
-            }
+            self.submit_completed_layer(
+                &forward_layer_weights,
+                completed_layer_roots(
+                    &hidden_states,
+                    layer_index,
+                    request_decoder_state,
+                    boundary_checkpoint_collector.as_deref(),
+                ),
+                &mut previous_dense_layer_output,
+                LayerGroupSubmission {
+                    completed_layer_count: layer_index + 1,
+                    decoder_layer_count,
+                    graph_submission_layer_interval,
+                    forward_token_count: token_count,
+                },
+                performance_attribution,
+            )?;
             // Expert pages are lazy loads on MLX's own stream, so this read
             // overlaps the layers still computing instead of stalling graph
             // submission; its bytes are the plan's second prefill stream slot.
@@ -471,4 +476,25 @@ pub(super) fn pre_final_normalization_hidden_state_at(
         &[1, token_position_index + 1, hidden_state_shape[2]],
         &[1, 1, 1],
     )?)
+}
+
+/// The arrays one completed layer leaves to evaluate: its output, plus the
+/// convolution state and prompt-cache boundary snapshots it does not reach.
+fn completed_layer_roots<'layer>(
+    layer_output: &'layer MlxArray,
+    layer_index: usize,
+    request_decoder_state: &'layer RequestDecoderStateStack,
+    boundary_checkpoint_collector: Option<
+        &'layer Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+    >,
+) -> CompletedLayerRoots<'layer> {
+    CompletedLayerRoots {
+        layer_output,
+        convolution_state: request_decoder_state
+            .layer(layer_index)
+            .and_then(DecoderCacheState::convolution_state_array),
+        boundary_checkpoint_states: boundary_checkpoint_collector
+            .map(|collector| collector.layer_evaluation_arrays(layer_index))
+            .unwrap_or_default(),
+    }
 }

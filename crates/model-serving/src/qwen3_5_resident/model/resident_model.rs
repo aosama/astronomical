@@ -91,6 +91,16 @@ fn resident_layer_seating(
 }
 
 impl Qwen3_5ResidentModel {
+    /// Materializes every bound target weight: the resident engine keeps the
+    /// whole model in memory.
+    pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
+        self.base.materialize_target_weights_with(
+            crate::qwen3_5_core::model_math::weights::DecoderLayerResidency::BoundWeights,
+        )
+    }
+}
+
+impl Qwen3_5ResidentModel {
     #[must_use]
     pub fn expert_memory_mode(&self) -> astronomical_ipc_protocol::ExpertMemoryMode {
         astronomical_ipc_protocol::ExpertMemoryMode::Resident

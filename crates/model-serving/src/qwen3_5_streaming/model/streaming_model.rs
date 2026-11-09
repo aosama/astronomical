@@ -29,6 +29,10 @@ pub struct Qwen3_5StreamingModel {
     pub(crate) base: Qwen3_5ModelBase,
     /// Sparse models own a pager; dense models have no sparse-expert weights.
     pub(crate) expert_pager: Option<Qwen3_5ExpertPager>,
+    /// A dense model's decoder layers, kept or read from the SSD per forward
+    /// (issue #1985); `None` for a sparse model.
+    pub(crate) dense_layer_streamer:
+        Option<crate::qwen3_5_streaming::model::dense_layer_streamer::Qwen3_5DenseLayerStreamer>,
     /// Individual routed experts retained within the paged-mode RAM ceiling.
     pub(crate) retained_experts: Option<RefCell<WarmExpertSlotTableCache>>,
     /// Pure target published at load and refreshed before mandatory expert reads.
