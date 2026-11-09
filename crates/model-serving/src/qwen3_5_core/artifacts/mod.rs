@@ -21,7 +21,8 @@ pub(crate) use super::quantizations::producers::optiq::{OptiQMetadata, OptiQMeta
 pub(crate) use super::vision::{Qwen3_5VisionConfig, vision_tensor_spec};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::expert_paging::{
-    QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
+    ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
+    SafetensorsDtype, build_quantized_expert_page_manifest_from_plan, load_quantized_expert_page,
 };
 pub use artifact::{Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator};
 pub use atlas_expert_layer_plans::expert_layer_plans_for_validated_artifact;

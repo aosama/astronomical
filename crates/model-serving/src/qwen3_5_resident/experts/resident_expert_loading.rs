@@ -224,7 +224,7 @@ fn insert_atlas_resident_source_tensors(
     positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
     resident_source_tensors: &mut ResidentSourceTensorMap,
 ) -> Result<(), Qwen3_5ExecutionError> {
-    let expert_page_error = |page_error: crate::expert_paging::ExpertManifestError| {
+    let expert_page_error = |page_error: crate::qwen3_5_core::artifacts::ExpertManifestError| {
         Qwen3_5ExecutionError::ExpertSourceFailure {
             description: format!("loading a complete Atlas expert layer failed: {page_error}"),
         }
@@ -239,17 +239,18 @@ fn insert_atlas_resident_source_tensors(
         }
         let every_expert_id: Vec<usize> = (0..layer_plan.expert_capacity).collect();
         let complete_layer_manifest =
-            crate::expert_paging::build_quantized_expert_page_manifest_from_plan(
+            crate::qwen3_5_core::artifacts::build_quantized_expert_page_manifest_from_plan(
                 layer_plan,
                 &every_expert_id,
             )
             .map_err(expert_page_error)?;
-        let mut complete_layer_tensors = crate::expert_paging::load_quantized_expert_page(
-            runtime,
-            &complete_layer_manifest,
-            positional_file_read_metrics.as_ref().map(Arc::clone),
-        )
-        .map_err(expert_page_error)?;
+        let mut complete_layer_tensors =
+            crate::qwen3_5_core::artifacts::load_quantized_expert_page(
+                runtime,
+                &complete_layer_manifest,
+                positional_file_read_metrics.as_ref().map(Arc::clone),
+            )
+            .map_err(expert_page_error)?;
         for tensor_source in layer_plan
             .tensor_sources
             .iter()
