@@ -12,14 +12,14 @@
 //! because a slow model on a small Mac is acceptable and a refused one is not
 //! (#1902).
 
-/// What a dense model needs in memory, apart from its decoder layers' large
-/// projections.
+/// What a dense model needs in memory beside its decoder layers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DenseLayerResidencyRequirements<'layers> {
-    /// Tensors that never stream: the output head, the final norm, each
-    /// layer's small tensors, and the embedding table when it is resident.
+    /// Tensors that never stream: the output head, the final norm, and the
+    /// embedding table when it is resident.
     pub always_resident_bytes: u64,
-    /// The streamable bytes of each decoder layer, in layer order.
+    /// Every tensor's bytes of each decoder layer, in layer order; a streamed
+    /// layer is read whole.
     pub decoder_layer_streamable_bytes: &'layers [u64],
     /// Reusable slots a streamed layer is read into; two let the next layer
     /// load while the current one computes.

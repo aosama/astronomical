@@ -24,7 +24,7 @@ pub(crate) struct DenseLayerTensorRange {
 
 impl DenseLayerTensorRange {
     fn byte_count(&self) -> u64 {
-        self.file_end_offset - self.file_start_offset
+        self.file_end_offset.saturating_sub(self.file_start_offset)
     }
 
     fn file_start_offset_key(&self) -> u64 {

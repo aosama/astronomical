@@ -166,15 +166,11 @@ impl Qwen3_5ModelBase {
             .resident_payload_bytes(self.embedding_residency())
     }
 
-    pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
-        self.materialize_target_weights_with(
-            crate::qwen3_5_core::model_math::weights::DecoderLayerResidency::BoundWeights,
-        )
-    }
-
     /// Materializes the target weights, leaving the decoder layers lazy when
     /// a dense layer streamer owns them. An embedding table read from the SSD
-    /// stays lazy too.
+    /// stays lazy too. Each engine's model calls this with its own layer
+    /// ownership; the base has no public materialize of its own, so a caller
+    /// reaching the base through deref cannot load a streamer's layers.
     pub(crate) fn materialize_target_weights_with(
         &self,
         decoder_layer_residency: crate::qwen3_5_core::model_math::weights::DecoderLayerResidency,

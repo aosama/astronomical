@@ -25,6 +25,7 @@ use crate::qwen3_5_core::configuration::Qwen3_5Config;
 pub(crate) fn decoder_layer_tensor_profiles(
     qwen3_5_config: &Qwen3_5Config,
 ) -> Result<Vec<Vec<TensorProfile>>, Qwen3_5ExecutionError> {
+    // Same mapping the resident binder uses for an unprofilable config.
     let language_tensor_profiles = qwen3_5_resident_language_tensor_profiles(qwen3_5_config)
         .map_err(|artifact_error| Qwen3_5ExecutionError::ExpertLayerPlan {
             description: artifact_error.to_string(),

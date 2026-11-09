@@ -36,6 +36,9 @@ pub(crate) mod output_combination;
 pub(crate) mod routing;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod streamed_layer_binding;
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "model_math/streamed_layer_binding_tests.rs"]
+mod streamed_layer_binding_tests;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod tensor_slicing;
 #[cfg(feature = "direct-mlx")]

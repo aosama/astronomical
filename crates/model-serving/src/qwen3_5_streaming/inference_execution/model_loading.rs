@@ -60,7 +60,7 @@ impl Qwen3_5EngineState {
                 runtime,
                 validated_artifact,
                 &self.model_directory,
-                (model_chunking, &self.chunking),
+                (model_chunking, self.dense_layer_probe_shape()),
                 self.decode_expert_cache_policy,
                 &mut model_loading_performance_attribution,
             )?;
@@ -173,6 +173,23 @@ impl Qwen3_5EngineState {
             );
         }
         Ok(self.engine_load_result(minimum_mlx_memory_ceiling_bytes))
+    }
+}
+
+impl Qwen3_5EngineState {
+    /// The forward shape this engine serves, which a dense model's
+    /// working-memory probe reproduces: the chunk sizer's largest prefill
+    /// chunk and the attention slab granularity requests use.
+    fn dense_layer_probe_shape(
+        &self,
+    ) -> crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape
+    {
+        crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape {
+            prefill_chunk_token_count: self
+                .prompt_processing_chunk_sizer
+                .maximum_prompt_processing_chunk_size_tokens(),
+            full_attention_kv_state_growth_tokens: self.full_attention_kv_state_growth_tokens,
+        }
     }
 }
 
@@ -311,9 +328,9 @@ fn load_and_materialize_streaming_model(
     runtime: MlxRuntime,
     validated_artifact: ValidatedQwen3_5Artifact,
     model_directory: &std::path::Path,
-    (model_chunking, worker_chunking): (
+    (model_chunking, dense_layer_probe_shape): (
         Qwen3_5ModelChunkingConfiguration,
-        &WorkerChunkingConfiguration,
+        crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape,
     ),
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     model_loading_performance_attribution: &mut PerformanceAttribution,
@@ -334,10 +351,7 @@ fn load_and_materialize_streaming_model(
                 // A dense model then measures one streamed layer's working
                 // memory at the prefill chunk size it will serve and keeps the
                 // layers that fit beside it; a sparse model has none to plan.
-                model.materialize_target_weights_and_plan_dense_layers(
-                    worker_chunking.fixed_ssd_streaming_prompt_processing_chunk_size_tokens
-                        as usize,
-                )
+                model.materialize_target_weights_and_plan_dense_layers(dense_layer_probe_shape)
             },
         )
         .map_err(InferenceEngineError::from)?;

@@ -117,3 +117,42 @@ fn should_plan_a_model_with_no_decoder_layers_as_fully_resident() {
     assert_eq!(residency_plan.resident_layer_count, 0);
     assert_eq!(residency_plan.streaming_slot_bytes, 0);
 }
+
+#[test]
+fn should_stream_every_layer_and_flag_the_floor_under_a_zero_limit() {
+    let residency_plan = requirements_under(0).plan();
+
+    assert_eq!(residency_plan.resident_layer_count, 0);
+    assert!(residency_plan.is_below_streaming_floor);
+}
+
+#[test]
+fn should_keep_layers_against_the_working_memory_alone_without_slots() {
+    let residency_plan = DenseLayerResidencyRequirements {
+        always_resident_bytes: 50,
+        decoder_layer_streamable_bytes: &LAYER_BYTES,
+        streaming_slot_count: 0,
+        working_memory_bytes: 30,
+        active_memory_ceiling_bytes: 379,
+    }
+    .plan();
+
+    assert_eq!(residency_plan.streaming_slot_bytes, 0);
+    assert_eq!(residency_plan.resident_layer_count, 2);
+}
+
+#[test]
+fn should_saturate_instead_of_overflowing_on_enormous_sizes() {
+    let enormous_layer_bytes = [u64::MAX, u64::MAX];
+    let residency_plan = DenseLayerResidencyRequirements {
+        always_resident_bytes: u64::MAX,
+        decoder_layer_streamable_bytes: &enormous_layer_bytes,
+        streaming_slot_count: 2,
+        working_memory_bytes: u64::MAX,
+        active_memory_ceiling_bytes: u64::MAX - 1,
+    }
+    .plan();
+
+    assert_eq!(residency_plan.resident_layer_count, 0);
+    assert!(residency_plan.is_below_streaming_floor);
+}

@@ -136,3 +136,14 @@ fn should_plan_one_load_per_shard_that_holds_part_of_the_layer() {
 fn should_plan_no_loads_for_a_layer_with_no_tensors() {
     assert!(dense_layer_shard_reads(BTreeMap::new()).is_empty());
 }
+
+#[test]
+fn should_plan_an_empty_read_for_a_reversed_range_instead_of_underflowing() {
+    let mut reversed_range =
+        tensor_range("language_model.model.layers.1.mlp.up_proj.weight", 500, 0);
+    reversed_range.file_end_offset = 100;
+
+    let shard_reads = dense_layer_shard_reads(BTreeMap::from([(0, vec![reversed_range])]));
+
+    assert_eq!(shard_reads[0].payload_bytes, 0);
+}

@@ -48,7 +48,10 @@ impl Qwen3_5Model {
             requested_ceiling_bytes: requested_mlx_memory_ceiling_bytes,
             minimum_safe_ceiling_bytes: minimum_mlx_memory_ceiling_bytes,
             current_active_memory_bytes,
-            retained_paged_expert_payload_bytes: expert_statistics.resident_payload_byte_count,
+            // Kept dense layers are given back like retained experts.
+            retained_paged_expert_payload_bytes: expert_statistics
+                .resident_payload_byte_count
+                .saturating_add(self.dense_kept_layer_payload_bytes()),
             complete_experts_are_resident: false,
             complete_residency_required_headroom_bytes: 0,
         }
@@ -248,6 +251,7 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);
         }
+        self.release_kept_dense_layers(retained_paged_expert_reclamation_bytes);
         self.mlx_ram_budget
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
@@ -267,6 +271,21 @@ impl Qwen3_5Model {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
+        self.apply_live_ceiling_to_budget_and_dense_layers(requested_mlx_memory_ceiling_bytes)?;
+        let Some(expert_pager) = self.expert_pager.as_mut() else {
+            return Ok(());
+        };
+        expert_pager.update_configured_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
+        Ok(())
+    }
+
+    /// Moves the RAM budget to the new ceiling, then plans a dense model's
+    /// kept layers again: a raise the resident engine cannot use yet still
+    /// lets it keep more, and the plan reads the limit just installed.
+    fn apply_live_ceiling_to_budget_and_dense_layers(
+        &self,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<(), InferenceEngineError> {
         self.mlx_ram_budget
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
@@ -275,11 +294,7 @@ impl Qwen3_5Model {
                     mlx_ram_budget_error.to_string(),
                 )
             })?;
-        let Some(expert_pager) = self.expert_pager.as_mut() else {
-            return Ok(());
-        };
-        expert_pager.update_configured_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
-        Ok(())
+        Ok(self.replan_kept_dense_layers()?)
     }
 
     fn restore_expert_paging_memory_ceiling(

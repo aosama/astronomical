@@ -69,15 +69,18 @@ fn reclaim_for_streaming_context(
     context_admission_setup: &StreamingContextAdmissionSetup,
     context_reclamation_target_bytes: usize,
 ) -> Result<(), InferenceEngineError> {
-    if let Some(dense_admission) =
-        super::dense_layer_admission::admit_by_releasing_kept_dense_layers(
-            model,
-            context_admission_setup.reservations_for_dense_release(),
-            context_reclamation_target_bytes,
-        )?
-    {
-        return dense_admission
-            .map_err(|()| reject_streaming_context_before_mlx_allocation(context_admission_setup));
+    match super::dense_layer_admission::admit_by_releasing_kept_dense_layers(
+        model,
+        context_admission_setup.reservations_for_dense_release(),
+        context_reclamation_target_bytes,
+    )? {
+        super::dense_layer_admission::DenseReleaseOutcome::Admitted => return Ok(()),
+        super::dense_layer_admission::DenseReleaseOutcome::StillShort => {
+            return Err(reject_streaming_context_before_mlx_allocation(
+                context_admission_setup,
+            ));
+        }
+        super::dense_layer_admission::DenseReleaseOutcome::NotDense => {}
     }
     if let Some(memory_snapshot_after_reclamation) =
         qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(

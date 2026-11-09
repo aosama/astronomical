@@ -228,8 +228,9 @@ struct DenseStreamingGeometry {
 /// Leaves a dense model's decoder layers out of its fixed core: kept layers
 /// are given back under request pressure like retained experts, so only the
 /// tensors that never stream are fixed. The two layer slots a streamed
-/// forward reads into become the streaming workspace the floor reserves, in
-/// place of a sparse model's complete expert layer.
+/// forward reads into become the per-operation page the floor reserves once.
+/// They stay out of the complete-expert-layer field, whose prefill rule
+/// would reserve three of it; prefill working memory is measured instead.
 fn dense_streaming_geometry(
     bound_model_core_payload_bytes: u64,
     dense_layer_streamer: Option<&Qwen3_5DenseLayerStreamer>,
@@ -248,15 +249,9 @@ fn dense_streaming_geometry(
     DenseStreamingGeometry {
         model_core_payload_bytes: bound_model_core_payload_bytes
             .saturating_sub(decoder_layer_payload_bytes),
-        dense_streaming_workspace_bytes: dense_layer_streamer
-            .largest_layer_payload_bytes()
-            .saturating_mul(DENSE_STREAMING_LAYER_SLOT_COUNT),
+        dense_streaming_workspace_bytes: dense_layer_streamer.streaming_slot_bytes(),
     }
 }
-
-/// Layers a streamed forward holds at once: the one computing and the one
-/// being read for it next.
-pub(crate) const DENSE_STREAMING_LAYER_SLOT_COUNT: u64 = 2;
 
 /// A dense model's on-disk embedding rows and decoder layer streamer, both
 /// planned from the validated headers before binding takes the sources.
@@ -468,7 +463,7 @@ fn build_streaming_expert_budget(
             .map_err(|_| Qwen3_5ExecutionError::InvalidInput {
                 description: "complete expert source layer byte count overflowed during model load",
             })?,
-        None => dense_streaming_workspace_bytes,
+        None => 0,
     };
     let fused_jangtq2_gathered_projection_kernel = expert_pager.and_then(|expert_pager| {
         fused_jangtq2_gathered_projection_kernel_for_pager(
@@ -482,14 +477,15 @@ fn build_streaming_expert_budget(
             fused_jangtq2_gathered_projection_kernel.is_some(),
         );
     }
-    let largest_routed_expert_page_bytes = expert_pager.map_or(Ok(0), |expert_pager| {
-        // The load-time budget is taken before the fused kernel
-        // verdict, so it keeps the conservative decode peak.
-        expert_pager.maximum_routed_expert_page_bytes(
-            usize::try_from(config.experts_per_token()).unwrap_or(usize::MAX),
-            true,
-        )
-    })?;
+    let largest_routed_expert_page_bytes =
+        expert_pager.map_or(Ok(dense_streaming_workspace_bytes), |expert_pager| {
+            // The load-time budget is taken before the fused kernel
+            // verdict, so it keeps the conservative decode peak.
+            expert_pager.maximum_routed_expert_page_bytes(
+                usize::try_from(config.experts_per_token()).unwrap_or(usize::MAX),
+                true,
+            )
+        })?;
     let mut mlx_ram_budget = MlxRamBudget::new(
         u64::try_from(runtime.memory_limits().active_memory_limit_bytes()).map_err(|_| {
             Qwen3_5ExecutionError::InvalidInput {

@@ -13,7 +13,8 @@
 use std::time::Duration;
 
 use astronomical_model_serving::{
-    Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ResidentModel, Qwen3_5StreamingModel,
+    DenseLayerProbeShape, Qwen3_5ArtifactValidator, Qwen3_5Config, Qwen3_5ResidentModel,
+    Qwen3_5StreamingModel,
 };
 use astronomical_runtime_integration::MlxRuntime;
 use serial_test::serial;
@@ -67,7 +68,13 @@ async fn assert_dense_streaming_logit_parity() {
         let mut answers_by_kept_layer_count = Vec::with_capacity(KEPT_LAYER_COUNTS.len());
         for kept_layer_count in KEPT_LAYER_COUNTS {
             streaming_model
-                .plan_dense_layer_residency(PREFILL_CHUNK_TOKEN_COUNT, Some(kept_layer_count))
+                .plan_dense_layer_residency(
+                    DenseLayerProbeShape {
+                        prefill_chunk_token_count: PREFILL_CHUNK_TOKEN_COUNT,
+                        full_attention_kv_state_growth_tokens: PREFILL_CHUNK_TOKEN_COUNT as i32,
+                    },
+                    Some(kept_layer_count),
+                )
                 .expect("the dense layers should plan");
             answers_by_kept_layer_count.push((
                 kept_layer_count,

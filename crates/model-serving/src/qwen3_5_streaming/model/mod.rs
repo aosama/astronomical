@@ -13,6 +13,8 @@ mod dense_layer_residency;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod dense_layer_streamer;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod dense_layer_working_memory_probe;
+#[cfg(feature = "direct-mlx")]
 mod diagnostic_paging;
 #[cfg(feature = "direct-mlx")]
 mod expert_memory_mode;
@@ -26,6 +28,8 @@ mod expert_reuse_union_offer;
 #[cfg(feature = "direct-mlx")]
 mod expert_storage_streaming;
 mod expert_streaming_stats;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod layer_submission;
 // Reads the next streamed layer while the graphics processor computes.
 pub(crate) mod prefill_complete_layer_prefetch;
 #[cfg(test)]
@@ -70,6 +74,8 @@ pub(crate) use crate::qwen3_5_core::model_math::{
     decoder_layer_weights, error, forward_contract, weights,
 };
 pub use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel as Qwen3_5Model;
+#[cfg(feature = "direct-mlx")]
+pub use dense_layer_working_memory_probe::DenseLayerProbeShape;
 
 #[cfg(all(test, feature = "direct-mlx"))]
 mod paged_execution_tests;

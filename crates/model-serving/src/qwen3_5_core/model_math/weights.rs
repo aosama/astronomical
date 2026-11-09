@@ -272,12 +272,14 @@ impl Qwen3_5Weights {
         if embedding_residency == EmbeddingResidency::Resident {
             bound_tensor_references.extend(embedding_references);
         } else {
-            expected_tensor_count -= embedding_references.len();
+            expected_tensor_count =
+                expected_tensor_count.saturating_sub(embedding_references.len());
         }
         if decoder_layer_residency == DecoderLayerResidency::BoundWeights {
             bound_tensor_references.extend(decoder_layer_references);
         } else {
-            expected_tensor_count -= decoder_layer_references.len();
+            expected_tensor_count =
+                expected_tensor_count.saturating_sub(decoder_layer_references.len());
         }
         bound_tensor_references.push(&self.final_normalization_weight);
         if !self.has_tied_embeddings {
