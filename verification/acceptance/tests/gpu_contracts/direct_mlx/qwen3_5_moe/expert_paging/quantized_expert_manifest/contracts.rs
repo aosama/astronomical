@@ -342,6 +342,7 @@ fn should_build_a_native_bfloat16_page_with_only_uncompressed_weight_intervals()
         full_shape: vec![8, 4, 1_024],
         tensor_payload_offset: 100,
         bytes_per_expert: 8_192,
+        expert_stride_bytes: 8_192,
         expert_capacity: 8,
     }];
     native_bfloat16_layer_plan.quantization_mode = QuantizationMode::NativeBfloat16;

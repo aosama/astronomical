@@ -30,6 +30,7 @@ fn tensor_source(
         full_shape: vec![4, 2, 2],
         tensor_payload_offset: 0,
         bytes_per_expert,
+        expert_stride_bytes: bytes_per_expert,
         expert_capacity,
     }
 }

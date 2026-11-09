@@ -86,6 +86,8 @@ impl Qwen3_5Model {
         decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
+        // Taken before binding, which consumes parts of the artifact.
+        let expert_atlas = validated_artifact.expert_atlas().cloned();
         let BoundLanguageArtifact {
             config,
             shard_index,
@@ -108,6 +110,7 @@ impl Qwen3_5Model {
                     &config,
                     &shard_index,
                     &tensor_inventory,
+                    expert_atlas.as_ref(),
                     decode_expert_cache_policy,
                     performance_attribution,
                 )?,
@@ -183,8 +186,7 @@ impl Qwen3_5Model {
             paged_forward_missing_route_collector:
                 crate::qwen3_5_streaming::PagedForwardMissingRouteCollector,
             hot_expert_warm_slot_count: std::cell::Cell::new(0),
-            request_expert_storage_read_tally:
-                super::request_expert_storage_read_tally::RequestExpertStorageReadTally::default(),
+            request_expert_storage_read_tally: Default::default(),
             fused_jangtq2_gathered_projection_kernel,
         })
     }
@@ -208,6 +210,7 @@ fn load_streaming_expert_runtime(
     config: &crate::Qwen3_5Config,
     shard_index: &super::Qwen3_5ShardIndex,
     tensor_inventory: &crate::TensorInventory,
+    expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<StreamingExpertRuntimeTrio, Qwen3_5ExecutionError> {
@@ -233,6 +236,7 @@ fn load_streaming_expert_runtime(
                 model_directory.to_path_buf(),
                 &tensor_name_to_shard_file_name,
                 &stored_tensor_name_by_canonical_name,
+                expert_atlas,
                 config,
                 // The live configurable MLX active-memory ceiling is the only
                 // paging budget. Reading the runtime policy here lets reloads

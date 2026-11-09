@@ -121,12 +121,33 @@ async fn should_measure_serving_rates_for_the_configured_graph_submission_interv
 }
 
 async fn measure_configured_interval_cell() {
-    let paging_experiment = TestRunContext::current().configuration.paging_experiment;
+    let test_run_configuration = TestRunContext::current().configuration;
+    let paging_experiment = test_run_configuration.paging_experiment;
     let ceiling_bytes = paging_experiment
         .maximum_mlx_memory_bytes()
         .expect("the interval cell needs a valid binary-gigabyte ceiling");
-    let model_id = crate::support::resident_sparse_moe_model_id();
-    let model_directory = crate::support::configured_installed_model_directory_by_id(model_id);
+    // A configured model directory (for example an Expert Atlas build of the
+    // same model) replaces the default 4-bit sparse model; its folder name is
+    // then the model id. The default keeps its registered id, because a
+    // discovered directory can be a snapshot folder whose name is a hash.
+    let (model_directory, model_id) = match test_run_configuration.model_directory {
+        Some(configured_model_directory) => {
+            let configured_model_id = configured_model_directory
+                .file_name()
+                .and_then(|directory_name| directory_name.to_str())
+                .expect("the model directory has a UTF-8 name")
+                .to_owned();
+            (configured_model_directory, configured_model_id)
+        }
+        None => {
+            let default_model_id = crate::support::resident_sparse_moe_model_id();
+            (
+                crate::support::configured_installed_model_directory_by_id(default_model_id),
+                default_model_id.to_owned(),
+            )
+        }
+    };
+    let model_id = model_id.as_str();
     let worker_home = tempfile::tempdir().expect("the isolated worker home should exist");
     write_configuration(worker_home.path(), &model_directory, &paging_experiment);
     let warm_up_prompt = build_model_prompt_content_at_most(
@@ -253,6 +274,9 @@ fn report_and_check(
     ceiling_bytes: u64,
 ) {
     let peak_memory_bytes = unsigned_field(server_status, "/mlx_memory_snapshot/peak_memory_bytes");
+    // The whole document, so two cells whose rates differ can be compared
+    // field by field without rerunning them.
+    println!("[graph-submission-interval] expert_stats={expert_stats}");
     println!(
         "[graph-submission-interval] ceiling_gib={} chunk_tokens={} prefill_interval={} generation_interval={} prompt_tokens={} completion_tokens={} prefill_tokens_per_second={:.1} decode_tokens_per_second={:.2} peak_gb={:.2} expert_memory_mode={} resident_expert_payload_gb={:.2} complete_expert_payload_gb={:.2} prefill_source_gb={:.2} decode_source_gb={:.2}",
         paging_experiment.maximum_mlx_memory_gigabytes,

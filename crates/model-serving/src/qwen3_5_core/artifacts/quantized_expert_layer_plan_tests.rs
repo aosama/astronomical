@@ -48,6 +48,7 @@ fn expert_tensor_source(parameter_name: &str, expert_capacity: usize) -> Quantiz
         full_shape: vec![expert_capacity, 4, 16],
         tensor_payload_offset: 128,
         bytes_per_expert: 256,
+        expert_stride_bytes: 256,
         expert_capacity,
     }
 }

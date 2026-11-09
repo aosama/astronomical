@@ -16,7 +16,6 @@ use crate::memory::{
     MeasuredExpertLayerPayload, RamBudgetGeometryError,
     mlx_ram_budget_model_geometry_from_measured_layer_facts,
 };
-use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan;
 use crate::qwen3_5_core::artifacts::{Qwen3_5FeedForwardArchitecture, ValidatedQwen3_5Artifact};
 
 /// Why disk-only RAM measurements could not be composed for this artifact.
@@ -40,26 +39,9 @@ pub fn mlx_ram_budget_model_geometry_from_validated_artifact(
     {
         return Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts);
     }
-    let layer_plans = quantized_expert_layer_plan::build_quantized_expert_layer_plans(
+    let layer_plans = super::atlas_expert_layer_plans::expert_layer_plans_for_validated_artifact(
+        validated_artifact,
         model_directory,
-        &validated_artifact
-            .shard_index()
-            .language_tensor_name_to_shard_file_name()
-            .iter()
-            .map(|(tensor_name, shard_file_name)| (tensor_name.clone(), shard_file_name.clone()))
-            .collect(),
-        &validated_artifact
-            .tensor_inventory()
-            .locations()
-            .map(|location| {
-                (
-                    location.canonical_name().to_owned(),
-                    location.stored_name().to_owned(),
-                )
-            })
-            .collect(),
-        validated_artifact.config(),
-        validated_artifact.config().layer_count() as usize,
     )
     .map_err(|_| Qwen3_5RamBudgetGeometryError::ExpertLayerPlan)?;
     let measured_layer_payloads = measured_layer_payloads(&layer_plans)?;

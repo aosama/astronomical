@@ -2,7 +2,7 @@
 //! attachment units are thin field mappings exercised by the REST
 //! integration journeys.
 
-use super::{expert_memory_mode_label, state_directory_label};
+use super::{expert_memory_mode_label, prompt_progress_elapsed_millis, state_directory_label};
 use astronomical_config::AstronomicalRuntimeInstance;
 use astronomical_ipc_protocol::ExpertMemoryMode;
 
@@ -99,4 +99,37 @@ fn should_report_a_zero_span_as_staying_loaded() {
 
     assert_eq!(status_json["idle_model_unload"]["after_seconds"], 0);
     assert!(status_json["idle_model_unload"]["remaining_seconds"].is_null());
+}
+
+#[test]
+fn should_run_the_prompt_clock_live_while_prompt_tokens_remain() {
+    let request_elapsed = std::time::Duration::from_millis(9_000);
+    assert_eq!(
+        prompt_progress_elapsed_millis(4_096, 11_125, 2_000, request_elapsed),
+        9_000
+    );
+}
+
+#[test]
+fn should_stop_the_prompt_clock_at_the_measured_time_once_every_prompt_token_is_processed() {
+    let request_elapsed = std::time::Duration::from_millis(10_000);
+    assert_eq!(
+        prompt_progress_elapsed_millis(20, 20, 1_158, request_elapsed),
+        1_158
+    );
+}
+
+#[test]
+fn should_never_report_less_than_the_measured_prompt_time() {
+    let request_elapsed = std::time::Duration::from_millis(500);
+    assert_eq!(
+        prompt_progress_elapsed_millis(10, 20, 1_000, request_elapsed),
+        1_000
+    );
+}
+
+#[test]
+fn should_stop_the_prompt_clock_for_an_empty_prompt() {
+    let request_elapsed = std::time::Duration::from_millis(700);
+    assert_eq!(prompt_progress_elapsed_millis(0, 0, 0, request_elapsed), 0);
 }

@@ -93,17 +93,10 @@ impl Qwen3_5EngineState {
         {
             return Ok(ActiveRequestAdvance::Continue(prefill_progress));
         }
-        // Restore the decode-phase retained-page budget before announcing
-        // generation preparation, so the UI does not report the prefill policy.
-        if !active_request.generation_residency_preparation_attempted {
-            active_request.generation_residency_preparation_attempted = true;
-            self.prepare_decode_expert_residency_after_prefill(request_id, active_request)?;
-        }
-        if !active_request.generation_preparation_announced {
-            active_request.generation_preparation_announced = true;
-            return Ok(ActiveRequestAdvance::Continue(
-                self.announce_generation_preparation()?,
-            ));
+        if let Some(preparation_announcement) =
+            self.begin_generation_preparation(request_id, active_request)?
+        {
+            return Ok(preparation_announcement);
         }
         let final_prompt_index = active_request.input_token_ids.len() - 1;
 
@@ -200,6 +193,34 @@ impl Qwen3_5EngineState {
         }
     }
 
+    /// Announces preparation the moment prompt work ends, then reconciles
+    /// decode residency on the next advance. Reconciling first kept the
+    /// public status on "prompt processing 100%" for as long as residency
+    /// took: about 8.5 s on the first request after a load. The announcement
+    /// carries no residency claim, so the prefill policy is never reported as
+    /// the decode residency; the first decode observation reports the
+    /// reconciled one. `Some` is the announcement to emit now.
+    fn begin_generation_preparation(
+        &mut self,
+        request_id: RequestId,
+        active_request: &mut super::engine_request::Qwen3_5EngineRequest,
+    ) -> Result<Option<ActiveRequestAdvance>, InferenceEngineError> {
+        if !active_request.generation_preparation_announced {
+            active_request.generation_preparation_announced = true;
+            return Ok(Some(ActiveRequestAdvance::Continue(
+                GeneratedToken::GenerationPreparationStarted {
+                    expert_residency: None,
+                    mlx_memory_telemetry: None,
+                },
+            )));
+        }
+        if !active_request.generation_residency_preparation_attempted {
+            active_request.generation_residency_preparation_attempted = true;
+            self.prepare_decode_expert_residency_after_prefill(request_id, active_request)?;
+        }
+        Ok(None)
+    }
+
     /// Completes the generation when the synchronized token is terminal.
     /// `Ok(None)` means the generation continues.
     fn complete_generation_if_terminal(
@@ -228,30 +249,6 @@ impl Qwen3_5EngineState {
         Ok(Some(ActiveRequestAdvance::Complete(
             generated_token_emission.generated_token,
         )))
-    }
-
-    /// Announces generation preparation from the model's live telemetry. The
-    /// telemetry carries the residency derived from its own reconciled
-    /// breakdown, so the announced claim and snapshot describe one instant
-    /// (issue #337).
-    fn announce_generation_preparation(&self) -> Result<GeneratedToken, InferenceEngineError> {
-        let model = self
-            .model
-            .as_ref()
-            .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
-        let mlx_memory_telemetry = self.collect_current_mlx_memory_telemetry()?;
-        let expert_residency = mlx_memory_telemetry
-            .as_ref()
-            .and_then(|telemetry| telemetry.expert_residency_telemetry())
-            .unwrap_or_else(|| {
-                model.expert_residency_telemetry_for_breakdown(
-                    &crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
-                )
-            });
-        Ok(GeneratedToken::GenerationPreparationStarted {
-            expert_residency,
-            mlx_memory_telemetry,
-        })
     }
 
     /// The current token for one decode step: a forced thinking transition

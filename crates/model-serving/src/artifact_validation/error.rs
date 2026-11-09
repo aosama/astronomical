@@ -15,32 +15,24 @@ pub enum ArtifactValidationError {
         model_directory: PathBuf,
     },
 
-    /// A streaming revision manifest is not valid JSON.
-    #[error("streaming revision manifest is not valid JSON: {source}")]
-    InvalidStreamingManifest {
-        /// JSON parse failure.
-        source: serde_json::Error,
+    /// An Expert Atlas manifest is missing, malformed, of another format, or
+    /// describes a layer inconsistently.
+    #[error("Expert Atlas manifest is not valid: {description}")]
+    InvalidAtlasManifest {
+        /// What the manifest reader found wrong.
+        description: String,
     },
 
-    /// The streaming revision's resident weight bundle is not a valid safetensors file.
-    #[error("streaming revision resident weight bundle is not a valid safetensors file: {source}")]
+    /// An Expert Atlas model's resident weight bundle is not a valid safetensors file.
+    #[error("Expert Atlas resident weight bundle is not a valid safetensors file: {source}")]
     InvalidResidentBundle {
         /// safetensors header failure.
         source: crate::expert_paging::SafetensorsHeaderError,
     },
 
-    /// A streaming revision manifest declares an unsupported format version.
-    #[error(
-        "streaming revision manifest declares unsupported format version {actual_format_version} (expected 3)"
-    )]
-    UnsupportedStreamingManifestVersion {
-        /// Version the manifest carried.
-        actual_format_version: u32,
-    },
-
-    /// A streaming revision manifest declares a file that is missing on disk.
-    #[error("streaming revision manifest declares missing file {file_name}")]
-    StreamingDeclaredFileMissing {
+    /// An Expert Atlas manifest declares a file that is missing on disk.
+    #[error("Expert Atlas manifest declares missing file {file_name}")]
+    AtlasDeclaredFileMissing {
         /// Declared file name.
         file_name: String,
         /// Underlying filesystem error.
@@ -48,11 +40,11 @@ pub enum ArtifactValidationError {
         source: io::Error,
     },
 
-    /// A streaming revision manifest file disagrees with its declared size.
+    /// An Expert Atlas file disagrees with its declared size.
     #[error(
-        "streaming revision file {file_name} has {actual_bytes} bytes, manifest declares {expected_bytes}"
+        "Expert Atlas file {file_name} has {actual_bytes} bytes, manifest declares {expected_bytes}"
     )]
-    StreamingDeclaredFileSize {
+    AtlasDeclaredFileSize {
         /// Declared file name.
         file_name: String,
         /// Size the manifest declares.

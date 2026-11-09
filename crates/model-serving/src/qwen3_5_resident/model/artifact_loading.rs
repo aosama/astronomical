@@ -55,6 +55,8 @@ impl Qwen3_5ResidentModel {
         chunking: super::Qwen3_5ModelChunkingConfiguration,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
+        // Taken before binding, which consumes parts of the artifact.
+        let expert_atlas = validated_artifact.expert_atlas().cloned();
         let BoundLanguageArtifact {
             config,
             shard_index,
@@ -78,6 +80,7 @@ impl Qwen3_5ResidentModel {
                         &config,
                         &shard_index,
                         &tensor_inventory,
+                        expert_atlas.as_ref(),
                         performance_attribution,
                     )?;
                     (
@@ -169,6 +172,7 @@ fn load_resident_expert_layer_plans(
     config: &crate::Qwen3_5Config,
     shard_index: &super::Qwen3_5ShardIndex,
     tensor_inventory: &crate::TensorInventory,
+    expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
     performance_attribution: &mut PerformanceAttribution,
 ) -> Result<ResidentExpertLayerPlans, Qwen3_5ExecutionError> {
     let tensor_name_to_shard_file_name: std::collections::HashMap<String, String> = shard_index
@@ -188,8 +192,9 @@ fn load_resident_expert_layer_plans(
     let expert_layer_plans = performance_attribution.measure_operation(
         PerformanceOperation::ExpertLayerPlanConstruction,
         |_performance_attribution| {
-            crate::qwen3_5_core::artifacts::build_quantized_expert_layer_plans(
+            crate::qwen3_5_core::artifacts::atlas_expert_layer_plans::build_expert_layer_plans(
                 model_directory,
+                expert_atlas,
                 &tensor_name_to_shard_file_name,
                 &stored_tensor_name_by_canonical_name,
                 config,

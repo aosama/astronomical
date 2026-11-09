@@ -15,6 +15,7 @@ default = []
 direct-mlx = ["dep:astronomical-neural-engine", "dep:astronomical-runtime-integration", "dep:mlx-c-rust", "dep:astronomical-mlx-c-fork", "dep:astronomical-quantization", "astronomical-jangtq2-qwen35/direct-mlx"]
 
 [dependencies]
+astronomical-expert-atlas = { path = "../expert-atlas" }
 astronomical-config = { path = "../config" }
 astronomical-ipc-protocol = { path = "../ipc-protocol" }
 # Pure memory policy and expert-paging arithmetic (budget composition, page

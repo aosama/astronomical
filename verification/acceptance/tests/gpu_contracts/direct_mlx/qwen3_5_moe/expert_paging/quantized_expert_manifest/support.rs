@@ -53,6 +53,7 @@ pub(super) fn synthetic_layer_plan(layer_prefix: &str) -> QuantizedExpertLayerPl
             },
             tensor_payload_offset: payload_offset,
             bytes_per_expert,
+            expert_stride_bytes: bytes_per_expert,
             expert_capacity,
         }
     };

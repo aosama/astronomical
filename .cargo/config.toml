@@ -203,6 +203,36 @@ measure-paged-prefill = "run -p xtask -- test-run --package astronomical-accepta
 # the streaming-latency probes in the same file honour that override too.
 measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts"
 
+# An Expert Atlas model (made by `astronomical models convert-atlas`) against
+# the stock checkpoint it came from: both validate, budget memory alike, and
+# load byte-identical routed pages and a complete layer through the
+# production plan builder and page loader. Pass --configuration PATH whose
+# `model_directory` names the Atlas and `reference_artifact_path` its source.
+verify-atlas-model-pages = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_load_identical_expert_tensors_from_an_atlas_and_its_stock_source"
+
+# Where a paged decode token's time goes: one 10,000-token Shakespeare request
+# (after a 500/50 warmup) through the attributed in-process engine, printing
+# per decode token the wall time, the per-layer route copies to the host and
+# the storage reads. Use it before and after any residency-policy change.
+# Pass --configuration PATH whose `model_directory` names the sparse model and
+# whose `paging_experiment.maximum_mlx_memory_gigabytes` sets the MLX limit.
+measure-decode-residency-attribution = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_to_route_copies_and_storage_reads"
+# The same probe with the model's weight files kept out of the macOS file
+# cache for the whole run: what the reads cost on a Mac whose RAM is the
+# limit, rather than on a larger Mac that caches the model in memory.
+measure-cold-decode-residency-attribution = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_attribute_decode_token_time_with_a_cold_file_cache"
+
+# Cold SSD-streaming prefill as production serves it: the in-process engine
+# with request attribution off (attribution synchronizes after every prefill
+# stage and changes how reads overlap), a 500/50 warmup, then a 10,240-token
+# Shakespeare prefill with the model's files kept out of the file cache.
+# It asks for 2 output tokens rather than the usual 500 on purpose: the
+# measured time must be prefill alone, and decode has its own probe above.
+# Prints request seconds and prompt tokens per second per request. Pass
+# --configuration PATH whose `model_directory` and `paging_experiment` (MLX
+# limit and SSD-streaming chunk) set the case.
+measure-unattributed-cold-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_measure_cold_prefill_without_attribution"
+
 # One cell of the SSD-paging graph-submission interval comparison on the
 # 4-bit sparse model: append --configuration PATH whose `paging_experiment`
 # object sets the ceiling, the streaming chunk and the prefill and generation

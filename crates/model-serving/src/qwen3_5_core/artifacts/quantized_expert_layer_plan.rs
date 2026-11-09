@@ -298,6 +298,7 @@ fn validate_quantized_tensor_source(
         full_shape,
         tensor_payload_offset,
         bytes_per_expert,
+        expert_stride_bytes: bytes_per_expert,
         expert_capacity,
     })
 }

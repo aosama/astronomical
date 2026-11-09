@@ -32,11 +32,12 @@ pub(super) fn discover_model_metadata(
     model_directory: &Path,
     config_value: &serde_json::Value,
 ) -> Option<Qwen3_5DiscoveredModelMetadata> {
-    // A converted per-expert streaming revision declares itself with
-    // manifest.json (format version 3) and carries no shard index; it
-    // discovers through its manifest and resident weight bundle.
-    if model_directory.join("manifest.json").is_file() {
-        return discover_streaming_model_metadata(model_directory, config_value);
+    // An Expert Atlas model declares itself with its manifest and carries no
+    // shard index; it discovers through its manifest and resident bundle.
+    // The manifest's format is checked, not just its file name: a stock
+    // checkpoint may ship an unrelated `manifest.json`.
+    if astronomical_expert_atlas::declares_atlas_manifest(model_directory) {
+        return discover_atlas_model_metadata(model_directory, config_value);
     }
     if !model_directory
         .join("model.safetensors.index.json")
@@ -84,7 +85,7 @@ pub(super) fn discover_model_metadata(
         // The Qwen text processor owns both structured output contracts.
         supports_reasoning: true,
         supports_tool_calls: true,
-        model_size_bytes: measure_model_safetensors_bytes(model_directory)?,
+        model_size_bytes: measure_model_weight_payload_bytes(model_directory)?,
     })
 }
 
@@ -129,23 +130,24 @@ fn all_shard_file_names(
         .collect()
 }
 
-/// Discovers a converted per-expert streaming revision from its manifest and
-/// resident weight bundle. The manifest replaces the shard index; the vision
-/// bundle travels beside the resident weights unchanged.
-fn discover_streaming_model_metadata(
+/// Discovers an Expert Atlas model from its manifest and resident weight
+/// bundle. The manifest replaces the shard index; a separate vision bundle
+/// travels beside the resident weights unchanged. Any other manifest
+/// (including the retired version 3 per-expert packs, which nothing serves)
+/// is not a model.
+fn discover_atlas_model_metadata(
     model_directory: &Path,
     config_value: &serde_json::Value,
 ) -> Option<Qwen3_5DiscoveredModelMetadata> {
-    #[derive(serde::Deserialize)]
-    struct StreamingManifestProbe {
-        format_version: u32,
-    }
-    let manifest: StreamingManifestProbe =
-        serde_json::from_slice(&fs::read(model_directory.join("manifest.json")).ok()?).ok()?;
-    if manifest.format_version != 3 || !model_directory.join("tokenizer.json").is_file() {
+    if !astronomical_expert_atlas::declares_atlas_manifest(model_directory)
+        || !model_directory.join("tokenizer.json").is_file()
+    {
         return None;
     }
-    if !model_directory.join("resident.safetensors").is_file() {
+    if !model_directory
+        .join(astronomical_expert_atlas::RESIDENT_BUNDLE_FILE_NAME)
+        .is_file()
+    {
         return None;
     }
     let has_vision = model_directory
@@ -166,11 +168,11 @@ fn discover_streaming_model_metadata(
         has_vision,
         supports_reasoning: true,
         supports_tool_calls: true,
-        model_size_bytes: measure_model_safetensors_bytes(model_directory)?,
+        model_size_bytes: measure_model_weight_payload_bytes(model_directory)?,
     })
 }
 
-fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
+fn measure_model_weight_payload_bytes(model_directory: &Path) -> Option<u64> {
     let mut pending_directories = vec![model_directory.to_path_buf()];
     let mut measured_safetensors_paths = HashSet::new();
     let mut model_size_bytes = 0_u64;
@@ -183,11 +185,13 @@ fn measure_model_safetensors_bytes(model_directory: &Path) -> Option<u64> {
                 pending_directories.push(entry_path);
                 continue;
             }
+            // Atlas expert records are weight payload too: leaving them out
+            // would report an Atlas model as a fraction of its real size.
             let is_weight_payload_file = matches!(
                 entry_path
                     .extension()
                     .and_then(|extension| extension.to_str()),
-                Some("safetensors")
+                Some("safetensors" | "atlas")
             );
             if !is_weight_payload_file || !entry_path.is_file() {
                 continue;

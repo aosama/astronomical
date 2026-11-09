@@ -102,6 +102,25 @@ impl WorkerActivity {
     }
 }
 
+/// The residency counts a preparation announcement carried, as the status
+/// reports them under its progress.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PreparationResidencyCounts {
+    pub total_layer_count: u32,
+    pub resident_expert_count: u32,
+    pub resident_expert_payload_bytes: u64,
+}
+
+impl From<ExpertResidencySnapshot> for PreparationResidencyCounts {
+    fn from(expert_residency: ExpertResidencySnapshot) -> Self {
+        Self {
+            total_layer_count: expert_residency.total_layer_count,
+            resident_expert_count: expert_residency.resident_expert_count,
+            resident_expert_payload_bytes: expert_residency.resident_expert_payload_bytes,
+        }
+    }
+}
+
 /// Per-request progress snapshot copied directly from one worker progress event.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ActiveRequestProgress {
@@ -120,9 +139,9 @@ pub enum ActiveRequestProgress {
     GenerationPreparation {
         request_started_at: Instant,
         preparation_started_at: Instant,
-        total_layer_count: u32,
-        resident_expert_count: u32,
-        resident_expert_payload_bytes: u64,
+        /// The residency counts the engine announced with preparation, or
+        /// `None` when it announces before reconciling decode residency.
+        preparation_residency_counts: Option<PreparationResidencyCounts>,
     },
     /// Accumulated generation progress for the active request.
     Generation {

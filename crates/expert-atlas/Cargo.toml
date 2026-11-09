@@ -1,0 +1,22 @@
+[package]
+name = "astronomical-expert-atlas"
+description = "The Expert Atlas model format: an expert-major re-layout of a mixture-of-experts checkpoint, its conversion, and its manifest."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+libc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "=3.27.0"

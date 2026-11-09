@@ -1,3 +1,4 @@
+mod atlas_model_pages;
 mod atlas_page_reads;
 mod large_sparse_moe_fixture;
 mod memory_budget;

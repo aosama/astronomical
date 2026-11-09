@@ -301,6 +301,7 @@ pub use persistent_cache::{
 pub use qwen3_5_core::artifacts::{
     Qwen3_5ArtifactError, Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator,
     Qwen3_5RamBudgetGeometryError, Qwen3_5ShardIndex, ValidatedQwen3_5Artifact,
+    expert_layer_plans_for_validated_artifact,
     mlx_ram_budget_model_geometry_from_validated_artifact, qwen3_5_language_tensor_profiles,
 };
 
