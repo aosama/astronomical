@@ -154,6 +154,17 @@ pub enum SchemaPropertyKind {
 }
 
 impl SchemaPropertyKind {
+    /// The kind a property flag declares, or `None` for any other argument.
+    pub fn from_kind_flag(argument_text: &str) -> Option<Self> {
+        match argument_text {
+            "--string" => Some(Self::String),
+            "--int" => Some(Self::Integer),
+            "--double" => Some(Self::Double),
+            "--boolean" => Some(Self::Boolean),
+            _ => None,
+        }
+    }
+
     pub const fn kind_flag(self) -> &'static str {
         match self {
             Self::String => "--string",
@@ -189,99 +200,132 @@ pub struct SchemaArguments {
     pub properties: Vec<SchemaPropertyInput>,
 }
 
+/// Parses `schema object` arguments. Modifiers (`--array`, `--optional`,
+/// `--description`) apply to the property declared just before them, which
+/// is why the arguments are walked in order instead of collected by flag.
 pub fn parse_schema_arguments(
     remaining_arguments: &[OsString],
 ) -> Result<SchemaArguments, UsageError> {
-    let mut object_name: Option<String> = None;
-    let mut properties: Vec<SchemaPropertyInput> = Vec::new();
-
+    let mut schema_accumulator = SchemaArgumentAccumulator::default();
     let mut argument_index = 0;
     while argument_index < remaining_arguments.len() {
         let argument_text = remaining_arguments[argument_index]
             .to_string_lossy()
             .into_owned();
-        match argument_text.as_str() {
+        argument_index += schema_accumulator.apply_argument(
+            &argument_text,
+            remaining_arguments,
+            argument_index,
+        )?;
+    }
+    schema_accumulator.finish()
+}
+
+/// What the `schema object` arguments declared so far.
+#[derive(Default)]
+struct SchemaArgumentAccumulator {
+    object_name: Option<String>,
+    properties: Vec<SchemaPropertyInput>,
+}
+
+impl SchemaArgumentAccumulator {
+    /// Applies the argument at `argument_index` and answers how many
+    /// arguments it consumed: two for a flag with a value, one for a switch.
+    fn apply_argument(
+        &mut self,
+        argument_text: &str,
+        remaining_arguments: &[OsString],
+        argument_index: usize,
+    ) -> Result<usize, UsageError> {
+        if let Some(property_kind) = SchemaPropertyKind::from_kind_flag(argument_text) {
+            let dotted_path = required_flag_text(
+                remaining_arguments,
+                argument_index,
+                property_kind.kind_flag(),
+            )?;
+            self.declare_property(property_kind, dotted_path)?;
+            return Ok(2);
+        }
+        match argument_text {
             "--name" => {
-                if object_name.is_some() {
+                if self.object_name.is_some() {
                     return Err(UsageError::RepeatedArgument("--name"));
                 }
-                let raw_name = required_flag_value(remaining_arguments, argument_index, "--name")?;
-                if raw_name.is_empty() || raw_name.starts_with('-') {
-                    return Err(UsageError::MissingValue("--name"));
-                }
-                object_name = Some(raw_name);
-                argument_index += 2;
+                self.object_name = Some(required_flag_text(
+                    remaining_arguments,
+                    argument_index,
+                    "--name",
+                )?);
+                Ok(2)
             }
-            "--string" | "--int" | "--double" | "--boolean" => {
-                let kind_flag: &'static str = match argument_text.as_str() {
-                    "--string" => "--string",
-                    "--int" => "--int",
-                    "--double" => "--double",
-                    _ => "--boolean",
-                };
-                let raw_dotted_path =
-                    required_flag_value(remaining_arguments, argument_index, kind_flag)?;
-                if raw_dotted_path.is_empty() || raw_dotted_path.starts_with('-') {
-                    return Err(UsageError::MissingValue(kind_flag));
-                }
-                validate_dotted_property_path(&raw_dotted_path)?;
-                reject_conflicting_property_path(&raw_dotted_path, &properties)?;
-                properties.push(SchemaPropertyInput {
-                    dotted_path: raw_dotted_path,
-                    kind: property_kind_for_flag(kind_flag),
-                    is_array: false,
-                    is_optional: false,
-                    description: None,
-                });
-                argument_index += 2;
+            "--array" => {
+                self.last_property(argument_text)?.is_array = true;
+                Ok(1)
             }
-            "--array" | "--optional" => {
-                let modified_property = properties.last_mut().ok_or_else(|| {
-                    UsageError::SchemaModifierWithoutProperty(argument_text.clone())
-                })?;
-                if argument_text == "--array" {
-                    modified_property.is_array = true;
-                } else {
-                    modified_property.is_optional = true;
-                }
-                argument_index += 1;
+            "--optional" => {
+                self.last_property(argument_text)?.is_optional = true;
+                Ok(1)
             }
             "--description" => {
                 let description_text =
-                    required_flag_value(remaining_arguments, argument_index, "--description")?;
-                if description_text.is_empty() || description_text.starts_with('-') {
-                    return Err(UsageError::MissingValue("--description"));
-                }
-                let modified_property =
-                    properties
-                        .last_mut()
-                        .ok_or(UsageError::SchemaModifierWithoutProperty(
-                            "--description".to_owned(),
-                        ))?;
-                modified_property.description = Some(description_text);
-                argument_index += 2;
+                    required_flag_text(remaining_arguments, argument_index, "--description")?;
+                self.last_property(argument_text)?.description = Some(description_text);
+                Ok(2)
             }
-            _ => return Err(UsageError::UnknownArgument(argument_text)),
+            _ => Err(UsageError::UnknownArgument(argument_text.to_owned())),
         }
     }
 
-    let object_name = object_name.ok_or(UsageError::SchemaNameRequired)?;
-    if properties.is_empty() {
-        return Err(UsageError::SchemaPropertyRequired);
+    fn declare_property(
+        &mut self,
+        property_kind: SchemaPropertyKind,
+        dotted_path: String,
+    ) -> Result<(), UsageError> {
+        validate_dotted_property_path(&dotted_path)?;
+        reject_conflicting_property_path(&dotted_path, &self.properties)?;
+        self.properties.push(SchemaPropertyInput {
+            dotted_path,
+            kind: property_kind,
+            is_array: false,
+            is_optional: false,
+            description: None,
+        });
+        Ok(())
     }
-    Ok(SchemaArguments {
-        object_name,
-        properties,
-    })
+
+    fn last_property(
+        &mut self,
+        modifier_flag: &str,
+    ) -> Result<&mut SchemaPropertyInput, UsageError> {
+        self.properties
+            .last_mut()
+            .ok_or_else(|| UsageError::SchemaModifierWithoutProperty(modifier_flag.to_owned()))
+    }
+
+    fn finish(self) -> Result<SchemaArguments, UsageError> {
+        let object_name = self.object_name.ok_or(UsageError::SchemaNameRequired)?;
+        if self.properties.is_empty() {
+            return Err(UsageError::SchemaPropertyRequired);
+        }
+        Ok(SchemaArguments {
+            object_name,
+            properties: self.properties,
+        })
+    }
 }
 
-fn property_kind_for_flag(kind_flag: &str) -> SchemaPropertyKind {
-    match kind_flag {
-        "--string" => SchemaPropertyKind::String,
-        "--int" => SchemaPropertyKind::Integer,
-        "--double" => SchemaPropertyKind::Double,
-        _ => SchemaPropertyKind::Boolean,
+/// A flag's value, refused when it is missing, empty or looks like another
+/// flag — a forgotten value must not swallow the next flag.
+fn required_flag_text(
+    remaining_arguments: &[OsString],
+    flag_index: usize,
+    flag: &'static str,
+) -> Result<String, UsageError> {
+    let flag_text = required_flag_value(remaining_arguments, flag_index, flag)?;
+    if flag_text.is_empty() || flag_text.starts_with('-') {
+        return Err(UsageError::MissingValue(flag));
     }
+    Ok(flag_text)
 }
 
 fn required_flag_value(
