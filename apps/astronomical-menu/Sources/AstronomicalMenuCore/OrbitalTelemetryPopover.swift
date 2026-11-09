@@ -87,18 +87,7 @@ struct OrbitalTelemetryPopover: View {
       }
       Divider()
       metricRow("Flight", statusDocument.flightTitle)
-      // The bar's slot is always reserved so the rows below stay still as the
-      // daemon moves between phases; the bar itself shows only when
-      // `showsProgressBar` says there is something to show. There is no
-      // spinner: the Flight and Progress rows already say what is happening.
-      ProgressView(
-        value: Double(statusDocument.progressCompletedUnitCount),
-        total: Double(max(statusDocument.progressTotalUnitCount, 1))
-      )
-      .tint(.cyan)
-      .opacity(statusDocument.showsProgressBar ? 1 : 0)
-      .accessibilityHidden(!statusDocument.showsProgressBar)
-      metricRow("Progress", statusDocument.progressTitle)
+      PopoverProgressRow(statusDocument: statusDocument)
       metricRow(statusDocument.elapsedTimeMetricTitle, statusDocument.elapsedTimeTitle)
       if let neuralEngineTitle = statusDocument.neuralEnginePrefill?.metricTitle(
         showsEstimate: !statusDocument.isActive)
