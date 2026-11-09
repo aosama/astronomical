@@ -24,20 +24,42 @@ fn should_back_off_exponentially_instead_of_retrying_on_a_fixed_delay() {
         .expect("--retry takes a count");
     assert!(
         retry_attempts >= 6,
-        "six attempts span about a minute of backoff, enough to outlast a release-edge 504"
+        "six retries span about a minute of backoff, enough to outlast a release-edge 504"
     );
+}
+
+/// The 1+2+4+8+16+32 s backoff of six retries.
+const SIX_RETRY_BACKOFF_SECONDS: u32 = 63;
+
+fn curl_seconds_option(option_name: &str) -> u32 {
+    curl_option_value(option_name)
+        .unwrap_or_else(|| panic!("{option_name} must be set"))
+        .parse()
+        .unwrap_or_else(|_| panic!("{option_name} takes seconds"))
 }
 
 #[test]
 fn should_retry_receive_errors_but_bound_the_whole_window() {
     assert!(curl_download_arguments().contains(&"--retry-all-errors"));
-    let retry_window_seconds: u32 = curl_option_value("--retry-max-time")
-        .expect("an unbounded retry window could stall a job on a missing archive")
-        .parse()
-        .expect("--retry-max-time takes seconds");
+    let retry_window_seconds = curl_seconds_option("--retry-max-time");
     assert!(
-        (60..=180).contains(&retry_window_seconds),
-        "the window must cover the backoff and still fail a missing archive quickly"
+        retry_window_seconds >= SIX_RETRY_BACKOFF_SECONDS,
+        "a window shorter than the backoff would silently drop retries"
+    );
+    assert!(
+        retry_window_seconds <= 180,
+        "the window must still fail a missing archive quickly"
+    );
+}
+
+#[test]
+fn should_bound_each_attempt_so_a_stalled_transfer_cannot_outlive_the_window() {
+    let connect_timeout_seconds = curl_seconds_option("--connect-timeout");
+    let attempt_timeout_seconds = curl_seconds_option("--max-time");
+    assert!(connect_timeout_seconds > 0 && connect_timeout_seconds < attempt_timeout_seconds);
+    assert!(
+        attempt_timeout_seconds <= curl_seconds_option("--retry-max-time"),
+        "one attempt must not run longer than the whole retry window"
     );
 }
 

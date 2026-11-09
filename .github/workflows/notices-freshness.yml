@@ -41,8 +41,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Install pinned verification tools (cargo-about, sccache)
-        run: cargo run --locked --quiet -p xtask -- install-verification-tools
+      # ci.yml's rust-core saves this macOS entry on main; restore-only here,
+      # so a release-edge 504 cannot fail the nightly check.
+      - name: Restore verification-tools-cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: verification-tools
+          path: ~/Library/Caches/Astronomical/verification-tools
+          key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
+      - name: Install verification tools
+        run: cargo run --locked --quiet -p xtask -- install-verification-tools --prefix ~/Library/Caches/Astronomical/verification-tools
       - name: Check committed Rust dependency notices freshness
         # Fails when regenerating from the current manifests differs from
         # the committed file. The digest memo may lag behind (manifest edits

@@ -461,6 +461,7 @@ fn packaging_contracts_run_on_required_checks() {
         "--test workflow_verdict_contract",
         "--test workflow_lane_split_contract",
         "--test workflow_cache_owner_contract",
+        "--test workflow_verification_tools_cache_contract",
         "--test workflow_xcode_pin_contract",
         "--test workflow_macos_packaging_contract",
         "--test workflow_xtask_binary_contract",

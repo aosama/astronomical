@@ -291,6 +291,7 @@ jobs:
           trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
           scripts/ci/ci-step-timing.sh begin install-verification-tools
           xtask install-verification-tools --prefix ~/Library/Caches/Astronomical/verification-tools
+        timeout-minutes: 6
       # install-action ships the SHA-256 of every nextest release inside the
       # pinned action commit and verifies the download against it, so the
       # digest is pinned by the action SHA
@@ -867,6 +868,7 @@ jobs:
           cargo test --locked -p xtask --test workflow_verdict_contract
           cargo test --locked -p xtask --test workflow_lane_split_contract
           cargo test --locked -p xtask --test workflow_cache_owner_contract
+          cargo test --locked -p xtask --test workflow_verification_tools_cache_contract
           cargo test --locked -p xtask --test workflow_xcode_pin_contract
           cargo test --locked -p xtask --test workflow_macos_packaging_contract
           cargo test --locked -p xtask --test workflow_verified_work_contract
@@ -902,8 +904,9 @@ jobs:
   # every other pull request pays one skipped job. It runs on ubuntu, off the
   # macOS critical path and outside the macOS runner concurrency pool: the
   # cargo-about harvest reads `cargo metadata` across all targets, so its
-  # output does not depend on the host. Like config-contracts it restores no
-  # caches, for the same runner.os keying reason. A pull request that did
+  # output does not depend on the host. It restores only the
+  # verification-tools owner, whose runner.os key keeps these Linux binaries
+  # apart from the macOS entry rust-core saves. A pull request that did
   # regenerate takes the check's input-digest fast path and skips the harvest.
   notices-freshness:
     name: Rust dependency notices freshness
@@ -917,8 +920,9 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      # Same owner and key scheme as the macOS build job; runner.os keeps the
-      # Linux binaries apart from the macOS ones.
+      # Same owner and key scheme as the macOS build job. This lane saves on
+      # the default branch only when a notices input changes, so its entry
+      # can age out and a pull request then downloads cold once.
       - name: Restore verification-tools-cache
         id: verification-tools-cache
         uses: ./.github/actions/astronomical-cache
@@ -927,7 +931,7 @@ jobs:
           owner: verification-tools
           path: ~/.cache/astronomical/verification-tools
           key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
-      - name: Install pinned verification tools (cargo-about, sccache)
+      - name: Install verification tools
         id: verification-tools-install
         run: cargo run --locked --quiet -p xtask -- install-verification-tools --prefix ~/.cache/astronomical/verification-tools
         timeout-minutes: 6

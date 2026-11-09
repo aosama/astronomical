@@ -128,8 +128,17 @@ jobs:
           restore-keys: |
             astronomical-v2-release-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-release-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
+      # ci.yml's rust-core saves this on main; restore-only here, as with the
+      # native archives, so a release-edge 504 cannot fail the weekly run.
+      - name: Restore verification-tools-cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: verification-tools
+          path: ~/Library/Caches/Astronomical/verification-tools
+          key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
       - name: Install verification tools
-        run: xtask install-verification-tools
+        run: xtask install-verification-tools --prefix ~/Library/Caches/Astronomical/verification-tools
       - name: Route Rust compilation through sccache
         # Written after sccache is installed: provision-xtask may compile
         # before it exists. sccache refuses incremental compilation, and the
