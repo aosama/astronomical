@@ -297,16 +297,14 @@ pub(crate) fn load_invariant_linear_scales(
 /// that load into memory plus the optional vision tower while it is in use.
 pub(crate) fn model_core_payload_bytes(
     weights: &Qwen3_5Weights,
-    reads_embedding_rows_from_disk: bool,
+    embedding_residency: crate::qwen3_5_core::model_math::weights::EmbeddingResidency,
     vision_model: &Option<Qwen3_5VisionModel>,
 ) -> u64 {
-    crate::qwen3_5_core::model::base::resident_text_weight_payload_bytes(
-        weights,
-        reads_embedding_rows_from_disk,
-    )
-    .saturating_add(
-        vision_model
-            .as_ref()
-            .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
-    )
+    weights
+        .resident_payload_bytes(embedding_residency)
+        .saturating_add(
+            vision_model
+                .as_ref()
+                .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
+        )
 }

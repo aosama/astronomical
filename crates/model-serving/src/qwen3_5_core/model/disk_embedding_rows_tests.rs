@@ -8,8 +8,10 @@ use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
 use mlx_c_rust::{MlxArray, MlxDtype};
 use serial_test::serial;
 
-use super::disk_embedding_rows::{DiskEmbeddingTable, Qwen3_5DiskEmbeddingRows};
-use super::embedding_row_reads::EmbeddingTableLayout;
+use super::disk_embedding_rows::{
+    AffineEmbeddingTables, DiskEmbeddingTable, Qwen3_5DiskEmbeddingRows,
+};
+use super::embedding_row_reads::{EmbeddingRowReadError, EmbeddingTableLayout};
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 
@@ -211,10 +213,10 @@ fn should_embed_quantized_tokens_exactly_like_the_resident_table() {
         write_fixture_shard(shard_directory.path(), &fixture_tensors);
     let disk_embedding_rows = Qwen3_5DiskEmbeddingRows {
         weight_table: table_over(&shard_path, absolute_starts[0], &fixture_tensors[0]),
-        affine_tables: Some((
-            table_over(&shard_path, absolute_starts[1], &fixture_tensors[1]),
-            table_over(&shard_path, absolute_starts[2], &fixture_tensors[2]),
-        )),
+        affine_tables: Some(AffineEmbeddingTables {
+            scales_table: table_over(&shard_path, absolute_starts[1], &fixture_tensors[1]),
+            biases_table: table_over(&shard_path, absolute_starts[2], &fixture_tensors[2]),
+        }),
     };
     let resident_form = resident_quantized_form(&runtime, &shard_path);
     let Qwen3_5AffineWeights::Quantized {
@@ -326,7 +328,10 @@ fn should_reject_a_token_one_past_the_last_row() {
 
     assert!(matches!(
         embedding_error,
-        Qwen3_5ExecutionError::InvalidInput { .. }
+        Qwen3_5ExecutionError::EmbeddingRowRead(EmbeddingRowReadError::TokenOutsideTable {
+            token_id: 16,
+            row_count: 16,
+        })
     ));
 }
 
@@ -348,6 +353,78 @@ fn should_reject_tables_that_do_not_match_the_bound_form() {
     let embedding_error = disk_embedding_rows
         .embed_tokens(&runtime, &token_indices(&runtime, &[1, 2]), &resident_form)
         .expect_err("mismatched tables must not embed");
+
+    assert!(matches!(
+        embedding_error,
+        Qwen3_5ExecutionError::InvalidTensor { .. }
+    ));
+}
+
+fn bfloat16_disk_rows(shard_directory: &std::path::Path) -> Qwen3_5DiskEmbeddingRows {
+    let fixture_tensors = vec![bfloat16_fixture_tensor()];
+    let (shard_path, absolute_starts) = write_fixture_shard(shard_directory, &fixture_tensors);
+    Qwen3_5DiskEmbeddingRows {
+        weight_table: table_over(&shard_path, absolute_starts[0], &fixture_tensors[0]),
+        affine_tables: None,
+    }
+}
+
+#[test]
+#[serial]
+fn should_embed_one_decode_token_exactly_like_the_resident_table() {
+    let runtime = test_runtime();
+    let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
+    let disk_embedding_rows = bfloat16_disk_rows(shard_directory.path());
+    let resident_table = runtime
+        .load_safetensors(
+            std::fs::File::open(shard_directory.path().join("model.safetensors"))
+                .expect("the shard should open"),
+            None,
+        )
+        .expect("the resident map should load")
+        .tensor("language_model.model.embed_tokens.weight")
+        .expect("the table should be present");
+    let decode_token_index = token_indices(&runtime, &[9]);
+    let resident_embedding = runtime
+        .take_axis(&resident_table, &decode_token_index, 0)
+        .expect("the resident row should gather");
+
+    let disk_embedding = disk_embedding_rows
+        .embed_tokens(
+            &runtime,
+            &decode_token_index,
+            &Qwen3_5AffineWeights::NativeBfloat16 {
+                weight: resident_table,
+            },
+        )
+        .expect("the decode token should embed");
+
+    let disk_embedding_values = as_float32_values(&runtime, &disk_embedding);
+    assert_eq!(disk_embedding_values.0, [1, 1, 8]);
+    assert_eq!(
+        disk_embedding_values,
+        as_float32_values(&runtime, &resident_embedding)
+    );
+}
+
+#[test]
+#[serial]
+fn should_reject_token_indices_that_are_not_shaped_one_by_tokens() {
+    let runtime = test_runtime();
+    let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
+    let disk_embedding_rows = bfloat16_disk_rows(shard_directory.path());
+    let flat_token_indices = runtime
+        .array_from_i32(&[1, 2, 3], &[3])
+        .expect("flat token ids should upload");
+    let placeholder_form = Qwen3_5AffineWeights::NativeBfloat16 {
+        weight: runtime
+            .array_from_f32(&[0.0], &[1])
+            .expect("a placeholder array should build"),
+    };
+
+    let embedding_error = disk_embedding_rows
+        .embed_tokens(&runtime, &flat_token_indices, &placeholder_form)
+        .expect_err("flat token indices must be rejected");
 
     assert!(matches!(
         embedding_error,

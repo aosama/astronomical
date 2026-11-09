@@ -143,7 +143,7 @@ impl Qwen3_5Model {
             &runtime,
             &config,
             &weights,
-            disk_embedding_rows.is_some(),
+            embedding_residency_of(disk_embedding_rows.as_ref()),
             &vision_model,
             expert_pager.as_ref(),
             &decoder_cache_layout,
@@ -213,6 +213,16 @@ fn measured_decoder_cache_layout(
             decoder_cache_layout_at_tensor_binding(config, chunking, weights, expert_pager)
         },
     )
+}
+
+/// Whether the loaded model reads embedding rows from the SSD.
+const fn embedding_residency_of(
+    disk_embedding_rows: Option<&Qwen3_5DiskEmbeddingRows>,
+) -> crate::qwen3_5_core::model_math::weights::EmbeddingResidency {
+    match disk_embedding_rows {
+        Some(_) => crate::qwen3_5_core::model_math::weights::EmbeddingResidency::RowsReadFromDisk,
+        None => crate::qwen3_5_core::model_math::weights::EmbeddingResidency::Resident,
+    }
 }
 
 /// Embedding rows read from the SSD for a dense model, which the streaming
@@ -350,7 +360,7 @@ fn build_streaming_expert_budget(
     runtime: &MlxRuntime,
     config: &crate::Qwen3_5Config,
     weights: &Qwen3_5Weights,
-    reads_embedding_rows_from_disk: bool,
+    embedding_residency: crate::qwen3_5_core::model_math::weights::EmbeddingResidency,
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_pager: Option<&Qwen3_5ExpertPager>,
     decoder_cache_layout: &crate::DecoderCacheLayout,
@@ -359,7 +369,7 @@ fn build_streaming_expert_budget(
     let model_core_payload_bytes =
         crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
             weights,
-            reads_embedding_rows_from_disk,
+            embedding_residency,
             vision_model,
         );
     let complete_expert_payload_bytes = match expert_pager {

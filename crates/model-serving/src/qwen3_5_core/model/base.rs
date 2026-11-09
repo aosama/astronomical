@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
+use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 use crate::{DecoderCacheLayout, MlxRamBudget};
 
@@ -162,13 +162,14 @@ impl Qwen3_5ModelBase {
     /// Returns the resident target payload bytes wired after materialization.
     #[must_use]
     pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {
-        resident_text_weight_payload_bytes(&self.weights, self.disk_embedding_rows.is_some())
+        self.weights
+            .resident_payload_bytes(self.embedding_residency())
     }
 
     pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
         // An embedding table read from the SSD stays lazy and never loads.
         self.weights
-            .materialize(&self.runtime, self.disk_embedding_rows.is_none())?;
+            .materialize(&self.runtime, self.embedding_residency())?;
         self.runtime.evaluate_arrays(&[
             &self.inverse_linear_head_dimension_scale,
             &self.inverse_square_root_linear_head_dimension_scale,
@@ -176,6 +177,14 @@ impl Qwen3_5ModelBase {
             &self.key_normalization_scale_weight,
         ])?;
         Ok(())
+    }
+
+    /// Whether this model reads embedding rows from the SSD.
+    pub(crate) const fn embedding_residency(&self) -> EmbeddingResidency {
+        match self.disk_embedding_rows {
+            Some(_) => EmbeddingResidency::RowsReadFromDisk,
+            None => EmbeddingResidency::Resident,
+        }
     }
 
     pub(crate) fn embedding_lookup(
@@ -211,22 +220,15 @@ impl Qwen3_5ModelBase {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => {
-                let selected_weights = self.runtime.take_axis(packed_weight, token_indices, 0)?;
-                let selected_scales =
-                    self.runtime
-                        .take_axis(quantization_scales, token_indices, 0)?;
-                let selected_biases =
-                    self.runtime
-                        .take_axis(quantization_biases, token_indices, 0)?;
-                Ok(self.runtime.dequantize_affine(
-                    &selected_weights,
-                    &selected_scales,
-                    &selected_biases,
-                    *quantization_group_size,
-                    *quantization_bits,
-                )?)
-            }
+            } => gather_quantized_embedding_rows(
+                &self.runtime,
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                token_indices,
+                *quantization_group_size,
+                *quantization_bits,
+            ),
         }
     }
 
@@ -264,17 +266,23 @@ impl Qwen3_5ModelBase {
     }
 }
 
-/// The text weight bytes that load into memory: every bound language tensor,
-/// less the embedding table when its rows are read from the SSD.
-pub(crate) fn resident_text_weight_payload_bytes(
-    weights: &Qwen3_5Weights,
-    reads_embedding_rows_from_disk: bool,
-) -> u64 {
-    if reads_embedding_rows_from_disk {
-        weights
-            .total_payload_bytes()
-            .saturating_sub(weights.embedding_payload_bytes())
-    } else {
-        weights.total_payload_bytes()
-    }
+/// Gathers rows of a quantized embedding and dequantizes them. The resident
+/// and on-disk lookups both call it, so their embeddings are the same
+/// operations by construction.
+pub(crate) fn gather_quantized_embedding_rows(
+    runtime: &MlxRuntime,
+    packed_rows: &MlxArray,
+    scale_rows: &MlxArray,
+    bias_rows: &MlxArray,
+    selected_row_indices: &MlxArray,
+    quantization_group_size: i32,
+    quantization_bits: i32,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    Ok(runtime.dequantize_affine(
+        &runtime.take_axis(packed_rows, selected_row_indices, 0)?,
+        &runtime.take_axis(scale_rows, selected_row_indices, 0)?,
+        &runtime.take_axis(bias_rows, selected_row_indices, 0)?,
+        quantization_group_size,
+        quantization_bits,
+    )?)
 }

@@ -68,7 +68,7 @@ fn should_reject_a_read_with_no_tokens() {
 
 #[test]
 fn should_merge_consecutive_rows_into_one_interval_and_split_at_gaps() {
-    let row_intervals = embedding_row_intervals(SIX_BIT_WEIGHT_TABLE, &[4, 5, 6, 10], 0);
+    let row_intervals = embedding_row_intervals(SIX_BIT_WEIGHT_TABLE, &[4, 5, 6, 10]);
 
     assert_eq!(row_intervals.len(), 2);
     assert_eq!(row_intervals[0].source_file_offset, 1_000_000 + 4 * 3072);
@@ -84,23 +84,19 @@ fn should_merge_consecutive_rows_into_one_interval_and_split_at_gaps() {
 }
 
 #[test]
-fn should_start_a_later_table_after_the_earlier_tables_in_the_virtual_payload() {
-    let scales_table = EmbeddingTableLayout {
-        first_row_file_offset: 9_000_000,
-        row_byte_count: 128,
-        row_count: 248_320,
-    };
-
-    let row_intervals = embedding_row_intervals(scales_table, &[0], 3072);
-
-    assert_eq!(row_intervals.len(), 1);
-    assert_eq!(row_intervals[0].virtual_payload_offset, 3072);
-    assert_eq!(row_intervals[0].source_file_offset, 9_000_000);
+fn should_reject_the_largest_token_id_in_a_smaller_table() {
+    assert_eq!(
+        select_embedding_rows(&[i32::MAX], 248_320),
+        Err(EmbeddingRowReadError::TokenOutsideTable {
+            token_id: i64::from(i32::MAX),
+            row_count: 248_320,
+        })
+    );
 }
 
 #[test]
 fn should_plan_one_interval_per_row_when_no_rows_touch() {
-    let row_intervals = embedding_row_intervals(SIX_BIT_WEIGHT_TABLE, &[1, 3, 5], 0);
+    let row_intervals = embedding_row_intervals(SIX_BIT_WEIGHT_TABLE, &[1, 3, 5]);
 
     assert_eq!(row_intervals.len(), 3);
 }

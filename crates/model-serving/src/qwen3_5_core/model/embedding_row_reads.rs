@@ -28,7 +28,7 @@ pub(crate) struct EmbeddingRowSelection {
 
 /// Failures planning an embedding row read.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-pub(crate) enum EmbeddingRowReadError {
+pub enum EmbeddingRowReadError {
     #[error("token id {token_id} is outside the {row_count}-row embedding table")]
     TokenOutsideTable { token_id: i64, row_count: usize },
     #[error("an embedding row read needs at least one token")]
@@ -46,8 +46,8 @@ pub(crate) fn select_embedding_rows(
     if token_ids.is_empty() {
         return Err(EmbeddingRowReadError::NoTokens);
     }
-    let mut distinct_row_ids = Vec::with_capacity(token_ids.len());
-    for token_id in token_ids {
+    let mut row_id_and_token_position = Vec::with_capacity(token_ids.len());
+    for (token_position, token_id) in token_ids.iter().enumerate() {
         let row_id = match usize::try_from(*token_id) {
             Ok(row_id) if row_id < row_count => row_id,
             _ => {
@@ -57,17 +57,18 @@ pub(crate) fn select_embedding_rows(
                 });
             }
         };
-        distinct_row_ids.push(row_id);
+        row_id_and_token_position.push((row_id, token_position));
     }
-    distinct_row_ids.sort_unstable();
-    distinct_row_ids.dedup();
-    let mut selected_row_index_by_token = Vec::with_capacity(token_ids.len());
-    for token_id in token_ids {
-        // Every id was validated above, so the search always finds it.
-        let selected_row_index = distinct_row_ids
-            .binary_search(&(*token_id as usize))
-            .unwrap_or_default();
-        selected_row_index_by_token.push(selected_row_index as i32);
+    // One sorted pass both deduplicates the rows and records where each
+    // token's row lands among them.
+    row_id_and_token_position.sort_unstable();
+    let mut distinct_row_ids: Vec<usize> = Vec::with_capacity(token_ids.len());
+    let mut selected_row_index_by_token = vec![0_i32; token_ids.len()];
+    for (row_id, token_position) in row_id_and_token_position {
+        if distinct_row_ids.last() != Some(&row_id) {
+            distinct_row_ids.push(row_id);
+        }
+        selected_row_index_by_token[token_position] = (distinct_row_ids.len() - 1) as i32;
     }
     Ok(EmbeddingRowSelection {
         distinct_row_ids,
@@ -76,17 +77,16 @@ pub(crate) fn select_embedding_rows(
 }
 
 /// The shard intervals holding `distinct_row_ids` of one table, placed in a
-/// virtual payload starting at `first_virtual_payload_offset`.
+/// virtual payload that starts at zero.
 ///
 /// Runs of consecutive rows merge into one interval, so a prompt of nearby
 /// token ids becomes a few reads rather than one per token.
 pub(crate) fn embedding_row_intervals(
     table_layout: EmbeddingTableLayout,
     distinct_row_ids: &[usize],
-    first_virtual_payload_offset: u64,
 ) -> Vec<BoundedReadInterval> {
     let mut row_intervals: Vec<BoundedReadInterval> = Vec::new();
-    let mut virtual_payload_offset = first_virtual_payload_offset;
+    let mut virtual_payload_offset = 0_u64;
     let mut previous_row_id: Option<usize> = None;
     for row_id in distinct_row_ids {
         let continues_previous_run =

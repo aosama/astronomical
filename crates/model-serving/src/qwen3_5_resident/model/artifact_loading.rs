@@ -249,7 +249,7 @@ fn build_resident_mlx_ram_budget(
     let model_core_payload_bytes =
         crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
             weights,
-            false,
+            crate::qwen3_5_core::model_math::weights::EmbeddingResidency::Resident,
             vision_model,
         );
     let complete_expert_payload_bytes =
