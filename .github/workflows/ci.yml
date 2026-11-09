@@ -272,11 +272,25 @@ jobs:
           restore-keys: |
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-${{ hashFiles('Cargo.lock') }}-
             astronomical-v2-sccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'third-party/tool-pins/Cargo.toml') }}-
+      # The pinned cargo-about and sccache binaries, so a warm run never
+      # reaches GitHub Releases: one 504 from the release edge used to fail
+      # the whole build. Keyed on the tool-pin manifest alone, with no
+      # restore-keys: a prefix match could only restore another pin's
+      # binaries, which the installer rejects by version and downloads anyway.
+      - name: Restore verification-tools-cache
+        id: verification-tools-cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: verification-tools
+          path: ~/Library/Caches/Astronomical/verification-tools
+          key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
       - name: Install verification tools
+        id: verification-tools-install
         run: |
           trap 'scripts/ci/ci-step-timing.sh end install-verification-tools' EXIT
           scripts/ci/ci-step-timing.sh begin install-verification-tools
-          xtask install-verification-tools
+          xtask install-verification-tools --prefix ~/Library/Caches/Astronomical/verification-tools
       # install-action ships the SHA-256 of every nextest release inside the
       # pinned action commit and verifies the download against it, so the
       # digest is pinned by the action SHA
@@ -447,6 +461,17 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: astronomical-v2-cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}-${{ hashFiles('Cargo.lock') }}
+      # Saved only after a successful install, so a run that lost a download
+      # can never publish a half-filled prefix under the primary key.
+      - name: Save verification-tools-cache
+        id: verification-tools-cache-save
+        if: ${{ !cancelled() && steps.verification-tools-cache.outputs.cache-hit != 'true' && steps.verification-tools-install.outcome == 'success' }}
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: save
+          owner: verification-tools
+          path: ~/Library/Caches/Astronomical/verification-tools
+          key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
       - name: Save native-archives-cache
         id: native-archives-cache-save
         if: ${{ !cancelled() && steps.native-archives-cache.outputs.cache-hit != 'true' }}
@@ -892,9 +917,29 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      # Same owner and key scheme as the macOS build job; runner.os keeps the
+      # Linux binaries apart from the macOS ones.
+      - name: Restore verification-tools-cache
+        id: verification-tools-cache
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: restore
+          owner: verification-tools
+          path: ~/.cache/astronomical/verification-tools
+          key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
       - name: Install pinned verification tools (cargo-about, sccache)
-        run: cargo run --locked --quiet -p xtask -- install-verification-tools
+        id: verification-tools-install
+        run: cargo run --locked --quiet -p xtask -- install-verification-tools --prefix ~/.cache/astronomical/verification-tools
         timeout-minutes: 6
+      - name: Save verification-tools-cache
+        id: verification-tools-cache-save
+        if: ${{ !cancelled() && steps.verification-tools-cache.outputs.cache-hit != 'true' && steps.verification-tools-install.outcome == 'success' }}
+        uses: ./.github/actions/astronomical-cache
+        with:
+          operation: save
+          owner: verification-tools
+          path: ~/.cache/astronomical/verification-tools
+          key: astronomical-v2-verification-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('third-party/tool-pins/Cargo.toml') }}
       - name: Check committed Rust dependency notices freshness
         run: cargo run --locked --quiet -p xtask -- notices --check
         timeout-minutes: 4

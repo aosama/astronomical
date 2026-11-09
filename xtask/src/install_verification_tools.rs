@@ -138,19 +138,32 @@ fn tool_reports_expected_version(executable_path: &Path, expected_line: &str) ->
         .unwrap_or(false)
 }
 
+/// The download retry window must outlast a GitHub release-edge outage: a
+/// fixed one-second delay with three retries gave up after about three
+/// seconds and failed whole CI runs on a 504 (pull request #1963). Leaving
+/// out `--retry-delay` gives curl's exponential backoff (1, 2, 4, 8, 16,
+/// 32 s); `--retry-all-errors` also retries a 504 that arrives as a receive
+/// error (curl exit 56), which plain `--retry` does not; `--retry-max-time`
+/// bounds the window so a truly missing archive still fails within two
+/// minutes instead of stalling the job.
+pub fn curl_download_arguments() -> [&'static str; 10] {
+    [
+        "--fail",
+        "--location",
+        "--proto",
+        "=https",
+        "--tlsv1.2",
+        "--retry",
+        "6",
+        "--retry-all-errors",
+        "--retry-max-time",
+        "120",
+    ]
+}
+
 fn download_with_curl(download_destination: &Path, download_url: &str) -> Result<(), String> {
     let curl_status = Command::new("curl")
-        .args([
-            "--fail",
-            "--location",
-            "--proto",
-            "=https",
-            "--tlsv1.2",
-            "--retry",
-            "3",
-            "--retry-delay",
-            "1",
-        ])
+        .args(curl_download_arguments())
         .arg("--output")
         .arg(download_destination)
         .arg(download_url)

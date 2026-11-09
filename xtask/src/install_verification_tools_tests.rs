@@ -1,7 +1,53 @@
 use crate::install_verification_tools::{
-    cargo_about_archive_name, cargo_about_release_url, expected_version_line, host_rust_target,
-    published_digest_from_sidecar, sccache_archive_name, sccache_release_url,
+    cargo_about_archive_name, cargo_about_release_url, curl_download_arguments,
+    expected_version_line, host_rust_target, published_digest_from_sidecar, sccache_archive_name,
+    sccache_release_url,
 };
+
+fn curl_option_value(option_name: &str) -> Option<&'static str> {
+    let download_arguments = curl_download_arguments();
+    let option_position = download_arguments
+        .iter()
+        .position(|argument| *argument == option_name)?;
+    download_arguments.get(option_position + 1).copied()
+}
+
+#[test]
+fn should_back_off_exponentially_instead_of_retrying_on_a_fixed_delay() {
+    assert!(
+        !curl_download_arguments().contains(&"--retry-delay"),
+        "a fixed --retry-delay disables curl's exponential backoff"
+    );
+    let retry_attempts: u32 = curl_option_value("--retry")
+        .expect("downloads must retry")
+        .parse()
+        .expect("--retry takes a count");
+    assert!(
+        retry_attempts >= 6,
+        "six attempts span about a minute of backoff, enough to outlast a release-edge 504"
+    );
+}
+
+#[test]
+fn should_retry_receive_errors_but_bound_the_whole_window() {
+    assert!(curl_download_arguments().contains(&"--retry-all-errors"));
+    let retry_window_seconds: u32 = curl_option_value("--retry-max-time")
+        .expect("an unbounded retry window could stall a job on a missing archive")
+        .parse()
+        .expect("--retry-max-time takes seconds");
+    assert!(
+        (60..=180).contains(&retry_window_seconds),
+        "the window must cover the backoff and still fail a missing archive quickly"
+    );
+}
+
+#[test]
+fn should_keep_https_only_and_fail_on_http_errors() {
+    let download_arguments = curl_download_arguments();
+    assert!(download_arguments.contains(&"--fail"));
+    assert_eq!(curl_option_value("--proto"), Some("=https"));
+    assert!(download_arguments.contains(&"--tlsv1.2"));
+}
 
 #[test]
 fn host_mapping_covers_both_runner_platforms_and_fails_closed() {
