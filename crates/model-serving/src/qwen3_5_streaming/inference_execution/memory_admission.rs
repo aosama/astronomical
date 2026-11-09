@@ -262,7 +262,8 @@ impl Qwen3_5EngineState {
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
-        let retained_expert_payload_bytes_before_growth = model.reclaimable_retained_payload_bytes();
+        let retained_expert_payload_bytes_before_growth =
+            model.reclaimable_retained_payload_bytes();
         let unobserved_scope_transient_floor_bytes = model
             .mlx_ram_budget()
             .adaptive_growth_unobserved_scope_transient_floor_bytes(adaptive_ram_growth_context);

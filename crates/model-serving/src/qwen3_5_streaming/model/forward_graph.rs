@@ -341,7 +341,7 @@ impl Qwen3_5Model {
                     .experimental_ssd_paging_generation_graph_submission_layer_interval,
             ))
             .unwrap_or(0);
-        let mut previous_streamed_layer_output = None;
+        let mut previous_dense_layer_output = None;
         for layer_index in 0..decoder_layer_count {
             // A dense model's streamer supplies its layers: a kept layer, or
             // one read from the SSD for this forward alone.
@@ -374,11 +374,12 @@ impl Qwen3_5Model {
             self.submit_completed_layer(
                 &forward_layer_weights,
                 &hidden_states,
-                &mut previous_streamed_layer_output,
+                &mut previous_dense_layer_output,
                 LayerGroupSubmission {
                     completed_layer_count: layer_index + 1,
                     decoder_layer_count,
                     graph_submission_layer_interval,
+                    forward_token_count: token_count,
                 },
                 performance_attribution,
             )?;

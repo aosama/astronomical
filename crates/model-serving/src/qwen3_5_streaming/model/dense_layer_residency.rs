@@ -13,6 +13,7 @@ use astronomical_memory_policy::residency::{
 use super::Qwen3_5Model;
 use super::dense_layer_streamer::{DENSE_STREAMING_LAYER_SLOT_COUNT, DenseLayerWeights};
 use super::dense_layer_working_memory_probe::DenseLayerProbeShape;
+use super::layer_submission::{LayerGroupSubmission, LayerSubmission};
 use crate::MlxRamBudgetMeasurement;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
@@ -32,10 +33,22 @@ impl ForwardLayerWeights<'_> {
         }
     }
 
-    /// Whether this layer was read for this forward alone and must submit
-    /// on its own so its bytes free once it completes.
+    /// Whether this layer was read for this forward alone, so its bytes
+    /// free once it completes.
     pub(crate) const fn is_streamed(&self) -> bool {
         matches!(self, Self::Dense(dense_layer_weights) if dense_layer_weights.is_streamed())
+    }
+
+    /// How this layer reaches the GPU in a forward at `layer_group_submission`.
+    pub(crate) const fn submission(
+        &self,
+        layer_group_submission: LayerGroupSubmission,
+    ) -> LayerSubmission {
+        LayerSubmission::for_layer(
+            matches!(self, Self::Dense(_)),
+            self.is_streamed(),
+            layer_group_submission.forward_token_count,
+        )
     }
 }
 
