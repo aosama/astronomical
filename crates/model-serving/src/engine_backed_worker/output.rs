@@ -632,3 +632,7 @@ pub(crate) fn worker_memory_snapshot(
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "output_tests.rs"]
+mod tests;

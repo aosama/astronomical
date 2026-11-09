@@ -51,6 +51,35 @@ final class MenuBarGlyphTests: XCTestCase {
     }
   }
 
+  private func denseStatusDocument(keptLayerCount: Int, streamedLayerPayloadBytes: Int) throws
+    -> DaemonStatusDocument
+  {
+    let denseLayers =
+      "{\"decoder_layer_count\":32,\"kept_layer_count\":\(keptLayerCount),\"streamed_layer_payload_bytes\":\(streamedLayerPayloadBytes)}"
+    let expertResidency =
+      "{\"total_layer_count\":0,\"resident_expert_count\":0,\"resident_expert_payload_bytes\":0,\"dense_layers\":\(denseLayers)}"
+    let servingSession =
+      "{\"completed_request_count\":0,\"total_prompt_token_count\":0,\"total_reused_prompt_token_count\":0,\"target_prompt_work_token_count\":0,\"target_reused_prompt_work_token_count\":0,\"average_prefill_tok_per_second\":0,\"average_generation_tok_per_second\":0}"
+    let statusJSON =
+      "{\"status\":\"ready\",\"activity\":\"idle\",\"ready_model_id\":\"dense\",\"expert_memory_mode\":\"resident\",\"expert_residency\":\(expertResidency),\"serving_session\":\(servingSession)}"
+    return try JSONDecoder().decode(DaemonStatusDocument.self, from: Data(statusJSON.utf8))
+  }
+
+  func test_should_show_streaming_when_a_dense_model_reads_layers_from_the_ssd() throws {
+    XCTAssertEqual(
+      try denseStatusDocument(keptLayerCount: 7, streamedLayerPayloadBytes: 4_437_000_000)
+        .menuBarGlyphState, .streaming)
+    XCTAssertEqual(
+      try denseStatusDocument(keptLayerCount: 0, streamedLayerPayloadBytes: 5_680_000_000)
+        .menuBarGlyphState, .streaming)
+  }
+
+  func test_should_show_resident_when_a_dense_model_keeps_every_layer() throws {
+    XCTAssertEqual(
+      try denseStatusDocument(keptLayerCount: 32, streamedLayerPayloadBytes: 0).menuBarGlyphState,
+      .resident)
+  }
+
   func test_should_show_generating_over_residency_while_a_request_is_live() throws {
     XCTAssertEqual(
       try statusDocument(

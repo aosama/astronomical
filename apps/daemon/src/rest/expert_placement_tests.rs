@@ -478,6 +478,7 @@ fn should_say_how_much_a_streaming_dense_model_reads_from_the_ssd() {
 fn should_say_every_layer_streams_when_none_is_kept() {
     let placement = dense_placement(streaming_dense_residency(0, 5_680_000_000));
 
+    assert_eq!(placement.stock_sentence, "5.29 GB on SSD");
     assert_eq!(
         placement.reply_sentence,
         "Dense model: all 32 layers read from the SSD."
@@ -532,4 +533,81 @@ fn should_leave_dense_layers_out_of_a_sparse_residency_document() {
     let residency_json = expert_residency_json(Some(measured_residency(40, 1, 2)));
 
     assert!(residency_json.get("dense_layers").is_none());
+}
+
+#[test]
+fn should_describe_the_dense_layers_even_before_a_memory_mode_is_reported() {
+    let placement = expert_placement(
+        Some("Ornith-1.5-9B-MLX-6bit"),
+        WorkerActivity::Idle,
+        None,
+        Some(streaming_dense_residency(7, 4_437_000_000)),
+    );
+
+    assert_eq!(
+        placement.reply_sentence,
+        "Dense model: 7 of 32 layers in RAM, 25 read from the SSD."
+    );
+}
+
+#[test]
+fn should_keep_the_dense_sentence_while_a_reply_runs() {
+    let placement = expert_placement(
+        Some("Ornith-1.5-9B-MLX-6bit"),
+        WorkerActivity::Generating,
+        Some(ExpertMemoryMode::Resident),
+        Some(streaming_dense_residency(7, 4_437_000_000)),
+    );
+
+    assert_eq!(
+        placement.reply_sentence,
+        "Dense model: 7 of 32 layers in RAM, 25 read from the SSD."
+    );
+}
+
+#[test]
+fn should_call_more_kept_layers_than_the_model_has_all_in_ram() {
+    let mut residency = streaming_dense_residency(40, 0);
+    if let Some(dense_layers) = residency.dense_layers.as_mut() {
+        dense_layers.kept_layer_count = 40;
+    }
+
+    assert_eq!(
+        dense_placement(residency).reply_sentence,
+        "Dense model: all 32 layers in RAM."
+    );
+}
+
+#[test]
+fn should_not_count_layers_for_a_dense_report_with_no_layers() {
+    let residency = ExpertResidencySnapshot {
+        dense_layers: Some(astronomical_ipc_protocol::WorkerDenseLayerResidency::default()),
+        ..dense_model_residency()
+    };
+
+    let placement = dense_placement(residency);
+
+    assert_eq!(placement.stock_sentence, "All in RAM");
+    assert_eq!(placement.reply_sentence, "Dense model, no experts.");
+}
+
+#[test]
+fn should_keep_the_dense_layers_when_the_daemon_takes_a_worker_residency() {
+    let worker_residency = astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+        dense_layers: Some(astronomical_ipc_protocol::WorkerDenseLayerResidency {
+            decoder_layer_count: 32,
+            kept_layer_count: 7,
+            streamed_layer_payload_bytes: 4_437_000_000,
+        }),
+        total_layer_count: 0,
+        resident_expert_count: 0,
+        resident_expert_payload_bytes: 0,
+        complete_expert_payload_byte_count: 0,
+        expert_capacity: 0,
+        layer_seating: ExpertLayerSeatingCounts::default(),
+    };
+
+    let daemon_residency = ExpertResidencySnapshot::from(worker_residency);
+
+    assert_eq!(daemon_residency.dense_layers, worker_residency.dense_layers);
 }

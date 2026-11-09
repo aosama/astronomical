@@ -1,7 +1,8 @@
 //! The stock label and the reply sentence every Observatory surface and the menu share.
 //!
 //! Stock describes where the expert library sits right now, from the seated
-//! byte counts. It is a short label rather than a full sentence: the menu
+//! byte counts, or for a dense model on the streaming engine, how much of
+//! its decoder layers it reads from the SSD (issue #1985). It is a short label rather than a full sentence: the menu
 //! shows it in a half-width monospaced cell, so every stock label stays
 //! within MAXIMUM_STOCK_LABEL_CHARACTERS to fit on one line there. The reply
 //! sentence describes what the current or last reply did with storage, from
@@ -14,7 +15,10 @@ use crate::{ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot};
 
 const APPLE_GIGABYTE_BYTES: f64 = 1_073_741_824.0;
 
-/// What a dense model says instead of a sentence about experts it does not have.
+/// What a dense model says instead of a sentence about experts it does not
+/// have, when it reports no decoder layers: the resident engine serves only
+/// a dense model that fits whole, and says so in these words, where the
+/// streaming engine, which may stream, counts its layers instead.
 const DENSE_MODEL_REPLY_SENTENCE: &str = "Dense model, no experts.";
 
 /// Copy budget for the stock label, in characters. The menu's Residency cell
@@ -119,12 +123,16 @@ fn stock_sentence(
     if resident_expert_payload_bytes == 0 {
         return "All on SSD".to_owned();
     }
+    on_ssd_stock_sentence(
+        complete_expert_payload_byte_count.saturating_sub(resident_expert_payload_bytes),
+    )
+}
+
+/// The one wording for bytes a model reads from the SSD, sparse or dense.
+fn on_ssd_stock_sentence(on_ssd_bytes: u64) -> String {
     format!(
         "{:.2} GB on SSD",
-        left_on_ssd_gigabytes(
-            complete_expert_payload_byte_count,
-            resident_expert_payload_bytes
-        )
+        on_ssd_bytes as f64 / APPLE_GIGABYTE_BYTES
     )
 }
 
@@ -158,15 +166,6 @@ fn fully_seated_stock_sentence(total_layer_count: u32) -> String {
         return format!("{total_layer_count} layers in RAM");
     }
     "All in RAM".to_owned()
-}
-
-fn left_on_ssd_gigabytes(
-    complete_expert_payload_byte_count: u64,
-    resident_expert_payload_bytes: u64,
-) -> f64 {
-    let left_on_ssd_bytes =
-        complete_expert_payload_byte_count.saturating_sub(resident_expert_payload_bytes);
-    left_on_ssd_bytes as f64 / APPLE_GIGABYTE_BYTES
 }
 
 fn reply_sentence(
@@ -211,7 +210,11 @@ fn is_dense_model_residency(expert_residency: Option<ExpertResidencySnapshot>) -
 fn dense_layers_of(
     expert_residency: Option<ExpertResidencySnapshot>,
 ) -> Option<WorkerDenseLayerResidency> {
-    expert_residency.and_then(|measured_residency| measured_residency.dense_layers)
+    // A report of no layers names nothing to place, so the model's dense
+    // wording without counts stands.
+    expert_residency
+        .and_then(|measured_residency| measured_residency.dense_layers)
+        .filter(|dense_layers| dense_layers.decoder_layer_count > 0)
 }
 
 /// A dense model that streams says how much it reads from the SSD, the way
@@ -220,14 +223,11 @@ fn dense_stock_sentence(dense_layers: WorkerDenseLayerResidency) -> String {
     if dense_layers.streamed_layer_payload_bytes == 0 {
         return fully_seated_stock_sentence(dense_layers.decoder_layer_count);
     }
-    format!(
-        "{:.2} GB on SSD",
-        dense_layers.streamed_layer_payload_bytes as f64 / APPLE_GIGABYTE_BYTES
-    )
+    on_ssd_stock_sentence(dense_layers.streamed_layer_payload_bytes)
 }
 
-/// Names the kept and streamed layers. A streamed layer is read once per
-/// prompt and once per generated token.
+/// Names the kept and streamed layers. A streamed layer is read from the SSD
+/// for every forward that runs it.
 fn dense_reply_sentence(dense_layers: WorkerDenseLayerResidency) -> String {
     let WorkerDenseLayerResidency {
         decoder_layer_count,
