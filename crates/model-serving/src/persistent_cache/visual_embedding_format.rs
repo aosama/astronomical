@@ -283,41 +283,18 @@ fn decode_lowercase_sha256(
     digest_text: &str,
     visual_embedding_file_path: &Path,
 ) -> Result<[u8; 32], PersistentVisualEmbeddingFileError> {
-    if digest_text.len() != 64 || digest_text != digest_text.to_ascii_lowercase() {
-        return Err(PersistentVisualEmbeddingFileError::InvalidImageDigest {
+    super::hex_digest::decode_lowercase_hex_digest(digest_text).ok_or_else(|| {
+        PersistentVisualEmbeddingFileError::InvalidImageDigest {
             visual_embedding_file_path: visual_embedding_file_path.to_path_buf(),
-        });
-    }
-    let mut decoded_digest = [0_u8; 32];
-    for (digest_byte_index, decoded_digest_byte) in decoded_digest.iter_mut().enumerate() {
-        *decoded_digest_byte = u8::from_str_radix(
-            &digest_text[digest_byte_index * 2..digest_byte_index * 2 + 2],
-            16,
-        )
-        .map_err(|_| PersistentVisualEmbeddingFileError::InvalidImageDigest {
-            visual_embedding_file_path: visual_embedding_file_path.to_path_buf(),
-        })?;
-    }
-    Ok(decoded_digest)
+        }
+    })
 }
 
 fn parse_digest_from_file_path(file_path: &Path) -> Option<[u8; 32]> {
     if file_path.extension()?.to_str()? != "safetensors" {
         return None;
     }
-    let file_stem = file_path.file_stem()?.to_str()?;
-    if file_stem.len() != 64 || file_stem != file_stem.to_ascii_lowercase() {
-        return None;
-    }
-    let mut visual_embedding_hash = [0_u8; 32];
-    for (hash_byte_index, visual_embedding_hash_byte) in
-        visual_embedding_hash.iter_mut().enumerate()
-    {
-        *visual_embedding_hash_byte =
-            u8::from_str_radix(&file_stem[hash_byte_index * 2..hash_byte_index * 2 + 2], 16)
-                .ok()?;
-    }
-    Some(visual_embedding_hash)
+    super::hex_digest::decode_lowercase_hex_digest(file_path.file_stem()?.to_str()?)
 }
 
 /// One visual embedding file did not satisfy the expected on-disk contract.

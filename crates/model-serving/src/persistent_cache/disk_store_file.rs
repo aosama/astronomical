@@ -348,21 +348,11 @@ pub(crate) fn read_file_size_bytes(
         )
 }
 
+/// The hash a cache-written file or block directory is named after.
 pub(super) fn parse_persistent_prompt_cache_file_hash_from_path(
     entry_path: &Path,
 ) -> Option<[u8; 32]> {
-    let file_stem = entry_path.file_stem()?.to_str()?;
-    if file_stem.len() != 64 {
-        return None;
-    }
-    let mut persistent_prompt_cache_file_hash = [0_u8; 32];
-    for (byte_index, persistent_prompt_cache_file_hash_byte) in
-        persistent_prompt_cache_file_hash.iter_mut().enumerate()
-    {
-        let hex_pair = &file_stem[byte_index * 2..byte_index * 2 + 2];
-        *persistent_prompt_cache_file_hash_byte = u8::from_str_radix(hex_pair, 16).ok()?;
-    }
-    Some(persistent_prompt_cache_file_hash)
+    super::hex_digest::decode_lowercase_hex_digest(entry_path.file_stem()?.to_str()?)
 }
 
 pub(crate) fn open_without_following_symlinks(path: &Path) -> Result<File, std::io::Error> {
@@ -400,3 +390,7 @@ pub(crate) fn hex_encode(block_hash_bytes: [u8; 32]) -> String {
         .map(|block_hash_byte| format!("{block_hash_byte:02x}"))
         .collect()
 }
+
+#[cfg(test)]
+#[path = "disk_store_file_tests.rs"]
+mod disk_store_file_tests;

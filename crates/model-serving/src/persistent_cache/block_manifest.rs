@@ -227,15 +227,7 @@ fn invalid_manifest(
 }
 
 fn parse_block_hash_hex(block_hash_hex: &str) -> Option<[u8; 32]> {
-    // The writer emits a canonical 64-character representation. Parsing still
-    // validates exact width and every byte pair before returning binary identity.
-    if block_hash_hex.len() != 64 {
-        return None;
-    }
-    let mut block_hash = [0_u8; 32];
-    for (block_hash_byte_index, block_hash_byte) in block_hash.iter_mut().enumerate() {
-        let byte_hex = &block_hash_hex[block_hash_byte_index * 2..block_hash_byte_index * 2 + 2];
-        *block_hash_byte = u8::from_str_radix(byte_hex, 16).ok()?;
-    }
-    Some(block_hash)
+    // The writer emits a canonical 64-character lowercase representation; a
+    // manifest holding anything else is corrupt and its block is discarded.
+    super::hex_digest::decode_lowercase_hex_digest(block_hash_hex)
 }
