@@ -80,6 +80,12 @@ test-vision-tower-hub = "test -p astronomical-vision-tower --test integration_te
 # both roles discoverable from the Development model_directories.
 test-dense-text-weights = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter dense_text_weights"
 
+# Dense streaming parity (issue #1985): the streamed_dense model answers one
+# Shakespeare prompt on the streaming engine, which reads embedding rows from
+# the SSD, and on the resident engine; the final logits must be bit-identical.
+# Loads the 9B model twice in one process, about ten seconds.
+test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_give_the_resident_logits"
+
 # Quantization lanes (the OptiQ port in crates/quantization).
 
 # The GPU encoder against the pure reference encoder and the shard-wise

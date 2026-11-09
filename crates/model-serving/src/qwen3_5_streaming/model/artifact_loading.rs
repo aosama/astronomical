@@ -7,6 +7,7 @@ use std::path::Path;
 use astronomical_ipc_protocol::WorkerDecodeExpertCachePolicy;
 use astronomical_runtime_integration::MlxRuntime;
 
+use crate::qwen3_5_core::model::disk_embedding_rows::Qwen3_5DiskEmbeddingRows;
 use crate::qwen3_5_core::model::loading_pipeline::{
     BoundLanguageArtifact, InvariantLinearScales, ModelKernelVerdicts, bind_language_artifact,
     load_invariant_linear_scales, load_model_kernel_verdicts,
@@ -86,8 +87,9 @@ impl Qwen3_5Model {
         decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        // Taken before binding, which consumes parts of the artifact.
+        // Both taken before binding, which consumes parts of the artifact.
         let expert_atlas = validated_artifact.expert_atlas().cloned();
+        let disk_embedding_rows = dense_disk_embedding_rows(&validated_artifact)?;
         let BoundLanguageArtifact {
             config,
             shard_index,
@@ -115,27 +117,19 @@ impl Qwen3_5Model {
                     performance_attribution,
                 )?,
             };
-        // Cache geometry cannot be finalized before weights and sparse plans are
-        // bound: their source dtypes determine MLX result-type promotion. Derive
-        // the persistence contract at that boundary without evaluating tensors.
-        let decoder_cache_layout = performance_attribution.measure_operation(
-            PerformanceOperation::ModelTensorBinding,
-            |_performance_attribution| {
-                decoder_cache_layout_at_tensor_binding(
-                    &config,
-                    &chunking,
-                    &weights,
-                    expert_pager.as_ref(),
-                )
-            },
+        let decoder_cache_layout = measured_decoder_cache_layout(
+            &config,
+            &chunking,
+            &weights,
+            expert_pager.as_ref(),
+            performance_attribution,
         )?;
         let ModelKernelVerdicts {
             gated_delta_kernel,
             gated_delta_checkpoint_kernel,
             gdn_decode_prework_kernel,
         } = load_model_kernel_verdicts(&runtime, &config, performance_attribution)?;
-        let compiled_swiglu = MlxCompiledSwiGlu::new()?;
-        let compiled_elementwise_graphs = MlxCompiledElementwiseGraphs::new()?;
+        let (compiled_swiglu, compiled_elementwise_graphs) = compiled_model_graphs()?;
         let InvariantLinearScales {
             inverse_linear_head_dimension_scale,
             inverse_square_root_linear_head_dimension_scale,
@@ -149,6 +143,7 @@ impl Qwen3_5Model {
             &runtime,
             &config,
             &weights,
+            embedding_residency_of(disk_embedding_rows.as_ref()),
             &vision_model,
             expert_pager.as_ref(),
             &decoder_cache_layout,
@@ -160,6 +155,7 @@ impl Qwen3_5Model {
                 config,
                 decoder_cache_layout,
                 weights,
+                disk_embedding_rows,
                 vision_model,
                 mlx_ram_budget: RefCell::new(mlx_ram_budget),
                 gated_delta_kernel,
@@ -189,6 +185,57 @@ impl Qwen3_5Model {
             request_expert_storage_read_tally: Default::default(),
             fused_jangtq2_gathered_projection_kernel,
         })
+    }
+}
+
+/// The compiled SwiGLU and elementwise graphs every forward reuses.
+fn compiled_model_graphs()
+-> Result<(MlxCompiledSwiGlu, MlxCompiledElementwiseGraphs), Qwen3_5ExecutionError> {
+    Ok((
+        MlxCompiledSwiGlu::new()?,
+        MlxCompiledElementwiseGraphs::new()?,
+    ))
+}
+
+/// Derives the decoder cache layout under attribution. It waits for bound
+/// weights and sparse plans, whose source dtypes decide MLX result-type
+/// promotion, and evaluates no tensor.
+fn measured_decoder_cache_layout(
+    config: &crate::Qwen3_5Config,
+    chunking: &super::Qwen3_5ModelChunkingConfiguration,
+    weights: &Qwen3_5Weights,
+    expert_pager: Option<&Qwen3_5ExpertPager>,
+    performance_attribution: &mut PerformanceAttribution,
+) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
+    performance_attribution.measure_operation(
+        PerformanceOperation::ModelTensorBinding,
+        |_performance_attribution| {
+            decoder_cache_layout_at_tensor_binding(config, chunking, weights, expert_pager)
+        },
+    )
+}
+
+/// Whether the loaded model reads embedding rows from the SSD.
+const fn embedding_residency_of(
+    disk_embedding_rows: Option<&Qwen3_5DiskEmbeddingRows>,
+) -> crate::qwen3_5_core::model_math::weights::EmbeddingResidency {
+    match disk_embedding_rows {
+        Some(_) => crate::qwen3_5_core::model_math::weights::EmbeddingResidency::RowsReadFromDisk,
+        None => crate::qwen3_5_core::model_math::weights::EmbeddingResidency::Resident,
+    }
+}
+
+/// Embedding rows read from the SSD for a dense model, which the streaming
+/// engine serves only when its text weights do not fit the limit; a sparse
+/// model keeps its resident table, which its expert budget already plans.
+fn dense_disk_embedding_rows(
+    validated_artifact: &ValidatedQwen3_5Artifact,
+) -> Result<Option<Qwen3_5DiskEmbeddingRows>, Qwen3_5ExecutionError> {
+    match validated_artifact.config().feed_forward_architecture() {
+        Qwen3_5FeedForwardArchitecture::Dense => {
+            Qwen3_5DiskEmbeddingRows::from_validated_artifact(validated_artifact)
+        }
+        Qwen3_5FeedForwardArchitecture::MixtureOfExperts => Ok(None),
     }
 }
 
@@ -313,6 +360,7 @@ fn build_streaming_expert_budget(
     runtime: &MlxRuntime,
     config: &crate::Qwen3_5Config,
     weights: &Qwen3_5Weights,
+    embedding_residency: crate::qwen3_5_core::model_math::weights::EmbeddingResidency,
     vision_model: &Option<Qwen3_5VisionModel>,
     expert_pager: Option<&Qwen3_5ExpertPager>,
     decoder_cache_layout: &crate::DecoderCacheLayout,
@@ -321,6 +369,7 @@ fn build_streaming_expert_budget(
     let model_core_payload_bytes =
         crate::qwen3_5_core::model::loading_pipeline::model_core_payload_bytes(
             weights,
+            embedding_residency,
             vision_model,
         );
     let complete_expert_payload_bytes = match expert_pager {

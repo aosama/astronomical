@@ -5,6 +5,16 @@ pub(crate) mod base;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_attention;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod disk_embedding_rows;
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "model/disk_embedding_rows_tests.rs"]
+mod disk_embedding_rows_tests;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod embedding_row_reads;
+#[cfg(all(test, feature = "direct-mlx"))]
+#[path = "model/embedding_row_reads_tests.rs"]
+mod embedding_row_reads_tests;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod full_attention;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta;

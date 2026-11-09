@@ -22,6 +22,14 @@ use super::{
 };
 use mlx_c_rust::MlxArray;
 
+/// Whether a model keeps its embedding table resident or reads its rows from
+/// the SSD per forward.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum EmbeddingResidency {
+    Resident,
+    RowsReadFromDisk,
+}
+
 /// Strict typed ownership for the indexed executable Qwen3.5 language shards.
 #[derive(Debug)]
 pub struct Qwen3_5Weights {
@@ -124,21 +132,13 @@ impl Qwen3_5Weights {
                 &model_shards,
                 &tensor_profile.name,
             )?;
-            weights_validation::validate_bound_tensor(tensor_profile, &tensor)?;
-            weights_validation::validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
-            let tensor = apply_rms_norm_storage_convention(
+            let (tensor, tensor_payload_bytes) = bind_language_tensor(
                 runtime,
                 qwen3_5_config,
                 raw_hugging_face_norm_offsets_apply,
-                &tensor_profile.name,
+                tensor_profile,
                 tensor,
             )?;
-            let tensor_payload_bytes = u64::try_from(tensor.byte_count()).map_err(|_| {
-                Qwen3_5ExecutionError::InvalidTensor {
-                    tensor_name: tensor_profile.name.clone(),
-                    description: "tensor payload byte count exceeds the u64 range",
-                }
-            })?;
             actual_payload_bytes = actual_payload_bytes
                 .checked_add(tensor_payload_bytes)
                 .ok_or(Qwen3_5ExecutionError::InvalidTensor {
@@ -226,10 +226,34 @@ impl Qwen3_5Weights {
         self.total_payload_bytes
     }
 
-    pub(crate) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), Qwen3_5ExecutionError> {
-        let mut bound_tensor_references = Vec::with_capacity(self.tensor_count);
+    /// Evaluates the bound tensors so they are resident. An embedding table
+    /// whose rows are read from the SSD stays lazy and never loads.
+    pub(crate) fn materialize(
+        &self,
+        runtime: &MlxRuntime,
+        embedding_residency: EmbeddingResidency,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        let materialized_tensor_references =
+            self.materialized_tensor_references(embedding_residency)?;
+        Ok(runtime.evaluate_arrays(&materialized_tensor_references)?)
+    }
+
+    /// Every bound tensor `materialize` evaluates, checked against the bound
+    /// tensor count so a typed weight that skipped traversal is caught.
+    fn materialized_tensor_references(
+        &self,
+        embedding_residency: EmbeddingResidency,
+    ) -> Result<Vec<&MlxArray>, Qwen3_5ExecutionError> {
+        let mut embedding_references = Vec::new();
         self.embedding_weights
-            .append_array_references(&mut bound_tensor_references);
+            .append_array_references(&mut embedding_references);
+        let mut bound_tensor_references = Vec::with_capacity(self.tensor_count);
+        let expected_tensor_count = if embedding_residency == EmbeddingResidency::Resident {
+            bound_tensor_references.extend(embedding_references);
+            self.tensor_count
+        } else {
+            self.tensor_count.saturating_sub(embedding_references.len())
+        };
         for decoder_layer_weights in &self.decoder_layer_weights {
             decoder_layer_weights.append_array_references(&mut bound_tensor_references);
         }
@@ -238,13 +262,37 @@ impl Qwen3_5Weights {
             self.language_model_head_weights
                 .append_array_references(&mut bound_tensor_references);
         }
-        if bound_tensor_references.len() != self.tensor_count {
+        if bound_tensor_references.len() != expected_tensor_count {
             return Err(Qwen3_5ExecutionError::TypedTensorCountMismatch {
                 actual_tensor_count: bound_tensor_references.len(),
-                expected_tensor_count: self.tensor_count,
+                expected_tensor_count,
             });
         }
-        Ok(runtime.evaluate_arrays(&bound_tensor_references)?)
+        Ok(bound_tensor_references)
+    }
+
+    /// The text weight bytes that load into memory: every bound language
+    /// tensor, less the embedding table when its rows are read from the SSD.
+    pub(crate) fn resident_payload_bytes(&self, embedding_residency: EmbeddingResidency) -> u64 {
+        match embedding_residency {
+            EmbeddingResidency::Resident => self.total_payload_bytes,
+            EmbeddingResidency::RowsReadFromDisk => self
+                .total_payload_bytes
+                .saturating_sub(self.embedding_payload_bytes()),
+        }
+    }
+
+    /// Payload bytes of the embedding table, whether or not it is resident.
+    pub(crate) fn embedding_payload_bytes(&self) -> u64 {
+        let mut embedding_references = Vec::new();
+        self.embedding_weights
+            .append_array_references(&mut embedding_references);
+        let mut embedding_payload_bytes = 0_u64;
+        for embedding_array in embedding_references {
+            embedding_payload_bytes = embedding_payload_bytes
+                .saturating_add(u64::try_from(embedding_array.byte_count()).unwrap_or(u64::MAX));
+        }
+        embedding_payload_bytes
     }
 }
 
@@ -399,6 +447,34 @@ pub(crate) fn take_full_attention_weights(
 /// attention RMSNorm weights as `gamma - 1`. MLX-converted checkpoints bake
 /// the true gamma in and pass through unchanged. The declared convention wins
 /// when both would match, so a tensor is never scaled twice.
+/// Validates one language tensor against its profile and applies the
+/// RMSNorm storage convention, returning it with its payload size. Every
+/// binding path runs this, so a streamed layer binds exactly like a resident
+/// one.
+pub(super) fn bind_language_tensor(
+    runtime: &MlxRuntime,
+    qwen3_5_config: &Qwen3_5Config,
+    raw_hugging_face_norm_offsets_apply: bool,
+    tensor_profile: &crate::TensorProfile,
+    tensor: MlxArray,
+) -> Result<(MlxArray, u64), Qwen3_5ExecutionError> {
+    weights_validation::validate_bound_tensor(tensor_profile, &tensor)?;
+    weights_validation::validate_quantized_tensor_bits(qwen3_5_config, tensor_profile)?;
+    let tensor = apply_rms_norm_storage_convention(
+        runtime,
+        qwen3_5_config,
+        raw_hugging_face_norm_offsets_apply,
+        &tensor_profile.name,
+        tensor,
+    )?;
+    let tensor_payload_bytes =
+        u64::try_from(tensor.byte_count()).map_err(|_| Qwen3_5ExecutionError::InvalidTensor {
+            tensor_name: tensor_profile.name.clone(),
+            description: "tensor payload byte count exceeds the u64 range",
+        })?;
+    Ok((tensor, tensor_payload_bytes))
+}
+
 fn apply_rms_norm_storage_convention(
     runtime: &MlxRuntime,
     qwen3_5_config: &Qwen3_5Config,

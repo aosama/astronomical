@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
-use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
+use crate::qwen3_5_core::model_math::weights::{EmbeddingResidency, Qwen3_5Weights};
 use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 use crate::{DecoderCacheLayout, MlxRamBudget};
 
@@ -27,6 +27,10 @@ pub struct Qwen3_5ModelBase {
     pub(crate) config: Qwen3_5Config,
     pub(crate) decoder_cache_layout: DecoderCacheLayout,
     pub(crate) weights: Qwen3_5Weights,
+    /// Embedding rows read from the SSD per forward instead of a resident
+    /// table; `None` keeps the table resident. Only a dense model the
+    /// streaming engine serves sets it (issue #1985).
+    pub(crate) disk_embedding_rows: Option<super::disk_embedding_rows::Qwen3_5DiskEmbeddingRows>,
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
@@ -158,11 +162,14 @@ impl Qwen3_5ModelBase {
     /// Returns the resident target payload bytes wired after materialization.
     #[must_use]
     pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {
-        self.weights.total_payload_bytes()
+        self.weights
+            .resident_payload_bytes(self.embedding_residency())
     }
 
     pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
-        self.weights.materialize(&self.runtime)?;
+        // An embedding table read from the SSD stays lazy and never loads.
+        self.weights
+            .materialize(&self.runtime, self.embedding_residency())?;
         self.runtime.evaluate_arrays(&[
             &self.inverse_linear_head_dimension_scale,
             &self.inverse_square_root_linear_head_dimension_scale,
@@ -172,7 +179,29 @@ impl Qwen3_5ModelBase {
         Ok(())
     }
 
+    /// Whether this model reads embedding rows from the SSD.
+    pub(crate) const fn embedding_residency(&self) -> EmbeddingResidency {
+        match self.disk_embedding_rows {
+            Some(_) => EmbeddingResidency::RowsReadFromDisk,
+            None => EmbeddingResidency::Resident,
+        }
+    }
+
     pub(crate) fn embedding_lookup(
+        &self,
+        token_indices: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        match &self.disk_embedding_rows {
+            Some(disk_embedding_rows) => disk_embedding_rows.embed_tokens(
+                &self.runtime,
+                token_indices,
+                &self.weights.embedding_weights,
+            ),
+            None => self.resident_embedding_lookup(token_indices),
+        }
+    }
+
+    fn resident_embedding_lookup(
         &self,
         token_indices: &MlxArray,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -191,22 +220,15 @@ impl Qwen3_5ModelBase {
                 quantization_biases,
                 quantization_group_size,
                 quantization_bits,
-            } => {
-                let selected_weights = self.runtime.take_axis(packed_weight, token_indices, 0)?;
-                let selected_scales =
-                    self.runtime
-                        .take_axis(quantization_scales, token_indices, 0)?;
-                let selected_biases =
-                    self.runtime
-                        .take_axis(quantization_biases, token_indices, 0)?;
-                Ok(self.runtime.dequantize_affine(
-                    &selected_weights,
-                    &selected_scales,
-                    &selected_biases,
-                    *quantization_group_size,
-                    *quantization_bits,
-                )?)
-            }
+            } => gather_quantized_embedding_rows(
+                &self.runtime,
+                packed_weight,
+                quantization_scales,
+                quantization_biases,
+                token_indices,
+                *quantization_group_size,
+                *quantization_bits,
+            ),
         }
     }
 
@@ -242,4 +264,25 @@ impl Qwen3_5ModelBase {
             )?),
         }
     }
+}
+
+/// Gathers rows of a quantized embedding and dequantizes them. The resident
+/// and on-disk lookups both call it, so their embeddings are the same
+/// operations by construction.
+pub(crate) fn gather_quantized_embedding_rows(
+    runtime: &MlxRuntime,
+    packed_rows: &MlxArray,
+    scale_rows: &MlxArray,
+    bias_rows: &MlxArray,
+    selected_row_indices: &MlxArray,
+    quantization_group_size: i32,
+    quantization_bits: i32,
+) -> Result<MlxArray, Qwen3_5ExecutionError> {
+    Ok(runtime.dequantize_affine(
+        &runtime.take_axis(packed_rows, selected_row_indices, 0)?,
+        &runtime.take_axis(scale_rows, selected_row_indices, 0)?,
+        &runtime.take_axis(bias_rows, selected_row_indices, 0)?,
+        quantization_group_size,
+        quantization_bits,
+    )?)
 }

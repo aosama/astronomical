@@ -70,6 +70,10 @@ pub enum Qwen3_5ExecutionError {
     ),
     #[error("Qwen3.5 sampled decoding error: {0}")]
     SampledDecoding(#[from] crate::InferenceEngineError),
+    #[error("on-disk embedding row read failed: {0}")]
+    EmbeddingRowRead(
+        #[from] crate::qwen3_5_core::model::embedding_row_reads::EmbeddingRowReadError,
+    ),
     #[error("{description}")]
     WeightSourceDescriptor {
         description: &'static str,

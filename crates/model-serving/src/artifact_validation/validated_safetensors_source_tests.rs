@@ -69,3 +69,30 @@ fn should_answer_none_for_a_tensor_the_source_does_not_hold() {
         None
     );
 }
+
+#[cfg(feature = "direct-mlx")]
+#[test]
+fn should_make_a_stored_tensor_range_absolute_by_adding_the_data_section_start() {
+    let shard_directory = tempfile::tempdir().expect("a shard folder should exist");
+    let validated_source = validated_two_tensor_source(shard_directory.path());
+    let header_length = u64::from_le_bytes(
+        std::fs::read(shard_directory.path().join("model.safetensors"))
+            .expect("the shard should read")[..8]
+            .try_into()
+            .expect("the shard should start with its header length"),
+    );
+
+    let tensor_file_range = validated_source
+        .stored_tensor_file_range("language_model.model.norm.weight")
+        .expect("the tensor should have a range");
+
+    assert_eq!(tensor_file_range.file_start_offset, 8 + header_length);
+    assert_eq!(tensor_file_range.file_end_offset, 8 + header_length + 4096);
+    assert_eq!(tensor_file_range.dtype, "U8");
+    assert_eq!(tensor_file_range.shape, [4096]);
+    assert!(
+        validated_source
+            .stored_tensor_file_range("language_model.lm_head.weight")
+            .is_none()
+    );
+}

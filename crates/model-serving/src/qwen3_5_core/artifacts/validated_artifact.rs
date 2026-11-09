@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
+#[cfg(feature = "direct-mlx")]
+use crate::artifact_validation::ValidatedStoredTensorRange;
 use crate::artifact_validation::{
     ArtifactValidationError, TensorInventory, TensorSemanticRole, TensorSourceId,
     ValidatedRequiredFile, ValidatedSafetensorsSource, ValidatedWeightsFile,
@@ -113,6 +115,21 @@ impl ValidatedQwen3_5Artifact {
         }
         Some(role_payload_bytes)
     }
+    /// The validated absolute byte range of one canonical tensor and the
+    /// source holding it, for readers that fetch part of a tensor later; they
+    /// duplicate the source's descriptor before the engine takes it.
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn tensor_file_range(
+        &self,
+        canonical_name: &str,
+    ) -> Option<(ValidatedStoredTensorRange<'_>, &ValidatedSafetensorsSource)> {
+        let tensor_location = self.tensor_inventory.location(canonical_name)?;
+        let safetensors_source = self.safetensors_sources.get(&tensor_location.source_id())?;
+        let tensor_file_range =
+            safetensors_source.stored_tensor_file_range(tensor_location.stored_name())?;
+        Some((tensor_file_range, safetensors_source))
+    }
+
     #[must_use]
     pub fn tokenizer_bytes(&self) -> Option<&[u8]> {
         self.required_files
