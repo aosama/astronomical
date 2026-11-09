@@ -191,6 +191,18 @@ test-acceptance = "run -p xtask -- test-run --package astronomical-acceptance --
 # strategies; append --filter NAME to pick cases.
 measure-paged-prefill = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx,expert-paging,performance-measurement --test performance_measurement --release --ignored --filter paged_prefill"
 
+# Routed-expert page reads from the SSD (not the file cache) through MLX: the
+# production stock-safetensors page load, the same page read again warm, and
+# three expert-major Atlas read shapes, with the Atlas bytes checked equal to
+# the stock bytes. It converts the 16 least-cached expert layers of the
+# installed large sparse MoE model into a temporary Atlas (about 13 GB of
+# scratch space, checked before writing), skips any page `mincore` finds in
+# the file cache, and fails within its 120-second budget when too few
+# uncached pages remain. Append --configuration PATH whose `model_directory`
+# names the model when the Development configuration does not discover it;
+# the streaming-latency probes in the same file honour that override too.
+measure-cold-expert-page-reads = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test direct_mlx --release --ignored --filter should_time_cold_routed_pages_through_mlx_for_stock_and_atlas_layouts"
+
 # One cell of the SSD-paging graph-submission interval comparison on the
 # 4-bit sparse model: append --configuration PATH whose `paging_experiment`
 # object sets the ceiling, the streaming chunk and the prefill and generation
