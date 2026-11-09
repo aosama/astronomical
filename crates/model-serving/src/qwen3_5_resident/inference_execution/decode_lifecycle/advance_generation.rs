@@ -219,8 +219,10 @@ impl Qwen3_5EngineState {
                 &crate::memory::telemetry::MlxActiveMemoryBreakdown::default(),
             ),
         };
+        // The resident engine has no residency to reconcile after prefill, so
+        // its announcement already describes the decode residency.
         Ok(GeneratedToken::GenerationPreparationStarted {
-            expert_residency,
+            expert_residency: Some(expert_residency),
             mlx_memory_telemetry,
         })
     }

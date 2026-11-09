@@ -23,6 +23,9 @@ pub struct ValidatedQwen3_5Artifact {
     pub(super) model_id: String,
     pub(super) revision: String,
     pub(super) max_output_tokens: u32,
+    /// Where an Expert Atlas model keeps its routed experts; `None` for a
+    /// stock safetensors checkpoint.
+    pub(super) expert_atlas: Option<astronomical_expert_atlas::AtlasManifest>,
 }
 
 impl ValidatedQwen3_5Artifact {
@@ -37,6 +40,12 @@ impl ValidatedQwen3_5Artifact {
     #[must_use]
     pub const fn supports_image_input(&self) -> bool {
         self.has_validated_vision_tower
+    }
+    /// The Atlas manifest when this model keeps its routed experts in Atlas
+    /// layer files rather than in its shards.
+    #[must_use]
+    pub const fn expert_atlas(&self) -> Option<&astronomical_expert_atlas::AtlasManifest> {
+        self.expert_atlas.as_ref()
     }
     #[must_use]
     pub const fn shard_index(&self) -> &Qwen3_5ShardIndex {

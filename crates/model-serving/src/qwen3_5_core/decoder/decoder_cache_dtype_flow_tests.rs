@@ -52,6 +52,7 @@ fn expert_tensor_source(
         full_shape: Vec::new(),
         tensor_payload_offset: 0,
         bytes_per_expert: 0,
+        expert_stride_bytes: 0,
         expert_capacity: 1,
     }
 }

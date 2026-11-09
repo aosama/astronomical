@@ -4,6 +4,7 @@
 //! these verbs lives in `crate::arguments`; the journeys that exercise
 //! them over the real IPC boundary live in `tests/integration/`.
 
+pub mod convert_atlas;
 pub mod doctor;
 pub mod embed;
 pub mod image;

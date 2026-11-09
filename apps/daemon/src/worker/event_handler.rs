@@ -525,7 +525,7 @@ fn apply_generation_preparation_started(
     }
     handle_generation_preparation_started(
         request_id,
-        expert_residency.into(),
+        expert_residency.map(Into::into),
         health_snapshot,
         active_chat_request_mut(active_request)?,
     )

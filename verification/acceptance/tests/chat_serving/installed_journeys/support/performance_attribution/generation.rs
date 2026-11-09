@@ -54,7 +54,6 @@ pub(crate) async fn run_attributed_generation(
     .await
 }
 
-#[expect(clippy::too_many_lines)]
 pub(crate) async fn run_generation_with_sampling(
     qwen3_5_engine: &mut Qwen3_5StreamingEngine,
     request_id: RequestId,
@@ -64,20 +63,58 @@ pub(crate) async fn run_generation_with_sampling(
     end_of_sequence_token_ids: &[u32],
     generation_sampling: GenerationSampling,
 ) -> Vec<u32> {
+    run_generation_with_request_attribution(
+        qwen3_5_engine,
+        request_id,
+        prompt_token_ids,
+        phase_name,
+        output_token_count,
+        end_of_sequence_token_ids,
+        generation_sampling,
+        RequestAttribution::Enabled,
+    )
+    .await
+}
+
+/// Whether a request records a performance-attribution report. Attribution
+/// synchronizes the graphics processor after each prefill stage, so a
+/// request that must behave like production serving turns it off.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RequestAttribution {
+    Enabled,
+    Disabled,
+}
+
+#[expect(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_generation_with_request_attribution(
+    qwen3_5_engine: &mut Qwen3_5StreamingEngine,
+    request_id: RequestId,
+    prompt_token_ids: &[u32],
+    phase_name: &str,
+    output_token_count: u16,
+    end_of_sequence_token_ids: &[u32],
+    generation_sampling: GenerationSampling,
+    request_attribution: RequestAttribution,
+) -> Vec<u32> {
     let request_started_at = Instant::now();
+    let inference_request = Qwen3_5InferenceRequest::new_sampling(
+        request_id,
+        prompt_token_ids.to_vec(),
+        output_token_count,
+        generation_sampling.temperature_thousandths(),
+        1_000,
+        generation_sampling.seed(),
+    )
+    .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID);
+    let inference_request = match request_attribution {
+        RequestAttribution::Enabled => {
+            inference_request.with_performance_attribution(PerformanceAttribution::enabled())
+        }
+        RequestAttribution::Disabled => inference_request,
+    };
     qwen3_5_engine
-        .start_generation(
-            Qwen3_5InferenceRequest::new_sampling(
-                request_id,
-                prompt_token_ids.to_vec(),
-                output_token_count,
-                generation_sampling.temperature_thousandths(),
-                1_000,
-                generation_sampling.seed(),
-            )
-            .with_image_pad_token_id(IMAGE_PAD_TOKEN_ID)
-            .with_performance_attribution(PerformanceAttribution::enabled()),
-        )
+        .start_generation(inference_request)
         .await
         .expect("the benchmark request should be accepted");
     let mut generated_token_ids = Vec::with_capacity(usize::from(output_token_count));

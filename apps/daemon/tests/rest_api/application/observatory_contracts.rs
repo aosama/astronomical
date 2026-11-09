@@ -202,9 +202,7 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
     health_snapshot.active_request_progress = Some(ActiveRequestProgress::GenerationPreparation {
         request_started_at,
         preparation_started_at,
-        total_layer_count: 40,
-        resident_expert_count: 32,
-        resident_expert_payload_bytes: 13_000_000_000,
+        preparation_residency_counts: health_snapshot.expert_residency.map(Into::into),
     });
     let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
     let response = application
@@ -236,6 +234,57 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
     assert_eq!(
         status_document["expert_residency"]["resident_expert_payload_bytes"],
         13_000_000_000_u64
+    );
+}
+
+#[tokio::test]
+async fn should_expose_generation_preparation_announced_before_residency_is_reconciled() {
+    let mut health_snapshot = ready_health_snapshot_with_model();
+    let last_observed_residency = ExpertResidencySnapshot {
+        total_layer_count: 40,
+        resident_expert_count: 24,
+        resident_expert_payload_bytes: 9_000_000_000,
+        complete_expert_payload_byte_count: 21_000_000_000,
+        expert_capacity: 256,
+        layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+    };
+    health_snapshot.activity = WorkerActivity::GenerationPreparation;
+    health_snapshot.expert_residency = Some(last_observed_residency);
+    health_snapshot.active_request_progress = Some(ActiveRequestProgress::GenerationPreparation {
+        request_started_at: Instant::now() - Duration::from_millis(900),
+        preparation_started_at: Instant::now() - Duration::from_millis(40),
+        preparation_residency_counts: None,
+    });
+    let application = build_application(ContractScriptedExecutor::ready(health_snapshot));
+    let response = application
+        .oneshot(
+            Request::builder()
+                .uri("/v1/status")
+                .body(Body::empty())
+                .expect("the preparation status request should be valid"),
+        )
+        .await
+        .expect("the application should return preparation status");
+    let response_body = to_bytes(response.into_body(), 16 * 1024)
+        .await
+        .expect("the preparation status body should be readable");
+    let status_document: serde_json::Value = serde_json::from_slice(&response_body)
+        .expect("the preparation status body should contain JSON");
+
+    assert_eq!(status_document["activity"], "generation_preparation");
+    assert_eq!(
+        status_document["progress"]["phase"],
+        "generation_preparation"
+    );
+    assert!(
+        status_document["progress"]
+            .get("resident_expert_count")
+            .is_none(),
+        "an unreconciled residency must not be reported as the decode residency"
+    );
+    assert_eq!(
+        status_document["expert_residency"]["resident_expert_count"], 24,
+        "the status keeps the last observed residency until decode reports its own"
     );
 }
 

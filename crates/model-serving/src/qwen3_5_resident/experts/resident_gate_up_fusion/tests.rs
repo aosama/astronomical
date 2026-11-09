@@ -183,6 +183,7 @@ fn synthetic_layer_plan(
             full_shape: vec![expert_capacity, 1, 1],
             tensor_payload_offset: 0,
             bytes_per_expert: *bytes_per_expert,
+            expert_stride_bytes: *bytes_per_expert,
             expert_capacity,
         })
         .collect();
@@ -269,6 +270,7 @@ fn append_projection_tensor_sources(
         full_shape: weight_shape,
         tensor_payload_offset: 0,
         bytes_per_expert: weight_bytes_per_expert,
+        expert_stride_bytes: weight_bytes_per_expert,
         expert_capacity,
     });
     if quantization_mode == QuantizationMode::Affine {
@@ -287,6 +289,7 @@ fn append_projection_tensor_sources(
                 full_shape: vec![expert_capacity, 16, 1],
                 tensor_payload_offset: 0,
                 bytes_per_expert: weight_bytes_per_expert / 2,
+                expert_stride_bytes: weight_bytes_per_expert / 2,
                 expert_capacity,
             });
         }

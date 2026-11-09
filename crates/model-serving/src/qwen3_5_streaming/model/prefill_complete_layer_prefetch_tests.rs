@@ -35,6 +35,7 @@ fn layer_plan_storing(projection_parameters: &[(&str, &[&str])]) -> QuantizedExp
                     full_shape: vec![4, 2, 2],
                     tensor_payload_offset: 0,
                     bytes_per_expert: 8,
+                    expert_stride_bytes: 8,
                     expert_capacity: 4,
                 })
         })

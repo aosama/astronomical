@@ -44,14 +44,14 @@ pub fn build_source_manifests(
                 byte_count: selected_tensor_byte_count,
             });
             for (expert_start, expert_count, first_page_slot) in
-                contiguous_selected_runs(selected_expert_ids)
+                selected_runs_for(tensor_source, selected_expert_ids)
             {
                 source_intervals.push(QuantizedExpertSourceInterval {
                     tensor_name: tensor_source.tensor_name.clone(),
                     expert_start,
                     expert_count,
                     source_file_offset: tensor_source.tensor_payload_offset
-                        + expert_start as u64 * tensor_source.bytes_per_expert as u64,
+                        + expert_start as u64 * tensor_source.expert_stride_bytes as u64,
                     source_byte_count: expert_count * tensor_source.bytes_per_expert,
                     virtual_payload_offset: virtual_payload_offset
                         + first_page_slot as u64 * tensor_source.bytes_per_expert as u64,
@@ -75,6 +75,25 @@ pub fn build_source_manifests(
         });
     }
     Ok(source_manifests)
+}
+
+/// Adjacent experts merge into one read only when their slices touch in the
+/// file, which holds in a stock shard (stride equals slice size) but not in
+/// an Expert Atlas layer file, where each expert's slice of one tensor is a
+/// whole record apart from the next; there every selected expert is its own
+/// interval.
+fn selected_runs_for(
+    tensor_source: &QuantizedTensorSource,
+    selected_expert_ids: &[usize],
+) -> Vec<(usize, usize, usize)> {
+    if tensor_source.expert_stride_bytes == tensor_source.bytes_per_expert {
+        return contiguous_selected_runs(selected_expert_ids);
+    }
+    selected_expert_ids
+        .iter()
+        .enumerate()
+        .map(|(page_slot, &expert_id)| (expert_id, 1, page_slot))
+        .collect()
 }
 
 /// Groups adjacent selected experts while retaining their first page slot.

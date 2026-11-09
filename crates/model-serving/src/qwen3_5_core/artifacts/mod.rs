@@ -1,13 +1,14 @@
 mod artifact;
 mod artifact_helpers;
 mod artifact_inventory;
+pub(crate) mod atlas_artifact;
+pub(crate) mod atlas_expert_layer_plans;
 #[cfg(feature = "direct-mlx")]
 pub mod expert_gate_up_fusion_plan;
 mod optiq_metadata_validation;
 pub mod quantized_expert_layer_plan;
 mod ram_budget_measurements;
 mod shard_index;
-pub(crate) mod streaming_revision;
 pub(crate) mod tensor_spec;
 mod validated_artifact;
 mod vision_validation;
@@ -20,9 +21,11 @@ pub(crate) use super::quantizations::producers::optiq::{OptiQMetadata, OptiQMeta
 pub(crate) use super::vision::{Qwen3_5VisionConfig, vision_tensor_spec};
 #[cfg(feature = "direct-mlx")]
 pub(crate) use crate::expert_paging::{
-    QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource, SafetensorsDtype,
+    ExpertManifestError, QuantizationMode, QuantizedExpertLayerPlan, QuantizedTensorSource,
+    SafetensorsDtype, build_quantized_expert_page_manifest_from_plan, load_quantized_expert_page,
 };
 pub use artifact::{Qwen3_5ArtifactValidationError, Qwen3_5ArtifactValidator};
+pub use atlas_expert_layer_plans::expert_layer_plans_for_validated_artifact;
 pub use quantized_expert_layer_plan::{
     build_quantized_expert_layer_plan, build_quantized_expert_layer_plans,
 };

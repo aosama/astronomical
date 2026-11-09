@@ -197,7 +197,7 @@ impl DownloadExecutablePreflight {
                 || !manifest_file_paths.contains(QWEN_TOKENIZER_FILE_PATH)
             {
                 return Err(DownloadExecutablePreflightError::NotExecutable(
-                    "converted streaming revisions require a resident weight bundle and a tokenizer"
+                    "Expert Atlas models require a resident weight bundle and a tokenizer"
                         .to_owned(),
                 ));
             }

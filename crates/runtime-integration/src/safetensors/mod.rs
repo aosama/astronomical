@@ -34,6 +34,8 @@
 //!   source byte ranges into a synthetic safetensors layout.
 //! - `bounded_range_read_concurrency` — the process-wide permit pool and
 //!   partitioning that bound physical read parallelism.
+//! - `piece_read_pool` — the long-lived threads that help read a span's
+//!   pieces, so a cached page does not pay for starting threads.
 //! - `file_writer` — descriptor-backed saving
 //!   ([`MlxRuntime::save_safetensors`]).
 //! - `memory_writer` — bounded in-memory serialization
@@ -57,6 +59,7 @@ pub mod file_writer;
 pub mod lazy_map;
 pub mod memory_writer;
 pub mod name_maps;
+mod piece_read_pool;
 pub mod read_metrics;
 #[cfg(test)]
 mod read_metrics_tests;

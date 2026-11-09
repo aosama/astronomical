@@ -13,6 +13,9 @@ use crate::verbs::respond::RespondArguments;
 use crate::verbs::schema::SchemaArguments;
 use crate::verbs::validate_config::ValidateConfigArguments;
 use crate::verbs::vision::VisionCommand;
+use embed_arguments::parse_embed_arguments;
+
+mod embed_arguments;
 
 const HELP_TEXT: &str = concat!(
     "Astronomical\n\n",
@@ -27,6 +30,7 @@ const HELP_TEXT: &str = concat!(
     "       astronomical image PROMPT [--size WIDTHxHEIGHT] [--model MODEL_ID] [--seed N]\n",
     "                                 [--output PATH]\n",
     "       astronomical models list | supported | programs | default [MODEL_ID] | download MODEL_ID\n",
+    "       astronomical models convert-atlas MODEL [--output-model-id ORGANIZATION/NAME]\n",
     "       astronomical status\n",
     "       astronomical doctor\n",
     "       astronomical schema object --name NAME (--string|--int|--double|--boolean) PROPERTY...\n",
@@ -116,6 +120,7 @@ pub enum CliCommand {
     Quantize(QuantizeCommand),
     Vision(VisionCommand),
     ModelPrograms,
+    ModelConvertAtlas(crate::verbs::convert_atlas::ConvertAtlasArguments),
 }
 
 /// Launch-specific arguments after `astronomical launch`.
@@ -211,13 +216,20 @@ fn parse_validate_command(
     crate::verbs::validate_config::parse_validate_config_arguments(&remaining_arguments[1..])
 }
 
-/// `models programs` reads only the disk, so unlike its siblings it is not a request
-/// to the daemon, and it is a command of its own.
+/// `models programs` and `models convert-atlas` read only the disk, so unlike
+/// their siblings they are not requests to the daemon, and each is a command
+/// of its own.
 fn parse_models_verb(remaining_arguments: &[OsString]) -> Result<CliCommand, UsageError> {
     let first_argument = remaining_arguments.first();
     if first_argument.is_some_and(is_programs_subcommand) {
         reject_trailing_arguments(&remaining_arguments[1..])?;
         return Ok(CliCommand::ModelPrograms);
+    }
+    if first_argument.is_some_and(|argument| argument == "convert-atlas") {
+        return crate::verbs::convert_atlas::parse_convert_atlas_arguments(
+            &remaining_arguments[1..],
+        )
+        .map(CliCommand::ModelConvertAtlas);
     }
     parse_models_command(remaining_arguments).map(CliCommand::Models)
 }
@@ -571,62 +583,6 @@ fn parse_thinking_budget(
         .map_err(|_parse_error| UsageError::InvalidThinkingBudget(raw_value))
 }
 
-fn parse_embed_arguments(remaining_arguments: &[OsString]) -> Result<EmbedArguments, UsageError> {
-    let mut text = None;
-    let mut file_path = None;
-    let mut model_id = None;
-    let mut argument_index = 0;
-    while argument_index < remaining_arguments.len() {
-        let argument = &remaining_arguments[argument_index];
-        if argument == "--model" {
-            if model_id.is_some() {
-                return Err(UsageError::RepeatedArgument("--model"));
-            }
-            model_id = Some(flag_value(
-                remaining_arguments,
-                argument_index + 1,
-                "--model",
-            )?);
-            argument_index += 2;
-            continue;
-        }
-        if argument == "--file" {
-            if file_path.is_some() {
-                return Err(UsageError::RepeatedArgument("--file"));
-            }
-            let file_value = flag_value(remaining_arguments, argument_index + 1, "--file")?;
-            file_path = Some(PathBuf::from(file_value));
-            argument_index += 2;
-            continue;
-        }
-        if argument.to_string_lossy().starts_with('-') {
-            return Err(UsageError::UnknownArgument(
-                argument.to_string_lossy().into_owned(),
-            ));
-        }
-        if text.is_some() {
-            return Err(UsageError::UnknownArgument(
-                argument.to_string_lossy().into_owned(),
-            ));
-        }
-        let raw_text = argument
-            .to_str()
-            .ok_or_else(|| UsageError::UnknownArgument(argument.to_string_lossy().into_owned()))?;
-        text = Some(raw_text.to_owned());
-        argument_index += 1;
-    }
-    if text.is_some() && file_path.is_some() {
-        return Err(UsageError::EmbedInputConflict);
-    }
-    // No input at all parses: the journey resolves stdin and fails at
-    // runtime when even stdin is empty.
-    Ok(EmbedArguments {
-        text,
-        file_path,
-        model_id,
-    })
-}
-
 /// Command-line usage failures. These exit 2.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum UsageError {
@@ -680,10 +636,18 @@ pub enum UsageError {
     InvalidImageSize(String),
     #[error("--seed must be a whole number from 0 to 18446744073709551615: {0}")]
     InvalidImageSeed(String),
-    #[error("models needs a subcommand: list, supported, default, download")]
+    #[error(
+        "models needs a subcommand: list, supported, programs, default, download, convert-atlas"
+    )]
     ModelsSubcommandRequired,
-    #[error("unknown models subcommand: {0}. Try: list, supported, default, download")]
+    #[error(
+        "unknown models subcommand: {0}. Try: list, supported, programs, default, download, convert-atlas"
+    )]
     UnknownModelsSubcommand(String),
+    #[error(
+        "models convert-atlas needs a MODEL. Try: astronomical models convert-atlas organization/model-name"
+    )]
+    ConvertAtlasModelRequired,
     #[error("models download needs a MODEL_ID. Try: astronomical models download Qwen3.5-2B-4bit")]
     ModelsDownloadModelRequired,
 }

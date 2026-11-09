@@ -105,14 +105,14 @@ async fn should_round_trip_expert_memory_mode_change_event() {
 async fn should_round_trip_generation_preparation_topology() {
     let worker_event = WorkerEvent::GenerationPreparationStarted {
         request_id: RequestId::new(72),
-        expert_residency: WorkerExpertResidencySnapshot {
+        expert_residency: Some(WorkerExpertResidencySnapshot {
             total_layer_count: 40,
             resident_expert_count: 32,
             resident_expert_payload_bytes: 21_969_764_352,
             complete_expert_payload_byte_count: 40_000_000_000,
             expert_capacity: 256,
             layer_seating: crate::ExpertLayerSeatingCounts::default(),
-        },
+        }),
         mlx_memory_snapshot: None,
     };
     let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
@@ -572,4 +572,29 @@ mod prompt_cache_clear_protocol {
             .await
             .expect("prompt-cache protocol test should finish within five seconds");
     }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn should_round_trip_generation_preparation_announced_before_residency_is_known() {
+    let worker_event = WorkerEvent::GenerationPreparationStarted {
+        request_id: RequestId::new(73),
+        expert_residency: None,
+        mlx_memory_snapshot: None,
+    };
+    let (daemon_transport, worker_transport) = duplex(TEST_TRANSPORT_CAPACITY_BYTES);
+    let mut worker_writer = ProtocolWriter::new(worker_transport);
+    let mut daemon_reader = ProtocolReader::new(daemon_transport);
+
+    worker_writer
+        .send_event(&worker_event)
+        .await
+        .expect("a residency-free preparation announcement should be written");
+
+    assert_eq!(
+        daemon_reader
+            .next_event()
+            .await
+            .expect("a residency-free preparation announcement should decode"),
+        Some(worker_event)
+    );
 }

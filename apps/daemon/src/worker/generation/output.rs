@@ -74,6 +74,7 @@ pub(in crate::worker) fn handle_worker_output(
         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
     }
     if let Some(expert_residency) = expert_residency {
+        super::preparation::record_final_expert_residency(active_request, expert_residency.into());
         crate::worker::health::publish_worker_expert_residency(health_snapshot, expert_residency);
     }
     Ok(())
@@ -253,6 +254,7 @@ pub(in crate::worker) fn handle_worker_generation_progress(
         publish_latest_mlx_memory_snapshot(health_snapshot, mlx_memory_snapshot);
     }
     if let Some(expert_residency) = expert_residency {
+        super::preparation::record_final_expert_residency(active_request, expert_residency.into());
         crate::worker::health::publish_worker_expert_residency(health_snapshot, expert_residency);
     }
     Ok(())
