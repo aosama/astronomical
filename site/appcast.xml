@@ -4,30 +4,41 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.95</title>
-            <pubDate>Sun, 08 Nov 2026 22:27:30 -0500</pubDate>
-            <sparkle:version>2173</sparkle:version>
-            <sparkle:shortVersionString>0.2.95</sparkle:shortVersionString>
+            <title>0.2.96</title>
+            <pubDate>Mon, 09 Nov 2026 00:12:22 -0500</pubDate>
+            <sparkle:version>2180</sparkle:version>
+            <sparkle:shortVersionString>0.2.96</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description sparkle:format="markdown"><![CDATA[## What's new
 
-- **Remove a downloaded model from disk.** In Download Models, a model you downloaded now has a **Remove from disk** button. It asks on the card first, then moves the model's folder to the Trash, so you can restore it from Finder or download it again at any time. It waits while the model is loaded, loading or still downloading, and never touches a copy you placed on your Mac yourself. Available on macOS 15 and later; on macOS 14, Download Models keeps showing the model's folder in Finder.
+### See pictures with more of Ornith
 
-## Security
+Download Models now offers three more Ornith 1.5 builds that read pictures as well as text. Each one is Ornith's own weights, unchanged, with its original vision tower:
 
-- Download controls, Reveal in Finder and Remove from disk now answer only Astronomical's own pages, so another website open on your Mac cannot start downloads, open folders or remove models. The command-line tool is unaffected.
+- **Ornith 1.5 9B MLX 6-bit Vision**: slightly more faithful answers than the 4-bit, for about 2 GB more memory.
+- **Ornith 1.5 35B A3B MLX 6-bit Vision**: the large model for harder work, such as reading screenshots and documents, writing, coding and multi-step reasoning.
+- **Ornith 1.5 35B A3B MLX 8-bit Vision**: the highest-precision build of that model, for Macs with plenty of memory.
+
+The 9B 4-bit stays the Get started pick. The text-only 35B descriptions no longer quote a disk size that disagreed with the size on their card.
+
+### Faster streaming from the SSD
+
+When a mixture-of-experts model streams its experts from the SSD, each expert page now loads about a third faster: 2.9 ms instead of 4.4 ms for one page of a 35B A3B 8-bit model. A failed read from the SSD now stops the answer with an error instead of quietly using stale bytes.
 
 ## Compatibility
 
-Existing settings and downloaded models carry over unchanged; no configuration settings were removed. Requires macOS 14 or later on Apple silicon.
+- Apple silicon Macs with macOS 14 or later.
+- Your configuration, downloaded models, chats and settings are kept as they are. No configuration field changed.
 
-This release is signed with a Developer ID certificate and notarized by Apple.
+## Distribution
+
+Astronomical 0.2.96 is signed with a Developer ID, notarized by Apple, and offered through this GitHub release and the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.95/Astronomical-0.2.95-macOS-arm64.dmg" length="20520824" type="application/octet-stream" sparkle:edSignature="DMbt2GmdRUhqsPCdC3+s7PEd9mNM/NJMeOAdLlbGgVhUss9zPiTXsENqKbdYG0K4C9lSz7qCSVWs3BncPvT6Ag=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.96/Astronomical-0.2.96-macOS-arm64.dmg" length="20537461" type="application/octet-stream" sparkle:edSignature="z+vXX+HGFl5C4TAQVgy9+ebB8annO9ZNNUaFv5Qi+6yQ5vUs6RUlnxI3cKfpLyIfZU+ry8ZQNICRI3IYJZdSDg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: bIwhQX44EQnK1emMd3Edxx112Fh2vC/4nllbhhYzbsjXxpqOWDS429/CYoss+NrL3bxbhacsUhhN7yqr8tHOBA==
-length: 2226
+edSignature: dcRm3lLtE6qToSyyXw4jDgVujysB3IK1k/+dQLxWG5KrIUVESciUgb3/OtkOqOtjllQ3lcuWjDalapxaq1m7BQ==
+length: 2646
 -->
