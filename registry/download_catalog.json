@@ -97,6 +97,63 @@
             "upstream_license": "MIT"
         },
         {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-9B-MLX-6bit-vision",
+            "revision": "98b34c45cbb06e551649612aca8c81c685067daa",
+            "display_name": "Ornith 1.5 9B MLX 6-bit Vision",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 8208531833,
+            "approximate_memory_bytes": 9324895646,
+            "role": "chat",
+            "public": true,
+            "description": "A capable everyday model that sees pictures and text and reasons before answering, at higher fidelity. Ornith's own 6-bit weights with its original vision tower: slightly more faithful answers than the 4-bit version, for about 2 GB more memory.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 6-bit (affine, group 64), vision tower at bf16",
+            "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-6bit-vision",
+            "revision": "6d2cb55f91769cef240d36fffd448c60bdd1900d",
+            "display_name": "Ornith 1.5 35B A3B MLX 6-bit Vision",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 29082037590,
+            "approximate_memory_bytes": 30410000000,
+            "role": "chat",
+            "public": true,
+            "description": "A large model that sees pictures and text and thinks carefully before answering. Best for harder work - reading screenshots and documents, writing, coding, and multi-step reasoning. Ornith's own 6-bit weights with its original vision tower, quick for its size because only a small part of it works on each word.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 6-bit (affine, group 64), 8-bit routers, bf16 vision tower",
+            "upstream_license": "MIT"
+        },
+        {
+            "huggingface_id": "ahmedihamdy/Ornith-1.5-35B-A3B-MLX-8bit-vision",
+            "revision": "605cbfe28036cdaba9b3410f3a97d6db51e782bf",
+            "display_name": "Ornith 1.5 35B A3B MLX 8-bit Vision",
+            "family": "qwen3_5",
+            "approximate_size_bytes": 37741637179,
+            "approximate_memory_bytes": 39070000000,
+            "role": "chat",
+            "public": true,
+            "description": "The highest-precision build of the large Ornith model that sees pictures and text and thinks carefully before answering. Best for harder work when quality matters most. Ornith's own 8-bit weights with its original vision tower, favoring quality over fitting smaller Macs.",
+            "capabilities": {
+                "supports_reasoning": true,
+                "supports_vision": true,
+                "supports_tool_calls": true,
+                "context_window": 262144
+            },
+            "quantization_label": "MLX 8-bit (affine, group 64), vision tower at bf16",
+            "upstream_license": "MIT"
+        },
+        {
             "huggingface_id": "black-forest-labs/FLUX.2-klein-4B",
             "revision": "e7b7dc27f91deacad38e78976d1f2b499d76a294",
             "display_name": "FLUX.2 Klein 4B full precision",
@@ -200,7 +257,7 @@
             "approximate_memory_bytes": 29313151686,
             "role": "coding",
             "public": true,
-            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents, runs comfortably on more Macs thanks to its lighter compression, and takes about 28.2 GB on disk.",
+            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents, and runs comfortably on more Macs thanks to its lighter compression.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
@@ -277,7 +334,7 @@
             "minimum_memory_bytes": 4484842240,
             "role": "coding",
             "public": true,
-            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents and takes about 34.3 GB on disk. This is the highest-precision MLX build of the 35B model, favoring quality over fitting smaller Macs.",
+            "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents. This is the highest-precision MLX build of the 35B model, favoring quality over fitting smaller Macs.",
             "capabilities": {
                 "supports_reasoning": true,
                 "supports_tool_calls": true,
