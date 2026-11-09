@@ -471,8 +471,8 @@ struct IntervalPiece {
 /// performs them, returning whether every byte was read.
 ///
 /// The span is cut into one piece per interval it touches, then the pieces
-/// are read by `read_source_pieces`, concurrently when the span is large
-/// enough (see its documentation for the measurement). A failure latches the
+/// are read by `read_source_pieces`, concurrently whenever there is more than
+/// one (see its documentation for the measurement). A failure latches the
 /// reader's error state as well as returning `false`.
 fn read_payload_at_offset(
     reader_state: &BoundedMultiRangeReaderState,
