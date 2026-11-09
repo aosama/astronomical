@@ -37,81 +37,81 @@ impl ModernBertConfiguration {
     pub fn from_config_value(
         config_value: &serde_json::Value,
     ) -> Result<Self, ModernBertConfigurationError> {
-        let hidden_size = positive_u32(config_value, "hidden_size")?;
-        let layer_count = positive_u32(config_value, "num_hidden_layers")?;
-        let attention_head_count = positive_u32(config_value, "num_attention_heads")?;
-        let maximum_position_count = positive_u32(config_value, "max_position_embeddings")?;
-        let local_attention_window = positive_u32(config_value, "local_attention")?;
-        let global_attn_every_n_layers = positive_u32(config_value, "global_attn_every_n_layers")?;
-        let global_rope_theta = positive_f32(config_value, "global_rope_theta")?;
-        let local_rope_theta = positive_f32(config_value, "local_rope_theta")?;
-        let layer_norm_epsilon = positive_f32(config_value, "layer_norm_eps")?;
-        let pad_token_id = token_id_field(config_value, "pad_token_id")?;
-        let cls_token_id = token_id_field(config_value, "cls_token_id")?;
-        let sep_token_id = token_id_field(config_value, "sep_token_id")?;
-        let quantization_value = config_value
-            .get("quantization")
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
-        let quantization_group_size = positive_u32(&quantization_value, "group_size")?;
-        let quantization_bits = positive_u32(&quantization_value, "bits")?;
-
-        if hidden_size > MAXIMUM_SUPPORTED_HIDDEN_SIZE {
-            return Err(ModernBertConfigurationError::HiddenSizeTooLarge {
-                hidden_size,
-                maximum_hidden_size: MAXIMUM_SUPPORTED_HIDDEN_SIZE,
-            });
-        }
-        if layer_count > MAXIMUM_SUPPORTED_LAYER_COUNT {
-            return Err(ModernBertConfigurationError::LayerCountExceeded {
-                actual_layer_count: layer_count,
-                maximum_layer_count: MAXIMUM_SUPPORTED_LAYER_COUNT,
-            });
-        }
-        if attention_head_count > hidden_size || hidden_size % attention_head_count != 0 {
-            return Err(
-                ModernBertConfigurationError::HiddenSizeNotDivisibleByHeads {
-                    hidden_size,
-                    attention_head_count,
-                },
-            );
-        }
-        if hidden_size % quantization_group_size != 0
-            || quantization_group_size > MAXIMUM_SUPPORTED_QUANTIZATION_GROUP_SIZE
-        {
-            return Err(ModernBertConfigurationError::QuantizationGroupMisaligned {
-                hidden_size,
-                quantization_group_size,
-            });
-        }
-        if quantization_bits == 0 || quantization_bits > MAXIMUM_SUPPORTED_QUANTIZATION_BITS {
-            return Err(ModernBertConfigurationError::UnsupportedQuantization {
-                quantization_group_size,
-                quantization_bits,
-            });
-        }
-        if layer_norm_epsilon < MINIMUM_LAYER_NORM_EPSILON {
+        let (quantization_group_size, quantization_bits) = parse_quantization(config_value)?;
+        let configuration = Self {
+            hidden_size: positive_u32(config_value, "hidden_size")?,
+            layer_count: positive_u32(config_value, "num_hidden_layers")?,
+            attention_head_count: positive_u32(config_value, "num_attention_heads")?,
+            maximum_position_count: positive_u32(config_value, "max_position_embeddings")?,
+            local_attention_window: positive_u32(config_value, "local_attention")?,
+            global_attn_every_n_layers: positive_u32(config_value, "global_attn_every_n_layers")?,
+            global_rope_theta: positive_f32(config_value, "global_rope_theta")?,
+            local_rope_theta: positive_f32(config_value, "local_rope_theta")?,
+            layer_norm_epsilon: positive_f32(config_value, "layer_norm_eps")?,
+            pad_token_id: token_id_field(config_value, "pad_token_id")?,
+            cls_token_id: token_id_field(config_value, "cls_token_id")?,
+            sep_token_id: token_id_field(config_value, "sep_token_id")?,
+            quantization_group_size,
+            quantization_bits,
+        };
+        configuration.validate_geometry()?;
+        configuration.validate_quantization()?;
+        if configuration.layer_norm_epsilon < MINIMUM_LAYER_NORM_EPSILON {
             return Err(ModernBertConfigurationError::UnsupportedLayerNormEpsilon {
-                actual: layer_norm_epsilon,
+                actual: configuration.layer_norm_epsilon,
                 minimum: MINIMUM_LAYER_NORM_EPSILON,
             });
         }
-        Ok(Self {
-            hidden_size,
-            layer_count,
-            attention_head_count,
-            maximum_position_count,
-            local_attention_window,
-            global_attn_every_n_layers,
-            global_rope_theta,
-            local_rope_theta,
-            layer_norm_epsilon,
-            pad_token_id,
-            cls_token_id,
-            sep_token_id,
-            quantization_group_size,
-            quantization_bits,
-        })
+        Ok(configuration)
+    }
+
+    /// Bounds the trunk so a hostile artifact cannot size GPU buffers.
+    fn validate_geometry(&self) -> Result<(), ModernBertConfigurationError> {
+        if self.hidden_size > MAXIMUM_SUPPORTED_HIDDEN_SIZE {
+            return Err(ModernBertConfigurationError::HiddenSizeTooLarge {
+                hidden_size: self.hidden_size,
+                maximum_hidden_size: MAXIMUM_SUPPORTED_HIDDEN_SIZE,
+            });
+        }
+        if self.layer_count > MAXIMUM_SUPPORTED_LAYER_COUNT {
+            return Err(ModernBertConfigurationError::LayerCountExceeded {
+                actual_layer_count: self.layer_count,
+                maximum_layer_count: MAXIMUM_SUPPORTED_LAYER_COUNT,
+            });
+        }
+        if self.attention_head_count > self.hidden_size
+            || !self.hidden_size.is_multiple_of(self.attention_head_count)
+        {
+            return Err(
+                ModernBertConfigurationError::HiddenSizeNotDivisibleByHeads {
+                    hidden_size: self.hidden_size,
+                    attention_head_count: self.attention_head_count,
+                },
+            );
+        }
+        Ok(())
+    }
+
+    /// Quantization groups tile each hidden row exactly; both values are
+    /// already positive, so only the upper bounds and alignment remain.
+    fn validate_quantization(&self) -> Result<(), ModernBertConfigurationError> {
+        if !self
+            .hidden_size
+            .is_multiple_of(self.quantization_group_size)
+            || self.quantization_group_size > MAXIMUM_SUPPORTED_QUANTIZATION_GROUP_SIZE
+        {
+            return Err(ModernBertConfigurationError::QuantizationGroupMisaligned {
+                hidden_size: self.hidden_size,
+                quantization_group_size: self.quantization_group_size,
+            });
+        }
+        if self.quantization_bits > MAXIMUM_SUPPORTED_QUANTIZATION_BITS {
+            return Err(ModernBertConfigurationError::UnsupportedQuantization {
+                quantization_group_size: self.quantization_group_size,
+                quantization_bits: self.quantization_bits,
+            });
+        }
+        Ok(())
     }
 
     /// Native head dimension derived from validated geometry.
@@ -134,23 +134,55 @@ fn token_id_field(
     .map_err(|_| ModernBertConfigurationError::MissingField { field_name })
 }
 
+/// The `quantization` block's group size and bits. An absent block or
+/// field is the unquantized artifact this engine does not serve, which is a
+/// different failure from a malformed top-level field.
+fn parse_quantization(
+    config_value: &serde_json::Value,
+) -> Result<(u32, u32), ModernBertConfigurationError> {
+    let quantization_block = config_value
+        .get("quantization")
+        .ok_or(ModernBertConfigurationError::MissingQuantization)?;
+    Ok((
+        positive_u32_or(
+            quantization_block,
+            "group_size",
+            ModernBertConfigurationError::MissingQuantization,
+        )?,
+        positive_u32_or(
+            quantization_block,
+            "bits",
+            ModernBertConfigurationError::MissingQuantization,
+        )?,
+    ))
+}
+
 fn positive_u32(
     document: &serde_json::Value,
     field_name: &'static str,
 ) -> Result<u32, ModernBertConfigurationError> {
-    let value = document
+    positive_u32_or(
+        document,
+        field_name,
+        ModernBertConfigurationError::MissingField { field_name },
+    )
+}
+
+/// A positive `u32` field; `absent_error` when it is missing or not an
+/// unsigned integer, `MissingField` when present but zero or too wide.
+fn positive_u32_or(
+    document: &serde_json::Value,
+    field_name: &'static str,
+    absent_error: ModernBertConfigurationError,
+) -> Result<u32, ModernBertConfigurationError> {
+    let unsigned_field = document
         .get(field_name)
         .and_then(serde_json::Value::as_u64)
-        .ok_or(match field_name {
-            "group_size" | "bits" => ModernBertConfigurationError::MissingQuantization,
-            _ => ModernBertConfigurationError::MissingField { field_name },
-        })?;
-    let parsed_value = u32::try_from(value)
-        .map_err(|_| ModernBertConfigurationError::MissingField { field_name })?;
-    if parsed_value == 0 {
-        return Err(ModernBertConfigurationError::MissingField { field_name });
+        .ok_or(absent_error)?;
+    match u32::try_from(unsigned_field) {
+        Ok(positive_field) if positive_field > 0 => Ok(positive_field),
+        _ => Err(ModernBertConfigurationError::MissingField { field_name }),
     }
-    Ok(parsed_value)
 }
 
 fn positive_f32(
@@ -211,3 +243,7 @@ pub enum ModernBertConfigurationError {
     #[error("ModernBERT missing quantization metadata")]
     MissingQuantization,
 }
+
+#[cfg(test)]
+#[path = "configuration_tests.rs"]
+mod configuration_tests;
