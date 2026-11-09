@@ -4,54 +4,36 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.93</title>
-            <pubDate>Sun, 08 Nov 2026 14:09:48 -0500</pubDate>
-            <sparkle:version>2161</sparkle:version>
-            <sparkle:shortVersionString>0.2.93</sparkle:shortVersionString>
+            <title>0.2.94</title>
+            <pubDate>Sun, 08 Nov 2026 21:33:52 -0500</pubDate>
+            <sparkle:version>2169</sparkle:version>
+            <sparkle:shortVersionString>0.2.94</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.93
+            <description sparkle:format="markdown"><![CDATA[## What's new
 
-### Meet Astro in Thin Talk
+- **Idle model unload.** A loaded model is now freed after it sits unused for a configurable time (`runtime.idle_model_unload_seconds`, 60 seconds by default; set 0 to keep it loaded). The change applies without a restart, and a request that arrives while the model is being freed is still served.
+- **A clearer Observatory Overview.** A live status band shows what is running, which model, progress in the work's own units, and when the loaded model will be freed. Memory sits beside the loaded model, and session tiles show requests, speed, prompt reuse and SSD prompt cache use.
+- **Simpler Observatory navigation.** Model is part of Overview, Settings is part of Configuration, navigation moves to a top bar, and type and buttons are larger and easier to read. Old addresses open the pages that replaced them.
+- **Download Models.** The Library is now called Download Models everywhere. Model cards are easier to read, Cyber Tiel Coder is available as an experimental model, and Qwen 3.5 0.8B and 2B are marked as retiring soon.
 
-Thin Talk now opens with Astro for anyone meeting it for the first time: a short welcome made for ages 8 to 18 that asks for a nickname (kept only on this Mac), offers an Explorer or Pilot style, downloads a chat model once if none is installed, and teaches Astro a first skill when you drop a card on it. Empty chats become Astro's home, and conversations show Astro's face and skill tags, tool steps as skill moments, Draw / Look / Read buttons, and chats coloured by skill in the sidebar. View > Show or Hide Astro brings back the classic look, and View > Meet Astro Again replays the welcome.
+## Fixes
 
-### Enhancements
+- The menu bar popover no longer leaves an empty gap between the Flight and Progress rows; the progress bar now sits inside the Progress row.
+- Dense models no longer describe experts they do not have.
+- Thin Talk's image-model selector no longer flickers when one image model is installed.
+- Residency and Maximum model RAM each fit on one line in the menu bar popover.
 
-- Thin Talk no longer caps thinking: the thinking-level control is gone and the model thinks as long as it needs.
-- Choose which image model draws pictures in Thin Talk.
-- The 4-bit FLUX.2 Klein build is supported and is the Library's Pictures pick.
-- The Library's Get started picks are grouped by job, with a More models page and download sizes.
-- `validate config` explains what each `models` entry does and which installed model it applies to.
-- `respond`, `embed` and `models` entries accept a full Hugging Face ID such as `organization/model`.
-- Small Macs are never refused a model because of their memory size.
+## Compatibility
 
-### Bug fixes
+Existing settings and downloaded models carry over unchanged; no configuration settings were removed. Requires macOS 14 or later on Apple silicon.
 
-- Downloads that include a zero-byte file now finish.
-- A failed download no longer blocks other models' downloads, even after a restart.
-- The Library's Download button stays usable after another model's download failed.
-- Publishing a model no longer leaves empty hidden folders behind, and folders left by earlier versions are cleared at startup.
-- Show in Finder in the Library opens Finder.
-- Lowering the memory limit below a loaded image model's needs is refused instead of crashing the worker.
-- The worker is relaunched if it exits during a memory change, and status reflects it.
-- Changing the memory limit with no model loaded no longer stops the next image model from loading.
-- The menu popover no longer shows a spinner that never stops.
-
-### Thanks
-
-Thank you to @charlesberret for reporting the download and model-ID problems fixed in this release (#1896, #1897, #1898).
-
-### Compatibility
-
-macOS 14.0 or later on Apple Silicon. Your configuration, conversations, preferences and installed models carry over unchanged. Thin Talk shows Astro's welcome once after the update; you can skip it or hide Astro from the View menu.
-
-This release is signed with a Developer ID, notarized by Apple, and delivered through GitHub and the in-app updater.
+This release is signed with a Developer ID certificate and notarized by Apple.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.93/Astronomical-0.2.93-macOS-arm64.dmg" length="20479437" type="application/octet-stream" sparkle:edSignature="93hStFv57p+K7+xTQ09wJLNxieY/mwuoJprUbvEJqL4HEyYOYxZvUKiJNz3Mlf2ylqJLnLF4YBfyumJt7aEwCg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.94/Astronomical-0.2.94-macOS-arm64.dmg" length="20497355" type="application/octet-stream" sparkle:edSignature="t5wKZbKlGq20nRmGQKs47iX6S+4uHRV6Qb77XZX6DXUD/cMXVct22LLRUwYX8SNRVaVhuiIbXJo7zEkeUYOzDQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: Xy2aszefLnKr9Hhuvi+F89o/5q2KmeZy+/4VyTHNAB9fjYkLTaA0h4WTxFv/RwmH1Cac7D+DTFZ9wsX5ctxrBw==
-length: 3790
+edSignature: gJvdxJ+DxvbRtgtok45kqVyq/PWHnA58YxlibKYKGfQ5MUYdnfHUat3wxvo1m95kOWsXkkntowNoYa37ecX1BQ==
+length: 2904
 -->
