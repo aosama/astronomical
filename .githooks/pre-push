@@ -36,7 +36,13 @@ if (cd "${REPOSITORY_ROOT}" && cargo verify); then
 else
     elapsed_seconds=$(( $(date +%s) - started_epoch_seconds ))
     printf '%s\n' "[pre-push] status=failed check=cargo-verify elapsed_seconds=${elapsed_seconds}" >&2
-    printf '%s\n' '[pre-push] hint=fix the compile errors locally before spending a GitHub Actions run' >&2
+    # Not every failure here is a compile error: a build that rebuilds MLX
+    # from source (any change to the native build identity, such as a cc
+    # bump) fails before compiling when this Mac's native-dependency cache
+    # was never provisioned, so the hint names that case next to compile
+    # errors instead of sending people to hunt for code errors.
+    printf '%s\n' '[pre-push] hint=fix the errors above locally before spending a GitHub Actions run' >&2
+    printf '%s\n' '[pre-push] hint=a "Missing ... archive" error means the native-dependency cache is empty; run cargo xtask bootstrap-native-dependencies' >&2
     exit 1
 fi
 
