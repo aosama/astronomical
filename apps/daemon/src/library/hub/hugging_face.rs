@@ -1,20 +1,18 @@
 //! Bounded immutable-revision manifest discovery from the public Hugging Face Hub.
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use reqwest::Url;
 use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
-    hugging_face_bounds::{
-        estimated_durable_file_metadata_bytes, has_ancestor_path, has_descendant_path,
-        is_canonical_ascii_path, parse_next_link, validate_tree_page_url,
-    },
+    hugging_face_bounds::{parse_next_link, validate_tree_page_url},
     transport::{HubHttpRequest, HubHttpResponse, HubTransport, HubTransportError},
 };
 use crate::library::download::job::download_job::MAXIMUM_DOWNLOAD_JOB_BYTES;
-use crate::library::download::transfer::file_digest::is_lowercase_hex;
+use tree_manifest::{TreeEntryDocument, TreeManifestAccumulator};
+
 use crate::library::{
     DownloadFileDigest, DownloadPathSelection, is_valid_huggingface_id, is_valid_immutable_revision,
 };
@@ -130,26 +128,6 @@ enum GatedStatus {
     Mode(String),
 }
 
-#[derive(Debug, Deserialize)]
-struct TreeEntryDocument {
-    #[serde(rename = "type")]
-    entry_type: String,
-    size: u64,
-    path: String,
-    oid: Option<String>,
-    lfs: Option<LfsDocument>,
-    #[serde(rename = "xetHash")]
-    xet_hash: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LfsDocument {
-    oid: String,
-    size: u64,
-    #[serde(rename = "pointerSize")]
-    pointer_size: u64,
-}
-
 impl Default for HuggingFaceHubLimits {
     fn default() -> Self {
         Self {
@@ -263,6 +241,9 @@ impl HuggingFaceHub {
         }
     }
 
+    /// Walks every page of the recursive tree. Each entry is checked as it
+    /// arrives so a hostile tree fails at its first bad entry instead of
+    /// after it has been buffered whole.
     async fn fetch_recursive_tree(
         &self,
         repository_id: &str,
@@ -273,13 +254,7 @@ impl HuggingFaceHub {
             format!("{HUGGING_FACE_ORIGIN}/api/models/{repository_id}/tree/{revision}");
         let mut next_page_url = Some(format!("{expected_tree_url}?recursive=true"));
         let mut fetched_page_count = 0_usize;
-        let mut fetched_tree_entry_count = 0_usize;
-        let mut files = Vec::new();
-        let mut normalized_paths = BTreeSet::new();
-        let mut normalized_file_paths = BTreeSet::new();
-        let mut total_bytes = 0_u64;
-        let mut estimated_job_metadata_bytes = DOWNLOAD_JOB_FIXED_METADATA_ALLOWANCE_BYTES;
-
+        let mut tree_manifest = TreeManifestAccumulator::new(self.limits);
         while let Some(page_url) = next_page_url {
             fetched_page_count = fetched_page_count.saturating_add(1);
             if fetched_page_count > self.limits.maximum_tree_page_count {
@@ -290,70 +265,12 @@ impl HuggingFaceHub {
             let tree_entries: Vec<TreeEntryDocument> =
                 serde_json::from_slice(&tree_response.body_bytes())
                     .map_err(HuggingFaceHubError::InvalidTreeJson)?;
-
             for tree_entry in tree_entries {
-                fetched_tree_entry_count = fetched_tree_entry_count.saturating_add(1);
-                if fetched_tree_entry_count > self.limits.maximum_file_count {
-                    return Err(HuggingFaceHubError::TooManyTreeEntries);
-                }
-                validate_tree_entry_common(&tree_entry, self.limits.maximum_path_bytes)?;
-                let normalized_path = tree_entry.path.to_ascii_lowercase();
-                if has_ancestor_path(&normalized_file_paths, &normalized_path) {
-                    return Err(HuggingFaceHubError::FilePathHierarchyConflict);
-                }
-                if !normalized_paths.insert(normalized_path.clone()) {
-                    return Err(HuggingFaceHubError::CaseInsensitivePathCollision);
-                }
-                match tree_entry.entry_type.as_str() {
-                    "directory" => validate_directory_entry(&tree_entry)?,
-                    "file" => {
-                        if has_descendant_path(&normalized_paths, &normalized_path) {
-                            return Err(HuggingFaceHubError::FilePathHierarchyConflict);
-                        }
-                        if path_selection.includes(&tree_entry.path) {
-                            if files.len() >= self.limits.maximum_file_count {
-                                return Err(HuggingFaceHubError::TooManyFiles);
-                            }
-                            total_bytes = total_bytes
-                                .checked_add(tree_entry.size)
-                                .ok_or(HuggingFaceHubError::TotalBytesTooLarge)?;
-                            if total_bytes > self.limits.maximum_total_bytes
-                                || total_bytes > MAXIMUM_JAVASCRIPT_SAFE_INTEGER
-                            {
-                                return Err(HuggingFaceHubError::TotalBytesTooLarge);
-                            }
-                            let manifest_file = validated_file(tree_entry)?;
-                            estimated_job_metadata_bytes = estimated_job_metadata_bytes
-                                .checked_add(estimated_durable_file_metadata_bytes(&manifest_file))
-                                .ok_or(HuggingFaceHubError::JobMetadataTooLarge)?;
-                            if estimated_job_metadata_bytes
-                                > self
-                                    .limits
-                                    .maximum_job_metadata_bytes
-                                    .min(MAXIMUM_DOWNLOAD_JOB_BYTES)
-                            {
-                                return Err(HuggingFaceHubError::JobMetadataTooLarge);
-                            }
-                            files.push(manifest_file);
-                        }
-                        normalized_file_paths.insert(normalized_path);
-                    }
-                    _ => return Err(HuggingFaceHubError::InvalidEntryType),
-                }
+                tree_manifest.accept_entry(tree_entry, path_selection)?;
             }
             next_page_url = parse_next_link(tree_response.selected_header("link"))?;
         }
-
-        if files.is_empty() || total_bytes == 0 {
-            return Err(HuggingFaceHubError::EmptyManifest);
-        }
-
-        Ok(HuggingFaceManifest {
-            repository_id: repository_id.to_owned(),
-            revision: revision.to_owned(),
-            files,
-            total_bytes,
-        })
+        tree_manifest.finish(repository_id, revision)
     }
 
     async fn execute_metadata_get(
@@ -451,67 +368,5 @@ impl HubManifestFile {
     }
 }
 
-fn validated_file(tree_entry: TreeEntryDocument) -> Result<HubManifestFile, HuggingFaceHubError> {
-    let xet_hash = match tree_entry.xet_hash {
-        Some(xet_hash) if is_lowercase_hex(&xet_hash, SHA256_HEX_CHARACTER_COUNT) => Some(xet_hash),
-        Some(_) => return Err(HuggingFaceHubError::InvalidXetHash),
-        None => None,
-    };
-    let digest = if let Some(lfs) = tree_entry.lfs {
-        if lfs.size != tree_entry.size
-            || lfs.pointer_size == 0
-            || lfs.pointer_size > MAXIMUM_JAVASCRIPT_SAFE_INTEGER
-            || !is_lowercase_hex(&lfs.oid, SHA256_HEX_CHARACTER_COUNT)
-        {
-            return Err(HuggingFaceHubError::InvalidLfsMetadata);
-        }
-        if let Some(git_oid) = tree_entry.oid.as_deref()
-            && !is_lowercase_hex(git_oid, GIT_SHA1_HEX_CHARACTER_COUNT)
-        {
-            return Err(HuggingFaceHubError::InvalidGitBlobSha1);
-        }
-        DownloadFileDigest::Sha256(lfs.oid)
-    } else {
-        let git_oid = tree_entry
-            .oid
-            .ok_or(HuggingFaceHubError::MissingIndependentDigest)?;
-        if !is_lowercase_hex(&git_oid, GIT_SHA1_HEX_CHARACTER_COUNT) {
-            return Err(HuggingFaceHubError::InvalidGitBlobSha1);
-        }
-        DownloadFileDigest::GitBlobSha1(git_oid)
-    };
-    Ok(HubManifestFile {
-        relative_path: tree_entry.path,
-        expected_bytes: tree_entry.size,
-        digest,
-        xet_hash,
-    })
-}
-
-fn validate_tree_entry_common(
-    tree_entry: &TreeEntryDocument,
-    maximum_path_bytes: usize,
-) -> Result<(), HuggingFaceHubError> {
-    if tree_entry.size > MAXIMUM_JAVASCRIPT_SAFE_INTEGER {
-        return Err(HuggingFaceHubError::InvalidEntrySize);
-    }
-    if !is_canonical_ascii_path(&tree_entry.path, maximum_path_bytes) {
-        return Err(HuggingFaceHubError::InvalidEntryPath);
-    }
-    Ok(())
-}
-
-fn validate_directory_entry(tree_entry: &TreeEntryDocument) -> Result<(), HuggingFaceHubError> {
-    if tree_entry.size != 0 {
-        return Err(HuggingFaceHubError::InvalidEntrySize);
-    }
-    if tree_entry.lfs.is_some() || tree_entry.xet_hash.is_some() {
-        return Err(HuggingFaceHubError::InvalidLfsMetadata);
-    }
-    if let Some(git_oid) = tree_entry.oid.as_deref()
-        && !is_lowercase_hex(git_oid, GIT_SHA1_HEX_CHARACTER_COUNT)
-    {
-        return Err(HuggingFaceHubError::InvalidGitBlobSha1);
-    }
-    Ok(())
-}
+#[path = "hugging_face_tree_manifest.rs"]
+mod tree_manifest;
