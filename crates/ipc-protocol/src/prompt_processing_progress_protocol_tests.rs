@@ -27,6 +27,7 @@ async fn should_round_trip_prefill_progress_event() {
             memory_ceiling_utilization: None,
         }),
         expert_residency: Some(WorkerExpertResidencySnapshot {
+            dense_layers: None,
             total_layer_count: 40,
             resident_expert_count: 40,
             resident_expert_payload_bytes: 3_375_366_144,

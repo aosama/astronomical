@@ -111,6 +111,7 @@ fn expert_streaming_stats_snapshot() -> WorkerExpertStreamingStats {
         model_id: None,
         expert_memory_mode: ExpertMemoryMode::Hybrid,
         expert_residency: WorkerExpertResidencySnapshot {
+            dense_layers: None,
             total_layer_count: 8,
             resident_expert_count: 16,
             resident_expert_payload_bytes: 1_024,

@@ -301,6 +301,8 @@ pub struct ExpertResidencyTelemetry {
     /// Per-layer retained counts. Zero seated layers means this sample has
     /// no map yet, so Observatory keeps the end-of-reply topology.
     pub layer_seating: ExpertLayerSeatingCounts,
+    /// A dense model's kept and streamed decoder layers (issue #1985).
+    pub dense_layers: Option<astronomical_ipc_protocol::WorkerDenseLayerResidency>,
 }
 
 /// One decoder layer's retained expert identities captured for observatory.

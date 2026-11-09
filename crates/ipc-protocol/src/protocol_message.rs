@@ -73,6 +73,21 @@ pub struct WorkerExpertResidencySnapshot {
     /// the zero seating means Observatory waits for the end-of-reply topology.
     #[serde(default)]
     pub layer_seating: ExpertLayerSeatingCounts,
+    /// A dense model's decoder layers: how many stay in RAM and what the
+    /// rest read from the SSD (issue #1985). `None` for a sparse model, or
+    /// a dense one that keeps everything on an engine that never streams.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dense_layers: Option<WorkerDenseLayerResidency>,
+}
+
+/// Where a dense model's decoder layers live while it serves.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WorkerDenseLayerResidency {
+    pub decoder_layer_count: u32,
+    /// Leading layers kept in RAM; the rest are read from the SSD for every
+    /// forward that runs them.
+    pub kept_layer_count: u32,
+    pub streamed_layer_payload_bytes: u64,
 }
 
 /// One decoder layer's retained sparse-expert identities at a snapshot instant.

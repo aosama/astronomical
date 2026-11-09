@@ -484,6 +484,7 @@ impl InferenceEngine for ScriptedChatEngine {
             self.idle_mlx_memory_telemetry,
         )
         .with_expert_residency_telemetry(ExpertResidencyTelemetry {
+            dense_layers: None,
             total_layer_count: 2,
             resident_expert_count: 2,
             resident_expert_payload_bytes: 8_000,

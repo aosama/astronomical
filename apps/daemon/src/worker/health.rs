@@ -167,6 +167,8 @@ pub struct ExpertResidencySnapshot {
     pub complete_expert_payload_byte_count: u64,
     pub expert_capacity: u32,
     pub layer_seating: ExpertLayerSeatingCounts,
+    /// A dense model's kept and streamed decoder layers (issue #1985).
+    pub dense_layers: Option<astronomical_ipc_protocol::WorkerDenseLayerResidency>,
 }
 
 impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
@@ -178,6 +180,7 @@ impl From<WorkerExpertResidencySnapshot> for ExpertResidencySnapshot {
             complete_expert_payload_byte_count: expert_residency.complete_expert_payload_byte_count,
             expert_capacity: expert_residency.expert_capacity,
             layer_seating: expert_residency.layer_seating,
+            dense_layers: expert_residency.dense_layers,
         }
     }
 }

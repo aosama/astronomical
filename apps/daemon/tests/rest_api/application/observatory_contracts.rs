@@ -192,6 +192,7 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
     let preparation_started_at = Instant::now() - Duration::from_millis(125);
     health_snapshot.activity = WorkerActivity::GenerationPreparation;
     health_snapshot.expert_residency = Some(ExpertResidencySnapshot {
+        dense_layers: None,
         total_layer_count: 40,
         resident_expert_count: 32,
         resident_expert_payload_bytes: 13_000_000_000,
@@ -241,6 +242,7 @@ async fn should_expose_generation_preparation_without_inventing_token_progress()
 async fn should_expose_generation_preparation_announced_before_residency_is_reconciled() {
     let mut health_snapshot = ready_health_snapshot_with_model();
     let last_observed_residency = ExpertResidencySnapshot {
+        dense_layers: None,
         total_layer_count: 40,
         resident_expert_count: 24,
         resident_expert_payload_bytes: 9_000_000_000,

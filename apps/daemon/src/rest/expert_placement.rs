@@ -8,7 +8,7 @@
 //! the request-scoped memory mode. Clients print these strings. They do not
 //! keep a second phrase table.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerDenseLayerResidency};
 
 use crate::{ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot};
 
@@ -83,6 +83,13 @@ pub(crate) fn expert_residency_json(
         "complete_expert_payload_byte_count": expert_residency.complete_expert_payload_byte_count,
         "expert_capacity": expert_residency.expert_capacity,
     });
+    if let Some(dense_layers) = expert_residency.dense_layers {
+        residency_json["dense_layers"] = serde_json::json!({
+            "decoder_layer_count": dense_layers.decoder_layer_count,
+            "kept_layer_count": dense_layers.kept_layer_count,
+            "streamed_layer_payload_bytes": dense_layers.streamed_layer_payload_bytes,
+        });
+    }
     let retained_expert_counts = expert_residency.layer_seating.published_counts();
     if !retained_expert_counts.is_empty() {
         residency_json["retained_expert_counts"] = serde_json::json!(retained_expert_counts);
@@ -97,6 +104,9 @@ fn stock_sentence(
 ) -> String {
     if ready_model_id_is_absent(ready_model_id) {
         return "No model loaded".to_owned();
+    }
+    if let Some(dense_layers) = dense_layers_of(expert_residency) {
+        return dense_stock_sentence(dense_layers);
     }
     let (complete_expert_payload_byte_count, resident_expert_payload_bytes, total_layer_count) =
         residency_bytes(expert_residency);
@@ -170,6 +180,9 @@ fn reply_sentence(
     if ready_model_id_is_absent(ready_model_id) {
         return String::new();
     }
+    if let Some(dense_layers) = dense_layers_of(expert_residency) {
+        return dense_reply_sentence(dense_layers);
+    }
     let Some(expert_memory_mode) = expert_memory_mode else {
         return String::new();
     };
@@ -193,6 +206,44 @@ fn is_dense_model_residency(expert_residency: Option<ExpertResidencySnapshot>) -
             && measured_residency.total_layer_count == 0
             && measured_residency.complete_expert_payload_byte_count == 0
     })
+}
+
+fn dense_layers_of(
+    expert_residency: Option<ExpertResidencySnapshot>,
+) -> Option<WorkerDenseLayerResidency> {
+    expert_residency.and_then(|measured_residency| measured_residency.dense_layers)
+}
+
+/// A dense model that streams says how much it reads from the SSD, the way
+/// a sparse model does; one that keeps every layer says so.
+fn dense_stock_sentence(dense_layers: WorkerDenseLayerResidency) -> String {
+    if dense_layers.streamed_layer_payload_bytes == 0 {
+        return fully_seated_stock_sentence(dense_layers.decoder_layer_count);
+    }
+    format!(
+        "{:.2} GB on SSD",
+        dense_layers.streamed_layer_payload_bytes as f64 / APPLE_GIGABYTE_BYTES
+    )
+}
+
+/// Names the kept and streamed layers. A streamed layer is read once per
+/// prompt and once per generated token.
+fn dense_reply_sentence(dense_layers: WorkerDenseLayerResidency) -> String {
+    let WorkerDenseLayerResidency {
+        decoder_layer_count,
+        kept_layer_count,
+        ..
+    } = dense_layers;
+    if kept_layer_count >= decoder_layer_count {
+        return format!("Dense model: all {decoder_layer_count} layers in RAM.");
+    }
+    if kept_layer_count == 0 {
+        return format!("Dense model: all {decoder_layer_count} layers read from the SSD.");
+    }
+    format!(
+        "Dense model: {kept_layer_count} of {decoder_layer_count} layers in RAM, {} read from the SSD.",
+        decoder_layer_count - kept_layer_count
+    )
 }
 
 fn reply_is_running(activity: WorkerActivity) -> bool {

@@ -215,6 +215,7 @@ impl Qwen3_5ResidentModel {
         let (complete_expert_payload_byte_count, expert_capacity) =
             resident_expert_library_facts(&self.expert_layer_plans);
         crate::inference_engine::contract::ExpertResidencyTelemetry {
+            dense_layers: None,
             total_layer_count: u32::try_from(resident_expert_statistics.complete_layer_count)
                 .unwrap_or(u32::MAX),
             resident_expert_count: u32::try_from(resident_expert_statistics.entry_count)

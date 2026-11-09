@@ -55,6 +55,7 @@ impl Qwen3_5StreamingModel {
             complete_expert_payload_byte_count,
             expert_capacity,
             layer_seating,
+            dense_layers: self.dense_layer_residency_report(),
         }
     }
 
