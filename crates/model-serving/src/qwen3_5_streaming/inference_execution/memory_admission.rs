@@ -262,9 +262,7 @@ impl Qwen3_5EngineState {
             .runtime()
             .memory_snapshot()
             .map_err(qwen3_5_runtime_error)?;
-        let retained_expert_payload_bytes_before_growth = model
-            .expert_weight_memory_cache_statistics()
-            .resident_payload_byte_count;
+        let retained_expert_payload_bytes_before_growth = model.reclaimable_retained_payload_bytes();
         let unobserved_scope_transient_floor_bytes = model
             .mlx_ram_budget()
             .adaptive_growth_unobserved_scope_transient_floor_bytes(adaptive_ram_growth_context);
@@ -387,8 +385,7 @@ impl Qwen3_5EngineState {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();
             let retained_expert_payload_bytes =
-                usize::try_from(expert_weight_memory_cache_statistics.resident_payload_byte_count)
-                    .unwrap_or(usize::MAX);
+                usize::try_from(model.reclaimable_retained_payload_bytes()).unwrap_or(usize::MAX);
             let expert_reclamation_plan = admission
                 .forward_projection
                 .expert_retention_reclamation_plan(retained_expert_payload_bytes);
@@ -572,7 +569,7 @@ impl Qwen3_5EngineState {
         *previous_pass_released_pages = Some(true);
         admission.memory_snapshot_before_growth = memory_snapshot_after_reclamation;
         admission.retained_expert_payload_bytes_before_growth =
-            expert_weight_memory_cache_statistics_after_reclamation.resident_payload_byte_count;
+            model.reclaimable_retained_payload_bytes();
         Ok(())
     }
 }

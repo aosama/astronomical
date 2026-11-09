@@ -101,27 +101,43 @@ impl Qwen3_5Model {
                 );
                 self.runtime
                     .synchronize_gpu_stream_and_clear_allocator_cache()?;
-                return self.keep_planned_dense_layers(Some(0)).map(Some);
+                return self
+                    .keep_planned_dense_layers(self.installed_active_memory_limit_bytes(), Some(0))
+                    .map(Some);
             }
             Err(probe_error) => return Err(probe_error),
         };
         dense_layer_streamer.record_measured_working_memory_bytes(working_memory_bytes);
         self.record_dense_working_memory_in_budget(probe_shape, working_memory_bytes);
-        self.keep_planned_dense_layers(resident_layer_count_override)
-            .map(Some)
+        self.keep_planned_dense_layers(
+            self.installed_active_memory_limit_bytes(),
+            resident_layer_count_override,
+        )
+        .map(Some)
     }
 
-    /// Plans again with the working memory measured at load, after a live
-    /// limit change, and keeps or gives back layers to match.
-    pub(crate) fn replan_kept_dense_layers(&self) -> Result<(), Qwen3_5ExecutionError> {
+    /// Plans again with the working memory measured at load for a live
+    /// limit change to `active_memory_ceiling_bytes`, and keeps or gives back
+    /// layers to match. A lower limit plans before the runtime installs it,
+    /// so the ceiling is passed rather than read.
+    pub(crate) fn replan_kept_dense_layers(
+        &self,
+        active_memory_ceiling_bytes: u64,
+    ) -> Result<(), Qwen3_5ExecutionError> {
         if self.dense_layer_streamer.is_none() {
             return Ok(());
         }
-        self.keep_planned_dense_layers(None).map(drop)
+        self.keep_planned_dense_layers(active_memory_ceiling_bytes, None)
+            .map(drop)
+    }
+
+    fn installed_active_memory_limit_bytes(&self) -> u64 {
+        self.runtime.memory_limits().active_memory_limit_bytes() as u64
     }
 
     fn keep_planned_dense_layers(
         &self,
+        active_memory_ceiling_bytes: u64,
         resident_layer_count_override: Option<usize>,
     ) -> Result<DenseLayerResidencyPlan, Qwen3_5ExecutionError> {
         let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
@@ -137,8 +153,7 @@ impl Qwen3_5Model {
             decoder_layer_streamable_bytes: dense_layer_streamer.layer_payload_bytes(),
             streaming_slot_count: DENSE_STREAMING_LAYER_SLOT_COUNT,
             working_memory_bytes: dense_layer_streamer.measured_working_memory_bytes(),
-            active_memory_ceiling_bytes: self.runtime.memory_limits().active_memory_limit_bytes()
-                as u64,
+            active_memory_ceiling_bytes,
         }
         .plan();
         let kept_layer_count =
@@ -210,6 +225,14 @@ impl Qwen3_5Model {
             0,
             super::dense_layer_streamer::Qwen3_5DenseLayerStreamer::streaming_slot_bytes,
         )
+    }
+
+    /// Payload admission may reclaim: retained experts, plus a dense model's
+    /// kept layers, which stream once given back.
+    pub(crate) fn reclaimable_retained_payload_bytes(&self) -> u64 {
+        self.expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count
+            .saturating_add(self.dense_kept_layer_payload_bytes())
     }
 
     /// Payload of the dense layers kept resident, which admission may give back.

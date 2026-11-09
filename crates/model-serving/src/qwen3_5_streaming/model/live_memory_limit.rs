@@ -246,12 +246,10 @@ impl Qwen3_5Model {
             } => retained_paged_expert_reclamation_bytes,
             _ => 0,
         };
-        if let Some(retained_experts) = self.retained_experts.as_ref() {
-            retained_experts
-                .borrow_mut()
-                .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);
-        }
-        self.release_kept_dense_layers(retained_paged_expert_reclamation_bytes);
+        self.give_back_retained_payload_for_lower_limit(
+            retained_paged_expert_reclamation_bytes,
+            requested_mlx_memory_ceiling_bytes,
+        )?;
         self.mlx_ram_budget
             .borrow_mut()
             .update_mlx_active_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes)
@@ -265,6 +263,24 @@ impl Qwen3_5Model {
         };
         expert_pager.update_configured_mlx_memory_ceiling_bytes(requested_mlx_memory_ceiling_bytes);
         Ok(())
+    }
+
+    /// Limits retained experts and gives back kept dense layers worth the
+    /// bytes the decision needs, then matches the kept layers to the plan for
+    /// the lower limit: the plan also leaves room for the working memory a
+    /// streamed layer needs, which the decision does not count.
+    fn give_back_retained_payload_for_lower_limit(
+        &self,
+        retained_paged_expert_reclamation_bytes: u64,
+        requested_mlx_memory_ceiling_bytes: u64,
+    ) -> Result<(), InferenceEngineError> {
+        if let Some(retained_experts) = self.retained_experts.as_ref() {
+            retained_experts
+                .borrow_mut()
+                .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);
+        }
+        self.release_kept_dense_layers(retained_paged_expert_reclamation_bytes);
+        Ok(self.replan_kept_dense_layers(requested_mlx_memory_ceiling_bytes)?)
     }
 
     fn update_expert_residency_for_live_mlx_memory_limit(
@@ -294,7 +310,7 @@ impl Qwen3_5Model {
                     mlx_ram_budget_error.to_string(),
                 )
             })?;
-        Ok(self.replan_kept_dense_layers()?)
+        Ok(self.replan_kept_dense_layers(requested_mlx_memory_ceiling_bytes)?)
     }
 
     fn restore_expert_paging_memory_ceiling(

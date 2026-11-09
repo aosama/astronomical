@@ -162,6 +162,21 @@ impl Qwen3_5Model {
     }
 }
 
+/// Limits retained experts and gives back a dense model's kept layers, whose
+/// bytes free the same way once they stream. Returns whether either released
+/// anything; both always run, since a model has one kind or the other.
+fn release_retained_payload(
+    model: &Qwen3_5Model,
+    reclamation_target_bytes: usize,
+) -> Result<bool, InferenceEngineError> {
+    let did_limit_expert_retention = model
+        .limit_expert_retention_for_request_memory_pressure(reclamation_target_bytes)
+        .map_err(InferenceEngineError::from)?;
+    let released_dense_layer_bytes = model
+        .release_kept_dense_layers(u64::try_from(reclamation_target_bytes).unwrap_or(u64::MAX));
+    Ok(did_limit_expert_retention | (released_dense_layer_bytes > 0))
+}
+
 /// Shrinks retained pages, then proves the physical effect with a fresh sample.
 ///
 /// Order matters: retire pages, synchronize the graphics-processor stream,
@@ -171,12 +186,7 @@ pub(crate) fn reclaim_retained_experts_for_request_memory_pressure(
     model: &Qwen3_5Model,
     retained_expert_payload_reclamation_target_bytes: usize,
 ) -> Result<Option<MlxMemorySnapshot>, InferenceEngineError> {
-    if !model
-        .limit_expert_retention_for_request_memory_pressure(
-            retained_expert_payload_reclamation_target_bytes,
-        )
-        .map_err(InferenceEngineError::from)?
-    {
+    if !release_retained_payload(model, retained_expert_payload_reclamation_target_bytes)? {
         return Ok(None);
     }
     // The pager first retires streaming ownership and releases Rust-selected
