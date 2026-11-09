@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 use std::mem::size_of;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use astronomical_runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
@@ -12,9 +12,7 @@ use astronomical_runtime_integration::{MlxRuntime, PositionalFileReadMetrics};
 use super::expert_pager::{ExpertPagingError, Qwen3_5ExpertPager};
 use crate::MlxAllocationAdmission;
 use crate::expert_paging::QuantizedExpertLayerPlan;
-use crate::expert_paging::safetensors_header::SafetensorsHeader;
 use crate::memory::ExpertStreamingSessionCounters;
-use crate::qwen3_5_core::artifacts::quantized_expert_layer_plan;
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 
 impl Qwen3_5ExpertPager {
@@ -33,6 +31,8 @@ impl Qwen3_5ExpertPager {
     /// `language_model.model.layers.0.mlp.switch_mlp.gate_proj.weight`) to
     /// shard file names (e.g., `model-00001-of-00005.safetensors`).
     /// `model_dir` is the directory containing the shard files.
+    /// `expert_atlas` names an Expert Atlas model's layer files; the plans are
+    /// then built from its manifest instead of the shard index.
     ///
     /// `configured_mlx_memory_cap_bytes` is the worker's resolved numeric
     /// admission ceiling for all expert paging operations.
@@ -41,17 +41,19 @@ impl Qwen3_5ExpertPager {
         model_dir: PathBuf,
         weight_map: &HashMap<String, String>,
         stored_tensor_name_by_canonical_name: &HashMap<String, String>,
+        expert_atlas: Option<&astronomical_expert_atlas::AtlasManifest>,
         config: &Qwen3_5Config,
         configured_mlx_memory_cap_bytes: usize,
     ) -> Result<Self, ExpertPagingError> {
-        let decoder_layer_count = config.layer_count() as usize;
-        let layer_plans = self_shard_layer_plans(
-            decoder_layer_count,
-            &model_dir,
-            weight_map,
-            stored_tensor_name_by_canonical_name,
-            config,
-        )?;
+        let layer_plans =
+            crate::qwen3_5_core::artifacts::atlas_expert_layer_plans::build_expert_layer_plans(
+                &model_dir,
+                expert_atlas,
+                weight_map,
+                stored_tensor_name_by_canonical_name,
+                config,
+                config.layer_count() as usize,
+            )?;
 
         // Streaming workspace and temporary decode routes are bounded by complete
         // layer geometry: the packed source ownership plus the decoded
@@ -92,34 +94,6 @@ impl Qwen3_5ExpertPager {
             session_process_io_baseline: RefCell::new(None),
         })
     }
-}
-
-/// Builds the shard-backed layer plans for the MoE decoder layers from the
-/// validated safetensors index.
-fn self_shard_layer_plans(
-    decoder_layer_count: usize,
-    model_dir: &Path,
-    weight_map: &HashMap<String, String>,
-    stored_tensor_name_by_canonical_name: &HashMap<String, String>,
-    config: &Qwen3_5Config,
-) -> Result<Vec<QuantizedExpertLayerPlan>, ExpertPagingError> {
-    let mut layer_plans = Vec::with_capacity(decoder_layer_count);
-    // One model-level cache prevents every decoder layer from reparsing the same shard header.
-    // The cache owns bounded metadata only and is dropped after all byte-range plans are built.
-    let mut safetensors_header_by_source_file = HashMap::<PathBuf, SafetensorsHeader>::new();
-    for decoder_layer_index in 0..decoder_layer_count {
-        let layer_prefix = format!("language_model.model.layers.{decoder_layer_index}.mlp");
-        let layer_plan = quantized_expert_layer_plan::build_quantized_expert_layer_plan_with_stored_names_and_header_cache(
-            model_dir,
-            weight_map,
-            stored_tensor_name_by_canonical_name,
-            &layer_prefix,
-            config,
-            &mut safetensors_header_by_source_file,
-        )?;
-        layer_plans.push(layer_plan);
-    }
-    Ok(layer_plans)
 }
 
 fn retain_resident_expert_source_files(

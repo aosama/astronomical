@@ -79,6 +79,7 @@ fn layer_plan_with_one_tensor(
         full_shape: vec![source_expert_capacity, 1, 1],
         tensor_payload_offset: 0,
         bytes_per_expert,
+        expert_stride_bytes: bytes_per_expert,
         expert_capacity: source_expert_capacity,
     };
     QuantizedExpertLayerPlan {

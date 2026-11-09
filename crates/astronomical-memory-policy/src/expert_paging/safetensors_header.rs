@@ -311,7 +311,7 @@ fn safetensors_header_length_as_usize(header_length_bytes: u64) -> usize {
     }
 }
 
-fn parse_dtype(dtype_str: &str) -> Option<SafetensorsDtype> {
+pub fn parse_dtype(dtype_str: &str) -> Option<SafetensorsDtype> {
     match dtype_str {
         "BOOL" => Some(SafetensorsDtype::Bool),
         "I8" => Some(SafetensorsDtype::Int8),

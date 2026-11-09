@@ -42,6 +42,7 @@ quantize-convert = [
 
 [dependencies]
 astronomical-config = { path = "../../crates/config" }
+astronomical-expert-atlas = { path = "../../crates/expert-atlas" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"], optional = true }
 astronomical-quantization = { path = "../../crates/quantization" }

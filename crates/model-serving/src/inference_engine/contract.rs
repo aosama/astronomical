@@ -518,13 +518,15 @@ pub enum GeneratedToken {
         prompt_processing_phase: WorkerPromptProcessingPhase,
         total_token_count: u32,
     },
-    /// Prefill is complete and the engine is reconciling expert ownership before decode.
+    /// Prefill is complete and the engine is about to reconcile expert ownership
+    /// before decode.
     ///
-    /// The memory observation is captured at the same owner-thread instant as the
-    /// residency so the public status never pairs fresh residency with a stale
-    /// prefill-era measurement (issue #337).
+    /// When a residency is present, the memory observation is captured at the
+    /// same owner-thread instant so the public status never pairs fresh
+    /// residency with a stale prefill-era measurement (issue #337). An engine
+    /// that announces before reconciling sends neither.
     GenerationPreparationStarted {
-        expert_residency: ExpertResidencyTelemetry,
+        expert_residency: Option<ExpertResidencyTelemetry>,
         mlx_memory_telemetry: Option<crate::memory::telemetry::MlxMemoryTelemetry>,
     },
     /// Engine-side end-of-sequence without an explicit token ID.

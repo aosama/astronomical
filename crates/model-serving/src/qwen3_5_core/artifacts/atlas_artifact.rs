@@ -1,12 +1,13 @@
-//! Validation for converted per-expert streaming revisions.
+//! Validation for Expert Atlas models.
 //!
-//! The manifest replaces the shard index: it declares the resident weight
-//! bundle, the expert packs, and every file's byte count. Dense tensors bind
-//! to the standard `resident.safetensors`; sparse expert tensors live only in
-//! the per-expert packs, so their inventory locations are stripped and the
-//! expert pager derives their plans from pack headers. A synthesized index
-//! document keeps the shard-index, inventory, and binding contracts identical
-//! to the shard path.
+//! The Atlas manifest replaces the shard index: it declares the resident
+//! weight bundle, one record file per expert layer, every file's byte count,
+//! and where each expert tensor sits inside a record. Dense tensors bind to
+//! the standard `resident.safetensors`; routed expert tensors live only in
+//! the layer files, so their inventory locations are stripped here and the
+//! expert plans are built from the manifest when the model loads. A
+//! synthesized index document keeps the shard-index, inventory, and binding
+//! contracts identical to the shard path.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
@@ -31,60 +32,30 @@ use crate::artifact_validation::{
 };
 use crate::expert_paging::SafetensorsHeader;
 use crate::qwen3_5_core::vision::vision_tensor_spec;
-
-/// On-disk format version of a converted per-expert streaming revision.
-const STREAMING_REVISION_FORMAT_VERSION: u32 = 3;
-
-/// Minimal streaming revision manifest view used by artifact validation.
-#[derive(serde::Deserialize)]
-struct StreamingRevisionManifestProbe {
-    format_version: u32,
-    resident_files: Vec<StreamingRevisionResidentFileProbe>,
-    expert_files: Vec<StreamingRevisionExpertFileProbe>,
-}
-
-#[derive(serde::Deserialize)]
-struct StreamingRevisionResidentFileProbe {
-    file_name: String,
-    expected_file_byte_count: u64,
-}
-
-#[derive(serde::Deserialize)]
-struct StreamingRevisionExpertFileProbe {
-    file_name: String,
-    expected_file_byte_count: u64,
-}
+use astronomical_expert_atlas::{RESIDENT_BUNDLE_FILE_NAME, VISION_BUNDLE_FILE_NAME};
 
 impl Qwen3_5ArtifactValidator {
-    /// Validates a converted per-expert streaming revision.
-    ///
-    /// The manifest replaces the shard index: it declares the resident weight
-    /// bundle, the expert packs, and every file's byte count. Dense tensors
-    /// bind to the standard `resident.safetensors`; sparse expert tensors live
-    /// only in the per-expert packs, so their inventory locations are stripped
-    /// and the expert pager derives their plans from pack headers. A
-    /// synthesized index document keeps the shard-index, inventory, and
-    /// binding contracts identical to the shard path.
-    pub(super) fn validate_streaming_revision(
+    /// Validates an Expert Atlas model (see the module documentation).
+    pub(super) fn validate_atlas_artifact(
         model_directory: &Path,
         max_output_tokens: u32,
     ) -> Result<ValidatedQwen3_5Artifact, Qwen3_5ArtifactValidationError> {
-        let required_files = collect_streaming_revision_required_files(model_directory)?;
+        let required_files = collect_atlas_required_files(model_directory)?;
         let config_bytes = captured_required_file_bytes(&required_files, "config.json")?;
         let revision = derive_revision_from_config_bytes(config_bytes);
         let mut config = Qwen3_5Config::from_json_bytes(config_bytes)?;
         let vision_config = Qwen3_5VisionConfig::from_optional_json_bytes(config_bytes)?;
         validate_optional_optiq_metadata(&required_files, &config)?;
-        review_streaming_manifest_completeness(model_directory)?;
+        let expert_atlas = review_atlas_manifest(model_directory)?;
         let (resident_header, vision_header) =
-            parse_streaming_revision_bundle_headers(model_directory, &vision_config)?;
-        let shard_index = synthesize_streaming_shard_index(
+            parse_atlas_bundle_headers(model_directory, &vision_config)?;
+        let shard_index = synthesize_atlas_shard_index(
             model_directory,
             &resident_header,
             vision_header.as_ref(),
             &mut config,
         )?;
-        let source_validation = validate_streaming_revision_sources(
+        let source_validation = validate_atlas_sources(
             model_directory,
             &shard_index,
             &config,
@@ -95,7 +66,13 @@ impl Qwen3_5ArtifactValidator {
             vision_config,
             required_files,
             shard_index,
-            total_payload_bytes: source_validation.validated_total_payload_bytes,
+            // Every weight byte counts, not just the resident bundle: memory
+            // budgeting compares this with the ceiling, and leaving the
+            // experts out would make a 35B model look small enough to hold.
+            total_payload_bytes: source_validation
+                .validated_total_payload_bytes
+                .checked_add(atlas_expert_payload_bytes(&expert_atlas)?)
+                .ok_or(ArtifactValidationError::TensorPayloadSizeOverflow)?,
             has_separate_vision_sidecar: source_validation.has_separate_vision_sidecar,
             has_validated_vision_tower: source_validation.has_validated_vision_tower,
             tensor_inventory: source_validation.tensor_inventory,
@@ -104,20 +81,21 @@ impl Qwen3_5ArtifactValidator {
             model_id: source_validation.model_id,
             revision,
             max_output_tokens,
+            expert_atlas: Some(expert_atlas),
         })
     }
 }
 
 /// Collects the always-required files plus the two optional documents when
 /// they are present on disk, validating each against its profile.
-fn collect_streaming_revision_required_files(
+fn collect_atlas_required_files(
     model_directory: &Path,
 ) -> Result<HashMap<String, ValidatedRequiredFile>, Qwen3_5ArtifactValidationError> {
     let mut required_file_profiles = vec![
         required_file("config.json"),
         required_file("manifest.json"),
         required_file("tokenizer.json"),
-        required_file("resident.safetensors"),
+        required_file(RESIDENT_BUNDLE_FILE_NAME),
     ];
     if model_directory.join("generation_config.json").is_file() {
         required_file_profiles.push(required_file("generation_config.json"));
@@ -129,88 +107,78 @@ fn collect_streaming_revision_required_files(
     )?)
 }
 
-/// Reviews manifest completeness: every declared file exists with its
-/// declared byte count, and the format version is the reviewed one. Content
-/// hashes gate preparation and re-conversion; serving integrity is bound by
-/// declared sizes plus per-pack header identity. The manifest is too large
-/// for the small-file byte capture contract (it declares one entry per
-/// expert), so it is read directly.
-fn review_streaming_manifest_completeness(
-    model_directory: &Path,
-) -> Result<(), Qwen3_5ArtifactValidationError> {
-    let manifest_bytes = std::fs::read(model_directory.join("manifest.json"))
-        .map_err(
-            |source| ArtifactValidationError::StreamingDeclaredFileMissing {
-                file_name: "manifest.json".to_owned(),
-                source,
-            },
-        )
-        .map_err(Qwen3_5ArtifactValidationError::from)?;
-    let manifest: StreamingRevisionManifestProbe =
-        serde_json::from_slice(manifest_bytes.as_slice())
-            .map_err(|source| ArtifactValidationError::InvalidStreamingManifest { source })
-            .map_err(Qwen3_5ArtifactValidationError::from)?;
-    if manifest.format_version != STREAMING_REVISION_FORMAT_VERSION {
-        return Err(
-            ArtifactValidationError::UnsupportedStreamingManifestVersion {
-                actual_format_version: manifest.format_version,
-            }
-            .into(),
-        );
-    }
-    let declared_file_entries = manifest
-        .expert_files
+/// The routed-expert payload the layer files hold, excluding record padding.
+fn atlas_expert_payload_bytes(
+    expert_atlas: &astronomical_expert_atlas::AtlasManifest,
+) -> Result<u64, Qwen3_5ArtifactValidationError> {
+    expert_atlas
+        .expert_layers
         .iter()
-        .map(|expert_file| (&expert_file.file_name, expert_file.expected_file_byte_count))
-        .chain(manifest.resident_files.iter().map(|resident_file| {
-            (
-                &resident_file.file_name,
-                resident_file.expected_file_byte_count,
-            )
-        }));
-    for (file_name, expected_file_byte_count) in declared_file_entries {
-        let declared_path = model_directory.join(file_name);
+        .try_fold(0_u64, |payload_bytes, expert_layer| {
+            expert_layer
+                .record_byte_count
+                .checked_mul(expert_layer.expert_count as u64)
+                .and_then(|layer_payload_bytes| payload_bytes.checked_add(layer_payload_bytes))
+        })
+        .ok_or_else(|| ArtifactValidationError::TensorPayloadSizeOverflow.into())
+}
+
+/// Reads the Atlas manifest (format, version and per-layer geometry are
+/// checked by the reader) and requires every declared file to exist with its
+/// declared byte count. Content digests are checked by the conversion that
+/// wrote them; serving binds to the declared sizes and record layout.
+fn review_atlas_manifest(
+    model_directory: &Path,
+) -> Result<astronomical_expert_atlas::AtlasManifest, Qwen3_5ArtifactValidationError> {
+    let expert_atlas =
+        astronomical_expert_atlas::AtlasManifest::read_from_directory(model_directory).map_err(
+            |manifest_error| ArtifactValidationError::InvalidAtlasManifest {
+                description: manifest_error.to_string(),
+            },
+        )?;
+    for declared_file in expert_atlas
+        .resident_files
+        .iter()
+        .chain(&expert_atlas.expert_files)
+    {
+        let declared_path = model_directory.join(&declared_file.file_name);
         let actual_file_byte_count = std::fs::metadata(&declared_path)
-            .map_err(
-                |source| ArtifactValidationError::StreamingDeclaredFileMissing {
-                    file_name: file_name.clone(),
-                    source,
-                },
-            )
-            .map_err(Qwen3_5ArtifactValidationError::from)?
+            .map_err(|source| ArtifactValidationError::AtlasDeclaredFileMissing {
+                file_name: declared_file.file_name.clone(),
+                source,
+            })?
             .len();
-        if actual_file_byte_count != expected_file_byte_count {
-            return Err(ArtifactValidationError::StreamingDeclaredFileSize {
-                file_name: file_name.clone(),
-                expected_bytes: expected_file_byte_count,
+        if actual_file_byte_count != declared_file.expected_file_byte_count {
+            return Err(ArtifactValidationError::AtlasDeclaredFileSize {
+                file_name: declared_file.file_name.clone(),
+                expected_bytes: declared_file.expected_file_byte_count,
                 actual_bytes: actual_file_byte_count,
             }
             .into());
         }
     }
-    Ok(())
+    Ok(expert_atlas)
 }
 
 /// Parses the resident bundle header, requiring the vision bundle beside it
 /// whenever the artifact declares a vision tower.
-fn parse_streaming_revision_bundle_headers(
+fn parse_atlas_bundle_headers(
     model_directory: &Path,
     vision_config: &Option<Qwen3_5VisionConfig>,
 ) -> Result<(SafetensorsHeader, Option<SafetensorsHeader>), Qwen3_5ArtifactValidationError> {
     // The resident bundle carries every non-expert tensor; the vision
     // bundle travels beside it unchanged from the source artifact.
     let resident_header = crate::expert_paging::parse_safetensors_header(
-        &model_directory.join("resident.safetensors"),
+        &model_directory.join(RESIDENT_BUNDLE_FILE_NAME),
     )
     .map_err(|source| ArtifactValidationError::InvalidResidentBundle { source })
     .map_err(Qwen3_5ArtifactValidationError::from)?;
-    const VISION_BUNDLE_FILE_NAME: &str = "optiq/optiq_vision.safetensors";
     if vision_config.is_some() && !model_directory.join(VISION_BUNDLE_FILE_NAME).is_file() {
-        return Err(ArtifactValidationError::StreamingDeclaredFileMissing {
+        return Err(ArtifactValidationError::AtlasDeclaredFileMissing {
             file_name: VISION_BUNDLE_FILE_NAME.to_owned(),
             source: std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                "the model declares a vision tower but the revision carries no vision bundle",
+                "the model declares a vision tower but the Atlas carries no vision bundle",
             ),
         }
         .into());
@@ -232,28 +200,27 @@ fn parse_streaming_revision_bundle_headers(
 /// Synthesizes the standard shard-index document from the bundle headers and
 /// the reviewed tensor profiles: sparse expert names map to the resident
 /// bundle as a placeholder that is never opened (MoE weight binding excludes
-/// sparse tensors and the pager reads pack headers), the vision bundle maps
+/// sparse tensors and the expert plans come from the Atlas manifest), the vision bundle maps
 /// its own tensors, and the resolved canonical names feed back into the
 /// config before the index is parsed.
-fn synthesize_streaming_shard_index(
+fn synthesize_atlas_shard_index(
     model_directory: &Path,
     resident_header: &SafetensorsHeader,
     vision_header: Option<&SafetensorsHeader>,
     config: &mut Qwen3_5Config,
 ) -> Result<Qwen3_5ShardIndex, Qwen3_5ArtifactValidationError> {
-    const VISION_BUNDLE_FILE_NAME: &str = "optiq/optiq_vision.safetensors";
     let mut weight_map = serde_json::Map::new();
     for tensor_entry in &resident_header.tensor_entries {
         weight_map.insert(
             tensor_entry.tensor_name.clone(),
-            serde_json::Value::String("resident.safetensors".to_owned()),
+            serde_json::Value::String(RESIDENT_BUNDLE_FILE_NAME.to_owned()),
         );
     }
     for tensor_profile in tensor_spec::qwen3_5_language_tensor_profiles(config)? {
         if tensor_profile.name.contains(".mlp.switch_mlp.") {
             weight_map
                 .entry(tensor_profile.name.clone())
-                .or_insert_with(|| serde_json::Value::String("resident.safetensors".to_owned()));
+                .or_insert_with(|| serde_json::Value::String(RESIDENT_BUNDLE_FILE_NAME.to_owned()));
         }
     }
     if let Some(vision_header) = vision_header {
@@ -265,15 +232,13 @@ fn synthesize_streaming_shard_index(
         }
     }
     let mut total_index_payload_bytes = 0_u64;
-    for bundle_file_name in ["resident.safetensors", VISION_BUNDLE_FILE_NAME] {
+    for bundle_file_name in [RESIDENT_BUNDLE_FILE_NAME, VISION_BUNDLE_FILE_NAME] {
         if model_directory.join(bundle_file_name).is_file() {
             let bundle_byte_count = std::fs::metadata(model_directory.join(bundle_file_name))
-                .map_err(
-                    |source| ArtifactValidationError::StreamingDeclaredFileMissing {
-                        file_name: bundle_file_name.to_owned(),
-                        source,
-                    },
-                )
+                .map_err(|source| ArtifactValidationError::AtlasDeclaredFileMissing {
+                    file_name: bundle_file_name.to_owned(),
+                    source,
+                })
                 .map_err(Qwen3_5ArtifactValidationError::from)?
                 .len();
             total_index_payload_bytes = total_index_payload_bytes
@@ -286,7 +251,9 @@ fn synthesize_streaming_shard_index(
         "weight_map": serde_json::Value::Object(weight_map),
     });
     let index_bytes = serde_json::to_vec(&index_document)
-        .map_err(|source| ArtifactValidationError::InvalidStreamingManifest { source })
+        .map_err(|source| ArtifactValidationError::InvalidAtlasManifest {
+            description: source.to_string(),
+        })
         .map_err(Qwen3_5ArtifactValidationError::from)?;
     let canonical_model_tensor_names =
         Qwen3_5ShardIndex::extract_language_and_vision_tensor_names_from_json(&index_bytes)?;
@@ -296,9 +263,9 @@ fn synthesize_streaming_shard_index(
         .map_err(Qwen3_5ArtifactValidationError::from)
 }
 
-/// The inventory-and-sources outcome one streaming revision carries into its
+/// The inventory-and-sources outcome one Atlas model carries into its
 /// validated artifact.
-struct StreamingRevisionSourceValidation {
+struct AtlasSourceValidation {
     tensor_inventory: TensorInventory,
     safetensors_sources: HashMap<TensorSourceId, ValidatedSafetensorsSource>,
     source_id_by_file_name_map: BTreeMap<String, TensorSourceId>,
@@ -309,14 +276,14 @@ struct StreamingRevisionSourceValidation {
 }
 
 /// Validates the vision tower's inventory, strips the sparse expert names
-/// from the index inventory (the pager reads pack headers), and validates
+/// from the index inventory (the expert plans come from the Atlas manifest), and validates
 /// every declared safetensors source against the recognized profiles.
-fn validate_streaming_revision_sources(
+fn validate_atlas_sources(
     model_directory: &Path,
     shard_index: &Qwen3_5ShardIndex,
     config: &Qwen3_5Config,
     vision_config: Option<&Qwen3_5VisionConfig>,
-) -> Result<StreamingRevisionSourceValidation, Qwen3_5ArtifactValidationError> {
+) -> Result<AtlasSourceValidation, Qwen3_5ArtifactValidationError> {
     let validated_vision_tower_storage =
         vision_validation::validate_vision_tower_inventory(shard_index, vision_config, config)?;
     let has_separate_vision_sidecar = validated_vision_tower_storage.has_separate_sidecar();
@@ -362,7 +329,7 @@ fn validate_streaming_revision_sources(
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_else(|| "unknown".to_owned())
     });
-    Ok(StreamingRevisionSourceValidation {
+    Ok(AtlasSourceValidation {
         tensor_inventory,
         safetensors_sources,
         source_id_by_file_name_map,

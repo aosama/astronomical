@@ -59,11 +59,12 @@ impl Qwen3_5ArtifactValidator {
             .into());
         }
 
-        // A converted per-expert streaming revision declares itself with
-        // manifest.json (format version 3) and carries no shard index; it
-        // validates against its own manifest and resident weight bundle.
-        if model_directory.join("manifest.json").is_file() {
-            return Self::validate_streaming_revision(model_directory, max_output_tokens);
+        // An Expert Atlas model declares itself with its manifest and carries
+        // no shard index; it validates against its own manifest and resident
+        // weight bundle. The manifest's format is checked, not just its file
+        // name: a stock checkpoint may ship an unrelated `manifest.json`.
+        if astronomical_expert_atlas::declares_atlas_manifest(model_directory) {
+            return Self::validate_atlas_artifact(model_directory, max_output_tokens);
         }
 
         let required_files = validated_core_required_files(model_directory)?;
@@ -139,6 +140,7 @@ impl Qwen3_5ArtifactValidator {
             model_id,
             revision,
             max_output_tokens,
+            expert_atlas: None,
         })
     }
 }

@@ -181,7 +181,8 @@ pub struct DiscoveredModel {
     pub capabilities: ModelCapabilities,
     /// Validated SPDX license metadata when the family contract declares one.
     pub license: Option<ModelLicense>,
-    /// Unique safetensors shard payload bytes measured from the discovered files.
+    /// Unique weight payload bytes measured from the discovered files: safetensors
+    /// shards, plus Expert Atlas layer files for an Atlas model.
     pub model_size_bytes: u64,
 }
 

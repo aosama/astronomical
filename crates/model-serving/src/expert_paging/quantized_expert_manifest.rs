@@ -324,9 +324,27 @@ pub struct QuantizedTensorSource {
     pub source_file_size_bytes: u64,
     pub dtype: SafetensorsDtype,
     pub full_shape: Vec<usize>,
+    /// File offset of expert 0's slice.
     pub tensor_payload_offset: u64,
     pub bytes_per_expert: usize,
+    /// Distance between consecutive experts' slices in the file. Equal to
+    /// `bytes_per_expert` in a stock safetensors shard, where a tensor's
+    /// experts sit back to back; the record stride in an Expert Atlas layer
+    /// file, where each expert's slices of every tensor sit together.
+    pub expert_stride_bytes: usize,
     pub expert_capacity: usize,
+}
+
+impl QuantizedTensorSource {
+    /// Whether this tensor lives in an Expert Atlas layer file rather than a
+    /// safetensors shard. Read from the file kind, not the stride, because a
+    /// one-slot page-sized record has a stride equal to its slice size.
+    #[must_use]
+    pub fn is_expert_atlas_source(&self) -> bool {
+        self.source_file
+            .extension()
+            .is_some_and(|extension| extension == "atlas")
+    }
 }
 
 /// Startup-validated tensor geometry reused by every decode-time page.

@@ -78,6 +78,7 @@ name = "astronomical-cli"
 version = "0.2.96"
 dependencies = [
  "astronomical-config",
+ "astronomical-expert-atlas",
  "astronomical-ipc-protocol",
  "astronomical-model-serving",
  "astronomical-quantization",
@@ -96,6 +97,7 @@ dependencies = [
 name = "astronomical-config"
 version = "0.2.96"
 dependencies = [
+ "astronomical-expert-atlas",
  "libc",
  "serde",
  "serde_json",
@@ -151,6 +153,18 @@ dependencies = [
  "serial_test",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "astronomical-expert-atlas"
+version = "0.2.96"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -226,6 +240,7 @@ name = "astronomical-model-serving"
 version = "0.2.96"
 dependencies = [
  "astronomical-config",
+ "astronomical-expert-atlas",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
  "astronomical-memory-policy",

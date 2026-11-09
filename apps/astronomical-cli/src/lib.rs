@@ -16,6 +16,9 @@ pub use arguments::{CliCommand, LaunchArguments, UsageError, help_text, parse_co
 pub use instance::{candidate_instances, runtime_instance_from_executable_path};
 pub use model_lifecycle::{ModelLifecycle, RequiredCapability};
 pub use transport::ipc::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
+pub use verbs::convert_atlas::{
+    ConvertAtlasArguments, ConvertAtlasDependencies, ConvertAtlasError, run_convert_atlas,
+};
 pub use verbs::doctor::{DoctorDependencies, DoctorError, run_doctor};
 pub use verbs::embed::{EmbedArguments, EmbedDependencies, EmbedError, run_embed};
 pub use verbs::image::{ImageArguments, ImageDependencies, ImageError, run_image};

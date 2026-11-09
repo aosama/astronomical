@@ -11,6 +11,7 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+astronomical-expert-atlas = { path = "../expert-atlas" }
 libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true

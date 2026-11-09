@@ -119,7 +119,8 @@ pub use worker::control_error::WorkerControlError;
 pub use worker::handle::{GenerationQueueDepth, WorkerHandle};
 pub use worker::health::{
     ActiveRequestProgress, ExpertResidencySnapshot, PendingPromptCacheClear,
-    PersistentPromptCacheSummary, WorkerActivity, WorkerHealthSnapshot, WorkerHealthStatus,
+    PersistentPromptCacheSummary, PreparationResidencyCounts, WorkerActivity, WorkerHealthSnapshot,
+    WorkerHealthStatus,
 };
 pub use worker::memory::limit::MlxMemoryLimitUpdateOutcome;
 pub use worker::process::child::{WorkerProcess, WorkerTerminationOutcome};

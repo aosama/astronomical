@@ -446,12 +446,18 @@ pub enum WorkerEvent {
         expert_residency: Option<WorkerExpertResidencySnapshot>,
     },
     /// Reports the explicit barrier between final prompt processing and first decode.
+    ///
+    /// Sent as soon as the last prompt token is processed, before the engine
+    /// reconciles expert residency for decoding, so the status leaves "prompt
+    /// processing" the moment prompt work ends. The residency is then `None`:
+    /// at this instant it is still the prefill policy, which must not be
+    /// reported as the decode residency; the first decode observation
+    /// carries the reconciled one.
     GenerationPreparationStarted {
         request_id: RequestId,
         /// Full residency at the preparation barrier, including the expert
-        /// library size. Flattening a subset here dropped those fields from
-        /// the live status bar at the moment generation began.
-        expert_residency: WorkerExpertResidencySnapshot,
+        /// library size, when the engine has already reconciled it.
+        expert_residency: Option<WorkerExpertResidencySnapshot>,
         /// Memory observation captured at the same owner-thread instant as the residency.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },

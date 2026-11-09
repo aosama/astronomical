@@ -41,8 +41,12 @@ impl Qwen3_5ResidentExpertWeights {
             source_shard_count = resident_source_shards.len(),
             "started detaching resident expert tensors from safetensors source maps"
         );
-        let mut resident_source_tensors =
-            detach_resident_source_tensors(layer_plans, &resident_source_shards)?;
+        let mut resident_source_tensors = gather_resident_source_tensors(
+            runtime,
+            layer_plans,
+            &resident_source_shards,
+            &positional_file_read_metrics,
+        )?;
         // MLX lazy load primitives retain their shared descriptor reader. Dropping
         // the source maps here removes their second reference to every selected
         // tensor, so evaluated gate/up sources can retire after one-layer fusion.
@@ -172,7 +176,8 @@ fn complete_model_expert_entry_count(layer_plans: &[QuantizedExpertLayerPlan]) -
     })
 }
 
-/// Collects the distinct safetensors files the layer plans read from. The
+/// Collects the distinct safetensors shards the layer plans read from (Atlas
+/// layer files are not safetensors and load separately). The
 /// `BTreeSet` both deduplicates shared source files (layers of one model
 /// frequently share a shard) and gives the shard-loading loop a deterministic
 /// order so logs are reproducible run to run.
@@ -183,9 +188,92 @@ fn collect_source_file_paths(layer_plans: &[QuantizedExpertLayerPlan]) -> BTreeS
             layer_plan
                 .tensor_sources
                 .iter()
+                .filter(|tensor_source| !tensor_source.is_expert_atlas_source())
                 .map(|tensor_source| tensor_source.source_file.clone())
         })
         .collect::<BTreeSet<_>>()
+}
+
+/// Every complete expert tensor the layer plans name: shard tensors detached
+/// from their loaded shards, and Atlas tensors reassembled from records.
+fn gather_resident_source_tensors(
+    runtime: &MlxRuntime,
+    layer_plans: &[QuantizedExpertLayerPlan],
+    resident_source_shards: &HashMap<PathBuf, MlxSafetensors>,
+    positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
+) -> Result<ResidentSourceTensorMap, Qwen3_5ExecutionError> {
+    let mut resident_source_tensors =
+        detach_resident_source_tensors(layer_plans, resident_source_shards)?;
+    insert_atlas_resident_source_tensors(
+        runtime,
+        layer_plans,
+        positional_file_read_metrics,
+        &mut resident_source_tensors,
+    )?;
+    Ok(resident_source_tensors)
+}
+
+/// Adds every Atlas-held tensor to the resident source map as a complete
+/// `[experts, ...]` tensor. An Atlas layer file is a run of expert records,
+/// so a complete layer loads as one page of every expert through the same
+/// bounded reader the pager uses, which reassembles each tensor from the
+/// records; materialization then proceeds exactly as for shards.
+fn insert_atlas_resident_source_tensors(
+    runtime: &MlxRuntime,
+    layer_plans: &[QuantizedExpertLayerPlan],
+    positional_file_read_metrics: &Option<Arc<PositionalFileReadMetrics>>,
+    resident_source_tensors: &mut ResidentSourceTensorMap,
+) -> Result<(), Qwen3_5ExecutionError> {
+    let expert_page_error = |page_error: crate::expert_paging::ExpertManifestError| {
+        Qwen3_5ExecutionError::ExpertSourceFailure {
+            description: format!("loading a complete Atlas expert layer failed: {page_error}"),
+        }
+    };
+    for layer_plan in layer_plans {
+        if !layer_plan
+            .tensor_sources
+            .iter()
+            .any(QuantizedTensorSource::is_expert_atlas_source)
+        {
+            continue;
+        }
+        let every_expert_id: Vec<usize> = (0..layer_plan.expert_capacity).collect();
+        let complete_layer_manifest =
+            crate::expert_paging::build_quantized_expert_page_manifest_from_plan(
+                layer_plan,
+                &every_expert_id,
+            )
+            .map_err(expert_page_error)?;
+        let mut complete_layer_tensors = crate::expert_paging::load_quantized_expert_page(
+            runtime,
+            &complete_layer_manifest,
+            positional_file_read_metrics.as_ref().map(Arc::clone),
+        )
+        .map_err(expert_page_error)?;
+        for tensor_source in layer_plan
+            .tensor_sources
+            .iter()
+            .filter(|tensor_source| tensor_source.is_expert_atlas_source())
+        {
+            let page_tensor_name = format!(
+                "{}.{}",
+                tensor_source.projection_name, tensor_source.parameter_name
+            );
+            let complete_tensor = complete_layer_tensors
+                .remove(&page_tensor_name)
+                .ok_or_else(|| Qwen3_5ExecutionError::MissingTensor {
+                    tensor_name: tensor_source.tensor_name.clone(),
+                })?;
+            resident_source_tensors.insert(
+                (
+                    tensor_source.source_file.clone(),
+                    tensor_source.tensor_name.clone(),
+                ),
+                complete_tensor,
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Opens every distinct expert source file and loads its safetensors shard
@@ -326,6 +414,7 @@ fn detach_resident_source_tensors(
     for tensor_source in layer_plans
         .iter()
         .flat_map(|layer_plan| layer_plan.tensor_sources.iter())
+        .filter(|tensor_source| !tensor_source.is_expert_atlas_source())
     {
         let source_tensor_key = (
             tensor_source.source_file.clone(),

@@ -255,6 +255,50 @@ fn attach_idle_model_unload(status_json: &mut serde_json::Value, worker_handle: 
     });
 }
 
+/// The preparation progress: no token progress to invent, the elapsed
+/// times, and the residency counts only when the announcement carried them.
+fn generation_preparation_progress(
+    request_started_at: tokio::time::Instant,
+    preparation_started_at: tokio::time::Instant,
+    preparation_residency_counts: Option<crate::PreparationResidencyCounts>,
+) -> serde_json::Value {
+    let mut preparation_progress = serde_json::json!({
+        "phase": "generation_preparation",
+        "processed_tokens": 0,
+        "total_tokens": 1,
+        "elapsed_ms": u64::try_from(preparation_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+        "request_elapsed_ms": u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+    });
+    if let Some(preparation_residency_counts) = preparation_residency_counts {
+        preparation_progress["total_layer_count"] =
+            serde_json::json!(preparation_residency_counts.total_layer_count);
+        preparation_progress["resident_expert_count"] =
+            serde_json::json!(preparation_residency_counts.resident_expert_count);
+        preparation_progress["resident_expert_payload_bytes"] =
+            serde_json::json!(preparation_residency_counts.resident_expert_payload_bytes);
+    }
+    preparation_progress
+}
+
+/// The prompt clock the status reports. While prompt tokens remain it runs
+/// live from the request start, so a long chunk still shows time passing.
+/// Once every prompt token is processed it stops at the worker's measured
+/// prompt time: whatever runs after that (decode residency, the first
+/// forward) is not prompt work, and letting the clock run made a finished
+/// 20-token prompt read "100% · 2 avg tok/s".
+fn prompt_progress_elapsed_millis(
+    processed_tokens: u32,
+    total_tokens: u32,
+    measured_prompt_elapsed_millis: u64,
+    request_elapsed: std::time::Duration,
+) -> u64 {
+    if processed_tokens >= total_tokens {
+        return measured_prompt_elapsed_millis;
+    }
+    measured_prompt_elapsed_millis
+        .max(u64::try_from(request_elapsed.as_millis()).unwrap_or(u64::MAX))
+}
+
 /// Attaches the live active-request progress, keeping the worker protocol's
 /// phase state out of the daemon's JSON contract one arm at a time.
 fn attach_active_request_progress(
@@ -270,8 +314,12 @@ fn attach_active_request_progress(
             request_started_at,
             completed_prefill_chunk_tokens,
         } => {
-            let live_elapsed_millis = elapsed_millis
-                .max(u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX));
+            let live_elapsed_millis = prompt_progress_elapsed_millis(
+                processed_tokens,
+                total_tokens,
+                elapsed_millis,
+                request_started_at.elapsed(),
+            );
             status_json["progress"] = serde_json::json!({
                 "phase": prompt_processing_phase,
                 "processed_tokens": processed_tokens,
@@ -298,20 +346,13 @@ fn attach_active_request_progress(
         ActiveRequestProgress::GenerationPreparation {
             request_started_at,
             preparation_started_at,
-            total_layer_count,
-            resident_expert_count,
-            resident_expert_payload_bytes,
+            preparation_residency_counts,
         } => {
-            status_json["progress"] = serde_json::json!({
-                "phase": "generation_preparation",
-                "processed_tokens": 0,
-                "total_tokens": 1,
-                "elapsed_ms": u64::try_from(preparation_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-                "request_elapsed_ms": u64::try_from(request_started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
-                "total_layer_count": total_layer_count,
-                "resident_expert_count": resident_expert_count,
-                "resident_expert_payload_bytes": resident_expert_payload_bytes,
-            });
+            status_json["progress"] = generation_preparation_progress(
+                request_started_at,
+                preparation_started_at,
+                preparation_residency_counts,
+            );
         }
         ActiveRequestProgress::ImageGeneration {
             phase,

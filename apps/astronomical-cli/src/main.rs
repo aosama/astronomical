@@ -46,7 +46,9 @@ fn main() -> ExitCode {
         Ok(CliCommand::Doctor) => run_doctor_verb(),
         Ok(CliCommand::Quantize(quantize_command)) => run_quantize_verb(quantize_command),
         Ok(CliCommand::Vision(vision_command)) => run_vision_verb(&vision_command),
-        Ok(CliCommand::ModelPrograms) => run_model_programs_verb(),
+        Ok(
+            disk_models_command @ (CliCommand::ModelPrograms | CliCommand::ModelConvertAtlas(_)),
+        ) => run_disk_models_command(&disk_models_command),
         Err(usage_error) => {
             eprint!("astronomical: {usage_error}\n\n{}", help_text());
             ExitCode::from(2)
@@ -91,6 +93,46 @@ fn run_model_programs_verb() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(report_error) => {
             eprintln!("astronomical: {report_error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// The `models` subcommands that read only the disk and need no daemon.
+fn run_disk_models_command(disk_models_command: &CliCommand) -> ExitCode {
+    match disk_models_command {
+        CliCommand::ModelConvertAtlas(convert_arguments) => {
+            run_convert_atlas_verb(convert_arguments)
+        }
+        _ => run_model_programs_verb(),
+    }
+}
+
+fn run_convert_atlas_verb(convert_arguments: &astronomical_cli::ConvertAtlasArguments) -> ExitCode {
+    let (runtime_instance, _) = own_runtime_instance_and_ipc_socket_paths();
+    let instance_paths =
+        match astronomical_config::AstronomicalInstancePaths::default_location_instance_paths(
+            runtime_instance,
+        ) {
+            Ok(instance_paths) => instance_paths,
+            Err(instance_error) => {
+                eprintln!("astronomical: {instance_error}");
+                return ExitCode::FAILURE;
+            }
+        };
+    let conversion_outcome = astronomical_cli::run_convert_atlas(
+        convert_arguments,
+        astronomical_cli::ConvertAtlasDependencies {
+            models_directory: instance_paths.models_directory(),
+            stdout: &mut io::stdout(),
+            stderr: &mut io::stderr(),
+            progress_interval: std::time::Duration::from_secs(5),
+        },
+    );
+    match conversion_outcome {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(conversion_error) => {
+            eprintln!("astronomical: {conversion_error}");
             ExitCode::FAILURE
         }
     }
