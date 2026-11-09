@@ -265,7 +265,8 @@ pub(crate) async fn sample_machine_serving_acceptance_mlx_memory_limits() -> Mlx
 const MAXIMUM_MODEL_TEST_MEMORY_BYTES: usize = 36_000_000_000;
 
 #[cfg(feature = "direct-mlx")]
-async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
+#[allow(dead_code)]
+pub(crate) async fn sample_machine_mlx_memory_ceiling_bytes() -> usize {
     let mut sysctl_command = Command::new(SYSCTL_EXECUTABLE_PATH);
     sysctl_command
         .arg("-n")
