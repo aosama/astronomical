@@ -34,6 +34,15 @@ impl LayerGroupSubmission {
     }
 }
 
+/// What one completed decoder layer leaves to evaluate: its output, and for
+/// a linear-attention layer the convolution state, which the output does
+/// not reach.
+#[derive(Clone, Copy)]
+pub(crate) struct CompletedLayerRoots<'layer> {
+    pub(crate) layer_output: &'layer MlxArray,
+    pub(crate) convolution_state: Option<&'layer MlxArray>,
+}
+
 /// How one completed decoder layer reaches the GPU.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum LayerSubmission {
@@ -71,15 +80,16 @@ impl Qwen3_5Model {
     pub(crate) fn submit_completed_layer(
         &self,
         forward_layer_weights: &ForwardLayerWeights<'_>,
-        hidden_states: &MlxArray,
+        completed_layer: CompletedLayerRoots<'_>,
         previous_dense_layer_output: &mut Option<MlxArray>,
         layer_group_submission: LayerGroupSubmission,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
+        let hidden_states = completed_layer.layer_output;
         match forward_layer_weights.submission(layer_group_submission) {
             LayerSubmission::DensePromptLayer => self.submit_dense_prompt_layer(
                 forward_layer_weights,
-                hidden_states,
+                completed_layer,
                 previous_dense_layer_output,
                 performance_attribution,
             ),
@@ -100,7 +110,7 @@ impl Qwen3_5Model {
     }
 
     /// Starts a streamed layer's read, waits for the previous dense layer,
-    /// then submits this one.
+    /// then submits this one with its convolution state.
     ///
     /// Submitting before the wait let two layers' activations coexist, and
     /// with no configured groups every kept layer joined one graph: a fresh
@@ -108,13 +118,21 @@ impl Qwen3_5Model {
     /// layers although one layer at the planned chunk measured 683 MB. The
     /// read stays ahead of the wait because the loads run on MLX's CPU
     /// stream, so the two layer slots still overlap reading with compute.
+    ///
+    /// The convolution state is a lazy copy of the input's last tokens that
+    /// the layer output does not reach. Left for the forward's terminal
+    /// evaluation, each linear-attention layer's copy pinned that layer's
+    /// whole convolution input: measured, active memory climbed about 20 MB
+    /// per such layer at 1,246 tokens and the forward peaked 2.2 GB above
+    /// its weights at 4,096 tokens, against 683 MB for one layer.
     fn submit_dense_prompt_layer(
         &self,
         forward_layer_weights: &ForwardLayerWeights<'_>,
-        layer_output: &MlxArray,
+        completed_layer: CompletedLayerRoots<'_>,
         previous_dense_layer_output: &mut Option<MlxArray>,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<(), Qwen3_5ExecutionError> {
+        let layer_output = completed_layer.layer_output;
         if forward_layer_weights.is_streamed() {
             let mut streamed_weight_arrays = Vec::new();
             forward_layer_weights
@@ -123,7 +141,9 @@ impl Qwen3_5Model {
             self.runtime.async_eval_arrays(&streamed_weight_arrays)?;
         }
         self.wait_for_previous_dense_layer(previous_dense_layer_output, performance_attribution)?;
-        self.runtime.async_eval_arrays(&[layer_output])?;
+        let mut layer_roots = vec![layer_output];
+        layer_roots.extend(completed_layer.convolution_state);
+        self.runtime.async_eval_arrays(&layer_roots)?;
         *previous_dense_layer_output = Some(layer_output.retain()?);
         Ok(())
     }

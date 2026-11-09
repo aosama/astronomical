@@ -28,6 +28,7 @@ fn should_keep_every_layer_resident_without_slots_when_the_model_fits() {
         DenseLayerResidencyPlan {
             resident_layer_count: 8,
             streaming_slot_bytes: 0,
+            streamed_forward_reserve_bytes: 230,
             streaming_floor_bytes: 280,
             is_below_streaming_floor: false,
         }
@@ -78,6 +79,7 @@ fn should_stream_every_layer_and_report_a_limit_below_the_streaming_floor() {
         DenseLayerResidencyPlan {
             resident_layer_count: 0,
             streaming_slot_bytes: 200,
+            streamed_forward_reserve_bytes: 230,
             streaming_floor_bytes: 280,
             is_below_streaming_floor: true,
         }

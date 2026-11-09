@@ -84,19 +84,20 @@ impl Qwen3_5Model {
                 &self.decoder_cache_layout,
                 probe_shape.full_attention_kv_state_growth_tokens,
             )?;
-        let probe_input = self.runtime.full(
-            &[1, token_count, self.config.hidden_size() as i32],
-            0.0,
-            MlxDtype::BFloat16,
-        )?;
         let mut layer_arrays = Vec::new();
         layer_weights.append_array_references(&mut layer_arrays);
-        layer_arrays.push(&probe_input);
         self.runtime.evaluate_arrays(&layer_arrays)?;
         self.runtime
             .synchronize_gpu_stream_and_clear_allocator_cache()?;
         let active_bytes_before = self.runtime.memory_snapshot()?.active_memory_bytes() as u64;
         self.runtime.reset_peak_memory()?;
+        // The input is made after the baseline: a real forward holds its
+        // hidden states too, about 34 MB at 4,096 tokens on the 9B model.
+        let probe_input = self.runtime.full(
+            &[1, token_count, self.config.hidden_size() as i32],
+            0.0,
+            MlxDtype::BFloat16,
+        )?;
         let probe_output = self.probe_forward(
             &probe_input,
             token_count,
@@ -107,7 +108,8 @@ impl Qwen3_5Model {
         self.runtime.evaluate_arrays(&[&probe_output])?;
         let peak_bytes = self.runtime.memory_snapshot()?.peak_memory_bytes() as u64;
         // The layer's own state persists past the forward and admission
-        // charges it as context, so it is not working memory.
+        // charges it as context, so it is not working memory. The peak
+        // includes the input, which the forward's hidden states stand for.
         Ok(peak_bytes
             .saturating_sub(active_bytes_before)
             .saturating_sub(request_decoder_state.payload_byte_count()))

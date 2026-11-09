@@ -56,6 +56,17 @@ impl DecoderCacheState {
         }
     }
 
+    /// The rolling convolution state of a hybrid layer: a lazy copy that
+    /// branches from the layer's input, so the layer output never reaches it
+    /// and evaluating it is the only way to release that input.
+    #[must_use]
+    pub fn convolution_state_array(&self) -> Option<&mlx_c_rust::MlxArray> {
+        match self {
+            Self::AppendOnlyAttention { .. } => None,
+            Self::Composite { convolution, .. } => convolution.state(),
+        }
+    }
+
     /// Returns logical payload bytes owned by this state family.
     #[must_use]
     pub fn payload_byte_count(&self) -> u64 {

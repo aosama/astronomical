@@ -37,6 +37,10 @@ pub struct DenseLayerResidencyPlan {
     pub resident_layer_count: usize,
     /// Bytes the streaming slots occupy; zero when nothing streams.
     pub streaming_slot_bytes: u64,
+    /// What one streamed forward adds beyond the resident tensors: the slots
+    /// and the working memory. Reported even when nothing streams, since
+    /// giving a layer back makes the forward stream.
+    pub streamed_forward_reserve_bytes: u64,
     /// The smallest limit that streams every layer: always resident tensors,
     /// slots and working memory.
     pub streaming_floor_bytes: u64,
@@ -65,14 +69,17 @@ impl DenseLayerResidencyRequirements<'_> {
             .saturating_add(all_layer_bytes)
             .saturating_add(self.working_memory_bytes);
         let streaming_slot_bytes = largest_layer_bytes.saturating_mul(self.streaming_slot_count);
+        let streamed_forward_reserve_bytes = self
+            .working_memory_bytes
+            .saturating_add(streaming_slot_bytes);
         let streaming_floor_bytes = self
             .always_resident_bytes
-            .saturating_add(self.working_memory_bytes)
-            .saturating_add(streaming_slot_bytes);
+            .saturating_add(streamed_forward_reserve_bytes);
         if complete_residency_bytes <= self.active_memory_ceiling_bytes {
             return DenseLayerResidencyPlan {
                 resident_layer_count: self.decoder_layer_streamable_bytes.len(),
                 streaming_slot_bytes: 0,
+                streamed_forward_reserve_bytes,
                 streaming_floor_bytes,
                 is_below_streaming_floor: false,
             };
@@ -84,6 +91,7 @@ impl DenseLayerResidencyRequirements<'_> {
             return DenseLayerResidencyPlan {
                 resident_layer_count: 0,
                 streaming_slot_bytes,
+                streamed_forward_reserve_bytes,
                 streaming_floor_bytes,
                 is_below_streaming_floor: true,
             };
@@ -100,6 +108,7 @@ impl DenseLayerResidencyRequirements<'_> {
         DenseLayerResidencyPlan {
             resident_layer_count,
             streaming_slot_bytes,
+            streamed_forward_reserve_bytes,
             streaming_floor_bytes,
             is_below_streaming_floor: false,
         }

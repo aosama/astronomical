@@ -1,5 +1,7 @@
 mod config;
 #[cfg(feature = "direct-mlx")]
+mod dense_prompt_forward_memory;
+#[cfg(feature = "direct-mlx")]
 mod dense_streaming_parity;
 #[cfg(feature = "direct-mlx")]
 mod neural_engine_answer_tasks;

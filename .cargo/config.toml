@@ -87,6 +87,12 @@ test-dense-text-weights = "run -p xtask -- test-run --package astronomical-accep
 # logits must be bit-identical. Loads the 9B model twice, about ten seconds.
 test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_give_the_resident_logits"
 
+# Dense prompt forward memory (issue #1985): one streamed_dense prompt forward,
+# a full 4,096-token chunk and a shorter prompt, with every layer streamed and
+# with seven kept, must peak within the plan's reserve for one streamed
+# forward (two layer slots plus the probed working memory). About ten seconds.
+test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_keep_a_streamed_prompt_forward_within_the_planned_reserve"
+
 # Quantization lanes (the OptiQ port in crates/quantization).
 
 # The GPU encoder against the pure reference encoder and the shard-wise

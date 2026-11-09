@@ -1,4 +1,5 @@
-use super::layer_submission::LayerGroupSubmission;
+use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
+use crate::DecoderCacheState;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
@@ -373,7 +374,12 @@ impl Qwen3_5Model {
             )?;
             self.submit_completed_layer(
                 &forward_layer_weights,
-                &hidden_states,
+                CompletedLayerRoots {
+                    layer_output: &hidden_states,
+                    convolution_state: request_decoder_state
+                        .layer(layer_index)
+                        .and_then(DecoderCacheState::convolution_state_array),
+                },
                 &mut previous_dense_layer_output,
                 LayerGroupSubmission {
                     completed_layer_count: layer_index + 1,
