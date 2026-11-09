@@ -5,6 +5,9 @@ use crate::{ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionD
 
 use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5Model;
+use super::dense_layer_admission::{
+    DenseReleaseOutcome, DenseReleaseReservations, admit_by_releasing_kept_dense_layers,
+};
 use crate::qwen3_5_streaming;
 
 /// Admits context against the paged expert cache, reclaiming its exact deficit.
@@ -69,21 +72,21 @@ fn reclaim_for_streaming_context(
     context_admission_setup: &StreamingContextAdmissionSetup,
     context_reclamation_target_bytes: usize,
 ) -> Result<(), InferenceEngineError> {
-    match super::dense_layer_admission::admit_by_releasing_kept_dense_layers(
+    match admit_by_releasing_kept_dense_layers(
         model,
         context_admission_setup.reservations_for_dense_release(),
         context_reclamation_target_bytes,
     )? {
-        super::dense_layer_admission::DenseReleaseOutcome::Admitted => return Ok(()),
-        super::dense_layer_admission::DenseReleaseOutcome::StillShort => {
+        DenseReleaseOutcome::Admitted => return Ok(()),
+        DenseReleaseOutcome::StillShort => {
             return Err(reject_streaming_context_before_mlx_allocation(
                 context_admission_setup,
             ));
         }
-        super::dense_layer_admission::DenseReleaseOutcome::NotDense => {}
+        DenseReleaseOutcome::NotDense => {}
     }
     if let Some(memory_snapshot_after_reclamation) =
-        qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
+        qwen3_5_streaming::reclaim_retained_payload_for_request_memory_pressure(
             model,
             context_reclamation_target_bytes,
         )?
@@ -183,14 +186,9 @@ fn build_streaming_context_admission_setup(
 impl StreamingContextAdmissionSetup {
     /// The reservations a dense release re-checks against after giving kept
     /// layers back.
-    const fn reservations_for_dense_release(
-        &self,
-    ) -> super::dense_layer_admission::DenseReleaseReservations {
-        super::dense_layer_admission::DenseReleaseReservations {
+    const fn reservations_for_dense_release(&self) -> DenseReleaseReservations {
+        DenseReleaseReservations {
             context_reservation_bytes: self.reservations.context_reservation_bytes,
-            maximum_expert_page_reservation_bytes: self
-                .reservations
-                .maximum_expert_page_reservation_bytes,
             temporary_workspace_reservation_bytes: self
                 .reservations
                 .temporary_workspace_reservation_bytes,
@@ -455,8 +453,9 @@ fn build_context_memory_admission_projection(
         0
     };
     // A streamed dense layer is read into a slot while the previous one
-    // computes, so a dense model reserves its slots the way a sparse one
-    // reserves its largest expert page.
+    // computes, so a dense model reserves the slots its streamed layers use
+    // the way a sparse one reserves its largest expert page; none while
+    // every layer is kept, as the plan assumed.
     let maximum_target_expert_page_reservation_bytes = maximum_target_expert_page_reservation_bytes
         .saturating_add(model.dense_streaming_slot_reservation_bytes());
     let maximum_expert_page_reservation_bytes =

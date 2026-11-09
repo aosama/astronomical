@@ -1,11 +1,10 @@
-use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
-use crate::DecoderCacheState;
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::qwen3_5_streaming::Qwen3_5MoEPagedExecutionMode;
-use crate::{PerformanceAttribution, PerformanceOperation};
+use crate::{DecoderCacheState, PerformanceAttribution, PerformanceOperation};
 
 use super::Qwen3_5Model;
+use super::layer_submission::{CompletedLayerRoots, LayerGroupSubmission};
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
 use crate::qwen3_5_core::decoder::Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector;
 use mlx_c_rust::{MlxArray, MlxDtype};

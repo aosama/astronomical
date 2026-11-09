@@ -28,8 +28,14 @@ const PROBE_CHUNK_TOKEN_COUNT: usize = 4096;
 const PROMPT_WORD_COUNT: usize = 3400;
 /// Every layer streamed, and some kept so kept layers precede streamed ones.
 const KEPT_LAYER_COUNTS: [usize; 2] = [0, 7];
-/// A full probe-sized chunk, and a shorter whole prompt.
-const FORWARD_TOKEN_COUNTS: [usize; 2] = [PROBE_CHUNK_TOKEN_COUNT, 1246];
+/// Measured forwards as `(preceding tokens, chunk tokens)`: a full
+/// probe-sized chunk, a shorter whole prompt, and a second chunk that
+/// attends over a full first chunk, since the probe runs at position zero.
+const MEASURED_CHUNKS: [(usize, usize); 3] = [
+    (0, PROBE_CHUNK_TOKEN_COUNT),
+    (0, 1246),
+    (PROBE_CHUNK_TOKEN_COUNT, 1024),
+];
 /// The final normalization and last-token logits, which no layer holds.
 const OUTSIDE_LAYER_SLACK_BYTES: u64 = 8 * 1024 * 1024;
 const FORWARD_MEMORY_BUDGET: Duration = Duration::from_secs(120);
@@ -89,42 +95,58 @@ async fn assert_prompt_forwards_stay_within_reserve() {
             )
             .expect("the dense layers should plan")
             .expect("a dense model should have a plan");
-        for forward_token_count in FORWARD_TOKEN_COUNTS {
-            let forward_growth = measure_prompt_forward_growth(
+        for (preceding_token_count, chunk_token_count) in MEASURED_CHUNKS {
+            let forward_growth = measure_chunk_forward_growth(
                 &streaming_model,
                 &qwen3_5_config,
-                &prompt_token_ids[..forward_token_count],
+                &prompt_token_ids[..preceding_token_count + chunk_token_count],
+                preceding_token_count,
             );
             eprintln!(
-                "[dense-forward-memory] kept={kept_layer_count} tokens={forward_token_count} growth_beyond_state={forward_growth} reserve={}",
+                "[dense-forward-memory] kept={kept_layer_count} preceding={preceding_token_count} tokens={chunk_token_count} growth_beyond_state={forward_growth} reserve={}",
                 residency_plan.streamed_forward_reserve_bytes
             );
             assert!(
                 forward_growth
                     <= residency_plan.streamed_forward_reserve_bytes + OUTSIDE_LAYER_SLACK_BYTES,
-                "a {forward_token_count}-token prompt with {kept_layer_count} kept layers grew {forward_growth} bytes beyond its state; the plan reserved {}",
+                "a {chunk_token_count}-token chunk after {preceding_token_count} tokens with {kept_layer_count} kept layers grew {forward_growth} bytes beyond its state; the plan reserved {}",
                 residency_plan.streamed_forward_reserve_bytes
             );
         }
     }
 }
 
-/// Peak bytes one prompt forward held beyond the weights and the decoder
-/// state it leaves behind.
-fn measure_prompt_forward_growth(
+/// Peak bytes the chunk after `preceding_token_count` tokens held beyond
+/// the weights and the decoder state it leaves behind; the preceding tokens
+/// run first, unmeasured, to fill that state.
+fn measure_chunk_forward_growth(
     streaming_model: &Qwen3_5StreamingModel,
     qwen3_5_config: &astronomical_model_serving::Qwen3_5Config,
     prompt_token_ids: &[u32],
+    preceding_token_count: usize,
 ) -> u64 {
     let runtime = streaming_model.runtime();
     let mut request_decoder_state = crate::common::standard_request_decoder_state(qwen3_5_config);
+    if preceding_token_count > 0 {
+        streaming_model
+            .forward_chunk(
+                &prompt_token_ids[..preceding_token_count],
+                0,
+                &mut request_decoder_state,
+            )
+            .expect("the preceding chunk should run");
+    }
     runtime
         .synchronize_gpu_stream_and_clear_allocator_cache()
         .expect("the allocator cache should clear");
     runtime.reset_peak_memory().expect("the peak should reset");
     let final_logits = streaming_model
-        .forward_chunk(prompt_token_ids, 0, &mut request_decoder_state)
-        .expect("the prompt forward should run")
+        .forward_chunk(
+            &prompt_token_ids[preceding_token_count..],
+            u32::try_from(preceding_token_count).expect("the chunk start should fit u32"),
+            &mut request_decoder_state,
+        )
+        .expect("the measured chunk should run")
         .to_vec_f32()
         .expect("the final logits should be readable");
     assert!(final_logits.iter().all(|logit| logit.is_finite()));

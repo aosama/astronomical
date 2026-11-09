@@ -58,16 +58,7 @@ impl DenseLayerResidencyRequirements<'_> {
     /// not one fewer.
     #[must_use]
     pub fn plan(&self) -> DenseLayerResidencyPlan {
-        let mut all_layer_bytes = 0_u64;
-        let mut largest_layer_bytes = 0_u64;
-        for layer_bytes in self.decoder_layer_streamable_bytes {
-            all_layer_bytes = all_layer_bytes.saturating_add(*layer_bytes);
-            largest_layer_bytes = largest_layer_bytes.max(*layer_bytes);
-        }
-        let complete_residency_bytes = self
-            .always_resident_bytes
-            .saturating_add(all_layer_bytes)
-            .saturating_add(self.working_memory_bytes);
+        let (all_layer_bytes, largest_layer_bytes) = self.layer_byte_totals();
         let streaming_slot_bytes = largest_layer_bytes.saturating_mul(self.streaming_slot_count);
         let streamed_forward_reserve_bytes = self
             .working_memory_bytes
@@ -75,42 +66,57 @@ impl DenseLayerResidencyRequirements<'_> {
         let streaming_floor_bytes = self
             .always_resident_bytes
             .saturating_add(streamed_forward_reserve_bytes);
-        if complete_residency_bytes <= self.active_memory_ceiling_bytes {
-            return DenseLayerResidencyPlan {
-                resident_layer_count: self.decoder_layer_streamable_bytes.len(),
-                streaming_slot_bytes: 0,
-                streamed_forward_reserve_bytes,
-                streaming_floor_bytes,
-                is_below_streaming_floor: false,
-            };
-        }
-        let Some(mut remaining_layer_bytes) = self
-            .active_memory_ceiling_bytes
-            .checked_sub(streaming_floor_bytes)
-        else {
-            return DenseLayerResidencyPlan {
-                resident_layer_count: 0,
-                streaming_slot_bytes,
-                streamed_forward_reserve_bytes,
-                streaming_floor_bytes,
-                is_below_streaming_floor: true,
-            };
-        };
-        let mut resident_layer_count = 0;
-        for layer_bytes in self.decoder_layer_streamable_bytes {
-            let Some(bytes_left_after_layer) = remaining_layer_bytes.checked_sub(*layer_bytes)
-            else {
-                break;
-            };
-            remaining_layer_bytes = bytes_left_after_layer;
-            resident_layer_count += 1;
-        }
-        DenseLayerResidencyPlan {
-            resident_layer_count,
-            streaming_slot_bytes,
+        let complete_residency_bytes = self
+            .always_resident_bytes
+            .saturating_add(all_layer_bytes)
+            .saturating_add(self.working_memory_bytes);
+        let mut residency_plan = DenseLayerResidencyPlan {
+            resident_layer_count: self.decoder_layer_streamable_bytes.len(),
+            streaming_slot_bytes: 0,
             streamed_forward_reserve_bytes,
             streaming_floor_bytes,
             is_below_streaming_floor: false,
+        };
+        if complete_residency_bytes <= self.active_memory_ceiling_bytes {
+            return residency_plan;
         }
+        residency_plan.streaming_slot_bytes = streaming_slot_bytes;
+        match self
+            .active_memory_ceiling_bytes
+            .checked_sub(streaming_floor_bytes)
+        {
+            Some(layer_room_bytes) => {
+                residency_plan.resident_layer_count = self.leading_layers_within(layer_room_bytes);
+            }
+            None => {
+                residency_plan.resident_layer_count = 0;
+                residency_plan.is_below_streaming_floor = true;
+            }
+        }
+        residency_plan
+    }
+
+    /// Every layer's bytes summed, and the largest single layer's bytes.
+    fn layer_byte_totals(&self) -> (u64, u64) {
+        let mut all_layer_bytes = 0_u64;
+        let mut largest_layer_bytes = 0_u64;
+        for layer_bytes in self.decoder_layer_streamable_bytes {
+            all_layer_bytes = all_layer_bytes.saturating_add(*layer_bytes);
+            largest_layer_bytes = largest_layer_bytes.max(*layer_bytes);
+        }
+        (all_layer_bytes, largest_layer_bytes)
+    }
+
+    /// How many leading layers fit in `layer_room_bytes`, in layer order.
+    fn leading_layers_within(&self, mut layer_room_bytes: u64) -> usize {
+        let mut resident_layer_count = 0;
+        for layer_bytes in self.decoder_layer_streamable_bytes {
+            let Some(room_left_after_layer) = layer_room_bytes.checked_sub(*layer_bytes) else {
+                break;
+            };
+            layer_room_bytes = room_left_after_layer;
+            resident_layer_count += 1;
+        }
+        resident_layer_count
     }
 }

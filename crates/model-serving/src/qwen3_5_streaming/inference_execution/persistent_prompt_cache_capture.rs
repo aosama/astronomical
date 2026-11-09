@@ -187,7 +187,7 @@ impl Qwen3_5EngineState {
                     active_request.performance_attribution.measure_operation(
                         PerformanceOperation::ExpertRetentionReclamation,
                         |_performance_attribution| {
-                            qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
+                            qwen3_5_streaming::reclaim_retained_payload_for_request_memory_pressure(
                                 model,
                                 active_memory_deficit_bytes,
                             )

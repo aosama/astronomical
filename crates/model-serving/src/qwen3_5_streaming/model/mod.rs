@@ -5,6 +5,8 @@ mod deferred_expert_demand;
 #[cfg(feature = "direct-mlx")]
 mod dense_layer_admission;
 #[cfg(feature = "direct-mlx")]
+mod dense_layer_counts;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod dense_layer_reads;
 #[cfg(all(test, feature = "direct-mlx"))]
 mod dense_layer_reads_tests;
@@ -28,6 +30,8 @@ mod expert_reuse_union_offer;
 #[cfg(feature = "direct-mlx")]
 mod expert_storage_streaming;
 mod expert_streaming_stats;
+#[cfg(feature = "direct-mlx")]
+mod forward_layer_weights;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod layer_submission;
 // Reads the next streamed layer while the graphics processor computes.
@@ -124,7 +128,7 @@ pub(crate) use crate::qwen3_5_core::vision::{Qwen3_5VisionModel, visual_embeddin
 #[cfg(feature = "direct-mlx")]
 pub use cached_plus_streamed_page_route::Qwen3_5MoECachedPlusStreamedPageRoute;
 #[cfg(feature = "direct-mlx")]
-pub(crate) use expert_retention_memory_pressure::reclaim_retained_experts_for_request_memory_pressure;
+pub(crate) use expert_retention_memory_pressure::reclaim_retained_payload_for_request_memory_pressure;
 pub use mixed_decode_execution::qwen3_5_moe_combine_partial_route_outputs_for_tests;
 #[cfg(feature = "direct-mlx")]
 pub use output_combination::qwen3_5_moe_combine_experts;

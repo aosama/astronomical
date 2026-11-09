@@ -104,9 +104,12 @@ pub(in crate::qwen3_5_streaming) fn collect_completed_forward_memory_snapshot(
     // of the request's logical streaming payload counter. They are expert-page
     // spike ownership, not activation, so both learning sites exclude them
     // (issue #691).
+    // A dense model's streamed layers sit in the peak the same way: weight
+    // bytes the slot reservation covers, never activation.
     let promoted_expert_page_stream_bytes = performance_attribution
         .expert_streaming_payload_byte_count()
-        .saturating_sub(streamed_expert_page_bytes_before_growth);
+        .saturating_sub(streamed_expert_page_bytes_before_growth)
+        .saturating_add(model.dense_streaming_slot_reservation_bytes());
     let retained_expert_payload_bytes_after_growth = model
         .expert_weight_memory_cache_statistics()
         .resident_payload_byte_count;

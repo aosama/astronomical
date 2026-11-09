@@ -33,7 +33,7 @@ pub use model::{
 #[cfg(feature = "direct-mlx")]
 pub(crate) use model::{
     PagedForwardMissingRouteCollector, PagedRouteValidationOutcome,
-    reclaim_retained_experts_for_request_memory_pressure,
+    reclaim_retained_payload_for_request_memory_pressure,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{

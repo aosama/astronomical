@@ -21,6 +21,25 @@ impl Qwen3_5EngineState {
         }
     }
 
+    /// Reads back the dense layers this request gave up for its context, now
+    /// that its state is gone (issue #1985). Without this one long prompt
+    /// left every later request streaming more layers than the plan needs.
+    /// It costs at most a few layer reads per request, while decode already
+    /// reads every streamed layer for every token. A failure leaves the
+    /// layers streaming, which is still correct, so it is only logged.
+    fn keep_planned_dense_layers_at_finalization(&self, request_id: u64) {
+        let Some(model) = self.model.as_ref() else {
+            return;
+        };
+        if let Err(replan_error) = model.replan_kept_dense_layers_under_installed_limit() {
+            tracing::warn!(
+                request_id,
+                error = %replan_error,
+                "could not keep the planned dense layers again after the request"
+            );
+        }
+    }
+
     pub(super) fn collect_current_mlx_memory_telemetry(
         &self,
     ) -> Result<Option<MlxMemoryTelemetry>, InferenceEngineError> {
@@ -126,6 +145,7 @@ impl Qwen3_5EngineState {
             .as_ref()
             .is_some_and(|model| model.resume_expert_retention_after_request_memory_pressure());
         self.lift_prefill_memory_recovery_freeze_at_finalization();
+        self.keep_planned_dense_layers_at_finalization(request_id.value());
         if let Some(model) = self.model.as_ref() {
             let expert_weight_memory_cache_statistics =
                 model.expert_weight_memory_cache_statistics();

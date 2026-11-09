@@ -25,6 +25,14 @@ use super::decoder_layer_weights::{
 };
 use super::{Qwen3_5ExecutionError, Qwen3_5Weights};
 
+/// The dtype of the hidden states the embedding lookup hands the first
+/// decoder layer, which every later layer's input inherits.
+pub(super) fn embedded_hidden_state_dtype(
+    weights: &Qwen3_5Weights,
+) -> Result<mlx_c_rust::MlxDtype, Qwen3_5ExecutionError> {
+    embedding_output_dtype(&affine_contract(&weights.embedding_weights))
+}
+
 /// Replays MLX's floating dtype propagation over the bound decoder graph without
 /// evaluating model tensors. The resulting contract therefore follows each
 /// artifact's actual affine scale and bias dtypes instead of its configured

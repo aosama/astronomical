@@ -6,9 +6,10 @@
 //! the prefill chunk size it will serve, and reads MLX's peak: the transient
 //! beyond the layer's own weights and the decoder state it writes.
 
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_c_rust::MlxArray;
 
 use super::Qwen3_5Model;
+use super::decoder_cache_dtype_flow::embedded_hidden_state_dtype;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
@@ -96,7 +97,7 @@ impl Qwen3_5Model {
         let probe_input = self.runtime.full(
             &[1, token_count, self.config.hidden_size() as i32],
             0.0,
-            MlxDtype::BFloat16,
+            embedded_hidden_state_dtype(&self.weights)?,
         )?;
         let probe_output = self.probe_forward(
             &probe_input,

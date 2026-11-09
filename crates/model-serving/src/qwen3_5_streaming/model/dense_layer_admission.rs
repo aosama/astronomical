@@ -1,22 +1,24 @@
-//! Making room for a request by giving kept dense layers back (issue #1985).
+//! What a dense model's kept layers mean to admission (issue #1985).
 //!
 //! A dense model keeps as many leading layers resident as its plan allowed.
-//! When a request needs more room than is left, admission gives the last kept
-//! layers back so they stream, then checks the request again, before it would
-//! ever refuse it: a slower answer is acceptable, a refused one is not (#1902).
-//! Admission only gets here when its first decision was to reclaim, which it
-//! makes only when the kept layers cover the shortfall.
+//! Kept layers are reclaimable payload: when a request needs more room than
+//! is left, admission gives the last kept layers back so they stream, then
+//! checks the request again, before it would ever refuse it: a slower answer
+//! is acceptable, a refused one is not (#1902). Streamed layers need their
+//! slots, which admission charges only while some layer streams.
 
 use crate::{ContextAdmissionRequirements, InferenceEngineError, MemoryAdmissionDecision};
 
 use super::super::inference_execution::qwen3_5_runtime_error;
 use super::Qwen3_5Model;
+use super::dense_layer_streamer::Qwen3_5DenseLayerStreamer;
 
-/// The reservations a request still needs after kept layers are released.
+/// The reservations a request still needs after kept layers are released;
+/// the layer slots are charged afresh, since releasing a layer can start
+/// streaming.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DenseReleaseReservations {
     pub(crate) context_reservation_bytes: usize,
-    pub(crate) maximum_expert_page_reservation_bytes: usize,
     pub(crate) temporary_workspace_reservation_bytes: usize,
     pub(crate) active_memory_ceiling_bytes: usize,
 }
@@ -28,7 +30,8 @@ pub(crate) enum DenseReleaseOutcome {
     NotDense,
     /// The request fits after the release.
     Admitted,
-    /// Every kept layer was given back and the request still does not fit.
+    /// Every kept layer was given back and the request still does not fit;
+    /// the planned layers are kept again before the refusal.
     StillShort,
 }
 
@@ -52,7 +55,12 @@ pub(crate) fn admit_by_releasing_kept_dense_layers(
             {
                 bytes_to_release = required_bytes;
             }
-            _ => return Ok(DenseReleaseOutcome::StillShort),
+            _ => {
+                // The request is refused either way, so streaming the
+                // released layers would only slow the next one.
+                model.replan_kept_dense_layers_under_installed_limit()?;
+                return Ok(DenseReleaseOutcome::StillShort);
+            }
         }
     }
 }
@@ -73,12 +81,70 @@ fn decide_after_release(
     Ok(ContextAdmissionRequirements {
         current_active_memory_bytes: memory_snapshot_after_release.active_memory_bytes(),
         context_growth_bytes: reservations.context_reservation_bytes,
-        expert_page_reservation_bytes: reservations.maximum_expert_page_reservation_bytes,
+        expert_page_reservation_bytes: usize::try_from(
+            model.dense_streaming_slot_reservation_bytes(),
+        )
+        .unwrap_or(usize::MAX),
         temporary_workspace_bytes: reservations.temporary_workspace_reservation_bytes,
+        // A dense model has no retained experts; its kept layers are the
+        // reclaimable payload this field carries.
         retained_expert_payload_bytes: usize::try_from(model.dense_kept_layer_payload_bytes())
             .unwrap_or(usize::MAX),
         active_memory_ceiling_bytes: reservations.active_memory_ceiling_bytes,
         complete_experts_are_resident: false,
     }
     .decide())
+}
+
+impl Qwen3_5Model {
+    /// The text weight bytes in memory: the bound tensors less any dense
+    /// decoder layers that are read per forward rather than kept.
+    pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {
+        let bound_payload_bytes = self.base.resident_model_payload_byte_count();
+        match &self.dense_layer_streamer {
+            Some(dense_layer_streamer) => bound_payload_bytes
+                .saturating_sub(dense_layer_streamer.streamed_layer_payload_bytes()),
+            None => bound_payload_bytes,
+        }
+    }
+
+    /// Bytes a forward's streamed layers occupy with the current kept count:
+    /// zero for a sparse model and while every dense layer is kept.
+    pub(crate) fn dense_streaming_slot_reservation_bytes(&self) -> u64 {
+        self.dense_layer_streamer
+            .as_ref()
+            .map_or(0, Qwen3_5DenseLayerStreamer::streaming_slot_bytes_in_use)
+    }
+
+    /// Payload admission may reclaim: retained experts, plus a dense model's
+    /// kept layers, which stream once given back.
+    pub(crate) fn reclaimable_retained_payload_bytes(&self) -> u64 {
+        self.expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count
+            .saturating_add(self.dense_kept_layer_payload_bytes())
+    }
+
+    /// Payload of the dense layers kept resident, which admission may give back.
+    pub(crate) fn dense_kept_layer_payload_bytes(&self) -> u64 {
+        self.dense_layer_streamer
+            .as_ref()
+            .map_or(0, Qwen3_5DenseLayerStreamer::kept_layer_payload_bytes)
+    }
+
+    /// Gives back kept dense layers until `required_bytes` are freed,
+    /// returning the bytes freed; those layers stream until a re-plan.
+    pub(crate) fn release_kept_dense_layers(&self, required_bytes: u64) -> u64 {
+        let Some(dense_layer_streamer) = &self.dense_layer_streamer else {
+            return 0;
+        };
+        let released_bytes = dense_layer_streamer.release_trailing_kept_layers(required_bytes);
+        if released_bytes > 0 {
+            tracing::info!(
+                released_bytes,
+                kept_layer_count = dense_layer_streamer.kept_layer_count(),
+                "gave kept dense layers back to make room"
+            );
+        }
+        released_bytes
+    }
 }

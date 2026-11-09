@@ -256,7 +256,10 @@ impl Qwen3_5EngineState {
                     )
                 })?
         } else {
-            0
+            // A dense model's streamed layers occupy their slots during the
+            // forward the way routed pages do, and context admission already
+            // reserves them; the guard reserves the same bytes.
+            usize::try_from(model.dense_streaming_slot_reservation_bytes()).unwrap_or(usize::MAX)
         };
         let memory_snapshot_before_growth = model
             .runtime()
@@ -529,7 +532,7 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let Some(memory_snapshot_after_reclamation) =
-            qwen3_5_streaming::reclaim_retained_experts_for_request_memory_pressure(
+            qwen3_5_streaming::reclaim_retained_payload_for_request_memory_pressure(
                 model,
                 target_bytes,
             )?

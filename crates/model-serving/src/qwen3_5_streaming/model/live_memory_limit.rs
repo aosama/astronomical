@@ -11,6 +11,7 @@ use crate::{
 };
 
 use super::Qwen3_5Model;
+use super::dense_layer_counts::KeptLayerReplan;
 use super::prefill_partial_layer_read::should_clear_prefill_completion_refusals;
 
 /// The live runtime facts one ceiling-change decision reads: limits currently
@@ -84,10 +85,15 @@ impl Qwen3_5Model {
             ceiling_change_decision,
             MemoryCeilingChangeDecision::Lower { .. }
         );
-        let previous_expert_paging_memory_ceiling_bytes = self
+        // The ceiling a failed change rolls back to: the pager's own when it
+        // has one, otherwise the current one, which a dense model's budget
+        // and kept layers return to.
+        let previous_memory_ceiling_bytes = self
             .expert_pager
             .as_ref()
-            .map(|expert_pager| expert_pager.configured_mlx_memory_ceiling_bytes());
+            .map_or(current_mlx_memory_ceiling_bytes, |expert_pager| {
+                expert_pager.configured_mlx_memory_ceiling_bytes()
+            });
         if is_lowering_mlx_memory_ceiling {
             // Native eviction comes first because the old MLX ceiling still
             // permits the bookkeeping and synchronization needed to release
@@ -96,13 +102,13 @@ impl Qwen3_5Model {
             self.lower_ceiling_with_expert_reclamation(
                 requested_mlx_memory_ceiling_bytes,
                 ceiling_change_decision,
-                previous_expert_paging_memory_ceiling_bytes,
+                previous_memory_ceiling_bytes,
             )?;
         }
 
         self.install_runtime_memory_limit_with_rollback(
             requested_mlx_memory_limits,
-            previous_expert_paging_memory_ceiling_bytes,
+            previous_memory_ceiling_bytes,
         )?;
         if !is_lowering_mlx_memory_ceiling
             && let Err(policy_update_error) = self
@@ -112,7 +118,7 @@ impl Qwen3_5Model {
         {
             return Err(self.restore_failed_raised_memory_limit(
                 current_mlx_memory_limits,
-                previous_expert_paging_memory_ceiling_bytes,
+                previous_memory_ceiling_bytes,
                 policy_update_error,
             ));
         }
@@ -185,7 +191,7 @@ impl Qwen3_5Model {
         &mut self,
         requested_mlx_memory_ceiling_bytes: u64,
         ceiling_change_decision: MemoryCeilingChangeDecision,
-        previous_expert_paging_memory_ceiling_bytes: Option<u64>,
+        previous_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
         self.prepare_expert_residency_for_lower_mlx_memory_limit(
             requested_mlx_memory_ceiling_bytes,
@@ -205,7 +211,7 @@ impl Qwen3_5Model {
             )
         })?;
         if post_reclamation_active_memory_bytes > requested_mlx_memory_ceiling_bytes {
-            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes)?;
+            self.restore_memory_ceiling_policy(previous_memory_ceiling_bytes)?;
             return Err(super::super::inference_execution::fatal_engine_error(
                 "retained model memory remained above the requested MLX ceiling after expert reclamation",
             ));
@@ -220,13 +226,13 @@ impl Qwen3_5Model {
     fn install_runtime_memory_limit_with_rollback(
         &mut self,
         requested_mlx_memory_limits: MlxMemoryLimits,
-        previous_expert_paging_memory_ceiling_bytes: Option<u64>,
+        previous_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
         if let Err(runtime_update_error) = self
             .runtime
             .update_memory_limits(requested_mlx_memory_limits)
         {
-            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes)?;
+            self.restore_memory_ceiling_policy(previous_memory_ceiling_bytes)?;
             return Err(super::super::inference_execution::qwen3_5_runtime_error(
                 runtime_update_error,
             ));
@@ -265,10 +271,11 @@ impl Qwen3_5Model {
         Ok(())
     }
 
-    /// Limits retained experts and gives back kept dense layers worth the
-    /// bytes the decision needs, then matches the kept layers to the plan for
-    /// the lower limit: the plan also leaves room for the working memory a
-    /// streamed layer needs, which the decision does not count.
+    /// Limits retained experts, and gives back the kept dense layers the plan
+    /// for the lower limit leaves no room for. The plan keeps the always
+    /// resident bytes, kept layers, slots and working memory under the lower
+    /// limit, so it frees at least what the decision needs; releasing by
+    /// bytes first could overshoot and read layers straight back.
     fn give_back_retained_payload_for_lower_limit(
         &self,
         retained_paged_expert_reclamation_bytes: u64,
@@ -279,8 +286,10 @@ impl Qwen3_5Model {
                 .borrow_mut()
                 .limit_for_request_pressure(retained_paged_expert_reclamation_bytes);
         }
-        self.release_kept_dense_layers(retained_paged_expert_reclamation_bytes);
-        Ok(self.replan_kept_dense_layers(requested_mlx_memory_ceiling_bytes)?)
+        Ok(self.replan_kept_dense_layers(
+            requested_mlx_memory_ceiling_bytes,
+            KeptLayerReplan::NeverGrow,
+        )?)
     }
 
     fn update_expert_residency_for_live_mlx_memory_limit(
@@ -310,27 +319,29 @@ impl Qwen3_5Model {
                     mlx_ram_budget_error.to_string(),
                 )
             })?;
-        Ok(self.replan_kept_dense_layers(requested_mlx_memory_ceiling_bytes)?)
+        Ok(self.replan_kept_dense_layers(
+            requested_mlx_memory_ceiling_bytes,
+            KeptLayerReplan::MatchPlan,
+        )?)
     }
 
-    fn restore_expert_paging_memory_ceiling(
+    /// Returns the budget, the pager and a dense model's kept layers to the
+    /// ceiling a failed change started from.
+    fn restore_memory_ceiling_policy(
         &mut self,
-        previous_memory_ceiling_bytes: Option<u64>,
+        previous_memory_ceiling_bytes: u64,
     ) -> Result<(), InferenceEngineError> {
-        if let Some(previous_memory_ceiling_bytes) = previous_memory_ceiling_bytes {
-            self.update_expert_residency_for_live_mlx_memory_limit(previous_memory_ceiling_bytes)?;
-        }
-        Ok(())
+        self.update_expert_residency_for_live_mlx_memory_limit(previous_memory_ceiling_bytes)
     }
 
     fn restore_failed_raised_memory_limit(
         &mut self,
         previous_mlx_memory_limits: MlxMemoryLimits,
-        previous_expert_paging_memory_ceiling_bytes: Option<u64>,
+        previous_memory_ceiling_bytes: u64,
         transition_error: InferenceEngineError,
     ) -> InferenceEngineError {
         let policy_restore_result =
-            self.restore_expert_paging_memory_ceiling(previous_expert_paging_memory_ceiling_bytes);
+            self.restore_memory_ceiling_policy(previous_memory_ceiling_bytes);
         let runtime_restore_result = self
             .runtime
             .update_memory_limits(previous_mlx_memory_limits);

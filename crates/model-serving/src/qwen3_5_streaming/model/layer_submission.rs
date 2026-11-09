@@ -8,7 +8,7 @@
 use mlx_c_rust::MlxArray;
 
 use super::Qwen3_5Model;
-use super::dense_layer_residency::ForwardLayerWeights;
+use super::forward_layer_weights::ForwardLayerWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::{PerformanceAttribution, PerformanceOperation};
 

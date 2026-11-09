@@ -60,7 +60,7 @@ impl Qwen3_5EngineState {
                 runtime,
                 validated_artifact,
                 &self.model_directory,
-                (model_chunking, self.dense_layer_probe_shape()),
+                self.streaming_forward_shape(model_chunking),
                 self.decode_expert_cache_policy,
                 &mut model_loading_performance_attribution,
             )?;
@@ -180,6 +180,16 @@ impl Qwen3_5EngineState {
     /// The forward shape this engine serves, which a dense model's
     /// working-memory probe reproduces: the chunk sizer's largest prefill
     /// chunk and the attention slab granularity requests use.
+    fn streaming_forward_shape(
+        &self,
+        model_chunking: Qwen3_5ModelChunkingConfiguration,
+    ) -> StreamingForwardShape {
+        StreamingForwardShape {
+            model_chunking,
+            dense_layer_probe_shape: self.dense_layer_probe_shape(),
+        }
+    }
+
     fn dense_layer_probe_shape(
         &self,
     ) -> crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape
@@ -322,16 +332,21 @@ fn resolve_model_chunking_configuration(
     })
 }
 
+/// How the engine will run forwards: the chunking the model loads with, and
+/// the prefill shape a dense model's working memory is measured at.
+struct StreamingForwardShape {
+    model_chunking: Qwen3_5ModelChunkingConfiguration,
+    dense_layer_probe_shape:
+        crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape,
+}
+
 /// Loads the streaming model from the validated artifact under the engine's
 /// decode-expert cache policy and materializes its target weights.
 fn load_and_materialize_streaming_model(
     runtime: MlxRuntime,
     validated_artifact: ValidatedQwen3_5Artifact,
     model_directory: &std::path::Path,
-    (model_chunking, dense_layer_probe_shape): (
-        Qwen3_5ModelChunkingConfiguration,
-        crate::qwen3_5_streaming::model::dense_layer_working_memory_probe::DenseLayerProbeShape,
-    ),
+    streaming_forward_shape: StreamingForwardShape,
     decode_expert_cache_policy: WorkerDecodeExpertCachePolicy,
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Qwen3_5Model, InferenceEngineError> {
@@ -340,7 +355,7 @@ fn load_and_materialize_streaming_model(
         validated_artifact,
         model_directory,
         true,
-        model_chunking,
+        streaming_forward_shape.model_chunking,
         decode_expert_cache_policy,
         model_loading_performance_attribution,
     )?;
@@ -351,7 +366,9 @@ fn load_and_materialize_streaming_model(
                 // A dense model then measures one streamed layer's working
                 // memory at the prefill chunk size it will serve and keeps the
                 // layers that fit beside it; a sparse model has none to plan.
-                model.materialize_target_weights_and_plan_dense_layers(dense_layer_probe_shape)
+                model.materialize_target_weights_and_plan_dense_layers(
+                    streaming_forward_shape.dense_layer_probe_shape,
+                )
             },
         )
         .map_err(InferenceEngineError::from)?;

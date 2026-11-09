@@ -16,6 +16,7 @@ use std::rc::Rc;
 use astronomical_runtime_integration::MlxRuntime;
 use mlx_c_rust::MlxArray;
 
+use super::dense_layer_counts::{kept_layer_count_after_release, streaming_slot_count_in_use};
 use super::dense_layer_reads::{
     DenseLayerShardRead, DenseLayerTensorRange, dense_layer_shard_reads,
 };
@@ -47,9 +48,10 @@ pub(crate) struct Qwen3_5DenseLayerStreamer {
     /// mutability lets request admission give kept layers back, so they
     /// stream, when a request needs their room.
     kept_layer_weights: RefCell<Vec<Rc<Qwen3_5DecoderLayerWeights>>>,
-    /// Working memory the load-time probe measured, reused when a live
-    /// limit change plans again; zero when the probe could not run.
-    measured_working_memory_bytes: Cell<u64>,
+    /// Working memory the load-time probe measured, reused whenever the kept
+    /// layers are planned again; `None` when the probe could not run, and
+    /// then nothing is kept, since a plan without it would overrun.
+    measured_working_memory_bytes: Cell<Option<u64>>,
 }
 
 /// Where a forward finds one decoder layer.
@@ -136,7 +138,7 @@ impl Qwen3_5DenseLayerStreamer {
             layer_tensor_profiles: decoder_layer_tensor_profiles(qwen3_5_config)?,
             layer_payload_bytes,
             kept_layer_weights: RefCell::new(Vec::new()),
-            measured_working_memory_bytes: Cell::new(0),
+            measured_working_memory_bytes: Cell::new(None),
         })
     }
 
@@ -161,17 +163,35 @@ impl Qwen3_5DenseLayerStreamer {
     }
 
     pub(crate) fn record_measured_working_memory_bytes(&self, working_memory_bytes: u64) {
-        self.measured_working_memory_bytes.set(working_memory_bytes);
+        self.measured_working_memory_bytes
+            .set(Some(working_memory_bytes));
     }
 
-    pub(crate) fn measured_working_memory_bytes(&self) -> u64 {
+    pub(crate) fn measured_working_memory_bytes(&self) -> Option<u64> {
         self.measured_working_memory_bytes.get()
     }
 
-    /// Bytes the layer slots occupy while layers stream.
+    /// Bytes the slots occupy when every layer streams: the floor the model
+    /// needs beside its always-resident tensors, whatever is kept now.
     pub(crate) fn streaming_slot_bytes(&self) -> u64 {
         self.largest_layer_payload_bytes()
-            .saturating_mul(DENSE_STREAMING_LAYER_SLOT_COUNT)
+            .saturating_mul(streaming_slot_count_in_use(
+                self.layer_payload_bytes.len(),
+                0,
+                DENSE_STREAMING_LAYER_SLOT_COUNT,
+            ))
+    }
+
+    /// Bytes streamed layers occupy in a forward with the current kept
+    /// count: none while every layer is kept, one slot when one layer
+    /// streams, both slots otherwise.
+    pub(crate) fn streaming_slot_bytes_in_use(&self) -> u64 {
+        self.largest_layer_payload_bytes()
+            .saturating_mul(streaming_slot_count_in_use(
+                self.layer_payload_bytes.len(),
+                self.kept_layer_count(),
+                DENSE_STREAMING_LAYER_SLOT_COUNT,
+            ))
     }
 
     /// The bytes one streamed layer occupies while it is read and used.
@@ -186,15 +206,16 @@ impl Qwen3_5DenseLayerStreamer {
     /// Gives back kept layers from the last one down until at least
     /// `required_bytes` are freed or none are kept, returning the bytes freed.
     /// Those layers stream from then on.
+    /// A forward that already holds a released layer keeps it alive through
+    /// its own `Rc` until that forward ends.
     pub(crate) fn release_trailing_kept_layers(&self, required_bytes: u64) -> u64 {
         let mut kept_layer_weights = self.kept_layer_weights.borrow_mut();
-        let mut released_bytes = 0_u64;
-        while released_bytes < required_bytes && !kept_layer_weights.is_empty() {
-            let released_layer_index = kept_layer_weights.len() - 1;
-            kept_layer_weights.pop();
-            released_bytes =
-                released_bytes.saturating_add(self.layer_payload_bytes[released_layer_index]);
-        }
+        let (kept_layer_count, released_bytes) = kept_layer_count_after_release(
+            &self.layer_payload_bytes,
+            kept_layer_weights.len(),
+            required_bytes,
+        );
+        kept_layer_weights.truncate(kept_layer_count);
         released_bytes
     }
 
