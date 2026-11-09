@@ -87,6 +87,21 @@ impl Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector {
             .collect()
     }
 
+    /// One linear-attention layer's boundary snapshots across every
+    /// checkpoint. They are lazy copies the layer output does not reach, so
+    /// a forward that submits layer by layer evaluates them with their layer
+    /// rather than letting them pin the layer's inputs until it ends.
+    #[must_use]
+    pub fn layer_evaluation_arrays(&self, decoder_layer_index: usize) -> Vec<&MlxArray> {
+        let layer_tensor_prefix = format!("layer_{decoder_layer_index}_linear.");
+        self.checkpoints
+            .iter()
+            .flat_map(|checkpoint| checkpoint.recurrent_snapshot_tensors.iter())
+            .filter(|(tensor_name, _)| tensor_name.starts_with(&layer_tensor_prefix))
+            .map(|(_, snapshot_tensor)| snapshot_tensor)
+            .collect()
+    }
+
     pub fn record_linear_attention_layer(
         &mut self,
         decoder_layer_index: usize,

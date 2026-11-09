@@ -35,12 +35,12 @@ impl LayerGroupSubmission {
 }
 
 /// What one completed decoder layer leaves to evaluate: its output, and for
-/// a linear-attention layer the convolution state, which the output does
-/// not reach.
-#[derive(Clone, Copy)]
+/// a linear-attention layer the convolution state and any prompt-cache
+/// boundary snapshots, which the output does not reach.
 pub(crate) struct CompletedLayerRoots<'layer> {
     pub(crate) layer_output: &'layer MlxArray,
     pub(crate) convolution_state: Option<&'layer MlxArray>,
+    pub(crate) boundary_checkpoint_states: Vec<&'layer MlxArray>,
 }
 
 /// How one completed decoder layer reaches the GPU.
@@ -143,6 +143,7 @@ impl Qwen3_5Model {
         self.wait_for_previous_dense_layer(previous_dense_layer_output, performance_attribution)?;
         let mut layer_roots = vec![layer_output];
         layer_roots.extend(completed_layer.convolution_state);
+        layer_roots.extend(completed_layer.boundary_checkpoint_states);
         self.runtime.async_eval_arrays(&layer_roots)?;
         *previous_dense_layer_output = Some(layer_output.retain()?);
         Ok(())

@@ -374,12 +374,12 @@ impl Qwen3_5Model {
             )?;
             self.submit_completed_layer(
                 &forward_layer_weights,
-                CompletedLayerRoots {
-                    layer_output: &hidden_states,
-                    convolution_state: request_decoder_state
-                        .layer(layer_index)
-                        .and_then(DecoderCacheState::convolution_state_array),
-                },
+                completed_layer_roots(
+                    &hidden_states,
+                    layer_index,
+                    request_decoder_state,
+                    boundary_checkpoint_collector.as_deref(),
+                ),
                 &mut previous_dense_layer_output,
                 LayerGroupSubmission {
                     completed_layer_count: layer_index + 1,
@@ -477,4 +477,25 @@ pub(super) fn pre_final_normalization_hidden_state_at(
         &[1, token_position_index + 1, hidden_state_shape[2]],
         &[1, 1, 1],
     )?)
+}
+
+/// The arrays one completed layer leaves to evaluate: its output, plus the
+/// convolution state and prompt-cache boundary snapshots it does not reach.
+fn completed_layer_roots<'layer>(
+    layer_output: &'layer MlxArray,
+    layer_index: usize,
+    request_decoder_state: &'layer RequestDecoderStateStack,
+    boundary_checkpoint_collector: Option<
+        &'layer Qwen3_5PersistentPromptCacheBoundaryCheckpointCollector,
+    >,
+) -> CompletedLayerRoots<'layer> {
+    CompletedLayerRoots {
+        layer_output,
+        convolution_state: request_decoder_state
+            .layer(layer_index)
+            .and_then(DecoderCacheState::convolution_state_array),
+        boundary_checkpoint_states: boundary_checkpoint_collector
+            .map(|collector| collector.layer_evaluation_arrays(layer_index))
+            .unwrap_or_default(),
+    }
 }
