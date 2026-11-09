@@ -49,7 +49,8 @@ impl PersistentPromptCacheDiskStore {
     ) -> Result<(), PersistentPromptCacheDiskStoreError> {
         // The final name is deterministic, but staging must be unique so a
         // crashed writer cannot be mistaken for a committed block on restart.
-        let block_directory_name = super::disk_store_file::hex_encode(block_key.block_hash());
+        let block_directory_name =
+            super::hex_digest::encode_lowercase_hex_digest(block_key.block_hash());
         let final_block_directory = self.blocks_directory.join(&block_directory_name);
         let staging_block_directory =
             unique_staging_block_directory(&self.blocks_directory, &block_directory_name);
@@ -117,7 +118,7 @@ impl PersistentPromptCacheDiskStore {
             &self.blocks_directory,
             &format!(
                 "{}-boundary",
-                super::disk_store_file::hex_encode(block_hash)
+                super::hex_digest::encode_lowercase_hex_digest(block_hash)
             ),
         );
         create_staging_directory(&staging_directory)?;

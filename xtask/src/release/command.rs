@@ -39,81 +39,108 @@ pub(crate) enum ReleaseCommand {
     AcceptSparkleUpdate,
 }
 
+/// Routes the subcommand to its own parser, so each subcommand's flags and
+/// requirements live in one small function rather than one long match.
 pub(crate) fn parse_release_command(arguments: &[String]) -> Result<ReleaseCommand, String> {
     let Some((subcommand, subcommand_arguments)) = arguments.split_first() else {
         return Err(RELEASE_USAGE.to_owned());
     };
     match subcommand.as_str() {
-        "create-dmg" => {
-            let flag_values =
-                parse_flag_values(subcommand_arguments, &["--app-bundle", "--output"])?;
-            Ok(ReleaseCommand::CreateDiskImage(DiskImageRequest {
-                app_bundle: required_path(&flag_values, "--app-bundle")?,
-                output_disk_image: required_path(&flag_values, "--output")?,
-            }))
-        }
-        "validate-dmg" => {
-            let flag_values = parse_flag_values(subcommand_arguments, &["--dmg"])?;
-            Ok(ReleaseCommand::ValidateDiskImage(required_path(
-                &flag_values,
-                "--dmg",
-            )?))
-        }
-        "validate-distribution-app" => {
-            let flag_values =
-                parse_flag_values(subcommand_arguments, &["--app-bundle", "--team-id"])?;
-            Ok(ReleaseCommand::ValidateDistributionApp {
-                app_bundle: required_path(&flag_values, "--app-bundle")?,
-                team_identifier: required_text(&flag_values, "--team-id")?,
-            })
-        }
+        "create-dmg" => parse_disk_image_creation_command(subcommand_arguments),
+        "validate-dmg" => parse_disk_image_validation_command(subcommand_arguments),
+        "validate-distribution-app" => parse_distribution_validation_command(subcommand_arguments),
         "notarize-dmg" => parse_notarization_command(subcommand_arguments),
         "prepare-and-publish" => Ok(ReleaseCommand::PrepareAndPublish(
-            parse_publication_request(
-                subcommand_arguments,
-                &[
-                    "--tag",
-                    "--notes-file",
-                    "--output-directory",
-                    "--signing-identity",
-                    "--team-id",
-                    "--notary-profile",
-                ],
-            )?,
+            parse_publication_request(subcommand_arguments, PREPARE_AND_PUBLISH_FLAGS)?,
         )),
+        "prepare-signed" => Ok(ReleaseCommand::PrepareSigned(parse_publication_request(
+            subcommand_arguments,
+            PREPARE_SIGNED_FLAGS,
+        )?)),
         "accept-sparkle-update" if subcommand_arguments.is_empty() => {
             Ok(ReleaseCommand::AcceptSparkleUpdate)
         }
-        "prepare-signed" => Ok(ReleaseCommand::PrepareSigned(parse_publication_request(
-            subcommand_arguments,
-            &["--tag", "--notes-file", "--output-directory"],
-        )?)),
-        "app-store-pkg" => {
-            let flag_values = parse_flag_values(
-                subcommand_arguments,
-                &["--app-bundle", "--installer-identity", "--output-pkg"],
-            )?;
-            Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
-                app_bundle: required_path(&flag_values, "--app-bundle")?,
-                installer_identity: required_text(&flag_values, "--installer-identity")?,
-                output_package: flag_values.get("--output-pkg").map(PathBuf::from),
-            }))
+        "app-store-pkg" => parse_app_store_package_command(subcommand_arguments),
+        "install-stable" => parse_install_stable_command(subcommand_arguments),
+        "build-and-install-stable" => parse_build_and_install_stable_command(subcommand_arguments),
+        _ => Err(RELEASE_USAGE.to_owned()),
+    }
+}
+
+const PREPARE_AND_PUBLISH_FLAGS: &[&str] = &[
+    "--tag",
+    "--notes-file",
+    "--output-directory",
+    "--signing-identity",
+    "--team-id",
+    "--notary-profile",
+];
+
+const PREPARE_SIGNED_FLAGS: &[&str] = &["--tag", "--notes-file", "--output-directory"];
+
+fn parse_disk_image_creation_command(
+    subcommand_arguments: &[String],
+) -> Result<ReleaseCommand, String> {
+    let flag_values = parse_flag_values(subcommand_arguments, &["--app-bundle", "--output"])?;
+    Ok(ReleaseCommand::CreateDiskImage(DiskImageRequest {
+        app_bundle: required_path(&flag_values, "--app-bundle")?,
+        output_disk_image: required_path(&flag_values, "--output")?,
+    }))
+}
+
+fn parse_disk_image_validation_command(
+    subcommand_arguments: &[String],
+) -> Result<ReleaseCommand, String> {
+    let flag_values = parse_flag_values(subcommand_arguments, &["--dmg"])?;
+    Ok(ReleaseCommand::ValidateDiskImage(required_path(
+        &flag_values,
+        "--dmg",
+    )?))
+}
+
+fn parse_distribution_validation_command(
+    subcommand_arguments: &[String],
+) -> Result<ReleaseCommand, String> {
+    let flag_values = parse_flag_values(subcommand_arguments, &["--app-bundle", "--team-id"])?;
+    Ok(ReleaseCommand::ValidateDistributionApp {
+        app_bundle: required_path(&flag_values, "--app-bundle")?,
+        team_identifier: required_text(&flag_values, "--team-id")?,
+    })
+}
+
+fn parse_app_store_package_command(
+    subcommand_arguments: &[String],
+) -> Result<ReleaseCommand, String> {
+    let flag_values = parse_flag_values(
+        subcommand_arguments,
+        &["--app-bundle", "--installer-identity", "--output-pkg"],
+    )?;
+    Ok(ReleaseCommand::AppStorePackage(AppStorePackageRequest {
+        app_bundle: required_path(&flag_values, "--app-bundle")?,
+        installer_identity: required_text(&flag_values, "--installer-identity")?,
+        output_package: flag_values.get("--output-pkg").map(PathBuf::from),
+    }))
+}
+
+fn parse_install_stable_command(subcommand_arguments: &[String]) -> Result<ReleaseCommand, String> {
+    let (is_dry_run, valued_arguments) = take_dry_run_flag(subcommand_arguments);
+    let flag_values = parse_flag_values(&valued_arguments, &["--app-bundle"])?;
+    Ok(ReleaseCommand::InstallStable {
+        app_bundle: flag_values.get("--app-bundle").map(PathBuf::from),
+        is_dry_run,
+    })
+}
+
+/// Takes no flag but `--dry-run`, so the whole argument list is matched
+/// exactly rather than parsed as `--flag value` pairs.
+fn parse_build_and_install_stable_command(
+    subcommand_arguments: &[String],
+) -> Result<ReleaseCommand, String> {
+    match subcommand_arguments {
+        [] => Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: false }),
+        [dry_run_flag] if dry_run_flag == "--dry-run" => {
+            Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: true })
         }
-        "install-stable" => {
-            let (is_dry_run, valued_arguments) = take_dry_run_flag(subcommand_arguments);
-            let flag_values = parse_flag_values(&valued_arguments, &["--app-bundle"])?;
-            Ok(ReleaseCommand::InstallStable {
-                app_bundle: flag_values.get("--app-bundle").map(PathBuf::from),
-                is_dry_run,
-            })
-        }
-        "build-and-install-stable" => match subcommand_arguments {
-            [] => Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: false }),
-            [dry_run_flag] if dry_run_flag == "--dry-run" => {
-                Ok(ReleaseCommand::BuildAndInstallStable { is_dry_run: true })
-            }
-            _ => Err(RELEASE_USAGE.to_owned()),
-        },
         _ => Err(RELEASE_USAGE.to_owned()),
     }
 }
@@ -254,3 +281,7 @@ pub(crate) fn parse_flag_values(
     }
     Ok(flag_values)
 }
+
+#[cfg(test)]
+#[path = "command_tests.rs"]
+mod command_tests;

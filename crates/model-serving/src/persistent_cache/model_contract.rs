@@ -282,7 +282,7 @@ impl PersistentPromptCacheModelContract {
 
     #[must_use]
     pub fn storage_contract_fingerprint_hex(&self) -> String {
-        hex_encode(self.storage_contract_fingerprint)
+        super::hex_digest::encode_lowercase_hex_digest(self.storage_contract_fingerprint)
     }
 }
 
@@ -423,13 +423,6 @@ fn update_tensor_layout_fingerprint(
 fn update_length_prefixed_bytes(fingerprint_digest: &mut Sha256, bytes: &[u8]) {
     fingerprint_digest.update((bytes.len() as u64).to_be_bytes());
     fingerprint_digest.update(bytes);
-}
-
-fn hex_encode(bytes: [u8; 32]) -> String {
-    bytes
-        .iter()
-        .map(|fingerprint_byte| format!("{fingerprint_byte:02x}"))
-        .collect()
 }
 
 /// The sizing knobs that decide one block token count, grouped so the

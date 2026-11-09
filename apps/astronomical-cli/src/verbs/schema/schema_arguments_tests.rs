@@ -1,4 +1,4 @@
-//! Unit tests for `crate::schema_arguments`: the `schema object` grammar —
+//! Unit tests for `crate::verbs::schema` argument parsing: the `schema object` grammar —
 //! property kinds, modifiers, dotted paths, and the rejection rules.
 
 use std::ffi::OsString;
@@ -165,4 +165,75 @@ fn should_reject_leaf_property_conflicting_with_nested_path() {
     ])
     .expect_err("leaf conflicts with nested object");
     assert!(usage_error.to_string().contains("address"));
+}
+
+fn os_arguments(argument_texts: &[&str]) -> Vec<OsString> {
+    argument_texts.iter().map(OsString::from).collect()
+}
+
+#[test]
+fn should_recognize_exactly_the_four_kind_flags() {
+    for property_kind in [
+        SchemaPropertyKind::String,
+        SchemaPropertyKind::Integer,
+        SchemaPropertyKind::Double,
+        SchemaPropertyKind::Boolean,
+    ] {
+        assert_eq!(
+            SchemaPropertyKind::from_kind_flag(property_kind.kind_flag()),
+            Some(property_kind)
+        );
+    }
+    assert_eq!(SchemaPropertyKind::from_kind_flag("--number"), None);
+    assert_eq!(SchemaPropertyKind::from_kind_flag("string"), None);
+}
+
+#[test]
+fn should_refuse_a_kind_flag_whose_path_is_another_flag() {
+    assert_eq!(
+        super::parse_schema_arguments(&os_arguments(&["--name", "Play", "--string", "--array"])),
+        Err(UsageError::MissingValue("--string"))
+    );
+}
+
+#[test]
+fn should_refuse_a_description_without_text_at_the_end_of_the_arguments() {
+    assert_eq!(
+        super::parse_schema_arguments(&os_arguments(&[
+            "--name",
+            "Play",
+            "--string",
+            "title",
+            "--description",
+        ])),
+        Err(UsageError::MissingValue("--description"))
+    );
+}
+
+#[test]
+fn should_refuse_a_repeated_object_name() {
+    assert_eq!(
+        super::parse_schema_arguments(&os_arguments(&["--name", "Play", "--name", "Sonnet"])),
+        Err(UsageError::RepeatedArgument("--name"))
+    );
+}
+
+#[test]
+fn should_attach_a_description_to_the_most_recent_property_only() {
+    let schema_arguments = super::parse_schema_arguments(&os_arguments(&[
+        "--name",
+        "Play",
+        "--string",
+        "title",
+        "--int",
+        "act_count",
+        "--description",
+        "Acts in the play",
+    ]))
+    .expect("a described property parses");
+    assert_eq!(schema_arguments.properties[0].description, None);
+    assert_eq!(
+        schema_arguments.properties[1].description.as_deref(),
+        Some("Acts in the play")
+    );
 }
