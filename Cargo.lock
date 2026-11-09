@@ -39,7 +39,7 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
 name = "astronomical-acceptance"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-cli",
  "astronomical-config",
@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-cli"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -94,7 +94,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-config"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "libc",
  "serde",
@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-daemon"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-e2e"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-config",
  "astronomical-daemon",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-inference-worker"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-config",
  "astronomical-daemon",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-ipc-protocol"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-rest-contract",
  "base64 0.23.1",
@@ -193,7 +193,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-jangtq2-qwen35"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-mlx-c-fork",
  "astronomical-runtime-integration",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-memory-policy"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-ipc-protocol",
  "serde",
@@ -216,14 +216,14 @@ dependencies = [
 
 [[package]]
 name = "astronomical-mlx-c-fork"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "mlx-c-rust",
 ]
 
 [[package]]
 name = "astronomical-model-serving"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
@@ -252,7 +252,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-native-build-orchestration"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-native-identity",
  "fs4",
@@ -262,21 +262,21 @@ dependencies = [
 
 [[package]]
 name = "astronomical-native-build-tool"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-native-build-orchestration",
 ]
 
 [[package]]
 name = "astronomical-native-identity"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "sha2",
 ]
 
 [[package]]
 name = "astronomical-neural-engine"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-test-harness",
  "cc",
@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-neural-engine-research"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-neural-engine",
  "astronomical-runtime-integration",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-quantization"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-runtime-integration",
  "mlx-c-rust",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-rest-contract"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "base64 0.23.1",
  "regex-automata",
@@ -329,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-runtime-integration"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-mlx-c-fork",
  "astronomical-native-build-orchestration",
@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-test-harness"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "base64 0.23.1",
  "image",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "astronomical-vision-tower"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "reqwest",
  "rustls",
@@ -2816,7 +2816,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "xtask"
-version = "0.2.95"
+version = "0.2.96"
 dependencies = [
  "astronomical-native-identity",
  "astronomical-test-harness",
