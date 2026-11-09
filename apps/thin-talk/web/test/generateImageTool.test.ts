@@ -90,7 +90,7 @@ function imageTool(storedImages: string[] = [], imageModelSelection = new ImageM
 const FOUR_BIT_IMAGE_MODEL = { id: "flux2-klein-4b-4bit", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] };
 const PICTURES_LIBRARY = {
   entries: [
-    { display_name: "FLUX.2 Klein 4B", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+    { display_name: "FLUX.2 Klein 4B full precision", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
     { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
   ],
 };
@@ -125,7 +125,7 @@ test("should_draw_with_the_model_the_person_chose", async () => {
     .execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT);
 
   assert.equal(imageRequestBodies[0]?.["model"], "FLUX.2-klein-4B");
-  assert.equal(toolOutput.generatedImageModelName, "FLUX.2 Klein 4B");
+  assert.equal(toolOutput.generatedImageModelName, "FLUX.2 Klein 4B full precision");
 });
 
 test("should_still_draw_when_the_library_cannot_be_read", async () => {
@@ -163,11 +163,11 @@ test("should_refuse_an_empty_prompt_without_calling_the_daemon", async () => {
   assert.equal(imageRequestBodies.length, 0);
 });
 
-test("should_point_to_the_library_when_no_picture_model_is_installed_in_classic_thin_talk", async () => {
+test("should_point_to_download_models_when_no_picture_model_is_installed_in_classic_thin_talk", async () => {
   installImageDaemon({ models: [CHAT_MODEL] });
   await assert.rejects(
     imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT),
-    (failure: Error) => /No picture model is installed/.test(failure.message) && /Library in the Observatory/.test(failure.message) && !/Pictures card/.test(failure.message),
+    (failure: Error) => /No picture model is installed/.test(failure.message) && /Download Models in the Observatory/.test(failure.message) && !/Pictures card/.test(failure.message),
   );
 });
 

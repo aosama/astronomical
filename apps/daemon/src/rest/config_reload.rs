@@ -274,6 +274,7 @@ async fn respond_to_reload_decision(
 ) -> Response {
     match reload_decision {
         ConfigReloadDecision::NoWorkerRestart { .. } => {
+            apply_idle_model_unload_span(application_state, &candidate_resolved);
             let mut live_config = reloadable_config
                 .write()
                 .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner());
@@ -302,6 +303,7 @@ async fn respond_to_reload_decision(
                 &candidate_resolved,
                 memory_limit_changed.then_some(memory_effective_generation),
             );
+            apply_idle_model_unload_span(application_state, &candidate_resolved);
             (
                 StatusCode::OK,
                 Json(
@@ -365,6 +367,7 @@ async fn restart_worker(
             let Some(reloadable_config) = application_state.reloadable_config.as_ref() else {
                 return internal_config_lock_error_response(discovered_model_count);
             };
+            apply_idle_model_unload_span(application_state, &candidate_resolved);
             let mut live_config = reloadable_config
                 .write()
                 .unwrap_or_else(|poisoned_lock| poisoned_lock.into_inner());
@@ -406,6 +409,18 @@ async fn restart_worker(
     }
 }
 
+/// Hands the reloaded idle-unload span to the worker loop. Called only where a
+/// reload commits the live configuration, so a busy or failed worker restart
+/// leaves the worker on the same span the live configuration still reports.
+fn apply_idle_model_unload_span(
+    application_state: &ApplicationState,
+    candidate_resolved: &crate::ResolvedRuntimeConfig,
+) {
+    if let Some(worker_handle) = application_state.worker_control.as_ref() {
+        worker_handle.set_idle_model_unload_seconds(candidate_resolved.idle_model_unload_seconds);
+    }
+}
+
 pub(super) fn effective_worker_generation(application_state: &ApplicationState) -> Option<String> {
     application_state
         .generation_executor
@@ -422,6 +437,7 @@ fn apply_in_place_reload_fields(
     // Copy only fields that are safe to apply without a worker or REST restart.
     // Worker and listener settings remain live-old until the requested restart succeeds.
     live_config.maximum_mlx_memory_bytes = candidate_resolved.maximum_mlx_memory_bytes;
+    live_config.idle_model_unload_seconds = candidate_resolved.idle_model_unload_seconds;
     if let Some(memory_effective_generation) = memory_effective_generation {
         live_config.configuration_generation = memory_effective_generation;
     }

@@ -74,7 +74,7 @@ fn launch_tool_registration(
 }
 
 /// Pure: the generation endpoint each harness speaks, which decides which
-/// Library models it can be launched on.
+/// installed models it can be launched on.
 pub fn harness_endpoint(launch_tool_kind: LaunchToolKind) -> &'static str {
     match launch_tool_kind {
         LaunchToolKind::OpenCode => "/v1/chat/completions",

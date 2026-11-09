@@ -87,6 +87,12 @@ pub use resolved_model_config::{DEFAULT_MAXIMUM_OUTPUT_TOKENS, ResolvedModelConf
 use config_document::UserConfigFile;
 
 pub const DEFAULT_PROMPT_CACHE_MAXIMUM_SIZE_GB: u64 = 50;
+/// One minute covers the pause between turns of a conversation, so a person
+/// chatting keeps a warm model, while a forgotten model stops holding memory.
+pub const DEFAULT_IDLE_MODEL_UNLOAD_SECONDS: u64 = 60;
+/// One week, the schema's maximum: a longer span would never fire in practice,
+/// so a larger value is almost certainly a typo for something smaller.
+pub const MAXIMUM_IDLE_MODEL_UNLOAD_SECONDS: u64 = 604_800;
 /// User-facing gigabyte settings use the convention Apple uses to market the
 /// machine: 1 GB = 1,073,741,824 bytes (2³⁰).
 const BYTES_PER_CONFIGURED_GIGABYTE: u64 = 1_073_741_824;
@@ -444,6 +450,19 @@ impl AstronomicalConfig {
             .runtime
             .metal_residency_refresh_enabled
             .unwrap_or(false)
+    }
+
+    /// Seconds a loaded model may sit unused before the daemon frees its memory.
+    ///
+    /// Zero keeps a model loaded until another model is requested. The default
+    /// frees memory a minute after the last request, because a resident model
+    /// otherwise holds gigabytes of unified memory the rest of the Mac needs.
+    #[must_use]
+    pub fn idle_model_unload_seconds(&self) -> u64 {
+        self.user_config_file
+            .runtime
+            .idle_model_unload_seconds
+            .unwrap_or(DEFAULT_IDLE_MODEL_UNLOAD_SECONDS)
     }
 }
 

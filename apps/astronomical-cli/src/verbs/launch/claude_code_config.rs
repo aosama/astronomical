@@ -10,7 +10,7 @@
 
 use std::net::SocketAddr;
 
-use super::chat_models::LibraryChatModel;
+use super::chat_models::InstalledChatModel;
 
 /// Where Claude Code sends Messages requests.
 pub const ANTHROPIC_BASE_URL_VARIABLE: &str = "ANTHROPIC_BASE_URL";
@@ -43,7 +43,7 @@ pub const LOCAL_MODEL_ROUTING_VARIABLES: [&str; 5] = [
 /// Claude Code's own default in place rather than inventing one.
 pub fn claude_code_environment(
     bind_address: SocketAddr,
-    chat_model: &LibraryChatModel,
+    chat_model: &InstalledChatModel,
 ) -> Vec<(String, String)> {
     let mut session_environment = vec![
         (
@@ -78,7 +78,7 @@ mod tests {
         CLAUDE_CODE_MAX_CONTEXT_TOKENS_VARIABLE, LOCAL_MODEL_ROUTING_VARIABLES,
         claude_code_environment,
     };
-    use crate::verbs::launch::chat_models::LibraryChatModel;
+    use crate::verbs::launch::chat_models::InstalledChatModel;
 
     fn environment_value<'a>(
         session_environment: &'a [(String, String)],
@@ -92,8 +92,8 @@ mod tests {
         None
     }
 
-    fn local_model(context_window_tokens: Option<u32>) -> LibraryChatModel {
-        LibraryChatModel {
+    fn local_model(context_window_tokens: Option<u32>) -> InstalledChatModel {
+        InstalledChatModel {
             model_id: "local-sonnet-free-model".to_owned(),
             context_window_tokens,
         }

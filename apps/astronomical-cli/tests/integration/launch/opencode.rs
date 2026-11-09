@@ -149,7 +149,7 @@ fn should_fail_when_the_library_has_no_chat_models() {
     assert!(matches!(error, LaunchError::NoChatModels));
     assert_eq!(
         error.to_string(),
-        "No models in the Library yet. Open Astronomical and download one."
+        "No models installed yet. Open Observatory's Download Models page and download one."
     );
 }
 
@@ -276,7 +276,7 @@ fn should_require_model_flag_when_several_chat_models_exist_without_a_terminal()
     assert!(matches!(error, LaunchError::ModelPickerRequired));
     assert_eq!(
         error.to_string(),
-        "Choose a model with --model; several chat models are in the Library."
+        "Choose a model with --model; several chat models are installed."
     );
 }
 

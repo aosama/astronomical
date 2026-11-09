@@ -74,7 +74,7 @@ final class FirstRunWelcomeWindowControllerTests: XCTestCase {
       telemetryStore: TelemetryStore(),
       applicationIdentity: testIdentity,
       openObservatory: {},
-      openLibrary: {},
+      openDownloadModels: {},
       restartServer: {},
       handleClose: { store.acknowledgeWelcome() })
     try XCTUnwrap(welcomeWindow()).close()
@@ -116,7 +116,7 @@ final class FirstRunWelcomeWindowControllerTests: XCTestCase {
       telemetryStore: TelemetryStore(),
       applicationIdentity: testIdentity,
       openObservatory: {},
-      openLibrary: {},
+      openDownloadModels: {},
       restartServer: {},
       handleClose: { [weak self] in self?.closeCount += 1 })
   }

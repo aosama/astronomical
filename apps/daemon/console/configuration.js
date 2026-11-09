@@ -38,10 +38,14 @@ function showConfigurationFeedback(tone, text) {
     feedback.hidden = !text;
 }
 
-function updateConfigurationDirtyState() {
-    const hasUnsavedEdits = configurationEditorState.workingDocument !== null
+function configurationHasUnsavedEdits() {
+    return configurationEditorState.workingDocument !== null
         && !configurationDocumentsAreEqual(
             configurationEditorState.savedDocument, configurationEditorState.workingDocument);
+}
+
+function updateConfigurationDirtyState() {
+    const hasUnsavedEdits = configurationHasUnsavedEdits();
     document.getElementById("configuration-save").disabled =
         !hasUnsavedEdits || configurationEditorState.isBusy;
     document.getElementById("configuration-discard").disabled =
@@ -284,12 +288,21 @@ function renderConfigurationSection(descriptor) {
     }
     if (descriptor.kind === "group") {
         for (const childDescriptor of descriptor.children) {
+            if (hasDedicatedConfigurationControl(childDescriptor)) { continue; }
             section.append(renderConfigurationDescriptor(childDescriptor));
         }
     } else {
         section.append(renderConfigurationDescriptor(descriptor));
     }
     return section;
+}
+
+// Called when another control on the page changed config.json. Unsaved edits
+// are left alone; the Save conflict check reports the newer file instead.
+function refreshConfigurationDocumentIfUnedited() {
+    if (!configurationHasUnsavedEdits()) {
+        loadConfigurationDocument();
+    }
 }
 
 function renderConfigurationSections() {
@@ -437,5 +450,8 @@ function wireConfigurationEditor() {
         .forEach((navigationButton) => {
             navigationButton.addEventListener("click", loadConfigurationDocument);
         });
-    if (window.location.pathname === "/configuration") { void loadConfigurationDocument(); }
+    document.addEventListener("observatory:config-file-written", refreshConfigurationDocumentIfUnedited);
+    // Reads the view, not the address, so a retired address such as /settings
+    // that opened Configuration loads the editor whatever ran first at startup.
+    if (!document.getElementById("configuration-view").hidden) { void loadConfigurationDocument(); }
 }

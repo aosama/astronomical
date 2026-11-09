@@ -159,6 +159,7 @@ fn config_with_installed_model() -> Arc<RwLock<ResolvedRuntimeConfig>> {
         persistent_prompt_cache_enabled: false,
         configured_persistent_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
+        idle_model_unload_seconds: 0,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         prompt_cache_config: PromptCacheConfig::new(PathBuf::from("/fictional/prompt-cache"), 1),

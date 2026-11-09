@@ -79,7 +79,7 @@ export class AstroHomeView {
   }
 
   /** Puts new content in the follow-up area, stopping the panel it replaces.
-   * While home offers a brain itself, the classic "add one from the Library"
+   * While home offers a brain itself, the classic "add one from Download Models"
    * notice under it is hidden (see astro.css), since it would say the same
    * thing in words a young person would not follow. */
   private replaceFollowUp(panel: { dispose(): void } | null, ...content: HTMLElement[]): void {

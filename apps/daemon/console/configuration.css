@@ -1,11 +1,15 @@
-/* The Configuration page: one panel per config.json section, generated from the
-   schema. Behavior hooks are the element IDs in index.html and configuration.js. */
+/* The Configuration page: the live Maximum model RAM control, then one panel per
+   config.json section generated from the schema. Behavior hooks are the element
+   IDs in index.html, configuration.js and memory-control.js. */
 
 .configuration-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
 .configuration-toolbar-spacer { flex: 1 1 auto; }
 #configuration-unsaved-note { color: var(--warn); font-size: var(--text-md); }
 #configuration-feedback { margin-bottom: 16px; }
 .configuration-neural-engine { margin-bottom: 16px; }
+.configuration-memory { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+/* A few digits of GB need no full-width field; a narrow one reads as a number. */
+.configuration-memory .mlx-memory-control input { flex: 0 1 160px; }
 #configuration-sections { display: flex; flex-direction: column; gap: 16px; }
 .configuration-section { display: flex; flex-direction: column; gap: 14px; }
 .configuration-group { display: flex; flex-direction: column; gap: 14px; }

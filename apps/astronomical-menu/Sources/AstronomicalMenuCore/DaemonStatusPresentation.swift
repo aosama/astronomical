@@ -114,11 +114,6 @@ extension DaemonStatusDocument {
     return "All in RAM"
   }
 
-  var replyReadTitle: String {
-    if isLoadingModel { return "" }
-    return expertPlacement?.replySentence ?? ""
-  }
-
   var modelDiskSizeTitle: String {
     if isLoadingModel { return "Being prepared" }
     if let readyModelSizeBytes {

@@ -68,6 +68,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "chat",
                 "get_started": true,
                 "experimental": false,
+                "retiring": false,
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
@@ -89,6 +90,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "coding",
                 "get_started": false,
                 "experimental": true,
+                "retiring": false,
                 "minimum_memory_bytes": 4_451_287_808_u64,
                 "public": true,
                 "ready_on_this_mac": false,
@@ -111,6 +113,7 @@ fn expected_validated_catalog_document() -> serde_json::Value {
                 "role": "helper",
                 "get_started": false,
                 "experimental": false,
+                "retiring": false,
                 "public": true,
                 "ready_on_this_mac": false,
                 "download_state": null,
@@ -200,13 +203,13 @@ async fn should_reject_catalog_mutation_and_leave_unknown_library_paths_unmatche
     .expect("the immutable catalog routing journey must finish within five seconds");
 }
 
-// The /library page renders one card per catalog entry and degrades the WHOLE
+// The /download-models page renders one card per catalog entry and degrades the WHOLE
 // page to "unavailable" when even one entry misses a field its renderer
 // requires, so a shipped entry that parses in Rust but cannot render would
 // take every model's download surface down with it. This journey walks the
 // real shipped registry file through every seam a user-visible entry crosses —
 // bundled parse, endpoint projection, and the browser renderability contract —
-// so a hand-edited catalog entry cannot silently vanish from the Library.
+// so a hand-edited catalog entry cannot silently vanish from Download Models.
 #[tokio::test]
 #[expect(clippy::too_many_lines)]
 async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpoint() {
@@ -369,7 +372,7 @@ fn assert_published_entry_carries_role_memory_and_flags(
             || is_javascript_safe_positive_integer(minimum_memory_bytes.as_u64()),
         "published entry {published_entry_index} streaming floor must be absent or a JavaScript-safe integer"
     );
-    for flag_name in ["get_started", "experimental"] {
+    for flag_name in ["get_started", "experimental", "retiring"] {
         assert!(
             published_entry[flag_name].is_boolean(),
             "published entry {published_entry_index} must always carry boolean {flag_name}"

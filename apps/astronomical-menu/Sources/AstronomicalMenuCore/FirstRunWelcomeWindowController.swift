@@ -18,7 +18,7 @@ final class FirstRunWelcomeWindowController: NSObject, NSWindowDelegate {
     telemetryStore: TelemetryStore,
     applicationIdentity: ApplicationIdentity,
     openObservatory: @escaping () -> Void,
-    openLibrary: @escaping () -> Void,
+    openDownloadModels: @escaping () -> Void,
     restartServer: @escaping () -> Void,
     handleClose: @escaping () -> Void
   ) {
@@ -31,7 +31,7 @@ final class FirstRunWelcomeWindowController: NSObject, NSWindowDelegate {
         telemetryStore: telemetryStore,
         applicationIdentity: applicationIdentity,
         openObservatory: openObservatory,
-        openLibrary: openLibrary,
+        openDownloadModels: openDownloadModels,
         restartServer: restartServer
       )
     }
@@ -46,7 +46,7 @@ final class FirstRunWelcomeWindowController: NSObject, NSWindowDelegate {
     telemetryStore: TelemetryStore,
     applicationIdentity: ApplicationIdentity,
     openObservatory: @escaping () -> Void,
-    openLibrary: @escaping () -> Void,
+    openDownloadModels: @escaping () -> Void,
     restartServer: @escaping () -> Void
   ) -> NSWindow {
     let window = NSWindow(
@@ -62,7 +62,7 @@ final class FirstRunWelcomeWindowController: NSObject, NSWindowDelegate {
         telemetryStore: telemetryStore,
         applicationIdentity: applicationIdentity,
         openObservatory: openObservatory,
-        openLibrary: openLibrary,
+        openDownloadModels: openDownloadModels,
         restartServer: restartServer,
         dismissWelcome: { [weak window] in window?.close() }
       ))

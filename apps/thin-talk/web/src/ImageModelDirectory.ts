@@ -6,11 +6,11 @@ import type { LibraryImageEntry } from "./ImageModelCatalog";
 /**
  * Lists the installed image models, named and ordered as the Library presents
  * them. The model list decides what is installed; the Library catalog only
- * adds names and the Pictures pick.
+ * adds names and the Image Generation pick.
  *
  * The last Library answer that could be read is kept, so a slow or failed
  * catalog read changes neither the names nor which model the selection rule
- * picks: without it, a timeout would quietly swap the Pictures pick for the
+ * picks: without it, a timeout would quietly swap the Image Generation pick for the
  * first installed model.
  */
 export class ImageModelDirectory {

@@ -223,7 +223,7 @@ fn should_require_the_model_flag_for_codex_when_several_chat_models_exist_withou
     assert!(matches!(error, LaunchError::ModelPickerRequired));
     assert_eq!(
         error.to_string(),
-        "Choose a model with --model; several chat models are in the Library."
+        "Choose a model with --model; several chat models are installed."
     );
 }
 

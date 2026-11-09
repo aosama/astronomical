@@ -211,8 +211,12 @@
   background: rgb(242 115 115 / 80%);
 }
 
-/* The class's display rule would beat the browser's own [hidden] style and paint
-   the idle stop (or a streaming send) as a phantom circle, so hide it explicitly. */
+/* These classes set display: inline-flex, which beats the browser's own
+   [hidden] style. Without this rule a hidden control is still painted: the idle
+   stop showed as a phantom circle, and the picture pill showed with a single
+   image model, where clicking it opened a menu the next render closed again. */
+.composer__icon[hidden],
+.composer__pill[hidden],
 .composer__send[hidden] {
   display: none;
 }

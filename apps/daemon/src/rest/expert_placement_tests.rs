@@ -352,3 +352,87 @@ fn should_keep_every_stock_label_on_one_line_of_the_menu_cell() {
         );
     }
 }
+
+fn dense_model_residency() -> ExpertResidencySnapshot {
+    ExpertResidencySnapshot {
+        expert_capacity: 0,
+        ..measured_residency(0, 0, 0)
+    }
+}
+
+#[test]
+fn should_call_a_dense_model_dense_instead_of_naming_experts() {
+    for activity in [WorkerActivity::Idle, WorkerActivity::Generating] {
+        let placement = expert_placement(
+            Some("Qwen3.5-0.8B"),
+            activity,
+            Some(ExpertMemoryMode::Resident),
+            Some(dense_model_residency()),
+        );
+
+        assert_eq!(placement.reply_sentence, "Dense model, no experts.");
+        assert_eq!(placement.stock_sentence, "All in RAM");
+    }
+}
+
+#[test]
+fn should_keep_the_expert_sentence_for_a_sparse_model_with_expert_capacity() {
+    let placement = expert_placement(
+        Some("Ornith"),
+        WorkerActivity::Idle,
+        Some(ExpertMemoryMode::Resident),
+        Some(measured_residency(0, 0, 0)),
+    );
+
+    assert_eq!(
+        placement.reply_sentence,
+        "Experts are being served from RAM."
+    );
+}
+
+#[test]
+fn should_keep_the_mode_sentence_before_any_residency_is_measured() {
+    let placement = expert_placement(
+        Some("not-yet-measured"),
+        WorkerActivity::Idle,
+        Some(ExpertMemoryMode::Resident),
+        None,
+    );
+
+    assert_eq!(
+        placement.reply_sentence,
+        "Experts are being served from RAM."
+    );
+}
+
+#[test]
+fn should_say_nothing_about_a_dense_residency_left_over_with_no_model_loaded() {
+    let placement = expert_placement(
+        None,
+        WorkerActivity::Idle,
+        Some(ExpertMemoryMode::Resident),
+        Some(dense_model_residency()),
+    );
+
+    assert_eq!(placement.reply_sentence, "");
+}
+
+#[test]
+fn should_not_call_a_sparse_model_dense_when_only_its_expert_capacity_is_unnamed() {
+    let sparse_residency_without_a_capacity = ExpertResidencySnapshot {
+        expert_capacity: 0,
+        ..measured_residency(40, 0, 2 * APPLE_GIGABYTE_BYTES)
+    };
+
+    let placement = expert_placement(
+        Some("Ornith"),
+        WorkerActivity::Idle,
+        Some(ExpertMemoryMode::Resident),
+        Some(sparse_residency_without_a_capacity),
+    );
+
+    assert_eq!(
+        placement.reply_sentence,
+        "Experts are being served from RAM."
+    );
+}

@@ -498,7 +498,7 @@
   display: none;
 }
 
-/* Home offers the brain itself, so the classic notice about the Library is
+/* Home offers the brain itself, so the classic notice about Download Models is
    hidden; a notice about anything else (a daemon that cannot be reached)
    still shows. */
 .empty-state--astro-offers-brain .empty-state__notice {

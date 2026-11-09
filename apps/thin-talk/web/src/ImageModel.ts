@@ -7,12 +7,12 @@ export class ImageModel {
   public readonly id: string;
   /** The Library's display name, or the id when the Library does not list it. */
   public readonly name: string;
-  /** Whether the Library recommends it for Pictures on its Get started page. */
-  public readonly isPicturesPick: boolean;
+  /** Whether Download Models recommends it for Image Generation on its Get started page. */
+  public readonly isImageGenerationPick: boolean;
 
-  public constructor(init: { id: string; name: string; isPicturesPick?: boolean }) {
+  public constructor(init: { id: string; name: string; isImageGenerationPick?: boolean }) {
     this.id = init.id;
     this.name = init.name;
-    this.isPicturesPick = init.isPicturesPick === true;
+    this.isImageGenerationPick = init.isImageGenerationPick === true;
   }
 }

@@ -37,6 +37,7 @@ impl UserConfigFile {
                 model_download_directory: None,
                 neural_engine_program_directory: None,
                 metal_residency_refresh_enabled: None,
+                idle_model_unload_seconds: None,
             },
             prompt_cache: None,
             chunking: Some(ChunkingConfigFile {
@@ -96,6 +97,8 @@ pub(crate) struct RuntimeConfigFile {
     pub(crate) neural_engine_program_directory: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) metal_residency_refresh_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) idle_model_unload_seconds: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

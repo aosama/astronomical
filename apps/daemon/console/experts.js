@@ -14,7 +14,7 @@ let renderedExpertLayerSignature = "";
 let renderedExpertSlotSignature = "";
 
 // The Observatory shell boots once from console.js; this view starts from
-// that single DOMContentLoaded handler like Library and Connect do.
+// that single DOMContentLoaded handler like Download Models and Connect do.
 function wireExpertObservatory() {
     pollExpertObservatory();
     setInterval(pollExpertObservatory, EXPERTS_POLL_INTERVAL_MILLIS);

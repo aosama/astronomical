@@ -47,6 +47,8 @@ pub struct ResolvedRuntimeConfig {
     pub maximum_mlx_memory_bytes: Option<u64>,
     /// Whether workers renew Metal residency; fixed for each worker's lifetime.
     pub metal_residency_refresh_enabled: bool,
+    /// Seconds an unused model stays loaded; zero keeps it. Applied live.
+    pub idle_model_unload_seconds: u64,
     /// Performance attribution preference captured by the worker at startup.
     pub performance_attribution_enabled: bool,
     /// Whether the worker may read and write the persistent prompt cache.
@@ -174,6 +176,7 @@ impl ResolvedRuntimeConfigResolver {
             unmatched_model_config_ids,
             maximum_mlx_memory_bytes: user_config.maximum_mlx_memory_bytes()?,
             metal_residency_refresh_enabled: user_config.metal_residency_refresh_enabled(),
+            idle_model_unload_seconds: user_config.idle_model_unload_seconds(),
             performance_attribution_enabled: user_config.performance_attribution_enabled(),
             persistent_prompt_cache_enabled: user_config.persistent_prompt_cache_enabled(),
             configured_persistent_prompt_cache_enabled: user_config
@@ -344,6 +347,9 @@ impl ConfigReloadDiff {
 
         if current.maximum_mlx_memory_bytes != candidate.maximum_mlx_memory_bytes {
             in_place_reloaded_fields.push("maximum_mlx_memory_gb".to_owned());
+        }
+        if current.idle_model_unload_seconds != candidate.idle_model_unload_seconds {
+            in_place_reloaded_fields.push("idle_model_unload_seconds".to_owned());
         }
         if current.performance_attribution_enabled != candidate.performance_attribution_enabled {
             // Daemon and worker attribution share one setting, while the daemon writer is

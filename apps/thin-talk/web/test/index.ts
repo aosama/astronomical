@@ -12,6 +12,7 @@ import "./sessionPreferences.test";
 import "./chatJourney.test";
 import "./modelSelection.test";
 import "./imageModelPillView.test";
+import "./composerStylesheet.test";
 import "./imageModelDirectory.test";
 import "./imageModelCatalog.test";
 import "./imageModelSelection.test";

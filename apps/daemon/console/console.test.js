@@ -4,33 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-const consoleScriptPath = path.join(__dirname, "console.js");
-const consoleScript = fs.readFileSync(consoleScriptPath, "utf8");
-const memoryControlScriptPath = path.join(__dirname, "memory-control.js");
-const memoryControlScript = fs.readFileSync(memoryControlScriptPath, "utf8");
-const neuralEnginePanelScriptPath = path.join(__dirname, "neural-engine-panel.js");
-const neuralEnginePanelScript = fs.readFileSync(neuralEnginePanelScriptPath, "utf8");
-const overviewCompactScriptPath = path.join(__dirname, "overview-compact.js");
-const overviewCompactScript = fs.readFileSync(overviewCompactScriptPath, "utf8");
-
-function createConsoleContext() {
-    const scriptContext = vm.createContext({
-        console: { log() {} },
-        document: { addEventListener() {} },
-        setInterval() {},
-        history: {
-            pushState() {},
-            replaceState() {},
-            state: null
-        },
-        TextEncoder
-    });
-    vm.runInContext(memoryControlScript, scriptContext, { filename: memoryControlScriptPath });
-    vm.runInContext(neuralEnginePanelScript, scriptContext, { filename: neuralEnginePanelScriptPath });
-    vm.runInContext(consoleScript, scriptContext, { filename: consoleScriptPath });
-    vm.runInContext(overviewCompactScript, scriptContext, { filename: overviewCompactScriptPath });
-    return scriptContext;
-}
+const { createConsoleContext, attachRecordingElements } = require("./console-test-support.js");
 
 test("formats exact Stable and dirty Development build identities from status", () => {
     const scriptContext = createConsoleContext();
@@ -90,17 +64,17 @@ test("defaults Observatory navigation to Overview", () => {
 
 test("moves Observatory visibility and current state to a selected destination", () => {
     const scriptContext = createConsoleContext();
-    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("model")];
-    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("model")];
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("download-models")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("download-models")];
     scriptContext.navigationButtons = navigationButtons;
     scriptContext.observatoryViews = observatoryViews;
 
     const activeViewIdentifier = vm.runInContext(
-        'activateObservatoryView("model", navigationButtons, observatoryViews)',
+        'activateObservatoryView("download-models", navigationButtons, observatoryViews)',
         scriptContext
     );
 
-    assert.equal(activeViewIdentifier, "model");
+    assert.equal(activeViewIdentifier, "download-models");
     assert.equal(navigationButtons[0].attributes["aria-current"], undefined);
     assert.equal(navigationButtons[1].attributes["aria-current"], "page");
     assert.equal(observatoryViews[0].hidden, true);
@@ -109,8 +83,8 @@ test("moves Observatory visibility and current state to a selected destination",
 
 test("activates a directly requested Observatory path without replacing it", () => {
     const scriptContext = createConsoleContext();
-    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("model")];
-    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("model")];
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("download-models")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("download-models")];
     const replacedPaths = [];
     scriptContext.document = {
         querySelectorAll(selector) {
@@ -118,7 +92,7 @@ test("activates a directly requested Observatory path without replacing it", () 
         }
     };
     scriptContext.window = {
-        location: { pathname: "/model" },
+        location: { pathname: "/download-models" },
         addEventListener() {}
     };
     scriptContext.history = {
@@ -135,10 +109,85 @@ test("activates a directly requested Observatory path without replacing it", () 
     assert.deepEqual(replacedPaths, []);
 });
 
-test("retains direct Library navigation and restores it from browser history", () => {
+test("should_open_overview_for_the_retired_model_path_and_show_its_address", () => {
     const scriptContext = createConsoleContext();
-    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("library")];
-    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("library")];
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("download-models")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("download-models")];
+    const replacedPaths = [];
+    scriptContext.document = {
+        querySelectorAll(selector) {
+            return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
+        }
+    };
+    scriptContext.window = { location: { pathname: "/model" }, addEventListener() {} };
+    scriptContext.history = {
+        pushState() {},
+        replaceState(unusedState, unusedTitle, observatoryPath) {
+            replacedPaths.push(observatoryPath);
+        }
+    };
+
+    vm.runInContext("wireObservatoryNavigation()", scriptContext);
+
+    assert.equal(observatoryViews[0].hidden, false, "the model facts now live on Overview");
+    assert.equal(navigationButtons[0].attributes["aria-current"], "page");
+    assert.deepEqual(replacedPaths, ["/overview"]);
+});
+
+test("should_open_download_models_for_the_retired_library_path_and_show_its_address", () => {
+    const scriptContext = createConsoleContext();
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("download-models")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("download-models")];
+    const replacedPaths = [];
+    scriptContext.document = {
+        querySelectorAll(selector) {
+            return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
+        }
+    };
+    scriptContext.window = { location: { pathname: "/library" }, addEventListener() {} };
+    scriptContext.history = {
+        pushState() {},
+        replaceState(unusedState, unusedTitle, observatoryPath) {
+            replacedPaths.push(observatoryPath);
+        }
+    };
+
+    vm.runInContext("wireObservatoryNavigation()", scriptContext);
+
+    assert.equal(observatoryViews[1].hidden, false);
+    assert.equal(navigationButtons[1].attributes["aria-current"], "page");
+    assert.deepEqual(replacedPaths, ["/download-models"]);
+});
+
+test("should_open_configuration_for_the_retired_settings_path_and_show_its_address", () => {
+    const scriptContext = createConsoleContext();
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("configuration")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("configuration")];
+    const replacedPaths = [];
+    scriptContext.document = {
+        querySelectorAll(selector) {
+            return selector === "[data-observatory-destination]" ? navigationButtons : observatoryViews;
+        }
+    };
+    scriptContext.window = { location: { pathname: "/settings" }, addEventListener() {} };
+    scriptContext.history = {
+        pushState() {},
+        replaceState(unusedState, unusedTitle, observatoryPath) {
+            replacedPaths.push(observatoryPath);
+        }
+    };
+
+    vm.runInContext("wireObservatoryNavigation()", scriptContext);
+
+    assert.equal(observatoryViews[1].hidden, false, "the memory limit now lives on Configuration");
+    assert.equal(navigationButtons[1].attributes["aria-current"], "page");
+    assert.deepEqual(replacedPaths, ["/configuration"]);
+});
+
+test("should_retain_direct_download_models_navigation_and_restore_it_from_browser_history", () => {
+    const scriptContext = createConsoleContext();
+    const navigationButtons = [createNavigationButton("overview"), createNavigationButton("download-models")];
+    const observatoryViews = [createObservatoryView("overview"), createObservatoryView("download-models")];
     let popstateHandler;
     scriptContext.document = {
         querySelectorAll(selector) {
@@ -146,7 +195,7 @@ test("retains direct Library navigation and restores it from browser history", (
         }
     };
     scriptContext.window = {
-        location: { pathname: "/library" },
+        location: { pathname: "/download-models" },
         addEventListener(eventName, eventHandler) {
             if (eventName === "popstate") { popstateHandler = eventHandler; }
         }
@@ -159,7 +208,7 @@ test("retains direct Library navigation and restores it from browser history", (
 
     scriptContext.window.location.pathname = "/overview";
     popstateHandler();
-    scriptContext.window.location.pathname = "/library";
+    scriptContext.window.location.pathname = "/download-models";
     popstateHandler();
 
     assert.equal(navigationButtons[1].attributes["aria-current"], "page");
@@ -222,121 +271,25 @@ test("renders a path-safe duplicate-model warning with its reveal control", () =
     assert.equal(messageElement.textContent.includes("private-root-marker"), false);
 });
 
-test("computes whole gigabyte bounds from exact status bytes", () => {
+test("should_show_a_reveal_failure_inside_the_discovery_warning_that_holds_the_button", async () => {
     const scriptContext = createConsoleContext();
-    const bounds = vm.runInContext(
-        "wholeGigabyteBounds({ minimum_mlx_memory_ceiling_bytes: 34359738369, machine_mlx_memory_ceiling_bytes: 44080218931 })",
-        scriptContext
-    );
-    assert.deepEqual(JSON.parse(JSON.stringify(bounds)), { minimumGigabytes: 1, maximumGigabytes: 41 });
+    const elementsById = attachRecordingElements(scriptContext);
+    scriptContext.fetch = async () => ({ ok: false });
+
+    await vm.runInContext("revealConfig()", scriptContext);
+
+    assert.equal(elementsById["model-discovery-reveal-feedback"].textContent, "Could not reveal the configuration file.");
 });
 
-function renderMemoryControlFor(statusDocument, editedInputValue) {
+test("should_clear_an_earlier_reveal_failure_when_the_reveal_succeeds", async () => {
     const scriptContext = createConsoleContext();
-    const elementsById = {
-        "maximum-mlx-memory-gb": { min: "", max: "", disabled: false, value: "" },
-        "maximum-mlx-memory-apply": { hidden: false },
-        "maximum-mlx-memory-reset": { hidden: false },
-        "maximum-mlx-memory-status": { textContent: "" },
-        "maximum-mlx-memory-notice": { textContent: "", hidden: false }
-    };
-    scriptContext.document.getElementById = (elementId) => elementsById[elementId];
-    if (editedInputValue !== undefined) {
-        vm.runInContext("maximumMlxMemoryEditIsActive = true", scriptContext);
-        elementsById["maximum-mlx-memory-gb"].value = editedInputValue;
-    }
-    scriptContext.renderMemoryLimitControl(statusDocument);
-    return elementsById;
-}
+    const elementsById = attachRecordingElements(scriptContext);
+    elementsById["model-discovery-reveal-feedback"] = { textContent: "Could not reveal the configuration file." };
+    scriptContext.fetch = async () => ({ ok: true });
 
-// A 48 GB Mac whose 40,200,896,512-byte wired claim the engine plans 2.5%
-// below: 39,195,874,112 bytes (36.50 GB).
-const WIRED_MAC_STATUS = {
-    machine_mlx_memory_ceiling_bytes: 42949672960,
-    wired_residency_budget_bytes: 40200896512
-};
+    await vm.runInContext("revealConfig()", scriptContext);
 
-test("shows only the reachable limit while an explicit request is served", () => {
-    const elementsById = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 36507222016,
-        configured_maximum_mlx_memory_gb: 34
-    });
-
-    assert.equal(elementsById["maximum-mlx-memory-gb"].max, "36");
-    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "34");
-    assert.equal(elementsById["maximum-mlx-memory-status"].textContent, "Up to 36 GB on this Mac");
-    assert.equal(elementsById["maximum-mlx-memory-apply"].hidden, true);
-    assert.equal(elementsById["maximum-mlx-memory-reset"].hidden, false);
-    assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, true);
-});
-
-test("offers apply only once the input differs from the applied value", () => {
-    const elementsById = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 36507222016,
-        configured_maximum_mlx_memory_gb: 34
-    }, "30");
-
-    assert.equal(elementsById["maximum-mlx-memory-apply"].hidden, false);
-});
-
-test("treats the Mac maximum landing below the machine ceiling as honoured, not capped", () => {
-    const elementsById = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 39195874112,
-        configured_maximum_mlx_memory_gb: null
-    });
-
-    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "36");
-    assert.equal(elementsById["maximum-mlx-memory-reset"].hidden, true);
-    assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, true);
-});
-
-test("reports a cap when an explicit request exceeds the live ceiling", () => {
-    const elementsById = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 39195874112,
-        configured_maximum_mlx_memory_gb: 40
-    });
-
-    assert.equal(elementsById["maximum-mlx-memory-gb"].value, "36");
-    assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, false);
-    assert.equal(elementsById["maximum-mlx-memory-notice"].textContent, "Capped at 36.50 GB on this Mac");
-    assert.equal(elementsById["maximum-mlx-memory-apply"].hidden, false);
-});
-
-test("prefers a pending change and then an error over the cap notice", () => {
-    const pendingElements = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 32212254720,
-        configured_maximum_mlx_memory_gb: 34,
-        pending_mlx_memory_ceiling_bytes: 36507222016
-    });
-    const failedElements = renderMemoryControlFor({
-        ...WIRED_MAC_STATUS,
-        mlx_memory_ceiling_bytes: 32212254720,
-        configured_maximum_mlx_memory_gb: 34,
-        pending_mlx_memory_ceiling_bytes: 36507222016,
-        mlx_memory_limit_error: "The worker could not apply the requested MLX memory ceiling"
-    });
-
-    assert.equal(pendingElements["maximum-mlx-memory-notice"].textContent, "Pending 34.00 GB");
-    assert.equal(
-        failedElements["maximum-mlx-memory-notice"].textContent,
-        "The worker could not apply the requested MLX memory ceiling"
-    );
-});
-
-test("reaches the machine ceiling when serving is pageable and stays quiet before a ceiling exists", () => {
-    const elementsById = renderMemoryControlFor({
-        machine_mlx_memory_ceiling_bytes: 42949672960,
-        mlx_memory_ceiling_bytes: 0,
-        configured_maximum_mlx_memory_gb: 34
-    });
-
-    assert.equal(elementsById["maximum-mlx-memory-gb"].max, "40");
-    assert.equal(elementsById["maximum-mlx-memory-notice"].hidden, true);
+    assert.equal(elementsById["model-discovery-reveal-feedback"].textContent, "");
 });
 
 test("maps every observatory destination to a stable URL path", () => {
@@ -346,12 +299,14 @@ test("maps every observatory destination to a stable URL path", () => {
 
     assert.equal(pathMap.overview, "/overview");
     assert.equal(pathMap.chat, "/chat");
-    assert.equal(pathMap.library, "/library");
+    assert.equal(pathMap["download-models"], "/download-models");
+    assert.equal(pathMap.library, undefined, "the Library page was renamed Download Models");
     assert.equal(pathMap.connect, "/connect");
     assert.equal(pathMap.memory, undefined);
     assert.equal(pathMap.cache, undefined);
-    assert.equal(pathMap.model, "/model");
-    assert.equal(pathMap.settings, "/settings");
+    assert.equal(pathMap.model, undefined, "the Model page was folded into Overview");
+    assert.equal(pathMap.configuration, "/configuration");
+    assert.equal(pathMap.settings, undefined, "the Settings page was folded into Configuration");
 });
 
 test("maps every observatory URL path back to its destination", () => {
@@ -361,12 +316,14 @@ test("maps every observatory URL path back to its destination", () => {
 
     assert.equal(reverseMap["/overview"], "overview");
     assert.equal(reverseMap["/chat"], "chat");
-    assert.equal(reverseMap["/library"], "library");
+    assert.equal(reverseMap["/download-models"], "download-models");
+    assert.equal(reverseMap["/library"], undefined, "the retired path is resolved separately");
     assert.equal(reverseMap["/connect"], "connect");
     assert.equal(reverseMap["/memory"], undefined);
     assert.equal(reverseMap["/cache"], undefined);
-    assert.equal(reverseMap["/model"], "model");
-    assert.equal(reverseMap["/settings"], "settings");
+    assert.equal(reverseMap["/model"], undefined, "the retired path is resolved separately");
+    assert.equal(reverseMap["/configuration"], "configuration");
+    assert.equal(reverseMap["/settings"], undefined, "the retired path is resolved separately");
 });
 
 test("defaults observatory to the overview destination path", () => {
@@ -668,11 +625,14 @@ test("should_offer_no_thin_talk_link_for_an_unknown_channel", () => {
     }
 });
 
-test("should_keep_every_chat_link_out_of_the_library_and_the_shell", () => {
-    const libraryScript = fs.readFileSync(path.join(__dirname, "library-render.js"), "utf8");
+test("should_keep_every_chat_link_out_of_download_models_and_the_shell", () => {
+    const downloadModelsRenderScript = fs.readFileSync(path.join(__dirname, "download-models-render.js"), "utf8");
+    const downloadModelsCardFooterScript = fs.readFileSync(path.join(__dirname, "download-models-card-footer.js"), "utf8");
     const consoleShell = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-    for (const hardcodingSource of [libraryScript, consoleShell]) {
+    for (const hardcodingSource of [downloadModelsRenderScript, downloadModelsCardFooterScript, consoleShell]) {
         assert.equal(hardcodingSource.includes("astronomical://"), false);
         assert.equal(hardcodingSource.includes("astronomical-dev://"), false);
     }
 });
+
+/** A document whose elements are created on first lookup and keep their text. */

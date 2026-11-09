@@ -33,7 +33,7 @@ test("should_carry_the_image_model_name_beside_the_image_name", async () => {
   assert.deepEqual(unnamedResult.details, { generatedImageName: "image.png" });
   assert.equal(generatedImageModelNameFromToolResult(unnamedResult), null);
 
-  const imagelessResult = await agentTool(toolReturning({ text: "No picture.", generatedImageModelName: "FLUX.2 Klein 4B" }), toolContext)
+  const imagelessResult = await agentTool(toolReturning({ text: "No picture.", generatedImageModelName: "FLUX.2 Klein 4B full precision" }), toolContext)
     .execute("call-3", {}, new AbortController().signal);
   assert.equal(imagelessResult.details, undefined, "a model name without an image is not recorded");
 });

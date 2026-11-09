@@ -11,8 +11,10 @@ use axum::{Router, body::Body, http::header, response::Response, routing::get};
 
 const INDEX_HTML: &str = include_str!("../../console/index.html");
 const CONSOLE_JS: &str = include_str!("../../console/console.js");
-const LIBRARY_JS: &str = include_str!("../../console/library.js");
-const LIBRARY_RENDER_JS: &str = include_str!("../../console/library-render.js");
+const DOWNLOAD_MODELS_JS: &str = include_str!("../../console/download-models.js");
+const DOWNLOAD_MODELS_RENDER_JS: &str = include_str!("../../console/download-models-render.js");
+const DOWNLOAD_MODELS_CARD_FOOTER_JS: &str =
+    include_str!("../../console/download-models-card-footer.js");
 const OVERVIEW_COMPACT_JS: &str = include_str!("../../console/overview-compact.js");
 const NEURAL_ENGINE_PANEL_JS: &str = include_str!("../../console/neural-engine-panel.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../../console/memory-control.js");
@@ -23,7 +25,7 @@ const CONFIGURATION_MODEL_JS: &str = include_str!("../../console/configuration-m
 const CONFIGURATION_JS: &str = include_str!("../../console/configuration.js");
 const CONFIGURATION_CSS: &str = include_str!("../../console/configuration.css");
 const CONSOLE_CSS: &str = include_str!("../../console/console.css");
-const LIBRARY_CSS: &str = include_str!("../../console/library.css");
+const DOWNLOAD_MODELS_CSS: &str = include_str!("../../console/download-models.css");
 const EXPERTS_CSS: &str = include_str!("../../console/experts.css");
 
 const HTML_CONTENT_TYPE: &str = "text/html; charset=utf-8";
@@ -40,18 +42,32 @@ where
         .route("/", get(console_index))
         .route("/overview", get(console_index))
         .route("/chat", get(console_index))
+        // The Model page was folded into Overview; its old address still serves
+        // the shell, and console.js opens Overview from it.
         .route("/model", get(console_index))
         .route("/experts", get(console_index))
+        .route("/download-models", get(console_index))
+        // The page was renamed Download Models; its old address still serves
+        // the shell, and console.js opens the renamed page from it.
         .route("/library", get(console_index))
         .route("/connect", get(console_index))
         .route("/configuration", get(console_index))
+        // The Settings page was folded into Configuration; its old address still
+        // serves the shell, and console.js opens Configuration from it.
         .route("/settings", get(console_index))
         .route("/configuration-model.js", get(configuration_model_script))
         .route("/configuration.js", get(configuration_script))
         .route("/configuration.css", get(configuration_stylesheet))
         .route("/console.js", get(console_script))
-        .route("/library.js", get(library_script))
-        .route("/library-render.js", get(library_render_script))
+        .route("/download-models.js", get(download_models_script))
+        .route(
+            "/download-models-render.js",
+            get(download_models_render_script),
+        )
+        .route(
+            "/download-models-card-footer.js",
+            get(download_models_card_footer_script),
+        )
         .route("/overview-compact.js", get(overview_compact_script))
         .route("/neural-engine-panel.js", get(neural_engine_panel_script))
         .route("/memory-control.js", get(memory_control_script))
@@ -59,7 +75,7 @@ where
         .route("/experts.js", get(experts_script))
         .route("/experts-render.js", get(experts_render_script))
         .route("/console.css", get(console_stylesheet))
-        .route("/library.css", get(library_stylesheet))
+        .route("/download-models.css", get(download_models_stylesheet))
         .route("/experts.css", get(experts_stylesheet))
 }
 
@@ -76,12 +92,16 @@ pub(crate) async fn console_script() -> Response {
     embedded_text_response(CONSOLE_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-pub(crate) async fn library_script() -> Response {
-    embedded_text_response(LIBRARY_JS, JAVASCRIPT_CONTENT_TYPE)
+pub(crate) async fn download_models_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-pub(crate) async fn library_render_script() -> Response {
-    embedded_text_response(LIBRARY_RENDER_JS, JAVASCRIPT_CONTENT_TYPE)
+pub(crate) async fn download_models_render_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_RENDER_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn download_models_card_footer_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_CARD_FOOTER_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn overview_compact_script() -> Response {
@@ -135,8 +155,8 @@ pub(crate) async fn console_stylesheet() -> Response {
     embedded_text_response(CONSOLE_CSS, CSS_CONTENT_TYPE)
 }
 
-pub(crate) async fn library_stylesheet() -> Response {
-    embedded_text_response(LIBRARY_CSS, CSS_CONTENT_TYPE)
+pub(crate) async fn download_models_stylesheet() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_CSS, CSS_CONTENT_TYPE)
 }
 
 fn embedded_text_response(body: &'static str, content_type: &'static str) -> Response {

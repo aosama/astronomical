@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::AstronomicalConfigError;
-use crate::config_document::UserConfigFile;
+use crate::config_document::{RuntimeConfigFile, UserConfigFile};
 use crate::duplicate_key_json;
 use crate::legacy_config_migration;
 
@@ -237,7 +237,16 @@ pub(crate) fn validate_user_config_file(
     if user_config_file.schema != "./astronomical-config.schema.json" {
         return Err(AstronomicalConfigError::InvalidSchemaReference);
     }
-    for model_directory_path in &user_config_file.runtime.model_directories {
+    validate_runtime_config_file(&user_config_file.runtime)?;
+    user_config_file.validate()
+}
+
+/// The `runtime` section's checks serde cannot express: absolute paths, the
+/// memory ceiling's byte range, and the idle-unload span's one-week cap.
+fn validate_runtime_config_file(
+    runtime_config_file: &RuntimeConfigFile,
+) -> Result<(), AstronomicalConfigError> {
+    for model_directory_path in &runtime_config_file.model_directories {
         if !model_directory_path.is_absolute() {
             return Err(AstronomicalConfigError::PathMustBeAbsolute {
                 field_name: "runtime.model_directories".to_owned(),
@@ -247,19 +256,34 @@ pub(crate) fn validate_user_config_file(
     }
     require_absolute_path(
         "runtime.model_download_directory",
-        user_config_file.runtime.model_download_directory.as_ref(),
+        runtime_config_file.model_download_directory.as_ref(),
     )?;
     require_absolute_path(
         "runtime.neural_engine_program_directory",
-        user_config_file
-            .runtime
-            .neural_engine_program_directory
-            .as_ref(),
+        runtime_config_file.neural_engine_program_directory.as_ref(),
     )?;
-    if let Some(maximum_mlx_memory_gb) = user_config_file.runtime.maximum_mlx_memory_gb {
+    if let Some(maximum_mlx_memory_gb) = runtime_config_file.maximum_mlx_memory_gb {
         crate::maximum_mlx_memory_gb_to_bytes(maximum_mlx_memory_gb)?;
     }
-    user_config_file.validate()
+    validate_idle_model_unload_seconds(runtime_config_file.idle_model_unload_seconds)
+}
+
+/// The schema caps the span at one week; serde alone accepts any `u64`.
+fn validate_idle_model_unload_seconds(
+    idle_model_unload_seconds: Option<u64>,
+) -> Result<(), AstronomicalConfigError> {
+    match idle_model_unload_seconds {
+        Some(idle_model_unload_seconds)
+            if idle_model_unload_seconds > crate::MAXIMUM_IDLE_MODEL_UNLOAD_SECONDS =>
+        {
+            Err(
+                AstronomicalConfigError::IdleModelUnloadSecondsAboveMaximum {
+                    maximum_idle_model_unload_seconds: crate::MAXIMUM_IDLE_MODEL_UNLOAD_SECONDS,
+                },
+            )
+        }
+        _ => Ok(()),
+    }
 }
 
 fn create_first_run_config(

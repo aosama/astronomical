@@ -7,7 +7,7 @@ import { ImageModel } from "./ImageModel";
  * the tool always read the same answer; listeners hear every change.
  *
  * One rule decides: the person's saved choice while it is installed, otherwise
- * the Library's Pictures pick, otherwise the first installed image model. The
+ * the Download Models Image Generation pick, otherwise the first installed image model. The
  * order of the folders a model was downloaded into never decides.
  */
 export class ImageModelSelection {
@@ -47,9 +47,9 @@ export class ImageModelSelection {
     if (preferredImageModel != null) {
       return preferredImageModel;
     }
-    const picturesPick = this.installedImageModels.find((imageModel) => imageModel.isPicturesPick);
-    if (picturesPick != null) {
-      return picturesPick;
+    const imageGenerationPick = this.installedImageModels.find((imageModel) => imageModel.isImageGenerationPick);
+    if (imageGenerationPick != null) {
+      return imageGenerationPick;
     }
     const firstImageModel: ImageModel | undefined = this.installedImageModels[0];
     return firstImageModel != null ? firstImageModel : null;

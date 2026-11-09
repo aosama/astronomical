@@ -23,7 +23,7 @@ export class ChatFailure extends Error {
   public get nextAction(): string {
     switch (this.kind) {
       case ChatFailureKind.NO_USABLE_MODEL:
-        return "Get a model from the Library, then try again.";
+        return "Get a model from Download Models in the Observatory, then try again.";
       case ChatFailureKind.MODEL_LOAD_FAILED:
         return "Pick a smaller model, or raise the memory ceiling, then try again.";
       case ChatFailureKind.WORKER_UNAVAILABLE:

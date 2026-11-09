@@ -287,6 +287,56 @@ fn should_not_restart_worker_when_metal_residency_refresh_is_unchanged() {
 }
 
 #[test]
+fn should_apply_a_new_idle_unload_span_without_restarting_the_worker() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.idle_model_unload_seconds = 300;
+    // A saved file always carries a new generation; the span alone must not
+    // turn that into a worker restart.
+    candidate.configuration_generation = "next-generation".to_owned();
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::NoWorkerRestart { ref reloaded_fields, .. }
+            if reloaded_fields == &["idle_model_unload_seconds".to_owned()]
+    ));
+}
+
+#[test]
+fn should_report_switching_idle_unload_off_as_a_live_change() {
+    let mut current = sample_resolved_config();
+    current.idle_model_unload_seconds = 60;
+    let candidate = sample_resolved_config();
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::NoWorkerRestart { ref reloaded_fields, .. }
+            if reloaded_fields == &["idle_model_unload_seconds".to_owned()]
+    ));
+}
+
+#[test]
+fn should_still_restart_the_worker_when_the_span_changes_beside_a_worker_setting() {
+    let current = sample_resolved_config();
+    let mut candidate = sample_resolved_config();
+    candidate.idle_model_unload_seconds = 120;
+    candidate.metal_residency_refresh_enabled = true;
+
+    let decision = ConfigReloadDiff::compare(&current, &candidate);
+
+    assert!(matches!(
+        decision,
+        ConfigReloadDecision::RestartWorker { ref reloaded_fields, .. }
+            if reloaded_fields.contains(&"idle_model_unload_seconds".to_owned())
+                && reloaded_fields.contains(&"metal_residency_refresh_enabled".to_owned())
+    ));
+}
+
+#[test]
 fn should_carry_metal_residency_refresh_into_the_worker_startup_configuration() {
     let mut resolved_config = sample_resolved_config();
     resolved_config.metal_residency_refresh_enabled = true;
@@ -401,6 +451,7 @@ fn sample_resolved_config() -> ResolvedRuntimeConfig {
         persistent_prompt_cache_enabled: true,
         configured_persistent_prompt_cache_enabled: None,
         metal_residency_refresh_enabled: false,
+        idle_model_unload_seconds: 0,
         configured_prompt_cache_maximum_size_bytes: None,
         performance_attribution_enabled: false,
         prompt_cache_config: PromptCacheConfig::new(
