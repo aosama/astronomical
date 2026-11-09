@@ -139,12 +139,12 @@ jobs:
       - name: Route Rust compilation through sccache
         # Written after sccache is installed: provision-xtask may compile
         # before it exists. sccache refuses incremental compilation, and the
-        # cap bounds the saved cache; release objects carry LTO bitcode and
-        # run larger than ci.yml's debug objects, hence 2G rather than 600M.
+        # cap bounds the saved cache at ci.yml's budget; a full release build
+        # filled 149 MiB, so the cap leaves room for several generations.
         run: |
           {
             printf 'SCCACHE_DIR=%s\n' "$HOME/Library/Caches/Astronomical/release-sccache"
-            printf 'SCCACHE_CACHE_SIZE=%s\n' "2G"
+            printf 'SCCACHE_CACHE_SIZE=%s\n' "600M"
             printf '%s\n' 'RUSTC_WRAPPER=sccache'
             printf '%s\n' 'CARGO_INCREMENTAL=0'
           } >> "$GITHUB_ENV"
@@ -181,9 +181,10 @@ jobs:
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
       - name: Save release-sccache-cache
-        # Measurement window for the pull request that introduces this cache:
-        # its runs save too, so a second push proves the warm path.
-        if: ${{ !cancelled() }}
+        # Default branch only, as ci.yml's sccache: a pull request's entry
+        # would never be superseded and would only spend the cache budget.
+        # The weekly run keeps it current for the run before a release.
+        if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
         uses: ./.github/actions/astronomical-cache
         with:
           operation: save
