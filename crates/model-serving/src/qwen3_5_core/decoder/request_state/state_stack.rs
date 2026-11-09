@@ -1,6 +1,7 @@
 use crate::decoder_cache::{
-    DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheState,
-    DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint,
+    ConvolutionState, DecoderCacheLayerLayout, DecoderCacheLayout, DecoderCacheState,
+    DecoderCacheStateAllocationCheckpoint, DecoderCacheStateCheckpoint, DecoderCacheTensorLayout,
+    FullAttentionKeyValueState, GatedDeltaRecurrentState,
 };
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use astronomical_runtime_integration::MlxRuntimeError;
@@ -279,72 +280,14 @@ impl RequestDecoderStateStack {
                 (
                     DecoderCacheState::AppendOnlyAttention { attention },
                     DecoderCacheLayerLayout::AppendOnlyAttention { keys, values, .. },
-                ) => {
-                    let capacity_growth_tokens =
-                        attention.projected_capacity_growth_tokens(update_token_count)?;
-                    let bytes_per_token = keys
-                        .sequence_payload_byte_count_per_token()
-                        .map_err(decoder_cache_layout_projection_error)?
-                        .checked_add(
-                            values
-                                .sequence_payload_byte_count_per_token()
-                                .map_err(decoder_cache_layout_projection_error)?,
-                        )
-                        .ok_or_else(|| {
-                            request_decoder_state_error(
-                                "full-attention key/value bytes per token overflowed",
-                            )
-                        })?;
-                    capacity_growth_tokens
-                        .checked_mul(bytes_per_token)
-                        .ok_or_else(|| {
-                            request_decoder_state_error(
-                                "full-attention persistent state growth bytes overflowed",
-                            )
-                        })?
-                }
+                ) => full_attention_growth_bytes(attention, keys, values, update_token_count)?,
                 (
                     DecoderCacheState::Composite {
                         convolution,
                         recurrent,
                     },
                     DecoderCacheLayerLayout::Composite { components },
-                ) => {
-                    let [
-                        DecoderCacheLayerLayout::RecurrentTensor {
-                            tensor: convolution_layout,
-                        },
-                        DecoderCacheLayerLayout::RecurrentTensor {
-                            tensor: recurrent_layout,
-                        },
-                    ] = components.as_slice()
-                    else {
-                        return Err(request_decoder_state_error(
-                            "composite decoder state layout must contain convolution and recurrent tensors",
-                        ));
-                    };
-                    match (convolution.is_unallocated(), recurrent.is_unallocated()) {
-                        (true, true) => convolution_layout
-                            .fixed_payload_byte_count()
-                            .map_err(decoder_cache_layout_projection_error)?
-                            .checked_add(
-                                recurrent_layout
-                                    .fixed_payload_byte_count()
-                                    .map_err(decoder_cache_layout_projection_error)?,
-                            )
-                            .ok_or_else(|| {
-                                request_decoder_state_error(
-                                    "composite persistent state growth bytes overflowed",
-                                )
-                            })?,
-                        (false, false) => 0,
-                        _ => {
-                            return Err(request_decoder_state_error(
-                                "composite decoder state is partially allocated",
-                            ));
-                        }
-                    }
-                }
+                ) => composite_first_use_bytes(convolution, recurrent, components)?,
                 _ => {
                     return Err(request_decoder_state_error(
                         "decoder state family does not match the validated decoder-cache layout",
@@ -362,3 +305,74 @@ impl RequestDecoderStateStack {
         Ok(persistent_growth_bytes)
     }
 }
+
+/// The key and value bytes of the slab capacity this update adds. Only
+/// whole growth slabs are allocated, so a short update inside the current
+/// slab adds nothing.
+fn full_attention_growth_bytes(
+    attention: &FullAttentionKeyValueState,
+    keys: &DecoderCacheTensorLayout,
+    values: &DecoderCacheTensorLayout,
+    update_token_count: usize,
+) -> Result<usize, MlxRuntimeError> {
+    let capacity_growth_tokens = attention.projected_capacity_growth_tokens(update_token_count)?;
+    let bytes_per_token = keys
+        .sequence_payload_byte_count_per_token()
+        .map_err(decoder_cache_layout_projection_error)?
+        .checked_add(
+            values
+                .sequence_payload_byte_count_per_token()
+                .map_err(decoder_cache_layout_projection_error)?,
+        )
+        .ok_or_else(|| {
+            request_decoder_state_error("full-attention key/value bytes per token overflowed")
+        })?;
+    capacity_growth_tokens
+        .checked_mul(bytes_per_token)
+        .ok_or_else(|| {
+            request_decoder_state_error("full-attention persistent state growth bytes overflowed")
+        })
+}
+
+/// Convolution and recurrent state are fixed-size and allocated together on
+/// a linear-attention layer's first forward, then never grow.
+fn composite_first_use_bytes(
+    convolution: &ConvolutionState,
+    recurrent: &GatedDeltaRecurrentState,
+    components: &[DecoderCacheLayerLayout],
+) -> Result<usize, MlxRuntimeError> {
+    let [
+        DecoderCacheLayerLayout::RecurrentTensor {
+            tensor: convolution_layout,
+        },
+        DecoderCacheLayerLayout::RecurrentTensor {
+            tensor: recurrent_layout,
+        },
+    ] = components
+    else {
+        return Err(request_decoder_state_error(
+            "composite decoder state layout must contain convolution and recurrent tensors",
+        ));
+    };
+    match (convolution.is_unallocated(), recurrent.is_unallocated()) {
+        (true, true) => convolution_layout
+            .fixed_payload_byte_count()
+            .map_err(decoder_cache_layout_projection_error)?
+            .checked_add(
+                recurrent_layout
+                    .fixed_payload_byte_count()
+                    .map_err(decoder_cache_layout_projection_error)?,
+            )
+            .ok_or_else(|| {
+                request_decoder_state_error("composite persistent state growth bytes overflowed")
+            }),
+        (false, false) => Ok(0),
+        _ => Err(request_decoder_state_error(
+            "composite decoder state is partially allocated",
+        )),
+    }
+}
+
+#[cfg(test)]
+#[path = "state_stack_tests.rs"]
+mod state_stack_tests;

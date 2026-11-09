@@ -36,9 +36,17 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         prefill_start: usize,
         prefill_end: usize,
+        layer_major_span_plan: Option<super::layer_major_span_plan::LayerMajorSpanPlan>,
     ) -> Result<PromptPrefillChunkOutcome, PromptPrefillChunkAttemptError> {
         // Phase 1: pure decision logic — no side effects.
-        let plan = self.plan_prompt_prefill_chunk(active_request, prefill_start, prefill_end)?;
+        let plan = self.plan_prompt_prefill_chunk(
+            active_request,
+            prefill_start,
+            prefill_end,
+            layer_major_span_plan,
+        )?;
+        // Counted before admission, so a declined layer-major group counts one
+        // attempt; its chunks then count again as they run.
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::PrefillChunkCount, 1);
@@ -64,47 +72,8 @@ impl Qwen3_5EngineState {
         // model: the 2026-10-24 per-layer tape model charged admission for
         // every streamed layer's payload and made admission evict the very
         // tables residency had just seated.
-        let staging_page_slot_count: u64 = 8;
-        let staging_yield_bytes = {
-            let model = self.model.as_ref().ok_or_else(|| {
-                PromptPrefillChunkAttemptError::Engine(fatal_engine_error(
-                    "Qwen3.5 engine lost its loaded model",
-                ))
-            })?;
-            let staging_page_slot_bytes = model
-                .expert_page_reservation_bytes_for_forward(1)
-                .map_err(qwen3_5_runtime_error)
-                .map_err(PromptPrefillChunkAttemptError::Engine)?;
-            let staging_reserve_bytes =
-                staging_page_slot_bytes.saturating_mul(staging_page_slot_count);
-            let resident_cache_bytes = model
-                .expert_weight_memory_cache_statistics()
-                .resident_payload_byte_count;
-            let staging_yield_bytes = super::prefill_staging_yield::staging_yield_bytes(
-                staging_reserve_bytes,
-                admission_outcome.unreserved_headroom_bytes,
-                resident_cache_bytes,
-            );
-            if staging_yield_bytes == 0 {
-                0
-            } else {
-                let cache_yielded = model
-                    .limit_expert_retention_for_request_memory_pressure(
-                        usize::try_from(staging_yield_bytes).unwrap_or(usize::MAX),
-                    )
-                    .map_err(qwen3_5_runtime_error)
-                    .map_err(PromptPrefillChunkAttemptError::Engine)?;
-                if cache_yielded {
-                    tracing::info!(
-                        staging_reserve_bytes,
-                        unreserved_headroom_bytes = admission_outcome.unreserved_headroom_bytes,
-                        staging_yield_bytes,
-                        "warm cache yielded staging slots for the prefill chunk tape"
-                    );
-                }
-                staging_yield_bytes
-            }
-        };
+        let staging_yield_bytes =
+            self.yield_warm_cache_for_prefill_staging(admission_outcome.unreserved_headroom_bytes)?;
         let forward_started_at = std::time::Instant::now();
         let dispatch_outcome_result =
             self.dispatch_prefill_forward(active_request, prefill_start, prefill_end, &plan);
@@ -151,10 +120,56 @@ impl Qwen3_5EngineState {
                 .streamed_expert_page_bytes_before_growth,
             forward_chunk_elapsed_millis: forward_elapsed.as_millis() as u64,
             adaptive_ram_growth_context: plan
-                .adaptive_ram_growth_context
+                .observed_growth_context
                 .with_execution_profile(crate::AdaptiveRamGrowthExecutionProfile::Paged),
             exact_temporary_workspace_bytes: plan.exact_temporary_workspace_bytes,
             boundary_checkpoints,
         })
+    }
+
+    /// Lends the warm expert cache's bytes to this chunk's staging slots when
+    /// admission left fewer unclaimed than the staging reserve, returning
+    /// the bytes lent; a dense model has no warm cache and lends nothing.
+    fn yield_warm_cache_for_prefill_staging(
+        &self,
+        unreserved_headroom_bytes: u64,
+    ) -> Result<u64, PromptPrefillChunkAttemptError> {
+        let staging_page_slot_count: u64 = 8;
+        let model = self.model.as_ref().ok_or_else(|| {
+            PromptPrefillChunkAttemptError::Engine(fatal_engine_error(
+                "Qwen3.5 engine lost its loaded model",
+            ))
+        })?;
+        let staging_page_slot_bytes = model
+            .expert_page_reservation_bytes_for_forward(1)
+            .map_err(qwen3_5_runtime_error)
+            .map_err(PromptPrefillChunkAttemptError::Engine)?;
+        let staging_reserve_bytes = staging_page_slot_bytes.saturating_mul(staging_page_slot_count);
+        let resident_cache_bytes = model
+            .expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count;
+        let staging_yield_bytes = super::prefill_staging_yield::staging_yield_bytes(
+            staging_reserve_bytes,
+            unreserved_headroom_bytes,
+            resident_cache_bytes,
+        );
+        if staging_yield_bytes == 0 {
+            return Ok(0);
+        }
+        let cache_yielded = model
+            .limit_expert_retention_for_request_memory_pressure(
+                usize::try_from(staging_yield_bytes).unwrap_or(usize::MAX),
+            )
+            .map_err(qwen3_5_runtime_error)
+            .map_err(PromptPrefillChunkAttemptError::Engine)?;
+        if cache_yielded {
+            tracing::info!(
+                staging_reserve_bytes,
+                unreserved_headroom_bytes,
+                staging_yield_bytes,
+                "warm cache yielded staging slots for the prefill chunk tape"
+            );
+        }
+        Ok(staging_yield_bytes)
     }
 }

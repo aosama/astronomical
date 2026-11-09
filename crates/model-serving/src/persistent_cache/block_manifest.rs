@@ -44,10 +44,13 @@ impl PersistentPromptCacheBlockManifest {
     ) -> Self {
         Self {
             format_version: PERSISTENT_PROMPT_CACHE_FORMAT_VERSION.to_owned(),
-            block_hash: disk_store_file::hex_encode(persistent_prompt_cache_block_key.block_hash()),
+            block_hash: super::hex_digest::encode_lowercase_hex_digest(
+                persistent_prompt_cache_block_key.block_hash(),
+            ),
             block_index: persistent_prompt_cache_block_key.block_index(),
-            parent_block_hash: parent_persistent_prompt_cache_block_key
-                .map(|parent_block_key| disk_store_file::hex_encode(parent_block_key.block_hash())),
+            parent_block_hash: parent_persistent_prompt_cache_block_key.map(|parent_block_key| {
+                super::hex_digest::encode_lowercase_hex_digest(parent_block_key.block_hash())
+            }),
             storage_contract_fingerprint: persistent_prompt_cache_model_contract
                 .storage_contract_fingerprint_hex(),
             has_sequence_state: persistent_prompt_cache_model_contract.has_sequence_state(),
@@ -227,15 +230,7 @@ fn invalid_manifest(
 }
 
 fn parse_block_hash_hex(block_hash_hex: &str) -> Option<[u8; 32]> {
-    // The writer emits a canonical 64-character representation. Parsing still
-    // validates exact width and every byte pair before returning binary identity.
-    if block_hash_hex.len() != 64 {
-        return None;
-    }
-    let mut block_hash = [0_u8; 32];
-    for (block_hash_byte_index, block_hash_byte) in block_hash.iter_mut().enumerate() {
-        let byte_hex = &block_hash_hex[block_hash_byte_index * 2..block_hash_byte_index * 2 + 2];
-        *block_hash_byte = u8::from_str_radix(byte_hex, 16).ok()?;
-    }
-    Some(block_hash)
+    // The writer emits a canonical 64-character lowercase representation; a
+    // manifest holding anything else is corrupt and its block is discarded.
+    super::hex_digest::decode_lowercase_hex_digest(block_hash_hex)
 }

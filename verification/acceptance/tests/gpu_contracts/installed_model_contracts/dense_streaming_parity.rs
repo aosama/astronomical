@@ -5,7 +5,8 @@
 //! layers it does not keep. The resident engine keeps everything in memory.
 //! For the same Shakespeare prompt and greedy decode, the streaming engine
 //! with every layer streamed, and with half kept, must produce the resident
-//! tokens and bit-identical final logits.
+//! tokens and bit-identical final logits, both when it prefills chunk by
+//! chunk and when it runs each layer over every chunk before the next.
 //!
 //! The resident layer count is pinned rather than planned from the limit, so
 //! both models load in this one process, one after the other.
@@ -65,7 +66,7 @@ async fn assert_dense_streaming_logit_parity() {
         .expect("the dense model should load on the streaming engine");
         let dense_forward = StreamingForward(&streaming_model);
         let active_bytes_after_load = dense_forward.materialized_active_bytes();
-        let mut answers_by_kept_layer_count = Vec::with_capacity(KEPT_LAYER_COUNTS.len());
+        let mut answers_by_streaming_variant = Vec::with_capacity(KEPT_LAYER_COUNTS.len() * 2);
         for kept_layer_count in KEPT_LAYER_COUNTS {
             streaming_model
                 .plan_dense_layer_residency(
@@ -76,12 +77,20 @@ async fn assert_dense_streaming_logit_parity() {
                     Some(kept_layer_count),
                 )
                 .expect("the dense layers should plan");
-            answers_by_kept_layer_count.push((
-                kept_layer_count,
+            answers_by_streaming_variant.push((
+                format!("{kept_layer_count} kept layers, chunk by chunk"),
                 greedy_answer(&qwen3_5_config, &prompt_token_ids, &dense_forward),
             ));
+            answers_by_streaming_variant.push((
+                format!("{kept_layer_count} kept layers, layer by layer"),
+                greedy_answer_after_layer_major_prefill(
+                    &qwen3_5_config,
+                    &prompt_token_ids,
+                    &streaming_model,
+                ),
+            ));
         }
-        (active_bytes_after_load, answers_by_kept_layer_count)
+        (active_bytes_after_load, answers_by_streaming_variant)
     };
     eprintln!("[dense-parity] status=progress step=2/2 engine=resident");
     let resident_answer = {
@@ -106,14 +115,14 @@ async fn assert_dense_streaming_logit_parity() {
         saved_active_bytes + EMBEDDING_ACCOUNTING_SLACK_BYTES >= embedding_table_bytes,
         "the streaming engine must leave at least the {embedding_table_bytes}-byte embedding table out of memory; it saved {saved_active_bytes}"
     );
-    for (kept_layer_count, streaming_greedy_answer) in &streaming_answer.1 {
+    for (streaming_variant, streaming_greedy_answer) in &streaming_answer.1 {
         assert_eq!(
             streaming_greedy_answer.generated_token_ids, resident_answer.1.generated_token_ids,
-            "greedy decode with {kept_layer_count} kept layers must choose the resident tokens"
+            "greedy decode with {streaming_variant} must choose the resident tokens"
         );
         assert!(
             streaming_greedy_answer.final_logits == resident_answer.1.final_logits,
-            "streaming with {kept_layer_count} kept layers must give bit-identical final logits"
+            "streaming with {streaming_variant} must give bit-identical final logits"
         );
     }
     eprintln!(
@@ -257,6 +266,29 @@ fn shakespeare_prompt_token_ids(model_directory: &std::path::Path) -> Vec<u32> {
         .to_vec()
 }
 
+/// Prefills the whole prompt layer by layer over the same spans the chunked
+/// prefill uses, then decodes greedily: each streamed layer is read once for
+/// the prompt, and every kernel still sees the chunked prefill's tokens.
+fn greedy_answer_after_layer_major_prefill(
+    qwen3_5_config: &Qwen3_5Config,
+    prompt_token_ids: &[u32],
+    streaming_model: &Qwen3_5StreamingModel,
+) -> GreedyAnswer {
+    let mut request_decoder_state = crate::common::standard_request_decoder_state(qwen3_5_config);
+    let prefill_logits = logits_of(streaming_model.prefill_prompt_layer_major(
+        prompt_token_ids,
+        0,
+        PREFILL_CHUNK_TOKEN_COUNT,
+        &mut request_decoder_state,
+    ));
+    greedy_decode(
+        prompt_token_ids.len(),
+        prefill_logits,
+        &mut request_decoder_state,
+        &StreamingForward(streaming_model),
+    )
+}
+
 /// Prefills the prompt in fixed chunks, then decodes greedily, returning
 /// the chosen tokens and the last step's logits.
 fn greedy_answer(
@@ -274,15 +306,32 @@ fn greedy_answer(
             &mut request_decoder_state,
         ));
     }
+    greedy_decode(
+        prompt_token_ids.len(),
+        final_logits,
+        &mut request_decoder_state,
+        dense_forward,
+    )
+}
+
+/// Decodes `DECODE_STEP_COUNT` greedy tokens after a prompt of
+/// `prompt_token_count` tokens whose last logits are `prefill_logits`.
+fn greedy_decode(
+    prompt_token_count: usize,
+    prefill_logits: Vec<f32>,
+    request_decoder_state: &mut astronomical_model_serving::RequestDecoderStateStack,
+    dense_forward: &dyn DenseForward,
+) -> GreedyAnswer {
+    let mut final_logits = prefill_logits;
     let mut generated_token_ids = Vec::with_capacity(DECODE_STEP_COUNT);
     for decode_step in 0..DECODE_STEP_COUNT {
         let next_token_id = highest_logit_token_id(&final_logits);
         generated_token_ids.push(next_token_id);
-        let position = prompt_token_ids.len() + decode_step;
+        let position = prompt_token_count + decode_step;
         final_logits = logits_of(dense_forward.forward_chunk(
             &[next_token_id],
             u32::try_from(position).expect("the decode position should fit u32"),
-            &mut request_decoder_state,
+            request_decoder_state,
         ));
     }
     GreedyAnswer {

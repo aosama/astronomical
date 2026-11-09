@@ -49,145 +49,96 @@ impl DFlashDraftConfiguration {
     pub fn from_config_value(
         config_document: &serde_json::Value,
     ) -> Result<Self, DFlashDraftConfigurationError> {
-        Self::from_config_value_inner(config_document)
-    }
-
-    fn from_config_value_inner(
-        config_document: &serde_json::Value,
-    ) -> Result<Self, DFlashDraftConfigurationError> {
-        let architectures = config_document
-            .get("architectures")
-            .and_then(serde_json::Value::as_array)
-            .ok_or(DFlashDraftConfigurationError::MissingField {
-                field: "architectures",
-            })?;
-        let declares_draft_architecture = architectures
-            .iter()
-            .any(|architecture| architecture.as_str() == Some("DFlashDraftModel"));
-        if !declares_draft_architecture {
-            return Err(DFlashDraftConfigurationError::NotADFlashDraftModel);
-        }
-
+        require_draft_architecture(config_document)?;
         let hidden_size = required_i32(config_document, "hidden_size")?;
-        let intermediate_size = required_i32(config_document, "intermediate_size")?;
-        let layer_count = required_i32(config_document, "num_hidden_layers")?;
         let attention_head_count = required_i32(config_document, "num_attention_heads")?;
-        let key_value_head_count = required_i32(config_document, "num_key_value_heads")?;
-        let head_dimension = optional_i32(config_document, "head_dim")?
-            .unwrap_or(hidden_size / attention_head_count.max(1));
-        let rms_norm_epsilon = config_document
-            .get("rms_norm_eps")
-            .and_then(serde_json::Value::as_f64)
-            .ok_or(DFlashDraftConfigurationError::MissingField {
-                field: "rms_norm_eps",
-            })? as f32;
-        let rope_theta = config_document
-            .get("rope_parameters")
-            .and_then(|rope_parameters| rope_parameters.get("rope_theta"))
-            .and_then(serde_json::Value::as_f64)
-            .ok_or(DFlashDraftConfigurationError::MissingField {
-                field: "rope_parameters.rope_theta",
-            })? as f32;
-        let vocabulary_size = required_i32(config_document, "vocab_size")?;
-        let maximum_position_count = required_i32(config_document, "max_position_embeddings")?;
-
         let dflash_config = config_document.get("dflash_config").ok_or(
             DFlashDraftConfigurationError::MissingField {
                 field: "dflash_config",
             },
         )?;
-        let mask_token_id = required_i32(dflash_config, "mask_token_id")?;
-        let draft_block_size = required_i32(dflash_config, "block_size")?;
-        let target_layer_ids = dflash_config
-            .get("target_layer_ids")
-            .and_then(serde_json::Value::as_array)
-            .ok_or(DFlashDraftConfigurationError::MissingField {
-                field: "dflash_config.target_layer_ids",
-            })?
-            .iter()
-            .map(|layer_id| {
-                layer_id
-                    .as_i64()
-                    .and_then(|layer_id| i32::try_from(layer_id).ok())
-                    .ok_or(DFlashDraftConfigurationError::MalformedField {
-                        field: "dflash_config.target_layer_ids",
-                    })
-            })
-            .collect::<Result<Vec<i32>, _>>()?;
-        let target_layer_count = required_i32(config_document, "num_target_layers")?;
-
-        Self::validate_geometry(
+        let draft_configuration = Self {
             hidden_size,
-            layer_count,
+            intermediate_size: required_i32(config_document, "intermediate_size")?,
+            layer_count: required_i32(config_document, "num_hidden_layers")?,
             attention_head_count,
-            key_value_head_count,
-            head_dimension,
-        )?;
-        Self::validate_target_taps(&target_layer_ids, target_layer_count)?;
-        Self::validate_token_identifiers(mask_token_id, vocabulary_size)?;
-        if draft_block_size <= 0 {
-            return Err(DFlashDraftConfigurationError::InvalidGeometry {
-                description: "dflash_config.block_size must be positive",
-            });
-        }
-        if rms_norm_epsilon <= 0.0 {
-            return Err(DFlashDraftConfigurationError::InvalidGeometry {
-                description: "rms_norm_eps must be positive",
-            });
-        }
-        if rope_theta <= 0.0 {
-            return Err(DFlashDraftConfigurationError::InvalidGeometry {
-                description: "rope_parameters.rope_theta must be positive",
-            });
-        }
-        let layer_attention_kinds = resolve_layer_attention_kinds(config_document, layer_count)?;
-
+            key_value_head_count: required_i32(config_document, "num_key_value_heads")?,
+            // A head count that is not positive is refused below; max(1)
+            // only keeps this default from dividing by zero first.
+            head_dimension: optional_i32(config_document, "head_dim")?
+                .unwrap_or(hidden_size / attention_head_count.max(1)),
+            rms_norm_epsilon: required_f32(config_document.get("rms_norm_eps"), "rms_norm_eps")?,
+            rope_theta: required_f32(
+                config_document
+                    .get("rope_parameters")
+                    .and_then(|rope_parameters| rope_parameters.get("rope_theta")),
+                "rope_parameters.rope_theta",
+            )?,
+            vocabulary_size: required_i32(config_document, "vocab_size")?,
+            maximum_position_count: required_i32(config_document, "max_position_embeddings")?,
+            mask_token_id: required_i32(dflash_config, "mask_token_id")?,
+            draft_block_size: required_i32(dflash_config, "block_size")?,
+            target_layer_ids: parse_target_layer_ids(dflash_config)?,
+            target_layer_count: required_i32(config_document, "num_target_layers")?,
+            layer_attention_kinds: Vec::new(),
+        };
+        draft_configuration.validate()?;
+        let layer_attention_kinds =
+            resolve_layer_attention_kinds(config_document, draft_configuration.layer_count)?;
         Ok(Self {
-            hidden_size,
-            intermediate_size,
-            layer_count,
-            attention_head_count,
-            key_value_head_count,
-            head_dimension,
-            rms_norm_epsilon,
-            rope_theta,
-            vocabulary_size,
-            maximum_position_count,
-            mask_token_id,
-            draft_block_size,
-            target_layer_ids,
-            target_layer_count,
             layer_attention_kinds,
+            ..draft_configuration
         })
     }
 
-    fn validate_geometry(
-        hidden_size: i32,
-        layer_count: i32,
-        attention_head_count: i32,
-        key_value_head_count: i32,
-        head_dimension: i32,
-    ) -> Result<(), DFlashDraftConfigurationError> {
-        let positive = [
-            ("hidden_size", hidden_size),
-            ("num_hidden_layers", layer_count),
-            ("num_attention_heads", attention_head_count),
-            ("num_key_value_heads", key_value_head_count),
-            ("head_dim", head_dimension),
+    /// Every rule that relates parsed fields to each other, checked before
+    /// the per-layer attention kinds, which rely on a positive layer count.
+    fn validate(&self) -> Result<(), DFlashDraftConfigurationError> {
+        self.validate_geometry()?;
+        Self::validate_target_taps(&self.target_layer_ids, self.target_layer_count)?;
+        Self::validate_token_identifiers(self.mask_token_id, self.vocabulary_size)?;
+        let positive_draft_scalars = [
+            (
+                self.draft_block_size > 0,
+                "dflash_config.block_size must be positive",
+            ),
+            (self.rms_norm_epsilon > 0.0, "rms_norm_eps must be positive"),
+            (
+                self.rope_theta > 0.0,
+                "rope_parameters.rope_theta must be positive",
+            ),
         ];
-        for (field, value) in positive {
-            if value <= 0 {
-                let description = match field {
-                    "hidden_size" => "hidden_size must be positive",
-                    "num_hidden_layers" => "num_hidden_layers must be positive",
-                    "num_attention_heads" => "num_attention_heads must be positive",
-                    "num_key_value_heads" => "num_key_value_heads must be positive",
-                    _ => "head_dim must be positive",
-                };
+        for (is_positive, description) in positive_draft_scalars {
+            if !is_positive {
                 return Err(DFlashDraftConfigurationError::InvalidGeometry { description });
             }
         }
-        if attention_head_count % key_value_head_count != 0 {
+        Ok(())
+    }
+
+    fn validate_geometry(&self) -> Result<(), DFlashDraftConfigurationError> {
+        let positive_dimensions = [
+            (self.hidden_size, "hidden_size must be positive"),
+            // The MLP projections are shaped [intermediate_size, hidden];
+            // a zero width would only surface later as a shape mismatch.
+            (self.intermediate_size, "intermediate_size must be positive"),
+            (self.layer_count, "num_hidden_layers must be positive"),
+            (
+                self.attention_head_count,
+                "num_attention_heads must be positive",
+            ),
+            (
+                self.key_value_head_count,
+                "num_key_value_heads must be positive",
+            ),
+            (self.head_dimension, "head_dim must be positive"),
+        ];
+        for (dimension, description) in positive_dimensions {
+            if dimension <= 0 {
+                return Err(DFlashDraftConfigurationError::InvalidGeometry { description });
+            }
+        }
+        if self.attention_head_count % self.key_value_head_count != 0 {
             return Err(DFlashDraftConfigurationError::InvalidGeometry {
                 description: "num_attention_heads must be a multiple of num_key_value_heads for grouped-query attention",
             });
@@ -365,6 +316,54 @@ fn resolve_layer_attention_kinds(
             }
         })
         .collect()
+}
+
+fn require_draft_architecture(
+    config_document: &serde_json::Value,
+) -> Result<(), DFlashDraftConfigurationError> {
+    let architectures = config_document
+        .get("architectures")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(DFlashDraftConfigurationError::MissingField {
+            field: "architectures",
+        })?;
+    for architecture in architectures {
+        if architecture.as_str() == Some("DFlashDraftModel") {
+            return Ok(());
+        }
+    }
+    Err(DFlashDraftConfigurationError::NotADFlashDraftModel)
+}
+
+/// The target layers whose hidden states the draft reads, in config order.
+fn parse_target_layer_ids(
+    dflash_config: &serde_json::Value,
+) -> Result<Vec<i32>, DFlashDraftConfigurationError> {
+    const FIELD: &str = "dflash_config.target_layer_ids";
+    let listed_layer_ids = dflash_config
+        .get("target_layer_ids")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(DFlashDraftConfigurationError::MissingField { field: FIELD })?;
+    let mut target_layer_ids = Vec::with_capacity(listed_layer_ids.len());
+    for listed_layer_id in listed_layer_ids {
+        let target_layer_id = listed_layer_id
+            .as_i64()
+            .and_then(|wide_layer_id| i32::try_from(wide_layer_id).ok())
+            .ok_or(DFlashDraftConfigurationError::MalformedField { field: FIELD })?;
+        target_layer_ids.push(target_layer_id);
+    }
+    Ok(target_layer_ids)
+}
+
+/// A JSON number narrowed to `f32`, the precision the draft computes in.
+fn required_f32(
+    field_value: Option<&serde_json::Value>,
+    field: &'static str,
+) -> Result<f32, DFlashDraftConfigurationError> {
+    field_value
+        .and_then(serde_json::Value::as_f64)
+        .map(|wide_number| wide_number as f32)
+        .ok_or(DFlashDraftConfigurationError::MissingField { field })
 }
 
 fn required_i32(

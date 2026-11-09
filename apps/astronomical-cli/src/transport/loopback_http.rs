@@ -59,18 +59,7 @@ fn fetch_http_body(
     request_path: &str,
     timeout: Duration,
 ) -> Result<Vec<u8>, LoopbackRequestError> {
-    let mut tcp_stream =
-        TcpStream::connect_timeout(&bind_address, timeout).map_err(|io_error| {
-            tracing::debug!(error = %io_error, "loopback connect failed");
-            LoopbackRequestError::Unreachable
-        })?;
-    tcp_stream
-        .set_read_timeout(Some(timeout))
-        .map_err(|_| LoopbackRequestError::Unreachable)?;
-    tcp_stream
-        .set_write_timeout(Some(timeout))
-        .map_err(|_| LoopbackRequestError::Unreachable)?;
-
+    let mut tcp_stream = open_loopback_stream(bind_address, timeout)?;
     let http_request = format!(
         "GET {request_path} HTTP/1.1\r\nHost: {bind_address}\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
     );
@@ -80,16 +69,59 @@ fn fetch_http_body(
             tracing::debug!(error = %io_error, "loopback write failed");
             LoopbackRequestError::Unreachable
         })?;
+    let raw_response = read_http_response(&mut tcp_stream)?;
+    successful_response_body(&raw_response)
+}
 
+/// Connects with `timeout` bounding the connect, every read and every
+/// write, so a stalled instance can never hang `launch`.
+fn open_loopback_stream(
+    bind_address: SocketAddr,
+    timeout: Duration,
+) -> Result<TcpStream, LoopbackRequestError> {
+    let tcp_stream = TcpStream::connect_timeout(&bind_address, timeout).map_err(|io_error| {
+        tracing::debug!(error = %io_error, "loopback connect failed");
+        LoopbackRequestError::Unreachable
+    })?;
+    tcp_stream
+        .set_read_timeout(Some(timeout))
+        .map_err(|_| LoopbackRequestError::Unreachable)?;
+    tcp_stream
+        .set_write_timeout(Some(timeout))
+        .map_err(|_| LoopbackRequestError::Unreachable)?;
+    Ok(tcp_stream)
+}
+
+/// The bytes of one response as read, where its header ends, and the body
+/// length the header declared, if any.
+#[derive(Debug)]
+struct RawHttpResponse {
+    response_bytes: Vec<u8>,
+    header_end: usize,
+    content_length: Option<usize>,
+}
+
+/// Where the header ends and the body length it declared, once the header
+/// has fully arrived.
+#[derive(Clone, Copy)]
+struct ParsedResponseHead {
+    header_end: usize,
+    content_length: Option<usize>,
+}
+
+/// Reads until the peer closes or the declared body has arrived, refusing
+/// to buffer more than one maximal body plus one read of header.
+fn read_http_response(
+    response_stream: &mut impl Read,
+) -> Result<RawHttpResponse, LoopbackRequestError> {
     let mut response_bytes = Vec::new();
     let mut read_buffer = [0_u8; 8192];
-    let mut header_end = None;
-    let mut content_length = None;
+    let mut parsed_head: Option<ParsedResponseHead> = None;
     loop {
-        if response_bytes.len() > MAXIMUM_JSON_BODY_BYTES + 8192 {
+        if response_bytes.len() > MAXIMUM_JSON_BODY_BYTES + read_buffer.len() {
             return Err(LoopbackRequestError::Oversized);
         }
-        match tcp_stream.read(&mut read_buffer) {
+        match response_stream.read(&mut read_buffer) {
             Ok(0) => break,
             Ok(bytes_read) => response_bytes.extend_from_slice(&read_buffer[..bytes_read]),
             Err(io_error) => {
@@ -97,52 +129,96 @@ fn fetch_http_body(
                 return Err(LoopbackRequestError::Unreachable);
             }
         }
-        if header_end.is_none()
-            && let Some(end) = find_header_end(&response_bytes)
+        if parsed_head.is_none()
+            && let Some(header_end) = find_header_end(&response_bytes)
         {
-            header_end = Some(end);
-            let header_text = std::str::from_utf8(&response_bytes[..end])
-                .map_err(|_| LoopbackRequestError::Malformed)?;
-            if header_text
-                .to_ascii_lowercase()
-                .contains("transfer-encoding: chunked")
-            {
-                // Astronomical JSON responses use Content-Length. Refuse chunked
-                // encoding rather than hanging on an incomplete stream.
-                return Err(LoopbackRequestError::Rejected);
-            }
-            content_length = parse_content_length(header_text)?;
+            let content_length = parse_response_head(header_text(&response_bytes, header_end)?)?;
+            parsed_head = Some(ParsedResponseHead {
+                header_end,
+                content_length,
+            });
         }
-        if let (Some(end), Some(body_length)) = (header_end, content_length) {
-            let body_start = end + HEADER_TERMINATOR.len();
-            if response_bytes.len().saturating_sub(body_start) >= body_length {
-                break;
+        if let Some(ParsedResponseHead {
+            header_end,
+            content_length: Some(body_length),
+        }) = parsed_head
+            && response_bytes
+                .len()
+                .saturating_sub(header_end + HEADER_TERMINATOR.len())
+                >= body_length
+        {
+            break;
+        }
+    }
+    let ParsedResponseHead {
+        header_end,
+        content_length,
+    } = parsed_head.ok_or(LoopbackRequestError::Malformed)?;
+    Ok(RawHttpResponse {
+        response_bytes,
+        header_end,
+        content_length,
+    })
+}
+
+fn header_text(response_bytes: &[u8], header_end: usize) -> Result<&str, LoopbackRequestError> {
+    std::str::from_utf8(&response_bytes[..header_end]).map_err(|_| LoopbackRequestError::Malformed)
+}
+
+/// The declared body length. Astronomical JSON responses use
+/// Content-Length; a chunked response is refused rather than read to EOF,
+/// where its chunk framing would corrupt the JSON.
+fn parse_response_head(header_text: &str) -> Result<Option<usize>, LoopbackRequestError> {
+    if is_chunked_transfer(header_text) {
+        return Err(LoopbackRequestError::Rejected);
+    }
+    parse_content_length(header_text)
+}
+
+/// Matches the header by name and the coding as one list entry, so
+/// `Transfer-Encoding:chunked` and `gzip, chunked` are both recognized.
+fn is_chunked_transfer(header_text: &str) -> bool {
+    for header_line in header_text.split("\r\n").skip(1) {
+        let Some((header_name, header_value)) = header_line.split_once(':') else {
+            continue;
+        };
+        if !header_name.trim().eq_ignore_ascii_case("transfer-encoding") {
+            continue;
+        }
+        for transfer_coding in header_value.split(',') {
+            if transfer_coding.trim().eq_ignore_ascii_case("chunked") {
+                return true;
             }
         }
     }
+    false
+}
 
-    let header_end = header_end.ok_or(LoopbackRequestError::Malformed)?;
-    let header_text = std::str::from_utf8(&response_bytes[..header_end])
-        .map_err(|_| LoopbackRequestError::Malformed)?;
-    let status_line = header_text
+/// The body of a 200 response, cut to its declared length; a body shorter
+/// than declared means the peer closed early.
+fn successful_response_body(
+    raw_response: &RawHttpResponse,
+) -> Result<Vec<u8>, LoopbackRequestError> {
+    let response_header_text = header_text(&raw_response.response_bytes, raw_response.header_end)?;
+    let status_line = response_header_text
         .split("\r\n")
         .next()
         .ok_or(LoopbackRequestError::Malformed)?;
     if !status_line.starts_with("HTTP/1.1 200") && !status_line.starts_with("HTTP/1.0 200") {
         return Err(LoopbackRequestError::Rejected);
     }
-    let body_start = header_end + HEADER_TERMINATOR.len();
-    let body_bytes = response_bytes.get(body_start..).unwrap_or(&[]);
+    let body_start = raw_response.header_end + HEADER_TERMINATOR.len();
+    let body_bytes = raw_response.response_bytes.get(body_start..).unwrap_or(&[]);
     if body_bytes.len() > MAXIMUM_JSON_BODY_BYTES {
         return Err(LoopbackRequestError::Oversized);
     }
-    if let Some(body_length) = content_length {
-        if body_bytes.len() < body_length {
-            return Err(LoopbackRequestError::Unreachable);
+    match raw_response.content_length {
+        Some(body_length) if body_bytes.len() < body_length => {
+            Err(LoopbackRequestError::Unreachable)
         }
-        return Ok(body_bytes[..body_length].to_vec());
+        Some(body_length) => Ok(body_bytes[..body_length].to_vec()),
+        None => Ok(body_bytes.to_vec()),
     }
-    Ok(body_bytes.to_vec())
 }
 
 fn find_header_end(response_bytes: &[u8]) -> Option<usize> {
@@ -170,3 +246,7 @@ fn parse_content_length(header_text: &str) -> Result<Option<usize>, LoopbackRequ
     }
     Ok(None)
 }
+
+#[cfg(test)]
+#[path = "loopback_http_tests.rs"]
+mod loopback_http_tests;

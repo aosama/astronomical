@@ -223,3 +223,91 @@ fn should_derive_head_dimension_from_the_trunk_when_absent() {
 
     assert_eq!(configuration.head_dimension(), 128);
 }
+
+fn invalid_geometry_description(config_document: &serde_json::Value) -> &'static str {
+    match DFlashDraftConfiguration::from_config_value(config_document) {
+        Err(DFlashDraftConfigurationError::InvalidGeometry { description }) => description,
+        other => panic!("expected an invalid geometry, got {other:?}"),
+    }
+}
+
+#[test]
+fn should_reject_a_zero_or_negative_intermediate_size() {
+    for intermediate_size in [0, -6144] {
+        let mut config_document = ornith_dflash_draft_config_document();
+        config_document["intermediate_size"] = serde_json::json!(intermediate_size);
+        assert_eq!(
+            invalid_geometry_description(&config_document),
+            "intermediate_size must be positive"
+        );
+    }
+}
+
+#[test]
+fn should_name_each_non_positive_trunk_dimension() {
+    for (field, expected_description) in [
+        ("hidden_size", "hidden_size must be positive"),
+        ("num_hidden_layers", "num_hidden_layers must be positive"),
+        (
+            "num_attention_heads",
+            "num_attention_heads must be positive",
+        ),
+        (
+            "num_key_value_heads",
+            "num_key_value_heads must be positive",
+        ),
+        ("head_dim", "head_dim must be positive"),
+    ] {
+        let mut config_document = ornith_dflash_draft_config_document();
+        config_document[field] = serde_json::json!(0);
+        assert_eq!(
+            invalid_geometry_description(&config_document),
+            expected_description,
+            "{field}"
+        );
+    }
+}
+
+#[test]
+fn should_refuse_a_non_integer_or_out_of_range_target_layer_id() {
+    for malformed_layer_id in [
+        serde_json::json!("six"),
+        serde_json::json!(4_294_967_296_i64),
+    ] {
+        let mut config_document = ornith_dflash_draft_config_document();
+        config_document["dflash_config"]["target_layer_ids"] =
+            serde_json::json!([1, malformed_layer_id]);
+        assert!(matches!(
+            DFlashDraftConfiguration::from_config_value(&config_document),
+            Err(DFlashDraftConfigurationError::MalformedField {
+                field: "dflash_config.target_layer_ids"
+            })
+        ));
+    }
+}
+
+#[test]
+fn should_accept_the_first_and_last_target_layer_and_refuse_one_past_the_last() {
+    let mut boundary_taps = ornith_dflash_draft_config_document();
+    boundary_taps["dflash_config"]["target_layer_ids"] = serde_json::json!([0, 39]);
+    let configuration = DFlashDraftConfiguration::from_config_value(&boundary_taps)
+        .expect("the first and last target layers are valid taps");
+    assert_eq!(configuration.target_layer_ids(), &[0, 39]);
+
+    let mut past_the_last = ornith_dflash_draft_config_document();
+    past_the_last["dflash_config"]["target_layer_ids"] = serde_json::json!([40]);
+    assert!(invalid_geometry_description(&past_the_last).contains("target layer range"));
+}
+
+#[test]
+fn should_require_the_rope_theta_inside_rope_parameters() {
+    let mut config_document = ornith_dflash_draft_config_document();
+    config_document["rope_theta"] = serde_json::json!(10_000_000);
+    config_document["rope_parameters"] = serde_json::json!({ "rope_type": "default" });
+    assert!(matches!(
+        DFlashDraftConfiguration::from_config_value(&config_document),
+        Err(DFlashDraftConfigurationError::MissingField {
+            field: "rope_parameters.rope_theta"
+        })
+    ));
+}

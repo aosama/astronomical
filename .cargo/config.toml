@@ -83,15 +83,30 @@ test-dense-text-weights = "run -p xtask -- test-run --package astronomical-accep
 # Dense streaming parity (issue #1985): the streamed_dense model answers one
 # Shakespeare prompt plus a short greedy decode on the streaming engine, which
 # reads embedding rows and decoder layers from the SSD (with every layer
-# streamed, then half kept), and on the resident engine; tokens and final
-# logits must be bit-identical. Loads the 9B model twice, about ten seconds.
+# streamed, then half kept, each prefilled chunk by chunk and layer by layer),
+# and on the resident engine; tokens and final logits must be bit-identical.
+# Loads the 9B model twice, about fifteen seconds.
 test-dense-streaming-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_give_the_resident_logits"
+
+# Dense layer-major checkpoint parity (issue #1985): one Shakespeare prompt
+# prefilled layer by layer and chunk by chunk over the engine's span plan, at
+# 0 and 8 kept layers, must publish identical prompt-cache boundary state at
+# the same positions. About fifteen seconds.
+test-dense-checkpoint-parity = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_publish_the_chunk_path_prompt_cache_state_from_a_layer_major_prefill"
 
 # Dense prompt forward memory (issue #1985): one streamed_dense prompt forward,
 # a full 4,096-token chunk and a shorter prompt, with every layer streamed and
 # with seven kept, must peak within the plan's reserve for one streamed
 # forward (two layer slots plus the probed working memory). About ten seconds.
 test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_keep_a_streamed_prompt_forward_within_the_planned_reserve"
+
+# Dense streaming speed ladder (issue #1985), on an optimized build with the
+# weight files kept out of the macOS file cache: the raw layer read rate, one
+# streamed layer, then 10,000 Shakespeare tokens in and 500 out at 0, 8, 16
+# and 24 kept layers. Reads cold from the SSD for about 25 minutes, hence the
+# one-hour case budget; decode prints progress with an ETA every five
+# seconds, and each prefill, about eight seconds, prints when it ends.
+measure-dense-streaming-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 3600 --filter should_measure_dense_streaming_speed_from_the_layer_read_up"
 
 # Quantization lanes (the OptiQ port in crates/quantization).
 

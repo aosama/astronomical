@@ -2,6 +2,7 @@
 //! during `PersistentPromptCacheDiskStore::open()`.
 
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use super::block_manifest::{
@@ -123,108 +124,129 @@ pub(crate) fn scan_current_format_block_directories(
     // Phase two below validates cross-directory ancestry before indexing any of
     // them, preventing lookup from observing a partially accepted graph.
     let mut block_candidate_by_hash = HashMap::new();
-    let directory_entries = std::fs::read_dir(blocks_directory).map_err(|source| {
-        PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
-            persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
-            source,
-        }
-    })?;
-    for directory_entry_result in directory_entries {
-        let directory_entry = directory_entry_result.map_err(|source| {
-            PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
-                persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
-                source,
-            }
-        })?;
-        let block_directory_path = directory_entry.path();
-        let entry_file_type = directory_entry.file_type().map_err(|source| {
-            PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
-                block_file_path: block_directory_path.clone(),
-                source,
-            }
-        })?;
-        if !entry_file_type.is_dir() {
-            continue;
-        }
-        let Some(block_directory_name) = block_directory_path
-            .file_name()
-            .and_then(|name| name.to_str())
-        else {
-            discard_block_directory(
-                &block_directory_path,
-                startup_cleanup_evidence,
-                BlockDirectoryDiscardReason::CorruptCurrentFormat,
-            )?;
-            continue;
-        };
-        // A staging name proves publication never reached its atomic directory
-        // rename. Remove the whole transaction; individual files are not salvageable.
-        if block_directory_name.contains(".staging-") {
-            discard_block_directory(
-                &block_directory_path,
-                startup_cleanup_evidence,
-                BlockDirectoryDiscardReason::InterruptedTransaction,
-            )?;
-            continue;
-        }
-        let Some(block_hash_from_directory) =
-            parse_persistent_prompt_cache_file_hash_from_path(&block_directory_path)
-        else {
-            discard_block_directory(
-                &block_directory_path,
-                startup_cleanup_evidence,
-                BlockDirectoryDiscardReason::CorruptCurrentFormat,
-            )?;
-            continue;
-        };
-        let block_manifest = match PersistentPromptCacheBlockManifest::read_from_block_directory(
+    for block_directory_path in list_block_directories(blocks_directory)? {
+        match classify_block_directory(
             &block_directory_path,
             persistent_prompt_cache_model_contract,
-        ) {
-            Ok(block_manifest) => block_manifest,
-            Err(_) => {
-                discard_block_directory(
-                    &block_directory_path,
-                    startup_cleanup_evidence,
-                    BlockDirectoryDiscardReason::CorruptCurrentFormat,
-                )?;
-                continue;
+        )? {
+            BlockDirectoryVerdict::Candidate {
+                block_hash,
+                block_candidate,
+            } => {
+                block_candidate_by_hash.insert(block_hash, block_candidate);
             }
-        };
-        if block_manifest.block_hash().ok() != Some(block_hash_from_directory) {
-            discard_block_directory(
+            BlockDirectoryVerdict::Discard(discard_reason) => discard_block_directory(
                 &block_directory_path,
                 startup_cleanup_evidence,
-                BlockDirectoryDiscardReason::CorruptCurrentFormat,
-            )?;
-            continue;
+                discard_reason,
+            )?,
         }
-        // Missing or invalid state remains `None` until topology reconciliation.
-        // That later phase can distinguish a legal compacted parent boundary from
-        // an incomplete leaf or a block missing required sequence state.
-        let (sequence_state_file, boundary_state_file) = validated_state_files_for_manifest(
-            &block_directory_path,
-            &block_manifest,
-            persistent_prompt_cache_model_contract,
-        )?;
-        block_candidate_by_hash.insert(
-            block_hash_from_directory,
-            BlockDirectoryCandidate {
-                block_directory_path,
-                block_index: block_manifest.block_index(),
-                parent_block_hash: block_manifest.parent_block_hash(),
-                sequence_state_file,
-                boundary_state_file,
-            },
-        );
     }
     reconcile_block_topology(
         block_candidate_by_hash,
         tracked_files,
         persistent_prompt_cache_model_contract,
         startup_cleanup_evidence,
+    )
+}
+
+/// The directories directly inside `blocks_directory`; stray files are left
+/// alone. The listing completes before any directory is discarded, because
+/// POSIX leaves `readdir` unspecified for entries removed while it iterates.
+fn list_block_directories(
+    blocks_directory: &Path,
+) -> Result<Vec<PathBuf>, PersistentPromptCacheDiskStoreError> {
+    let mut block_directory_paths = Vec::new();
+    for directory_entry_result in std::fs::read_dir(blocks_directory)
+        .map_err(|source| read_blocks_directory_error(blocks_directory, source))?
+    {
+        let directory_entry = directory_entry_result
+            .map_err(|source| read_blocks_directory_error(blocks_directory, source))?;
+        let entry_path = directory_entry.path();
+        let entry_file_type = directory_entry.file_type().map_err(|source| {
+            PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
+                block_file_path: entry_path.clone(),
+                source,
+            }
+        })?;
+        if entry_file_type.is_dir() {
+            block_directory_paths.push(entry_path);
+        }
+    }
+    Ok(block_directory_paths)
+}
+
+fn read_blocks_directory_error(
+    blocks_directory: &Path,
+    source: std::io::Error,
+) -> PersistentPromptCacheDiskStoreError {
+    PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
+        persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
+        source,
+    }
+}
+
+/// What phase one decides about one block directory on its own.
+enum BlockDirectoryVerdict {
+    Candidate {
+        block_hash: [u8; 32],
+        block_candidate: BlockDirectoryCandidate,
+    },
+    Discard(BlockDirectoryDiscardReason),
+}
+
+/// Judges one block directory without looking at any other: its name, its
+/// manifest, and whether the manifest names the directory's own hash.
+/// Only failures to read state files are errors; a malformed block is a
+/// verdict, so one corrupt directory never stops the scan.
+fn classify_block_directory(
+    block_directory_path: &Path,
+    persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
+) -> Result<BlockDirectoryVerdict, PersistentPromptCacheDiskStoreError> {
+    let corrupt_verdict =
+        BlockDirectoryVerdict::Discard(BlockDirectoryDiscardReason::CorruptCurrentFormat);
+    let Some(block_directory_name) = block_directory_path.file_name().and_then(OsStr::to_str)
+    else {
+        return Ok(corrupt_verdict);
+    };
+    // A staging name proves publication never reached its atomic directory
+    // rename. Remove the whole transaction; individual files are not salvageable.
+    if block_directory_name.contains(".staging-") {
+        return Ok(BlockDirectoryVerdict::Discard(
+            BlockDirectoryDiscardReason::InterruptedTransaction,
+        ));
+    }
+    let Some(block_hash) = parse_persistent_prompt_cache_file_hash_from_path(block_directory_path)
+    else {
+        return Ok(corrupt_verdict);
+    };
+    let Ok(block_manifest) = PersistentPromptCacheBlockManifest::read_from_block_directory(
+        block_directory_path,
+        persistent_prompt_cache_model_contract,
+    ) else {
+        return Ok(corrupt_verdict);
+    };
+    if block_manifest.block_hash().ok() != Some(block_hash) {
+        return Ok(corrupt_verdict);
+    }
+    // Missing or invalid state remains `None` until topology reconciliation.
+    // That later phase can distinguish a legal compacted parent boundary from
+    // an incomplete leaf or a block missing required sequence state.
+    let (sequence_state_file, boundary_state_file) = validated_state_files_for_manifest(
+        block_directory_path,
+        &block_manifest,
+        persistent_prompt_cache_model_contract,
     )?;
-    Ok(())
+    Ok(BlockDirectoryVerdict::Candidate {
+        block_hash,
+        block_candidate: BlockDirectoryCandidate {
+            block_directory_path: block_directory_path.to_path_buf(),
+            block_index: block_manifest.block_index(),
+            parent_block_hash: block_manifest.parent_block_hash(),
+            sequence_state_file,
+            boundary_state_file,
+        },
+    })
 }
 
 struct BlockDirectoryCandidate {
@@ -239,6 +261,7 @@ struct BlockDirectoryCandidate {
 /// the evidence bucket the removal is recorded under, so the operator-facing
 /// cleanup report separates interrupted transactions (expected after a crash
 /// mid-publish) from genuinely corrupt current-format directories.
+#[derive(Debug, PartialEq, Eq)]
 enum BlockDirectoryDiscardReason {
     CorruptCurrentFormat,
     InterruptedTransaction,
@@ -550,3 +573,7 @@ fn cache_owned_directory_byte_count(
     }
     Ok(total_byte_count)
 }
+
+#[cfg(test)]
+#[path = "disk_store_scan_tests.rs"]
+mod disk_store_scan_tests;

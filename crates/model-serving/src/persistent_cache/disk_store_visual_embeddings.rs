@@ -7,9 +7,8 @@ use astronomical_runtime_integration::MlxRuntime;
 use super::disk_store::PersistentPromptCacheDiskStore;
 use super::disk_store_error::PersistentPromptCacheDiskStoreError;
 use super::disk_store_file::{
-    PersistentPromptCacheFileKind, hex_encode, map_safetensors_writer_error,
-    open_without_following_symlinks, read_file_size_bytes,
-    remove_cache_owned_file_or_confirm_absent,
+    PersistentPromptCacheFileKind, map_safetensors_writer_error, open_without_following_symlinks,
+    read_file_size_bytes, remove_cache_owned_file_or_confirm_absent,
 };
 use super::disk_store_index::TrackedPersistentPromptCacheFile;
 use super::disk_store_scan;
@@ -184,12 +183,16 @@ fn save_visual_embedding_safetensors_file(
             },
         }
     })?;
-    let file_name = format!("{}.safetensors", hex_encode(visual_embedding_hash));
+    let file_name = format!(
+        "{}.safetensors",
+        super::hex_digest::encode_lowercase_hex_digest(visual_embedding_hash)
+    );
     let file_path = visual_embeddings_directory.join(&file_name);
     let temp_file_path = visual_embeddings_directory.join(format!("{file_name}.tmp"));
     remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
     let named_array = ("visual_embeddings", visual_embeddings);
-    let encoded_image_sha256_text = hex_encode(encoded_image_sha256);
+    let encoded_image_sha256_text =
+        super::hex_digest::encode_lowercase_hex_digest(encoded_image_sha256);
     let visual_token_count_text = visual_token_count.to_string();
     let metadata_entries: [(&str, &str); 5] = [
         (
