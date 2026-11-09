@@ -201,4 +201,17 @@ extension DaemonStatusDocument {
     guard let progress else { return 1 }
     return max(1, progress.totalUnitCount)
   }
+
+  /// How much of the progress bar's track to fill. A completed count past the
+  /// total (the daemon can report the final token before the total settles)
+  /// fills the track instead of overflowing it.
+  var progressBarFillFraction: Double {
+    usageBarFillFraction(Double(progressCompletedUnitCount) / Double(progressTotalUnitCount))
+  }
+
+  /// What VoiceOver reads for the bar. A capped generation's title is a token
+  /// count ("27 / 512 tokens") with no percentage, so the bar carries it.
+  var progressBarAccessibilityValue: String {
+    "\(Int((progressBarFillFraction * 100).rounded(.down))) percent"
+  }
 }

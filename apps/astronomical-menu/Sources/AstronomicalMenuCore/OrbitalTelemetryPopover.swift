@@ -13,6 +13,13 @@ enum PopoverTypography {
   static let headline = Font.system(size: headlinePointSize, weight: .semibold)
 }
 
+enum PopoverLayout {
+  static let width: CGFloat = 390
+  static let edgePadding: CGFloat = 16
+  /// The width rows lay out in, which contract tests measure against.
+  static let contentWidth: CGFloat = width - 2 * edgePadding
+}
+
 struct OrbitalTelemetryPopover: View {
   @Environment(\.colorScheme) private var colorScheme
   @ObservedObject var telemetryStore: TelemetryStore
@@ -211,17 +218,13 @@ struct OrbitalTelemetryPopover: View {
       }
     }
     .font(PopoverTypography.body)
-    .padding(16).frame(width: 390).background(
+    .padding(PopoverLayout.edgePadding).frame(width: PopoverLayout.width).background(
       orbitalTelemetryBackgroundColor(colorScheme: colorScheme)
     )
   }
 
   private func metricRow(_ metricLabel: String, _ metricText: String) -> some View {
-    HStack {
-      Text(metricLabel).foregroundStyle(.secondary)
-      Spacer()
-      Text(metricText).font(PopoverTypography.monospacedBody)
-    }
+    PopoverMetricRow(metricLabel: metricLabel, metricText: metricText)
   }
 
   private func summaryMetric(_ metricLabel: String, _ metricText: String) -> some View {
