@@ -18,7 +18,8 @@ const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
 const FLUX2_KLEIN_4BIT_ROLE: &str = "flux2_klein_4bit";
 const DENSE_VISION_ROLE: &str = "dense_vision";
-const E2E_TEST_MODEL_ROLES: [&str; 8] = [
+const STREAMED_DENSE_ROLE: &str = "streamed_dense";
+const E2E_TEST_MODEL_ROLES: [&str; 9] = [
     LARGE_SPARSE_MOE_STREAMING_ROLE,
     LARGEST_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
@@ -27,6 +28,7 @@ const E2E_TEST_MODEL_ROLES: [&str; 8] = [
     FLUX2_KLEIN_ROLE,
     FLUX2_KLEIN_4BIT_ROLE,
     DENSE_VISION_ROLE,
+    STREAMED_DENSE_ROLE,
 ];
 
 fn e2e_test_model_names() -> &'static BTreeMap<String, String> {

@@ -2,7 +2,7 @@
 pub(crate) use astronomical_test_harness::fixtures::{
     dense_vision_model_id, e2e_test_model_ids, flux2_klein_model_id,
     large_sparse_moe_streaming_model_id, ornith_dflash_draft_model_id, required_e2e_test_model_ids,
-    resident_sparse_moe_model_id, small_dense_model_id,
+    resident_sparse_moe_model_id, small_dense_model_id, streamed_dense_model_id,
 };
 
 #[cfg(feature = "direct-mlx")]
@@ -310,6 +310,12 @@ pub(crate) fn configured_large_sparse_moe_streaming_model_directory() -> PathBuf
 #[allow(dead_code)]
 pub(crate) fn configured_dense_vision_model_directory() -> PathBuf {
     configured_installed_model_directory_by_id(dense_vision_model_id())
+}
+
+#[cfg(feature = "direct-mlx")]
+#[allow(dead_code)]
+pub(crate) fn configured_streamed_dense_model_directory() -> PathBuf {
+    configured_installed_model_directory_by_id(streamed_dense_model_id())
 }
 
 #[cfg(feature = "direct-mlx")]

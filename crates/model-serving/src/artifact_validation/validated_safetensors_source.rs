@@ -13,6 +13,10 @@ use crate::safetensors::{
 
 const MAXIMUM_SAFETENSORS_HEADER_BYTES: u64 = 16 * 1024 * 1024;
 
+#[cfg(test)]
+#[path = "validated_safetensors_source_tests.rs"]
+mod tests;
+
 /// Already-open validated SafeTensors descriptor with one retained bounded header.
 #[derive(Debug)]
 pub(crate) struct ValidatedSafetensorsSource {
@@ -139,6 +143,17 @@ impl ValidatedSafetensorsSource {
 
     pub(crate) const fn payload_bytes(&self) -> u64 {
         self.payload_bytes
+    }
+
+    /// Payload bytes of one stored tensor from its validated header offsets,
+    /// or `None` when this source does not hold it.
+    pub(crate) fn stored_tensor_payload_bytes(&self, stored_name: &str) -> Option<u64> {
+        let tensor_view = self.tensor_metadata_by_stored_name.get(stored_name)?;
+        Some(
+            tensor_view
+                .data_end_offset()
+                .saturating_sub(tensor_view.data_start_offset()),
+        )
     }
 
     /// Validates the canonical profiles of every declared source location.

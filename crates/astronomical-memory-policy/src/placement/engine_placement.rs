@@ -18,8 +18,9 @@ pub enum EnginePlacement {
     /// Startup selection admitted complete expert residency under the
     /// startup ceiling; the resident engine owns every expert.
     CompleteResidencyFits,
-    /// Startup selection could not admit complete expert residency; the
-    /// streaming engine owns the experts and pages them from SSD.
+    /// Startup selection could not admit complete residency (every expert of
+    /// a sparse model, or every text weight of a dense one); the streaming
+    /// engine serves the model, paging experts from the SSD.
     CompleteResidencyDoesNotFit {
         /// Bytes short of complete residency plus its required headroom at
         /// the startup ceiling.

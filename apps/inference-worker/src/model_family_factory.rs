@@ -3,8 +3,9 @@
 //! Qwen-Image-21, the Qwen3.5 text engine) through its own startup pipeline.
 //!
 //! The Qwen3.5 startup pipeline lives alongside this orchestrator in the
-//! `model_family_factory/` folder: the startup routine (`qwen3_5_model_startup`)
-//! and its failure type (`qwen3_5_model_startup_error`).
+//! `model_family_factory/` folder: the startup routine (`qwen3_5_model_startup`),
+//! the dense placement it consults (`qwen3_5_dense_engine_placement`), and its
+//! failure type (`qwen3_5_model_startup_error`).
 
 use std::path::PathBuf;
 
@@ -26,6 +27,9 @@ use astronomical_model_serving::{
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
+mod qwen3_5_dense_engine_placement;
+#[cfg(test)]
+mod qwen3_5_dense_engine_placement_tests;
 mod qwen3_5_model_startup;
 mod qwen3_5_model_startup_error;
 
