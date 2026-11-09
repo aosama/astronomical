@@ -4,7 +4,9 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use super::{IdleModelUnloadClock, WorkerIdleness};
+use super::{
+    IdleModelUnloadClock, WorkerIdleness, idle_clock_millis, idle_unload_remaining_seconds,
+};
 use crate::worker::handle::GENERATION_QUEUE_DEPTH;
 
 fn idle_clock_with_span(
@@ -13,7 +15,11 @@ fn idle_clock_with_span(
     let shared_setting = Arc::new(AtomicU64::new(idle_model_unload_seconds));
     let started_at = Instant::now();
     (
-        IdleModelUnloadClock::new(Arc::clone(&shared_setting), started_at),
+        IdleModelUnloadClock::new(
+            Arc::clone(&shared_setting),
+            Arc::new(AtomicU64::new(0)),
+            started_at,
+        ),
         shared_setting,
         started_at,
     )
@@ -149,4 +155,83 @@ fn should_leave_the_clock_alone_after_an_iteration_that_served_nothing() {
     idle_clock.observe_iteration_end(false, started_at + Duration::from_secs(59));
 
     assert!(idle_clock.is_unload_due(started_at + Duration::from_secs(60)));
+}
+
+#[test]
+fn should_count_down_the_seconds_left_rounding_up() {
+    assert_eq!(
+        idle_unload_remaining_seconds(60, 1_000_000, 1_000_000),
+        Some(60)
+    );
+    assert_eq!(
+        idle_unload_remaining_seconds(60, 1_000_000, 1_018_500),
+        Some(42)
+    );
+}
+
+#[test]
+fn should_report_zero_once_the_span_has_passed() {
+    assert_eq!(
+        idle_unload_remaining_seconds(60, 1_000_000, 1_090_000),
+        Some(0)
+    );
+}
+
+#[test]
+fn should_report_no_countdown_when_unloading_is_off_or_the_clock_never_ran() {
+    assert_eq!(idle_unload_remaining_seconds(0, 1_000_000, 1_010_000), None);
+    assert_eq!(idle_unload_remaining_seconds(60, 0, 1_010_000), None);
+}
+
+#[test]
+fn should_publish_only_restarts_of_the_clock() {
+    let last_activity_clock_millis = Arc::new(AtomicU64::new(0));
+    let mut idle_clock = IdleModelUnloadClock::new(
+        Arc::new(AtomicU64::new(60)),
+        Arc::clone(&last_activity_clock_millis),
+        Instant::now(),
+    );
+    let published_at_start = last_activity_clock_millis.load(Ordering::Relaxed);
+    assert!(
+        published_at_start > 0,
+        "starting the clock publishes a time"
+    );
+
+    idle_clock.observe_iteration_end(false, Instant::now());
+    assert_eq!(
+        last_activity_clock_millis.load(Ordering::Relaxed),
+        published_at_start
+    );
+}
+
+#[test]
+fn should_publish_the_time_of_a_request_that_ended() {
+    let last_activity_clock_millis = Arc::new(AtomicU64::new(0));
+    let started_at = Instant::now();
+    let mut idle_clock = IdleModelUnloadClock::new(
+        Arc::new(AtomicU64::new(60)),
+        Arc::clone(&last_activity_clock_millis),
+        started_at,
+    );
+    let request_ended_at = started_at + Duration::from_secs(30);
+
+    idle_clock.observe_iteration_end(true, request_ended_at);
+
+    assert_eq!(
+        last_activity_clock_millis.load(Ordering::Relaxed),
+        idle_clock_millis(request_ended_at)
+    );
+}
+
+#[test]
+fn should_give_the_full_span_when_the_check_lands_before_the_last_activity() {
+    assert_eq!(idle_unload_remaining_seconds(60, 2_000, 1_000), Some(60));
+}
+
+#[test]
+fn should_saturate_rather_than_overflow_for_the_largest_span() {
+    assert_eq!(
+        idle_unload_remaining_seconds(u64::MAX, 1, 1),
+        Some(u64::MAX.saturating_mul(1000).div_ceil(1000))
+    );
 }

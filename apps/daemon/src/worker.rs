@@ -70,6 +70,7 @@ pub(crate) async fn run_worker(
     active_generation_permits: Arc<Semaphore>,
     generation_queue_permits: Arc<Semaphore>,
     idle_model_unload_seconds: Arc<AtomicU64>,
+    idle_clock_last_activity_millis: Arc<AtomicU64>,
 ) {
     publish_health(
         &health_snapshot,
@@ -92,7 +93,11 @@ pub(crate) async fn run_worker(
         cancellation_acknowledgement_timeout,
         image_generation_timeouts,
         contained_failure_relaunch: ContainedFailureRelaunch::new(),
-        idle_model_unload: IdleModelUnloadClock::new(idle_model_unload_seconds, Instant::now()),
+        idle_model_unload: IdleModelUnloadClock::new(
+            idle_model_unload_seconds,
+            idle_clock_last_activity_millis,
+            Instant::now(),
+        ),
     };
     let mut idle_control_interval = interval(Duration::from_secs(1));
     idle_control_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);

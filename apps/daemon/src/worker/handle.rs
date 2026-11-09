@@ -70,6 +70,9 @@ pub struct WorkerHandle {
     /// Zero until the daemon applies its configuration, so a handle launched
     /// outside the daemon never unloads a model on its own.
     pub(super) idle_model_unload_seconds: Arc<AtomicU64>,
+    /// When the worker loop's idle clock last restarted, as wall-clock
+    /// milliseconds; zero until a worker loop runs.
+    pub(super) idle_clock_last_activity_millis: Arc<AtomicU64>,
 }
 
 /// Everything a launch needs beyond the worker executable path: the two
@@ -96,6 +99,7 @@ impl WorkerHandle {
             generation_queue_permits: Arc::new(Semaphore::new(GENERATION_QUEUE_DEPTH)),
             command_sender: None,
             idle_model_unload_seconds: Arc::new(AtomicU64::new(0)),
+            idle_clock_last_activity_millis: Arc::new(AtomicU64::new(0)),
             health_snapshot: Arc::new(RwLock::new(WorkerHealthSnapshot::unavailable(
                 WorkerHealthStatus::Unavailable,
             ))),
@@ -252,6 +256,7 @@ impl WorkerHandle {
         let active_generation_permits = Arc::new(Semaphore::new(ACTIVE_GENERATION_SLOTS));
         let generation_queue_permits = Arc::new(Semaphore::new(GENERATION_QUEUE_DEPTH));
         let idle_model_unload_seconds = Arc::new(AtomicU64::new(0));
+        let idle_clock_last_activity_millis = Arc::new(AtomicU64::new(0));
 
         tokio::spawn(worker::run_worker(
             worker_process,
@@ -266,6 +271,7 @@ impl WorkerHandle {
             Arc::clone(&active_generation_permits),
             Arc::clone(&generation_queue_permits),
             Arc::clone(&idle_model_unload_seconds),
+            Arc::clone(&idle_clock_last_activity_millis),
         ));
 
         Ok(Self {
@@ -274,7 +280,20 @@ impl WorkerHandle {
             command_sender: Some(command_sender),
             health_snapshot,
             idle_model_unload_seconds,
+            idle_clock_last_activity_millis,
         })
+    }
+
+    /// The idle-unload span and how long the loaded model has left, for
+    /// `/v1/status`.
+    #[must_use]
+    pub(crate) fn idle_model_unload_countdown(
+        &self,
+    ) -> crate::worker::idle_model_unload::IdleModelUnloadCountdown {
+        crate::worker::idle_model_unload::IdleModelUnloadCountdown::read(
+            &self.idle_model_unload_seconds,
+            &self.idle_clock_last_activity_millis,
+        )
     }
 
     /// Sets how long a loaded model may stay unused before the worker loop

@@ -30,22 +30,34 @@ const IDLE_UNLOAD_DISABLED_SENTINEL_SECONDS: u64 = 0;
 pub(crate) struct IdleModelUnloadClock {
     idle_model_unload_seconds: Arc<AtomicU64>,
     last_activity_at: Instant,
+    /// The same restart on the idle clock's own millisecond scale, shared with
+    /// the worker handle so `/v1/status` can say when the model will unload.
+    last_activity_clock_millis: Arc<AtomicU64>,
 }
 
 impl IdleModelUnloadClock {
     /// Starts the idle clock at `now`. The setting is shared with the worker
     /// handle so a configuration reload changes it without a worker restart.
-    pub(crate) fn new(idle_model_unload_seconds: Arc<AtomicU64>, now: Instant) -> Self {
-        Self {
+    pub(crate) fn new(
+        idle_model_unload_seconds: Arc<AtomicU64>,
+        last_activity_clock_millis: Arc<AtomicU64>,
+        now: Instant,
+    ) -> Self {
+        let mut idle_clock = Self {
             idle_model_unload_seconds,
             last_activity_at: now,
-        }
+            last_activity_clock_millis,
+        };
+        idle_clock.record_activity(now);
+        idle_clock
     }
 
     /// Restarts the idle clock, as after a worker restart that may have
     /// loaded a model.
     pub(crate) fn record_activity(&mut self, now: Instant) {
         self.last_activity_at = now;
+        self.last_activity_clock_millis
+            .store(idle_clock_millis(now), Ordering::Relaxed);
     }
 
     /// Restarts the idle clock at the end of every loop iteration that was
@@ -53,7 +65,7 @@ impl IdleModelUnloadClock {
     /// rather than from whenever the loop began waiting for it.
     pub(crate) fn observe_iteration_end(&mut self, was_serving_a_request: bool, now: Instant) {
         if was_serving_a_request {
-            self.last_activity_at = now;
+            self.record_activity(now);
         }
     }
 
@@ -65,6 +77,69 @@ impl IdleModelUnloadClock {
         }
         now.saturating_duration_since(self.last_activity_at)
             >= Duration::from_secs(idle_model_unload_seconds)
+    }
+}
+
+/// The start of the idle clock's millisecond scale, fixed on first use.
+static IDLE_CLOCK_EPOCH: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+/// Milliseconds on the same monotonic clock the unload decision uses, so the
+/// countdown agrees with it after the Mac sleeps or the wall clock is set.
+/// One is added so zero keeps meaning "the clock never ran".
+pub(crate) fn idle_clock_millis(at: Instant) -> u64 {
+    let idle_clock_epoch = IDLE_CLOCK_EPOCH.get_or_init(std::time::Instant::now);
+    let since_epoch_millis = at
+        .into_std()
+        .saturating_duration_since(*idle_clock_epoch)
+        .as_millis();
+    u64::try_from(since_epoch_millis)
+        .unwrap_or(u64::MAX)
+        .saturating_add(1)
+}
+
+/// Whole seconds left before an idle model unloads, rounded up, so 0 means the
+/// span has passed and the unload is due at the next idle check. `None` when
+/// unloading is off (a span of zero) or the clock has never run.
+pub(crate) fn idle_unload_remaining_seconds(
+    idle_model_unload_seconds: u64,
+    last_activity_clock_millis: u64,
+    now_clock_millis: u64,
+) -> Option<u64> {
+    if idle_model_unload_seconds == IDLE_UNLOAD_DISABLED_SENTINEL_SECONDS
+        || last_activity_clock_millis == 0
+    {
+        return None;
+    }
+    let idle_millis = now_clock_millis.saturating_sub(last_activity_clock_millis);
+    let remaining_millis = idle_model_unload_seconds
+        .saturating_mul(1000)
+        .saturating_sub(idle_millis);
+    Some(remaining_millis.div_ceil(1000))
+}
+
+/// What `/v1/status` reports about the idle unload of the loaded model.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct IdleModelUnloadCountdown {
+    /// The configured span; zero means a model stays loaded.
+    pub(crate) after_seconds: u64,
+    /// Seconds until the loaded model unloads, when unloading is on.
+    pub(crate) remaining_seconds: Option<u64>,
+}
+
+impl IdleModelUnloadCountdown {
+    pub(crate) fn read(
+        idle_model_unload_seconds: &AtomicU64,
+        last_activity_clock_millis: &AtomicU64,
+    ) -> Self {
+        let after_seconds = idle_model_unload_seconds.load(Ordering::Relaxed);
+        Self {
+            after_seconds,
+            remaining_seconds: idle_unload_remaining_seconds(
+                after_seconds,
+                last_activity_clock_millis.load(Ordering::Relaxed),
+                idle_clock_millis(Instant::now()),
+            ),
+        }
     }
 }
 

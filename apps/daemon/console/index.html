@@ -7,6 +7,7 @@
     <title>Astronomical Observatory</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/console.css">
+    <link rel="stylesheet" href="/overview.css">
     <link rel="stylesheet" href="/download-models.css">
     <link rel="stylesheet" href="/experts.css">
     <link rel="stylesheet" href="/configuration.css">
@@ -50,116 +51,63 @@
                     <span id="model-discovery-reveal-feedback"></span>
                 </div>
                 <section id="overview-view" class="observatory-view" data-observatory-view="overview" aria-labelledby="overview-title">
-                    <div class="view-heading overview-heading">
-                        <div>
-                            <p class="eyebrow">Live operations</p>
-                            <h2 id="overview-title">Overview</h2>
-                            <p class="overview-intro">The loaded model, request flow, serving performance, memory pressure, and prompt reuse.</p>
+                    <h2 id="overview-title" class="visually-hidden">Overview</h2>
+                    <section id="overview-now" class="panel overview-now" aria-labelledby="overview-now-model">
+                        <div class="overview-now-heading">
+                            <span id="overview-now-state" class="overview-now-state" data-state="unavailable" role="status">Connecting</span>
+                            <h3 id="overview-now-model" class="overview-now-model">Waiting for the local server</h3>
+                            <span id="overview-now-unload" class="overview-now-unload"></span>
                         </div>
-                    </div>
-                    <div class="overview-grid">
-                        <section id="loaded-model-panel" class="panel loaded-model-panel" aria-labelledby="loaded-model-panel-title">
-                            <div class="panel-heading-row"><h3 id="loaded-model-panel-title">Loaded model</h3></div>
-                            <div class="loaded-model-grid">
-                                <div class="loaded-model-stat loaded-model-stat-wide"><span id="loaded-model-id" class="loaded-model-stat-value">No model loaded</span><span class="loaded-model-stat-label">model</span></div>
-                                <div class="loaded-model-stat"><span id="loaded-model-context-window" class="loaded-model-stat-value">—</span><span class="loaded-model-stat-label">context window</span></div>
-                                <div class="loaded-model-stat"><span id="loaded-model-max-input" class="loaded-model-stat-value">—</span><span class="loaded-model-stat-label">max input tokens</span></div>
-                                <div class="loaded-model-stat"><span id="loaded-model-max-output" class="loaded-model-stat-value">—</span><span class="loaded-model-stat-label">max output tokens</span></div>
-                                <div class="loaded-model-stat"><span id="loaded-model-modalities" class="loaded-model-stat-value">—</span><span class="loaded-model-stat-label">input modalities</span></div>
-                                <div class="loaded-model-stat"><span id="loaded-model-expert-memory" class="loaded-model-stat-value">—</span><span class="loaded-model-stat-label">expert memory</span></div>
-                                <div class="loaded-model-stat"><span id="loaded-model-disk-size" class="loaded-model-stat-value">—</span><span class="loaded-model-stat-label">size on disk</span></div>
-                                <div class="loaded-model-stat"><span id="loaded-model-residency" class="loaded-model-stat-value">—</span><span class="loaded-model-stat-label">residency</span></div>
+                        <div class="overview-now-bar" aria-hidden="true"><div id="overview-now-fill" class="overview-now-fill"></div></div>
+                        <p id="overview-now-detail" class="overview-now-detail"></p>
+                    </section>
+                    <div class="overview-pair">
+                        <section id="overview-memory" class="panel overview-memory" aria-labelledby="overview-memory-title">
+                            <div class="overview-card-heading">
+                                <h3 id="overview-memory-title">Memory</h3>
+                                <span id="overview-memory-pressure" class="overview-memory-pressure" data-pressure-state="unavailable" role="status">macOS pressure: unavailable</span>
                             </div>
-                            <p id="loaded-model-instance-note" class="loaded-model-note">Single-user local console. Private and served by astronomicald on this Mac.</p>
+                            <p class="overview-memory-total"><span id="overview-memory-used" class="overview-memory-used">0.0 GB</span> <span id="overview-memory-ceiling" class="overview-memory-ceiling">of 0.0 GB ceiling</span></p>
+                            <div class="overview-memory-bar" aria-hidden="true">
+                                <div id="overview-memory-seg-experts" class="overview-memory-seg" data-memory-part="experts"></div>
+                                <div id="overview-memory-seg-model-core" class="overview-memory-seg" data-memory-part="model-core"></div>
+                                <div id="overview-memory-seg-context-state" class="overview-memory-seg" data-memory-part="context-state"></div>
+                                <div id="overview-memory-seg-runtime-work" class="overview-memory-seg" data-memory-part="runtime-work"></div>
+                            </div>
+                            <ul class="overview-memory-key">
+                                <li><span class="overview-memory-swatch" data-memory-part="experts"></span>Experts <span id="overview-memory-experts">0.0 GB</span></li>
+                                <li><span class="overview-memory-swatch" data-memory-part="model-core"></span>Model core <span id="overview-memory-model-core">0.0 GB</span></li>
+                                <li><span class="overview-memory-swatch" data-memory-part="context-state"></span>Context <span id="overview-memory-context-state">0.0 GB</span></li>
+                                <li><span class="overview-memory-swatch" data-memory-part="runtime-work"></span>Runtime <span id="overview-memory-runtime-work">0.0 GB</span></li>
+                                <li><span class="overview-memory-swatch" data-memory-part="free"></span>Free <span id="overview-memory-free">0.0 GB</span></li>
+                            </ul>
                         </section>
-                        <section id="now-strip" class="panel now-strip">
-                            <div class="panel-heading-row"><h3>Current request</h3><div id="phase-label" class="phase-label">Idle</div></div>
-                            <div class="phase-bar"><div id="phase-fill" class="phase-fill"></div></div>
-                            <div class="phase-stats">
-                                <span id="phase-tokens" class="phase-stat-value">—</span>
-                                <span class="phase-stat-sep">·</span>
-                                <span id="phase-tps" class="phase-stat-value">— tok/s</span>
-                                <span class="phase-stat-sep">·</span>
-                                <span id="phase-elapsed" class="phase-stat-value">— ms</span>
-                            </div>
-                        </section>
-                        <section id="neural-engine-panel" class="panel neural-engine-panel" aria-labelledby="neural-engine-panel-title" hidden>
-                            <div class="panel-heading-row">
-                                <h3 id="neural-engine-panel-title">Neural Engine</h3>
-                                <span class="neural-engine-scope">Work and time since launch</span>
-                            </div>
-                            <dl id="neural-engine-tiles" class="neural-engine-tiles" hidden>
-                                <div class="neural-engine-tile"><dt>Prompt speed</dt><dd id="neural-engine-speed" class="neural-engine-value">—</dd><dd id="neural-engine-speed-detail" class="neural-engine-detail"></dd></div>
-                                <div class="neural-engine-tile"><dt>Work done</dt><dd id="neural-engine-work" class="neural-engine-value">—</dd><dd id="neural-engine-work-detail" class="neural-engine-detail"></dd></div>
-                                <div class="neural-engine-tile"><dt>Time saved</dt><dd id="neural-engine-saved" class="neural-engine-value">—</dd><dd id="neural-engine-saved-detail" class="neural-engine-detail"></dd></div>
-                            </dl>
-                            <p id="neural-engine-note" class="neural-engine-note"></p>
-                        </section>
-                        <section class="panel overview-summary">
-                            <div class="overview-summary-heading">
-                                <div>
-                                    <p class="eyebrow">Since launch</p>
-                                    <h3>Serving session</h3>
-                                </div>
-                                <span id="session-requests" class="metric-value">0 requests</span>
-                            </div>
-                            <div class="overview-summary-grid">
-                                <section id="session-panel" class="overview-summary-section session-panel">
-                                    <h4>Performance</h4>
-                                    <div class="session-row">
-                                        <span class="metric-label">Average generation</span>
-                                        <span id="session-avg-gen" class="metric-value">0 tok/s</span>
-                                    </div>
-                                    <div class="session-row">
-                                        <span class="metric-label">Prompt reuse</span>
-                                        <span id="session-reuse-pct" class="metric-value">Not measured</span>
-                                    </div>
-                                    <div class="reuse-bar"><div id="reuse-fill" class="reuse-fill"></div></div>
-                                    <div class="session-row session-breakdown-row">
-                                        <span class="metric-label">Session prompts</span>
-                                        <span id="session-reuse-breakdown" class="metric-value">No completed prompts</span>
-                                    </div>
-                                </section>
-                                <section id="compact-memory-panel" class="overview-summary-section compact-memory-panel">
-                                    <div class="panel-heading-row">
-                                        <h4>MLX memory</h4>
-                                        <span id="compact-memory-total" class="metric-value compact-memory-total">0 GB</span>
-                                    </div>
-                                    <div class="compact-memory-bar" id="compact-memory-bar">
-                                        <div class="mlx-segment mlx-segment-experts" id="compact-mem-seg-experts"></div>
-                                        <div class="mlx-segment mlx-segment-model-core" id="compact-mem-seg-model-core"></div>
-                                        <div class="mlx-segment mlx-segment-context-state" id="compact-mem-seg-context-state"></div>
-                                        <div class="mlx-segment mlx-segment-runtime-work" id="compact-mem-seg-runtime-work"></div>
-                                        <div class="mlx-segment mlx-segment-available" id="compact-mem-seg-available"></div>
-                                    </div>
-                                    <div class="compact-memory-ceiling">
-                                        <span class="compact-memory-ceiling-label">ceiling</span>
-                                        <span id="compact-memory-ceiling" class="metric-value compact-memory-ceiling-value">/ 0 GB</span>
-                                    </div>
-                                    <div class="compact-memory-pressure-row">
-                                        <span class="compact-memory-pressure-label">macOS memory pressure</span>
-                                        <span id="compact-memory-pressure-state" class="compact-memory-pressure-state" data-pressure-state="unavailable" role="status" aria-live="polite">Unavailable</span>
-                                    </div>
-                                </section>
-                                <section id="compact-cache-panel" class="overview-summary-section compact-cache-panel">
-                                    <div class="panel-heading-row">
-                                        <h4>Prompt-cache reuse</h4>
-                                        <span id="compact-cache-hit-rate" class="metric-value compact-cache-hit-rate">0.0%</span>
-                                    </div>
-                                    <div class="compact-cache-top">
-                                        <svg id="compact-cache-sparkline" class="compact-cache-sparkline" viewBox="0 0 120 24" width="120" height="24" aria-hidden="true"><polyline id="compact-cache-sparkline-line" points="" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                        <span id="compact-cache-tokens-saved" class="compact-cache-stat">0 prompt tokens reused</span>
-                                    </div>
-                                    <div class="compact-cache-disk-bar">
-                                        <div id="compact-cache-disk-fill" class="compact-cache-disk-fill"></div>
-                                        <span id="compact-cache-disk-label" class="compact-cache-disk-label">0 GB / 0 GB</span>
-                                    </div>
-                                </section>
-                            </div>
+                        <section id="overview-model" class="panel overview-model" aria-labelledby="overview-model-title">
+                            <h3 id="overview-model-title">Loaded model</h3>
+                            <dl id="overview-model-facts" class="overview-model-facts" hidden></dl>
+                            <p id="overview-model-empty" class="overview-model-empty">No model is loaded. The next request loads one.</p>
                         </section>
                     </div>
+                    <section id="neural-engine-panel" class="panel neural-engine-panel" aria-labelledby="neural-engine-panel-title" hidden>
+                        <div class="panel-heading-row">
+                            <h3 id="neural-engine-panel-title">Neural Engine</h3>
+                            <span class="neural-engine-scope">Work and time since launch</span>
+                        </div>
+                        <dl id="neural-engine-tiles" class="neural-engine-tiles" hidden>
+                            <div class="neural-engine-tile"><dt>Prompt speed</dt><dd id="neural-engine-speed" class="neural-engine-value">—</dd><dd id="neural-engine-speed-detail" class="neural-engine-detail"></dd></div>
+                            <div class="neural-engine-tile"><dt>Work done</dt><dd id="neural-engine-work" class="neural-engine-value">—</dd><dd id="neural-engine-work-detail" class="neural-engine-detail"></dd></div>
+                            <div class="neural-engine-tile"><dt>Time saved</dt><dd id="neural-engine-saved" class="neural-engine-value">—</dd><dd id="neural-engine-saved-detail" class="neural-engine-detail"></dd></div>
+                        </dl>
+                        <p id="neural-engine-note" class="neural-engine-note"></p>
+                    </section>
+                    <section class="overview-session" aria-labelledby="overview-session-title">
+                        <h3 id="overview-session-title" class="visually-hidden">Since launch</h3>
+                        <div class="overview-tile"><p class="overview-tile-label">Requests since launch</p><p id="overview-session-requests" class="overview-tile-value">0</p></div>
+                        <div class="overview-tile"><p class="overview-tile-label">Average speed</p><p id="overview-session-speed" class="overview-tile-value">—</p></div>
+                        <div class="overview-tile"><p class="overview-tile-label">Prompt reused from memory</p><p id="overview-session-memory-reuse" class="overview-tile-value">—</p><p id="overview-session-memory-reuse-hint" class="overview-tile-hint">No prompts yet</p></div>
+                        <div class="overview-tile"><p class="overview-tile-label">SSD prompt cache</p><p id="overview-session-ssd-cache" class="overview-tile-value">—</p><p id="overview-session-ssd-cache-hint" class="overview-tile-hint"></p></div>
+                    </section>
                 </section>
-
                 <section id="chat-view" class="observatory-view" data-observatory-view="chat" aria-labelledby="chat-title" hidden>
                     <div class="view-heading">
                         <div><p class="eyebrow">Local inference</p><h2 id="chat-title">Chat</h2></div>
@@ -361,7 +309,7 @@
     <script src="/configuration.js" defer></script>
     <script src="/neural-engine-panel.js" defer></script>
     <script src="/console.js" defer></script>
-    <script src="/overview-compact.js" defer></script>
+    <script src="/overview.js" defer></script>
     <!-- Chat opens in Thin Talk through the link console.js gives #open-thin-talk
          once the daemon reports its channel; the Observatory itself renders no
          model output, so it loads no render stack. -->

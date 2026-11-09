@@ -15,7 +15,8 @@ const DOWNLOAD_MODELS_JS: &str = include_str!("../../console/download-models.js"
 const DOWNLOAD_MODELS_RENDER_JS: &str = include_str!("../../console/download-models-render.js");
 const DOWNLOAD_MODELS_CARD_FOOTER_JS: &str =
     include_str!("../../console/download-models-card-footer.js");
-const OVERVIEW_COMPACT_JS: &str = include_str!("../../console/overview-compact.js");
+const OVERVIEW_JS: &str = include_str!("../../console/overview.js");
+const OVERVIEW_CSS: &str = include_str!("../../console/overview.css");
 const NEURAL_ENGINE_PANEL_JS: &str = include_str!("../../console/neural-engine-panel.js");
 const MEMORY_CONTROL_JS: &str = include_str!("../../console/memory-control.js");
 const CONNECT_JS: &str = include_str!("../../console/connect.js");
@@ -68,7 +69,8 @@ where
             "/download-models-card-footer.js",
             get(download_models_card_footer_script),
         )
-        .route("/overview-compact.js", get(overview_compact_script))
+        .route("/overview.js", get(overview_script))
+        .route("/overview.css", get(overview_stylesheet))
         .route("/neural-engine-panel.js", get(neural_engine_panel_script))
         .route("/memory-control.js", get(memory_control_script))
         .route("/connect.js", get(connect_script))
@@ -104,8 +106,13 @@ pub(crate) async fn download_models_card_footer_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_CARD_FOOTER_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
-pub(crate) async fn overview_compact_script() -> Response {
-    embedded_text_response(OVERVIEW_COMPACT_JS, JAVASCRIPT_CONTENT_TYPE)
+pub(crate) async fn overview_script() -> Response {
+    embedded_text_response(OVERVIEW_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+/// `GET /overview.css` — the Overview view's layout and colours.
+pub(crate) async fn overview_stylesheet() -> Response {
+    embedded_text_response(OVERVIEW_CSS, CSS_CONTENT_TYPE)
 }
 
 pub(crate) async fn neural_engine_panel_script() -> Response {

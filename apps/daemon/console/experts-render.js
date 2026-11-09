@@ -142,7 +142,7 @@ function unknownLibraryHeadline(modelId, headlineFacts) {
         + ".";
 }
 
-// Same ownership split as reconciledMlxMemorySegmentBytes in overview-compact.js.
+// Same ownership split as reconciledMlxMemorySegmentBytes in overview.js.
 // Both bars have to name the same bytes or the expert segment will disagree
 // with Overview.
 function reconciledExpertMemorySegments(mlxMemorySnapshot, mlxMemoryCeilingBytes) {

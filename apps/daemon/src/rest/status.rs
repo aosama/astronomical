@@ -1,4 +1,6 @@
-use crate::{ActiveRequestProgress, ApplicationBuildIdentity, application::ApplicationState};
+use crate::{
+    ActiveRequestProgress, ApplicationBuildIdentity, WorkerHandle, application::ApplicationState,
+};
 use axum::{
     Json,
     extract::State,
@@ -70,9 +72,11 @@ pub(crate) async fn status_check(State(application_state): State<ApplicationStat
         &application_state,
     );
     attach_serving_and_prompt_cache_facts(&mut status_json, &worker_health_snapshot);
-    if let Some(progress) = worker_health_snapshot.active_request_progress {
-        attach_active_request_progress(&mut status_json, progress);
-    }
+    attach_progress_or_idle_unload(
+        &mut status_json,
+        &worker_health_snapshot,
+        &application_state,
+    );
     Json(status_json).into_response()
 }
 
@@ -218,6 +222,36 @@ fn attach_serving_and_prompt_cache_facts(
         "misses": persistent_prompt_cache_summary.misses,
         "tokens_saved": persistent_prompt_cache_summary.tokens_saved,
         "hit_rate": persistent_prompt_cache_summary.hit_rate(),
+    });
+}
+
+/// Running work reports its progress; a loaded model with nothing running and
+/// no load in flight reports when it will unload instead.
+fn attach_progress_or_idle_unload(
+    status_json: &mut serde_json::Value,
+    worker_health_snapshot: &crate::WorkerHealthSnapshot,
+    application_state: &ApplicationState,
+) {
+    if let Some(progress) = worker_health_snapshot.active_request_progress.clone() {
+        attach_active_request_progress(status_json, progress);
+        return;
+    }
+    if worker_health_snapshot.ready_model_id.is_some()
+        && worker_health_snapshot.model_load_in_flight.is_none()
+        && let Some(worker_handle) = application_state.worker_control.as_ref()
+    {
+        attach_idle_model_unload(status_json, worker_handle);
+    }
+}
+
+/// Says when an idle loaded model unloads, so Overview can show it. Present
+/// only while a model is loaded and nothing runs; `remaining_seconds` is null
+/// when the span is 0, which keeps a model loaded.
+fn attach_idle_model_unload(status_json: &mut serde_json::Value, worker_handle: &WorkerHandle) {
+    let countdown = worker_handle.idle_model_unload_countdown();
+    status_json["idle_model_unload"] = serde_json::json!({
+        "after_seconds": countdown.after_seconds,
+        "remaining_seconds": countdown.remaining_seconds,
     });
 }
 
