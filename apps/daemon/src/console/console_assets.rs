@@ -15,6 +15,7 @@ const DOWNLOAD_MODELS_JS: &str = include_str!("../../console/download-models.js"
 const DOWNLOAD_MODELS_RENDER_JS: &str = include_str!("../../console/download-models-render.js");
 const DOWNLOAD_MODELS_CARD_FOOTER_JS: &str =
     include_str!("../../console/download-models-card-footer.js");
+const DOWNLOAD_MODELS_REMOVAL_JS: &str = include_str!("../../console/download-models-removal.js");
 const OVERVIEW_JS: &str = include_str!("../../console/overview.js");
 const OVERVIEW_CSS: &str = include_str!("../../console/overview.css");
 const NEURAL_ENGINE_PANEL_JS: &str = include_str!("../../console/neural-engine-panel.js");
@@ -69,6 +70,10 @@ where
             "/download-models-card-footer.js",
             get(download_models_card_footer_script),
         )
+        .route(
+            "/download-models-removal.js",
+            get(download_models_removal_script),
+        )
         .route("/overview.js", get(overview_script))
         .route("/overview.css", get(overview_stylesheet))
         .route("/neural-engine-panel.js", get(neural_engine_panel_script))
@@ -104,6 +109,10 @@ pub(crate) async fn download_models_render_script() -> Response {
 
 pub(crate) async fn download_models_card_footer_script() -> Response {
     embedded_text_response(DOWNLOAD_MODELS_CARD_FOOTER_JS, JAVASCRIPT_CONTENT_TYPE)
+}
+
+pub(crate) async fn download_models_removal_script() -> Response {
+    embedded_text_response(DOWNLOAD_MODELS_REMOVAL_JS, JAVASCRIPT_CONTENT_TYPE)
 }
 
 pub(crate) async fn overview_script() -> Response {

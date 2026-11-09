@@ -3,9 +3,11 @@
 //! Binding to loopback keeps other machines out, but a web page on this Mac can
 //! still reach the daemon: DNS rebinding makes a hostile domain resolve here, which
 //! the browser then treats as same-origin, and the CORS policy admits any
-//! `http://localhost` port. That matters for endpoints that read local paths or
-//! rewrite `config.json`, so they check both headers. Tools with no browser send
-//! no `Origin` and name a loopback `Host`, so they pass.
+//! `http://localhost` port. That matters for every endpoint that acts on this
+//! Mac (reading local paths, rewriting `config.json`, starting downloads,
+//! revealing folders in Finder, moving models to the Trash), so they check both
+//! headers. Tools with no browser send no `Origin` and name a loopback `Host`,
+//! so they pass.
 
 use axum::{
     Json,
@@ -64,13 +66,28 @@ fn header_text(headers: &HeaderMap, header_name: header::HeaderName) -> Option<O
     }
 }
 
+/// The Thin Talk canvas's page origin. It is a custom URL scheme that only the
+/// Mac app's own web view serves, and browsers set `Origin` themselves, so no
+/// web page can claim it; the download routes accept it because Astro reads
+/// and starts downloads from that canvas.
+pub(crate) const THIN_TALK_CANVAS_ORIGIN: &str = "thintalk-asset://shell";
+
 /// The refusal to answer with, or `None` when the request may proceed.
 pub(crate) fn refusal_for_foreign_request(headers: &HeaderMap) -> Option<Response> {
+    refusal_unless_from(headers, &[])
+}
+
+/// As `refusal_for_foreign_request`, but also admitting the named app origins,
+/// still only with a loopback `Host`, so a rebound domain stays refused.
+fn refusal_unless_from(headers: &HeaderMap, admitted_app_origins: &[&str]) -> Option<Response> {
     let is_allowed = match (
         header_text(headers, header::HOST),
         header_text(headers, header::ORIGIN),
     ) {
-        (Some(host), Some(origin)) => request_comes_from_this_instance(host, origin),
+        (Some(host), Some(origin)) => {
+            request_comes_from_this_instance(host, origin)
+                || is_admitted_app_request(host, origin, admitted_app_origins)
+        }
         _ => false,
     };
     if is_allowed {
@@ -86,6 +103,44 @@ pub(crate) fn refusal_for_foreign_request(headers: &HeaderMap) -> Option<Respons
         )
             .into_response(),
     )
+}
+
+fn is_admitted_app_request(
+    host: Option<&str>,
+    origin: Option<&str>,
+    admitted_app_origins: &[&str],
+) -> bool {
+    match (host, origin) {
+        (Some(host), Some(origin)) => {
+            names_loopback(host) && admitted_app_origins.contains(&origin)
+        }
+        _ => false,
+    }
+}
+
+/// The same refusal as a route layer, for routers whose every endpoint acts on
+/// this Mac (Finder reveals, moving models to the Trash), so a new handler on
+/// such a router cannot forget the check.
+pub(crate) async fn refuse_foreign_browser_requests(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    match refusal_for_foreign_request(request.headers()) {
+        Some(refusal) => refusal,
+        None => next.run(request).await,
+    }
+}
+
+/// The route layer for the download controls: this instance's own page and
+/// the Thin Talk canvas, whose Astro reads status and starts downloads.
+pub(crate) async fn refuse_foreign_browser_requests_except_thin_talk(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    match refusal_unless_from(request.headers(), &[THIN_TALK_CANVAS_ORIGIN]) {
+        Some(refusal) => refusal,
+        None => next.run(request).await,
+    }
 }
 
 #[cfg(test)]

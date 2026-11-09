@@ -426,11 +426,16 @@ function createDownloadModelsCatalogRow(catalogRow, allRows) {
     }
     const progress = createDownloadModelsProgress(catalogRow);
     if (progress.firstChild) row.appendChild(progress);
-    const detailText = downloadModelsProgressDetail(catalogRow);
+    // A download's progress outranks an older removal notice on the same card.
+    const progressDetail = downloadModelsProgressDetail(catalogRow);
+    const detailText = progressDetail || downloadModelsRemovalNoticeFor(catalogRow);
     if (detailText) {
         const detail = document.createElement("p");
         detail.className = "download-models-download-detail";
         detail.textContent = detailText;
+        // A removal outcome is announced; progress, which changes every few
+        // seconds, is not.
+        if (!progressDetail) detail.setAttribute("role", "status");
         row.appendChild(detail);
     }
 

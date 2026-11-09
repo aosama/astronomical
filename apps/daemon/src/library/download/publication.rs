@@ -18,6 +18,12 @@ use crate::{
 
 pub trait DownloadPublicationRefresh: Send + Sync {
     fn refresh(&self, published_directory: &Path) -> Result<(), Box<dyn Error + Send + Sync>>;
+
+    /// Re-runs discovery after a published model was removed from disk, so the
+    /// served model list and the worker's policies stop naming it. Required,
+    /// not defaulted: a wrapper that forgot to forward it would leave a removed
+    /// model requestable until the next restart.
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }
 
 pub struct DownloadPublication {
@@ -124,5 +130,11 @@ impl DownloadPublicationRefresh for MeasuredDiscoveryRefresh {
             Ok(refresh_outcome) => refresh_outcome,
             Err(source) => Err(Box::new(source) as Box<dyn Error + Send + Sync>),
         }
+    }
+
+    /// Forwarded unmeasured: the attribution record names a publication's
+    /// revision, which a removal does not have.
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        self.discovery_refresh.refresh_after_removal()
     }
 }

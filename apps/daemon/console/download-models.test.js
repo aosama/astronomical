@@ -207,6 +207,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             approximateSize: "1.40 GB",
             approximateSizeBytes: 1_500_000_000,
             readyOnThisMac: false,
+            removableFromDisk: false,
             destinationDirectory: null,
             downloadState: null,
             description: "A test model for exercising Download Models rendering.",
@@ -234,6 +235,7 @@ test("retains catalog order and formats sizes as decimal SI gigabytes", () => {
             approximateSize: "1.86 GB",
             approximateSizeBytes: 2_000_000_000,
             readyOnThisMac: false,
+            removableFromDisk: false,
             destinationDirectory: null,
             downloadState: null,
             description: "A test model for exercising Download Models rendering.",
@@ -266,6 +268,7 @@ test("presents progress and only the controls valid for each durable download st
         family: "qwen3_5",
         approximateSize: "4.00 GB",
         readyOnThisMac: false,
+        removableFromDisk: false,
         downloadState: "downloading"
     };
     vm.runInContext(
@@ -370,6 +373,7 @@ test("should not show another model's download state or controls on a row", () =
         family: "qwen3_5",
         approximateSize: "4.00 GB",
         readyOnThisMac: false,
+        removableFromDisk: false,
         downloadState: "failed"
     };
     const rowButtonLabels = () => JSON.parse(JSON.stringify(vm.runInContext(
@@ -572,6 +576,7 @@ test("does not offer the Thin Talk handoff for a ready image-generation-only mod
     scriptContext.catalogRow = {
         huggingfaceId: "astronomical-test/example-flux",
         readyOnThisMac: true,
+        removableFromDisk: false,
         requestableModelId: "example-flux",
         supportsImageGeneration: true
     };
@@ -599,6 +604,7 @@ test("should_not_offer_the_thin_talk_handoff_for_a_ready_embedding_model", () =>
     const actionLabels = primaryActionLabelsFor({
         huggingfaceId: "astronomical-test/example-embedder",
         readyOnThisMac: true,
+        removableFromDisk: false,
         requestableModelId: "example-embedder",
         supportsEmbeddings: true
     });
@@ -610,6 +616,7 @@ test("should_offer_the_thin_talk_handoff_for_a_ready_chat_model", () => {
     const actionLabels = primaryActionLabelsFor({
         huggingfaceId: "astronomical-test/example-chat",
         readyOnThisMac: true,
+        removableFromDisk: false,
         requestableModelId: "example-chat",
         supportsReasoning: true
     });
@@ -621,6 +628,7 @@ test("should_not_offer_the_thin_talk_handoff_for_a_chat_model_not_yet_on_this_ma
     const actionLabels = primaryActionLabelsFor({
         huggingfaceId: "astronomical-test/example-chat",
         readyOnThisMac: false,
+        removableFromDisk: false,
         requestableModelId: "example-chat",
         supportsReasoning: true
     });
@@ -644,6 +652,7 @@ function thinTalkHandoffsFromDownloadModels(applicationChannel) {
     scriptContext.catalogRow = {
         huggingfaceId: "astronomical-test/example-qwen",
         readyOnThisMac: true,
+        removableFromDisk: false,
         supportsImageGeneration: false
     };
 

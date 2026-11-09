@@ -46,8 +46,9 @@ pub use application::{
 pub use application_build_identity::ApplicationBuildIdentity;
 pub use library::application::{
     build_application_with_full_control_and_library_download,
-    build_application_with_library_download,
+    build_application_with_library_download, build_application_with_library_download_and_trash,
 };
+pub use library::model_folder_trash::{MacTrashCommand, ModelFolderTrash, ModelFolderTrashError};
 
 pub use config::config_reload::{
     ConfigReloadDecision, ConfigReloadDiff, ResolvedRuntimeConfig, ResolvedRuntimeConfigError,

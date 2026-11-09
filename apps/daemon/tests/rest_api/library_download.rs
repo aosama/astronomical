@@ -20,6 +20,7 @@ use tower::ServiceExt;
 use crate::support::ScriptedExecutor;
 
 mod ipc_download_start;
+mod removal;
 mod replacing_a_failed_download;
 mod restart;
 mod support;
@@ -426,6 +427,10 @@ impl DownloadPublicationRefresh for ValidatingDiscoveryRefresh {
         }
         Err(io::Error::other("published fixture should be structurally discoverable").into())
     }
+
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Ok(())
+    }
 }
 
 struct FailingDiscoveryRefresh;
@@ -435,6 +440,10 @@ impl DownloadPublicationRefresh for FailingDiscoveryRefresh {
         &self,
         _published_directory: &Path,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        Err(io::Error::other("intentional discovery refresh failure").into())
+    }
+
+    fn refresh_after_removal(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Err(io::Error::other("intentional discovery refresh failure").into())
     }
 }
@@ -610,4 +619,45 @@ async fn response_json(response: axum::response::Response) -> serde_json::Value 
         .await
         .expect("response body should be readable");
     serde_json::from_slice(&response_bytes).expect("response should contain JSON")
+}
+
+/// Every download control acts on this Mac, so a page from another site,
+/// including a rebound domain that looks same-origin, is refused, while the
+/// command line (no Origin) and this instance's own page still pass.
+#[tokio::test]
+async fn should_refuse_download_controls_from_another_sites_page() {
+    let test_directory = tempfile::tempdir().expect("temporary directory should be available");
+    let application = build_test_application(test_directory.path(), Arc::new(ScriptedHub::new()));
+    for control_path in [
+        "/v1/library/download",
+        "/v1/library/download/pause",
+        "/v1/library/download/resume",
+        "/v1/library/download/cancel",
+        "/v1/library/reveal",
+    ] {
+        let control_response = application
+            .clone()
+            .oneshot(
+                Request::post(control_path)
+                    .header("content-type", "application/json")
+                    .header("host", "127.0.0.1:6733")
+                    .header("origin", "http://rebound.example:6733")
+                    .body(Body::from(format!(
+                        "{{\"huggingface_id\":\"{REPOSITORY_ID}\"}}"
+                    )))
+                    .expect("the control request should be valid"),
+            )
+            .await
+            .expect("the control response should be available");
+        assert_eq!(
+            control_response.status(),
+            StatusCode::FORBIDDEN,
+            "{control_path} answered a foreign page"
+        );
+    }
+    assert_eq!(
+        start_download(&application).await,
+        StatusCode::ACCEPTED,
+        "a tool that sends no Origin still starts a download"
+    );
 }

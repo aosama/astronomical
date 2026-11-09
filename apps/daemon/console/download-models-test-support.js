@@ -12,6 +12,8 @@ const downloadModelsRenderScriptPath = path.join(__dirname, "download-models-ren
 const downloadModelsRenderScript = fs.readFileSync(downloadModelsRenderScriptPath, "utf8");
 const downloadModelsCardFooterScriptPath = path.join(__dirname, "download-models-card-footer.js");
 const downloadModelsCardFooterScript = fs.readFileSync(downloadModelsCardFooterScriptPath, "utf8");
+const downloadModelsRemovalScriptPath = path.join(__dirname, "download-models-removal.js");
+const downloadModelsRemovalScript = fs.readFileSync(downloadModelsRemovalScriptPath, "utf8");
 const observatoryShellPath = path.join(__dirname, "index.html");
 const observatoryShell = fs.readFileSync(observatoryShellPath, "utf8");
 const ASYNC_TEST_OPTIONS = { timeout: 5_000 };
@@ -26,6 +28,7 @@ function createDownloadModelsContext() {
     vm.runInContext(downloadModelsScript, scriptContext, { filename: downloadModelsScriptPath });
     vm.runInContext(downloadModelsRenderScript, scriptContext, { filename: downloadModelsRenderScriptPath });
     vm.runInContext(downloadModelsCardFooterScript, scriptContext, { filename: downloadModelsCardFooterScriptPath });
+    vm.runInContext(downloadModelsRemovalScript, scriptContext, { filename: downloadModelsRemovalScriptPath });
     return scriptContext;
 }
 

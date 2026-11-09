@@ -53,6 +53,14 @@ function createDownloadModelsPrimaryActions(catalogRow, isExpanded) {
     }
     for (const button of downloadModelsActionButtons(catalogRow)) {
         actions.appendChild(button);
+        if (button.className.includes("download-models-download-button")) {
+            focusDownloadModelsRemovalControlIfRequested(catalogRow, "download", button);
+        }
+    }
+    if (canRemoveDownloadModelsModelFromDisk(catalogRow)) {
+        for (const removalControl of createDownloadModelsRemovalControls(catalogRow)) {
+            actions.appendChild(removalControl);
+        }
     }
     const detailsButton = document.createElement("button");
     detailsButton.className = "button button-secondary download-models-details-toggle";
