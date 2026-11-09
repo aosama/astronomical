@@ -110,13 +110,6 @@ pub(crate) fn flux2_klein_4bit_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_4BIT_ROLE)
 }
 
-/// The dense model that streams its decoder layers from the SSD when its text
-/// weights do not fit under the MLX limit (issue #1985).
-#[allow(dead_code)]
-pub(crate) fn streamed_dense_model_id() -> &'static str {
-    model_id_for_role(STREAMED_DENSE_ROLE)
-}
-
 pub(crate) fn e2e_test_model_ids() -> [&'static str; 4] {
     [
         large_sparse_moe_streaming_model_id(),

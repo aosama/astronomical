@@ -1,6 +1,6 @@
 use std::fs;
 
-use astronomical_model_serving::Qwen3_5ArtifactValidator;
+use astronomical_model_serving::{Qwen3_5ArtifactValidator, TensorSemanticRole};
 
 /// Links or copies a regular file from source to target, falling back to copy
 /// when hard linking is not permitted (e.g. cross-volume or APFS restricted).
@@ -248,36 +248,54 @@ fn should_validate_the_large_sparse_moe_streaming_artifact() {
 
 #[test]
 #[ignore = "requires model_directories to discover the streamed dense Ornith build"]
-fn should_count_every_text_weight_of_a_text_only_dense_artifact_as_its_target_payload() {
+fn should_count_dense_text_weights_as_the_whole_text_only_payload() {
     let model_directory = crate::common::configured_streamed_dense_model_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the streamed dense artifact should validate");
 
-    // A text-only dense build binds every tensor it ships, so the startup
-    // placement compares the whole payload with the limit.
-    assert!(validated_artifact.target_weight_payload_bytes() > 0);
+    // Preconditions: a text-only build with no tower and no auxiliary
+    // tensors, so its text weights are its whole payload.
+    assert!(!validated_artifact.supports_image_input());
     assert_eq!(
-        validated_artifact.target_weight_payload_bytes(),
+        validated_artifact.payload_bytes_for_semantic_role(TensorSemanticRole::Auxiliary),
+        Some(0)
+    );
+    let text_weight_payload_bytes = validated_artifact
+        .text_weight_payload_bytes()
+        .expect("the text weight sizes should be readable");
+    assert!(text_weight_payload_bytes > 0);
+    assert_eq!(
+        text_weight_payload_bytes,
         validated_artifact.total_payload_bytes()
     );
 }
 
 #[test]
 #[ignore = "requires model_directories to discover the dense vision Ornith build"]
-fn should_leave_the_vision_tower_out_of_the_target_payload() {
+fn should_split_dense_text_weights_from_vision_and_auxiliary_bytes() {
     let model_directory = crate::common::configured_dense_vision_model_directory();
 
     let validated_artifact = Qwen3_5ArtifactValidator::new()
         .validate(&model_directory, 20_480)
         .expect("the dense vision artifact should validate");
 
-    // The tower loads only for image requests, so the startup placement must
-    // not count it against the limit.
+    // The tower holds memory only while an image request encodes, so the
+    // startup placement compares the text weights alone with the limit.
     assert!(validated_artifact.supports_image_input());
-    assert!(
-        validated_artifact.target_weight_payload_bytes() < validated_artifact.total_payload_bytes(),
-        "the vision tower must not count toward the text weights"
+    let text_weight_payload_bytes = validated_artifact
+        .text_weight_payload_bytes()
+        .expect("the text weight sizes should be readable");
+    let vision_payload_bytes = validated_artifact
+        .payload_bytes_for_semantic_role(TensorSemanticRole::Vision)
+        .expect("the vision tower sizes should be readable");
+    let auxiliary_payload_bytes = validated_artifact
+        .payload_bytes_for_semantic_role(TensorSemanticRole::Auxiliary)
+        .expect("the auxiliary sizes should be readable");
+    assert!(vision_payload_bytes > 0);
+    assert_eq!(
+        text_weight_payload_bytes + vision_payload_bytes + auxiliary_payload_bytes,
+        validated_artifact.total_payload_bytes()
     );
 }

@@ -36,6 +36,8 @@ pub enum Qwen3_5ModelStartupError {
         #[source]
         source: ExpertMemoryAdmissionError,
     },
+    #[error("failed to total the Qwen3.5 text weights at {model_directory:?}")]
+    TextWeightPayloadUnreadable { model_directory: PathBuf },
     #[error("failed to initialize Qwen3.5 processor at {model_directory:?}")]
     ProcessorInitialization {
         model_directory: PathBuf,
@@ -66,7 +68,7 @@ impl Qwen3_5ModelStartupError {
     pub fn public_model_load_failure_reason(&self) -> String {
         let unbounded_public_model_load_failure_reason = match self {
             Self::ArtifactValidation { source, .. } => source.public_failure_reason(),
-            Self::ArtifactRamGeometry { .. } => {
+            Self::ArtifactRamGeometry { .. } | Self::TextWeightPayloadUnreadable { .. } => {
                 "Qwen3.5 artifact RAM geometry could not be derived".to_owned()
             }
             Self::CompleteResidencyDecision { .. } => {

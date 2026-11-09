@@ -575,7 +575,7 @@ fn select_qwen3_5_engine_from_artifact(
         ) {
             Ok(geometry) => geometry,
             Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => {
-                let engine_placement = super::dense_engine_placement::place_dense_artifact(
+                let engine_placement = super::qwen3_5_dense_engine_placement::place_dense_artifact(
                     validated_artifact,
                     model_directory_path,
                     active_memory_limit_bytes,

@@ -73,6 +73,13 @@ test-integration-and-rest = "test --no-fail-fast -p astronomical-config -p astro
 # `astronomical vision add TEXT_FOLDER --tower TOWER_MODEL --output DIR`.
 test-vision-tower-hub = "test -p astronomical-vision-tower --test integration_tests -- --ignored"
 
+# Dense placement contracts on installed models (issue #1985): the text
+# weights startup placement compares with the MLX limit, on the streamed_dense
+# build (text only) and the dense_vision build (tower and auxiliary tensors
+# left out). They read headers only, so they take under a second, but need
+# both roles discoverable from the Development model_directories.
+test-dense-text-weights = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter dense_text_weights"
+
 # Quantization lanes (the OptiQ port in crates/quantization).
 
 # The GPU encoder against the pure reference encoder and the shard-wise

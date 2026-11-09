@@ -13,6 +13,10 @@ use crate::safetensors::{
 
 const MAXIMUM_SAFETENSORS_HEADER_BYTES: u64 = 16 * 1024 * 1024;
 
+#[cfg(test)]
+#[path = "validated_safetensors_source_tests.rs"]
+mod tests;
+
 /// Already-open validated SafeTensors descriptor with one retained bounded header.
 #[derive(Debug)]
 pub(crate) struct ValidatedSafetensorsSource {

@@ -1,7 +1,8 @@
 //! Streaming-engine promotion gate for a raised MLX ceiling.
 //!
 //! A streaming worker is spawned only when its startup ceiling could not
-//! admit complete expert residency. When the user later raises the ceiling
+//! admit complete residency: every expert of a sparse model, or every text
+//! weight of a dense model. When the user later raises the ceiling
 //! far enough, the honest transition is a replacement worker: the restart
 //! re-runs startup engine selection, which loads the complete-owner
 //! resident engine. This module owns the byte arithmetic that predicts that
@@ -28,6 +29,42 @@ pub struct StreamingStartupResidencyFacts {
 }
 
 impl StreamingStartupResidencyFacts {
+    /// Startup facts for a dense model: the text weights it binds are its
+    /// whole core and it has no experts. Dense selection compares those
+    /// weights with the limit macOS granted or the user set and nothing
+    /// else, so it carries no headroom of its own.
+    #[must_use]
+    pub const fn for_dense_text_weights(
+        dense_text_weight_payload_bytes: u64,
+        sequence_state_bytes_per_token: u64,
+    ) -> Self {
+        Self {
+            model_core_payload_bytes: dense_text_weight_payload_bytes,
+            complete_expert_payload_bytes: 0,
+            startup_complete_residency_headroom_bytes: 0,
+            sequence_state_bytes_per_token,
+        }
+    }
+
+    /// The complete-residency decision startup selection makes under
+    /// `active_memory_ceiling_bytes`. Startup selection and the raise check
+    /// both call it, so a promotion demand cannot disagree with the engine a
+    /// replacement worker would choose.
+    #[must_use]
+    pub fn startup_complete_residency_decision(
+        &self,
+        active_memory_ceiling_bytes: u64,
+    ) -> CompleteResidencyDecision {
+        CompleteResidencyRequirements {
+            current_active_memory_bytes: self.model_core_payload_bytes,
+            retained_paged_expert_payload_bytes: 0,
+            complete_expert_payload_bytes: self.complete_expert_payload_bytes,
+            required_headroom_bytes: self.startup_complete_residency_headroom_bytes,
+            active_memory_ceiling_bytes,
+        }
+        .decide()
+    }
+
     /// Decides whether a replacement worker's startup engine selection would
     /// load the complete-owner resident engine under the raised ceiling.
     ///
@@ -38,14 +75,7 @@ impl StreamingStartupResidencyFacts {
     #[must_use]
     pub fn raised_ceiling_selects_complete_residency(&self, raised_ceiling_bytes: u64) -> bool {
         matches!(
-            CompleteResidencyRequirements {
-                current_active_memory_bytes: self.model_core_payload_bytes,
-                retained_paged_expert_payload_bytes: 0,
-                complete_expert_payload_bytes: self.complete_expert_payload_bytes,
-                required_headroom_bytes: self.startup_complete_residency_headroom_bytes,
-                active_memory_ceiling_bytes: raised_ceiling_bytes,
-            }
-            .decide(),
+            self.startup_complete_residency_decision(raised_ceiling_bytes),
             CompleteResidencyDecision::Admit { .. }
         )
     }

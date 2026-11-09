@@ -45,13 +45,12 @@ impl Qwen3_5EngineState {
             // engine in a replacement worker. Derived from the same artifact
             // and directory the selection itself reads, so the two answers
             // cannot drift.
-            if let Some(startup_residency_facts) = capture_streaming_startup_residency_facts(
+            self.startup_residency_facts = capture_streaming_startup_residency_facts(
                 self,
                 &validated_artifact,
                 &mut model_loading_performance_attribution,
-            )? {
-                self.startup_residency_facts = Some(startup_residency_facts);
-            }
+            )?
+            .or(self.startup_residency_facts);
             let runtime = initialize_mlx_runtime_with_cleanup(
                 self.memory_limits,
                 &mut model_loading_performance_attribution,
@@ -65,6 +64,8 @@ impl Qwen3_5EngineState {
                 self.decode_expert_cache_policy,
                 &mut model_loading_performance_attribution,
             )?;
+            self.startup_residency_facts =
+                with_loaded_sequence_state_rate(self.startup_residency_facts, &model);
             let (resolved_model_id, resolved_model_revision) =
                 resolve_validated_model_identity(&model_id, &model_revision)?;
             let persistent_visual_embedding_model_contract =
@@ -176,8 +177,9 @@ impl Qwen3_5EngineState {
 }
 
 /// Captures the startup residency facts from the validated artifact under
-/// attribution. A zero complete-expert payload leaves the previous facts in
-/// place: an artifact without experts has no residency story to tell.
+/// attribution: a sparse model's expert geometry, or a dense model's text
+/// weights, which a live raise compares the same way startup placement did.
+/// A sparse artifact without expert bytes leaves the previous facts in place.
 fn capture_streaming_startup_residency_facts(
     engine_state: &Qwen3_5EngineState,
     validated_artifact: &ValidatedQwen3_5Artifact,
@@ -192,11 +194,32 @@ fn capture_streaming_startup_residency_facts(
             )
         },
     );
-    let Some((startup_geometry, startup_complete_residency_headroom_bytes)) =
-        expert_startup_geometry(startup_geometry_result)?
-    else {
-        return Ok(None);
-    };
+    startup_residency_facts_from_geometry(startup_geometry_result, validated_artifact)
+}
+
+/// Builds startup facts from the artifact geometry: a sparse model's expert
+/// geometry, or a dense model's text weights when the geometry answers that
+/// the model has no experts. A sparse artifact without expert bytes records
+/// none.
+fn startup_residency_facts_from_geometry(
+    startup_geometry_result: Result<
+        (crate::MlxRamBudgetModelGeometry, u64),
+        crate::Qwen3_5RamBudgetGeometryError,
+    >,
+    validated_artifact: &ValidatedQwen3_5Artifact,
+) -> Result<Option<StreamingStartupResidencyFacts>, InferenceEngineError> {
+    let (startup_geometry, startup_complete_residency_headroom_bytes) =
+        match startup_geometry_result {
+            Ok(startup_geometry) => startup_geometry,
+            Err(crate::Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => {
+                return dense_startup_residency_facts(validated_artifact).map(Some);
+            }
+            Err(geometry_error) => {
+                return Err(fatal_engine_error(format!(
+                    "startup residency selection facts are unreadable for this artifact: {geometry_error}"
+                )));
+            }
+        };
     if startup_geometry.complete_expert_payload_bytes == 0 {
         return Ok(None);
     }
@@ -208,23 +231,36 @@ fn capture_streaming_startup_residency_facts(
     }))
 }
 
-/// The expert geometry startup facts are built from, or `None` for a dense
-/// model. A dense model has no expert residency to promote back to, so it
-/// records no startup facts; before dense models could stream, this engine
-/// never loaded one and the dense answer was reported as unreadable.
-fn expert_startup_geometry(
-    startup_geometry_result: Result<
-        (crate::MlxRamBudgetModelGeometry, u64),
-        crate::Qwen3_5RamBudgetGeometryError,
-    >,
-) -> Result<Option<(crate::MlxRamBudgetModelGeometry, u64)>, InferenceEngineError> {
-    match startup_geometry_result {
-        Ok(startup_geometry) => Ok(Some(startup_geometry)),
-        Err(crate::Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => Ok(None),
-        Err(geometry_error) => Err(fatal_engine_error(format!(
-            "startup residency selection facts are unreadable for this artifact: {geometry_error}"
-        ))),
+/// A dense model's startup facts. Its decoder-state rate is read from the
+/// loaded model afterwards (`with_loaded_sequence_state_rate`), because
+/// the artifact alone does not know the decoder cache layout.
+fn dense_startup_residency_facts(
+    validated_artifact: &ValidatedQwen3_5Artifact,
+) -> Result<StreamingStartupResidencyFacts, InferenceEngineError> {
+    let dense_text_weight_payload_bytes = validated_artifact
+        .text_weight_payload_bytes()
+        .ok_or_else(|| fatal_engine_error("the dense model's text weight sizes are unreadable"))?;
+    Ok(StreamingStartupResidencyFacts::for_dense_text_weights(
+        dense_text_weight_payload_bytes,
+        0,
+    ))
+}
+
+/// Fills a dense model's decoder-state rate from the loaded model's decoder
+/// cache layout; sparse facts already carry theirs from the artifact.
+fn with_loaded_sequence_state_rate(
+    startup_residency_facts: Option<StreamingStartupResidencyFacts>,
+    model: &Qwen3_5Model,
+) -> Option<StreamingStartupResidencyFacts> {
+    let mut startup_residency_facts = startup_residency_facts?;
+    if startup_residency_facts.complete_expert_payload_bytes == 0 {
+        startup_residency_facts.sequence_state_bytes_per_token = model
+            .base
+            .mlx_ram_budget()
+            .model_geometry()
+            .sequence_state_bytes_per_token;
     }
+    Some(startup_residency_facts)
 }
 
 /// Initializes the MLX runtime under attribution and immediately clears the

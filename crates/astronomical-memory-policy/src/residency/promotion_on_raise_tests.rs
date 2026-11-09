@@ -72,3 +72,48 @@ fn should_reject_a_saturating_request_context_without_overflowing() {
         !LARGE_SPARSE_MOE_FACTS.complete_residency_admits_request_context(u64::MAX, usize::MAX)
     );
 }
+
+const DENSE_TEXT_WEIGHT_PAYLOAD_BYTES: u64 = 7_276_225_536;
+
+#[test]
+fn should_promote_a_streaming_dense_model_once_the_raise_fits_its_text_weights() {
+    let dense_startup_facts =
+        StreamingStartupResidencyFacts::for_dense_text_weights(DENSE_TEXT_WEIGHT_PAYLOAD_BYTES, 0);
+
+    assert!(dense_startup_facts.raised_ceiling_selects_complete_residency(36_500_000_000));
+    assert!(
+        dense_startup_facts
+            .raised_ceiling_selects_complete_residency(DENSE_TEXT_WEIGHT_PAYLOAD_BYTES),
+        "a raise exactly to the text weights selects the resident engine at startup too"
+    );
+}
+
+#[test]
+fn should_keep_a_dense_model_streaming_when_the_raise_is_one_byte_short() {
+    let dense_startup_facts =
+        StreamingStartupResidencyFacts::for_dense_text_weights(DENSE_TEXT_WEIGHT_PAYLOAD_BYTES, 0);
+
+    assert!(
+        !dense_startup_facts
+            .raised_ceiling_selects_complete_residency(DENSE_TEXT_WEIGHT_PAYLOAD_BYTES - 1)
+    );
+}
+
+#[test]
+fn should_give_dense_facts_no_experts_and_no_headroom() {
+    let dense_startup_facts = StreamingStartupResidencyFacts::for_dense_text_weights(
+        DENSE_TEXT_WEIGHT_PAYLOAD_BYTES,
+        32_768,
+    );
+
+    assert_eq!(
+        dense_startup_facts.model_core_payload_bytes,
+        DENSE_TEXT_WEIGHT_PAYLOAD_BYTES
+    );
+    assert_eq!(dense_startup_facts.complete_expert_payload_bytes, 0);
+    assert_eq!(
+        dense_startup_facts.startup_complete_residency_headroom_bytes,
+        0
+    );
+    assert_eq!(dense_startup_facts.sequence_state_bytes_per_token, 32_768);
+}

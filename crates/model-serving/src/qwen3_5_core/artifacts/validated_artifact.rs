@@ -80,31 +80,38 @@ impl ValidatedQwen3_5Artifact {
         self.total_payload_bytes
     }
     /// Bytes of every tensor the text model binds: what loading the whole
-    /// text model places in memory. The vision tower is left out because it
-    /// loads only for image requests, and auxiliary tensors because the
-    /// runtime never binds them.
+    /// text model places in memory, and what startup placement compares with
+    /// the limit.
     ///
-    /// Reads the validated headers, so it must be asked before the engine
-    /// takes the SafeTensors sources; a source already taken counts nothing.
+    /// The vision tower is left out because it is bound lazily and holds
+    /// memory only while an image request encodes, and auxiliary tensors
+    /// because the runtime never binds them. Reads the validated headers, so
+    /// it answers `None`, never an undercount, when the engine has already
+    /// taken a source or a header lacks a declared tensor.
     #[must_use]
-    pub fn target_weight_payload_bytes(&self) -> u64 {
-        let mut target_weight_payload_bytes = 0_u64;
+    pub fn text_weight_payload_bytes(&self) -> Option<u64> {
+        self.payload_bytes_for_semantic_role(TensorSemanticRole::Target)
+    }
+
+    /// Bytes of every validated tensor with `semantic_role`, or `None` when a
+    /// source was already taken or a header lacks a declared tensor.
+    #[must_use]
+    pub fn payload_bytes_for_semantic_role(
+        &self,
+        semantic_role: TensorSemanticRole,
+    ) -> Option<u64> {
+        let mut role_payload_bytes = 0_u64;
         for tensor_location in self.tensor_inventory.locations() {
-            if tensor_location.semantic_role() != TensorSemanticRole::Target {
+            if tensor_location.semantic_role() != semantic_role {
                 continue;
             }
-            let Some(safetensors_source) =
-                self.safetensors_sources.get(&tensor_location.source_id())
-            else {
-                continue;
-            };
-            let tensor_payload_bytes = safetensors_source
-                .stored_tensor_payload_bytes(tensor_location.stored_name())
-                .unwrap_or(0);
-            target_weight_payload_bytes =
-                target_weight_payload_bytes.saturating_add(tensor_payload_bytes);
+            let tensor_payload_bytes = self
+                .safetensors_sources
+                .get(&tensor_location.source_id())?
+                .stored_tensor_payload_bytes(tensor_location.stored_name())?;
+            role_payload_bytes = role_payload_bytes.saturating_add(tensor_payload_bytes);
         }
-        target_weight_payload_bytes
+        Some(role_payload_bytes)
     }
     #[must_use]
     pub fn tokenizer_bytes(&self) -> Option<&[u8]> {
