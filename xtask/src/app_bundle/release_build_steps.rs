@@ -18,14 +18,23 @@ use super::tool_command::run_tool;
 /// `cargo build` arguments for the three shipped executables. The App Store
 /// channel adds the daemon feature that derives state from Application
 /// Support; no other channel may carry it.
+///
+/// The disposable target directory travels as `--target-dir`, never as the
+/// `CARGO_TARGET_DIR` variable: sccache folds every `CARGO_*` variable into
+/// each object's key, and the lane's directory name is new on every run, so
+/// the variable made every release object a cache miss. The flag's path only
+/// reaches rustc as output locations, which sccache leaves out of the key.
 pub(crate) fn release_cargo_arguments(
     channel_profile: &ChannelProfile,
     host_target_triple: &str,
+    cargo_target_directory: &Path,
 ) -> Vec<String> {
     let mut cargo_arguments: Vec<String> = Vec::new();
     for argument_word in ["build", "--release", "--target", host_target_triple] {
         cargo_arguments.push(argument_word.to_owned());
     }
+    cargo_arguments.push("--target-dir".to_owned());
+    cargo_arguments.push(cargo_target_directory.display().to_string());
     for (package_name, binary_name) in [
         (
             "astronomical-inference-worker",
@@ -71,8 +80,11 @@ impl ReleaseBuildContext<'_> {
             .args(release_cargo_arguments(
                 self.channel_profile,
                 self.host_target_triple,
+                self.cargo_target_directory,
             ))
-            .env("CARGO_TARGET_DIR", self.cargo_target_directory)
+            // The lane exports the same directory as CARGO_TARGET_DIR; see
+            // release_cargo_arguments for why it must not reach the build.
+            .env_remove("CARGO_TARGET_DIR")
             .env("CARGO_BUILD_JOBS", &self.logical_cpu_count);
         for (identity_variable, identity_value) in self.build_identity.cargo_environment() {
             cargo_command.env(identity_variable, identity_value);

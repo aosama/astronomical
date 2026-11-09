@@ -184,7 +184,8 @@ jobs:
         # Default branch only, as ci.yml's sccache: a pull request's entry
         # would never be superseded and would only spend the cache budget.
         # The weekly run keeps it current for the run before a release.
-        if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
+        # TEMPORARY: pull request runs save too, for one measurement cycle.
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/astronomical-cache
         with:
           operation: save
