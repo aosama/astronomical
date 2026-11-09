@@ -209,10 +209,17 @@ async fn should_resume_a_paused_download_through_download_start() {
 /// bytes in `test_directory` for the next daemon to find.
 async fn interrupt_a_running_download(test_directory: &Path) {
     let catalog = test_catalog();
+    // A progressive hub stages each file's first byte and then holds the rest
+    // for one second, so the pause lands while bytes are staged and the job is
+    // still running. A delayed hub delivered every file whole at the same
+    // moment, so on a busy CI runner the job could publish between the
+    // staged-bytes check and the pause, which then found no job (issue #1973).
+    // One second leaves the staged-bytes poll and the pause a wide margin while
+    // keeping the journey well inside its ten-second budget.
     let coordinator = build_test_coordinator(
         test_directory,
         Arc::clone(&catalog),
-        Arc::new(ScriptedHub::delayed(Duration::from_millis(250))),
+        Arc::new(ScriptedHub::progressive(Duration::from_secs(1))),
     );
     let service = start_ipc_service(test_directory, catalog, Arc::clone(&coordinator)).await;
     assert_download_started(&ask(&service, download_start()).await, "start");

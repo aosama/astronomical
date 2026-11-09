@@ -165,6 +165,37 @@ fn ok_bytes(body: &'static [u8]) -> HubHttpResponse {
 }
 
 impl ScriptedHub {
+    /// Answers a ranged request as the real Hub does: `206` with the remaining bytes and a
+    /// `Content-Range`. A restart journey resumes files that already staged their first byte,
+    /// and a full `200` reply to that ranged request is rightly rejected by the daemon.
+    fn scripted_payload_response(
+        &self,
+        payload: &'static [u8],
+        resume_offset_bytes: u64,
+    ) -> HubPayloadResponse {
+        let resume_offset = usize::try_from(resume_offset_bytes).unwrap_or(usize::MAX);
+        if resume_offset == 0 || resume_offset >= payload.len() {
+            return HubPayloadResponse::new(
+                200,
+                None,
+                Some(payload.len() as u64),
+                self.scripted_payload_stream(payload),
+            );
+        }
+        let remaining_payload = &payload[resume_offset..];
+        let content_range = format!(
+            "bytes {resume_offset}-{last_byte_index}/{total_bytes}",
+            last_byte_index = payload.len() - 1,
+            total_bytes = payload.len()
+        );
+        HubPayloadResponse::new(
+            206,
+            Some(content_range),
+            Some(remaining_payload.len() as u64),
+            self.scripted_payload_stream(remaining_payload),
+        )
+    }
+
     /// The payload as one chunk, or as two separated by the payload delay so a journey can
     /// observe progress mid-file.
     fn scripted_payload_stream(&self, payload: &'static [u8]) -> HubPayloadByteStream {
@@ -191,13 +222,7 @@ impl HubPayloadTransport for ScriptedHub {
                 return Err(HubTransportError::new("scripted connection reset"));
             }
             let payload = payload_for_request(&request, self.corrupt_model_config)?;
-            let payload_stream = self.scripted_payload_stream(payload);
-            Ok(HubPayloadResponse::new(
-                200,
-                None,
-                Some(payload.len() as u64),
-                payload_stream,
-            ))
+            Ok(self.scripted_payload_response(payload, request.resume_offset_bytes()))
         })
     }
 }
