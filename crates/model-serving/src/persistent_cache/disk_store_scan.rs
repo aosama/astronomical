@@ -124,29 +124,7 @@ pub(crate) fn scan_current_format_block_directories(
     // Phase two below validates cross-directory ancestry before indexing any of
     // them, preventing lookup from observing a partially accepted graph.
     let mut block_candidate_by_hash = HashMap::new();
-    let directory_entries = std::fs::read_dir(blocks_directory).map_err(|source| {
-        PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
-            persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
-            source,
-        }
-    })?;
-    for directory_entry_result in directory_entries {
-        let directory_entry = directory_entry_result.map_err(|source| {
-            PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
-                persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
-                source,
-            }
-        })?;
-        let block_directory_path = directory_entry.path();
-        let entry_file_type = directory_entry.file_type().map_err(|source| {
-            PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
-                block_file_path: block_directory_path.clone(),
-                source,
-            }
-        })?;
-        if !entry_file_type.is_dir() {
-            continue;
-        }
+    for block_directory_path in list_block_directories(blocks_directory)? {
         match classify_block_directory(
             &block_directory_path,
             persistent_prompt_cache_model_contract,
@@ -170,6 +148,36 @@ pub(crate) fn scan_current_format_block_directories(
         persistent_prompt_cache_model_contract,
         startup_cleanup_evidence,
     )
+}
+
+/// The directories directly inside `blocks_directory`; stray files are left
+/// alone. The listing completes before any directory is discarded, because
+/// POSIX leaves `readdir` unspecified for entries removed while it iterates.
+fn list_block_directories(
+    blocks_directory: &Path,
+) -> Result<Vec<PathBuf>, PersistentPromptCacheDiskStoreError> {
+    let read_directory_error =
+        |source| PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
+            persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
+            source,
+        };
+    let mut block_directory_paths = Vec::new();
+    for directory_entry_result in
+        std::fs::read_dir(blocks_directory).map_err(read_directory_error)?
+    {
+        let directory_entry = directory_entry_result.map_err(read_directory_error)?;
+        let entry_path = directory_entry.path();
+        let entry_file_type = directory_entry.file_type().map_err(|source| {
+            PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
+                block_file_path: entry_path.clone(),
+                source,
+            }
+        })?;
+        if entry_file_type.is_dir() {
+            block_directory_paths.push(entry_path);
+        }
+    }
+    Ok(block_directory_paths)
 }
 
 /// What phase one decides about one block directory on its own.

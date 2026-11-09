@@ -49,25 +49,8 @@ pub(super) fn run_command(
     let mut child = spawn_owned_process_group(command, stage)?;
     let process_group_id = i32::try_from(child.id())
         .map_err(|_| "the child process identifier exceeds the supported range".to_owned())?;
-    let (stream_sender, stream_receiver) = mpsc::channel();
-    let output_readers = [
-        start_reader(
-            child.stdout.take().expect("piped stdout"),
-            true,
-            stream_sender.clone(),
-        ),
-        start_reader(
-            child.stderr.take().expect("piped stderr"),
-            false,
-            stream_sender,
-        ),
-    ];
-    let mut captured_output = CapturedOutput {
-        stream_receiver,
-        command_log,
-        captured_stdout: String::new(),
-        output_style,
-    };
+    let (output_readers, mut captured_output) =
+        start_output_capture(&mut child, command_log, output_style);
     let mut supervision_clock = SupervisionClock::start(Instant::now(), budget);
     eprintln!(
         "[test-run] stage={stage} status=start progress_percent=0 eta_seconds=unknown budget_seconds={}",
@@ -81,6 +64,54 @@ pub(super) fn run_command(
         &mut captured_output,
     );
     stop_owned_process_group(process_group_id, &mut child)?;
+    let captured_stdout = finish_output_capture(output_readers, captured_output, stage)?;
+    let exit_code = command_outcome?;
+    eprintln!(
+        "[test-run] stage={stage} status=finished progress_percent=100 elapsed_seconds={} eta_seconds=0 exit_code={exit_code}",
+        supervision_clock.started_at.elapsed().as_secs()
+    );
+    Ok(CommandOutput {
+        exit_code,
+        stdout: captured_stdout,
+    })
+}
+
+/// One reader thread per pipe, both feeding one channel, so stdout and
+/// stderr lines reach the log in the order they were read.
+fn start_output_capture(
+    child: &mut Child,
+    command_log: File,
+    output_style: OutputStyle,
+) -> ([thread::JoinHandle<()>; 2], CapturedOutput) {
+    let (stream_sender, stream_receiver) = mpsc::channel();
+    let output_readers = [
+        start_reader(
+            child.stdout.take().expect("piped stdout"),
+            true,
+            stream_sender.clone(),
+        ),
+        start_reader(
+            child.stderr.take().expect("piped stderr"),
+            false,
+            stream_sender,
+        ),
+    ];
+    let captured_output = CapturedOutput {
+        stream_receiver,
+        command_log,
+        captured_stdout: String::new(),
+        output_style,
+    };
+    (output_readers, captured_output)
+}
+
+/// Waits for both readers to reach end of file, then drains what they sent
+/// after the last poll and flushes the log, answering the captured stdout.
+fn finish_output_capture(
+    output_readers: [thread::JoinHandle<()>; 2],
+    mut captured_output: CapturedOutput,
+    stage: &str,
+) -> Result<String, String> {
     for output_reader in output_readers {
         output_reader
             .join()
@@ -91,15 +122,7 @@ pub(super) fn run_command(
         .command_log
         .flush()
         .map_err(|error| error.to_string())?;
-    let exit_code = command_outcome?;
-    eprintln!(
-        "[test-run] stage={stage} status=finished progress_percent=100 elapsed_seconds={} eta_seconds=0 exit_code={exit_code}",
-        supervision_clock.started_at.elapsed().as_secs()
-    );
-    Ok(CommandOutput {
-        exit_code,
-        stdout: captured_output.captured_stdout,
-    })
+    Ok(captured_output.captured_stdout)
 }
 
 fn create_command_log(log_path: &Path, command: &Command) -> Result<File, String> {
