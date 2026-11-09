@@ -160,7 +160,9 @@ fn measure_one_streamed_layer(
         .find(|layer_index| qwen3_5_config.decoder_layer_is_full_attention(*layer_index))
         .expect("the model should have a full-attention layer");
     for layer_index in [
-        first_full_attention_layer_index - 1,
+        first_full_attention_layer_index
+            .checked_sub(1)
+            .expect("a linear-attention layer should precede the first full-attention layer"),
         first_full_attention_layer_index,
     ] {
         for token_count in [PREFILL_SPAN_TOKEN_COUNT, 1] {

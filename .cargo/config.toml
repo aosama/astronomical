@@ -103,9 +103,9 @@ test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomi
 # Dense streaming speed ladder (issue #1985), on an optimized build with the
 # weight files kept out of the macOS file cache: the raw layer read rate, one
 # streamed layer, then 10,000 Shakespeare tokens in and 500 out at 0, 8, 16
-# and 24 kept layers. Reads cold from the SSD for many minutes and prints
-# progress with an ETA every five seconds; about 25 minutes, hence the
-# one-hour case budget.
+# and 24 kept layers. Reads cold from the SSD for about 25 minutes, hence the
+# one-hour case budget; decode prints progress with an ETA every five
+# seconds, and each prefill, about eight seconds, prints when it ends.
 measure-dense-streaming-speed = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 3600 --filter should_measure_dense_streaming_speed_from_the_layer_read_up"
 
 # Quantization lanes (the OptiQ port in crates/quantization).

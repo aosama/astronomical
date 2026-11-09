@@ -45,6 +45,8 @@ impl Qwen3_5EngineState {
             prefill_end,
             layer_major_span_plan,
         )?;
+        // Counted before admission, so a declined layer-major group counts one
+        // attempt; its chunks then count again as they run.
         active_request
             .performance_attribution
             .record_counter(PerformanceCounter::PrefillChunkCount, 1);

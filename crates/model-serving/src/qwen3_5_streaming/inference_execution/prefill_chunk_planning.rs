@@ -104,36 +104,8 @@ impl Qwen3_5EngineState {
             .as_ref()
             .ok_or_else(|| super::fatal_engine_error("Qwen3.5 engine lost its loaded model"))?;
         let prefill_token_count = prefill_end - prefill_start;
-        let capture_is_eligible = self.persistent_prompt_cache.is_some()
-            && active_request.can_use_persistent_prompt_cache;
-
-        // Cache-disabled and request-ineligible paths stop here: they do not
-        // plan checkpoint boundaries, derive a synthetic block length, or
-        // reserve checkpoint/publication memory. Cache-enabled execution uses
-        // the one contract owned by the open store.
         let (all_completed_prefill_chunk_tokens, persistent_prompt_cache_block_token_count) =
-            if capture_is_eligible {
-                let persistent_prompt_cache_block_token_count = self
-                    .persistent_prompt_cache
-                    .as_ref()
-                    .ok_or_else(|| {
-                        super::fatal_engine_error(
-                            "eligible prompt-cache capture has no persistent cache owner",
-                        )
-                    })?
-                    .model_contract_ref()
-                    .block_token_count();
-                (
-                    persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
-                        prefill_start,
-                        prefill_end,
-                        persistent_prompt_cache_block_token_count,
-                    ),
-                    Some(persistent_prompt_cache_block_token_count),
-                )
-            } else {
-                (Vec::new(), None)
-            };
+            self.planned_prompt_cache_boundaries(active_request, prefill_start, prefill_end)?;
 
         let mut intermediate_completed_prefill_chunk_tokens =
             all_completed_prefill_chunk_tokens.clone();
@@ -142,23 +114,10 @@ impl Qwen3_5EngineState {
             intermediate_completed_prefill_chunk_tokens.pop();
         }
 
-        let boundary_checkpoint_workspace_bytes =
-            if intermediate_completed_prefill_chunk_tokens.is_empty() {
-                0
-            } else {
-                model
-                    .decoder_cache_layout()
-                    .boundary_snapshot_payload_byte_count()
-                    .map_err(|error| {
-                        super::fatal_engine_error(format!(
-                            "failed to project boundary checkpoint workspace: {error}"
-                        ))
-                    })?
-                    .checked_mul(intermediate_completed_prefill_chunk_tokens.len())
-                    .ok_or_else(|| {
-                        super::fatal_engine_error("boundary checkpoint workspace bytes overflowed")
-                    })?
-            };
+        let boundary_checkpoint_workspace_bytes = boundary_checkpoint_workspace_bytes(
+            model,
+            intermediate_completed_prefill_chunk_tokens.len(),
+        )?;
 
         let direct_publication_workspace_bytes = if !all_completed_prefill_chunk_tokens.is_empty() {
             self.persistent_prompt_cache
@@ -221,6 +180,43 @@ impl Qwen3_5EngineState {
         })
     }
 
+    /// The prompt-cache boundaries this forward captures, relative to its
+    /// start, and the block size they fall on.
+    ///
+    /// Cache-disabled and request-ineligible paths plan none: they do not
+    /// derive a synthetic block length or reserve checkpoint and publication
+    /// memory. Cache-enabled execution uses the one contract the open store
+    /// owns.
+    fn planned_prompt_cache_boundaries(
+        &self,
+        active_request: &Qwen3_5EngineRequest,
+        prefill_start: usize,
+        prefill_end: usize,
+    ) -> Result<(Vec<usize>, Option<usize>), PromptPrefillChunkAttemptError> {
+        if self.persistent_prompt_cache.is_none() || !active_request.can_use_persistent_prompt_cache
+        {
+            return Ok((Vec::new(), None));
+        }
+        let persistent_prompt_cache_block_token_count = self
+            .persistent_prompt_cache
+            .as_ref()
+            .ok_or_else(|| {
+                super::fatal_engine_error(
+                    "eligible prompt-cache capture has no persistent cache owner",
+                )
+            })?
+            .model_contract_ref()
+            .block_token_count();
+        Ok((
+            persistent_prompt_cache_boundary_completed_prefill_chunk_tokens(
+                prefill_start,
+                prefill_end,
+                persistent_prompt_cache_block_token_count,
+            ),
+            Some(persistent_prompt_cache_block_token_count),
+        ))
+    }
+
     fn prefill_growth_context(
         &self,
         active_request: &Qwen3_5EngineRequest,
@@ -239,6 +235,29 @@ impl Qwen3_5EngineState {
             AdaptiveRamGrowthExecutionProfile::Paged,
         )
     }
+}
+
+/// The snapshots a forward holds until publication, one per boundary it
+/// captures before its end.
+fn boundary_checkpoint_workspace_bytes(
+    model: &crate::qwen3_5_streaming::model::Qwen3_5Model,
+    intermediate_boundary_count: usize,
+) -> Result<usize, PromptPrefillChunkAttemptError> {
+    if intermediate_boundary_count == 0 {
+        return Ok(0);
+    }
+    Ok(model
+        .decoder_cache_layout()
+        .boundary_snapshot_payload_byte_count()
+        .map_err(|error| {
+            super::fatal_engine_error(format!(
+                "failed to project boundary checkpoint workspace: {error}"
+            ))
+        })?
+        .checked_mul(intermediate_boundary_count)
+        .ok_or_else(|| {
+            super::fatal_engine_error("boundary checkpoint workspace bytes overflowed")
+        })?)
 }
 
 /// Hidden states a layer-major prefill holds between layers: every span's,

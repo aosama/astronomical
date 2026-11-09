@@ -49,7 +49,10 @@ async fn assert_checkpoint_parity() {
         .expect("the Shakespeare prompt should encode")
         .get_ids()
         .to_vec();
-    assert!(prompt_token_ids.len() > 2 * BLOCK_TOKEN_COUNT);
+    assert!(
+        (2 * BLOCK_TOKEN_COUNT..3 * BLOCK_TOKEN_COUNT).contains(&prompt_token_ids.len()),
+        "the prompt must cross exactly two block boundaries"
+    );
     let machine_mlx_memory_ceiling_bytes =
         crate::common::sample_machine_mlx_memory_ceiling_bytes().await;
     let mlx_memory_limits = astronomical_runtime_integration::MlxMemoryLimits::new(
@@ -108,7 +111,7 @@ async fn assert_checkpoint_parity() {
             "the chunk path should publish both boundaries"
         );
         assert!(
-            layer_major_boundaries == chunk_path_boundaries,
+            bit_patterns(&layer_major_boundaries) == bit_patterns(&chunk_path_boundaries),
             "with {kept_layer_count} kept layers the layer-major prefill must publish the chunk path's boundaries bit for bit"
         );
         eprintln!(
@@ -117,4 +120,26 @@ async fn assert_checkpoint_parity() {
             chunk_path_boundaries[0].1.len()
         );
     }
+}
+
+/// Every snapshot value's bit pattern, so equality means bit for bit: an
+/// equal NaN compares equal, and 0.0 differs from -0.0.
+fn bit_patterns(
+    published_boundaries: &[(usize, std::collections::BTreeMap<String, Vec<f32>>)],
+) -> Vec<(usize, Vec<(String, Vec<u32>)>)> {
+    published_boundaries
+        .iter()
+        .map(|(boundary_token, snapshot_tensors)| {
+            let tensor_bits = snapshot_tensors
+                .iter()
+                .map(|(tensor_name, values)| {
+                    (
+                        tensor_name.clone(),
+                        values.iter().map(|value| value.to_bits()).collect(),
+                    )
+                })
+                .collect();
+            (*boundary_token, tensor_bits)
+        })
+        .collect()
 }

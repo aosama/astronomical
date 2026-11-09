@@ -196,12 +196,18 @@ fn push_final_state_boundary(
     )
     .last()
         == Some(&end_token);
-    if !ends_on_boundary
-        || boundary_checkpoints
-            .iter()
-            .any(|checkpoint| checkpoint.completed_prefill_chunk_tokens == end_token)
-    {
+    if !ends_on_boundary {
         return Ok(());
+    }
+    // The engine records this boundary once, from the final state; a second
+    // capture here would be a duplicate publication, so it fails the check.
+    if boundary_checkpoints
+        .iter()
+        .any(|checkpoint| checkpoint.completed_prefill_chunk_tokens == end_token)
+    {
+        return Err(Qwen3_5ExecutionError::InvalidInput {
+            description: "a boundary was captured twice",
+        });
     }
     boundary_checkpoints.push(Qwen3_5PersistentPromptCacheBoundaryCheckpoint {
         completed_prefill_chunk_tokens: end_token,

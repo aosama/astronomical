@@ -18,7 +18,9 @@
 //! dozens of forwards that re-paid complete-layer storage reads while making no
 //! visible progress. Instead, the first memory failure of a text request sheds
 //! retained expert residency and re-seeds from the persistent prompt cache
-//! (`prefill_memory_recovery`); only a second failure is terminal.
+//! (`prefill_memory_recovery`); only a second failure is terminal. The one
+//! exception is a layer-major group that does not fit: its tokens run again as
+//! the chunks it was made of, which fit before, and never as smaller ones.
 
 use std::time::Instant;
 
