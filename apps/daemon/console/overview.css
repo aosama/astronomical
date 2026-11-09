@@ -1,0 +1,87 @@
+/* Astronomical Observatory Overview: what is running now on top, memory beside
+   the loaded model, then totals since launch. Behaviour hooks are the element
+   ids in index.html and overview.js. The loaded-model card leaves out facts
+   that do not apply rather than showing dashes. */
+
+#overview-view { display: flex; flex-direction: column; gap: 14px; }
+
+.overview-now { display: flex; flex-direction: column; gap: 12px; padding: 18px 22px; }
+.overview-now-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.overview-now-model { margin: 0; font-size: var(--text-xl); font-weight: var(--weight-strong); overflow-wrap: anywhere; }
+.overview-now-unload { margin-left: auto; color: var(--text-dim); font-size: var(--text-md); }
+/* The state chip is the first thing read. Violet marks work and loading, as in
+   the header; idle and unavailable stay neutral. */
+.overview-now-state {
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    color: var(--ink-dim);
+    font-size: var(--text-md);
+    font-weight: var(--weight-strong);
+}
+.overview-now-state[data-state="working"], .overview-now-state[data-state="loading"] { background: var(--nebula-dim); color: var(--accent); }
+.overview-now-state[data-state="unavailable"] { color: var(--text-dim); }
+.overview-now-bar { height: 8px; overflow: hidden; border-radius: 999px; background: var(--panel-2); }
+.overview-now-fill { width: 0; height: 100%; border-radius: inherit; background: var(--accent); transition: width 250ms ease; }
+.overview-now-detail { margin: 0; color: var(--ink-dim); font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+
+/* Memory takes the wider column: it is the figure most likely to explain a
+   slow Mac, while the model card holds a handful of short facts. */
+.overview-pair { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+.overview-memory, .overview-model { display: flex; flex-direction: column; gap: 12px; padding: 18px 22px; }
+.overview-card-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.overview-memory-total { margin: 0; display: flex; align-items: baseline; gap: 8px; }
+.overview-memory-used { font-size: var(--text-2xl); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; }
+.overview-memory-ceiling { color: var(--text-dim); font-size: var(--text-md); }
+.overview-memory-bar { display: flex; height: 14px; overflow: hidden; border-radius: 6px; background: var(--panel-2); }
+.overview-memory-seg { width: 0; height: 100%; transition: width 300ms ease; }
+/* Memory is data, so it uses the console's data blue and its neighbours, never
+   the violet reserved for running work. */
+.overview-memory-seg[data-memory-part="experts"], .overview-memory-swatch[data-memory-part="experts"] { background: var(--resident); }
+.overview-memory-seg[data-memory-part="model-core"], .overview-memory-swatch[data-memory-part="model-core"] { background: var(--ink-dim); }
+.overview-memory-seg[data-memory-part="context-state"], .overview-memory-swatch[data-memory-part="context-state"] { background: var(--memory-context); }
+.overview-memory-seg[data-memory-part="runtime-work"], .overview-memory-swatch[data-memory-part="runtime-work"] { background: var(--ink-faint); }
+.overview-memory-swatch[data-memory-part="free"] { background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.overview-memory-key { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; color: var(--text-dim); font-size: var(--text-md); }
+.overview-memory-key li { display: flex; align-items: center; gap: 6px; }
+.overview-memory-key li span:last-child { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.overview-memory-swatch { width: 10px; height: 10px; border-radius: 3px; }
+.overview-memory-pressure { padding: 2px 9px; border-radius: 6px; background: var(--panel-2); color: var(--text-dim); font-size: var(--text-sm); }
+.overview-memory-pressure[data-pressure-state="normal"] { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.overview-memory-pressure[data-pressure-state="warning"] { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+.overview-memory-pressure[data-pressure-state="critical"] { background: var(--button-danger-fill); color: var(--button-danger-ink); }
+
+.overview-model-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: var(--text-md); }
+.overview-model-facts dt { color: var(--text-dim); }
+.overview-model-facts dd { margin: 0; color: var(--ink); text-align: right; overflow-wrap: anywhere; }
+.overview-model-empty { margin: 0; color: var(--text-dim); font-size: var(--text-md); }
+
+.overview-session { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.overview-tile { min-width: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-small); background: var(--panel); }
+.overview-tile p { margin: 0; }
+.overview-tile-label { color: var(--text-dim); font-size: var(--text-md); }
+.overview-tile .overview-tile-value { margin-top: 4px; font-size: var(--text-2xl); font-weight: var(--weight-strong); font-variant-numeric: tabular-nums; }
+.overview-tile .overview-tile-hint { margin-top: 2px; color: var(--text-dim); font-size: var(--text-sm); }
+
+@media (max-width: 1100px) {
+    .overview-session { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 900px) {
+    .overview-pair { grid-template-columns: minmax(0, 1fr); }
+    .overview-session { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Neural Engine: shown by neural-engine-panel.js once the Neural Engine is turned on. */
+.neural-engine-panel { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
+.neural-engine-scope { color: var(--text-dim); font-size: var(--text-sm); }
+.neural-engine-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.neural-engine-tile { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.neural-engine-tile dt { color: var(--text-dim); font-size: var(--text-md); }
+.neural-engine-tile dd { margin: 0; }
+.neural-engine-value { margin-top: 2px; color: var(--text); font-family: var(--font-mono); font-size: var(--text-xl); font-variant-numeric: tabular-nums; line-height: 1.4; }
+.neural-engine-detail { color: var(--text-dim); font-size: var(--text-sm); line-height: 1.4; overflow-wrap: anywhere; }
+.neural-engine-note { margin: 0; color: var(--text-dim); font-size: var(--text-md); line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+    .overview-now-fill, .overview-memory-seg { transition: none; }
+}

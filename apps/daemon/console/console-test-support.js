@@ -11,8 +11,8 @@ const memoryControlScriptPath = path.join(__dirname, "memory-control.js");
 const memoryControlScript = fs.readFileSync(memoryControlScriptPath, "utf8");
 const neuralEnginePanelScriptPath = path.join(__dirname, "neural-engine-panel.js");
 const neuralEnginePanelScript = fs.readFileSync(neuralEnginePanelScriptPath, "utf8");
-const overviewCompactScriptPath = path.join(__dirname, "overview-compact.js");
-const overviewCompactScript = fs.readFileSync(overviewCompactScriptPath, "utf8");
+const overviewScriptPath = path.join(__dirname, "overview.js");
+const overviewScript = fs.readFileSync(overviewScriptPath, "utf8");
 
 function createConsoleContext() {
     const scriptContext = vm.createContext({
@@ -29,7 +29,7 @@ function createConsoleContext() {
     vm.runInContext(memoryControlScript, scriptContext, { filename: memoryControlScriptPath });
     vm.runInContext(neuralEnginePanelScript, scriptContext, { filename: neuralEnginePanelScriptPath });
     vm.runInContext(consoleScript, scriptContext, { filename: consoleScriptPath });
-    vm.runInContext(overviewCompactScript, scriptContext, { filename: overviewCompactScriptPath });
+    vm.runInContext(overviewScript, scriptContext, { filename: overviewScriptPath });
     return scriptContext;
 }
 

@@ -12,10 +12,10 @@ const EXPECTED_THIN_TALK_FALLBACK_MARKER: &str = "choose Chat";
 const EXPECTED_NAVIGATION_LABEL_MARKER: &str = "aria-label=\"Observatory sections\"";
 const EXPECTED_OVERVIEW_REGION_MARKER: &str =
     "data-observatory-view=\"overview\" aria-labelledby=\"overview-title\"";
-const EXPECTED_COMPACT_OVERVIEW_MARKER: &str =
-    "id=\"compact-memory-panel\" class=\"overview-summary-section compact-memory-panel\"";
+const EXPECTED_OVERVIEW_MEMORY_MARKER: &str =
+    "id=\"overview-memory\" class=\"panel overview-memory\"";
 const EXPECTED_MEMORY_PRESSURE_MARKER: &str =
-    "id=\"compact-memory-pressure-state\" class=\"compact-memory-pressure-state\"";
+    "id=\"overview-memory-pressure\" class=\"overview-memory-pressure\"";
 const EXPECTED_DISCOVERY_REVEAL_MARKER: &str =
     "id=\"model-discovery-reveal-config\" class=\"button button-secondary\"";
 const EXPECTED_CONNECT_REGION_MARKER: &str =
@@ -215,8 +215,8 @@ async fn should_expose_named_observatory_navigation_and_overview_region() {
         "the Observatory must expose a labelled Overview region"
     );
     assert!(
-        shell_text.contains(EXPECTED_COMPACT_OVERVIEW_MARKER),
-        "the Overview must expose its compact MLX memory panel"
+        shell_text.contains(EXPECTED_OVERVIEW_MEMORY_MARKER),
+        "the Overview must expose its memory panel"
     );
     assert!(
         shell_text.contains(EXPECTED_MEMORY_PRESSURE_MARKER),
@@ -279,17 +279,17 @@ async fn should_serve_the_embedded_neural_engine_panel_javascript() {
 }
 
 #[tokio::test]
-async fn should_serve_the_embedded_compact_overview_javascript() {
+async fn should_serve_the_embedded_overview_javascript() {
     let application = astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));
     let response = application
         .oneshot(
             Request::builder()
-                .uri("/overview-compact.js")
+                .uri("/overview.js")
                 .body(Body::empty())
-                .expect("the compact overview request should be valid"),
+                .expect("the overview script request should be valid"),
         )
         .await
-        .expect("the application should return the compact overview script");
+        .expect("the application should return the overview script");
 
     assert_eq!(response.status(), StatusCode::OK);
     assert!(
@@ -302,9 +302,9 @@ async fn should_serve_the_embedded_compact_overview_javascript() {
     );
     let response_body = to_bytes(response.into_body(), 1024 * 1024)
         .await
-        .expect("the compact overview script body should be readable");
-    let script_text = String::from_utf8(response_body.to_vec())
-        .expect("the compact overview script should be UTF-8");
+        .expect("the overview script body should be readable");
+    let script_text =
+        String::from_utf8(response_body.to_vec()).expect("the overview script should be UTF-8");
     assert!(script_text.contains("reconciledMlxMemorySegmentBytes"));
 }
 
@@ -346,7 +346,7 @@ async fn should_serve_the_embedded_connection_material_script() {
 }
 
 #[tokio::test]
-async fn should_serve_the_embedded_experts_view_assets() {
+async fn should_serve_the_embedded_experts_and_overview_assets() {
     for experts_asset_path in [
         (
             "/experts.js",
@@ -359,6 +359,7 @@ async fn should_serve_the_embedded_experts_view_assets() {
             "expertMemoryModePhrase",
         ),
         ("/experts.css", "text/css", "experts-bar-ssd"),
+        ("/overview.css", "text/css", "overview-now-state"),
     ] {
         let application =
             astronomical_daemon::build_application(ScriptedExecutor::ready(Vec::new()));

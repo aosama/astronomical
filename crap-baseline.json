@@ -3433,7 +3433,7 @@
     },
     {
       "file": "apps/daemon/src/console/console_assets.rs",
-      "function": "overview_compact_script",
+      "function": "overview_script",
       "line": 71,
       "cyclomatic": 1.0,
       "coverage": null,

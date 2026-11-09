@@ -7,7 +7,6 @@ const CACHE_STATS_URL = "/v1/cache/stats";
 const SYSTEM_TELEMETRY_URL = "/v1/system/telemetry";
 const CONFIG_REVEAL_URL = "/v1/config/reveal";
 const POLL_INTERVAL_MILLIS = 1000;
-const SPARKLINE_BUFFER_SIZE = 60;
 
 const OBSERVATORY_PATH_MAP = {
     overview: "/overview",
@@ -37,7 +36,6 @@ const OBSERVATORY_DEFAULT_PATH = "/overview";
 let selectedModelId = null;
 // The model the worker reports as loaded (status ready_model_id), or null.
 let loadedModelId = null;
-const sparklineHitRateBuffer = [];
 
 document.addEventListener("DOMContentLoaded", () => {
     console.log("observatory boot");
@@ -117,15 +115,15 @@ async function pollStatus() {
         const data = await response.json();
         renderApplicationIdentity(data.application);
         renderStatusHeader(data);
-        renderNowStrip(data);
-        renderLoadedModelFromStatus(data);
-        renderCompactMlxMemory(data);
+        loadedModelId = data.ready_model_id || null;
+        renderOverviewNow(data);
+        renderOverviewMemory(data);
+        renderOverviewModel(data, readExpertPlacement(data));
+        renderOverviewSession(data);
         renderMemoryLimitControl(data);
         renderConfigurationNeuralEngineStatus(data);
         renderNeuralEnginePanel(data);
         renderModelDiscoveryDiagnostic(data.configuration);
-        renderSession(data);
-        renderLoadedModelFootprint(data);
     } catch (fetchError) {
         setStatusUnavailable();
     }
@@ -199,8 +197,6 @@ function renderApplicationIdentity(applicationIdentity) {
     if (!applicationIdentity) { return; }
     document.getElementById("application-channel").textContent =
         applicationIdentity.channel_display_name || applicationIdentity.channel;
-    document.getElementById("loaded-model-instance-note").textContent =
-        `Single-user local console. Private and served by astronomicald on this Mac. Config: ${applicationIdentity.state_directory}/config.json`;
     document.body.dataset.applicationChannel = applicationIdentity.channel || "unknown";
     renderThinTalkLink(applicationIdentity.channel);
 }
@@ -209,13 +205,13 @@ async function pollSystemTelemetry() {
     try {
         const response = await fetch(SYSTEM_TELEMETRY_URL);
         if (!response.ok) {
-            renderCompactMemoryPressure(null);
+            renderOverviewMemoryPressure(null);
             return;
         }
         const telemetryDocument = await response.json();
-        renderCompactMemoryPressure(telemetryDocument.memory_pressure);
+        renderOverviewMemoryPressure(telemetryDocument.memory_pressure);
     } catch (fetchError) {
-        renderCompactMemoryPressure(null);
+        renderOverviewMemoryPressure(null);
     }
 }
 
@@ -224,7 +220,10 @@ function setStatusUnavailable() {
     header.className = "status-header unavailable";
     document.getElementById("status-word").textContent = "Unavailable";
     document.getElementById("status-model-id").textContent = "No model loaded";
-    resetNowStrip();
+    // With no answer, nothing on Overview may keep describing the last model.
+    renderOverviewNow(null);
+    renderOverviewModel(null, {});
+    renderOverviewMemory({});
 }
 
 function renderStatusHeader(data) {
@@ -276,7 +275,7 @@ async function pollModels() {
         if (selectedModel) {
             selectedModelId = selectedModel.id;
         }
-        renderLoadedModelLimits(models.find((model) => model.id === loadedModelId) || null);
+        rememberOverviewLoadedModelListing(models.find((model) => model.id === loadedModelId) || null);
     } catch (fetchError) {
         // Status polling handles the unavailable display; stay quiet here.
     }
@@ -288,66 +287,12 @@ function selectAdvertisedModel(advertisedModels, preferredModelId) {
         || null;
 }
 
-// The phases /v1/status reports. "target" is prompt processing: the worker names
-// the model doing the work rather than the stage. A phase missing from this table
-// shows as "Active", because an internal name means nothing on this page.
-const PHASE_LABELS = new Map([
-    ["target", "Prefilling"],
-    ["generation_preparation", "Preparing output"],
-    ["generation", "Generating"],
-    ["preparing", "Preparing"],
-    ["encoding_prompt", "Encoding prompt"],
-    ["denoising", "Denoising"],
-    ["decoding", "Decoding"],
-    ["encoding_image", "Encoding image"],
-]);
-
-function renderNowStrip(data) {
-    const phaseLabel = document.getElementById("phase-label");
-    const phaseFill = document.getElementById("phase-fill");
-    const phaseTokens = document.getElementById("phase-tokens");
-    const phaseTps = document.getElementById("phase-tps");
-    const phaseElapsed = document.getElementById("phase-elapsed");
-    const progress = data.progress;
-    if (!progress) { resetNowStrip(); return; }
-    const processedTokens = progress.processed_tokens || 0;
-    const totalTokens = progress.total_tokens || 0;
-    const elapsedMs = progress.elapsed_ms || 0;
-    const fillPercent = totalTokens > 0 ? Math.min(100, (processedTokens / totalTokens) * 100) : 0;
-    const tokPerSecond = elapsedMs > 0 ? (processedTokens / elapsedMs) * 1000 : 0;
-    phaseLabel.classList.add("phase-live");
-    phaseLabel.textContent = (PHASE_LABELS.get(progress.phase) || "Active")
-        + (progress.phase === "target" ? neuralEnginePhaseSuffix(data) : "");
-    if (progress.phase === "generation") {
-        phaseFill.classList.add("generating");
-    } else {
-        phaseFill.classList.remove("generating");
-    }
-    phaseFill.style.width = fillPercent.toFixed(1) + "%";
-    phaseTokens.textContent = processedTokens.toLocaleString() + " / " + totalTokens.toLocaleString();
-    phaseTps.textContent = tokPerSecond.toFixed(0) + " tok/s";
-    phaseElapsed.textContent = elapsedMs.toLocaleString() + " ms";
-}
-
-function resetNowStrip() {
-    document.getElementById("phase-label").textContent = "Idle";
-    document.getElementById("phase-label").classList.remove("phase-live");
-    document.getElementById("phase-fill").style.width = "0%";
-    document.getElementById("phase-fill").classList.remove("generating");
-    document.getElementById("phase-tokens").textContent = "—";
-    document.getElementById("phase-tps").textContent = "— tok/s";
-    document.getElementById("phase-elapsed").textContent = "— ms";
-}
-
 async function pollCacheStats() {
     try {
         const response = await fetch(CACHE_STATS_URL);
         if (!response.ok) { return; }
         const data = await response.json();
-        renderCompactCachePanel(data);
-        const hitRate = data.persistent_prompt_cache_hit_rate || 0;
-        pushSparklineSample(hitRate);
-        renderSparkline();
+        renderOverviewPromptCache(data);
     } catch (fetchError) {
         // Cache panel stays at last-known values on transient fetch errors.
     }
@@ -358,126 +303,11 @@ function formatGigabytes(bytes) {
     return (bytes / 1073741824).toFixed(2) + " GB";
 }
 
-function pushSparklineSample(hitRate) {
-    sparklineHitRateBuffer.push(hitRate);
-    if (sparklineHitRateBuffer.length > SPARKLINE_BUFFER_SIZE) {
-        sparklineHitRateBuffer.shift();
-    }
-}
-
-function renderSparkline() {
-    const compactLine = document.getElementById("compact-cache-sparkline-line");
-    if (sparklineHitRateBuffer.length < 2) {
-        compactLine.setAttribute("points", "");
-        return;
-    }
-    const width = 120;
-    const height = 24;
-    const stepX = width / (SPARKLINE_BUFFER_SIZE - 1);
-    const points = sparklineHitRateBuffer.map((value, index) => {
-        const x = (index * stepX).toFixed(1);
-        const y = (height - value * height).toFixed(1);
-        return x + "," + y;
-    }).join(" ");
-    compactLine.setAttribute("points", points);
-}
-
 function readExpertPlacement(statusDocument) {
     if (typeof expertPlacementCopy !== "function") {
         return { stockSentence: "", replySentence: "" };
     }
     return expertPlacementCopy(statusDocument);
-}
-
-function renderLoadedModelFromStatus(data) {
-    loadedModelId = data.ready_model_id || null;
-    document.getElementById("loaded-model-id").textContent = loadedModelId || "No model loaded";
-    const expertMemoryElement = document.getElementById("loaded-model-expert-memory");
-    if (!loadedModelId) {
-        expertMemoryElement.textContent = "—";
-        return;
-    }
-    const placement = readExpertPlacement(data);
-    if (placement.replySentence) {
-        expertMemoryElement.textContent = placement.replySentence;
-        return;
-    }
-    const expertMemoryPhrase = expertMemoryModePhrase(data.expert_memory_mode);
-    expertMemoryElement.textContent = expertMemoryPhrase || "—";
-}
-
-// The Loaded model panel describes the model the worker has loaded, never the
-// chat picker's choice: with nothing loaded every fact reads "—" rather than
-// another model's limits.
-function renderLoadedModelLimits(loadedModel) {
-    const formatTokens = (tokenCount) => (loadedModel ? (tokenCount || 0).toLocaleString() : "—");
-    document.getElementById("loaded-model-context-window").textContent = formatTokens(loadedModel?.context_window);
-    document.getElementById("loaded-model-max-input").textContent = formatTokens(loadedModel?.max_input_tokens);
-    document.getElementById("loaded-model-max-output").textContent = formatTokens(loadedModel?.max_output_tokens);
-    const inputModalities = loadedModel?.input_modalities || [];
-    document.getElementById("loaded-model-modalities").textContent = !loadedModel
-        ? "—"
-        : inputModalities.indexOf("image") !== -1 ? "Text + Image" : "Text only";
-}
-
-function renderLoadedModelFootprint(data) {
-    const residencyElement = document.getElementById("loaded-model-residency");
-    if (!data.ready_model_id) {
-        // Nothing is loaded, as after an idle unload: clear the last model's
-        // size and residency rather than leave them describing it.
-        document.getElementById("loaded-model-disk-size").textContent = "—";
-        residencyElement.textContent = "Not loaded";
-        return;
-    }
-    const readyModelSizeBytes = data.ready_model_size_bytes;
-    if (readyModelSizeBytes !== undefined && readyModelSizeBytes !== null) {
-        document.getElementById("loaded-model-disk-size").textContent = formatGigabytes(readyModelSizeBytes);
-    } else {
-        document.getElementById("loaded-model-disk-size").textContent = "Not measured";
-    }
-    const placement = readExpertPlacement(data);
-    if (placement.stockSentence) {
-        residencyElement.textContent = placement.stockSentence;
-        return;
-    }
-    residencyElement.textContent = expertMemoryModePhrase(data.expert_memory_mode) || "—";
-}
-
-function setMlxSegmentWidth(elementId, byteCount, ceilingBytes) {
-    const element = document.getElementById(elementId);
-    if (!element) { return; }
-    const fraction = ceilingBytes > 0 ? Math.min(100, (byteCount / ceilingBytes) * 100) : 0;
-    element.style.width = fraction.toFixed(1) + "%";
-}
-
-function renderSession(data) {
-    const servingSession = data.serving_session;
-    if (!servingSession) { return; }
-    const completedRequestCount = servingSession.completed_request_count || 0;
-    document.getElementById("session-requests").textContent =
-        completedRequestCount + (completedRequestCount === 1 ? " request" : " requests");
-    const averageGenerationTokensPerSecond = servingSession.average_generation_tok_per_second || 0;
-    document.getElementById("session-avg-gen").textContent =
-        Math.round(averageGenerationTokensPerSecond) + " tok/s";
-    const totalPromptTokenCount = servingSession.total_prompt_token_count || 0;
-    const totalReusedPromptTokenCount = servingSession.total_reused_prompt_token_count || 0;
-    const reusePercentageElement = document.getElementById("session-reuse-pct");
-    const reuseFill = document.getElementById("reuse-fill");
-    const reuseBreakdownElement = document.getElementById("session-reuse-breakdown");
-    if (totalPromptTokenCount === 0) {
-        reusePercentageElement.textContent = "Not measured";
-        reuseFill.style.width = "0%";
-        reuseBreakdownElement.textContent = "No completed prompts";
-        return;
-    }
-    const boundedReusedCount = Math.min(totalReusedPromptTokenCount, totalPromptTokenCount);
-    const reuseFraction = boundedReusedCount / totalPromptTokenCount;
-    const reusePercentage = Math.round(reuseFraction * 100);
-    reusePercentageElement.textContent = reusePercentage + "%";
-    reuseFill.style.width = (reuseFraction * 100) + "%";
-    const newTokenCount = totalPromptTokenCount - boundedReusedCount;
-    reuseBreakdownElement.textContent =
-        boundedReusedCount.toLocaleString() + " reused · " + newTokenCount.toLocaleString() + " new";
 }
 
 function wireConfigRevealControl() {

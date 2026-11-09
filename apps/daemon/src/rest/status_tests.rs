@@ -75,3 +75,28 @@ fn should_report_neural_engine_totals_under_their_public_names() {
         })
     );
 }
+
+#[test]
+fn should_report_the_idle_unload_span_with_no_countdown_before_the_clock_runs() {
+    let worker_handle = crate::WorkerHandle::unavailable();
+    worker_handle.set_idle_model_unload_seconds(60);
+    let mut status_json = serde_json::json!({});
+
+    super::attach_idle_model_unload(&mut status_json, &worker_handle);
+
+    assert_eq!(
+        status_json["idle_model_unload"],
+        serde_json::json!({ "after_seconds": 60, "remaining_seconds": null })
+    );
+}
+
+#[test]
+fn should_report_a_zero_span_as_staying_loaded() {
+    let worker_handle = crate::WorkerHandle::unavailable();
+    let mut status_json = serde_json::json!({});
+
+    super::attach_idle_model_unload(&mut status_json, &worker_handle);
+
+    assert_eq!(status_json["idle_model_unload"]["after_seconds"], 0);
+    assert!(status_json["idle_model_unload"]["remaining_seconds"].is_null());
+}

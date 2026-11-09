@@ -21,6 +21,8 @@
     /* 5.5:1 on --ground-raised and 4.5:1 on --panel-2, so it is safe for text. */
     --nebula-bright: #9d7bff;
     --data: #5fc8ff;
+    /* Context memory on Overview: a teal beside the data blue, never violet. */
+    --memory-context: #5ee6c4;
     --ink: #f3f5ff;
     --ink-dim: #c9d0e8;
     --ink-faint: #98a2c4;
@@ -78,6 +80,8 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; min-width: 0; min-height: 100%; }
 [hidden] { display: none !important; }
+/* Read by screen readers, not drawn: headings the layout already makes plain. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 body.observatory {
     background: var(--window-frame);
@@ -245,52 +249,6 @@ body[data-application-channel="development"] #application-channel { color: var(-
 .panel-heading-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .panel-note { margin: 4px 0 0; color: var(--text-dim); font-size: var(--text-md); }
 
-.overview-heading { margin-bottom: 20px; }
-.overview-intro { max-width: 660px; margin: 10px 0 0; color: var(--text-dim); font-size: var(--text-lg); }
-.overview-grid { display: flex; flex-direction: column; gap: 14px; }
-.now-strip { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
-.neural-engine-panel { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px; }
-.neural-engine-scope { color: var(--text-dim); font-size: var(--text-sm); }
-.neural-engine-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
-.neural-engine-tile { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; }
-.neural-engine-tile dt { color: var(--text-dim); font-size: var(--text-md); }
-.neural-engine-tile dd { margin: 0; }
-.neural-engine-value { margin-top: 2px; color: var(--text); font-family: var(--font-mono); font-size: var(--text-xl); font-variant-numeric: tabular-nums; line-height: 1.4; }
-.neural-engine-detail { color: var(--text-dim); font-size: var(--text-sm); line-height: 1.4; overflow-wrap: anywhere; }
-.neural-engine-note { margin: 0; color: var(--text-dim); font-size: var(--text-md); line-height: 1.5; }
-.overview-summary { padding: 0; overflow: hidden; }
-.overview-summary-heading { padding: 16px 20px; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border); }
-.overview-summary-heading h3 { margin: 0; font-size: var(--text-xl); letter-spacing: -0.01em; }
-.overview-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.overview-summary-section { min-width: 0; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-.overview-summary-section + .overview-summary-section { border-left: 1px solid var(--border); }
-.overview-summary-section h4 { margin: 0; color: var(--text); font-size: var(--text-lg); font-weight: var(--weight-strong); line-height: 1.3; }
-.phase-label { color: var(--text-dim); font-family: var(--font-mono); font-size: var(--text-md); font-weight: var(--weight-label); }
-.phase-bar, .reuse-bar {
-    height: 8px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: var(--panel-2);
-}
-.phase-fill, .reuse-fill { width: 0; height: 100%; border-radius: inherit; transition: width 250ms ease; }
-.phase-label.phase-live { color: var(--accent); }
-/* Prefill is the dimmer violet, so generation still reads as a step forward. */
-.phase-fill { background: var(--nebula-rim); }
-.phase-fill.generating { background: var(--accent); }
-.reuse-fill { background: var(--data); }
-.phase-stats { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.phase-stat-value, .metric-value {
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: var(--text-lg);
-    font-variant-numeric: tabular-nums;
-}
-.phase-stat-sep { color: var(--text-dim); opacity: 0.5; }
-.session-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.metric-label { color: var(--text-dim); font-size: var(--text-lg); }
-.session-breakdown-row { padding-top: 10px; border-top: 1px solid var(--border); }
-.session-breakdown-row .metric-value { max-width: 65%; text-align: right; overflow-wrap: anywhere; }
-
 /* Chat redirection: conversations live in Thin Talk, opened through the
    channel's own link; the Observatory renders no model output itself. */
 .chat-redirect {
@@ -304,45 +262,6 @@ body[data-application-channel="development"] #application-channel { color: var(-
 .chat-redirect-open { text-decoration: none; }
 .chat-redirect-fallback { margin: 6px 0 0; color: var(--text-dim); font-size: var(--text-sm); line-height: 1.5; }
 .control-feedback { padding: 10px 14px; border-radius: var(--radius-small); font-size: var(--text-lg); overflow-wrap: anywhere; }
-
-.mlx-segment { height: 100%; transition: width 300ms ease; }
-/* Segments are one data blue and separate by strength, so memory reads as a
-   single quantity; experts keep the resident colour used everywhere else. */
-.mlx-segment-experts { background: var(--resident); }
-.mlx-segment-model-core { background: var(--ink); }
-.mlx-segment-context-state { background: rgba(95, 200, 255, 0.28); }
-.mlx-segment-runtime-work { background: rgba(95, 200, 255, 0.55); }
-.mlx-segment-available { background: rgba(243, 245, 255, 0.07); }
-
-.compact-memory-total { font-size: var(--text-lg); font-weight: var(--weight-label); }
-.compact-memory-bar { display: flex; height: 10px; overflow: hidden; border-radius: 999px; background: var(--panel-2); }
-.compact-memory-bar .mlx-segment { height: 100%; }
-.compact-memory-ceiling { margin-top: auto; display: flex; align-items: baseline; gap: 6px; }
-.compact-memory-ceiling-label { color: var(--text-dim); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; }
-.compact-memory-ceiling-value { font-size: var(--text-md); }
-.compact-memory-pressure-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.compact-memory-pressure-label { color: var(--text-dim); font-size: var(--text-md); }
-.compact-memory-pressure-state { font-family: var(--font-mono); font-size: var(--text-md); font-weight: var(--weight-label); }
-.compact-memory-pressure-state[data-pressure-state="normal"] { color: var(--ok); }
-.compact-memory-pressure-state[data-pressure-state="warning"] { color: var(--warn); }
-.compact-memory-pressure-state[data-pressure-state="critical"] { color: var(--bad); }
-.compact-memory-pressure-state[data-pressure-state="unavailable"] { color: var(--text-dim); }
-
-.compact-cache-hit-rate { font-size: var(--text-lg); font-weight: var(--weight-label); }
-.compact-cache-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.compact-cache-sparkline { flex: 0 0 auto; opacity: 0.8; }
-.compact-cache-stat { color: var(--text); font-family: var(--font-mono); font-size: var(--text-md); font-variant-numeric: tabular-nums; }
-.compact-cache-disk-bar { position: relative; height: 30px; margin-top: auto; padding: 0 12px; overflow: hidden; display: flex; align-items: center; border-radius: var(--radius-small); background: var(--panel-2); }
-.compact-cache-disk-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--data), rgba(95, 200, 255, 0.6)); opacity: 0.6; transition: width 300ms ease; }
-.compact-cache-disk-label { position: relative; z-index: 1; font-family: var(--font-mono); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
-
-.loaded-model-stat-label { color: var(--text-dim); font-size: var(--text-xs); letter-spacing: 0.07em; text-transform: uppercase; }
-
-.loaded-model-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.loaded-model-stat { min-width: 0; min-height: 96px; padding: 14px; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); }
-.loaded-model-stat-wide { grid-column: span 2; }
-.loaded-model-stat-value { color: var(--text); font-family: var(--font-mono); font-size: var(--text-xl); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; word-break: normal; }
-.loaded-model-note { margin: 16px 0 0; color: var(--text-dim); font-size: var(--text-md); overflow-wrap: anywhere; }
 
 .mlx-memory-control { display: flex; flex-direction: column; gap: 10px; color: var(--text-dim); }
 .mlx-memory-control-row { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -376,5 +295,5 @@ body[data-application-channel="development"] #application-channel { color: var(-
 
 @media (prefers-reduced-motion: reduce) {
     .status-header.loading .status-star, .status-header.active .status-star { animation: none; opacity: 0.85; }
-    .navigation-button, .phase-fill, .reuse-fill, .mlx-segment, .compact-cache-disk-fill, .button { transition: none; }
+    .navigation-button, .button { transition: none; }
 }
