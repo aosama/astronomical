@@ -217,6 +217,7 @@ async fn interrupt_a_running_download(test_directory: &Path) {
     let service = start_ipc_service(test_directory, catalog, Arc::clone(&coordinator)).await;
     assert_download_started(&ask(&service, download_start()).await, "start");
     wait_until_downloading(&service).await;
+    wait_until_bytes_are_staged(test_directory).await;
     coordinator
         .pause()
         .await
@@ -225,6 +226,20 @@ async fn interrupt_a_running_download(test_directory: &Path) {
         .shutdown()
         .await
         .expect("the first daemon shuts down");
+}
+
+/// The job reports "downloading" before its first chunk reaches the staging
+/// folder, so a pause right after that report could leave nothing staged; the
+/// restart journeys need staged bytes to prove a paused download keeps them.
+async fn wait_until_bytes_are_staged(test_directory: &Path) {
+    let staging_directory = test_directory.join(format!("models/.incomplete/{REPOSITORY_ID}"));
+    for _poll_attempt in 0..500 {
+        if staging_directory.is_dir() && staged_byte_count(&staging_directory) > 0 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the running download never staged a byte");
 }
 
 /// A new daemon over the same folder, recovering at startup as production
