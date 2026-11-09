@@ -386,24 +386,43 @@ fn path_is_writable(path: &Path) -> bool {
     unsafe { libc::access(path_bytes.as_ptr(), libc::W_OK) == 0 }
 }
 
+/// Seeds the suffix from nanoseconds and the whole process id. The old seed
+/// was whole seconds with the id shifted left by 24, and the suffix read only
+/// the low 30 bits, so two runs in the same second whose ids shared their low
+/// 6 bits got the same name and a later journey reused an earlier one's target.
+pub(crate) fn disposable_target_entropy(epoch_nanos: u128, process_id: u32) -> u64 {
+    (epoch_nanos as u64) ^ u64::from(process_id).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
+/// Six lowercase alphanumeric characters from the high bits of one generator
+/// step: a multiplicative step mixes low bits upward, so the top bits are the
+/// ones every input bit reaches.
+pub(crate) fn disposable_target_suffix(entropy: u64) -> String {
+    (0..6)
+        .map(|digit_index| {
+            let digit = (entropy >> (34 + digit_index * 5)) as usize % 36;
+            if digit < 10 {
+                (b'0' + digit as u8) as char
+            } else {
+                (b'a' + (digit - 10) as u8) as char
+            }
+        })
+        .collect()
+}
+
 fn create_marker_owned_target(lane_root: &Path, lane_name: &str) -> std::io::Result<PathBuf> {
     // mktemp-style unique directory: lowercase alphanumeric suffix, created
     // exclusively so concurrent lanes can never collide.
-    let mut entropy = unix_epoch_seconds() ^ ((std::process::id() as u64) << 24);
+    let epoch_nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since_epoch| since_epoch.as_nanos())
+        .unwrap_or(0);
+    let mut entropy = disposable_target_entropy(epoch_nanos, std::process::id());
     for _ in 0..64 {
         entropy = entropy
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
-        let suffix: String = (0..6)
-            .map(|digit_index| {
-                let digit = (entropy >> (digit_index * 5)) as usize % 36;
-                if digit < 10 {
-                    (b'0' + digit as u8) as char
-                } else {
-                    (b'a' + (digit - 10) as u8) as char
-                }
-            })
-            .collect();
+        let suffix = disposable_target_suffix(entropy);
         let candidate = lane_root.join(format!("astronomical-cargo-{lane_name}.{suffix}"));
         match std::fs::create_dir(&candidate) {
             Ok(()) => {

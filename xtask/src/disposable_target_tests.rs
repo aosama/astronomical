@@ -2,7 +2,8 @@
 //! typed port of the retired `scripts/run-in-disposable-cargo-target.sh`.
 
 use crate::disposable_target::{
-    UsageError, allocated_bytes_from_du_output, exit_code_from_status, is_valid_lane_name,
+    UsageError, allocated_bytes_from_du_output, disposable_target_entropy,
+    disposable_target_suffix, exit_code_from_status, is_valid_lane_name,
     lane_root_string_is_acceptable, marker_identity, parse_arguments, select_rustc_wrapper,
 };
 
@@ -244,5 +245,47 @@ mod should_convert_exit_status_to_shell_status {
             .arg(format!("exit {code}"))
             .status()
             .expect("the exit-status fixture should run")
+    }
+}
+
+mod should_name_disposable_targets_uniquely {
+    use super::*;
+
+    fn first_suffix(epoch_nanos: u128, process_id: u32) -> String {
+        let entropy = disposable_target_entropy(epoch_nanos, process_id)
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        disposable_target_suffix(entropy)
+    }
+
+    #[test]
+    fn should_differ_for_process_ids_that_share_their_low_bits_in_the_same_second() {
+        // The old seed let ids 1 and 65 collide within one second.
+        assert_ne!(
+            first_suffix(1_700_000_000_000_000_000, 1),
+            first_suffix(1_700_000_000_000_000_000, 65)
+        );
+    }
+
+    #[test]
+    fn should_differ_for_the_same_process_a_moment_later() {
+        assert_ne!(
+            first_suffix(1_700_000_000_000_000_000, 4242),
+            first_suffix(1_700_000_000_000_000_001, 4242)
+        );
+    }
+
+    #[test]
+    fn should_produce_six_lowercase_alphanumeric_characters_even_for_zero_entropy() {
+        for entropy in [0, u64::MAX, 0x9E37_79B9_7F4A_7C15] {
+            let suffix = disposable_target_suffix(entropy);
+            assert_eq!(suffix.len(), 6);
+            assert!(
+                suffix
+                    .chars()
+                    .all(|suffix_character| suffix_character.is_ascii_lowercase()
+                        || suffix_character.is_ascii_digit())
+            );
+        }
     }
 }
