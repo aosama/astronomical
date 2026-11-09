@@ -2,7 +2,7 @@
 //! `.github/workflows/macos-packaging.yml` and pins what the lane promises.
 //! It builds a real Stable bundle through `cargo xtask app package` and
 //! smoke-tests that bundle; it never signs with an identity, notarizes, or
-//! publishes; it gates only pull requests that touch packaging; and it
+//! publishes; it runs weekly and on demand, never on pull requests; and it
 //! resolves the same Xcode as `ci.yml`, whose pin the native-build identity
 //! depends on.
 
@@ -127,8 +127,12 @@ fn should_never_sign_with_an_identity_notarize_or_publish() {
     );
 }
 
+/// A release build is a weekly backstop, never a gate: every release already
+/// packages for real on the release Mac, and the contracts run as xtask unit
+/// tests on every pull request, so a pull request or push trigger only makes
+/// people wait.
 #[test]
-fn should_gate_only_pull_requests_that_touch_packaging() {
+fn should_run_weekly_and_on_demand_but_never_on_pull_requests_or_pushes() {
     let workflow = macos_packaging_workflow_contract();
     let triggers = triggers_of(&workflow);
     assert!(
@@ -139,30 +143,12 @@ fn should_gate_only_pull_requests_that_touch_packaging() {
         triggers.get("workflow_dispatch").is_some(),
         "the on-demand run is missing"
     );
-    assert!(
-        triggers.get("push").is_none(),
-        "a cold release build on every push to main would queue behind itself"
-    );
-    let pull_request_paths = required_field(
-        required_field(triggers, "pull_request", "triggers"),
-        "paths",
-        "pull_request trigger",
-    )
-    .as_sequence()
-    .expect("the pull_request paths filter must be a sequence");
-    let mut watches_packaging_pipeline = false;
-    for path_filter in pull_request_paths {
-        let path_filter_text = path_filter.as_str().unwrap_or_default();
+    for gating_trigger in ["pull_request", "pull_request_target", "push"] {
         assert!(
-            path_filter_text != "**" && !path_filter_text.is_empty(),
-            "the pull_request filter must not match every change"
+            triggers.get(gating_trigger).is_none(),
+            "the packaging lane must not run on {gating_trigger}"
         );
-        watches_packaging_pipeline |= path_filter_text.starts_with("xtask/src/app_bundle");
     }
-    assert!(
-        watches_packaging_pipeline,
-        "pull requests that change the packaging pipeline must run this lane"
-    );
 }
 
 #[test]

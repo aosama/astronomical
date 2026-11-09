@@ -6,13 +6,15 @@ name: macOS packaging
 # disposable target lane, the Swift menu app, Thin Talk web assets, ad hoc
 # signing, and the bundle checks.
 #
-# Deliberately not a pull-request gate. The pipeline's contracts (signing
-# plans, Info.plist rendering, bundle layout checks) are typed xtask unit
-# tests that the macOS build job already runs on every pull request, so
-# gating every pull request on a release build would add CI wall time for no
-# new coverage. It runs weekly against main, on demand (run it before cutting
-# a release), and on pull requests that change this workflow or the packaging
-# pipeline itself.
+# A weekly backstop, never a gate. The pipeline's contracts (signing plans,
+# Info.plist rendering, bundle layout checks) are typed xtask unit tests that
+# the macOS build job runs on every pull request, and every release packages
+# for real on the release Mac through `cargo xtask release prepare-signed`,
+# which fails before any tag is pushed. What only this lane adds is a clean
+# runner on the pinned toolchain, which catches a runner image or toolchain
+# change that breaks packaging; a weekly run finds that within days and
+# nobody waits on it. It runs weekly against main and on demand, and never
+# on pull requests or pushes, where it only made people wait.
 #
 # Caching. The lane used to rebuild everything: about 4-7 minutes of native
 # MLX compilation and 5-7 minutes of thin-LTO Rust per run. Both are now
@@ -37,20 +39,12 @@ on:
     # Sundays at 03:41 UTC, off the hour and clear of the 02:23 notices lane.
     - cron: "41 3 * * 0"
   workflow_dispatch:
-  pull_request:
-    paths:
-      - .github/workflows/macos-packaging.yml
-      - xtask/src/app_bundle/**
-      - xtask/src/app_bundle.rs
 
 permissions:
   contents: read
 
 concurrency:
   group: macos-packaging-${{ github.ref }}
-  # A newer push supersedes a pull request's in-flight packaging run; this
-  # lane is informational there, never a required check.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Must equal ci.yml's pin: the native-build identity hashes toolchain
@@ -181,11 +175,11 @@ jobs:
           path: ${{ env.NATIVE_BUILD_ENTRY_DIRECTORY }}
           key: astronomical-v2-native-build-${{ runner.os }}-${{ runner.arch }}-${{ env.NATIVE_BUILD_IDENTITY }}
       - name: Save release-sccache-cache
-        # Default branch only, as ci.yml's sccache: a pull request's entry
-        # would never be superseded and would only spend the cache budget.
-        # The weekly run keeps it current for the run before a release.
-        # TEMPORARY: pull request runs save too, for one measurement cycle.
-        if: ${{ !cancelled() }}
+        # Default branch only, as ci.yml's sccache: an entry saved by a
+        # dispatch from another branch would never be superseded and would
+        # only spend the cache budget. Each weekly run saves a fresh
+        # generation for the next one.
+        if: ${{ !cancelled() && github.ref_name == github.event.repository.default_branch }}
         uses: ./.github/actions/astronomical-cache
         with:
           operation: save
