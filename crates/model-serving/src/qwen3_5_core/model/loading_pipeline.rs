@@ -141,7 +141,7 @@ pub(crate) fn bind_language_artifact(
 /// position and stored tensor spelling for physical reads.
 pub(crate) fn build_vision_tensor_shard_map(
     shard_index: &Qwen3_5ShardIndex,
-) -> HashMap<String, crate::qwen3_5_core::vision::EmbeddedVisionTensorLocation> {
+) -> HashMap<String, crate::qwen3_5_core::vision::VisionTensorLocation> {
     let mut vision_tensor_name_to_shard_location = HashMap::new();
     for (vision_tensor_name, shard_file_name) in shard_index.vision_tensor_name_to_shard_file_name()
     {
@@ -157,8 +157,8 @@ pub(crate) fn build_vision_tensor_shard_map(
         if let Some(shard_position) = shard_position_option {
             vision_tensor_name_to_shard_location.insert(
                 vision_tensor_name.clone(),
-                crate::qwen3_5_core::vision::EmbeddedVisionTensorLocation {
-                    shard_position,
+                crate::qwen3_5_core::vision::VisionTensorLocation {
+                    source_file_position: shard_position,
                     stored_tensor_name: shard_index.stored_tensor_name_for(vision_tensor_name),
                 },
             );

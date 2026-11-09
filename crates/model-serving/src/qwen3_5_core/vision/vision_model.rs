@@ -23,9 +23,14 @@ use super::{
 };
 use mlx_c_rust::{MlxArray, MlxCompiledElementwiseGraphs};
 
+#[cfg(test)]
+#[path = "vision_model_tests.rs"]
+mod tests;
+
 const LAYER_NORM_EPSILON: f32 = 1e-6;
 
-/// Resident Qwen3.5 vision configuration and indexed visual weights.
+/// Qwen3.5 vision configuration and its visual weights, which hold memory only
+/// between an image request's first use and the release that follows it.
 #[derive(Debug)]
 pub struct Qwen3_5VisionModel {
     config: Qwen3_5VisionConfig,
@@ -75,7 +80,7 @@ impl Qwen3_5VisionModel {
         model_shard_files: Vec<std::fs::File>,
         vision_tensor_name_to_shard_location: std::collections::HashMap<
             String,
-            super::EmbeddedVisionTensorLocation,
+            super::VisionTensorLocation,
         >,
     ) -> Result<Self, Qwen3_5ExecutionError> {
         let weights = Qwen3_5VisionWeights::load_from_model_shard_files(
@@ -91,6 +96,12 @@ impl Qwen3_5VisionModel {
             weights_have_been_used: Cell::new(false),
             padding_zero_cache: Qwen3_5VisionPaddingZeroCache::new(),
         })
+    }
+
+    /// The tower's complete payload, whether or not it is in memory right now.
+    #[must_use]
+    pub(crate) const fn tower_payload_bytes(&self) -> u64 {
+        self.weights.total_payload_bytes()
     }
 
     /// Releases the tower's evaluated weights once an image request no longer

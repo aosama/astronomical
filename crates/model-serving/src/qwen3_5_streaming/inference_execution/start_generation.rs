@@ -477,11 +477,7 @@ impl Qwen3_5EngineState {
     /// Releases the loaded model's vision tower once its embeddings are resolved.
     fn release_loaded_vision_tower(&mut self) {
         if let Some(model) = self.model.as_mut() {
-            let model_base = &mut model.base;
-            crate::qwen3_5_core::vision::release_vision_tower_after_image_request(
-                &model_base.runtime,
-                model_base.vision_model.as_mut(),
-            );
+            model.base.release_vision_tower_after_image_request();
         }
     }
 

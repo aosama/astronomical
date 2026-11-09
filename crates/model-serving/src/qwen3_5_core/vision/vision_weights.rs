@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use astronomical_runtime_integration::{MlxRuntime, MlxSafetensors};
+use astronomical_runtime_integration::MlxRuntime;
 
 use crate::qwen3_5_core::configuration::Qwen3_5Config;
 use crate::qwen3_5_core::quantizations::mlx_quantization::{
@@ -13,16 +13,17 @@ use super::{Qwen3_5ExecutionError, ValidatedQwen3_5Artifact};
 use mlx_c_rust::{MlxArray, MlxDtype};
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
-/// Where one canonical vision tensor physically lives inside the loaded model
-/// shards, including its stored spelling for unified-naming checkpoints
+/// Where one canonical vision tensor physically lives among the tower's
+/// source files (vision sidecars, or the model shards of an embedded tower),
+/// including its stored spelling for unified-naming checkpoints
 /// (`model.visual.*` shards read through canonical `vision_tower.*` names).
 #[derive(Clone, Debug)]
-pub struct EmbeddedVisionTensorLocation {
-    /// Position of the owning shard inside the loaded model shard list.
-    pub shard_position: usize,
-    /// Tensor spelling to use for the physical shard read.
+pub struct VisionTensorLocation {
+    /// Position of the owning file in the tower's source file list.
+    pub source_file_position: usize,
+    /// Tensor spelling to use for the physical read.
     pub stored_tensor_name: String,
 }
 
@@ -37,13 +38,12 @@ pub struct Qwen3_5VisionWeights {
     bound_tensors: HashMap<String, MlxArray>,
     quantization_profiles: HashMap<String, ModuleQuantizationProfile>,
     tensor_profiles: Vec<TensorProfile>,
+    /// The tower's own source files. Its lazy maps are loaded apart from the
+    /// language shards even for embedded towers, because a map entry keeps an
+    /// evaluated tensor alive: sharing the language maps would pin the tower's
+    /// bytes for the model's lifetime. The maps themselves are dropped right
+    /// after binding; each bound handle keeps its reader alive on its own.
     tensor_source: Qwen3_5VisionTensorSource,
-    /// The lazy SafeTensors maps the bound tensors read from. They are loaded
-    /// apart from the language shards even for embedded towers, because a
-    /// map entry keeps an evaluated tensor alive: sharing the language maps
-    /// would pin the tower's bytes for the model's lifetime.
-    #[allow(dead_code)]
-    source_safetensors: Vec<MlxSafetensors>,
     total_payload_bytes: u64,
 }
 
@@ -80,7 +80,7 @@ impl Qwen3_5VisionWeights {
             .shard_index()
             .vision_tensor_name_to_shard_file_name()
         {
-            let Some(shard_position) = vision_sidecar_file_names
+            let Some(source_file_position) = vision_sidecar_file_names
                 .iter()
                 .position(|indexed_file_name| indexed_file_name == vision_sidecar_file_name)
             else {
@@ -88,8 +88,8 @@ impl Qwen3_5VisionWeights {
             };
             vision_tensor_name_to_location.insert(
                 vision_tensor_name.clone(),
-                EmbeddedVisionTensorLocation {
-                    shard_position,
+                VisionTensorLocation {
+                    source_file_position,
                     stored_tensor_name: vision_tensor_name.clone(),
                 },
             );
@@ -97,7 +97,7 @@ impl Qwen3_5VisionWeights {
         let tensor_source = Qwen3_5VisionTensorSource::new(
             vision_sidecar_files
                 .into_iter()
-                .map(|vision_sidecar_file| vision_sidecar_file.into_file())
+                .map(crate::artifact_validation::ValidatedWeightsFile::into_file)
                 .collect(),
             vision_tensor_name_to_location,
         );
@@ -107,7 +107,7 @@ impl Qwen3_5VisionWeights {
     /// Loads vision weights embedded in the model shard files.
     ///
     /// `model_shard_files` are descriptors of the model shards in the order the
-    /// locations' `shard_position` values index. Vision tensors can be
+    /// locations' `source_file_position` values index. Vision tensors can be
     /// embedded in the same shard files as language model tensors or in a
     /// dedicated vision-only model shard.
     pub fn load_from_model_shard_files(
@@ -115,10 +115,12 @@ impl Qwen3_5VisionWeights {
         vision_config: &super::Qwen3_5VisionConfig,
         qwen3_5_config: &Qwen3_5Config,
         model_shard_files: Vec<std::fs::File>,
-        vision_tensor_name_to_shard_location: HashMap<String, EmbeddedVisionTensorLocation>,
+        vision_tensor_name_to_shard_location: HashMap<String, VisionTensorLocation>,
     ) -> Result<Self, Qwen3_5ExecutionError> {
-        let tensor_source =
-            Qwen3_5VisionTensorSource::new(model_shard_files, vision_tensor_name_to_shard_location);
+        let tensor_source = Qwen3_5VisionTensorSource::keeping_referenced_files(
+            model_shard_files,
+            vision_tensor_name_to_shard_location,
+        );
         Self::bind(runtime, vision_config, qwen3_5_config, tensor_source)
     }
 
@@ -138,19 +140,13 @@ impl Qwen3_5VisionWeights {
                 vision_config,
                 qwen3_5_config,
             );
-        let source_safetensors = tensor_source.load_lazy_safetensors(runtime)?;
-        let (bound_tensors, total_payload_bytes) = bind_vision_tensors(
-            runtime,
-            &tensor_profiles,
-            &tensor_source,
-            &source_safetensors,
-        )?;
+        let (bound_tensors, total_payload_bytes) =
+            bind_vision_tensors(runtime, &tensor_profiles, &tensor_source)?;
         Ok(Self {
             bound_tensors,
             quantization_profiles,
             tensor_profiles,
             tensor_source,
-            source_safetensors,
             total_payload_bytes,
         })
     }
@@ -158,19 +154,16 @@ impl Qwen3_5VisionWeights {
     /// Replaces every bound tensor with a fresh lazy handle read from the
     /// retained source files, releasing the evaluated bytes.
     ///
-    /// The previous handles must not be referenced by any pending graph; the
-    /// caller releases only after the visual embeddings were evaluated.
+    /// The bytes are freed once no graph still references the previous
+    /// handles, and results stay correct either way; the caller releases after
+    /// the visual embeddings were evaluated, when nothing does. On error the
+    /// previous handles stay bound.
     pub(super) fn rebind_lazily(
         &mut self,
         runtime: &MlxRuntime,
     ) -> Result<(), Qwen3_5ExecutionError> {
-        let source_safetensors = self.tensor_source.load_lazy_safetensors(runtime)?;
-        let (bound_tensors, total_payload_bytes) = bind_vision_tensors(
-            runtime,
-            &self.tensor_profiles,
-            &self.tensor_source,
-            &source_safetensors,
-        )?;
+        let (bound_tensors, total_payload_bytes) =
+            bind_vision_tensors(runtime, &self.tensor_profiles, &self.tensor_source)?;
         if total_payload_bytes != self.total_payload_bytes {
             return Err(Qwen3_5ExecutionError::TensorPayloadMismatch {
                 actual_payload_bytes: total_payload_bytes,
@@ -178,7 +171,6 @@ impl Qwen3_5VisionWeights {
             });
         }
         self.bound_tensors = bound_tensors;
-        self.source_safetensors = source_safetensors;
         Ok(())
     }
 
@@ -276,20 +268,21 @@ impl Qwen3_5VisionWeights {
     }
 }
 
-/// Binds every profiled vision tensor from the loaded source maps, returning
-/// the bound handles and their total payload size.
+/// Binds every profiled vision tensor from fresh lazy maps of the source
+/// files, returning the bound handles and their total payload size. The maps
+/// are dropped on return; each bound handle keeps its reader alive.
 fn bind_vision_tensors(
     runtime: &MlxRuntime,
     tensor_profiles: &[TensorProfile],
     tensor_source: &Qwen3_5VisionTensorSource,
-    source_safetensors: &[MlxSafetensors],
 ) -> Result<(HashMap<String, MlxArray>, u64), Qwen3_5ExecutionError> {
+    let source_safetensors = tensor_source.load_lazy_safetensors(runtime)?;
     let mut bound_tensors = HashMap::with_capacity(tensor_profiles.len());
     let mut total_payload_bytes = 0_u64;
     for tensor_profile in tensor_profiles {
         let tensor_location = tensor_source.location(&tensor_profile.name)?;
         let source_map = source_safetensors
-            .get(tensor_location.shard_position)
+            .get(tensor_location.source_file_position)
             .ok_or_else(|| Qwen3_5ExecutionError::InvalidTensor {
                 tensor_name: tensor_profile.name.clone(),
                 description: "vision tensor resolves outside the loaded vision source files",

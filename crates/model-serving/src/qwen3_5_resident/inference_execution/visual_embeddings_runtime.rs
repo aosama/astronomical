@@ -3,7 +3,6 @@
 use crate::InferenceEngineError;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_core::vision::VisualEmbeddingEngineContext;
-use crate::qwen3_5_core::vision::release_vision_tower_after_image_request;
 use crate::qwen3_5_core::vision::resolve_visual_embeddings_for_processed_images as resolve_shared_visual_embeddings;
 use astronomical_ipc_protocol::RequestId;
 use mlx_c_rust::MlxArray;
@@ -52,10 +51,6 @@ pub(crate) fn resolve_visual_embeddings_for_processed_images(
 /// Releases the loaded model's vision tower once its embeddings are resolved.
 fn release_loaded_vision_tower(engine_state: &mut Qwen3_5EngineState) {
     if let Some(model) = engine_state.model.as_mut() {
-        let model_base = &mut model.base;
-        release_vision_tower_after_image_request(
-            &model_base.runtime,
-            model_base.vision_model.as_mut(),
-        );
+        model.base.release_vision_tower_after_image_request();
     }
 }

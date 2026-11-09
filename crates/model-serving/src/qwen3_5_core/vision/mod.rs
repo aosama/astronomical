@@ -39,9 +39,9 @@ pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles;
 #[cfg(feature = "direct-mlx")]
 pub use vision_tensor_spec::qwen3_5_vision_tensor_profiles_for_model;
 #[cfg(feature = "direct-mlx")]
-pub use vision_weights::EmbeddedVisionTensorLocation;
-#[cfg(feature = "direct-mlx")]
 pub use vision_weights::Qwen3_5VisionWeights;
+#[cfg(feature = "direct-mlx")]
+pub use vision_weights::VisionTensorLocation;
 #[cfg(feature = "direct-mlx")]
 pub use visual_embedding_injection::qwen3_5_inject_visual_embeddings;
 pub use visual_embeddings::{
@@ -60,8 +60,7 @@ pub(crate) use super::configuration::Qwen3_5ConfigError;
 pub(crate) use super::model_math::error::Qwen3_5ExecutionError;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use visual_embeddings_runtime::{
-    VisualEmbeddingEngineContext, release_vision_tower_after_image_request,
-    resolve_visual_embeddings_for_processed_images,
+    VisualEmbeddingEngineContext, resolve_visual_embeddings_for_processed_images,
 };
 
 #[cfg(feature = "direct-mlx")]
