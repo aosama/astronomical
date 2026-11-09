@@ -6,6 +6,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::native_store_paths::{native_store_entry_directory, native_store_schema_version};
+
 use astronomical_native_identity::probes::{ProbeValue, ToolchainOverrides};
 use astronomical_native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity_with_probe_values,
@@ -25,22 +27,58 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
     let (identity, probe_values) =
         native_build_identity_with_probe_values(&request).map_err(|error| error.to_string())?;
     if options.explain {
-        // These are the exact values the identity was hashed from — one
-        // capture, no second pass. Values are flattened to one line each so
-        // a CI log stays greppable: a native-cache flap is then attributable
-        // by reading seven lines instead of diffing runner images.
-        eprintln!("[native-fingerprint] identity={identity}");
-        for probe_entry in &probe_values {
-            eprintln!(
-                "[native-fingerprint] probe={} source={} value={}",
-                probe_entry.name,
-                probe_source_text(probe_entry),
-                one_line_text(&probe_entry.value)
-            );
-        }
+        explain_probe_values(&identity, &probe_values);
     }
-    println!("{identity}");
+    print_identity(&options, &identity)
+}
+
+/// These are the exact values the identity was hashed from — one capture, no
+/// second pass. Values are flattened to one line each so a CI log stays
+/// greppable: a native-cache flap is then attributable by reading seven lines
+/// instead of diffing runner images.
+fn explain_probe_values(identity: &str, probe_values: &[ProbeValue]) {
+    eprintln!("[native-fingerprint] identity={identity}");
+    for probe_entry in probe_values {
+        eprintln!(
+            "[native-fingerprint] probe={} source={} value={}",
+            probe_entry.name,
+            probe_source_text(probe_entry),
+            one_line_text(&probe_entry.value)
+        );
+    }
+}
+
+fn print_identity(options: &FingerprintOptions, identity: &str) -> Result<(), String> {
+    if options.cache_environment {
+        print!(
+            "{}",
+            cache_environment_text(&options.repository_root, identity)?
+        );
+    } else {
+        println!("{identity}");
+    }
     Ok(())
+}
+
+/// `--cache-environment` prints `KEY=value` lines for `$GITHUB_ENV`, so a
+/// workflow gets the native build cache key and the store entry to cache
+/// without re-deriving the store layout in shell. The entry is in the default
+/// store under HOME, which is the store `app package` reads its metallib from.
+fn cache_environment_text(repository_root: &Path, native_identity: &str) -> Result<String, String> {
+    let Some(home_directory) = std::env::var_os("HOME") else {
+        return Err("HOME is required to locate the native build store".to_owned());
+    };
+    let schema_version = native_store_schema_version(repository_root)?;
+    let entry_directory =
+        native_store_entry_directory(Path::new(&home_directory), schema_version, native_identity);
+    Ok(cache_environment_lines(native_identity, &entry_directory))
+}
+
+fn cache_environment_lines(native_identity: &str, entry_directory: &Path) -> String {
+    format!(
+        "NATIVE_BUILD_IDENTITY={native_identity}\nNATIVE_BUILD_ENTRY_DIRECTORY={}\n",
+        entry_directory.display()
+    )
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -49,6 +87,7 @@ struct FingerprintOptions {
     profile: NativeBuildProfile,
     scope: IdentityScope,
     explain: bool,
+    cache_environment: bool,
     target_triple: Option<String>,
 }
 
@@ -83,8 +122,7 @@ fn parse_arguments(
     repository_root: &Path,
     arguments: &[String],
 ) -> Result<Option<FingerprintOptions>, String> {
-    let mut source_only = false;
-    let mut explain = false;
+    let mut fingerprint_switches = FingerprintSwitches::default();
     let mut profile_text: Option<String> = None;
     let mut positional_root: Option<String> = None;
     let mut target_triple: Option<String> = None;
@@ -92,8 +130,7 @@ fn parse_arguments(
     while argument_index < arguments.len() {
         let argument = &arguments[argument_index];
         match argument.as_str() {
-            "--source-only" => source_only = true,
-            "--explain" => explain = true,
+            _ if fingerprint_switches.apply(argument) => {}
             "--profile" => {
                 let profile_value = option_value(arguments, argument_index, "--profile")?;
                 profile_text = Some(profile_value.clone());
@@ -121,20 +158,51 @@ fn parse_arguments(
     let profile_text = profile_text.ok_or("--profile is required")?;
     let profile =
         NativeBuildProfile::from_profile_text(&profile_text).map_err(|error| error.to_string())?;
-    let scope = if source_only {
-        IdentityScope::SourceOnly
-    } else {
-        IdentityScope::Full
-    };
+    let scope = fingerprint_switches.identity_scope()?;
     Ok(Some(FingerprintOptions {
         repository_root: positional_root
             .map(PathBuf::from)
             .unwrap_or_else(|| repository_root.to_path_buf()),
         profile,
         scope,
-        explain,
+        explain: fingerprint_switches.explain,
+        cache_environment: fingerprint_switches.cache_environment,
         target_triple,
     }))
+}
+
+/// The on/off options, kept apart from the valued ones so each stays a
+/// one-line match arm.
+#[derive(Debug, Default)]
+struct FingerprintSwitches {
+    source_only: bool,
+    explain: bool,
+    cache_environment: bool,
+}
+
+impl FingerprintSwitches {
+    /// Sets the switch `argument` names and reports whether it was one.
+    fn apply(&mut self, argument: &str) -> bool {
+        match argument {
+            "--source-only" => self.source_only = true,
+            "--explain" => self.explain = true,
+            "--cache-environment" => self.cache_environment = true,
+            _ => return false,
+        }
+        true
+    }
+
+    /// A source-only identity leaves the toolchain out, so it never names a
+    /// store entry and cannot be a cache key.
+    fn identity_scope(&self) -> Result<IdentityScope, String> {
+        match (self.source_only, self.cache_environment) {
+            (true, true) => {
+                Err("--cache-environment needs the full identity, not --source-only".to_owned())
+            }
+            (true, false) => Ok(IdentityScope::SourceOnly),
+            (false, _) => Ok(IdentityScope::Full),
+        }
+    }
 }
 
 fn option_value<'a>(

@@ -159,10 +159,12 @@ fn should_enable_the_app_store_state_root_feature_only_for_the_store() {
     let stable_arguments = release_cargo_arguments(
         &ChannelProfile::for_channel(Channel::Stable),
         "aarch64-apple-darwin",
+        Path::new("/lane-fixture/app-release"),
     );
     let store_arguments = release_cargo_arguments(
         &ChannelProfile::for_channel(Channel::AppStore),
         "aarch64-apple-darwin",
+        Path::new("/lane-fixture/app-release"),
     );
 
     assert_eq!(
@@ -184,6 +186,22 @@ fn should_enable_the_app_store_state_root_feature_only_for_the_store() {
             "{binary_name}"
         );
     }
+}
+
+/// sccache keys objects on every `CARGO_*` variable, so the per-run lane
+/// directory must reach Cargo as a flag for release objects to be reusable.
+#[test]
+fn should_pass_the_disposable_target_directory_as_a_flag() {
+    let stable_arguments = release_cargo_arguments(
+        &ChannelProfile::for_channel(Channel::Stable),
+        "aarch64-apple-darwin",
+        Path::new("/lane-fixture/app-release"),
+    );
+
+    assert_eq!(
+        &stable_arguments[4..6],
+        ["--target-dir", "/lane-fixture/app-release"]
+    );
 }
 
 #[test]

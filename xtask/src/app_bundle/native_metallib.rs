@@ -13,9 +13,7 @@ use astronomical_native_identity::{
     FingerprintRequest, IdentityScope, NativeBuildProfile, native_build_identity,
 };
 
-const NATIVE_BUILD_STORE_SCHEMA_VERSION_PATH: &str =
-    "crates/native-build-orchestration/src/native-build-store-schema-version";
-const NATIVE_BUILD_STORE_RELATIVE_TO_HOME: &str = "Library/Caches/Astronomical/native-builds";
+use crate::native_store_paths::{native_store_entry_directory, native_store_schema_version};
 
 pub(crate) fn packaged_metallib_source(
     repository_root: &Path,
@@ -50,26 +48,6 @@ pub(crate) fn metallib_store_path(
     schema_version: u32,
     native_identity: &str,
 ) -> PathBuf {
-    home_directory
-        .join(NATIVE_BUILD_STORE_RELATIVE_TO_HOME)
-        .join(format!("v{schema_version}"))
-        .join("entries")
-        .join(native_identity)
+    native_store_entry_directory(home_directory, schema_version, native_identity)
         .join("share/mlx/mlx.metallib")
-}
-
-fn native_store_schema_version(repository_root: &Path) -> Result<u32, String> {
-    let schema_version_path = repository_root.join(NATIVE_BUILD_STORE_SCHEMA_VERSION_PATH);
-    let schema_version_text = match std::fs::read_to_string(&schema_version_path) {
-        Ok(schema_version_text) => schema_version_text,
-        Err(read_error) => {
-            return Err(format!(
-                "native build store schema version is unavailable: {read_error}"
-            ));
-        }
-    };
-    match schema_version_text.trim().parse::<u32>() {
-        Ok(schema_version) => Ok(schema_version),
-        Err(_) => Err("native build store schema version must be an unsigned integer".to_owned()),
-    }
 }

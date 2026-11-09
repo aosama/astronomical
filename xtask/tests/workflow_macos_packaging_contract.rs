@@ -2,15 +2,15 @@
 //! `.github/workflows/macos-packaging.yml` and pins what the lane promises.
 //! It builds a real Stable bundle through `cargo xtask app package` and
 //! smoke-tests that bundle; it never signs with an identity, notarizes, or
-//! publishes; it gates only pull requests that touch packaging; and it
+//! publishes; it runs weekly and on demand, never on pull requests; and it
 //! resolves the same Xcode as `ci.yml`, whose pin the native-build identity
 //! depends on.
 
 mod contract_support;
 
 use contract_support::{
-    find_step_by_name, macos_packaging_workflow_contract, required_field, required_job,
-    required_text, run_text_of, steps_of, triggers_of, workflow_contract,
+    find_step_by_id, find_step_by_name, macos_packaging_workflow_contract, required_field,
+    required_job, required_text, run_text_of, steps_of, triggers_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -21,6 +21,11 @@ const NATIVE_BOOTSTRAP_STEP_NAME: &str = "Provision verified native dependencies
 const STABLE_BUNDLE_PATH: &str = "target/astronomical-macos-stable.noindex/Astronomical.app";
 const PINNED_XCODE_ACTION: &str = "./.github/actions/assert-pinned-xcode";
 const PINNED_XCODE_VARIABLE: &str = "ASTRONOMICAL_PINNED_XCODE_VERSION";
+const NATIVE_BUILD_RESTORE_STEP_NAME: &str = "Restore native-build-cache";
+const NATIVE_BUILD_KEY_STEP_NAME: &str = "Compute the native build cache key";
+const SCCACHE_ROUTING_STEP_NAME: &str = "Route Rust compilation through sccache";
+const RELEASE_SCCACHE_RESTORE_STEP_NAME: &str = "Restore release-sccache-cache";
+const CI_NATIVE_BUILD_JOB_ID: &str = "rust-core";
 
 /// Fragments that would mean the lane signs with a real identity, reaches
 /// Apple's notary service, or publishes a release; CI holds no credentials
@@ -33,6 +38,21 @@ const FORBIDDEN_RELEASE_FRAGMENTS: [&str; 6] = [
     "secrets.",
     "app-store",
 ];
+
+fn step_index_of(job_steps: &[&Value], step_name: &str) -> usize {
+    job_steps
+        .iter()
+        .position(|step| step.get("name").and_then(Value::as_str) == Some(step_name))
+        .unwrap_or_else(|| panic!("the packaging job has no step named {step_name}"))
+}
+
+fn cache_input<'a>(step: &'a Value, step_name: &str, input_name: &str) -> &'a str {
+    required_text(
+        required_field(step, "with", step_name),
+        input_name,
+        step_name,
+    )
+}
 
 fn packaging_job_run_texts(workflow: &Value) -> Vec<String> {
     let mut run_texts = Vec::new();
@@ -107,8 +127,12 @@ fn should_never_sign_with_an_identity_notarize_or_publish() {
     );
 }
 
+/// A release build is a weekly backstop, never a gate: every release already
+/// packages for real on the release Mac, and the contracts run as xtask unit
+/// tests on every pull request, so a pull request or push trigger only makes
+/// people wait.
 #[test]
-fn should_gate_only_pull_requests_that_touch_packaging() {
+fn should_run_weekly_and_on_demand_but_never_on_pull_requests_or_pushes() {
     let workflow = macos_packaging_workflow_contract();
     let triggers = triggers_of(&workflow);
     assert!(
@@ -119,30 +143,12 @@ fn should_gate_only_pull_requests_that_touch_packaging() {
         triggers.get("workflow_dispatch").is_some(),
         "the on-demand run is missing"
     );
-    assert!(
-        triggers.get("push").is_none(),
-        "a cold release build on every push to main would queue behind itself"
-    );
-    let pull_request_paths = required_field(
-        required_field(triggers, "pull_request", "triggers"),
-        "paths",
-        "pull_request trigger",
-    )
-    .as_sequence()
-    .expect("the pull_request paths filter must be a sequence");
-    let mut watches_packaging_pipeline = false;
-    for path_filter in pull_request_paths {
-        let path_filter_text = path_filter.as_str().unwrap_or_default();
+    for gating_trigger in ["pull_request", "pull_request_target", "push"] {
         assert!(
-            path_filter_text != "**" && !path_filter_text.is_empty(),
-            "the pull_request filter must not match every change"
+            triggers.get(gating_trigger).is_none(),
+            "the packaging lane must not run on {gating_trigger}"
         );
-        watches_packaging_pipeline |= path_filter_text.starts_with("xtask/src/app_bundle");
     }
-    assert!(
-        watches_packaging_pipeline,
-        "pull requests that change the packaging pipeline must run this lane"
-    );
 }
 
 #[test]
@@ -206,4 +212,93 @@ fn should_provision_native_archives_before_packaging() {
         bootstrap_index.is_some() && bootstrap_index < package_index,
         "native archives must be provisioned before the bundle is packaged"
     );
+}
+
+/// The packaging lane reuses the native MLX build ci.yml saves on main, so
+/// its restore key must be ci.yml's key character for character: any drift
+/// silently turns every packaging run back into a cold MLX build.
+#[test]
+fn should_restore_the_native_build_ci_saves_under_the_identical_key() {
+    let ci_workflow = workflow_contract();
+    let ci_steps = steps_of(
+        required_job(&ci_workflow, CI_NATIVE_BUILD_JOB_ID),
+        CI_NATIVE_BUILD_JOB_ID,
+    );
+    let ci_restore_step = find_step_by_id(&ci_steps, "native-build-cache");
+    let workflow = macos_packaging_workflow_contract();
+    let job_steps = steps_of(required_job(&workflow, PACKAGING_JOB_ID), PACKAGING_JOB_ID);
+    let packaging_restore_step = find_step_by_name(&job_steps, NATIVE_BUILD_RESTORE_STEP_NAME);
+
+    for input_name in ["key", "path"] {
+        assert_eq!(
+            cache_input(
+                packaging_restore_step,
+                NATIVE_BUILD_RESTORE_STEP_NAME,
+                input_name
+            ),
+            cache_input(ci_restore_step, "native-build-cache", input_name),
+            "the packaging lane's native-build {input_name} drifted from ci.yml"
+        );
+    }
+}
+
+#[test]
+fn should_compute_the_native_key_and_restore_the_entry_before_packaging() {
+    let workflow = macos_packaging_workflow_contract();
+    let job_steps = steps_of(required_job(&workflow, PACKAGING_JOB_ID), PACKAGING_JOB_ID);
+    let key_text = run_text_of(
+        find_step_by_name(&job_steps, NATIVE_BUILD_KEY_STEP_NAME),
+        NATIVE_BUILD_KEY_STEP_NAME,
+    );
+    assert!(
+        key_text.contains("--profile core") && key_text.contains("--cache-environment"),
+        "the key must be the core profile's, the profile app package prewarms: {key_text}"
+    );
+    let key_index = step_index_of(&job_steps, NATIVE_BUILD_KEY_STEP_NAME);
+    let restore_index = step_index_of(&job_steps, NATIVE_BUILD_RESTORE_STEP_NAME);
+    let package_index = step_index_of(&job_steps, PACKAGE_STEP_NAME);
+    assert!(
+        key_index < restore_index && restore_index < package_index,
+        "the native build entry must be keyed, then restored, before the bundle is packaged"
+    );
+}
+
+#[test]
+fn should_route_rust_compilation_through_sccache_before_packaging() {
+    let workflow = macos_packaging_workflow_contract();
+    let job_steps = steps_of(required_job(&workflow, PACKAGING_JOB_ID), PACKAGING_JOB_ID);
+    let routing_text = run_text_of(
+        find_step_by_name(&job_steps, SCCACHE_ROUTING_STEP_NAME),
+        SCCACHE_ROUTING_STEP_NAME,
+    );
+    for required_setting in [
+        "RUSTC_WRAPPER=sccache",
+        "CARGO_INCREMENTAL=0",
+        "release-sccache",
+    ] {
+        assert!(
+            routing_text.contains(required_setting),
+            "the sccache routing step does not set {required_setting}"
+        );
+    }
+    assert!(
+        step_index_of(&job_steps, SCCACHE_ROUTING_STEP_NAME)
+            < step_index_of(&job_steps, PACKAGE_STEP_NAME),
+        "Rust must be routed through sccache before the bundle is packaged"
+    );
+}
+
+/// Release objects are optimised and carry LTO bitcode, so they share nothing
+/// with ci.yml's debug sccache; mixing the two would only evict each other.
+#[test]
+fn should_keep_release_objects_out_of_the_debug_sccache_family() {
+    let workflow = macos_packaging_workflow_contract();
+    let job_steps = steps_of(required_job(&workflow, PACKAGING_JOB_ID), PACKAGING_JOB_ID);
+    let release_key = cache_input(
+        find_step_by_name(&job_steps, RELEASE_SCCACHE_RESTORE_STEP_NAME),
+        RELEASE_SCCACHE_RESTORE_STEP_NAME,
+        "key",
+    );
+    assert!(release_key.starts_with("astronomical-v2-release-sccache-"));
+    assert!(!release_key.starts_with("astronomical-v2-sccache-"));
 }

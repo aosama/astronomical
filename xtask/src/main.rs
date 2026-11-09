@@ -40,6 +40,9 @@ mod native_dependency_manifest;
 #[cfg(test)]
 mod native_dependency_manifest_tests;
 mod native_fingerprint;
+mod native_store_paths;
+#[cfg(test)]
+mod native_store_paths_tests;
 mod notices;
 #[cfg(test)]
 mod notices_tests;
@@ -135,7 +138,7 @@ fn main() -> ExitCode {
         )),
         _ => {
             eprintln!(
-                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release <step> (see scripts/release/README.md) | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | check-test-channel-isolation | menu-contracts | vendor-thin-talk-assets [--verify-only] | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
+                "usage: cargo xtask [--repository-root PATH] app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store | prewarm-native-build --profile core|core+memory-contract [--profile ...] | release <step> (see scripts/release/README.md) | provision-bindgen-headers [--verify-headers | --print-patch-list] [--cache-dir PATH] [--native-build-store-dir PATH] [--manifest FILE] [--patch-list FILE] [--profile NAME] [--target TRIPLE] | test-run --package NAME (--test TARGET | --lib | --tests) [--features FEATURES] [--release | --profile NAME] [--configuration PATH] [--filter NAME] [--exact] [--ignored] | mlx-c-coverage-inventory | disposable-target --lane NAME -- COMMAND [ARGUMENT ...] | scan-retired-native-output [--target-directory PATH] [--fail-on-found] [EXTRA_SCAN_ROOT ...] | tier-pyramid [--update-baseline] | source-size [--staged] [root] | notices [--check] | native-fingerprint [--source-only] [--explain] [--cache-environment] [--target TARGET_TRIPLE] --profile core|core+memory-contract [root] | commit-identity --staged|--pre-push | classify-scope | check-architecture | check-test-channel-isolation | menu-contracts | vendor-thin-talk-assets [--verify-only] | audit-test-declarations | prune-caches [--dry-run] [--repo owner/name] | save-sccache <primary-cache-key> | install-verification-tools [--prefix DIR] | bootstrap-native-dependencies [--cache-dir ABSOLUTE_PATH] [--verify]"
             );
             ExitCode::from(2)
         }
