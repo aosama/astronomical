@@ -293,13 +293,18 @@ pub(crate) fn load_invariant_linear_scales(
     })
 }
 
-/// The model-core payload both engines budget identically: language weights
-/// plus the optional resident vision tower.
+/// The model-core payload both engines budget identically: the text weights
+/// that load into memory plus the optional vision tower while it is in use.
 pub(crate) fn model_core_payload_bytes(
     weights: &Qwen3_5Weights,
+    reads_embedding_rows_from_disk: bool,
     vision_model: &Option<Qwen3_5VisionModel>,
 ) -> u64 {
-    weights.total_payload_bytes().saturating_add(
+    crate::qwen3_5_core::model::base::resident_text_weight_payload_bytes(
+        weights,
+        reads_embedding_rows_from_disk,
+    )
+    .saturating_add(
         vision_model
             .as_ref()
             .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),

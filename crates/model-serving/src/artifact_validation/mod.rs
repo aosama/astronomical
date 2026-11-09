@@ -34,5 +34,7 @@ pub use validated_artifact::{
     RawSafetensorsInventoryForTests, RawSafetensorsTensorDescriptorForTests, ValidatedWeightsFile,
 };
 pub(crate) use validated_safetensors_source::ValidatedSafetensorsSource;
+#[cfg(feature = "direct-mlx")]
+pub(crate) use validated_safetensors_source::ValidatedStoredTensorRange;
 #[doc(hidden)]
 pub use validated_safetensors_source::validate_safetensors_required_profiles_for_tests;

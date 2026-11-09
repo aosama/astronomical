@@ -23,6 +23,10 @@ pub(crate) struct ValidatedSafetensorsSource {
     source_id: TensorSourceId,
     required_file: ValidatedRequiredFile,
     tensor_metadata_by_stored_name: BTreeMap<String, SafetensorsTensorView>,
+    /// Where the tensor data begins in the file; header offsets are relative
+    /// to it, so absolute reads add it.
+    #[cfg(feature = "direct-mlx")]
+    data_section_start_bytes: u64,
     payload_bytes: u64,
 }
 
@@ -133,6 +137,8 @@ impl ValidatedSafetensorsSource {
             source_id,
             required_file,
             tensor_metadata_by_stored_name,
+            #[cfg(feature = "direct-mlx")]
+            data_section_start_bytes: bounded_header.data_section_start_bytes,
             payload_bytes,
         })
     }
@@ -154,6 +160,29 @@ impl ValidatedSafetensorsSource {
                 .data_end_offset()
                 .saturating_sub(tensor_view.data_start_offset()),
         )
+    }
+
+    /// The validated header of one stored tensor with its data range made
+    /// absolute in the file, or `None` when this source does not hold it.
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn stored_tensor_file_range(
+        &self,
+        stored_name: &str,
+    ) -> Option<ValidatedStoredTensorRange<'_>> {
+        let tensor_view = self.tensor_metadata_by_stored_name.get(stored_name)?;
+        Some(ValidatedStoredTensorRange {
+            dtype: &tensor_view.dtype,
+            shape: &tensor_view.shape,
+            file_start_offset: self.data_section_start_bytes + tensor_view.data_start_offset(),
+            file_end_offset: self.data_section_start_bytes + tensor_view.data_end_offset(),
+        })
+    }
+
+    /// A duplicate of this source's validated descriptor, for readers that
+    /// must reach the same file identity after the engine takes the original.
+    #[cfg(feature = "direct-mlx")]
+    pub(crate) fn duplicate_file(&self) -> std::io::Result<std::fs::File> {
+        self.required_file.file().try_clone()
     }
 
     /// Validates the canonical profiles of every declared source location.
@@ -401,4 +430,14 @@ fn map_header_error(
             }
         }
     }
+}
+
+/// One stored tensor's validated dtype, shape and absolute byte range.
+#[cfg(feature = "direct-mlx")]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ValidatedStoredTensorRange<'source> {
+    pub(crate) dtype: &'source str,
+    pub(crate) shape: &'source [usize],
+    pub(crate) file_start_offset: u64,
+    pub(crate) file_end_offset: u64,
 }

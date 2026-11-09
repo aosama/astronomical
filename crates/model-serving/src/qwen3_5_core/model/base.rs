@@ -27,6 +27,10 @@ pub struct Qwen3_5ModelBase {
     pub(crate) config: Qwen3_5Config,
     pub(crate) decoder_cache_layout: DecoderCacheLayout,
     pub(crate) weights: Qwen3_5Weights,
+    /// Embedding rows read from the SSD per forward instead of a resident
+    /// table; `None` keeps the table resident. Only a dense model the
+    /// streaming engine serves sets it (issue #1985).
+    pub(crate) disk_embedding_rows: Option<super::disk_embedding_rows::Qwen3_5DiskEmbeddingRows>,
     pub(crate) vision_model: Option<Qwen3_5VisionModel>,
     /// Single-source MLX RAM split for context, activations, streaming, and experts.
     pub(crate) mlx_ram_budget: RefCell<MlxRamBudget>,
@@ -158,11 +162,13 @@ impl Qwen3_5ModelBase {
     /// Returns the resident target payload bytes wired after materialization.
     #[must_use]
     pub(crate) fn resident_model_payload_byte_count(&self) -> u64 {
-        self.weights.total_payload_bytes()
+        resident_text_weight_payload_bytes(&self.weights, self.disk_embedding_rows.is_some())
     }
 
     pub fn materialize_target_weights(&self) -> Result<(), Qwen3_5ExecutionError> {
-        self.weights.materialize(&self.runtime)?;
+        // An embedding table read from the SSD stays lazy and never loads.
+        self.weights
+            .materialize(&self.runtime, self.disk_embedding_rows.is_none())?;
         self.runtime.evaluate_arrays(&[
             &self.inverse_linear_head_dimension_scale,
             &self.inverse_square_root_linear_head_dimension_scale,
@@ -173,6 +179,20 @@ impl Qwen3_5ModelBase {
     }
 
     pub(crate) fn embedding_lookup(
+        &self,
+        token_indices: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        match &self.disk_embedding_rows {
+            Some(disk_embedding_rows) => disk_embedding_rows.embed_tokens(
+                &self.runtime,
+                token_indices,
+                &self.weights.embedding_weights,
+            ),
+            None => self.resident_embedding_lookup(token_indices),
+        }
+    }
+
+    fn resident_embedding_lookup(
         &self,
         token_indices: &MlxArray,
     ) -> Result<MlxArray, Qwen3_5ExecutionError> {
@@ -241,5 +261,20 @@ impl Qwen3_5ModelBase {
                 *quantization_bits,
             )?),
         }
+    }
+}
+
+/// The text weight bytes that load into memory: every bound language tensor,
+/// less the embedding table when its rows are read from the SSD.
+pub(crate) fn resident_text_weight_payload_bytes(
+    weights: &Qwen3_5Weights,
+    reads_embedding_rows_from_disk: bool,
+) -> u64 {
+    if reads_embedding_rows_from_disk {
+        weights
+            .total_payload_bytes()
+            .saturating_sub(weights.embedding_payload_bytes())
+    } else {
+        weights.total_payload_bytes()
     }
 }

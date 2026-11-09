@@ -226,10 +226,35 @@ impl Qwen3_5Weights {
         self.total_payload_bytes
     }
 
-    pub(crate) fn materialize(&self, runtime: &MlxRuntime) -> Result<(), Qwen3_5ExecutionError> {
-        let mut bound_tensor_references = Vec::with_capacity(self.tensor_count);
+    /// Evaluates the bound tensors so they are resident. With
+    /// `should_materialize_embeddings` false the embedding table stays lazy,
+    /// for a model that reads embedding rows from the SSD instead.
+    pub(crate) fn materialize(
+        &self,
+        runtime: &MlxRuntime,
+        should_materialize_embeddings: bool,
+    ) -> Result<(), Qwen3_5ExecutionError> {
+        let materialized_tensor_references =
+            self.materialized_tensor_references(should_materialize_embeddings)?;
+        Ok(runtime.evaluate_arrays(&materialized_tensor_references)?)
+    }
+
+    /// Every bound tensor `materialize` evaluates, checked against the bound
+    /// tensor count so a typed weight that skipped traversal is caught.
+    fn materialized_tensor_references(
+        &self,
+        should_materialize_embeddings: bool,
+    ) -> Result<Vec<&MlxArray>, Qwen3_5ExecutionError> {
+        let mut embedding_references = Vec::new();
         self.embedding_weights
-            .append_array_references(&mut bound_tensor_references);
+            .append_array_references(&mut embedding_references);
+        let mut bound_tensor_references = Vec::with_capacity(self.tensor_count);
+        let expected_tensor_count = if should_materialize_embeddings {
+            bound_tensor_references.extend(embedding_references);
+            self.tensor_count
+        } else {
+            self.tensor_count.saturating_sub(embedding_references.len())
+        };
         for decoder_layer_weights in &self.decoder_layer_weights {
             decoder_layer_weights.append_array_references(&mut bound_tensor_references);
         }
@@ -238,13 +263,26 @@ impl Qwen3_5Weights {
             self.language_model_head_weights
                 .append_array_references(&mut bound_tensor_references);
         }
-        if bound_tensor_references.len() != self.tensor_count {
+        if bound_tensor_references.len() != expected_tensor_count {
             return Err(Qwen3_5ExecutionError::TypedTensorCountMismatch {
                 actual_tensor_count: bound_tensor_references.len(),
-                expected_tensor_count: self.tensor_count,
+                expected_tensor_count,
             });
         }
-        Ok(runtime.evaluate_arrays(&bound_tensor_references)?)
+        Ok(bound_tensor_references)
+    }
+
+    /// Payload bytes of the embedding table, whether or not it is resident.
+    pub(crate) fn embedding_payload_bytes(&self) -> u64 {
+        let mut embedding_references = Vec::new();
+        self.embedding_weights
+            .append_array_references(&mut embedding_references);
+        let mut embedding_payload_bytes = 0_u64;
+        for embedding_array in embedding_references {
+            embedding_payload_bytes = embedding_payload_bytes
+                .saturating_add(u64::try_from(embedding_array.byte_count()).unwrap_or(u64::MAX));
+        }
+        embedding_payload_bytes
     }
 }
 
