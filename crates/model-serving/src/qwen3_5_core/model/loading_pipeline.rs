@@ -61,6 +61,10 @@ pub(crate) fn bind_language_artifact(
     } else {
         None
     };
+    // An embedded tower reads its own lazy maps of the same files (see
+    // `Qwen3_5VisionWeights`), so its descriptors are duplicated here before
+    // the language loader takes ownership of the originals.
+    let mut embedded_vision_shard_files = Vec::new();
     let model_shards = performance_attribution.measure_operation(
         PerformanceOperation::ModelSafetensorsMapping,
         |performance_attribution| -> Result<_, Qwen3_5ExecutionError> {
@@ -71,6 +75,14 @@ pub(crate) fn bind_language_artifact(
                 performance_attribution.positional_file_read_metrics();
             for model_shard_file in model_shard_files {
                 let shard_source_file = model_shard_file.into_file();
+                if has_embedded_vision_tower {
+                    embedded_vision_shard_files.push(shard_source_file.try_clone().map_err(
+                        |source| Qwen3_5ExecutionError::WeightSourceDescriptor {
+                            description: "could not duplicate a model shard descriptor for the vision tower",
+                            source,
+                        },
+                    )?);
+                }
                 model_shards.push(
                     runtime.load_safetensors(
                         shard_source_file,
@@ -97,12 +109,12 @@ pub(crate) fn bind_language_artifact(
                         })?;
                 let vision_tensor_name_to_shard_location =
                     build_vision_tensor_shard_map(&shard_index);
-                Some(Qwen3_5VisionModel::load_from_model_shards(
+                Some(Qwen3_5VisionModel::load_from_model_shard_files(
                     runtime,
                     vision_config,
                     &config,
-                    &model_shards,
-                    &vision_tensor_name_to_shard_location,
+                    std::mem::take(&mut embedded_vision_shard_files),
+                    vision_tensor_name_to_shard_location,
                 )?)
             } else {
                 None

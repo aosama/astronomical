@@ -32,6 +32,28 @@ pub(crate) struct VisualEmbeddingEngineContext<'context> {
     pub(crate) persistent_prompt_cache: Option<&'context PersistentPromptCacheDiskStore>,
 }
 
+/// Releases the vision tower's evaluated weights once a request has resolved
+/// its visual embeddings, whether or not resolution succeeded.
+///
+/// A failed release only logs and leaves the tower resident: the request
+/// already has what it needs, and the next image request tries again.
+pub(crate) fn release_vision_tower_after_image_request(
+    runtime: &MlxRuntime,
+    vision_model: Option<&mut Qwen3_5VisionModel>,
+) {
+    let Some(vision_model) = vision_model else {
+        return;
+    };
+    match vision_model.release_used_weights(runtime) {
+        Ok(true) => tracing::info!("released the vision tower weights after the image request"),
+        Ok(false) => {}
+        Err(release_error) => tracing::warn!(
+            error = %release_error,
+            "vision tower weights stay resident because releasing them failed"
+        ),
+    }
+}
+
 /// Resolves the visual-embedding suffix tensor for the images one request plans.
 ///
 /// Cached full-image embeddings are sliced per required image; missing images

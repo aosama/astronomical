@@ -70,6 +70,12 @@ pub enum Qwen3_5ExecutionError {
     ),
     #[error("Qwen3.5 sampled decoding error: {0}")]
     SampledDecoding(#[from] crate::InferenceEngineError),
+    #[error("{description}: {source}")]
+    WeightSourceDescriptor {
+        description: &'static str,
+        #[source]
+        source: std::io::Error,
+    },
 }
 
 impl Qwen3_5ExecutionError {

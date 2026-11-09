@@ -12,6 +12,8 @@ pub(crate) mod vision_input_plan;
 mod vision_model;
 #[cfg(feature = "direct-mlx")]
 mod vision_rotary_embedding;
+#[cfg(feature = "direct-mlx")]
+mod vision_tensor_source;
 pub(crate) mod vision_tensor_spec;
 #[cfg(feature = "direct-mlx")]
 mod vision_weights;
@@ -58,7 +60,8 @@ pub(crate) use super::configuration::Qwen3_5ConfigError;
 pub(crate) use super::model_math::error::Qwen3_5ExecutionError;
 #[cfg(feature = "direct-mlx")]
 pub(crate) use visual_embeddings_runtime::{
-    VisualEmbeddingEngineContext, resolve_visual_embeddings_for_processed_images,
+    VisualEmbeddingEngineContext, release_vision_tower_after_image_request,
+    resolve_visual_embeddings_for_processed_images,
 };
 
 #[cfg(feature = "direct-mlx")]
