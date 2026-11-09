@@ -384,13 +384,6 @@ pub(crate) fn remove_cache_owned_file_or_confirm_absent(
     })
 }
 
-pub(crate) fn hex_encode(block_hash_bytes: [u8; 32]) -> String {
-    block_hash_bytes
-        .iter()
-        .map(|block_hash_byte| format!("{block_hash_byte:02x}"))
-        .collect()
-}
-
 #[cfg(test)]
 #[path = "disk_store_file_tests.rs"]
 mod disk_store_file_tests;

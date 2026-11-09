@@ -194,3 +194,93 @@ fn should_refuse_a_tree_without_a_nonempty_selected_file() {
         Err(HuggingFaceHubError::EmptyManifest)
     ));
 }
+
+fn refusal_of_single_entry(tree_entry: TreeEntryDocument) -> HuggingFaceHubError {
+    let mut tree_manifest = TreeManifestAccumulator::new(HuggingFaceHubLimits::default());
+    accept_all(&mut tree_manifest, vec![tree_entry]).expect_err("the entry must be refused")
+}
+
+#[test]
+fn should_keep_a_lowercase_xet_hash_and_refuse_any_other() {
+    let mut tree_manifest = TreeManifestAccumulator::new(HuggingFaceHubLimits::default());
+    let xet_file = TreeEntryDocument {
+        xet_hash: Some(LFS_SHA256.to_owned()),
+        ..lfs_file("model.safetensors", 64)
+    };
+    accept_all(&mut tree_manifest, vec![xet_file]).expect("a lowercase Xet hash");
+    let manifest = tree_manifest
+        .finish(REPOSITORY_ID, REVISION)
+        .expect("a nonempty manifest");
+    assert_eq!(manifest.files()[0].xet_hash(), Some(LFS_SHA256));
+
+    let uppercase_xet_file = TreeEntryDocument {
+        xet_hash: Some(LFS_SHA256.to_ascii_uppercase()),
+        ..lfs_file("model.safetensors", 64)
+    };
+    assert!(matches!(
+        refusal_of_single_entry(uppercase_xet_file),
+        HuggingFaceHubError::InvalidXetHash
+    ));
+}
+
+#[test]
+fn should_refuse_large_file_metadata_that_disagrees_with_the_entry() {
+    let mut size_mismatch = lfs_file("model.safetensors", 64);
+    if let Some(lfs_document) = size_mismatch.lfs.as_mut() {
+        lfs_document.size = 63;
+    }
+    let mut empty_pointer = lfs_file("model.safetensors", 64);
+    if let Some(lfs_document) = empty_pointer.lfs.as_mut() {
+        lfs_document.pointer_size = 0;
+    }
+    for malformed_entry in [size_mismatch, empty_pointer] {
+        assert!(matches!(
+            refusal_of_single_entry(malformed_entry),
+            HuggingFaceHubError::InvalidLfsMetadata
+        ));
+    }
+}
+
+#[test]
+fn should_refuse_a_file_with_no_verifiable_digest() {
+    let undigested_file = TreeEntryDocument {
+        oid: None,
+        ..git_file("config.json", 512)
+    };
+    assert!(matches!(
+        refusal_of_single_entry(undigested_file),
+        HuggingFaceHubError::MissingIndependentDigest
+    ));
+}
+
+#[test]
+fn should_refuse_a_git_blob_id_that_is_not_lowercase_sha1() {
+    let short_blob_id = TreeEntryDocument {
+        oid: Some(GIT_BLOB_SHA1[..39].to_owned()),
+        ..git_file("config.json", 512)
+    };
+    assert!(matches!(
+        refusal_of_single_entry(short_blob_id),
+        HuggingFaceHubError::InvalidGitBlobSha1
+    ));
+}
+
+#[test]
+fn should_refuse_a_directory_that_carries_a_size_or_large_file_metadata() {
+    let sized_directory = TreeEntryDocument {
+        size: 1,
+        ..directory("weights")
+    };
+    assert!(matches!(
+        refusal_of_single_entry(sized_directory),
+        HuggingFaceHubError::InvalidEntrySize
+    ));
+    let directory_with_lfs = TreeEntryDocument {
+        lfs: lfs_file("weights", 0).lfs,
+        ..directory("weights")
+    };
+    assert!(matches!(
+        refusal_of_single_entry(directory_with_lfs),
+        HuggingFaceHubError::InvalidLfsMetadata
+    ));
+}

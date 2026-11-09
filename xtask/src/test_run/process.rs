@@ -163,14 +163,14 @@ impl CapturedOutput {
 }
 
 /// When the run started, when it last reported progress, and its budget.
-pub(super) struct SupervisionClock {
+struct SupervisionClock {
     started_at: Instant,
     last_progress_at: Instant,
     budget: Duration,
 }
 
 impl SupervisionClock {
-    pub(super) fn start(started_at: Instant, budget: Duration) -> Self {
+    fn start(started_at: Instant, budget: Duration) -> Self {
         Self {
             started_at,
             last_progress_at: started_at,
@@ -178,13 +178,13 @@ impl SupervisionClock {
         }
     }
 
-    pub(super) fn is_budget_exhausted(&self, now: Instant) -> bool {
+    fn is_budget_exhausted(&self, now: Instant) -> bool {
         now.saturating_duration_since(self.started_at) >= self.budget
     }
 
     /// Answers whether a progress line is due at `now`, and when it is,
     /// restarts the progress interval from `now`.
-    pub(super) fn take_progress_due(&mut self, now: Instant) -> bool {
+    fn take_progress_due(&mut self, now: Instant) -> bool {
         let is_progress_due =
             now.saturating_duration_since(self.last_progress_at) >= PROGRESS_INTERVAL;
         if is_progress_due {
@@ -293,7 +293,7 @@ fn drain_output(
 
 /// Where one output line is echoed on the console.
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum ConsoleEcho {
+enum ConsoleEcho {
     Stdout(String),
     Stderr(String),
     /// Cargo's rendered diagnostics already end in a newline.
@@ -305,7 +305,7 @@ pub(super) enum ConsoleEcho {
 /// a build reads like a plain `cargo` run; artifact and build-script
 /// messages have nothing rendered and stay silent. A stdout line that is
 /// not JSON is an ordinary program line and passes through.
-pub(super) fn console_echo_for_line(
+fn console_echo_for_line(
     output_style: OutputStyle,
     is_stdout: bool,
     line_text: &str,

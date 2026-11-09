@@ -332,6 +332,18 @@ fn packed_row_geometry(
             "packed code shape {packed_shape:?} and row scale shape {scale_shape:?} disagree"
         )));
     }
+    let input_width = decoded_input_width(*words_per_row, bit_width)?;
+    Ok(PackedRowGeometry {
+        output_rows: *output_rows,
+        words_per_row: *words_per_row,
+        input_width,
+    })
+}
+
+/// The activation width one packed row decodes to: `words_per_row` 32-bit
+/// words of `bit_width`-bit codes, which must be whole 32-code groups and
+/// align to the Hadamard rotation block.
+fn decoded_input_width(words_per_row: i32, bit_width: u32) -> Result<i32, MlxRuntimeError> {
     let bits_i32 = i32::try_from(bit_width)
         .map_err(|_| projection_error("bit width exceeds the template range".to_owned()))?;
     if words_per_row % bits_i32 != 0 {
@@ -347,16 +359,14 @@ fn packed_row_geometry(
         )));
     };
     let input_width = packed_bit_count / bits_i32;
+    // Whole 32-code groups always decode to a multiple of 32, so this holds
+    // while the Hadamard block is 32 wide; it guards a change to that width.
     if !hadamard32::is_applicable_to_input_width(input_width as usize) {
         return Err(projection_error(format!(
             "decoded input width {input_width} is not aligned to the jangtq2 packing width"
         )));
     }
-    Ok(PackedRowGeometry {
-        output_rows: *output_rows,
-        words_per_row: *words_per_row,
-        input_width,
-    })
+    Ok(input_width)
 }
 
 /// Whether one activation row serves every assignment (decode broadcasts
@@ -383,9 +393,9 @@ fn is_shared_activation_row(
     }
     match *activation_row_count {
         1 => Ok(true),
-        rows if rows == assignment_count => Ok(false),
-        rows => Err(projection_error(format!(
-            "activations carry {rows} rows but the route has {assignment_count} assignments"
+        activation_rows if activation_rows == assignment_count => Ok(false),
+        activation_rows => Err(projection_error(format!(
+            "activations carry {activation_rows} rows but the route has {assignment_count} assignments"
         ))),
     }
 }

@@ -10,9 +10,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 
 use super::{
-    DOWNLOAD_JOB_FIXED_METADATA_ALLOWANCE_BYTES, GIT_SHA1_HEX_CHARACTER_COUNT, HubManifestFile,
-    HuggingFaceHubError, HuggingFaceHubLimits, HuggingFaceManifest,
-    MAXIMUM_JAVASCRIPT_SAFE_INTEGER, SHA256_HEX_CHARACTER_COUNT,
+    HubManifestFile, HuggingFaceHubError, HuggingFaceHubLimits, HuggingFaceManifest,
+    MAXIMUM_JAVASCRIPT_SAFE_INTEGER,
 };
 use crate::library::download::job::download_job::MAXIMUM_DOWNLOAD_JOB_BYTES;
 use crate::library::download::transfer::file_digest::is_lowercase_hex;
@@ -21,6 +20,11 @@ use crate::library::hub::hugging_face_bounds::{
     is_canonical_ascii_path,
 };
 use crate::library::{DownloadFileDigest, DownloadPathSelection};
+
+const GIT_SHA1_HEX_CHARACTER_COUNT: usize = 40;
+const SHA256_HEX_CHARACTER_COUNT: usize = 64;
+/// Durable job metadata reserved before any file is listed.
+const DOWNLOAD_JOB_FIXED_METADATA_ALLOWANCE_BYTES: usize = 4_096;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct TreeEntryDocument {
@@ -221,5 +225,5 @@ fn validate_directory_entry(tree_entry: &TreeEntryDocument) -> Result<(), Huggin
 }
 
 #[cfg(test)]
-#[path = "hugging_face_tree_manifest_tests.rs"]
-mod hugging_face_tree_manifest_tests;
+#[path = "tree_manifest_tests.rs"]
+mod tree_manifest_tests;

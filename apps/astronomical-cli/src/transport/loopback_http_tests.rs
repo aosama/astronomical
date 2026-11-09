@@ -126,6 +126,13 @@ fn should_not_mistake_other_headers_for_chunked_transfer() {
     assert!(!is_chunked_transfer(
         "HTTP/1.1 200 OK\r\nX-Note: chunked\r\nContent-Length: 2"
     ));
+    // The former substring match counted both of these as chunked.
+    assert!(!is_chunked_transfer(
+        "HTTP/1.1 200 OK\r\nX-Original-Transfer-Encoding: chunked\r\nContent-Length: 2"
+    ));
+    assert!(!is_chunked_transfer(
+        "HTTP/1.1 200 OK\r\nX-Note: transfer-encoding: chunked\r\nContent-Length: 2"
+    ));
     assert!(!is_chunked_transfer(
         "HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip"
     ));

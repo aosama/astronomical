@@ -5,8 +5,8 @@ use crate::{RequestId, WorkerEvent};
 impl WorkerEvent {
     /// Returns a bounded diagnostic summary without exposing model-generated payloads.
     ///
-    /// The summary is the event's name followed by at most one identifying
-    /// detail: its request id, or the model it concerns.
+    /// The summary is the event's name followed by its request id, or by the
+    /// model-scoped counters it carries; never by generated payload.
     #[must_use]
     pub fn diagnostic_summary(&self) -> String {
         let event_name = self.diagnostic_event_name();
@@ -14,10 +14,10 @@ impl WorkerEvent {
             return format!("{event_name} request_id={}", request_id.value());
         }
         match self {
-            Self::ExpertStreamingStats { stats } => format!(
-                "{event_name} model_id={} retained_assignments={}",
-                stats.model_id.as_deref().unwrap_or("<none>"),
-                stats.retained_route_assignment_count
+            Self::ExpertStreamingStats { stats } => expert_streaming_summary(
+                event_name,
+                stats.model_id.as_deref(),
+                stats.retained_route_assignment_count,
             ),
             Self::PromptCacheCleared { model_id, .. } => {
                 format!("{event_name} model_id={model_id:?}")
@@ -105,6 +105,19 @@ impl WorkerEvent {
             | Self::PromptCacheCleared { .. } => None,
         }
     }
+}
+
+/// The streaming-stats line names its model, or `<none>` before one is
+/// loaded, and the assignments served from retained memory so far.
+fn expert_streaming_summary(
+    event_name: &str,
+    model_id: Option<&str>,
+    retained_route_assignment_count: u64,
+) -> String {
+    format!(
+        "{event_name} model_id={} retained_assignments={retained_route_assignment_count}",
+        model_id.unwrap_or("<none>")
+    )
 }
 
 #[cfg(test)]

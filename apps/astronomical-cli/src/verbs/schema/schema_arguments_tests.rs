@@ -1,4 +1,4 @@
-//! Unit tests for `crate::schema_arguments`: the `schema object` grammar —
+//! Unit tests for `crate::verbs::schema` argument parsing: the `schema object` grammar —
 //! property kinds, modifiers, dotted paths, and the rejection rules.
 
 use std::ffi::OsString;

@@ -92,10 +92,19 @@ fn open_loopback_stream(
     Ok(tcp_stream)
 }
 
-/// The bytes of one response as read, and where its header ends.
+/// The bytes of one response as read, where its header ends, and the body
+/// length the header declared, if any.
 #[derive(Debug)]
 struct RawHttpResponse {
     response_bytes: Vec<u8>,
+    header_end: usize,
+    content_length: Option<usize>,
+}
+
+/// Where the header ends and the body length it declared, once the header
+/// has fully arrived.
+#[derive(Clone, Copy)]
+struct ParsedResponseHead {
     header_end: usize,
     content_length: Option<usize>,
 }
@@ -107,7 +116,7 @@ fn read_http_response(
 ) -> Result<RawHttpResponse, LoopbackRequestError> {
     let mut response_bytes = Vec::new();
     let mut read_buffer = [0_u8; 8192];
-    let mut parsed_head: Option<(usize, Option<usize>)> = None;
+    let mut parsed_head: Option<ParsedResponseHead> = None;
     loop {
         if response_bytes.len() > MAXIMUM_JSON_BODY_BYTES + read_buffer.len() {
             return Err(LoopbackRequestError::Oversized);
@@ -124,9 +133,15 @@ fn read_http_response(
             && let Some(header_end) = find_header_end(&response_bytes)
         {
             let content_length = parse_response_head(header_text(&response_bytes, header_end)?)?;
-            parsed_head = Some((header_end, content_length));
+            parsed_head = Some(ParsedResponseHead {
+                header_end,
+                content_length,
+            });
         }
-        if let Some((header_end, Some(body_length))) = parsed_head
+        if let Some(ParsedResponseHead {
+            header_end,
+            content_length: Some(body_length),
+        }) = parsed_head
             && response_bytes
                 .len()
                 .saturating_sub(header_end + HEADER_TERMINATOR.len())
@@ -135,7 +150,10 @@ fn read_http_response(
             break;
         }
     }
-    let (header_end, content_length) = parsed_head.ok_or(LoopbackRequestError::Malformed)?;
+    let ParsedResponseHead {
+        header_end,
+        content_length,
+    } = parsed_head.ok_or(LoopbackRequestError::Malformed)?;
     Ok(RawHttpResponse {
         response_bytes,
         header_end,

@@ -156,16 +156,12 @@ pub(crate) fn scan_current_format_block_directories(
 fn list_block_directories(
     blocks_directory: &Path,
 ) -> Result<Vec<PathBuf>, PersistentPromptCacheDiskStoreError> {
-    let read_directory_error =
-        |source| PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
-            persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
-            source,
-        };
     let mut block_directory_paths = Vec::new();
-    for directory_entry_result in
-        std::fs::read_dir(blocks_directory).map_err(read_directory_error)?
+    for directory_entry_result in std::fs::read_dir(blocks_directory)
+        .map_err(|source| read_blocks_directory_error(blocks_directory, source))?
     {
-        let directory_entry = directory_entry_result.map_err(read_directory_error)?;
+        let directory_entry = directory_entry_result
+            .map_err(|source| read_blocks_directory_error(blocks_directory, source))?;
         let entry_path = directory_entry.path();
         let entry_file_type = directory_entry.file_type().map_err(|source| {
             PersistentPromptCacheDiskStoreError::ReadBlockMetadata {
@@ -178,6 +174,16 @@ fn list_block_directories(
         }
     }
     Ok(block_directory_paths)
+}
+
+fn read_blocks_directory_error(
+    blocks_directory: &Path,
+    source: std::io::Error,
+) -> PersistentPromptCacheDiskStoreError {
+    PersistentPromptCacheDiskStoreError::ReadPromptCacheDirectory {
+        persistent_prompt_cache_directory: blocks_directory.to_path_buf(),
+        source,
+    }
 }
 
 /// What phase one decides about one block directory on its own.
@@ -197,10 +203,11 @@ fn classify_block_directory(
     block_directory_path: &Path,
     persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
 ) -> Result<BlockDirectoryVerdict, PersistentPromptCacheDiskStoreError> {
-    let corrupt = BlockDirectoryVerdict::Discard(BlockDirectoryDiscardReason::CorruptCurrentFormat);
+    let corrupt_verdict =
+        BlockDirectoryVerdict::Discard(BlockDirectoryDiscardReason::CorruptCurrentFormat);
     let Some(block_directory_name) = block_directory_path.file_name().and_then(OsStr::to_str)
     else {
-        return Ok(corrupt);
+        return Ok(corrupt_verdict);
     };
     // A staging name proves publication never reached its atomic directory
     // rename. Remove the whole transaction; individual files are not salvageable.
@@ -211,16 +218,16 @@ fn classify_block_directory(
     }
     let Some(block_hash) = parse_persistent_prompt_cache_file_hash_from_path(block_directory_path)
     else {
-        return Ok(corrupt);
+        return Ok(corrupt_verdict);
     };
     let Ok(block_manifest) = PersistentPromptCacheBlockManifest::read_from_block_directory(
         block_directory_path,
         persistent_prompt_cache_model_contract,
     ) else {
-        return Ok(corrupt);
+        return Ok(corrupt_verdict);
     };
     if block_manifest.block_hash().ok() != Some(block_hash) {
-        return Ok(corrupt);
+        return Ok(corrupt_verdict);
     }
     // Missing or invalid state remains `None` until topology reconciliation.
     // That later phase can distinguish a legal compacted parent boundary from
@@ -254,6 +261,7 @@ struct BlockDirectoryCandidate {
 /// the evidence bucket the removal is recorded under, so the operator-facing
 /// cleanup report separates interrupted transactions (expected after a crash
 /// mid-publish) from genuinely corrupt current-format directories.
+#[derive(Debug, PartialEq, Eq)]
 enum BlockDirectoryDiscardReason {
     CorruptCurrentFormat,
     InterruptedTransaction,

@@ -22,9 +22,6 @@ const MAXIMUM_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 const DEFAULT_MAXIMUM_TREE_PAGE_COUNT: usize = 128;
 const DEFAULT_MAXIMUM_FILE_COUNT: usize = 65_536;
 const DEFAULT_MAXIMUM_PATH_BYTES: usize = 1_024;
-const GIT_SHA1_HEX_CHARACTER_COUNT: usize = 40;
-const SHA256_HEX_CHARACTER_COUNT: usize = 64;
-const DOWNLOAD_JOB_FIXED_METADATA_ALLOWANCE_BYTES: usize = 4_096;
 /// Resource limits applied while converting untrusted Hub metadata into a manifest.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct HuggingFaceHubLimits {
@@ -241,9 +238,9 @@ impl HuggingFaceHub {
         }
     }
 
-    /// Walks every page of the recursive tree. Each entry is checked as it
-    /// arrives so a hostile tree fails at its first bad entry instead of
-    /// after it has been buffered whole.
+    /// Walks every page of the recursive tree. Each page's entries are
+    /// checked as the page arrives, so a hostile tree fails at its first bad
+    /// page instead of after the whole tree has been fetched.
     async fn fetch_recursive_tree(
         &self,
         repository_id: &str,
@@ -368,5 +365,4 @@ impl HubManifestFile {
     }
 }
 
-#[path = "hugging_face_tree_manifest.rs"]
 mod tree_manifest;

@@ -1,3 +1,4 @@
+use super::expert_streaming_summary;
 use crate::{ChatGenerationFailureReason, RequestId, WorkerEvent};
 
 const PRIVATE_FAILURE_TEXT: &str = "Shall I compare thee to a summer's day?";
@@ -66,5 +67,21 @@ fn should_name_the_scoped_and_global_prompt_cache_clears_apart() {
     assert_eq!(
         global_clear.diagnostic_summary(),
         "prompt_cache_cleared model_id=None"
+    );
+}
+
+#[test]
+fn should_name_expert_streaming_stats_with_model_and_retained_assignments() {
+    assert_eq!(
+        expert_streaming_summary("expert_streaming_stats", Some("ornith-35b"), 4_096),
+        "expert_streaming_stats model_id=ornith-35b retained_assignments=4096"
+    );
+}
+
+#[test]
+fn should_name_expert_streaming_stats_before_any_model_is_loaded() {
+    assert_eq!(
+        expert_streaming_summary("expert_streaming_stats", None, 0),
+        "expert_streaming_stats model_id=<none> retained_assignments=0"
     );
 }

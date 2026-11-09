@@ -54,3 +54,17 @@ fn should_refuse_a_64_byte_text_holding_a_multibyte_character_without_panicking(
     assert_eq!(multibyte_digest.len(), 64);
     assert_eq!(decode_lowercase_hex_digest(&multibyte_digest), None);
 }
+
+#[test]
+fn should_encode_every_byte_as_two_lowercase_digits_and_decode_back() {
+    let ascending_digest: [u8; 32] = core::array::from_fn(byte_value_from_index);
+    assert_eq!(
+        super::encode_lowercase_hex_digest(ascending_digest),
+        ASCENDING_DIGEST_HEX
+    );
+    assert_eq!(
+        super::encode_lowercase_hex_digest([0xff; 32]),
+        "f".repeat(64)
+    );
+    assert_eq!(super::encode_lowercase_hex_digest([0; 32]), "0".repeat(64));
+}

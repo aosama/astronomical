@@ -155,7 +155,7 @@ pub enum SchemaPropertyKind {
 
 impl SchemaPropertyKind {
     /// The kind a property flag declares, or `None` for any other argument.
-    pub fn from_kind_flag(argument_text: &str) -> Option<Self> {
+    fn from_kind_flag(argument_text: &str) -> Option<Self> {
         match argument_text {
             "--string" => Some(Self::String),
             "--int" => Some(Self::Integer),

@@ -249,6 +249,10 @@ fn should_name_each_non_positive_trunk_dimension() {
         ("hidden_size", "hidden_size must be positive"),
         ("num_hidden_layers", "num_hidden_layers must be positive"),
         (
+            "num_attention_heads",
+            "num_attention_heads must be positive",
+        ),
+        (
             "num_key_value_heads",
             "num_key_value_heads must be positive",
         ),

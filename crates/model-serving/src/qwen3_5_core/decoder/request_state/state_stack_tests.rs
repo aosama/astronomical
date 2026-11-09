@@ -5,7 +5,12 @@ use crate::qwen3_5_core::decoder::cache_layout::{
 };
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config;
 
-use super::RequestDecoderStateStack;
+use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
+use mlx_c_rust::MlxArray;
+use serial_test::serial;
+
+use super::{RequestDecoderStateStack, composite_first_use_bytes};
+use crate::decoder_cache::{ConvolutionState, GatedDeltaRecurrentState};
 
 const KV_SLAB_TOKENS: usize = 256;
 
@@ -150,4 +155,96 @@ fn should_refuse_a_layout_whose_layer_families_are_swapped() {
         .projected_persistent_state_growth_bytes(&reversed_layout, 1)
         .expect_err("swapped families must be refused");
     assert!(refusal.to_string().contains("family"), "{refusal}");
+}
+
+/// The convolution and recurrent components of the first linear-attention
+/// layer of the Ornith layout.
+fn first_composite_components() -> Vec<DecoderCacheLayerLayout> {
+    for decoder_cache_layer_layout in layout_layers(&ornith_decoder_cache_layout()) {
+        if let DecoderCacheLayerLayout::Composite { components } = decoder_cache_layer_layout {
+            return components;
+        }
+    }
+    panic!("the Ornith layout has linear-attention layers");
+}
+
+/// MLX arrays need an initialized runtime; small limits suffice because the
+/// tests only hold one-element arrays.
+fn test_runtime() -> MlxRuntime {
+    MlxRuntime::initialize(
+        MlxMemoryLimits::new(512 * 1024 * 1024, 512 * 1024 * 1024)
+            .expect("the state stack test memory limits should be valid"),
+    )
+    .expect("the direct MLX runtime should initialize")
+}
+
+/// A one-element state array; only whether a state is present matters to
+/// the projection, never its contents.
+fn present_state_array() -> MlxArray {
+    MlxArray::from_f32(&[0.0], &[1]).expect("a one-element state array")
+}
+
+#[test]
+fn should_project_the_fixed_state_bytes_of_an_unallocated_linear_attention_layer() {
+    let composite_components = first_composite_components();
+    let expected_bytes: usize = composite_components.iter().map(fixed_component_bytes).sum();
+    assert!(expected_bytes > 0);
+    assert_eq!(
+        composite_first_use_bytes(
+            &ConvolutionState::empty(),
+            &GatedDeltaRecurrentState::empty(),
+            &composite_components,
+        )
+        .expect("an unallocated layer projects its fixed state"),
+        expected_bytes
+    );
+}
+
+#[test]
+#[serial]
+fn should_project_nothing_for_an_already_allocated_linear_attention_layer() {
+    let _runtime = test_runtime();
+    let mut convolution = ConvolutionState::empty();
+    convolution.restore_from_snapshot(present_state_array());
+    let mut recurrent = GatedDeltaRecurrentState::empty();
+    recurrent.set_next(present_state_array());
+    assert_eq!(
+        composite_first_use_bytes(&convolution, &recurrent, &first_composite_components())
+            .expect("an allocated layer projects no growth"),
+        0
+    );
+}
+
+#[test]
+#[serial]
+fn should_refuse_a_partially_allocated_linear_attention_layer() {
+    let _runtime = test_runtime();
+    let mut convolution = ConvolutionState::empty();
+    convolution.restore_from_snapshot(present_state_array());
+    let refusal = composite_first_use_bytes(
+        &convolution,
+        &GatedDeltaRecurrentState::empty(),
+        &first_composite_components(),
+    )
+    .expect_err("half-allocated state must be refused");
+    assert!(
+        refusal.to_string().contains("partially allocated"),
+        "{refusal}"
+    );
+}
+
+#[test]
+fn should_refuse_composite_components_that_are_not_convolution_then_recurrent() {
+    let mut single_component = first_composite_components();
+    single_component.truncate(1);
+    let refusal = composite_first_use_bytes(
+        &ConvolutionState::empty(),
+        &GatedDeltaRecurrentState::empty(),
+        &single_component,
+    )
+    .expect_err("a one-component layout must be refused");
+    assert!(
+        refusal.to_string().contains("convolution and recurrent"),
+        "{refusal}"
+    );
 }

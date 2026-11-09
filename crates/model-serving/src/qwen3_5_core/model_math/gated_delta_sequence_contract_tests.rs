@@ -5,8 +5,7 @@ use super::{
     validate_sequence_dtypes,
 };
 
-/// Qwen3.5 linear-attention geometry: 16 key heads, 32 value heads, key
-/// dimension 128, value dimension 128, one batch row of 512 prompt tokens.
+/// The six input shapes, owned so a test can break one before validating.
 struct SequenceShapes {
     query_shape: Vec<i32>,
     key_shape: Vec<i32>,
@@ -17,6 +16,8 @@ struct SequenceShapes {
 }
 
 impl SequenceShapes {
+    /// Qwen3.5 linear-attention geometry: 16 key heads, 32 value heads, key
+    /// dimension 128, value dimension 128, one batch row of 512 prompt tokens.
     fn qwen3_5_prompt_chunk() -> Self {
         Self {
             query_shape: vec![1, 512, 16, 128],

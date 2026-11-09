@@ -105,18 +105,18 @@ pub(super) fn validate_gated_delta_sequence_shapes(
 }
 
 /// The shapes of the six kernel inputs, read once from their arrays.
-pub(super) struct GatedDeltaSequenceInputShapes<'shape> {
-    pub(super) query_shape: &'shape [i32],
-    pub(super) key_shape: &'shape [i32],
-    pub(super) value_shape: &'shape [i32],
-    pub(super) decay_shape: &'shape [i32],
-    pub(super) update_rate_shape: &'shape [i32],
-    pub(super) recurrent_state_shape: &'shape [i32],
+struct GatedDeltaSequenceInputShapes<'shape> {
+    query_shape: &'shape [i32],
+    key_shape: &'shape [i32],
+    value_shape: &'shape [i32],
+    decay_shape: &'shape [i32],
+    update_rate_shape: &'shape [i32],
+    recurrent_state_shape: &'shape [i32],
 }
 
 /// Derives the kernel geometry from the queries and values, then requires
 /// every other input to agree with it.
-pub(super) fn sequence_shape_from_input_shapes(
+fn sequence_shape_from_input_shapes(
     input_shapes: &GatedDeltaSequenceInputShapes<'_>,
 ) -> Result<GatedDeltaSequenceShape, MlxRuntimeError> {
     let has_expected_ranks = input_shapes.query_shape.len() == 4
@@ -156,7 +156,7 @@ impl GatedDeltaSequenceShape {
     /// The blocked kernel's own limits, each reported on its own so a model
     /// that breaks one learns which.
     fn validate_kernel_geometry(&self) -> Result<(), MlxRuntimeError> {
-        let dimensions = [
+        let kernel_dimensions = [
             self.batch_size,
             self.token_count,
             self.key_head_count,
@@ -164,7 +164,7 @@ impl GatedDeltaSequenceShape {
             self.key_head_dimension,
             self.value_head_dimension,
         ];
-        if dimensions.into_iter().min() <= Some(0) {
+        if kernel_dimensions.into_iter().min() <= Some(0) {
             return Err(gated_delta_sequence_error(
                 "pipelined gated-delta dimensions must be positive",
             ));
@@ -207,7 +207,7 @@ impl GatedDeltaSequenceShape {
 
 /// The state accumulates across tokens in float32 whatever the activation
 /// dtype, so a narrower state would drift over a long prompt.
-pub(super) fn validate_sequence_dtypes(
+fn validate_sequence_dtypes(
     recurrent_state_dtype: MlxDtype,
     activation_dtypes: [MlxDtype; 5],
 ) -> Result<(), MlxRuntimeError> {

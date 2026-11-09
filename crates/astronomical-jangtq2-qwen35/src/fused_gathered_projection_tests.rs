@@ -145,3 +145,15 @@ fn should_refuse_activations_that_match_neither_one_row_nor_every_assignment() {
         "{narrow_activations}"
     );
 }
+
+#[test]
+fn should_refuse_a_packed_page_with_a_zero_or_negative_dimension() {
+    for (packed_shape, scale_shape) in [
+        ([0, OUTPUT_ROWS, TWO_BIT_WORDS_PER_ROW], [0, OUTPUT_ROWS]),
+        ([EXPERT_COUNT, 0, TWO_BIT_WORDS_PER_ROW], [EXPERT_COUNT, 0]),
+        ([EXPERT_COUNT, OUTPUT_ROWS, -2], [EXPERT_COUNT, OUTPUT_ROWS]),
+    ] {
+        let refusal = refusal_text(packed_row_geometry(&packed_shape, &scale_shape, 2));
+        assert!(refusal.contains("disagree"), "{packed_shape:?}: {refusal}");
+    }
+}
