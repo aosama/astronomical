@@ -138,6 +138,7 @@ async fn should_apply_a_live_ceiling_within_the_machine_bound_to_the_next_model(
         WorkerEvent::MlxMemoryLimitChanged {
             effective_mlx_memory_ceiling_bytes: 40_000_000_000,
             expert_residency: Some(WorkerExpertResidencySnapshot {
+                dense_layers: None,
                 total_layer_count: 2,
                 resident_expert_count: 2,
                 resident_expert_payload_bytes: 8_000,

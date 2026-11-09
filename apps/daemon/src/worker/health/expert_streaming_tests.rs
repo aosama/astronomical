@@ -18,6 +18,7 @@ fn stats_snapshot(
         model_id: Some(String::from("qwen35-moe")),
         expert_memory_mode,
         expert_residency: WorkerExpertResidencySnapshot {
+            dense_layers: None,
             total_layer_count: 60,
             resident_expert_count: 3_200,
             resident_expert_payload_bytes: 40_000_000_000,

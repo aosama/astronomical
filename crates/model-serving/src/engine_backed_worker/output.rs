@@ -534,6 +534,7 @@ pub(super) fn worker_expert_residency_snapshot(
         complete_expert_payload_byte_count: expert_residency.complete_expert_payload_byte_count,
         expert_capacity: expert_residency.expert_capacity,
         layer_seating: expert_residency.layer_seating,
+        dense_layers: expert_residency.dense_layers,
     }
 }
 
@@ -556,6 +557,8 @@ pub(super) fn worker_expert_streaming_stats(
             // Session totals stay end-of-reply. The live layer map rides the
             // residency sample, which already carries the seating counts.
             layer_seating: astronomical_ipc_protocol::ExpertLayerSeatingCounts::default(),
+            // Only a sparse model's pager reports session stats.
+            dense_layers: None,
         },
         layer_topology: expert_streaming_stats
             .layer_topology
@@ -629,3 +632,7 @@ pub(crate) fn worker_memory_snapshot(
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "output_tests.rs"]
+mod tests;

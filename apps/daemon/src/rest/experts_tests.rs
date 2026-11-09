@@ -16,6 +16,7 @@ fn populated_stats_snapshot() -> WorkerExpertStreamingStats {
         model_id: Some(String::from("qwen35-122b-moe")),
         expert_memory_mode: ExpertMemoryMode::Hybrid,
         expert_residency: WorkerExpertResidencySnapshot {
+            dense_layers: None,
             total_layer_count: 60,
             resident_expert_count: 3_200,
             resident_expert_payload_bytes: 38_000_000_000,

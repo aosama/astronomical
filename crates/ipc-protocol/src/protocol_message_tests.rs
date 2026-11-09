@@ -106,6 +106,7 @@ async fn should_round_trip_generation_preparation_topology() {
     let worker_event = WorkerEvent::GenerationPreparationStarted {
         request_id: RequestId::new(72),
         expert_residency: Some(WorkerExpertResidencySnapshot {
+            dense_layers: None,
             total_layer_count: 40,
             resident_expert_count: 32,
             resident_expert_payload_bytes: 21_969_764_352,
@@ -191,6 +192,7 @@ async fn should_round_trip_changed_and_rejected_memory_limit_events() {
             expert_memory_mode: ExpertMemoryMode::Paged,
             mlx_memory_snapshot: None,
             expert_residency: Some(WorkerExpertResidencySnapshot {
+                dense_layers: None,
                 total_layer_count: 24,
                 resident_expert_count: 2,
                 resident_expert_payload_bytes: 4_000,
@@ -597,4 +599,60 @@ async fn should_round_trip_generation_preparation_announced_before_residency_is_
             .expect("a residency-free preparation announcement should decode"),
         Some(worker_event)
     );
+}
+
+#[test]
+fn should_carry_a_dense_model_layer_residency_through_serde() {
+    let expert_residency = WorkerExpertResidencySnapshot {
+        dense_layers: Some(crate::WorkerDenseLayerResidency {
+            decoder_layer_count: 32,
+            kept_layer_count: 7,
+            streamed_layer_payload_bytes: 4_437_000_000,
+        }),
+        total_layer_count: 0,
+        resident_expert_count: 0,
+        resident_expert_payload_bytes: 0,
+        complete_expert_payload_byte_count: 0,
+        expert_capacity: 0,
+        layer_seating: crate::ExpertLayerSeatingCounts::default(),
+    };
+
+    let encoded = serde_json::to_value(expert_residency).expect("the residency should encode");
+    let decoded: WorkerExpertResidencySnapshot =
+        serde_json::from_value(encoded).expect("the residency should decode");
+
+    assert_eq!(decoded, expert_residency);
+}
+
+#[test]
+fn should_read_no_dense_layers_from_a_worker_that_does_not_send_them() {
+    let older_worker_residency = serde_json::json!({
+        "total_layer_count": 40,
+        "resident_expert_count": 32,
+        "resident_expert_payload_bytes": 1,
+        "complete_expert_payload_byte_count": 2,
+        "expert_capacity": 256
+    });
+
+    let decoded: WorkerExpertResidencySnapshot = serde_json::from_value(older_worker_residency)
+        .expect("a residency without dense layers should decode");
+
+    assert_eq!(decoded.dense_layers, None);
+}
+
+#[test]
+fn should_leave_dense_layers_out_of_a_sparse_model_payload() {
+    let sparse_residency = WorkerExpertResidencySnapshot {
+        dense_layers: None,
+        total_layer_count: 40,
+        resident_expert_count: 32,
+        resident_expert_payload_bytes: 1,
+        complete_expert_payload_byte_count: 2,
+        expert_capacity: 256,
+        layer_seating: crate::ExpertLayerSeatingCounts::default(),
+    };
+
+    let encoded = serde_json::to_value(sparse_residency).expect("the residency should encode");
+
+    assert!(encoded.get("dense_layers").is_none());
 }

@@ -36,8 +36,11 @@ extension DaemonStatusDocument {
     if modelLoadInFlight != nil { return .loadingModel }
     guard status == "ready", readyModelIdentifier != nil else { return .idle }
     if isActive { return .generating }
-    // "paged" and "hybrid" both stream some experts from the SSD; dense
-    // models report no mode and are wholly in memory.
+    // A dense model that keeps only some decoder layers reads the rest from
+    // the SSD for every token, whatever its expert mode reads.
+    if expertResidency?.denseLayers?.streamsFromTheSSD == true { return .streaming }
+    // "paged" and "hybrid" both stream some experts from the SSD; a dense
+    // model with every layer in memory reports no mode.
     switch expertMemoryMode {
     case "paged", "hybrid": return .streaming
     default: return .resident

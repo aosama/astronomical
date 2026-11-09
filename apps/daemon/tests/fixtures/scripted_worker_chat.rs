@@ -22,6 +22,7 @@ pub(super) fn expert_streaming_session_stats_snapshot(
         )),
         expert_memory_mode: ExpertMemoryMode::Hybrid,
         expert_residency: WorkerExpertResidencySnapshot {
+            dense_layers: None,
             total_layer_count: 8,
             resident_expert_count: 512,
             resident_expert_payload_bytes: 2_000_000_000,

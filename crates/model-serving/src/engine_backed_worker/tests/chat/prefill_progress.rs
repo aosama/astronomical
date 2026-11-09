@@ -27,6 +27,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
                     forward_prefill_chunk_elapsed_millis: 350,
                     completed_prefill_chunk_tokens: 2_048,
                     expert_residency_telemetry: Some(ExpertResidencyTelemetry {
+                        dense_layers: None,
                         total_layer_count: 40,
                         resident_expert_count: 40,
                         resident_expert_payload_bytes: 3_375_366_144,
@@ -149,6 +150,7 @@ async fn should_exclude_the_complete_restored_prompt_prefix_from_progress_withou
             assert_eq!(
                 expert_residency,
                 Some(WorkerExpertResidencySnapshot {
+                    dense_layers: None,
                     total_layer_count: 40,
                     resident_expert_count: 40,
                     resident_expert_payload_bytes: 3_375_366_144,

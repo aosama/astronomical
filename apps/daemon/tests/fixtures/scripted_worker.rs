@@ -375,6 +375,7 @@ async fn dispatch_unstructured_chat(
             let generation_preparation_event = WorkerEvent::GenerationPreparationStarted {
                 request_id,
                 expert_residency: Some(astronomical_ipc_protocol::WorkerExpertResidencySnapshot {
+                    dense_layers: None,
                     total_layer_count: 40,
                     resident_expert_count: 40,
                     resident_expert_payload_bytes: 23_073_914_880,

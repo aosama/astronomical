@@ -90,9 +90,10 @@ pub use persistent_prompt_cache_diagnostics::{
 pub use protocol_error::ProtocolError;
 pub use protocol_message::{
     ExpertMemoryMode, MAX_IPC_FRAME_BYTES, MlxMemorySnapshotSource, RequestId, WorkerCommand,
-    WorkerEvent, WorkerExpertLayerTopology, WorkerExpertResidencySnapshot,
-    WorkerExpertStreamingStats, WorkerMemoryCeilingUtilizationSnapshot, WorkerMlxMemorySnapshot,
-    WorkerPromptProcessingPhase, WorkerPromptWorkReuse,
+    WorkerDenseLayerResidency, WorkerEvent, WorkerExpertLayerTopology,
+    WorkerExpertResidencySnapshot, WorkerExpertStreamingStats,
+    WorkerMemoryCeilingUtilizationSnapshot, WorkerMlxMemorySnapshot, WorkerPromptProcessingPhase,
+    WorkerPromptWorkReuse,
 };
 pub use protocol_reader::ProtocolReader;
 pub use protocol_writer::ProtocolWriter;

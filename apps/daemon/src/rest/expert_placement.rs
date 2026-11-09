@@ -1,20 +1,24 @@
 //! The stock label and the reply sentence every Observatory surface and the menu share.
 //!
 //! Stock describes where the expert library sits right now, from the seated
-//! byte counts. It is a short label rather than a full sentence: the menu
+//! byte counts, or for a dense model on the streaming engine, how much of
+//! its decoder layers it reads from the SSD (issue #1985). It is a short label rather than a full sentence: the menu
 //! shows it in a half-width monospaced cell, so every stock label stays
 //! within MAXIMUM_STOCK_LABEL_CHARACTERS to fit on one line there. The reply
 //! sentence describes what the current or last reply did with storage, from
 //! the request-scoped memory mode. Clients print these strings. They do not
 //! keep a second phrase table.
 
-use astronomical_ipc_protocol::ExpertMemoryMode;
+use astronomical_ipc_protocol::{ExpertMemoryMode, WorkerDenseLayerResidency};
 
 use crate::{ExpertResidencySnapshot, WorkerActivity, WorkerHealthSnapshot};
 
 const APPLE_GIGABYTE_BYTES: f64 = 1_073_741_824.0;
 
-/// What a dense model says instead of a sentence about experts it does not have.
+/// What a dense model says instead of a sentence about experts it does not
+/// have, when it reports no decoder layers: the resident engine serves only
+/// a dense model that fits whole, and says so in these words, where the
+/// streaming engine, which may stream, counts its layers instead.
 const DENSE_MODEL_REPLY_SENTENCE: &str = "Dense model, no experts.";
 
 /// Copy budget for the stock label, in characters. The menu's Residency cell
@@ -83,6 +87,13 @@ pub(crate) fn expert_residency_json(
         "complete_expert_payload_byte_count": expert_residency.complete_expert_payload_byte_count,
         "expert_capacity": expert_residency.expert_capacity,
     });
+    if let Some(dense_layers) = expert_residency.dense_layers {
+        residency_json["dense_layers"] = serde_json::json!({
+            "decoder_layer_count": dense_layers.decoder_layer_count,
+            "kept_layer_count": dense_layers.kept_layer_count,
+            "streamed_layer_payload_bytes": dense_layers.streamed_layer_payload_bytes,
+        });
+    }
     let retained_expert_counts = expert_residency.layer_seating.published_counts();
     if !retained_expert_counts.is_empty() {
         residency_json["retained_expert_counts"] = serde_json::json!(retained_expert_counts);
@@ -98,6 +109,9 @@ fn stock_sentence(
     if ready_model_id_is_absent(ready_model_id) {
         return "No model loaded".to_owned();
     }
+    if let Some(dense_layers) = dense_layers_of(expert_residency) {
+        return dense_stock_sentence(dense_layers);
+    }
     let (complete_expert_payload_byte_count, resident_expert_payload_bytes, total_layer_count) =
         residency_bytes(expert_residency);
     if complete_expert_payload_byte_count == 0 {
@@ -109,12 +123,16 @@ fn stock_sentence(
     if resident_expert_payload_bytes == 0 {
         return "All on SSD".to_owned();
     }
+    on_ssd_stock_sentence(
+        complete_expert_payload_byte_count.saturating_sub(resident_expert_payload_bytes),
+    )
+}
+
+/// The one wording for bytes a model reads from the SSD, sparse or dense.
+fn on_ssd_stock_sentence(on_ssd_bytes: u64) -> String {
     format!(
         "{:.2} GB on SSD",
-        left_on_ssd_gigabytes(
-            complete_expert_payload_byte_count,
-            resident_expert_payload_bytes
-        )
+        on_ssd_bytes as f64 / APPLE_GIGABYTE_BYTES
     )
 }
 
@@ -150,15 +168,6 @@ fn fully_seated_stock_sentence(total_layer_count: u32) -> String {
     "All in RAM".to_owned()
 }
 
-fn left_on_ssd_gigabytes(
-    complete_expert_payload_byte_count: u64,
-    resident_expert_payload_bytes: u64,
-) -> f64 {
-    let left_on_ssd_bytes =
-        complete_expert_payload_byte_count.saturating_sub(resident_expert_payload_bytes);
-    left_on_ssd_bytes as f64 / APPLE_GIGABYTE_BYTES
-}
-
 fn reply_sentence(
     ready_model_id: Option<&str>,
     activity: WorkerActivity,
@@ -169,6 +178,9 @@ fn reply_sentence(
     // about a reply. There is no library to have read.
     if ready_model_id_is_absent(ready_model_id) {
         return String::new();
+    }
+    if let Some(dense_layers) = dense_layers_of(expert_residency) {
+        return dense_reply_sentence(dense_layers);
     }
     let Some(expert_memory_mode) = expert_memory_mode else {
         return String::new();
@@ -193,6 +205,45 @@ fn is_dense_model_residency(expert_residency: Option<ExpertResidencySnapshot>) -
             && measured_residency.total_layer_count == 0
             && measured_residency.complete_expert_payload_byte_count == 0
     })
+}
+
+fn dense_layers_of(
+    expert_residency: Option<ExpertResidencySnapshot>,
+) -> Option<WorkerDenseLayerResidency> {
+    // A report of no layers names nothing to place, so the model's dense
+    // wording without counts stands.
+    expert_residency
+        .and_then(|measured_residency| measured_residency.dense_layers)
+        .filter(|dense_layers| dense_layers.decoder_layer_count > 0)
+}
+
+/// A dense model that streams says how much it reads from the SSD, the way
+/// a sparse model does; one that keeps every layer says so.
+fn dense_stock_sentence(dense_layers: WorkerDenseLayerResidency) -> String {
+    if dense_layers.streamed_layer_payload_bytes == 0 {
+        return fully_seated_stock_sentence(dense_layers.decoder_layer_count);
+    }
+    on_ssd_stock_sentence(dense_layers.streamed_layer_payload_bytes)
+}
+
+/// Names the kept and streamed layers. A streamed layer is read from the SSD
+/// for every forward that runs it.
+fn dense_reply_sentence(dense_layers: WorkerDenseLayerResidency) -> String {
+    let WorkerDenseLayerResidency {
+        decoder_layer_count,
+        kept_layer_count,
+        ..
+    } = dense_layers;
+    if kept_layer_count >= decoder_layer_count {
+        return format!("Dense model: all {decoder_layer_count} layers in RAM.");
+    }
+    if kept_layer_count == 0 {
+        return format!("Dense model: all {decoder_layer_count} layers read from the SSD.");
+    }
+    format!(
+        "Dense model: {kept_layer_count} of {decoder_layer_count} layers in RAM, {} read from the SSD.",
+        decoder_layer_count - kept_layer_count
+    )
 }
 
 fn reply_is_running(activity: WorkerActivity) -> bool {
