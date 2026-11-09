@@ -245,3 +245,39 @@ fn should_validate_the_large_sparse_moe_streaming_artifact() {
         assert!(validated_artifact.supports_image_input());
     }
 }
+
+#[test]
+#[ignore = "requires model_directories to discover the streamed dense Ornith build"]
+fn should_count_every_text_weight_of_a_text_only_dense_artifact_as_its_target_payload() {
+    let model_directory = crate::common::configured_streamed_dense_model_directory();
+
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the streamed dense artifact should validate");
+
+    // A text-only dense build binds every tensor it ships, so the startup
+    // placement compares the whole payload with the limit.
+    assert!(validated_artifact.target_weight_payload_bytes() > 0);
+    assert_eq!(
+        validated_artifact.target_weight_payload_bytes(),
+        validated_artifact.total_payload_bytes()
+    );
+}
+
+#[test]
+#[ignore = "requires model_directories to discover the dense vision Ornith build"]
+fn should_leave_the_vision_tower_out_of_the_target_payload() {
+    let model_directory = crate::common::configured_dense_vision_model_directory();
+
+    let validated_artifact = Qwen3_5ArtifactValidator::new()
+        .validate(&model_directory, 20_480)
+        .expect("the dense vision artifact should validate");
+
+    // The tower loads only for image requests, so the startup placement must
+    // not count it against the limit.
+    assert!(validated_artifact.supports_image_input());
+    assert!(
+        validated_artifact.target_weight_payload_bytes() < validated_artifact.total_payload_bytes(),
+        "the vision tower must not count toward the text weights"
+    );
+}

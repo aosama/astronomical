@@ -575,10 +575,12 @@ fn select_qwen3_5_engine_from_artifact(
         ) {
             Ok(geometry) => geometry,
             Err(Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => {
-                return Ok((
-                    Qwen3_5SelectedEngine::Resident,
-                    EnginePlacement::CompleteResidencyFits,
-                ));
+                let engine_placement = super::dense_engine_placement::place_dense_artifact(
+                    validated_artifact,
+                    model_directory_path,
+                    active_memory_limit_bytes,
+                )?;
+                return Ok((selected_engine_for(engine_placement), engine_placement));
             }
             Err(source) => {
                 return Err(Qwen3_5ModelStartupError::ArtifactRamGeometry {
@@ -612,12 +614,16 @@ fn select_qwen3_5_engine_from_artifact(
                     source,
                 },
             )?;
-    let selected_engine = if engine_placement.runs_resident_engine() {
+    Ok((selected_engine_for(engine_placement), engine_placement))
+}
+
+/// The engine family a startup placement runs on.
+const fn selected_engine_for(engine_placement: EnginePlacement) -> Qwen3_5SelectedEngine {
+    if engine_placement.runs_resident_engine() {
         Qwen3_5SelectedEngine::Resident
     } else {
         Qwen3_5SelectedEngine::Streaming
-    };
-    Ok((selected_engine, engine_placement))
+    }
 }
 
 /// Records a failed loading attribution whose artifact metadata was already

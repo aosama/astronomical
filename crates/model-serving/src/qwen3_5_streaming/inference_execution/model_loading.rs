@@ -183,22 +183,20 @@ fn capture_streaming_startup_residency_facts(
     validated_artifact: &ValidatedQwen3_5Artifact,
     model_loading_performance_attribution: &mut PerformanceAttribution,
 ) -> Result<Option<StreamingStartupResidencyFacts>, InferenceEngineError> {
-    let (startup_geometry, startup_complete_residency_headroom_bytes) =
-        model_loading_performance_attribution
-            .measure_operation(
-                PerformanceOperation::ArtifactRamBudgetGeometry,
-                |_performance_attribution| {
-                    crate::mlx_ram_budget_model_geometry_from_validated_artifact(
-                        validated_artifact,
-                        &engine_state.model_directory,
-                    )
-                },
+    let startup_geometry_result = model_loading_performance_attribution.measure_operation(
+        PerformanceOperation::ArtifactRamBudgetGeometry,
+        |_performance_attribution| {
+            crate::mlx_ram_budget_model_geometry_from_validated_artifact(
+                validated_artifact,
+                &engine_state.model_directory,
             )
-            .map_err(|geometry_error| {
-                fatal_engine_error(format!(
-                    "startup residency selection facts are unreadable for this artifact: {geometry_error}"
-                ))
-            })?;
+        },
+    );
+    let Some((startup_geometry, startup_complete_residency_headroom_bytes)) =
+        expert_startup_geometry(startup_geometry_result)?
+    else {
+        return Ok(None);
+    };
     if startup_geometry.complete_expert_payload_bytes == 0 {
         return Ok(None);
     }
@@ -208,6 +206,25 @@ fn capture_streaming_startup_residency_facts(
         startup_complete_residency_headroom_bytes,
         sequence_state_bytes_per_token: startup_geometry.sequence_state_bytes_per_token,
     }))
+}
+
+/// The expert geometry startup facts are built from, or `None` for a dense
+/// model. A dense model has no expert residency to promote back to, so it
+/// records no startup facts; before dense models could stream, this engine
+/// never loaded one and the dense answer was reported as unreadable.
+fn expert_startup_geometry(
+    startup_geometry_result: Result<
+        (crate::MlxRamBudgetModelGeometry, u64),
+        crate::Qwen3_5RamBudgetGeometryError,
+    >,
+) -> Result<Option<(crate::MlxRamBudgetModelGeometry, u64)>, InferenceEngineError> {
+    match startup_geometry_result {
+        Ok(startup_geometry) => Ok(Some(startup_geometry)),
+        Err(crate::Qwen3_5RamBudgetGeometryError::NotSparseMixtureOfExperts) => Ok(None),
+        Err(geometry_error) => Err(fatal_engine_error(format!(
+            "startup residency selection facts are unreadable for this artifact: {geometry_error}"
+        ))),
+    }
 }
 
 /// Initializes the MLX runtime under attribution and immediately clears the

@@ -26,6 +26,9 @@ use astronomical_model_serving::{
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
+mod dense_engine_placement;
+#[cfg(test)]
+mod dense_engine_placement_tests;
 mod qwen3_5_model_startup;
 mod qwen3_5_model_startup_error;
 

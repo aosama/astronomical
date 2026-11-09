@@ -18,7 +18,8 @@ const SMALL_DENSE_ROLE: &str = "small_dense";
 const FLUX2_KLEIN_ROLE: &str = "flux2_klein";
 const FLUX2_KLEIN_4BIT_ROLE: &str = "flux2_klein_4bit";
 const DENSE_VISION_ROLE: &str = "dense_vision";
-const E2E_TEST_MODEL_ROLES: [&str; 8] = [
+const STREAMED_DENSE_ROLE: &str = "streamed_dense";
+const E2E_TEST_MODEL_ROLES: [&str; 9] = [
     LARGE_SPARSE_MOE_STREAMING_ROLE,
     LARGEST_SPARSE_MOE_STREAMING_ROLE,
     RESIDENT_SPARSE_MOE_ROLE,
@@ -27,6 +28,7 @@ const E2E_TEST_MODEL_ROLES: [&str; 8] = [
     FLUX2_KLEIN_ROLE,
     FLUX2_KLEIN_4BIT_ROLE,
     DENSE_VISION_ROLE,
+    STREAMED_DENSE_ROLE,
 ];
 
 fn e2e_test_model_names() -> &'static BTreeMap<String, String> {
@@ -106,6 +108,13 @@ pub(crate) fn flux2_klein_model_id() -> &'static str {
 #[allow(dead_code)]
 pub(crate) fn flux2_klein_4bit_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_4BIT_ROLE)
+}
+
+/// The dense model that streams its decoder layers from the SSD when its text
+/// weights do not fit under the MLX limit (issue #1985).
+#[allow(dead_code)]
+pub(crate) fn streamed_dense_model_id() -> &'static str {
+    model_id_for_role(STREAMED_DENSE_ROLE)
 }
 
 pub(crate) fn e2e_test_model_ids() -> [&'static str; 4] {

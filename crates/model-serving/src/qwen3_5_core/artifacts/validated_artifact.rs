@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 
 use crate::artifact_validation::{
-    ArtifactValidationError, TensorInventory, TensorSourceId, ValidatedRequiredFile,
-    ValidatedSafetensorsSource, ValidatedWeightsFile,
+    ArtifactValidationError, TensorInventory, TensorSemanticRole, TensorSourceId,
+    ValidatedRequiredFile, ValidatedSafetensorsSource, ValidatedWeightsFile,
 };
 
 use super::{Qwen3_5Config, Qwen3_5ShardIndex, Qwen3_5VisionConfig};
@@ -78,6 +78,33 @@ impl ValidatedQwen3_5Artifact {
     #[must_use]
     pub const fn total_payload_bytes(&self) -> u64 {
         self.total_payload_bytes
+    }
+    /// Bytes of every tensor the text model binds: what loading the whole
+    /// text model places in memory. The vision tower is left out because it
+    /// loads only for image requests, and auxiliary tensors because the
+    /// runtime never binds them.
+    ///
+    /// Reads the validated headers, so it must be asked before the engine
+    /// takes the SafeTensors sources; a source already taken counts nothing.
+    #[must_use]
+    pub fn target_weight_payload_bytes(&self) -> u64 {
+        let mut target_weight_payload_bytes = 0_u64;
+        for tensor_location in self.tensor_inventory.locations() {
+            if tensor_location.semantic_role() != TensorSemanticRole::Target {
+                continue;
+            }
+            let Some(safetensors_source) =
+                self.safetensors_sources.get(&tensor_location.source_id())
+            else {
+                continue;
+            };
+            let tensor_payload_bytes = safetensors_source
+                .stored_tensor_payload_bytes(tensor_location.stored_name())
+                .unwrap_or(0);
+            target_weight_payload_bytes =
+                target_weight_payload_bytes.saturating_add(tensor_payload_bytes);
+        }
+        target_weight_payload_bytes
     }
     #[must_use]
     pub fn tokenizer_bytes(&self) -> Option<&[u8]> {
