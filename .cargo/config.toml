@@ -115,6 +115,9 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # steps).
 # `cargo xtask prewarm-native-build --profile core` builds the pinned native
 # MLX runtime into the machine-wide store before Cargo compiles anything.
+# `cargo xtask native-fingerprint --profile core [--target TRIPLE] [--explain]`
+# prints that build's identity; `--cache-environment` prints it with its store
+# entry directory as `$GITHUB_ENV` lines for workflows that cache the entry.
 # `cargo xtask check-test-channel-isolation` fails when a package test tree
 # reaches for Stable state, and `cargo xtask menu-contracts` runs the menu
 # app's Swift contract tests with the Git credential helper cleared.
