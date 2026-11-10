@@ -122,7 +122,8 @@ impl ResolvedModelPolicyCatalog {
             ModelFamily::Qwen3_5
             | ModelFamily::PrismHadamardQwen35
             | ModelFamily::ModernBert
-            | ModelFamily::Laya => {
+            | ModelFamily::Laya
+            | ModelFamily::Kev => {
                 WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
                     model_family: WorkerImageGenerationModelFamily::Flux2Klein,
@@ -196,12 +197,21 @@ impl ResolvedModelPolicyCatalog {
             worker_model_configuration: WorkerModelConfiguration::Decisions(
                 WorkerDecisionModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
-                    // Laya is the only decision family discovery reports.
-                    model_family: WorkerDecisionModelFamily::Laya,
+                    model_family: worker_decision_family(discovered_model.model_family),
                     artifact_revision: discovered_model.revision.clone(),
                     maximum_tokens_per_question: decision_capabilities.maximum_tokens_per_question,
                 },
             ),
         }
     }
+}
+
+/// The worker's name for a decision family. A decision capability is only
+/// ever discovered on Kev and Laya folders; any other family is reported as
+/// Laya, and the worker refuses it at load because the folder is not one.
+fn worker_decision_family(model_family: ModelFamily) -> WorkerDecisionModelFamily {
+    if model_family == ModelFamily::Kev {
+        return WorkerDecisionModelFamily::Kev;
+    }
+    WorkerDecisionModelFamily::Laya
 }

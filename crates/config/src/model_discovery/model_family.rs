@@ -5,7 +5,7 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::flux2_klein_mlx_4bit;
-use super::{flux2_klein, laya, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5};
+use super::{flux2_klein, kev, laya, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -20,6 +20,9 @@ pub enum ModelFamily {
     ModernBert,
     /// A decision model: a ModernBERT encoder scoring one marker per option.
     Laya,
+    /// A decision model: a Qwen3.5 backbone with a pointer head over the
+    /// options, marked by `kev_decision.json`.
+    Kev,
 }
 
 impl ModelFamily {
@@ -57,6 +60,7 @@ impl ModelFamily {
             Self::QwenImage21 => "qwen_image_21",
             Self::ModernBert => "modernbert",
             Self::Laya => "laya",
+            Self::Kev => "kev",
         })
     }
 }
@@ -113,10 +117,21 @@ pub fn classify_model_directory(
     if model_directory.join("model_index.json").is_file() {
         return classify_pipeline_directory(model_directory);
     }
-    if flux2_klein_mlx_4bit::classifies_directory(model_directory) {
-        return Ok(Some(ModelFamily::Flux2Klein));
+    if let Some(marked_family) = family_marked_by_file(model_directory) {
+        return Ok(Some(marked_family));
     }
     classify_config_directory(model_directory)
+}
+
+/// The families a folder declares with a marker file rather than with its
+/// config's model type: the 4-bit FLUX.2 Klein build, whose pipeline index
+/// lives under its transformer, and Kev, whose config is its Qwen3.5
+/// backbone's.
+fn family_marked_by_file(model_directory: &Path) -> Option<ModelFamily> {
+    if flux2_klein_mlx_4bit::classifies_directory(model_directory) {
+        return Some(ModelFamily::Flux2Klein);
+    }
+    kev::classifies_directory(model_directory).then_some(ModelFamily::Kev)
 }
 
 /// Reads `model_type` from the directory's `config.json`.

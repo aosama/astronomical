@@ -123,9 +123,8 @@ pub(crate) fn read_pickle(pickle_bytes: &[u8]) -> Result<PickledValue, String> {
 impl Unpickler<'_> {
     fn apply_opcode(&mut self, opcode: u8) -> Result<(), String> {
         match opcode {
-            0x80 | b'X' | b'J' | b'K' | b'M' | b'G' | b'N' | 0x88 | 0x89 => {
-                self.push_literal(opcode)
-            }
+            0x80 | b'X' | b'N' | 0x88 | 0x89 => self.push_literal(opcode),
+            b'J' | b'K' | b'M' | b'G' => self.push_number(opcode),
             b'}' | b']' | b')' | b'(' | b't' | 0x85 | 0x86 | 0x87 => self.build_container(opcode),
             b's' | b'u' | b'a' | b'e' => self.fill_container(opcode),
             b'q' | b'r' | b'h' | b'j' => self.use_memo(opcode),
@@ -150,6 +149,15 @@ impl Unpickler<'_> {
                         .map_err(|_| "the pickle holds text that is not UTF-8".to_owned())?,
                 )
             }
+            b'N' => PickledValue::None,
+            other_opcode => PickledValue::Boolean(other_opcode == 0x88),
+        };
+        self.stack.push(StackEntry::Value(literal_value));
+        Ok(())
+    }
+
+    fn push_number(&mut self, opcode: u8) -> Result<(), String> {
+        let number_value = match opcode {
             b'J' => PickledValue::Integer(i64::from(self.read_u32()? as i32)),
             b'K' => PickledValue::Integer(i64::from(self.read_bytes(1)?[0])),
             b'M' => {
@@ -159,17 +167,15 @@ impl Unpickler<'_> {
                     integer_bytes[1],
                 ])))
             }
-            b'G' => {
+            _ => {
                 let float_bytes: [u8; 8] = self
                     .read_bytes(8)?
                     .try_into()
                     .map_err(|_| "the pickle cut a float short".to_owned())?;
                 PickledValue::Float(f64::from_be_bytes(float_bytes))
             }
-            b'N' => PickledValue::None,
-            other_opcode => PickledValue::Boolean(other_opcode == 0x88),
         };
-        self.stack.push(StackEntry::Value(literal_value));
+        self.stack.push(StackEntry::Value(number_value));
         Ok(())
     }
 

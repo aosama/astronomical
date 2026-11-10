@@ -116,39 +116,85 @@ fn read_central_directory_entry(
     archive_bytes: &[u8],
     entry_start: usize,
 ) -> Result<(StoredZipEntry, usize), String> {
-    if read_u32(archive_bytes, entry_start)? != CENTRAL_DIRECTORY_ENTRY_SIGNATURE {
-        return Err("a zip directory entry is malformed".to_owned());
-    }
-    let compression_method = read_u16(archive_bytes, entry_start + 10)?;
-    let compressed_size = read_u32(archive_bytes, entry_start + 20)?;
-    let uncompressed_size = read_u32(archive_bytes, entry_start + 24)?;
-    let name_length = read_u16(archive_bytes, entry_start + 28)? as usize;
-    let extra_length = read_u16(archive_bytes, entry_start + 30)? as usize;
-    let comment_length = read_u16(archive_bytes, entry_start + 32)? as usize;
-    let local_header_start = read_u32(archive_bytes, entry_start + 42)?;
+    let directory_fields = CentralDirectoryFields::read(archive_bytes, entry_start)?;
     let name_start = entry_start + CENTRAL_DIRECTORY_ENTRY_BYTES;
-    let entry_name =
-        String::from_utf8(byte_range(archive_bytes, name_start, name_length)?.to_vec())
-            .map_err(|_| "a zip entry name is not UTF-8".to_owned())?;
-    if compression_method != STORED_COMPRESSION_METHOD || compressed_size != uncompressed_size {
-        return Err(format!(
-            "zip entry {entry_name} is compressed; only stored entries are read"
-        ));
-    }
-    if [compressed_size, local_header_start].contains(&ZIP64_MARKER) {
-        return Err("ZIP64 archives are not supported".to_owned());
-    }
-    let data_start = local_data_start(archive_bytes, local_header_start as usize)?;
-    byte_range(archive_bytes, data_start, compressed_size as usize)?;
-    let next_entry_start = name_start + name_length + extra_length + comment_length;
+    let entry_name = String::from_utf8(
+        byte_range(archive_bytes, name_start, directory_fields.name_length)?.to_vec(),
+    )
+    .map_err(|_| "a zip entry name is not UTF-8".to_owned())?;
+    refuse_unreadable_entry(
+        &entry_name,
+        directory_fields.compression_method != STORED_COMPRESSION_METHOD
+            || directory_fields.compressed_size != directory_fields.uncompressed_size,
+        [
+            directory_fields.compressed_size,
+            directory_fields.local_header_start,
+        ]
+        .contains(&ZIP64_MARKER),
+    )?;
+    let data_start = local_data_start(archive_bytes, directory_fields.local_header_start as usize)?;
+    let byte_count = directory_fields.compressed_size as usize;
+    byte_range(archive_bytes, data_start, byte_count)?;
+    let next_entry_start = name_start + directory_fields.trailing_byte_count();
     Ok((
         StoredZipEntry {
             entry_name,
             data_start,
-            byte_count: compressed_size as usize,
+            byte_count,
         },
         next_entry_start,
     ))
+}
+
+/// The fixed-offset fields of one central directory record this reader uses.
+struct CentralDirectoryFields {
+    compression_method: u16,
+    compressed_size: u32,
+    uncompressed_size: u32,
+    name_length: usize,
+    extra_length: usize,
+    comment_length: usize,
+    local_header_start: u32,
+}
+
+impl CentralDirectoryFields {
+    fn read(archive_bytes: &[u8], entry_start: usize) -> Result<Self, String> {
+        if read_u32(archive_bytes, entry_start)? != CENTRAL_DIRECTORY_ENTRY_SIGNATURE {
+            return Err("a zip directory entry is malformed".to_owned());
+        }
+        Ok(Self {
+            compression_method: read_u16(archive_bytes, entry_start + 10)?,
+            compressed_size: read_u32(archive_bytes, entry_start + 20)?,
+            uncompressed_size: read_u32(archive_bytes, entry_start + 24)?,
+            name_length: read_u16(archive_bytes, entry_start + 28)? as usize,
+            extra_length: read_u16(archive_bytes, entry_start + 30)? as usize,
+            comment_length: read_u16(archive_bytes, entry_start + 32)? as usize,
+            local_header_start: read_u32(archive_bytes, entry_start + 42)?,
+        })
+    }
+
+    /// The variable-length name, extra field and comment after the fixed record.
+    fn trailing_byte_count(&self) -> usize {
+        self.name_length + self.extra_length + self.comment_length
+    }
+}
+
+/// Refuses an entry this reader cannot hand out as plain bytes: a
+/// compressed one, or one whose sizes or offsets need ZIP64 records.
+fn refuse_unreadable_entry(
+    entry_name: &str,
+    is_compressed: bool,
+    needs_zip64: bool,
+) -> Result<(), String> {
+    if is_compressed {
+        return Err(format!(
+            "zip entry {entry_name} is compressed; only stored entries are read"
+        ));
+    }
+    if needs_zip64 {
+        return Err("ZIP64 archives are not supported".to_owned());
+    }
+    Ok(())
 }
 
 /// Where an entry's data begins: after its local header, whose name and

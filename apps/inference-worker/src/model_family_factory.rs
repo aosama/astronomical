@@ -22,10 +22,10 @@ use astronomical_ipc_protocol::{
 };
 use astronomical_model_serving::{
     DecisionEngine, EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
-    LayaDecisionEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor,
-    ModelFamilyImageEngine, ModelFamilyInferenceEngine, ModernBertEmbeddingEngine,
-    PrismHadamardQwen35ServingSettings, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
-    initialize_prism_hadamard_qwen35_model_with_serving_settings,
+    KevDecisionEngine, LayaDecisionEngine, ModelFactory, ModelFactoryRuntime,
+    ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceEngine,
+    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, QwenImage21ArtifactProvenance,
+    QwenImage21ImageEngine, initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
 mod qwen3_5_dense_engine_placement;
@@ -148,10 +148,10 @@ impl ModelFamilyFactory {
     }
 
     #[allow(clippy::type_complexity)]
-    /// Builds the engine of a model that runs on a ModernBERT encoder: the
-    /// embedding engine for ModernBERT itself, the decision engine for Laya.
-    /// A family paired with the other family's configuration is refused.
-    async fn create_encoder_model_engine(
+    /// Builds the engine of a model that answers in one forward pass: the
+    /// embedding engine for ModernBERT, a decision engine for Laya or Kev.
+    /// A family paired with another family's configuration is refused.
+    async fn create_single_pass_model_engine(
         &self,
         encoder_family: Option<ModelFamily>,
         model_directory_path: PathBuf,
@@ -165,9 +165,14 @@ impl ModelFamilyFactory {
                 self.create_modern_bert_embeddings_engine(model_directory_path, model_configuration)
                     .await
             }
-            (Some(ModelFamily::Laya), WorkerModelConfiguration::Decisions(model_configuration)) => {
-                self.create_laya_decision_engine(&model_directory_path, model_configuration)
-            }
+            (
+                Some(decision_family @ (ModelFamily::Laya | ModelFamily::Kev)),
+                WorkerModelConfiguration::Decisions(model_configuration),
+            ) => self.create_decision_engine(
+                decision_family,
+                &model_directory_path,
+                model_configuration,
+            ),
             _ => Err(
                 "selected model configuration does not match its classified model family"
                     .to_owned(),
@@ -283,11 +288,13 @@ impl
                 .await
             }
             (
-                encoder_family @ Some(ModelFamily::ModernBert | ModelFamily::Laya),
+                encoder_family @ Some(
+                    ModelFamily::ModernBert | ModelFamily::Laya | ModelFamily::Kev,
+                ),
                 encoder_model_configuration @ (WorkerModelConfiguration::Embeddings(_)
                 | WorkerModelConfiguration::Decisions(_)),
             ) => {
-                self.create_encoder_model_engine(
+                self.create_single_pass_model_engine(
                     encoder_family,
                     model_directory_path,
                     encoder_model_configuration,
@@ -554,22 +561,36 @@ impl ModelFamilyFactory {
         ))
     }
 
-    /// Builds the Laya decision engine for a directory already classified as
-    /// Laya. The unloaded engine only reads the config and tokenizer bytes;
+    /// Builds the decision engine of a directory already classified as Laya
+    /// or Kev. The unloaded engine only reads the config and tokenizer bytes;
     /// MLX runtime initialization stays inside load() on the worker runtime
     /// thread.
-    fn create_laya_decision_engine(
+    fn create_decision_engine(
         &self,
+        decision_family: ModelFamily,
         model_directory_path: &std::path::Path,
         model_configuration: WorkerDecisionModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
-        match LayaDecisionEngine::new(
-            model_configuration.model_id,
-            model_directory_path,
-            self.effective_mlx_memory_ceiling_bytes,
-            self.allocator_cache_memory_limit_bytes,
-        ) {
-            Ok(decision_engine) => Ok(ModelFactoryRuntime::Decisions(Box::new(decision_engine))),
+        let decision_engine: Result<Box<dyn DecisionEngine>, _> =
+            if decision_family == ModelFamily::Kev {
+                KevDecisionEngine::new(
+                    model_configuration.model_id,
+                    model_directory_path,
+                    self.effective_mlx_memory_ceiling_bytes,
+                    self.allocator_cache_memory_limit_bytes,
+                )
+                .map(|kev_engine| Box::new(kev_engine) as Box<dyn DecisionEngine>)
+            } else {
+                LayaDecisionEngine::new(
+                    model_configuration.model_id,
+                    model_directory_path,
+                    self.effective_mlx_memory_ceiling_bytes,
+                    self.allocator_cache_memory_limit_bytes,
+                )
+                .map(|laya_engine| Box::new(laya_engine) as Box<dyn DecisionEngine>)
+            };
+        match decision_engine {
+            Ok(decision_engine) => Ok(ModelFactoryRuntime::Decisions(decision_engine)),
             // The failure text is the engine's own bounded, path-free reason.
             Err(initialization_failure) => Err(format!(
                 "selected decision artifact failed initialization: {initialization_failure}"

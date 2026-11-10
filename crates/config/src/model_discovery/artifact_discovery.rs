@@ -10,7 +10,7 @@ use std::path::Path;
 use crate::model_discovery::{
     ChatModelCapabilities, DecisionModelCapabilities, DiscoveredModel, EmbeddingModelCapabilities,
     ModelCapabilities, ModelFamily, ModelLicense, classified_artifacts,
-    derive_revision_from_config_bytes, flux2_klein, laya, model_family, modernbert,
+    derive_revision_from_config_bytes, flux2_klein, kev, laya, model_family, modernbert,
     prism_hadamard_qwen35, qwen_image_21, qwen3_5,
 };
 
@@ -39,8 +39,8 @@ pub fn try_discover_model_with_id(
     match model_family {
         ModelFamily::Qwen3_5 => discover_qwen3_5_model(model_directory, model_id, model_family),
         ModelFamily::Flux2Klein => discover_flux2_klein_model(model_directory, model_family),
-        ModelFamily::ModernBert | ModelFamily::Laya => {
-            discover_encoder_model(model_directory, model_id, model_family)
+        ModelFamily::ModernBert | ModelFamily::Laya | ModelFamily::Kev => {
+            discover_single_pass_model(model_directory, model_id, model_family)
         }
         ModelFamily::PrismHadamardQwen35 => {
             discover_prism_hadamard_qwen35_model(model_directory, model_id, model_family)
@@ -52,17 +52,42 @@ pub fn try_discover_model_with_id(
     }
 }
 
-/// Discovers a model built on a ModernBERT encoder: the decision model when
-/// the family says so, and the embedding model otherwise.
-fn discover_encoder_model(
+/// Discovers a model that answers in one forward pass: Kev or Laya, the
+/// decision models, or the ModernBERT embedding model.
+fn discover_single_pass_model(
     model_directory: &Path,
     model_id: &str,
-    encoder_family: ModelFamily,
+    model_family: ModelFamily,
 ) -> Option<DiscoveredModel> {
-    if encoder_family == ModelFamily::Laya {
-        return discover_laya_model(model_directory, model_id, encoder_family);
+    match model_family {
+        ModelFamily::Kev => discover_kev_model(model_directory, model_id, model_family),
+        ModelFamily::Laya => discover_laya_model(model_directory, model_id, model_family),
+        _ => discover_modernbert_model(model_directory, model_id, model_family),
     }
-    discover_modernbert_model(model_directory, model_id, encoder_family)
+}
+
+/// Projects a Kev decision-model folder into the neutral discovery contract.
+fn discover_kev_model(
+    model_directory: &Path,
+    model_id: &str,
+    model_family: ModelFamily,
+) -> Option<DiscoveredModel> {
+    let family_metadata = kev::discover_model_metadata(model_directory)?;
+    let settings_bytes = fs::read(model_directory.join("kev_decision.json")).ok()?;
+    let (provider_model_id, revision) =
+        provenance_or_config_revision(model_directory, &settings_bytes);
+    Some(DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id,
+        model_family,
+        revision,
+        model_directory: model_directory.to_path_buf(),
+        capabilities: ModelCapabilities::Decisions(DecisionModelCapabilities {
+            maximum_tokens_per_question: family_metadata.maximum_tokens_per_question,
+        }),
+        license: None,
+        model_size_bytes: family_metadata.model_size_bytes,
+    })
 }
 
 /// Derives the provider model id and revision for a config-document family:
