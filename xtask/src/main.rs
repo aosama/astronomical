@@ -27,6 +27,9 @@ mod commit_identity_tests;
 mod coverage_floor;
 #[cfg(test)]
 mod coverage_floor_tests;
+mod crap_baseline;
+#[cfg(test)]
+mod crap_baseline_tests;
 mod disposable_target;
 #[cfg(test)]
 mod disposable_target_tests;
@@ -114,6 +117,7 @@ fn main() -> ExitCode {
         Some("coverage-floor") => {
             run_command(coverage_floor::run(&resolve_root(), &arguments[1..]))
         }
+        Some("crap-baseline") => run_command(crap_baseline::run(&resolve_root(), &arguments[1..])),
         Some("notices") => run_command(notices::run(
             &resolve_root(),
             arguments.contains(&"--check".to_owned()),

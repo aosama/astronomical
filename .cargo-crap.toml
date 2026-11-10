@@ -1,10 +1,14 @@
 # cargo-crap ratchets function complexity against the committed baseline
-# (crap-baseline.json): an existing function may only improve, and any
-# complexity growth fails the gate. Test trees are scored too — the
-# acceptance helpers are the repository's largest functions — while #[test]
-# functions themselves are skipped by the tool by design. The hard
-# 100-code-line budget stays enforced by clippy::too_many_lines (denied
-# through the workspace lints tables) in the CI clippy lanes.
+# (crap-baseline.json) through `cargo xtask crap-baseline`: an existing
+# function may only improve, any complexity growth fails the gate, and a
+# function the baseline does not list yet may not exceed complexity 15
+# unless crap-admissions.json names it. Regenerate the baseline with
+# `cargo xtask crap-baseline --write`, never by hand. Test trees are scored
+# too — the acceptance helpers are the repository's largest functions —
+# while #[test] functions themselves are skipped by the tool by design. The
+# hard 100-code-line budget stays enforced by clippy::too_many_lines (denied
+# through the workspace lints tables) in the pre-commit hook; CI runs no
+# clippy.
 #
 # When cargo-crap 0.10 ships (structural signals), add [signals] with lines
 # in the gate set and limits.lines = 100 to restore an explicit line-count

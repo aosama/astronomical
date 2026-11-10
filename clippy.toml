@@ -22,12 +22,12 @@
 # runs. Rustc-level warnings stay denied in every CI compile through the
 # [build] warnings policy; only clippy-only lints left CI.
 #
-# The bypass-proof growth ratchet over tracked debt is cargo-crap's
-# (cargo crap --workspace --baseline crap-baseline.json --fail-regression,
-# see .cargo-crap.toml): it parses sources without compiling, scores every
-# function — tests included, #[test] functions excepted by the tool — and
-# fails when any function's cyclomatic complexity grows against the
-# committed baseline. When cargo-crap's structural-signals release ships,
+# The growth ratchet over tracked debt is cargo-crap's, run through
+# `cargo xtask crap-baseline` (see .cargo-crap.toml): it parses
+# sources without compiling, scores every function — tests included, #[test]
+# functions excepted by the tool — and fails when any function's cyclomatic
+# complexity grows against the committed baseline, or when a function the
+# baseline does not list yet exceeds complexity 15. When cargo-crap's structural-signals release ships,
 # gating lines there restores an explicit line-count ratchet.
 #
 # Report runs must set CARGO_BUILD_WARNINGS=warn (the lane does). The
