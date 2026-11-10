@@ -297,11 +297,16 @@ impl Qwen3_5EngineState {
         // earlier chunks record at weight one while the final chunk records
         // boosted, ranking prompt-tail routes by token density for the
         // prefill-to-decode handoff.
-        if !active_request.has_opened_prefill_demand_window {
+        if !active_request
+            .engine_extension
+            .has_opened_prefill_demand_window
+        {
             if let Some(model) = self.model.as_ref() {
                 model.begin_prefill_demand_window_for_residency();
             }
-            active_request.has_opened_prefill_demand_window = true;
+            active_request
+                .engine_extension
+                .has_opened_prefill_demand_window = true;
         }
         let prefill_chunk_demand_weight =
             if prefill_start + attempted_prefill_chunk_token_count >= prefill_end_exclusive {
@@ -397,7 +402,9 @@ impl Qwen3_5EngineState {
             }
         };
         if !prefill_memory_recovery::should_attempt_prefill_memory_recovery(
-            active_request.completed_prefill_memory_recovery_attempt_count,
+            active_request
+                .engine_extension
+                .completed_prefill_memory_recovery_attempt_count,
             active_request.has_visual_inputs,
         ) {
             return Err(prefill_memory_failure_error);

@@ -63,7 +63,7 @@ impl Qwen3_5EngineState {
         prefill_end_exclusive: usize,
     ) -> Option<LayerMajorSpanPlan> {
         let model = self.model.as_ref()?;
-        if active_request.layer_major_prefill_declined
+        if active_request.engine_extension.layer_major_prefill_declined
             || active_request.has_visual_inputs
             || !model.streams_dense_layers()
         {

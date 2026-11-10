@@ -41,15 +41,23 @@ impl Qwen3_5EngineState {
         // already exists. Reaching the tail means the tail itself becomes
         // this call's emission AND the bonus of the next round, whose
         // verify forward commits it.
-        if active_request.speculative_emission_queue.len() > 1 {
+        if active_request
+            .engine_extension
+            .speculative_emission_queue
+            .len()
+            > 1
+        {
             let committed_token_id = active_request
+                .engine_extension
                 .speculative_emission_queue
                 .pop_front()
                 .expect("the queue length was just proven above one");
             return self.emit_one_speculative_token_id(active_request, committed_token_id);
         }
-        let bonus_token_id = if let Some(correction_token_id) =
-            active_request.speculative_emission_queue.pop_front()
+        let bonus_token_id = if let Some(correction_token_id) = active_request
+            .engine_extension
+            .speculative_emission_queue
+            .pop_front()
         {
             correction_token_id
         } else {
@@ -150,6 +158,7 @@ impl Qwen3_5EngineState {
             .max(1);
         let context_length_tokens = active_request.next_position_tokens;
         let mut draft_key_value_states: DFlashDraftKeyValueStates = active_request
+            .engine_extension
             .speculative_draft_key_value_states
             .take()
             .ok_or_else(|| {
@@ -184,7 +193,9 @@ impl Qwen3_5EngineState {
             &mut active_request.random_state,
             &mut active_request.performance_attribution,
         )?;
-        active_request.speculative_draft_key_value_states = Some(draft_key_value_states);
+        active_request
+            .engine_extension
+            .speculative_draft_key_value_states = Some(draft_key_value_states);
         let accepted_context_growth = round_outcome
             .context_length_after_round
             .saturating_sub(context_length_tokens) as usize;
@@ -214,6 +225,7 @@ impl Qwen3_5EngineState {
         // synchronization per token.
         for queued_token_id in round_outcome.emitted_token_ids.iter().skip(1) {
             active_request
+                .engine_extension
                 .speculative_emission_queue
                 .push_back(*queued_token_id);
         }

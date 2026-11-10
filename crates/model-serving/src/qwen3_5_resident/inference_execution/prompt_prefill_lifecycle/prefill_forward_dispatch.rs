@@ -57,7 +57,7 @@ impl Qwen3_5EngineState {
             super::prefill_invalid_input_error_constructors::engine_lost_loaded_model_invalid_input,
         )?;
 
-        let dispatch_outcome = if active_request.speculative_session_admitted {
+        let dispatch_outcome = if active_request.engine_extension.speculative_session_admitted {
             dispatch_speculative_forward(self, active_request, model, prefill_start, prefill_end)?
         } else {
             dispatch_non_speculative_forward(
@@ -113,6 +113,7 @@ fn dispatch_speculative_forward(
         &mut active_request.performance_attribution,
     )?;
     let mut draft_key_value_states = active_request
+        .engine_extension
         .speculative_draft_key_value_states
         .take()
         .ok_or(Qwen3_5ExecutionError::InvalidInput {
@@ -135,7 +136,9 @@ fn dispatch_speculative_forward(
         prefill_start as i32,
     )
     .map_err(Qwen3_5ExecutionError::from)?;
-    active_request.speculative_draft_key_value_states = Some(draft_key_value_states);
+    active_request
+        .engine_extension
+        .speculative_draft_key_value_states = Some(draft_key_value_states);
     if chunk_includes_final_prompt_token {
         let terminal_logits =
             chunk_output

@@ -65,6 +65,22 @@ pub struct Qwen3_5ModelBase {
 }
 
 impl Qwen3_5ModelBase {
+    /// Returns highest-logit token IDs for each row in a logits tensor.
+    pub fn highest_logit_token_ids(
+        &self,
+        position_logits: &MlxArray,
+    ) -> Result<Vec<u32>, Qwen3_5ExecutionError> {
+        let selected_tokens = self.select_highest_logit_token(position_logits)?;
+        Ok(selected_tokens.to_vec_u32()?)
+    }
+
+    pub(crate) fn select_highest_logit_token(
+        &self,
+        final_position_logits: &MlxArray,
+    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
+        Ok(self.runtime.argmax_axis(final_position_logits, -1)?)
+    }
+
     /// Returns the MLX runtime used by this model.
     #[must_use]
     pub fn runtime(&self) -> &MlxRuntime {

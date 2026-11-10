@@ -57,7 +57,10 @@ impl Qwen3_5EngineState {
         active_request: &mut Qwen3_5EngineRequest,
         failed_prefill_start: usize,
     ) -> Result<(), InferenceEngineError> {
-        active_request.completed_prefill_memory_recovery_attempt_count = active_request
+        active_request
+            .engine_extension
+            .completed_prefill_memory_recovery_attempt_count = active_request
+            .engine_extension
             .completed_prefill_memory_recovery_attempt_count
             .saturating_add(1);
         let model = self
@@ -106,7 +109,7 @@ impl Qwen3_5EngineState {
                         persistent_prompt_cache,
                         &active_request.input_token_ids,
                         &active_request.persistent_prompt_cache_block_causal_inputs,
-                        active_request.reserved_context_tokens,
+                        active_request.engine_extension.reserved_context_tokens,
                         &mut active_request.request_decoder_state,
                         &mut active_request.performance_attribution,
                     )
@@ -143,7 +146,9 @@ impl Qwen3_5EngineState {
             .freeze_expert_retention_for_prefill_memory_recovery();
         // Demand evidence recorded by discarded chunks must not steer the
         // decode handoff, so the retry opens a fresh window.
-        active_request.has_opened_prefill_demand_window = false;
+        active_request
+            .engine_extension
+            .has_opened_prefill_demand_window = false;
         tracing::warn!(
             request_id = request_id.value(),
             failed_prefill_start,
@@ -218,17 +223,19 @@ impl Qwen3_5EngineState {
             ?layer_major_decline,
             "layer-major prefill did not fit; continuing chunk by chunk"
         );
-        active_request.layer_major_prefill_declined = true;
+        active_request.engine_extension.layer_major_prefill_declined = true;
         if layer_major_decline == LayerMajorDecline::RanOutOfMemory {
-            let completed_recovery_attempt_count =
-                active_request.completed_prefill_memory_recovery_attempt_count;
+            let completed_recovery_attempt_count = active_request
+                .engine_extension
+                .completed_prefill_memory_recovery_attempt_count;
             self.recover_prefill_after_memory_exhaustion(
                 request_id,
                 active_request,
                 prefill_start,
             )?;
-            active_request.completed_prefill_memory_recovery_attempt_count =
-                completed_recovery_attempt_count;
+            active_request
+                .engine_extension
+                .completed_prefill_memory_recovery_attempt_count = completed_recovery_attempt_count;
         }
         self.keep_planned_dense_layers_after_decline(request_id);
         Ok(())
