@@ -22,6 +22,10 @@
 //! exception is a layer-major group that does not fit: its tokens run again as
 //! the chunks it was made of, which fit before, and never as smaller ones.
 
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
+use crate::qwen3_5_core::prompt_cache_capture::{
+    capture_persistent_prompt_cache_blocks, capture_persistent_prompt_cache_partial_tail_block,
+};
 use std::time::Instant;
 
 use astronomical_ipc_protocol::RequestId;
@@ -296,11 +300,16 @@ impl Qwen3_5EngineState {
         // earlier chunks record at weight one while the final chunk records
         // boosted, ranking prompt-tail routes by token density for the
         // prefill-to-decode handoff.
-        if !active_request.has_opened_prefill_demand_window {
+        if !active_request
+            .engine_extension
+            .has_opened_prefill_demand_window
+        {
             if let Some(model) = self.model.as_ref() {
                 model.begin_prefill_demand_window_for_residency();
             }
-            active_request.has_opened_prefill_demand_window = true;
+            active_request
+                .engine_extension
+                .has_opened_prefill_demand_window = true;
         }
         let prefill_chunk_demand_weight =
             if prefill_start + attempted_prefill_chunk_token_count >= prefill_end_exclusive {
@@ -396,7 +405,9 @@ impl Qwen3_5EngineState {
             }
         };
         if !prefill_memory_recovery::should_attempt_prefill_memory_recovery(
-            active_request.completed_prefill_memory_recovery_attempt_count,
+            active_request
+                .engine_extension
+                .completed_prefill_memory_recovery_attempt_count,
             active_request.has_visual_inputs,
         ) {
             return Err(prefill_memory_failure_error);
@@ -428,7 +439,8 @@ impl Qwen3_5EngineState {
         // than continuing with an in-memory chain that restart cannot reproduce.
         if let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() {
             if active_request.can_use_persistent_prompt_cache && !boundary_checkpoints.is_empty() {
-                self.capture_persistent_prompt_cache_blocks(
+                capture_persistent_prompt_cache_blocks(
+                    self,
                     persistent_prompt_cache,
                     model,
                     active_request,
@@ -437,7 +449,8 @@ impl Qwen3_5EngineState {
                     boundary_checkpoints,
                 )?;
             }
-            self.capture_persistent_prompt_cache_partial_tail_block(
+            capture_persistent_prompt_cache_partial_tail_block(
+                self,
                 persistent_prompt_cache,
                 model,
                 active_request,

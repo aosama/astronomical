@@ -17,7 +17,6 @@ mod visual_embeddings_runtime;
 // Downward bindings so the phase folders keep their pre-move one-level
 // `super::<module>` paths into the persistent prompt-cache machinery.
 use persistent_prompt_cache::decoder_state_reuse;
-use persistent_prompt_cache::persistent_prompt_cache_capture;
 use persistent_prompt_cache::persistent_prompt_cache_startup_logging;
 use persistent_prompt_cache::persistent_prompt_cache_visual_identity;
 use persistent_prompt_cache::retained_live_prefix;
@@ -35,7 +34,6 @@ pub(crate) use engine_state::Qwen3_5EngineState;
 pub use engine_state::Qwen3_5InferenceExecution;
 
 pub use memory_governance::memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
-pub use persistent_prompt_cache::persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 pub use prompt_prefill_lifecycle::prompt_processing_chunk_sizer::{
     Qwen3_5ResidentPromptProcessingChunkSizer, Qwen3_5ResidentPromptProcessingChunkSizerError,

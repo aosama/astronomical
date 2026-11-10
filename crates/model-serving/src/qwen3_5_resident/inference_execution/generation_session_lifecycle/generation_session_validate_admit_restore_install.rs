@@ -8,7 +8,7 @@ use crate::{
 
 use mlx_c_rust::MlxArray;
 
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::{Qwen3_5EngineRequest, ResidentRequestExtension};
 use super::persistent_prompt_cache_visual_identity::{
     Qwen3_5PersistentPromptCacheVisualIdentity, Qwen3_5PersistentPromptCacheVisualIdentityInput,
 };
@@ -616,10 +616,12 @@ impl Qwen3_5EngineState {
             first_decode_forward_elapsed_millis: None,
             generation_preparation_announced: false,
             structured_generation: inference_request.take_structured_generation(),
-            speculative_draft_key_value_states: self
-                .empty_speculative_draft_key_value_states(speculative_session_admitted),
-            speculative_emission_queue: std::collections::VecDeque::new(),
-            speculative_session_admitted,
+            engine_extension: ResidentRequestExtension {
+                speculative_draft_key_value_states: self
+                    .empty_speculative_draft_key_value_states(speculative_session_admitted),
+                speculative_emission_queue: std::collections::VecDeque::new(),
+                speculative_session_admitted,
+            },
         });
         let restored_prompt_prefix_token_count = u32::try_from(generation_position.prefill_cursor)
             .map_err(

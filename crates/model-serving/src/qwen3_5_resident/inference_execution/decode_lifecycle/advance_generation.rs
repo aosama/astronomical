@@ -110,12 +110,10 @@ impl Qwen3_5EngineState {
         // speculation for the session's remainder — the block contract
         // cannot re-seed a mid-block forced token, and the classic path
         // below already handles that boundary exactly.
-        if active_request.speculative_session_admitted {
+        if active_request.engine_extension.speculative_session_admitted {
             if forced_thinking_transition_token_id.is_some() {
                 active_request.suspend_speculative_session("forced_thinking_transition");
-            } else if active_request.pending_generated_token.is_some()
-                || !active_request.speculative_emission_queue.is_empty()
-            {
+            } else if active_request.has_speculative_tokens_to_advance() {
                 return self.advance_speculative_generation(request_id, active_request);
             }
         }

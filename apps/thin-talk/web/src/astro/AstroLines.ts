@@ -20,6 +20,13 @@ export enum AstroMoment {
   SKILL_VOICE = "skillVoice",
   HOME_GREETING = "homeGreeting",
   HOME_PROMPT = "homePrompt",
+  YOUR_ASTRO = "yourAstro",
+  ASK_NEW_NAME = "askNewName",
+  STYLE_PREVIEW = "stylePreview",
+  SAVE_FAILED = "saveFailed",
+  ENGINE_SILENT = "engineSilent",
+  ENGINE_STARTING = "engineStarting",
+  ENGINE_WONT_WAKE = "engineWontWake",
 }
 
 /** "Hi, Maya!" with a name, "Hi!" without one: a nickname is optional, and
@@ -57,6 +64,18 @@ const LINES: Record<AstroMoment, LinesForNickname> = {
   [AstroMoment.SKILL_VOICE]: () => ({ explorer: "Talking out loud is coming soon. I'm practising!", pilot: "Voice is coming soon." }),
   [AstroMoment.HOME_GREETING]: (nickname) => ({ explorer: addressed("Hi", nickname, "!"), pilot: addressed("Hey", nickname, "") }),
   [AstroMoment.HOME_PROMPT]: () => ({ explorer: "What should we do today?", pilot: "What are we working on?" }),
+  [AstroMoment.YOUR_ASTRO]: (nickname) => ({
+    explorer: addressed("Here's everything I remember about you", nickname, ". Change anything you like!"),
+    pilot: "Here's what I remember. Change anything.",
+  }),
+  [AstroMoment.ASK_NEW_NAME]: () => ({ explorer: "Want a new name? What should I call you now?", pilot: "What should I call you?" }),
+  // Each voice describes itself, so picking a card is a preview of how Astro
+  // will sound before anything is saved.
+  [AstroMoment.STYLE_PREVIEW]: () => ({ explorer: "Ooh, Explorer! Big buttons and lots of help. Is this the one?", pilot: "Pilot mode. Sleek and quick. Save it?" }),
+  [AstroMoment.SAVE_FAILED]: () => ({ explorer: "Uh-oh, I couldn't remember that. Let's try again!", pilot: "That didn't save. Try again?" }),
+  [AstroMoment.ENGINE_STARTING]: () => ({ explorer: "Hang on… I'm just waking up!", pilot: "One moment. Starting up." }),
+  [AstroMoment.ENGINE_WONT_WAKE]: () => ({ explorer: "I can't wake up right now. A restart usually fixes it!", pilot: "I can't start right now. A restart usually fixes it." }),
+  [AstroMoment.ENGINE_SILENT]: () => ({ explorer: "I can't hear my engine right now. Let's check again in a moment.", pilot: "My engine isn't answering. Check again in a moment." }),
 };
 
 export function astroLine(moment: AstroMoment, style: AstroStyle, nickname: string): string {

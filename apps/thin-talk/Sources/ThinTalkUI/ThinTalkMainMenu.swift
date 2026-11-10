@@ -39,7 +39,7 @@ public enum ThinTalkMainMenu {
     let windowMenu = ThinTalkStandardMenus.windowMenu()
     let helpMenu = ThinTalkStandardMenus.helpMenu(hostActions: hostActions)
     for submenu in [
-      ThinTalkStandardMenus.applicationMenu(hostActions: hostActions),
+      ThinTalkStandardMenus.applicationMenu(hostActions: hostActions, conversationActions: conversationActions),
       fileMenu(conversationActions: conversationActions),
       ThinTalkStandardMenus.editMenu(),
       viewMenu(conversationActions: conversationActions),
@@ -82,8 +82,6 @@ public enum ThinTalkMainMenu {
     viewMenu.addItem(sidebarItem)
     viewMenu.addItem(
       menuItem("Show or Hide Astro", #selector(ThinTalkConversationActions.toggleAstro(_:)), "", conversationActions))
-    viewMenu.addItem(
-      menuItem("Meet Astro Again", #selector(ThinTalkConversationActions.meetAstro(_:)), "", conversationActions))
     viewMenu.addItem(.separator())
     // "=" rather than "+": AppKit matches key equivalents against the key's
     // unshifted character, which is "=" for ⌘+ as well (the canvas also answers

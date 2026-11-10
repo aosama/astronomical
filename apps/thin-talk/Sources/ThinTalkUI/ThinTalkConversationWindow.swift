@@ -27,7 +27,10 @@ public final class ThinTalkConversationWindow {
   private let commandController: CanvasCommandController
   private var fullScreenObservers: [NSObjectProtocol] = []
 
-  public init(applicationIdentity: ThinTalkApplicationIdentity) {
+  /// `restartEngine` is the host's way to restart the local engine, offered
+  /// by Astro's welcome when the engine never answers; nil where the host
+  /// has none (the standalone development app).
+  public init(applicationIdentity: ThinTalkApplicationIdentity, restartEngine: (@MainActor () -> Void)? = nil) {
     let zoomController = CanvasZoomController()
     let commandController = CanvasCommandController()
     self.commandController = commandController
@@ -42,7 +45,8 @@ public final class ThinTalkConversationWindow {
         applicationIdentity: applicationIdentity,
         zoomController: zoomController,
         commandController: commandController,
-        titlebarInset: Self.titlebarInset(of: window)))
+        titlebarInset: Self.titlebarInset(of: window),
+        restartEngine: restartEngine))
     window.center()
     observeTitlebarHeightChanges()
   }

@@ -8,7 +8,7 @@ import ThinTalkCore
 /// Journey contracts for the Chat menu item's window: opening chat presents a
 /// visible conversation window, closing it restores the accessory posture
 /// through the application handler exactly once, and reopening reuses the
-/// same persistent window. These follow the first-run welcome window contracts.
+/// same persistent window.
 @MainActor
 final class ChatWindowControllerTests: XCTestCase {
   private var controller: ChatWindowController!
@@ -23,6 +23,19 @@ final class ChatWindowControllerTests: XCTestCase {
     let window = try XCTUnwrap(chatWindow(), "the Chat item must present the chat window")
     XCTAssertTrue(window.isVisible, "the chat window must actually be on screen")
     XCTAssertEqual(window.title, "Thin Talk Development")
+  }
+
+  /// The popover's "Your Astro…" opens the same chat window (the page then
+  /// opens Your Astro once it has loaded), with the conversation's menus.
+  func test_show_your_astro_presents_the_chat_window_with_its_menus() throws {
+    try bootstrap()
+    defer { cleanup() }
+
+    controller.showYourAstro(handleClose: { [weak self] in self?.closeCount += 1 })
+
+    let window = try XCTUnwrap(chatWindow(), "Your Astro… must present the chat window")
+    XCTAssertTrue(window.isVisible)
+    XCTAssertNotNil(NSApp.mainMenu?.item(withTitle: "Conversation"), "the conversation's menus are installed")
   }
 
   /// The hosted window has no View menu, so without a zoom controller on its
@@ -71,8 +84,33 @@ final class ChatWindowControllerTests: XCTestCase {
     showChat()
     XCTAssertNotNil(NSApp.mainMenu?.item(withTitle: "Conversation"))
     try XCTUnwrap(chatWindow()).close()
+    XCTAssertNotNil(
+      NSApp.mainMenu?.item(withTitle: "Conversation"),
+      "the swap waits until menu handling ends, so an open menu is never orphaned")
+    finishPendingCloseWork()
 
     XCTAssertTrue(NSApp.mainMenu === menuBeforeChat)
+  }
+
+  /// Chat reopened before the deferred close work ran must keep its menus,
+  /// and the superseded close must not send the app back to accessory.
+  func test_should_keep_the_conversation_menus_when_chat_reopens_before_the_close_settles() throws {
+    try bootstrap()
+    defer { cleanup() }
+    let menuBeforeChat = NSMenu(title: "Before chat")
+    NSApp.mainMenu = menuBeforeChat
+
+    showChat()
+    try XCTUnwrap(chatWindow()).close()
+    showChat()
+    finishPendingCloseWork()
+
+    XCTAssertNotNil(NSApp.mainMenu?.item(withTitle: "Conversation"))
+    XCTAssertEqual(closeCount, 0, "the superseded close never reaches the app")
+    try XCTUnwrap(chatWindow()).close()
+    finishPendingCloseWork()
+    XCTAssertTrue(NSApp.mainMenu === menuBeforeChat, "the menu from before chat is still the one put back")
+    XCTAssertEqual(closeCount, 1)
   }
 
   func test_should_frame_the_chat_window_like_a_native_mac_window() throws {
@@ -104,6 +142,39 @@ final class ChatWindowControllerTests: XCTestCase {
         isARepeat: false, keyCode: 0))
   }
 
+  /// Two closes before the deferred work runs must still put back the menu
+  /// from before chat, not an empty menu bar.
+  func test_should_put_the_previous_menu_back_once_after_two_quick_closes() throws {
+    try bootstrap()
+    defer { cleanup() }
+    let menuBeforeChat = NSMenu(title: "Before chat")
+    NSApp.mainMenu = menuBeforeChat
+
+    showChat()
+    try XCTUnwrap(chatWindow()).close()
+    showChat()
+    try XCTUnwrap(chatWindow()).close()
+    finishPendingCloseWork()
+
+    XCTAssertTrue(NSApp.mainMenu === menuBeforeChat)
+    XCTAssertEqual(closeCount, 1, "the app hears one close for the window that stayed closed")
+  }
+
+  /// The app keeps its menu bar only while it stays a regular app, so it asks
+  /// this before going back to menu-bar-only.
+  func test_should_report_chat_showing_only_while_the_window_is_on_screen() throws {
+    try bootstrap()
+    defer { cleanup() }
+    XCTAssertFalse(controller.isShowingChat, "no window yet")
+
+    showChat()
+    XCTAssertTrue(controller.isShowingChat)
+    try XCTUnwrap(chatWindow()).close()
+    finishPendingCloseWork()
+
+    XCTAssertFalse(controller.isShowingChat)
+  }
+
   func test_closing_the_chat_window_invokes_the_close_handler_exactly_once() throws {
     try bootstrap()
     defer { cleanup() }
@@ -112,6 +183,7 @@ final class ChatWindowControllerTests: XCTestCase {
     let window = try XCTUnwrap(chatWindow())
 
     window.close()
+    finishPendingCloseWork()
 
     XCTAssertEqual(closeCount, 1, "closing the chat window must notify the app exactly once")
     XCTAssertFalse(window.isVisible)
@@ -123,6 +195,7 @@ final class ChatWindowControllerTests: XCTestCase {
 
     showChat()
     try XCTUnwrap(chatWindow()).close()
+    finishPendingCloseWork()
 
     showChat()
     let reopenedWindow = try XCTUnwrap(
@@ -130,7 +203,14 @@ final class ChatWindowControllerTests: XCTestCase {
     XCTAssertTrue(reopenedWindow.isVisible)
 
     reopenedWindow.close()
+    finishPendingCloseWork()
     XCTAssertEqual(closeCount, 2, "each presented chat window closes on its own")
+  }
+
+  /// Runs the close work the controller defers to the default run-loop mode,
+  /// as the app's run loop does once menu handling ends.
+  private func finishPendingCloseWork() {
+    RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05))
   }
 
   private func bootstrap() throws {
@@ -152,6 +232,8 @@ final class ChatWindowControllerTests: XCTestCase {
 
   private func cleanup() {
     chatWindow()?.close()
+    // A close's deferred work must not leak into the next test.
+    finishPendingCloseWork()
     controller = nil
   }
 

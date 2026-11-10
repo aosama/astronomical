@@ -21,9 +21,7 @@ pub use expert_streaming::{ExpertPagingError, Qwen3_5ExpertPager};
 pub use inference_execution::{
     Qwen3_5PrefillExecutionContext as Qwen3_5StreamingPrefillExecutionContext,
     Qwen3_5StreamingEngine, Qwen3_5StreamingPromptProcessingChunkSizer,
-    Qwen3_5StreamingPromptProcessingChunkSizerError,
-    persistent_prompt_cache_publication_advances_parent_chain,
-    safe_minimum_mlx_memory_ceiling_bytes,
+    Qwen3_5StreamingPromptProcessingChunkSizerError, safe_minimum_mlx_memory_ceiling_bytes,
 };
 #[cfg(feature = "direct-mlx")]
 pub use model::{

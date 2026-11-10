@@ -1,13 +1,19 @@
-import { makeButton, makeElement } from "./AstroDom";
+import { makeButton, makeElement, setSiblingsInert } from "./AstroDom";
 import { AstroFigure } from "./AstroFigure";
 import type { AstroLibrary } from "./AstroLibrary";
 import { AstroMoment, astroLine } from "./AstroLines";
-import { AstroProfile, MAXIMUM_NICKNAME_CHARACTERS } from "./AstroProfile";
+import { AstroProfile } from "./AstroProfile";
 import { AstroStyle } from "./AstroStyle";
+import type { AstroTrail } from "./AstroTrail";
+import { ENGINE_PATIENCE } from "./EngineWatch";
+import type { EngineWatch } from "./EngineWatch";
 import { FirstFlightJourney, FirstFlightStep } from "./FirstFlightJourney";
+import { buildGrownUpNotePanel } from "./GrownUpNote";
+import { buildNameForm } from "./NameForm";
 import { SketchbookOffer } from "./SketchbookOffer";
 import { SkillCardKind, skillCard } from "./SkillCard";
 import { buildSkillShelf } from "./SkillShelf";
+import { buildStyleChoiceRow } from "./StyleChoices";
 import { WakeUpPanel } from "./WakeUpPanel";
 
 /** Prefix for the flight's control ids; Astro's home uses "astro-home". */
@@ -23,6 +29,7 @@ export interface FirstFlightCallbacks {
   /** Saved as soon as it is chosen, so quitting halfway keeps it. */
   onNicknameChosen(typedNickname: string): void;
   onStyleChosen(style: AstroStyle): void;
+  onTrailChosen(trail: AstroTrail): void;
   /** `chosenSkill` is the skill taught to Astro, whose starter prompt fills
    * the message field; null when the person skipped or chose nothing. */
   onFinished(chosenSkill: SkillCardKind | null): void;
@@ -32,16 +39,6 @@ export interface FirstFlightCallbacks {
 interface DisposablePanel {
   dispose(): void;
 }
-
-const STYLE_CHOICES: readonly { testID: string; title: string; detail: string; style: AstroStyle | null }[] = [
-  { testID: "astro-style-explorer", title: "Explorer", detail: "Big buttons, lots of help, and Astro chats a little more. Feels right for about 8 to 12.", style: AstroStyle.EXPLORER },
-  { testID: "astro-style-pilot", title: "Pilot", detail: "Sleek and quick. Astro gets to the point. Feels right for about 13 to 18.", style: AstroStyle.PILOT },
-  { testID: "astro-style-grown-up", title: "I'm a grown-up", detail: "Setting this up for someone? See what Astro does and what stays private.", style: null },
-];
-
-const GROWN_UP_NOTE =
-  "Astro runs entirely on this Mac. Nothing typed or shown to Astro leaves it, there is no account, and the name you give is kept only here. " +
-  "Conversations are saved on this Mac and can be deleted from the sidebar. Astro can be hidden from the View menu for a plain chat window.";
 
 /**
  * Astro's first flight: a full-window welcome that replaces Thin Talk's old
@@ -53,21 +50,34 @@ export class FirstFlightView {
   private readonly document: Document;
   private readonly library: AstroLibrary;
   private readonly callbacks: FirstFlightCallbacks;
+  private readonly engineWatch: EngineWatch;
+  /** Asks the host to restart the engine; null where the host cannot. */
+  private readonly restartEngine: (() => void) | null;
+  /** Stops listening for the engine's first answer. */
+  private stopAwaitingEngine: (() => void) | null = null;
   private readonly figure: AstroFigure;
   private readonly bubble: HTMLElement;
   private readonly controls: HTMLElement;
-  private journey = new FirstFlightJourney({ hasBrain: true });
+  private journey = new FirstFlightJourney({ hasBrain: null });
   /** The name and style as the flight shows them in Astro's words; the saved
    * profile belongs to AstroCompanion. */
   private shownProfile = AstroProfile.newcomer();
   private chosenSkill: SkillCardKind | null = null;
   private openPanels: DisposablePanel[] = [];
 
-  public constructor(init: { overlay: HTMLElement; library: AstroLibrary; callbacks: FirstFlightCallbacks }) {
+  public constructor(init: {
+    overlay: HTMLElement;
+    library: AstroLibrary;
+    engineWatch: EngineWatch;
+    restartEngine: (() => void) | null;
+    callbacks: FirstFlightCallbacks;
+  }) {
     this.overlay = init.overlay;
     this.document = init.overlay.ownerDocument;
     this.library = init.library;
     this.callbacks = init.callbacks;
+    this.engineWatch = init.engineWatch;
+    this.restartEngine = init.restartEngine;
     this.figure = new AstroFigure(this.document, "first-flight__astro");
     this.bubble = makeElement(this.document, "p", "first-flight__bubble");
     this.bubble.setAttribute("role", "status");
@@ -91,27 +101,18 @@ export class FirstFlightView {
     return !this.overlay.hidden;
   }
 
-  public open(profile: AstroProfile, hasBrain: boolean): void {
+  /** `hasBrain` is null while the engine has not answered. The flight starts
+   * anyway, because hello, name and style need no engine; the answer is
+   * handed to the journey whenever it arrives. */
+  public open(profile: AstroProfile, hasBrain: boolean | null): void {
     this.shownProfile = profile;
     this.journey = new FirstFlightJourney({ hasBrain });
+    this.stopAwaitingEngine?.();
+    this.stopAwaitingEngine = hasBrain === null ? this.engineWatch.onceAnswered((answeredHasBrain) => this.engineAnswered(answeredHasBrain)) : null;
     this.chosenSkill = null;
     this.overlay.hidden = false;
-    this.setRestOfWindowInert(true);
+    setSiblingsInert(this.overlay, true);
     this.render();
-  }
-
-  /** The overlay is a modal dialog: the sidebar and conversation behind it
-   * must not take keyboard focus or be read by VoiceOver while it is open. */
-  private setRestOfWindowInert(isInert: boolean): void {
-    const windowRoot = this.overlay.parentElement;
-    if (windowRoot === null) {
-      return;
-    }
-    for (const sibling of Array.from(windowRoot.children)) {
-      if (sibling !== this.overlay) {
-        sibling.toggleAttribute("inert", isInert);
-      }
-    }
   }
 
   /** Each step replaces the controls, which drops focus on the floor; the
@@ -145,6 +146,12 @@ export class FirstFlightView {
       case FirstFlightStep.GROWN_UP:
         this.renderGrownUp();
         break;
+      case FirstFlightStep.ENGINE_STARTING:
+        this.renderEngineStarting();
+        break;
+      case FirstFlightStep.ENGINE_SILENT:
+        this.renderEngineSilent();
+        break;
       case FirstFlightStep.WAKE:
         this.renderWake();
         break;
@@ -172,42 +179,33 @@ export class FirstFlightView {
 
   private renderName(): void {
     this.say(AstroMoment.ASK_NAME);
-    const nameForm = makeElement(this.document, "form", "first-flight__name");
-    const nameLabel = makeElement(this.document, "label", "first-flight__note", "Your first name or a nickname");
-    const nameField = makeElement(this.document, "input", "first-flight__name-field");
-    nameField.id = nameLabel.htmlFor = "astro-nickname";
-    nameField.dataset.testid = "astro-nickname";
-    nameField.maxLength = MAXIMUM_NICKNAME_CHARACTERS;
-    nameField.autocomplete = "off";
-    nameField.value = this.shownProfile.nickname;
-    const privacyNote = makeElement(this.document, "p", "first-flight__note", "It stays on this Mac. Astro never sends it anywhere.");
-    const confirmButton = makeButton(this.document, "astro-name-confirm", "That's me", false);
-    confirmButton.type = "submit";
     const skipNameButton = makeButton(this.document, "astro-name-skip", "Skip", true);
     skipNameButton.addEventListener("click", () => this.advance(() => this.journey.giveName()));
-    nameForm.addEventListener("submit", (submitEvent) => {
-      submitEvent.preventDefault();
-      this.shownProfile = this.shownProfile.withNickname(nameField.value);
-      this.callbacks.onNicknameChosen(nameField.value);
-      this.advance(() => this.journey.giveName());
+    const nameForm = buildNameForm(this.document, {
+      fieldID: "astro-nickname",
+      nickname: this.shownProfile.nickname,
+      confirmButton: makeButton(this.document, "astro-name-confirm", "That's me", false),
+      secondaryButton: skipNameButton,
+      onSubmit: (typedNickname) => {
+        this.shownProfile = this.shownProfile.withNickname(typedNickname);
+        this.callbacks.onNicknameChosen(typedNickname);
+        this.advance(() => this.journey.giveName());
+      },
     });
-    nameForm.append(nameLabel, nameField, privacyNote, this.actionRow(confirmButton, skipNameButton));
     this.controls.append(nameForm);
   }
 
   private renderStyle(): void {
     this.say(AstroMoment.ASK_STYLE);
-    const choiceRow = makeElement(this.document, "div", "first-flight__choices");
-    choiceRow.setAttribute("role", "group");
-    choiceRow.setAttribute("aria-label", "Pick a style");
-    for (const styleChoice of STYLE_CHOICES) {
-      const choiceButton = makeButton(this.document, styleChoice.testID, "", true);
-      choiceButton.className = "first-flight__choice";
-      choiceButton.append(makeElement(this.document, "strong", "", styleChoice.title), makeElement(this.document, "span", "", styleChoice.detail));
-      choiceButton.addEventListener("click", () => this.chooseStyle(styleChoice.style));
-      choiceRow.append(choiceButton);
-    }
-    this.controls.append(choiceRow);
+    this.controls.append(
+      buildStyleChoiceRow(this.document, {
+        idPrefix: ID_PREFIX,
+        includesGrownUpNote: true,
+        pickedStyle: null,
+        savedStyle: null,
+        onChoose: (style) => this.chooseStyle(style),
+      }),
+    );
   }
 
   private chooseStyle(style: AstroStyle | null): void {
@@ -222,18 +220,58 @@ export class FirstFlightView {
 
   private renderGrownUp(): void {
     this.say(AstroMoment.GROWN_UP);
-    const notePanel = makeElement(this.document, "div", "first-flight__panel");
-    notePanel.append(makeElement(this.document, "h2", "", "For grown-ups"), makeElement(this.document, "p", "", GROWN_UP_NOTE));
+    const notePanel = buildGrownUpNotePanel(this.document);
     const backButton = makeButton(this.document, "astro-grown-up-back", "Back to choosing a style", false);
     backButton.addEventListener("click", () => this.advance(() => this.journey.leaveGrownUpNote()));
     this.controls.append(notePanel, this.actionRow(backButton));
+  }
+
+  /** Redraws only when the answer moved a waiting flight on; an answer that
+   * arrives during hello, name or style changes nothing on screen. */
+  private engineAnswered(hasBrain: boolean): void {
+    const stepBeforeAnswer = this.journey.step;
+    this.journey.engineAnswered(hasBrain);
+    if (this.isOpen && this.journey.step !== stepBeforeAnswer) {
+      this.render();
+    }
+  }
+
+  private renderEngineStarting(): void {
+    this.say(AstroMoment.ENGINE_STARTING);
+    const waitingDots = makeElement(this.document, "div", "first-flight__waiting");
+    waitingDots.setAttribute("aria-hidden", "true");
+    waitingDots.append(makeElement(this.document, "span", ""), makeElement(this.document, "span", ""), makeElement(this.document, "span", ""));
+    const note = makeElement(this.document, "p", "first-flight__note", "Astro's engine is starting on this Mac. The first time takes a few seconds.");
+    this.controls.append(waitingDots, note);
+    const silenceTimer = setTimeout(() => this.advance(() => this.journey.engineStayedSilent()), ENGINE_PATIENCE.silentAfterMilliseconds);
+    this.openPanels.push({ dispose: () => clearTimeout(silenceTimer) });
+    void this.engineWatch.ask();
+  }
+
+  private renderEngineSilent(): void {
+    this.say(AstroMoment.ENGINE_WONT_WAKE);
+    const restartEngine = this.restartEngine;
+    const retryButton = makeButton(this.document, "astro-engine-retry", restartEngine !== null ? "Restart Astro's engine" : "Try again", false);
+    retryButton.addEventListener("click", () => {
+      restartEngine?.();
+      this.advance(() => this.journey.retryEngine());
+    });
+    const grownUpNote = makeElement(this.document, "div", "first-flight__panel");
+    grownUpNote.append(makeElement(this.document, "p", "", "For grown-ups: the local server on this Mac didn't answer. The Astronomical icon in the menu bar shows its status."));
+    this.controls.append(this.actionRow(retryButton), grownUpNote);
   }
 
   private renderWake(): void {
     this.say(AstroMoment.NEEDS_BRAIN);
     const wakeUpPanel = new WakeUpPanel(this.document, ID_PREFIX, this.library, {
       figure: this.figure,
-      trailOwner: this.overlay,
+      trailChoice: {
+        trail: this.shownProfile.trail,
+        onTrailChosen: (trail) => {
+          this.shownProfile = this.shownProfile.withTrail(trail);
+          this.callbacks.onTrailChosen(trail);
+        },
+      },
       say: (moment) => this.say(moment),
       isShowing: () => this.isOpen && this.journey.step === FirstFlightStep.WAKE,
       onBrainArrived: () => this.journey.brainArrived(),
@@ -310,8 +348,10 @@ export class FirstFlightView {
 
   private close(): void {
     this.disposeOpenPanels();
+    this.stopAwaitingEngine?.();
+    this.stopAwaitingEngine = null;
     this.overlay.hidden = true;
-    this.setRestOfWindowInert(false);
+    setSiblingsInert(this.overlay, false);
     this.figure.setCharging(false);
     this.callbacks.onFinished(this.chosenSkill);
   }

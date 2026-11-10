@@ -51,7 +51,7 @@ final class FirstRunWelcomeContractTests: XCTestCase {
     XCTAssertEqual(makeStore().welcomeDecision(), .alreadyAcknowledged)
   }
 
-  func test_welcome_stays_reopenable_from_the_popover_overflow_menu() throws {
+  func test_your_astro_stays_reopenable_from_the_popover_overflow_menu() throws {
     let packageDirectoryURL = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let popoverSource = try String(
@@ -59,7 +59,8 @@ final class FirstRunWelcomeContractTests: XCTestCase {
         "Sources/AstronomicalMenuCore/OrbitalTelemetryPopover.swift"),
       encoding: .utf8)
 
-    XCTAssertTrue(popoverSource.contains("Button(\"Welcome…\", action: showWelcome)"))
+    XCTAssertTrue(popoverSource.contains("Button(\"Your Astro…\", action: showYourAstro)"))
+    XCTAssertFalse(popoverSource.contains("Welcome…"), "the native welcome window is retired")
   }
 
   private func makeStore() -> FirstRunWelcomeAcknowledgmentStore {

@@ -105,7 +105,7 @@ impl Qwen3_5EngineState {
         }
 
         let mut boundary_checkpoints = dispatch_outcome.boundary_checkpoints;
-        super::prompt_prefill_counters::record_persistent_prompt_cache_boundary_checkpoint(
+        crate::qwen3_5_core::prompt_cache_capture::record_persistent_prompt_cache_boundary_checkpoint(
             active_request,
             plan.prefill_token_count,
             &plan.all_completed_prefill_chunk_tokens,

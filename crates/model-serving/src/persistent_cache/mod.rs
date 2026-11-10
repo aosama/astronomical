@@ -65,6 +65,9 @@ mod restore_support_tests_support;
 mod retention_policy;
 #[cfg(feature = "direct-mlx")]
 mod startup_cleanup_evidence;
+// Pure planning like `capture_planning`, so its tests run in every build.
+#[cfg(any(test, feature = "direct-mlx"))]
+pub(crate) mod tail_capture_planning;
 pub(crate) mod visual_embedding_format;
 pub(crate) mod visual_embedding_key;
 mod visual_embedding_model_contract;

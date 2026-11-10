@@ -168,6 +168,8 @@ export function bootChatClient(): AppShell {
     bridge,
     library: new AstroLibrary(client),
     firstFlightOverlay: requireElement<HTMLElement>("#first-flight"),
+    yourAstroOverlay: requireElement<HTMLElement>("#your-astro"),
+    trailOwner: requireElement<HTMLElement>("#app"),
     emptyState: requireElement<HTMLElement>("#empty-state"),
     composerField,
     skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),
@@ -178,6 +180,7 @@ export function bootChatClient(): AppShell {
       void controller.refreshChatModels();
       void controller.refreshImageModels();
     },
+    restartEngine: config.canRestartEngine ? () => host.requestEngineRestart() : null,
   });
   new HostCommandRouter(
     hostCommandHandlers({ controller, transcript, composerField, host, windowChrome, astro }),

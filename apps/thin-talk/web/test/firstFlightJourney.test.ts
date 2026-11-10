@@ -65,3 +65,41 @@ test("should_skip_to_finished_from_any_step", () => {
   freshJourney.skip();
   assert.equal(freshJourney.step, FirstFlightStep.FINISHED);
 });
+
+test("should_wait_for_a_silent_engine_after_the_style_and_route_on_its_answer", () => {
+  for (const [hasBrain, expectedStep] of [[true, FirstFlightStep.SKILLS], [false, FirstFlightStep.WAKE]] as const) {
+    const journey = new FirstFlightJourney({ hasBrain: null });
+    journey.greet();
+    journey.giveName();
+    journey.chooseStyle();
+    assert.equal(journey.step, FirstFlightStep.ENGINE_STARTING);
+    journey.engineAnswered(hasBrain);
+    assert.equal(journey.step, expectedStep);
+  }
+});
+
+test("should_record_an_early_engine_answer_without_moving_the_flight", () => {
+  const journey = new FirstFlightJourney({ hasBrain: null });
+  journey.greet();
+  journey.engineAnswered(false);
+  assert.equal(journey.step, FirstFlightStep.NAME, "an answer during the name step changes nothing on screen");
+  journey.giveName();
+  journey.chooseStyle();
+  assert.equal(journey.step, FirstFlightStep.WAKE, "no wait once the answer is known");
+});
+
+test("should_say_the_engine_stayed_silent_and_wait_again_after_a_retry", () => {
+  const journey = new FirstFlightJourney({ hasBrain: null });
+  journey.engineStayedSilent();
+  assert.equal(journey.step, FirstFlightStep.HELLO, "silence only matters while waiting");
+  journey.greet();
+  journey.giveName();
+  journey.chooseStyle();
+  journey.engineStayedSilent();
+  assert.equal(journey.step, FirstFlightStep.ENGINE_SILENT);
+  journey.retryEngine();
+  assert.equal(journey.step, FirstFlightStep.ENGINE_STARTING);
+  journey.engineStayedSilent();
+  journey.engineAnswered(true);
+  assert.equal(journey.step, FirstFlightStep.SKILLS, "a late answer still moves a silent flight on");
+});

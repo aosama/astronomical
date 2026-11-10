@@ -21,10 +21,18 @@ pub(crate) mod artifacts;
 pub(crate) mod configuration;
 pub(crate) mod decoder;
 pub(crate) mod dense;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod engine_errors;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod engine_request;
+#[cfg(all(test, feature = "direct-mlx"))]
+pub(crate) mod engine_request_test_support;
 #[cfg(test)]
 pub(crate) mod frozen_config_test_support;
 pub(crate) mod model;
 pub(crate) mod model_math;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod prompt_cache_capture;
 pub(crate) mod quantizations;
 pub(crate) mod route_observation;
 pub(crate) mod text;

@@ -27,6 +27,7 @@ const SINGLETON_CONTROL_IDENTIFIERS = [
   "composer-skill-voice",
   "composer-astro",
   "first-flight",
+  "your-astro",
 ] as const;
 
 // Message ids are UUIDs minted by the conversation log, so a bubble identifier

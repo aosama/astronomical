@@ -5,8 +5,8 @@ import XCTest
 
 // Issue #710: an orphaned `Settings { EmptyView() }` scene opened a blank
 // app-titled window on every launch. The menu applications own all interface
-// through their NSApplicationDelegate (status-bar popover plus first-run
-// welcome window); no SwiftUI scene belongs in either executable.
+// through their NSApplicationDelegate (status-bar popover plus the chat
+// window); no SwiftUI scene belongs in either executable.
 final class MenuSceneContractTests: XCTestCase {
   private let executableSourceDirectories = [
     "Sources/AstronomicalMenu",

@@ -1,10 +1,12 @@
 import Foundation
 
-/// Decides and records whether the menu application shows its first-run welcome
-/// window. One versioned marker file in the instance state directory is the
-/// whole state machine: the window must appear at most once per major moment,
-/// and never again after the user has seen it once — replaying it after an
-/// update reads as a bug (issue #610).
+/// Decides and records whether the menu application opens the chat window by
+/// itself on first launch, where Astro's first flight is the welcome. One
+/// versioned marker file in the instance state directory is the whole state
+/// machine: the window opens by itself at most once, and never again after
+/// that — reopening it after an update reads as a bug (issue #610). The marker
+/// name is kept from the retired native welcome window, so a Mac that saw
+/// that window is not welcomed twice.
 ///
 /// Existing installs are migrated silently: a state directory that already
 /// carries a configuration file proves prior use, so those users are marked
@@ -37,8 +39,7 @@ struct FirstRunWelcomeAcknowledgmentStore {
   func acknowledgeWelcome() {
     try? fileManager.createDirectory(at: stateDirectoryURL, withIntermediateDirectories: true)
     // A failed marker write must not crash the menu application; the worst case
-    // is a repeated welcome on the next launch, which the reopenable menu item
-    // also covers.
+    // is the chat window opening by itself once more on the next launch.
     try? Data("{}".utf8).write(to: markerFileURL(), options: .atomic)
   }
 

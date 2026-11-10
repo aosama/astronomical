@@ -4,6 +4,8 @@
 //! and before allocator cleanup. Final telemetry then reports the retained
 //! pager ownership after cleanup.
 
+use super::NO_RETAINED_LIVE_PREFIX_BYTES;
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
     PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,
@@ -60,8 +62,11 @@ impl Qwen3_5EngineState {
             })?;
         let peak_memory_bytes = u64::try_from(mlx_memory_snapshot.peak_memory_bytes())
             .map_err(|_| super::fatal_engine_error("MLX peak memory bytes exceed the u64 range"))?;
-        let active_memory_breakdown =
-            model.finalized_active_memory_breakdown(active_memory_bytes, 0);
+        let active_memory_breakdown = model.finalized_active_memory_breakdown(
+            active_memory_bytes,
+            NO_RETAINED_LIVE_PREFIX_BYTES,
+            0,
+        );
         Ok(Some(
             MlxMemoryTelemetry::new(
                 active_memory_bytes,
@@ -222,8 +227,11 @@ impl Qwen3_5EngineState {
                     // The finalized claim derives from the breakdown reconciling
                     // this exact snapshot, so the pair cannot straddle a
                     // promotion or demote (issue #337).
-                    let active_memory_breakdown =
-                        model.finalized_active_memory_breakdown(active_memory_bytes, 0);
+                    let active_memory_breakdown = model.finalized_active_memory_breakdown(
+                        active_memory_bytes,
+                        NO_RETAINED_LIVE_PREFIX_BYTES,
+                        0,
+                    );
                     let expert_residency_telemetry = Some(
                         model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown),
                     );
