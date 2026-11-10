@@ -1,5 +1,6 @@
 import { ImageModelDirectory } from "./ImageModelDirectory";
 import { ImageModelSelection } from "./ImageModelSelection";
+import { ModelDescriptionDirectory } from "./ModelDescriptionDirectory";
 import { DaemonClient } from "./DaemonClient";
 import type { ChatStreamer } from "./ChatStreamer";
 import { SessionBridge } from "./SessionBridge";
@@ -17,9 +18,8 @@ import { ChatFailure } from "./ChatFailure";
 import { ChatFailureKind } from "./ChatFailureKind";
 import { StallWatchdog } from "./StallWatchdog";
 import { ToolStep, ToolStepState } from "./ToolStep";
-
-/** How the chat surface discovered its models at startup. */
-export type LoadPhase = "idle" | "loading" | "ready" | "empty" | "failed";
+import { describeLoadFailure, loadNoticeText } from "./LoadNotice";
+import type { LoadPhase } from "./LoadNotice";
 
 /** Extra time before a stall is reported once tools finish: the next model
  * request may first reload the chat model, which an image tool swaps out, and
@@ -37,9 +37,6 @@ export const ENGINE_START_PATIENCE = {
   quickRetryCount: 30,
   slowRetryMilliseconds: 5_000,
 };
-
-/** What the window says while it waits for an engine that has not answered. */
-export const WAITING_FOR_ENGINE_NOTICE = "Waiting for the engine to start…";
 
 /**
  * Owns the conversation: asks the turn streamer for each answer, keeps the
@@ -75,13 +72,15 @@ export class ChatController {
   private selectedModelID: string | null = null;
   private readonly imageModelDirectory: ImageModelDirectory;
   private readonly imageModelSelection: ImageModelSelection;
+  /** Plain names for the brain control, read after the model list. */
+  private readonly modelDescriptionDirectory: ModelDescriptionDirectory;
   private isStreaming = false;
   /** Tool calls of the current turn that have started and not yet finished. */
   private readonly runningToolCallIDs = new Set<string>();
 
   /** `imageModelSelection` is shared with the image tool: choosing here is what
    * the next picture is drawn with, and the tool's fresh list of installed
-   * models redraws the composer's pill through it. */
+   * models redraws the composer's brain panel through it. */
   public constructor(init: {
     client: DaemonClient;
     streamer: ChatStreamer;
@@ -91,6 +90,7 @@ export class ChatController {
     imageModelSelection: ImageModelSelection;
   }) {
     this.client = init.client;
+    this.modelDescriptionDirectory = new ModelDescriptionDirectory(init.client, () => this.publish());
     this.imageModelDirectory = init.imageModelDirectory;
     this.imageModelSelection = init.imageModelSelection;
     this.imageModelSelection.onChange(() => this.publish());
@@ -149,7 +149,7 @@ export class ChatController {
       this.loadPhase = this.models.length === 0 ? "empty" : "ready";
     } catch (error) {
       this.loadPhase = "failed";
-      this.loadFailureMessage = ChatController.describeLoadFailure(error);
+      this.loadFailureMessage = describeLoadFailure(error);
       this.publish();
       // Only what the network or the engine reported can change by itself.
       // An engine of another channel, or one whose answer makes no sense,
@@ -166,20 +166,9 @@ export class ChatController {
       this.store.startNew();
     }
     this.publish();
-    // Image models only decorate the composer, so they are listed after chat
-    // is ready rather than delaying it.
+    // Image models and plain model names only decorate the composer, so they
+    // are read after chat is ready rather than delaying it.
     void this.refreshImageModels();
-  }
-
-  /** An engine that does not answer is being waited for, and the window says
-   * so in its own words: the browser's text for a refused connection ("Load
-   * failed") reads as a broken app. Any other failure is the engine's own
-   * explanation and is shown as it is. */
-  private static describeLoadFailure(error: unknown): string {
-    if (error instanceof ChatFailure && error.kind === ChatFailureKind.WORKER_UNAVAILABLE) {
-      return WAITING_FOR_ENGINE_NOTICE;
-    }
-    return error instanceof Error ? error.message : String(error);
   }
 
   private scheduleLoadRetry(): void {
@@ -262,7 +251,7 @@ export class ChatController {
    * Re-reads the chat models after one was installed while the window was
    * open (Astro's brain landing). Keeps the current choice when it is still
    * installed; a window that had no model becomes ready to chat. A failed read
-   * keeps the previous list, as the image pill does.
+   * keeps the previous list, as the picture list does.
    */
   public async refreshChatModels(): Promise<void> {
     if (this.loadPhase === "failed") {
@@ -279,6 +268,7 @@ export class ChatController {
     } catch {
       return;
     }
+    void this.modelDescriptionDirectory.refresh();
     const selectedModelID = this.selectedModelID;
     if (selectedModelID === null || !this.models.some((model) => model.id === selectedModelID)) {
       this.selectedModelID = this.initialModelID();
@@ -287,13 +277,14 @@ export class ChatController {
     this.publish();
   }
 
-  /** Lists the installed image models again, for the picture pill. A failed
+  /** Lists the installed image models again, for the brain panel. A failed
    * read keeps the last list: the image tool lists them again when it runs. */
   public async refreshImageModels(): Promise<void> {
+    void this.modelDescriptionDirectory.refresh();
     try {
       this.imageModelSelection.updateInstalled(await this.imageModelDirectory.load());
     } catch {
-      // Keep the previous list; the pill is a convenience, not a requirement.
+      // Keep the previous list; the panel is a convenience, not a requirement.
     }
   }
 
@@ -655,7 +646,7 @@ export class ChatController {
           toolSteps: message.toolSteps,
         }),
     );
-    const snapshot: TranscriptSnapshot = { messages, notice: this.noticeText() };
+    const snapshot: TranscriptSnapshot = { messages, notice: loadNoticeText(this.loadPhase, this.loadFailureMessage) };
     return snapshot;
   }
 
@@ -677,23 +668,10 @@ export class ChatController {
       toolsAvailable: this.selectedModelSupportsToolCalls(),
       imageModels: this.imageModelSelection.installed,
       selectedImageModelID: this.selectedImageModelID(),
+      modelDescriptions: this.modelDescriptionDirectory.descriptions,
       failure: this.failure
         ? { message: this.failure.message, nextAction: this.failure.nextAction }
         : null,
     });
-  }
-
-  private noticeText(): string | null {
-    switch (this.loadPhase) {
-      case "empty":
-        return "No chat model is available yet. Add one from the Models page in the Observatory.";
-      case "idle":
-      case "loading":
-        return "Looking for a chat model on this Mac.";
-      case "failed":
-        return this.loadFailureMessage;
-      case "ready":
-        return null;
-    }
   }
 }

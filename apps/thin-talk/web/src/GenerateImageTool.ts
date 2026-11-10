@@ -82,7 +82,7 @@ export class GenerateImageTool implements ConversationTool {
   /**
    * The model to draw with, read afresh for each picture so a model added or
    * removed since Thin Talk opened is honoured; writing the list back to the
-   * shared selection updates the composer's pill to match what draws. An
+   * shared selection updates the composer's brain panel to match what draws. An
    * empty list is read once more before giving up, since telling a child
    * "I can't draw" when a picture model is installed is the worse mistake.
    */

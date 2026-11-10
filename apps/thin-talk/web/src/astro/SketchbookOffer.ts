@@ -49,7 +49,7 @@ export class SketchbookOffer {
   }
 
   /** Stops listening when the offer leaves the screen; the download and
-   * AstroLibrary's install notice (which refreshes the picture pill) carry on. */
+   * AstroLibrary's install notice (which refreshes the brain panel) carry on. */
   public dispose(): void {
     this.stopListening?.();
     this.stopListening = null;

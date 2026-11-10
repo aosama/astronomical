@@ -8,12 +8,11 @@ import { AstroStyle } from "./AstroStyle";
 /** The message field's placeholder while Astro is shown. */
 export const ASTRO_COMPOSER_PLACEHOLDER = "Ask Astro anything";
 
-/** Plain words for the composer's pills in the Explorer style: the chat model
- * is Astro's brain and the image model its sketchbook. Pilots see the models'
- * own names, since teenagers often want to know which one they are using. */
+/** Plain words for the composer's brain control in the Explorer style: the
+ * chat model is Astro's brain. Pilots see the models' own names, since
+ * teenagers often want to know which one they are using. */
 export const EXPLORER_FRIENDLY_NAMES: ComposerFriendlyNames = {
   brain: "Astro's brain",
-  sketchbook: "Sketchbook",
 };
 
 /** The parts of the window that change look when Astro is shown or hidden. */
@@ -28,7 +27,7 @@ export interface AstroPresentationTargets {
  * Applies one presentation to the whole window: the root classes the Astro
  * stylesheets key on, the transcript's persona, the composer's words, and
  * where the drawing tool sends someone without a picture model.
- * Explorer gets friendly pill names; Pilot keeps the models' own names.
+ * Explorer gets a friendly brain name; Pilot keeps the models' own names.
  */
 export function applyAstroPresentation(targets: AstroPresentationTargets, persona: TranscriptPersona): void {
   const isPilot = persona.isAstroShown && persona.style === AstroStyle.PILOT;

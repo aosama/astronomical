@@ -25,19 +25,30 @@ function selectorsThatHide(stylesheet: string): string[] {
   return hidingSelectors;
 }
 
-test("should_hide_a_hidden_composer_pill_such_as_the_single_image_model_pill", () => {
-  assert.ok(selectorsThatHide(composerStylesheet).includes(".composer__pill[hidden]"));
+test("should_hide_the_brain_control_while_no_chat_model_is_installed", () => {
+  assert.ok(selectorsThatHide(composerStylesheet).includes(".composer__brain[hidden]"));
 });
 
 test("should_hide_every_hidden_composer_control_that_sets_its_own_display", () => {
   const hidingSelectors = selectorsThatHide(composerStylesheet);
-  for (const controlClass of [".composer__icon", ".composer__pill", ".composer__send"]) {
+  for (const controlClass of [".composer__icon", ".composer__brain", ".composer__send"]) {
     assert.ok(hidingSelectors.includes(`${controlClass}[hidden]`), `${controlClass} needs a [hidden] rule`);
   }
 });
 
+test("should_drop_the_brain_name_and_keep_the_icon_in_a_narrow_composer", () => {
+  // A narrow window must never push Send out of the composer: the name goes,
+  // and the brain icon keeps its own size so flex cannot squeeze it.
+  const narrowRuleMatch = composerStylesheet.match(/@container \(max-width: (\d+)px\) \{([\s\S]*?)\n\}/);
+  assert.ok(narrowRuleMatch, "the composer has a narrow-width rule");
+  assert.ok(Number(narrowRuleMatch[1]) > 0);
+  assert.ok(selectorsThatHide(narrowRuleMatch[2]!).includes(".composer__brain-label"));
+  assert.match(narrowRuleMatch[2]!, /\.composer__brain \{[^}]*flex: none;/);
+  assert.match(composerStylesheet, /\.composer \{\s*container-type: inline-size;/);
+});
+
 test("should_not_count_a_rule_that_only_styles_a_hidden_control_as_hiding_it", () => {
-  const stylesheetWithoutDisplayNone = ".composer__pill[hidden] { opacity: 0.5; }";
+  const stylesheetWithoutDisplayNone = ".composer__brain[hidden] { opacity: 0.5; }";
 
   assert.deepEqual(selectorsThatHide(stylesheetWithoutDisplayNone), []);
 });

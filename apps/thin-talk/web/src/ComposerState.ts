@@ -1,5 +1,6 @@
 import { ChatModel } from "./ChatModel";
 import { ImageModel } from "./ImageModel";
+import type { ModelDescription } from "./ModelDescription";
 
 /** The failure banner's content, or null when no failure is showing. */
 export interface ComposerFailure {
@@ -8,7 +9,7 @@ export interface ComposerFailure {
 }
 
 /**
- * The state the composer, the model pill, and the failure
+ * The state the composer, the brain control, and the failure
  * banner render. The controller produces it; the composer only draws it and
  * reports intents back.
  */
@@ -24,10 +25,12 @@ export class ComposerState {
    * disabled when it cannot, so it never promises tools that will not run. */
   public readonly toolsAvailable: boolean;
   public readonly failure: ComposerFailure | null;
-  /** The installed image models, in the order the picture pill lists them. */
+  /** The installed image models, in the order the brain panel lists them. */
   public readonly imageModels: readonly ImageModel[];
   /** The image model that draws the next picture, or null with none installed. */
   public readonly selectedImageModelID: string | null;
+  /** The Library's plain names and details, by model id; empty until read. */
+  public readonly modelDescriptions: ReadonlyMap<string, ModelDescription>;
 
   public constructor(init: {
     isStreaming: boolean;
@@ -40,6 +43,7 @@ export class ComposerState {
     failure: ComposerFailure | null;
     imageModels?: readonly ImageModel[];
     selectedImageModelID?: string | null;
+    modelDescriptions?: ReadonlyMap<string, ModelDescription>;
   }) {
     this.isStreaming = init.isStreaming;
     this.acceptsInput = init.acceptsInput;
@@ -52,5 +56,6 @@ export class ComposerState {
     this.imageModels = init.imageModels != null ? init.imageModels : [];
     const configuredImageModelID: string | null | undefined = init.selectedImageModelID;
     this.selectedImageModelID = configuredImageModelID != null ? configuredImageModelID : null;
+    this.modelDescriptions = init.modelDescriptions != null ? init.modelDescriptions : new Map();
   }
 }

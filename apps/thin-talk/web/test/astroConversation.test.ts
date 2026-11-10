@@ -88,9 +88,38 @@ test("should_fill_the_message_field_from_a_skill_button_without_sending", async 
   document.querySelector<HTMLButtonElement>("[data-testid=composer-skill-look]")!.click();
   const field = document.querySelector<HTMLTextAreaElement>("#composer-input")!;
   assert.equal(field.value, "Look at a photo I pick and tell me what you see.");
-  document.querySelector<HTMLButtonElement>("[data-testid=composer-skill-voice]")!.click();
-  assert.equal(field.value, "Look at a photo I pick and tell me what you see.", "the coming-soon button changes nothing");
   assert.equal(daemon.chatRequestBody(), null);
+});
+
+test("should_keep_the_skill_buttons_inside_the_message_field_with_a_name_each", async () => {
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
+  await waitUntilReady();
+  const launcherGroup = document.getElementById("skill-launchers")!;
+  assert.ok(document.getElementById("composer")!.contains(launcherGroup));
+  const launcherButtons = [...launcherGroup.querySelectorAll<HTMLButtonElement>("button[data-skill]")];
+  // An icon alone has to be guessed, so each button names itself to a pointer
+  // (title) and to assistive technology (aria-label).
+  assert.deepEqual(launcherButtons.map((launcherButton) => launcherButton.title), ["Look at a photo", "Read a file", "Draw"]);
+  for (const launcherButton of launcherButtons) {
+    assert.equal(launcherButton.getAttribute("aria-label"), launcherButton.title);
+  }
+});
+
+test("should_not_offer_a_skill_button_for_talking_before_talking_exists", async () => {
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
+  await waitUntilReady();
+  // Booleans, not elements: a failed comparison of DOM nodes makes the assertion
+  // print the whole document, which stalls the run for minutes.
+  const launcherGroup = document.getElementById("skill-launchers")!;
+  assert.equal(launcherGroup.querySelector("[data-skill=voice]") === null, true);
+  assert.equal(document.getElementById("composer-skill-voice") === null, true);
+});
+
+test("should_leave_the_message_field_alone_when_the_gap_between_skill_buttons_is_clicked", async () => {
+  bootJourney(undefined, { astroProfile: MET_ASTRO_PROFILE });
+  await waitUntilReady();
+  document.getElementById("skill-launchers")!.click();
+  assert.equal(document.querySelector<HTMLTextAreaElement>("#composer-input")!.value, "");
 });
 
 test("should_return_to_classic_thin_talk_with_the_focus_switch_and_back", async () => {
