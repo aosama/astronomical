@@ -3,22 +3,25 @@ import { makeButton, makeElement } from "./AstroDom";
 import { AstroMoment } from "./AstroLines";
 import type { AstroFigure } from "./AstroFigure";
 import type { AstroLibrary } from "./AstroLibrary";
+import { buildTrailChips } from "./AstroTrail";
+import type { AstroTrail } from "./AstroTrail";
 import { DownloadMeter } from "./DownloadMeter";
 import { ModelDownloadPhase } from "./ModelDownload";
 import type { ModelDownloadProgress } from "./ModelDownload";
 
-/** Trails a newcomer can pick while the brain downloads: a small, harmless
- * choice that makes the wait feel like theirs. */
-const TRAILS: readonly { name: string; label: string }[] = [
-  { name: "rainbow", label: "Rainbow" },
-  { name: "aurora", label: "Aurora" },
-  { name: "sunset", label: "Sunset" },
-];
+/** The trail chips shown while the brain downloads: a small, harmless choice
+ * that makes the wait feel like the person's own. */
+export interface WakeUpTrailChoice {
+  /** The saved trail, shown pressed among the chips. */
+  readonly trail: AstroTrail;
+  /** The host saves the choice. */
+  onTrailChosen(trail: AstroTrail): void;
+}
 
 export interface WakeUpPanelHost {
   readonly figure: AstroFigure;
-  /** Where the trail class goes, so the choice colours Astro's trail. */
-  readonly trailOwner: HTMLElement;
+  /** Null where the trail has a control of its own (Your Astro). */
+  readonly trailChoice: WakeUpTrailChoice | null;
   say(moment: AstroMoment): void;
   /** Whether the wake-up screen is still on show; a download that lands after
    * the person moved on must not talk over the next screen. */
@@ -87,7 +90,12 @@ export class WakeUpPanel {
       }
       this.startBrainDownload(brainPick, meter, wakeButton);
     });
-    this.element.append(meter.element, this.trailChips(), this.actionRow(wakeButton, keepGoingButton));
+    this.element.append(meter.element);
+    const trailChoice = this.host.trailChoice;
+    if (trailChoice !== null) {
+      this.element.append(this.trailChips(trailChoice));
+    }
+    this.element.append(this.actionRow(wakeButton, keepGoingButton));
     return { meter, wakeButton };
   }
 
@@ -144,26 +152,17 @@ export class WakeUpPanel {
     return actionRow;
   }
 
-  private trailChips(): HTMLElement {
-    const chipRow = makeElement(this.document, "div", "wake-up__trails");
-    chipRow.append(makeElement(this.document, "span", "wake-up__trails-label", "While you wait, pick a trail:"));
-    for (const trail of TRAILS) {
-      const trailChip = makeButton(this.document, `${this.idPrefix}-trail-${trail.name}`, trail.label, true);
-      trailChip.classList.add("astro-chip");
-      trailChip.setAttribute("aria-pressed", String(trail.name === "rainbow"));
-      trailChip.addEventListener("click", () => this.chooseTrail(trail.name, chipRow));
-      chipRow.append(trailChip);
-    }
-    return chipRow;
+  private trailChips(trailChoice: WakeUpTrailChoice): HTMLElement {
+    const trailRow = makeElement(this.document, "div", "wake-up__trails");
+    trailRow.append(
+      makeElement(this.document, "span", "wake-up__trails-label", "While you wait, pick a trail:"),
+      buildTrailChips(this.document, this.idPrefix, trailChoice.trail, (trail) => this.chooseTrail(trailChoice, trail)),
+    );
+    return trailRow;
   }
 
-  private chooseTrail(trailName: string, chipRow: HTMLElement): void {
-    for (const knownTrail of TRAILS) {
-      this.host.trailOwner.classList.toggle(`astro-trail--${knownTrail.name}`, knownTrail.name === trailName);
-    }
-    for (const trailChip of chipRow.querySelectorAll<HTMLButtonElement>(".astro-chip")) {
-      trailChip.setAttribute("aria-pressed", String(trailChip.id === `${this.idPrefix}-trail-${trailName}`));
-    }
+  private chooseTrail(trailChoice: WakeUpTrailChoice, trail: AstroTrail): void {
+    trailChoice.onTrailChosen(trail);
     this.host.figure.hop();
   }
 }

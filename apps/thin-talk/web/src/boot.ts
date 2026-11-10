@@ -168,6 +168,8 @@ export function bootChatClient(): AppShell {
     bridge,
     library: new AstroLibrary(client),
     firstFlightOverlay: requireElement<HTMLElement>("#first-flight"),
+    yourAstroOverlay: requireElement<HTMLElement>("#your-astro"),
+    trailOwner: requireElement<HTMLElement>("#app"),
     emptyState: requireElement<HTMLElement>("#empty-state"),
     composerField,
     skillLaunchers: requireElement<HTMLElement>("#skill-launchers"),

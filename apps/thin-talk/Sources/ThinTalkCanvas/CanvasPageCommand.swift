@@ -14,7 +14,7 @@ public enum CanvasPageCommand: String, CaseIterable, Sendable {
   case copyLastAnswer
   case deleteConversation
   case focusComposer
-  case meetAstro
+  case openYourAstro
   case toggleAstro
 
   /// The script that delivers the command to the page's command router.

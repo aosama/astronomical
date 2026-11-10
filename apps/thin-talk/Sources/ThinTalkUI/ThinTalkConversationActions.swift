@@ -48,10 +48,10 @@ public final class ThinTalkConversationActions: NSObject, NSMenuItemValidation {
     commandController.run(.focusComposer)
   }
 
-  /// Replays Astro's first flight, so a grown-up can show it to a new person
-  /// or a young person can change their name and style.
-  @objc public func meetAstro(_ sender: Any?) {
-    commandController.run(.meetAstro)
+  /// Settings (⌘,): opens Your Astro, where a young person changes their
+  /// name, style or trail on its own instead of replaying the whole welcome.
+  @objc public func openYourAstro(_ sender: Any?) {
+    commandController.run(.openYourAstro)
   }
 
   /// The Focus switch: hides Astro for a plain chat window, or brings Astro back.

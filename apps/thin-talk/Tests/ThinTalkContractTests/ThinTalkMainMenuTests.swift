@@ -76,7 +76,7 @@ final class ThinTalkMainMenuTests: XCTestCase {
     let viewMenu = try submenu(mainMenu, "View")
     let expectedViewItems: [(String, String, NSEvent.ModifierFlags, Bool)] = [
       ("Toggle Sidebar", "s", [.command, .control], true),
-      ("Show or Hide Astro", "", [.command], true), ("Meet Astro Again", "", [.command], true),
+      ("Show or Hide Astro", "", [.command], true),
       ("Zoom In", "=", [.command], true), ("Zoom Out", "-", [.command], true),
       ("Actual Size", "0", [.command], true),
       ("Enter Full Screen", "f", [.command, .control], false),
@@ -88,6 +88,19 @@ final class ThinTalkMainMenuTests: XCTestCase {
       XCTAssertEqual(viewItem.target === actions, targetsConversation, title)
     }
     XCTAssertNil(viewMenu.item(withTitle: "Enter Full Screen")?.target, "full screen goes to the key window")
+  }
+
+  func test_should_open_your_astro_from_settings_with_command_comma() throws {
+    let (mainMenu, actions) = menuBar(ThinTalkHostMenuActions(applicationName: "Astronomical"))
+    let applicationMenu = try submenu(mainMenu, "Astronomical")
+    let settingsItem = try XCTUnwrap(applicationMenu.item(withTitle: "Settings…"))
+    XCTAssertEqual(settingsItem.action, #selector(ThinTalkConversationActions.openYourAstro(_:)))
+    XCTAssertEqual(settingsItem.keyEquivalent, ",")
+    XCTAssertEqual(settingsItem.keyEquivalentModifierMask, [.command])
+    XCTAssertTrue(settingsItem.target === actions, "Settings opens Your Astro in the conversation page")
+    XCTAssertNil(
+      try submenu(mainMenu, "View").item(withTitle: "Meet Astro Again"),
+      "the replay lives on Your Astro, not in the View menu")
   }
 
   func test_should_quit_through_the_normal_terminate_path() throws {

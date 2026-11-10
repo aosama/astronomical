@@ -52,6 +52,9 @@ export class FakeDaemon {
   private readonly installedModels: unknown[];
   /** Hugging Face ids whose downloads were requested, in order. */
   public readonly requestedLibraryDownloads: string[] = [];
+  /** While true, model reads fail as a network error would when the engine
+   * is not running, so a page can be tested against a silent engine. */
+  public modelsUnreachable = false;
   private libraryDownloadPollCount = 0;
   private readonly readyLibraryModelIDs = new Set<string>();
 
@@ -85,6 +88,9 @@ export class FakeDaemon {
       });
     }
     if (url.endsWith("/v1/models")) {
+      if (this.modelsUnreachable) {
+        throw new TypeError("fetch failed: the fake engine is not running");
+      }
       return Response.json({ data: this.installedModels });
     }
     if (url.endsWith("/v1/library/catalog") && this.options.libraryCatalog !== undefined) {
