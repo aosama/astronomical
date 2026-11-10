@@ -4,17 +4,19 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.98</title>
-            <pubDate>Tue, 10 Nov 2026 00:18:31 -0500</pubDate>
-            <sparkle:version>2210</sparkle:version>
-            <sparkle:shortVersionString>0.2.98</sparkle:shortVersionString>
+            <title>0.2.99</title>
+            <pubDate>Tue, 10 Nov 2026 05:51:50 -0500</pubDate>
+            <sparkle:version>2213</sparkle:version>
+            <sparkle:shortVersionString>0.2.99</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.98
+            <description sparkle:format="markdown"><![CDATA[## Astronomical 0.2.99
 
 ### Fixed
-- Only one Astronomical item shows in the menu bar. After updating to 0.2.97 with Launch at Login on, the menu-bar companion could start twice; a second copy now leaves at once.
-- Neural Engine prefill now engages. A model was unloaded as idle just as its Neural Engine programs finished preparing, so every message prepared them again; the idle timer now starts when preparation ends.
+- The chat window finds its engine by itself. After an update or a fresh launch the window could open a moment before the engine and stay on "Load failed" with no model selector; it now says it is waiting and fills in its models and conversations as soon as the engine answers.
+- "Check for Updates…" is back in the menu-bar popover's menu.
+- The menu-bar companion comes back when you return to the chat app if it stopped unexpectedly.
+- A Neural Engine preparation that stops making progress no longer keeps a model in memory.
 
 ### Compatibility
 - macOS 14.0 or later on Apple silicon.
@@ -22,10 +24,10 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 
 The disk image is signed with a Developer ID, notarized by Apple and stapled.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.98/Astronomical-0.2.98-macOS-arm64.dmg" length="20963478" type="application/octet-stream" sparkle:edSignature="qu9pcaXbRwBOyI0U2np1SqmReFIOdHWoRLoGp165oj50dJ/udgTzqKEEXzTGZUYROp+5DJ0rPgb92wmVg6FYAQ=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.99/Astronomical-0.2.99-macOS-arm64.dmg" length="20953152" type="application/octet-stream" sparkle:edSignature="0ZLl9XIbEtu293CEiUuwbhq8Z7X2c/TCqPspE9Ib9LeASAeuSLlPAc9kM6W9/lE+/JtlEMYDDhCLy8XrvVMXCg=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: fFD3u7IksdWlTjuuyzGVCNJm5+MmlEETo5XS7SHU/IX3ZvYiJ8Npa/eFb218KMNvJmySx3jXgiN+/2X9WnulBQ==
-length: 1879
+edSignature: EEftk2YcmrjBiIrxRlu35ID8wBUeopihMs6VBw1UqA6f8NkFADn0BuRLB2WRzsOp8tTfSm6Xdvr03FswSLcFDQ==
+length: 2024
 -->
