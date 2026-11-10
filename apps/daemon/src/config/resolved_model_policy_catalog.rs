@@ -215,3 +215,7 @@ fn worker_decision_family(model_family: ModelFamily) -> WorkerDecisionModelFamil
     }
     WorkerDecisionModelFamily::Laya
 }
+
+#[cfg(test)]
+#[path = "resolved_model_policy_catalog_tests.rs"]
+mod tests;

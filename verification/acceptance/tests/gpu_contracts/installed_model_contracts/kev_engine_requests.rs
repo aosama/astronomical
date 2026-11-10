@@ -1,6 +1,6 @@
 //! How the Kev engine handles requests on a real converted checkpoint.
 //!
-//! Agreement with Kev's reference implementation is a separate journey's
+//! Agreement with Kev's reference scoring is `kev_reference_decisions`'s
 //! job. This one checks what can be checked without the reference: that an
 //! unambiguous question is answered the way anyone would answer it, that a
 //! question reads exactly the same alone and among others (each continues

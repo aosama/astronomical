@@ -7,11 +7,11 @@ use std::path::Path;
 use serde_json::json;
 
 use super::{ConvertKevInvocation, KEV_HEAD_FILE_NAME, KEV_SETTINGS_FILE_NAME, convert_checkpoint};
+use crate::convert_kev::test_support::{TestHeadSettings, kev_head_archive_bytes};
 use crate::model_files::bfloat16::{bfloat16_bits_to_f32, f32_to_bfloat16_bits};
 use crate::model_files::safetensors_file::{
     OutputCheckpoint, PlannedTensor, SourceCheckpoint, TensorElementType,
 };
-use crate::model_files::test_support::{TestHeadSettings, kev_head_archive_bytes};
 
 const BASE_REVISION: &str = "0123456789abcdef0123456789abcdef01234567";
 const ADAPTED_TENSOR_NAME: &str = "model.language_model.layers.0.mlp.up_proj.weight";

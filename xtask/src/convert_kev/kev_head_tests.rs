@@ -1,8 +1,8 @@
 //! Unit contracts for reading Kev's head and settings from `head.pt`.
 
 use super::{HEAD_TENSOR_NAMES, KevHead};
+use crate::convert_kev::test_support::{TestHeadSettings, kev_head_archive_bytes};
 use crate::model_files::stored_zip::StoredZipArchive;
-use crate::model_files::test_support::{TestHeadSettings, kev_head_archive_bytes};
 
 fn head_settings() -> TestHeadSettings<'static> {
     TestHeadSettings {

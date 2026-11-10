@@ -32,6 +32,7 @@ pub mod answer;
 pub mod calibration;
 pub mod criterion_text;
 pub mod failure;
+pub mod kev_answers;
 pub mod kev_rendering;
 pub mod laya_rendering;
 pub mod laya_sequence;

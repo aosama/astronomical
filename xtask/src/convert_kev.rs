@@ -17,6 +17,8 @@ mod backbone_copy;
 mod kev_head;
 mod lora_adapter;
 mod lora_merge;
+#[cfg(test)]
+mod test_support;
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use astronomical_decision_contract::kev_rendering::kev_answer_from_probabilities;
+use astronomical_decision_contract::kev_answers::kev_answer_from_probabilities;
 use astronomical_decision_contract::{
     DecisionFailure, DecisionQuestion, OrderedJsonValue, QuestionInputCoverage, QuestionOutcome,
 };
