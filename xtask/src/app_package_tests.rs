@@ -4,17 +4,13 @@
 //! shell builder against fake tools. These replace the retired app-builder
 //! journeys and the validator's shell contract suite.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::build_identity::BuildIdentity;
-use super::bundle_assembly::{BundleInputs, assemble_bundle, missing_inputs};
-use super::bundle_check::{hidden_entry_problems, layout_problems, plist_identity_problems};
+use super::bundle_check::plist_identity_problems;
 use super::channel_profile::{Channel, ChannelProfile};
-use super::code_signing::{
-    APPLICATION_ENTITLEMENTS_PATH, INHERITED_ENTITLEMENTS_PATH, SigningRequest, signing_plan,
-};
+use super::code_signing::{INHERITED_ENTITLEMENTS_PATH, SigningRequest, signing_plan};
 use super::command::{AppCommand, parse_app_command};
-use super::info_plist::render_info_plist;
 use super::package_pipeline::{PackageRequest, disposable_reentry_arguments};
 use super::release_build_steps::release_cargo_arguments;
 use super::smoke_test::{
@@ -22,7 +18,7 @@ use super::smoke_test::{
     status_identity_problem,
 };
 
-const DEVELOPER_ID: &str = "Developer ID Application: Example (ABCDE12345)";
+pub(super) const DEVELOPER_ID: &str = "Developer ID Application: Example (ABCDE12345)";
 
 fn arguments(argument_words: &[&str]) -> Vec<String> {
     let mut owned_arguments = Vec::new();
@@ -32,7 +28,7 @@ fn arguments(argument_words: &[&str]) -> Vec<String> {
     owned_arguments
 }
 
-fn release_identity(is_dirty: bool) -> BuildIdentity {
+pub(super) fn release_identity(is_dirty: bool) -> BuildIdentity {
     BuildIdentity {
         application_version: "0.2.88".to_owned(),
         repository_url: "https://github.com/example-owner/astronomical".to_owned(),
@@ -78,8 +74,8 @@ fn should_sign_stable_with_developer_id_hardened_runtime_and_timestamp() {
 
     assert_eq!(
         signing_invocations.len(),
-        10,
-        "Sparkle code, four executables, and the bundle"
+        12,
+        "Sparkle code, the agent and its bundle, four executables, and the bundle"
     );
     for signing_invocation in &signing_invocations {
         assert!(
@@ -117,17 +113,28 @@ fn should_assign_app_store_entitlements_and_keep_the_cli_bare() {
 
     assert_eq!(
         signing_invocations.len(),
-        5,
-        "four executables and the bundle, no Sparkle"
+        7,
+        "the agent and its bundle, four executables, and the bundle; no Sparkle"
     );
+    // Rendered beside the bundle at signing time, because it names the app
+    // group of this signing's team.
     let application_entitlements =
-        format!("--entitlements /repository/{APPLICATION_ENTITLEMENTS_PATH}");
+        "--entitlements /fixture/Astronomical.application.entitlements".to_owned();
     let inherited_entitlements =
         format!("--entitlements /repository/{INHERITED_ENTITLEMENTS_PATH}");
-    assert!(
-        invocation_arguments_for(&signing_invocations, "MacOS/astronomical-menu")
-            .ends_with(&application_entitlements)
-    );
+    // The main app and the agent are each a sandboxed application; the agent's
+    // bundle is sealed with the same profile as its executable.
+    for sandboxed_application_suffix in [
+        "MacOS/astronomical-app",
+        "MacOS/astronomical-menu",
+        "LoginItems/Astronomical Agent.app",
+    ] {
+        assert!(
+            invocation_arguments_for(&signing_invocations, sandboxed_application_suffix)
+                .ends_with(&application_entitlements),
+            "{sandboxed_application_suffix}"
+        );
+    }
     assert!(
         invocation_arguments_for(&signing_invocations, "MacOS/astronomicald")
             .ends_with(&inherited_entitlements)
@@ -271,215 +278,6 @@ fn should_reenter_the_app_release_lane_with_the_same_request() {
             DEVELOPER_ID,
         ])
     );
-}
-
-/// Assembles a fixture bundle through the real assembly code so layout
-/// checks run against what the pipeline actually writes.
-fn assembled_fixture_bundle(channel: Channel) -> (tempfile::TempDir, PathBuf) {
-    let fixture_directory = tempfile::tempdir().expect("a fixture directory");
-    let fixture_root = fixture_directory.path();
-    let channel_profile = ChannelProfile::for_channel(channel);
-    let swift_build = fixture_root.join("apps/astronomical-menu/.build");
-    write_fixture_file(
-        &swift_build
-            .join("release")
-            .join(channel_profile.menu_swift_product),
-        "menu",
-        true,
-    );
-    write_fixture_file(
-        &swift_build.join("release/ThinTalk_ThinTalkCanvas.bundle/index.html"),
-        "<html>",
-        false,
-    );
-    write_fixture_file(
-        &swift_build.join("checkouts/Sparkle/LICENSE"),
-        "sparkle",
-        false,
-    );
-    write_fixture_file(
-        &swift_build.join("release/Sparkle.framework/Versions/B/Sparkle"),
-        "sparkle",
-        false,
-    );
-    for notice_path in [
-        "LICENSE",
-        "third-party/THIRD_PARTY_NOTICES",
-        "third-party/RUST_DEPENDENCY_NOTICES",
-        "mlx.metallib",
-        "icon.icns",
-    ] {
-        write_fixture_file(&fixture_root.join(notice_path), "notice", false);
-    }
-    for executable_name in [
-        "astronomicald",
-        "astronomical-inference-worker",
-        "astronomical",
-    ] {
-        write_fixture_file(
-            &fixture_root.join("release").join(executable_name),
-            "binary",
-            true,
-        );
-    }
-    let bundle_inputs = BundleInputs::for_repository(
-        fixture_root,
-        &channel_profile,
-        &fixture_root.join("release"),
-        fixture_root.join("mlx.metallib"),
-        fixture_root.join("icon.icns"),
-    );
-    assert!(
-        missing_inputs(&bundle_inputs).is_empty(),
-        "{:?}",
-        missing_inputs(&bundle_inputs)
-    );
-    let bundle_path = fixture_root
-        .join("out")
-        .join(channel_profile.bundle_directory_name());
-    let plist_text = render_info_plist(
-        &channel_profile,
-        &release_identity(false),
-        "https://example-owner.github.io/astronomical/appcast.xml",
-    );
-    assemble_bundle_without_rpath(&bundle_path, &bundle_inputs, &plist_text, &channel_profile);
-    (fixture_directory, bundle_path)
-}
-
-/// `install_name_tool` cannot edit a text fixture, so the Sparkle
-/// framework input is dropped before assembly and copied afterwards; the
-/// layout under test is otherwise exactly what `assemble_bundle` writes.
-fn assemble_bundle_without_rpath(
-    bundle_path: &Path,
-    bundle_inputs: &BundleInputs,
-    plist_text: &str,
-    channel_profile: &ChannelProfile,
-) {
-    let mut rpath_free_inputs = bundle_inputs.clone();
-    rpath_free_inputs.sparkle_framework = None;
-    assemble_bundle(bundle_path, &rpath_free_inputs, plist_text)
-        .expect("the fixture bundle should assemble");
-    if channel_profile.ships_sparkle {
-        write_fixture_file(
-            &bundle_path.join("Contents/Frameworks/Sparkle.framework/Versions/B/Sparkle"),
-            "sparkle",
-            false,
-        );
-    }
-}
-
-fn write_fixture_file(file_path: &Path, file_text: &str, is_executable: bool) {
-    std::fs::create_dir_all(file_path.parent().expect("a parent")).expect("fixture directory");
-    std::fs::write(file_path, file_text).expect("fixture file");
-    if is_executable {
-        let executable_permissions = std::os::unix::fs::PermissionsExt::from_mode(0o755);
-        std::fs::set_permissions(file_path, executable_permissions).expect("executable bit");
-    }
-}
-
-#[test]
-fn should_find_no_layout_problem_in_freshly_assembled_bundles() {
-    for channel in [Channel::Development, Channel::Stable, Channel::AppStore] {
-        let (_fixture_directory, bundle_path) = assembled_fixture_bundle(channel);
-
-        assert!(
-            layout_problems(&bundle_path, &ChannelProfile::for_channel(channel)).is_empty(),
-            "{channel:?}"
-        );
-    }
-}
-
-#[test]
-fn should_report_a_missing_metallib_executable_bit_and_stray_sparkle() {
-    let (_fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Stable);
-    std::fs::remove_file(bundle_path.join("Contents/Resources/share/mlx/mlx.metallib"))
-        .expect("remove metallib");
-    let plain_permissions = std::os::unix::fs::PermissionsExt::from_mode(0o644);
-    std::fs::set_permissions(
-        bundle_path.join("Contents/MacOS/astronomicald"),
-        plain_permissions,
-    )
-    .expect("drop the executable bit");
-
-    let stable_problems =
-        layout_problems(&bundle_path, &ChannelProfile::for_channel(Channel::Stable));
-    let store_problems = layout_problems(
-        &bundle_path,
-        &ChannelProfile::for_channel(Channel::AppStore),
-    );
-
-    assert!(
-        stable_problems.contains(&"required bundled MLX AOT metallib is unavailable".to_owned()),
-        "{stable_problems:?}"
-    );
-    assert!(
-        stable_problems.contains(&"bundled executable is unavailable: astronomicald".to_owned()),
-        "{stable_problems:?}"
-    );
-    assert!(
-        store_problems
-            .contains(&"an App Store bundle must not embed Sparkle or its license".to_owned()),
-        "{store_problems:?}"
-    );
-}
-
-/// The v0.2.88 leak: a git-ignored Playwright folder inside the Thin Talk
-/// web resources was copied whole into the shipped bundle.
-#[test]
-fn should_report_a_leaked_playwright_folder_inside_the_canvas_resources() {
-    let (_fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Stable);
-    let leaked_folder =
-        bundle_path.join("Contents/Resources/ThinTalk_ThinTalkCanvas.bundle/.playwright-cli");
-    write_fixture_file(&leaked_folder.join("console.log"), "debug", false);
-
-    let stable_problems =
-        layout_problems(&bundle_path, &ChannelProfile::for_channel(Channel::Stable));
-
-    assert_eq!(
-        stable_problems,
-        vec![
-            "hidden entry inside the bundle: Contents/Resources/ThinTalk_ThinTalkCanvas.bundle/.playwright-cli"
-                .to_owned()
-        ]
-    );
-}
-
-#[test]
-fn should_report_a_hidden_file_at_any_depth_of_the_bundle() {
-    let (_fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Development);
-    write_fixture_file(&bundle_path.join("Contents/.DS_Store"), "finder", false);
-
-    assert_eq!(
-        hidden_entry_problems(&bundle_path),
-        vec!["hidden entry inside the bundle: Contents/.DS_Store".to_owned()]
-    );
-}
-
-/// Sparkle's framework links `Versions/Current`; following symlinks could
-/// walk out of the bundle and blame it for files it does not contain.
-#[test]
-fn should_not_follow_a_symlink_out_of_the_bundle() {
-    let (fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Stable);
-    let outside_directory = fixture_directory.path().join("outside");
-    write_fixture_file(&outside_directory.join(".hidden"), "outside", false);
-    std::os::unix::fs::symlink(&outside_directory, bundle_path.join("Contents/linked"))
-        .expect("symlink out of the bundle");
-
-    assert!(hidden_entry_problems(&bundle_path).is_empty());
-}
-
-#[test]
-fn should_cap_the_hidden_entry_report() {
-    let (_fixture_directory, bundle_path) = assembled_fixture_bundle(Channel::Stable);
-    for hidden_index in 0..15 {
-        write_fixture_file(
-            &bundle_path.join(format!("Contents/Resources/.stray-{hidden_index:02}")),
-            "stray",
-            false,
-        );
-    }
-
-    assert_eq!(hidden_entry_problems(&bundle_path).len(), 10);
 }
 
 fn plist_document_for(channel: Channel, is_dirty: bool) -> serde_json::Value {

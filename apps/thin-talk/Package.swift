@@ -17,7 +17,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "ThinTalk", targets: ["ThinTalk"]),
-        // The chat surface is also linked by astronomical-menu, which opens the
+        // The chat surface is also linked by the Astronomical main app
+        // (apps/astronomical-menu, product astronomical-app), which opens the
         // conversation as one window of the one Astronomical app (issue 647
         // decision revision, 2026-09-20). One module set, two hosts.
         .library(name: "ThinTalkChat", targets: ["ThinTalkCore", "ThinTalkCanvas", "ThinTalkUI"]),

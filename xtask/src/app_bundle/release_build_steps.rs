@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::build_identity::BuildIdentity;
-use super::build_steps::build_menu_application;
+use super::build_steps::build_swift_applications;
 use super::channel_profile::ChannelProfile;
 use super::step_reporter::StepReporter;
 use super::tool_command::run_tool;
@@ -111,10 +111,10 @@ impl ReleaseBuildContext<'_> {
         )
     }
 
-    pub(crate) fn build_menu_application(
+    pub(crate) fn build_swift_applications(
         &self,
         step_reporter: &StepReporter,
     ) -> Result<(), String> {
-        build_menu_application(self.repository_root, self.channel_profile, step_reporter)
+        build_swift_applications(self.repository_root, self.channel_profile, step_reporter)
     }
 }

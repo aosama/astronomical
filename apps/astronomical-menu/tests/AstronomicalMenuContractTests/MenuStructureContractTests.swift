@@ -55,22 +55,24 @@ final class MenuStructureContractTests: XCTestCase {
     XCTAssertLessThan(downloadActionStart.lowerBound, overflowMenuStart.lowerBound)
   }
 
-  func test_should_place_the_launch_at_login_switch_inside_the_overflow_menu_behind_its_guard()
-    throws
-  {
+  /// The main app owns the updater and registers the agent at login, so the
+  /// popover offers neither: a control here could only ask another process.
+  func test_should_leave_updates_and_launch_at_login_to_the_main_app_menu() throws {
     let packageDirectoryURL = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let popoverSource = try String(
       contentsOf: packageDirectoryURL.appendingPathComponent(
         "Sources/AstronomicalMenuCore/OrbitalTelemetryPopover.swift"),
       encoding: .utf8)
-    let overflowMenuStart = try XCTUnwrap(popoverSource.range(of: "Menu {"))
-    let launchAtLoginGuardStart = try XCTUnwrap(
-      popoverSource.range(of: "if launchAtLoginSupported {"))
-    let launchAtLoginToggleStart = try XCTUnwrap(
-      popoverSource.range(of: "Toggle(\"Launch at Login\", isOn: $launchAtLoginIsEnabled)"))
+    let settingsMenuSource = try String(
+      contentsOf: packageDirectoryURL.appendingPathComponent(
+        "Sources/AstronomicalAppCore/ApplicationSettingsMenu.swift"),
+      encoding: .utf8)
 
-    XCTAssertGreaterThan(launchAtLoginGuardStart.lowerBound, overflowMenuStart.lowerBound)
-    XCTAssertGreaterThan(launchAtLoginToggleStart.lowerBound, launchAtLoginGuardStart.lowerBound)
+    for mainApplicationControl in ["Launch at Login", "Check for Updates", "Update Channel"] {
+      XCTAssertFalse(popoverSource.contains("\"\(mainApplicationControl)"), mainApplicationControl)
+    }
+    XCTAssertTrue(settingsMenuSource.contains("\"Launch at Login\""))
+    XCTAssertTrue(settingsMenuSource.contains("\"Update Channel\""))
   }
 }

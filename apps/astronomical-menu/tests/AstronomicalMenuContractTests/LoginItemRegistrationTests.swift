@@ -1,7 +1,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenuCore
+@testable import AstronomicalAppCore
 
 /// Scripts the registration service so switch decisions are verified against
 /// every system state the real registrar can report, without touching the

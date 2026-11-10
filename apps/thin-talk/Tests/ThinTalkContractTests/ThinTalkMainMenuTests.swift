@@ -182,4 +182,52 @@ final class ThinTalkMainMenuTests: XCTestCase {
     XCTAssertTrue(
       NSApp.servicesMenu === mainMenu.item(withTitle: "Astronomical")?.submenu?.item(withTitle: "Services")?.submenu)
   }
+
+  /// A host's own settings sit directly under Check for Updates, in the order
+  /// the host gave them, so the app menu reads updates first, then settings.
+  func test_should_place_the_hosts_settings_items_under_check_for_updates() throws {
+    let firstSettingsItem = NSMenuItem(title: "Check for Updates Automatically", action: nil, keyEquivalent: "")
+    let secondSettingsItem = NSMenuItem(title: "Launch at Login", action: nil, keyEquivalent: "")
+    let (mainMenu, _) = menuBar(
+      ThinTalkHostMenuActions(
+        applicationName: "Host", checkForUpdates: {},
+        hostSettingsMenuItems: [firstSettingsItem, secondSettingsItem]))
+    let applicationMenuTitles = try XCTUnwrap(mainMenu.items.first?.submenu).items.map(\.title)
+    let updatesIndex = try XCTUnwrap(applicationMenuTitles.firstIndex(of: "Check for Updates…"))
+
+    XCTAssertEqual(
+      Array(applicationMenuTitles[(updatesIndex + 1)...(updatesIndex + 2)]),
+      ["Check for Updates Automatically", "Launch at Login"])
+  }
+
+  func test_should_add_no_settings_items_for_a_host_that_supplies_none() throws {
+    let (mainMenu, _) = menuBar(ThinTalkHostMenuActions(applicationName: "Host"))
+    let applicationMenuTitles = try XCTUnwrap(mainMenu.items.first?.submenu).items.map(\.title)
+
+    XCTAssertEqual(Array(applicationMenuTitles.prefix(2)), ["About Host", ""], "About, then the separator")
+  }
+
+  /// A host whose Quit leaves an engine serving offers the full stop beside
+  /// it. The item has no shortcut: ⌥⌘Q is AppKit's own Quit and Keep Windows.
+  func test_should_offer_quit_and_stop_engine_last_without_a_shortcut_when_the_host_can() throws {
+    var stopRequestCount = 0
+    let (mainMenu, _) = menuBar(
+      ThinTalkHostMenuActions(applicationName: "Host", quitEverything: { stopRequestCount += 1 }))
+    let applicationMenu = try XCTUnwrap(mainMenu.items.first?.submenu)
+    let quitEverythingItem = try XCTUnwrap(applicationMenu.items.last)
+
+    XCTAssertEqual(quitEverythingItem.title, "Quit and Stop Engine")
+    XCTAssertEqual(quitEverythingItem.keyEquivalent, "")
+    XCTAssertEqual(applicationMenu.items[applicationMenu.items.count - 2].title, "Quit Host")
+    _ = quitEverythingItem.target?.perform(quitEverythingItem.action, with: nil)
+    XCTAssertEqual(stopRequestCount, 1)
+  }
+
+  func test_should_end_the_app_menu_at_quit_for_a_host_with_nothing_else_to_stop() throws {
+    let (mainMenu, _) = menuBar(ThinTalkHostMenuActions(applicationName: "Host"))
+    let applicationMenu = try XCTUnwrap(mainMenu.items.first?.submenu)
+
+    XCTAssertEqual(applicationMenu.items.last?.title, "Quit Host")
+    XCTAssertNil(applicationMenu.item(withTitle: "Quit and Stop Engine"))
+  }
 }

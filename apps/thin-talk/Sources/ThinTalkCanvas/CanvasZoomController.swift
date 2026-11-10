@@ -3,7 +3,7 @@ import WebKit
 
 /// Routes zoom commands and zoom keys to the live canvas web view. Whatever hosts
 /// the canvas owns one controller for its lifetime: the standalone app's scene or
-/// the menu application's chat window. The canvas registers itself when
+/// the Astronomical main app's chat window. The canvas registers itself when
 /// the hosting view layer hands the controller over, and every zoom intent is a
 /// no-op until the canvas has installed its web view.
 @MainActor

@@ -3,7 +3,7 @@ import SwiftUI
 import ThinTalkCanvas
 import ThinTalkCore
 
-/// The one conversation window both hosts open: the menu application's chat
+/// The one conversation window both hosts open: the Astronomical main app's chat
 /// window and the standalone development app. Building it in one place keeps
 /// the shipped window and the one developers look at from drifting apart, which
 /// is how the standalone app came to have a hidden title bar the shipped one

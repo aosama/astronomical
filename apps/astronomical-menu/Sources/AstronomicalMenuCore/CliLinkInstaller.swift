@@ -19,9 +19,12 @@ struct CliLinkInstaller {
 
   init(channel: ApplicationChannel, bundle: Bundle = .main) {
     self.channel = channel
-    // The menu binary and the CLI live in the same Contents/MacOS directory.
-    self.bundleCliURL = bundle.executableURL?.deletingLastPathComponent()
-      .appendingPathComponent("astronomical")
+    // The CLI lives in the main bundle's Contents/MacOS; the link must point
+    // there, where every release keeps it, not into the nested agent bundle.
+    self.bundleCliURL = bundle.executableURL.map { agentExecutableURL in
+      ApplicationBundleLayout.bundledExecutablesDirectory(forExecutableAt: agentExecutableURL)
+        .appendingPathComponent("astronomical")
+    }
   }
 
   var destinationURL: URL {

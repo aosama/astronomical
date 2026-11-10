@@ -1,5 +1,6 @@
 //! The compile steps of the Development app: the native MLX runtime, the
-//! Rust executables, the Thin Talk web assets, and the Swift menu app.
+//! Rust executables, the Thin Talk web assets, and the two Swift executables
+//! (the main app and its menu-bar agent).
 //!
 //! Each step keeps its output between runs. The release lane deliberately
 //! starts cold from a disposable target directory; the edit loop must not,
@@ -11,7 +12,7 @@ use std::process::Command;
 use astronomical_native_identity::digest_bytes;
 
 use super::build_identity::BuildIdentity;
-use super::channel_profile::ChannelProfile;
+use super::channel_profile::{AGENT_EXECUTABLE_NAME, ChannelProfile};
 use super::step_reporter::StepReporter;
 use super::tool_command::{run_quiet_tool, run_tool};
 
@@ -115,24 +116,30 @@ pub(crate) fn npm_install_is_current(
     node_modules_exists && !lockfile_digest.is_empty() && lockfile_digest == installed_digest.trim()
 }
 
+/// Builds the main app, then the agent. They share one package and most of
+/// their modules, so the second build only compiles what the first did not.
+///
 /// Warnings fail the Swift build, mirroring the Rust rule that a warning is
 /// a defect, so none survives into a bundle.
-pub(crate) fn build_menu_application(
+pub(crate) fn build_swift_applications(
     repository_root: &Path,
     channel_profile: &ChannelProfile,
     step_reporter: &StepReporter,
 ) -> Result<(), String> {
     let macos_sdk_path =
         run_quiet_tool(Command::new("xcrun").args(["--sdk", "macosx", "--show-sdk-path"]))?;
-    let mut swift_command = menu_application_build_command(
-        repository_root,
-        channel_profile.menu_swift_product,
-        macos_sdk_path.trim(),
-    );
-    run_tool(&mut swift_command, step_reporter)
+    for swift_product in [
+        channel_profile.application_swift_product,
+        AGENT_EXECUTABLE_NAME,
+    ] {
+        let mut swift_command =
+            swift_product_build_command(repository_root, swift_product, macos_sdk_path.trim());
+        run_tool(&mut swift_command, step_reporter)?;
+    }
+    Ok(())
 }
 
-/// The `swift build` for the menu app, which also hosts the Thin Talk window.
+/// The `swift build` for one product of the app's Swift package.
 ///
 /// The SDK is handed to the link step's clang as well as to swiftc. Under the
 /// swiftbuild backend the link runs without SDKROOT, so clang cannot read the
@@ -144,16 +151,16 @@ pub(crate) fn build_menu_application(
 /// The SDK path travels as one argument. The tests prove that for the `swift`
 /// command line; an SDK path containing spaces has not been tried through the
 /// swiftbuild backend, which receives it from SwiftPM.
-pub(crate) fn menu_application_build_command(
+pub(crate) fn swift_product_build_command(
     repository_root: &Path,
-    menu_swift_product: &str,
+    swift_product: &str,
     macos_sdk_path: &str,
 ) -> Command {
     let mut swift_command = Command::new("swift");
     swift_command
         .args(["build", "--configuration", "release", "--package-path"])
         .arg(repository_root.join("apps/astronomical-menu"))
-        .args(["--product", menu_swift_product])
+        .args(["--product", swift_product])
         .args(["-Xswiftc", "-warnings-as-errors"])
         .args(["-Xswiftc", "-Xclang-linker", "-Xswiftc", "-isysroot"])
         .args(["-Xswiftc", "-Xclang-linker", "-Xswiftc", macos_sdk_path]);

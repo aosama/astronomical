@@ -29,11 +29,20 @@ public enum ApplicationUpdateChannel: String, CaseIterable, Hashable, Identifiab
 @MainActor
 public protocol ApplicationUpdateChecking: AnyObject {
   /// Whether this build surfaces update controls in the user interface.
-  /// Store builds return false so the popover never presents dead controls.
+  /// Store builds return false so the menu never presents dead controls.
   var supportsUserUpdateControls: Bool { get }
   var canCheckForUpdates: Bool { get }
   var automaticallyChecksForUpdates: Bool { get set }
   var selectedChannel: ApplicationUpdateChannel { get }
+
+  /// Runs just before an installed update relaunches the app. The main app
+  /// uses it to stop the menu-bar agent and its engine, which would otherwise
+  /// keep running the build being replaced.
+  var prepareForRelaunch: (@MainActor () -> Void)? { get set }
+  /// True once an update is downloaded and waiting to be installed when the
+  /// app quits. No relaunch follows that install, so `prepareForRelaunch`
+  /// never runs for it; the main app stops the agent as it quits instead.
+  var installsUpdateOnQuit: Bool { get }
 
   func checkForUpdates()
   func start()
@@ -75,6 +84,9 @@ final class AppStoreUpdateController: ApplicationUpdateChecking {
     set {}
   }
   private(set) var selectedChannel = ApplicationUpdateChannel.stable
+  // The store relaunches the app itself; nothing here ever calls this.
+  var prepareForRelaunch: (@MainActor () -> Void)?
+  let installsUpdateOnQuit = false
 
   func checkForUpdates() {
     // Store builds never check for updates in-process; the App Store owns the

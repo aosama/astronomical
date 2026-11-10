@@ -56,8 +56,10 @@ test-rest-api = "test --no-fail-fast -p astronomical-rest-contract -p astronomic
 test-e2e = "test --no-fail-fast -p astronomical-e2e --test e2e"
 
 # The macOS packaging contracts of `cargo xtask app package` (signing
-# plans, Cargo arguments, bundle layout, plist checks for every channel);
-# runs in the required macOS CI check.
+# plans, Cargo arguments, bundle layout, plist checks for every channel, the
+# two-process bundle and its app group); runs in the required macOS CI check.
+# It selects every xtask test module whose name starts with `app_package`, so
+# a new packaging test file must keep that prefix to stay in the lane.
 test-app-builder = "test -p xtask --bin xtask app_package"
 
 # Both lanes together; run this before committing.
@@ -126,10 +128,12 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # xtask sources. `cargo xtask app dev` rebuilds the Development app
 # (incremental `app-dev` profile, cached icon and npm install, ad-hoc
 # signing) and swaps it in for the running one; `cargo xtask app instance
-# status|start|stop|restart` controls that instance headless, and `restart`
-# reopens the menu app if it quit one; `cargo xtask
-# app info-plist --channel development|stable|app-store` prints the plist a
-# channel would get, for inspecting the channel profiles. `cargo xtask app
+# status|start|stop|restart` controls that instance headless; `stop` quits
+# the chat app and the menu-bar agent, and `restart` reopens the agent (not
+# the chat window) if it quit one; `cargo xtask
+# app info-plist --channel development|stable|app-store [--agent]` prints the
+# plist a channel's main app would get, or with `--agent` its menu-bar
+# agent's, for inspecting the channel profiles. `cargo xtask app
 # package --channel stable|app-store [--signing-identity NAME]` builds a
 # release bundle from a clean commit in the disposable app-release lane, and
 # `cargo xtask app smoke-test --app-bundle PATH [--real-model MODEL_ID]`

@@ -1,5 +1,5 @@
 //! `cargo xtask app smoke-test --app-bundle PATH [--real-model MODEL_ID]`:
-//! launches a built bundle's daemon and menu app in isolation, checks that
+//! launches a built bundle's daemon and menu-bar agent in isolation, checks that
 //! they serve this build's identity, and shuts them down. Typed port of the
 //! launching half of the retired `validate-macos-app.sh`.
 //!
@@ -12,10 +12,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use super::channel_profile::AGENT_EXECUTABLE_NAME;
 use super::tool_command::run_quiet_tool;
 
 const HEALTH_WAIT: Duration = Duration::from_secs(30);
-const MENU_SURVIVAL_PERIOD: Duration = Duration::from_secs(2);
+const AGENT_SURVIVAL_PERIOD: Duration = Duration::from_secs(2);
 const PROCESS_EXIT_WAIT: Duration = Duration::from_secs(30);
 const POLL_INTERVAL: Duration = Duration::from_millis(250);
 const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
@@ -93,7 +94,7 @@ fn exercise_running_instance(
         return Err("/v1/models did not return a data array".to_owned());
     }
     println!("[app-smoke-test] step=daemon status=success");
-    check_menu_survives(&smoke_test_request.bundle_path, log_directory)?;
+    check_agent_survives(&smoke_test_request.bundle_path, log_directory)?;
     if let Some(real_model_identifier) = &smoke_test_request.real_model_identifier {
         probe_real_model(
             repository_root,
@@ -161,27 +162,54 @@ fn read_bundle_instance_identity(bundle_path: &Path) -> Result<BundleInstanceIde
     }
 }
 
-/// The menu app must start and stay up; it is then asked to terminate.
-fn check_menu_survives(bundle_path: &Path, log_directory: &Path) -> Result<(), String> {
-    let mut menu_process = launch_bundled_executable(
-        &bundle_path.join("Contents/MacOS/astronomical-menu"),
+/// The menu-bar agent must start and stay up; it is then asked to terminate.
+/// The main app is not launched here: it would start an agent of its own
+/// through LaunchServices, outside this test's control.
+fn check_agent_survives(bundle_path: &Path, log_directory: &Path) -> Result<(), String> {
+    let mut agent_process = launch_bundled_executable(
+        &agent_executable_path(bundle_path)?,
         &[],
-        &log_directory.join("menu.log"),
+        &log_directory.join("agent.log"),
     )?;
-    std::thread::sleep(MENU_SURVIVAL_PERIOD);
-    let menu_survived = matches!(menu_process.try_wait(), Ok(None));
+    std::thread::sleep(AGENT_SURVIVAL_PERIOD);
+    let agent_survived = matches!(agent_process.try_wait(), Ok(None));
     let _ = Command::new("kill")
-        .args(["-TERM", &menu_process.id().to_string()])
+        .args(["-TERM", &agent_process.id().to_string()])
         .status();
-    wait_for_child_exit(&mut menu_process, "menu app")?;
-    if !menu_survived {
+    wait_for_child_exit(&mut agent_process, "menu-bar agent")?;
+    if !agent_survived {
         return Err(format!(
-            "the menu app exited during the smoke test; read {}",
-            log_directory.join("menu.log").display()
+            "the menu-bar agent exited during the smoke test; read {}",
+            log_directory.join("agent.log").display()
         ));
     }
     println!("[app-smoke-test] step=menu status=success");
     Ok(())
+}
+
+/// The agent's bundle name differs per channel, and the smoke test is handed
+/// only a bundle path, so the one bundle in LoginItems is found by looking.
+pub(crate) fn agent_executable_path(bundle_path: &Path) -> Result<PathBuf, String> {
+    let login_items_directory = bundle_path.join("Contents/Library/LoginItems");
+    let Ok(login_item_entries) = std::fs::read_dir(&login_items_directory) else {
+        return Err(format!(
+            "the bundle has no menu-bar agent: {} is missing",
+            login_items_directory.display()
+        ));
+    };
+    for login_item_entry in login_item_entries.flatten() {
+        let agent_executable = login_item_entry
+            .path()
+            .join("Contents/MacOS")
+            .join(AGENT_EXECUTABLE_NAME);
+        if agent_executable.is_file() {
+            return Ok(agent_executable);
+        }
+    }
+    Err(format!(
+        "no menu-bar agent executable under {}",
+        login_items_directory.display()
+    ))
 }
 
 fn probe_real_model(

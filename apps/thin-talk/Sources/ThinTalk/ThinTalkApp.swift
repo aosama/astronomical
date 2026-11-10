@@ -6,7 +6,7 @@ import ThinTalkUI
 /// Spotlight), not a menu-bar item, matching the requirement that a thin chat
 /// app is discoverable through first-class launch.
 ///
-/// The window and menu bar are the same ones the menu application opens
+/// The window and menu bar are the same ones the Astronomical main app opens
 /// (`ThinTalkConversationWindow`, `ThinTalkMainMenu`), so what developers run
 /// here is what ships. Production always renders the real, client-backed
 /// conversation; the UX preview and offscreen PNG exporter are development-only

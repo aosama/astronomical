@@ -18,7 +18,7 @@ public enum CanvasWebResources {
   ///
   /// This deliberately does NOT call `Bundle.module`. That generated accessor ends in
   /// `fatalError` when it cannot place the bundle, which killed the host process the
-  /// moment ThinTalkCanvas was linked into the menu app; here a missing bundle
+  /// moment ThinTalkCanvas was linked into the Astronomical main app; here a missing bundle
   /// degrades to a visible canvas-unavailable state instead.
   ///
   /// The replacement cannot simply mirror `Bundle.module`, because SwiftPM generates

@@ -10,17 +10,17 @@ use std::path::{Path, PathBuf};
 
 use super::build_identity::{BuildIdentity, github_pages_feed_url};
 use super::build_steps::{
-    build_menu_application, build_rust_executables, build_thin_talk_web_assets,
+    build_rust_executables, build_swift_applications, build_thin_talk_web_assets,
     prewarm_native_runtime, rust_executable_directory,
 };
-use super::bundle_assembly::{BundleInputs, assemble_bundle, missing_inputs};
+use super::bundle_assembly::{BundleInputs, BundlePlists, assemble_bundle, missing_inputs};
 use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{SigningRequest, sign_bundle};
 use super::icon_cache::cached_channel_icon;
-use super::info_plist::render_info_plist;
+use super::info_plist::{render_agent_info_plist, render_info_plist};
 use super::native_metallib::packaged_metallib_source;
-use super::running_instance::{open_bundle, quit_menu_app, wait_for_daemon_exit};
+use super::running_instance::{open_bundle, quit_bundled_applications, wait_for_daemon_exit};
 use super::step_reporter::StepReporter;
 use super::tool_command::run_quiet_tool;
 
@@ -29,7 +29,7 @@ pub(crate) const DEV_PIPELINE_STEP_NAMES: [&str; 8] = [
     "native-runtime",
     "rust-executables",
     "thin-talk-web",
-    "menu-app",
+    "swift-apps",
     "assemble-and-sign",
     "check-bundle",
     "swap-and-open",
@@ -133,8 +133,8 @@ fn run_compile_steps(
         .join("thin-talk-package-lock.sha256");
     build_thin_talk_web_assets(repository_root, &lockfile_stamp_path, step_reporter)?;
     step_reporter.finish_step();
-    step_reporter.start_step("menu-app");
-    build_menu_application(repository_root, channel_profile, step_reporter)?;
+    step_reporter.start_step("swift-apps");
+    build_swift_applications(repository_root, channel_profile, step_reporter)?;
     step_reporter.finish_step();
     Ok(())
 }
@@ -154,7 +154,11 @@ fn run_bundle_steps(
     assemble_bundle(
         &pipeline_paths.staging_bundle_path,
         &bundle_inputs,
-        &info_plist_text,
+        &BundlePlists {
+            application_info_plist_text: &info_plist_text,
+            agent_info_plist_text: &render_agent_info_plist(channel_profile, build_identity),
+            agent_bundle_relative_path: &channel_profile.agent_bundle_relative_path(),
+        },
     )?;
     sign_bundle(&SigningRequest {
         bundle_path: &pipeline_paths.staging_bundle_path,
@@ -171,7 +175,7 @@ fn run_bundle_steps(
     )?;
     step_reporter.finish_step();
     step_reporter.start_step("swap-and-open");
-    quit_menu_app(channel_profile)?;
+    quit_bundled_applications(channel_profile)?;
     swap_in_staged_bundle(pipeline_paths)?;
     wait_for_daemon_exit(channel_profile)?;
     open_bundle(&pipeline_paths.bundle_path)?;

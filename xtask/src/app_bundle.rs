@@ -6,6 +6,7 @@
 //! commit in a disposable target directory, and `app smoke-test` launches a
 //! built bundle in isolation.
 
+mod application_group;
 mod build_identity;
 mod build_steps;
 mod bundle_assembly;
@@ -29,13 +30,26 @@ mod tool_command;
 #[path = "app_bundle_tests.rs"]
 mod app_bundle_tests;
 #[cfg(test)]
+#[path = "app_package_fixture_tests.rs"]
+mod app_package_fixture_tests;
+#[cfg(test)]
+#[path = "app_package_group_tests.rs"]
+mod app_package_group_tests;
+#[cfg(test)]
 #[path = "app_package_tests.rs"]
 mod app_package_tests;
+#[cfg(test)]
+#[path = "app_package_two_process_tests.rs"]
+mod app_package_two_process_tests;
+#[cfg(test)]
+#[path = "app_running_instance_tests.rs"]
+mod app_running_instance_tests;
 
 pub use command::run;
 // Stable installation re-checks a bundle with the same rules that built it.
 pub(crate) use bundle_check::{layout_problems, plist_identity_problems, version_text_reports};
-pub(crate) use channel_profile::{Channel, ChannelProfile};
+// The distribution signature check names the same two Swift executables.
+pub(crate) use channel_profile::{APPLICATION_EXECUTABLE_NAME, Channel, ChannelProfile};
 // The publisher derives the release version and update feed exactly as the
 // packager does, so the two cannot disagree about either.
 pub(crate) use build_identity::{daemon_package_identity, github_pages_feed_url};

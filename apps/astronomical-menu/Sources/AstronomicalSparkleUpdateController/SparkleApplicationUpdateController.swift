@@ -1,6 +1,6 @@
 // Sparkle-backed update controller for the direct-distribution executable.
 //
-// Lives in its own target so the App Store executable can link the menu core
+// Lives in its own target so the App Store executable can link the app core
 // without Sparkle: the store binary never links this framework, which is the
 // structural form of the App Review rule that store builds must not contain
 // self-updating code (guideline 2.4.5(vii)).
@@ -11,7 +11,7 @@
 // a bare executable only surfaces Sparkle's "Unable to Check For Updates"
 // failure alert, so the controller stays dormant unless the host is packaged.
 
-import AstronomicalMenuCore
+import AstronomicalAppCore
 import Foundation
 import Sparkle
 
@@ -31,6 +31,8 @@ public final class SparkleApplicationUpdateController: NSObject, ApplicationUpda
   )
 
   public private(set) var selectedChannel: ApplicationUpdateChannel
+  public var prepareForRelaunch: (@MainActor () -> Void)?
+  public private(set) var installsUpdateOnQuit = false
 
   public init(
     applicationChannel: ApplicationChannel,
@@ -76,13 +78,28 @@ public final class SparkleApplicationUpdateController: NSObject, ApplicationUpda
 
   public func start() {
     // Scheduled checks require eager startup; this lazy owner would otherwise
-    // remain dormant until the user first opened the popover.
+    // remain dormant until the user first chose Check for Updates.
     guard isHostPackagedApplication else { return }
     sparkleUpdaterController.startUpdater()
   }
 
   public func allowedChannels(for updater: SPUUpdater) -> Set<String> {
     allowedChannels
+  }
+
+  public func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+    prepareForRelaunch?()
+  }
+
+  /// Sparkle asks this when an update is ready to install at quit. Returning
+  /// false leaves the install to Sparkle; the note taken here is what lets
+  /// the main app stop its agent before that install replaces the bundle.
+  public func updater(
+    _ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+    immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
+  ) -> Bool {
+    installsUpdateOnQuit = true
+    return false
   }
 
   public func selectUpdateChannel(_ selectedChannel: ApplicationUpdateChannel) {

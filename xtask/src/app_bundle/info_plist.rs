@@ -1,11 +1,16 @@
-//! `Info.plist` rendered from a channel profile and a build identity.
+//! The two `Info.plist` files of the bundle, rendered from a channel profile
+//! and a build identity: the main app's, and the menu-bar agent's.
 //!
-//! Keys and values match the shell builder's output so the existing bundle
-//! validator and the menu app read the same contract. Rendering is pure, so
-//! every channel's plist is unit-tested without building anything.
+//! The main app is a regular application, so its plist carries no
+//! `LSUIElement`. The agent's sets it, which makes the agent an accessory for
+//! its whole life: neither process ever changes role while running, which is
+//! what keeps the main app's menu bar reachable. Both carry the same
+//! `Astronomical*` keys, because each reads its instance identity from its own
+//! bundle. Rendering is pure, so every channel's plists are unit-tested
+//! without building anything.
 
 use super::build_identity::BuildIdentity;
-use super::channel_profile::ChannelProfile;
+use super::channel_profile::{AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile};
 
 /// Sparkle's EdDSA public key: updates must be signed by its private half.
 pub(crate) const SPARKLE_PUBLIC_ED25519_KEY: &str = "g0URwy+j86uDYcmOu0k/IUVWwCOSrGOPSoFnVoYQ9AQ=";
@@ -20,7 +25,15 @@ pub(crate) fn render_info_plist(
          <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
          <plist version=\"1.0\">\n<dict>\n",
     );
-    push_bundle_keys(&mut plist_text, channel_profile, build_identity);
+    push_bundle_keys(
+        &mut plist_text,
+        &BundleNaming {
+            bundle_name: channel_profile.bundle_name,
+            bundle_identifier: channel_profile.bundle_identifier,
+            executable_name: APPLICATION_EXECUTABLE_NAME,
+        },
+        build_identity,
+    );
     if channel_profile.ships_sparkle {
         push_sparkle_keys(&mut plist_text, update_feed_url);
     }
@@ -34,27 +47,60 @@ pub(crate) fn render_info_plist(
         channel_profile.chat_url_scheme,
     ));
     push_string(&mut plist_text, "CFBundlePackageType", "APPL");
+    plist_text.push_str("</dict>\n</plist>\n");
+    plist_text
+}
+
+/// The agent's plist: no URL scheme (links belong to the main app) and no
+/// Sparkle keys (the main app owns updates).
+pub(crate) fn render_agent_info_plist(
+    channel_profile: &ChannelProfile,
+    build_identity: &BuildIdentity,
+) -> String {
+    let mut plist_text = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+         <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+         <plist version=\"1.0\">\n<dict>\n",
+    );
+    push_bundle_keys(
+        &mut plist_text,
+        &BundleNaming {
+            bundle_name: &channel_profile.agent_bundle_name(),
+            bundle_identifier: &channel_profile.agent_bundle_identifier(),
+            executable_name: AGENT_EXECUTABLE_NAME,
+        },
+        build_identity,
+    );
+    push_astronomical_keys(&mut plist_text, channel_profile, build_identity);
+    push_string(&mut plist_text, "CFBundlePackageType", "APPL");
     push_boolean(&mut plist_text, "LSUIElement", true);
     plist_text.push_str("</dict>\n</plist>\n");
     plist_text
 }
 
+/// What tells the main app's bundle keys from the agent's.
+struct BundleNaming<'naming> {
+    bundle_name: &'naming str,
+    bundle_identifier: &'naming str,
+    executable_name: &'naming str,
+}
+
 fn push_bundle_keys(
     plist_text: &mut String,
-    channel_profile: &ChannelProfile,
+    bundle_naming: &BundleNaming<'_>,
     build_identity: &BuildIdentity,
 ) {
-    push_string(plist_text, "CFBundleName", channel_profile.bundle_name);
+    push_string(plist_text, "CFBundleName", bundle_naming.bundle_name);
+    push_string(plist_text, "CFBundleDisplayName", bundle_naming.bundle_name);
     push_string(
         plist_text,
-        "CFBundleDisplayName",
-        channel_profile.bundle_name,
+        "CFBundleExecutable",
+        bundle_naming.executable_name,
     );
-    push_string(plist_text, "CFBundleExecutable", "astronomical-menu");
     push_string(
         plist_text,
         "CFBundleIdentifier",
-        channel_profile.bundle_identifier,
+        bundle_naming.bundle_identifier,
     );
     push_string(plist_text, "CFBundleVersion", &build_identity.build_number);
     push_string(

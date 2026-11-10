@@ -22,7 +22,7 @@ public struct CanvasRuntimeConfig: Equatable, Sendable, Encodable {
   /// window). Encoded only when present, so the key stays optional for the page.
   public let titlebarInset: Int?
   /// Whether the host can restart the local engine when the page asks
-  /// (the menu application can; the standalone development app cannot), so
+  /// (the Astronomical main app can; the standalone development app cannot), so
   /// the page offers a restart only where pressing it does something.
   public let canRestartEngine: Bool
 

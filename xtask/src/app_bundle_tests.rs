@@ -2,20 +2,17 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use super::build_identity::{BuildIdentity, daemon_package_identity, github_pages_feed_url};
-use super::build_steps::{menu_application_build_command, npm_install_is_current};
+use super::build_steps::{npm_install_is_current, swift_product_build_command};
 use super::bundle_assembly::{BundleInputs, missing_inputs};
 use super::bundle_check::daemon_version_matches;
 use super::channel_profile::{Channel, ChannelProfile, SandboxPolicy};
 use super::code_signing::{SigningRequest, signing_plan};
-use super::command::{AppCommand, parse_app_command};
+use super::command::{AppCommand, PlistSubject, parse_app_command};
 use super::dev_pipeline::DevPipelinePaths;
 use super::icon_cache::cached_icon_file_name;
 use super::info_plist::{escape_xml_text, render_info_plist};
-use super::instance_control::{
-    InstanceAction, reopen_menu_app_if_it_was_running, status_report_lines,
-};
+use super::instance_control::{InstanceAction, status_report_lines};
 use super::native_metallib::metallib_store_path;
-use super::running_instance::menu_process_pattern;
 use super::step_reporter::estimate_remaining_seconds;
 
 fn sample_build_identity(is_dirty: bool) -> BuildIdentity {
@@ -275,7 +272,7 @@ fn should_sign_sparkle_first_and_the_bundle_last() {
     })
     .expect("an ad-hoc Development plan is valid");
 
-    assert_eq!(signing_invocations.len(), 10);
+    assert_eq!(signing_invocations.len(), 12);
     assert!(
         signing_invocations[0]
             .code_object_path
@@ -286,8 +283,23 @@ fn should_sign_sparkle_first_and_the_bundle_last() {
             .code_object_path
             .ends_with("Frameworks/Sparkle.framework")
     );
+    // A seal covers what is beneath it: the agent's executable, then the
+    // agent's bundle, both before the main bundle that contains them.
+    assert!(signing_invocations[5].code_object_path.ends_with(
+        "Contents/Library/LoginItems/Astronomical Development Agent.app/Contents/MacOS/astronomical-menu"
+    ));
+    assert!(
+        signing_invocations[6]
+            .code_object_path
+            .ends_with("Contents/Library/LoginItems/Astronomical Development Agent.app")
+    );
+    assert!(
+        signing_invocations[7]
+            .code_object_path
+            .ends_with("Contents/MacOS/astronomical-app")
+    );
     assert_eq!(
-        signing_invocations[9].code_object_path,
+        signing_invocations[11].code_object_path,
         PathBuf::from("/fixture/Dev.app")
     );
     for signing_invocation in &signing_invocations {
@@ -322,7 +334,32 @@ fn should_parse_the_app_subcommands() {
     assert_eq!(parse_app_command(&arguments(&["dev"])), Ok(AppCommand::Dev));
     assert_eq!(
         parse_app_command(&arguments(&["info-plist", "--channel", "stable"])),
-        Ok(AppCommand::InfoPlist(Channel::Stable))
+        Ok(AppCommand::InfoPlist(
+            Channel::Stable,
+            PlistSubject::MainApplication
+        ))
+    );
+    assert_eq!(
+        parse_app_command(&arguments(&[
+            "info-plist",
+            "--channel",
+            "development",
+            "--agent"
+        ])),
+        Ok(AppCommand::InfoPlist(
+            Channel::Development,
+            PlistSubject::Agent
+        ))
+    );
+    assert!(
+        parse_app_command(&arguments(&[
+            "info-plist",
+            "--channel",
+            "stable",
+            "--helper"
+        ]))
+        .is_err(),
+        "only --agent may follow the channel"
     );
 }
 
@@ -501,67 +538,6 @@ fn should_report_unknown_fields_as_dashes_for_a_sparse_status_document() {
     assert_eq!(status_lines[4], "  build: unknown");
 }
 
-/// A command line as `pgrep -f` sees it, from a channel's bundle built in
-/// `worktree_name`'s target directory.
-fn bundle_command_line(worktree_name: &str, channel: Channel, executable_name: &str) -> String {
-    let channel_profile = ChannelProfile::for_channel(channel);
-    format!(
-        "/repository/.claude/worktrees/{worktree_name}/target/{}/{}.app/Contents/MacOS/{executable_name}",
-        channel_profile.output_directory_name, channel_profile.bundle_name
-    )
-}
-
-#[test]
-fn should_match_the_development_menu_app_from_any_worktree() {
-    let development_pattern =
-        menu_process_pattern(&ChannelProfile::for_channel(Channel::Development));
-
-    for worktree_name in ["first-worktree", "second-worktree"] {
-        let command_line =
-            bundle_command_line(worktree_name, Channel::Development, "astronomical-menu");
-        assert!(
-            command_line.contains(&development_pattern),
-            "{command_line}"
-        );
-    }
-}
-
-#[test]
-fn should_not_match_the_development_menu_app_with_the_stable_pattern() {
-    let stable_pattern = menu_process_pattern(&ChannelProfile::for_channel(Channel::Stable));
-    let development_command_line =
-        bundle_command_line("any-worktree", Channel::Development, "astronomical-menu");
-
-    assert!(!development_command_line.contains(&stable_pattern));
-}
-
-#[test]
-fn should_keep_stable_and_app_store_menu_apps_apart_despite_one_bundle_name() {
-    let stable_pattern = menu_process_pattern(&ChannelProfile::for_channel(Channel::Stable));
-    let stable_command_line =
-        bundle_command_line("any-worktree", Channel::Stable, "astronomical-menu");
-    let app_store_command_line =
-        bundle_command_line("any-worktree", Channel::AppStore, "astronomical-menu");
-
-    assert!(stable_command_line.contains(&stable_pattern));
-    assert!(!app_store_command_line.contains(&stable_pattern));
-}
-
-#[test]
-fn should_not_match_the_daemon_or_worker_inside_the_same_bundle() {
-    let development_pattern =
-        menu_process_pattern(&ChannelProfile::for_channel(Channel::Development));
-
-    for executable_name in ["astronomicald", "astronomical-inference-worker"] {
-        let command_line =
-            bundle_command_line("any-worktree", Channel::Development, executable_name);
-        assert!(
-            !command_line.contains(&development_pattern),
-            "{command_line}"
-        );
-    }
-}
-
 #[test]
 fn should_render_each_channels_own_chat_scheme_into_the_info_plist() {
     for (channel, chat_scheme_entry) in [
@@ -593,51 +569,6 @@ fn should_not_render_the_stable_chat_scheme_into_a_development_info_plist() {
     assert!(!plist_text.contains("<string>astronomical</string>"));
 }
 
-fn open_menu_app_succeeds(_bundle_path: &Path) -> Result<(), String> {
-    Ok(())
-}
-
-fn open_menu_app_fails(_bundle_path: &Path) -> Result<(), String> {
-    Err("open refused".to_owned())
-}
-
-#[test]
-fn should_reopen_a_menu_app_that_was_running() {
-    let reopen_outcome = reopen_menu_app_if_it_was_running(
-        true,
-        Path::new("/fictional/Fictional.app"),
-        open_menu_app_succeeds,
-    );
-
-    assert_eq!(reopen_outcome, Ok(()));
-}
-
-#[test]
-fn should_not_open_a_menu_app_that_was_not_running() {
-    // The opener always fails, so an Ok here proves it was never called.
-    let reopen_outcome = reopen_menu_app_if_it_was_running(
-        false,
-        Path::new("/fictional/Fictional.app"),
-        open_menu_app_fails,
-    );
-
-    assert_eq!(reopen_outcome, Ok(()));
-}
-
-#[test]
-fn should_say_the_daemon_is_running_when_the_menu_app_cannot_reopen() {
-    let reopen_outcome = reopen_menu_app_if_it_was_running(
-        true,
-        Path::new("/fictional/Fictional.app"),
-        open_menu_app_fails,
-    );
-
-    assert_eq!(
-        reopen_outcome,
-        Err("the daemon is running, but the menu app did not reopen: open refused".to_owned())
-    );
-}
-
 fn command_arguments(tool_command: &std::process::Command) -> Vec<String> {
     let mut arguments = Vec::new();
     for argument in tool_command.get_args() {
@@ -648,7 +579,7 @@ fn command_arguments(tool_command: &std::process::Command) -> Vec<String> {
 
 #[test]
 fn should_hand_the_macos_sdk_to_the_menu_link_step_so_the_app_gets_the_current_design() {
-    let swift_command = menu_application_build_command(
+    let swift_command = swift_product_build_command(
         Path::new("/repository"),
         "astronomical-menu",
         "/sdks/MacOSX.sdk",
@@ -680,9 +611,9 @@ fn should_hand_the_macos_sdk_to_the_menu_link_step_so_the_app_gets_the_current_d
 
 #[test]
 fn should_pass_an_sdk_path_with_spaces_as_one_argument() {
-    let swift_command = menu_application_build_command(
+    let swift_command = swift_product_build_command(
         Path::new("/repository"),
-        "astronomical-menu-app-store",
+        "astronomical-app-app-store",
         "/Applications/Xcode Beta.app/SDKs/MacOSX.sdk",
     );
     let arguments = command_arguments(&swift_command);
@@ -690,5 +621,5 @@ fn should_pass_an_sdk_path_with_spaces_as_one_argument() {
         arguments.last().map(String::as_str),
         Some("/Applications/Xcode Beta.app/SDKs/MacOSX.sdk")
     );
-    assert!(arguments.contains(&"astronomical-menu-app-store".to_string()));
+    assert!(arguments.contains(&"astronomical-app-app-store".to_string()));
 }

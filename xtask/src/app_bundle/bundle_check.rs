@@ -13,12 +13,17 @@
 use std::path::Path;
 use std::process::Command;
 
+use super::application_group::{APPLICATION_GROUP_PLIST_KEY, APPLICATION_GROUPS_ENTITLEMENT_KEY};
 use super::build_identity::BuildIdentity;
-use super::channel_profile::{ChannelProfile, SandboxPolicy};
+use super::channel_profile::{
+    AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile, SandboxPolicy,
+};
 use super::tool_command::run_quiet_tool;
 
+/// The executables of the main bundle's `Contents/MacOS`; the agent's lives
+/// in its own nested bundle and is checked there.
 const BUNDLED_EXECUTABLE_NAMES: [&str; 4] = [
-    "astronomical-menu",
+    APPLICATION_EXECUTABLE_NAME,
     "astronomicald",
     "astronomical-inference-worker",
     "astronomical",
@@ -41,19 +46,14 @@ pub(crate) fn check_bundle(
             .arg("-lint")
             .arg(bundle_path.join("Contents/Info.plist")),
     )?;
-    let plist_json_text = run_quiet_tool(
-        Command::new("plutil")
-            .args(["-convert", "json", "-o", "-"])
-            .arg(bundle_path.join("Contents/Info.plist")),
-    )?;
-    let plist_document: serde_json::Value = match serde_json::from_str(&plist_json_text) {
-        Ok(plist_document) => plist_document,
-        Err(parse_error) => {
-            return Err(format!("Info.plist did not convert to JSON: {parse_error}"));
-        }
-    };
+    let plist_document = read_plist_document(&bundle_path.join("Contents/Info.plist"))?;
     let mut bundle_problems = layout_problems(bundle_path, channel_profile);
     bundle_problems.extend(plist_identity_problems(&plist_document, channel_profile));
+    bundle_problems.extend(bundled_agent_problems(
+        bundle_path,
+        &plist_document,
+        channel_profile,
+    )?);
     if !bundle_problems.is_empty() {
         return Err(format!(
             "the bundle failed its checks:\n  {}",
@@ -64,10 +64,190 @@ pub(crate) fn check_bundle(
     check_daemon_identity(bundle_path, build_identity)
 }
 
+/// The role and identity problems of the agent inside `bundle_path`. A missing
+/// agent plist is reported as one more problem rather than as a tool error,
+/// so a single run still lists everything wrong with the bundle.
+pub(crate) fn bundled_agent_problems(
+    bundle_path: &Path,
+    application_plist_document: &serde_json::Value,
+    channel_profile: &ChannelProfile,
+) -> Result<Vec<String>, String> {
+    let agent_plist_path = bundle_path
+        .join(channel_profile.agent_bundle_relative_path())
+        .join("Contents/Info.plist");
+    if !agent_plist_path.is_file() {
+        return Ok(vec![
+            "the menu-bar agent's Info.plist is unavailable".to_owned(),
+        ]);
+    }
+    let agent_plist_document = read_plist_document(&agent_plist_path)?;
+    let mut agent_problems = process_role_problems(
+        application_plist_document,
+        &agent_plist_document,
+        channel_profile,
+    );
+    agent_problems.extend(application_group_problems(
+        application_plist_document,
+        &agent_plist_document,
+        channel_profile,
+    ));
+    Ok(agent_problems)
+}
+
+/// A sandboxed channel's two applications each have a container of their
+/// own, so both plists must name one app group, the same one, ending in the
+/// channel's group name: with different groups, or none, the chat app and the
+/// engine would each keep separate state. An unsandboxed channel must name
+/// none, because its state stays in the home directory.
+pub(crate) fn application_group_problems(
+    application_plist_document: &serde_json::Value,
+    agent_plist_document: &serde_json::Value,
+    channel_profile: &ChannelProfile,
+) -> Vec<String> {
+    let application_group = application_plist_document[APPLICATION_GROUP_PLIST_KEY].as_str();
+    let agent_group = agent_plist_document[APPLICATION_GROUP_PLIST_KEY].as_str();
+    let Some(application_group_name) = channel_profile.application_group_name else {
+        if application_group.is_some() || agent_group.is_some() {
+            return vec!["an unsandboxed bundle must not name an app group".to_owned()];
+        }
+        return Vec::new();
+    };
+    let mut group_problems = Vec::new();
+    let expected_group_suffix = format!(".{application_group_name}");
+    match application_group {
+        Some(application_group)
+            if application_group.ends_with(&expected_group_suffix)
+                && application_group.len() > expected_group_suffix.len() => {}
+        _ => group_problems.push(format!(
+            "the main app must name an app group ending in {expected_group_suffix}"
+        )),
+    }
+    if agent_group != application_group {
+        group_problems.push("the agent and the main app must name the same app group".to_owned());
+    }
+    group_problems
+}
+
+fn read_plist_document(plist_path: &Path) -> Result<serde_json::Value, String> {
+    let plist_json_text = run_quiet_tool(
+        Command::new("plutil")
+            .args(["-convert", "json", "-o", "-"])
+            .arg(plist_path),
+    )?;
+    match serde_json::from_str(&plist_json_text) {
+        Ok(plist_document) => Ok(plist_document),
+        Err(parse_error) => Err(format!(
+            "{} did not convert to JSON: {parse_error}",
+            plist_path.display()
+        )),
+    }
+}
+
+/// Each process keeps one role for its whole life: the main app is a regular
+/// application and the agent an accessory. A main app marked `LSUIElement`
+/// would have no menu bar, which is the defect this layout exists to prevent;
+/// an agent without it would put a second icon in the Dock. The agent must
+/// also belong to the same instance and build as the app around it, or its
+/// engine would serve another channel's port and state directory.
+pub(crate) fn process_role_problems(
+    application_plist_document: &serde_json::Value,
+    agent_plist_document: &serde_json::Value,
+    channel_profile: &ChannelProfile,
+) -> Vec<String> {
+    let mut role_problems = Vec::new();
+    if application_plist_document["LSUIElement"].as_bool() == Some(true) {
+        role_problems
+            .push("the main app must be a regular application, not LSUIElement".to_owned());
+    }
+    expect_plist_text(
+        application_plist_document,
+        "CFBundleExecutable",
+        APPLICATION_EXECUTABLE_NAME,
+        &mut role_problems,
+    );
+    if agent_plist_document["LSUIElement"].as_bool() != Some(true) {
+        role_problems.push("the menu-bar agent must be LSUIElement".to_owned());
+    }
+    if !agent_plist_document["CFBundleURLTypes"].is_null() {
+        role_problems.push("links belong to the main app; the agent must register none".to_owned());
+    }
+    role_problems.extend(agent_identity_problems(
+        agent_plist_document,
+        channel_profile,
+    ));
+    role_problems.extend(shared_build_identity_problems(
+        application_plist_document,
+        agent_plist_document,
+    ));
+    role_problems
+}
+
+/// The agent's own naming: its executable, its identifier (which the main app
+/// registers at login), and the channel it serves.
+fn agent_identity_problems(
+    agent_plist_document: &serde_json::Value,
+    channel_profile: &ChannelProfile,
+) -> Vec<String> {
+    let mut identity_problems = Vec::new();
+    for (agent_plist_key, expected_text) in [
+        ("CFBundleExecutable", AGENT_EXECUTABLE_NAME.to_owned()),
+        (
+            "CFBundleIdentifier",
+            channel_profile.agent_bundle_identifier(),
+        ),
+        (
+            "AstronomicalChannel",
+            channel_profile.channel.as_channel_name().to_owned(),
+        ),
+    ] {
+        if agent_plist_document[agent_plist_key].as_str() != Some(expected_text.as_str()) {
+            identity_problems.push(format!(
+                "the agent's {agent_plist_key} does not match the bundle"
+            ));
+        }
+    }
+    identity_problems
+}
+
+/// Both processes read their instance and build from their own plist, so the
+/// two plists must agree on every such value.
+fn shared_build_identity_problems(
+    application_plist_document: &serde_json::Value,
+    agent_plist_document: &serde_json::Value,
+) -> Vec<String> {
+    let mut disagreement_problems = Vec::new();
+    for shared_identity_key in [
+        "AstronomicalDaemonPort",
+        "AstronomicalStateDirectoryName",
+        "CFBundleVersion",
+        "CFBundleShortVersionString",
+        "AstronomicalBuildCommit",
+        "AstronomicalBuildDirty",
+    ] {
+        if agent_plist_document[shared_identity_key]
+            != application_plist_document[shared_identity_key]
+        {
+            disagreement_problems.push(format!(
+                "the agent and the main app disagree on {shared_identity_key}"
+            ));
+        }
+    }
+    disagreement_problems
+}
+
+/// The agent's executable must be in its nested bundle, where macOS looks for
+/// a helper the main app registers at login.
+fn agent_layout_problems(bundle_path: &Path, channel_profile: &ChannelProfile) -> Vec<String> {
+    if is_executable_file(&bundle_path.join(channel_profile.agent_executable_relative_path())) {
+        return Vec::new();
+    }
+    vec!["the menu-bar agent's executable is unavailable".to_owned()]
+}
+
 /// Files that must, or for the App Store must not, be in the bundle.
 pub(crate) fn layout_problems(bundle_path: &Path, channel_profile: &ChannelProfile) -> Vec<String> {
     let contents_path = bundle_path.join("Contents");
-    let mut layout_problems = Vec::new();
+    let mut layout_problems = agent_layout_problems(bundle_path, channel_profile);
     for executable_name in BUNDLED_EXECUTABLE_NAMES {
         if !is_executable_file(&contents_path.join("MacOS").join(executable_name)) {
             layout_problems.push(format!(
@@ -276,8 +456,8 @@ fn registered_url_schemes(plist_document: &serde_json::Value) -> Vec<&str> {
 }
 
 /// Strict seal verification, plus for the App Store the sandbox
-/// entitlements on every executable that must run sandboxed, and proof the
-/// menu app does not link Sparkle.
+/// entitlements on every executable that must run sandboxed, and proof that
+/// neither Swift executable links Sparkle.
 fn check_signatures(bundle_path: &Path, channel_profile: &ChannelProfile) -> Result<(), String> {
     run_quiet_tool(
         Command::new("codesign")
@@ -288,38 +468,64 @@ fn check_signatures(bundle_path: &Path, channel_profile: &ChannelProfile) -> Res
         return Ok(());
     }
     let macos_directory = bundle_path.join("Contents/MacOS");
-    for (executable_name, entitlement_keys) in [
+    let application_executable = macos_directory.join(APPLICATION_EXECUTABLE_NAME);
+    let agent_executable = bundle_path.join(channel_profile.agent_executable_relative_path());
+    // Both applications must belong to the app group, or the sandbox would
+    // refuse one of them the container their shared state lives in.
+    let sandbox_entitlement_keys = vec![
+        "com.apple.security.app-sandbox",
+        "com.apple.security.network.client",
+        "com.apple.security.network.server",
+        APPLICATION_GROUPS_ENTITLEMENT_KEY,
+    ];
+    check_entitlements(&[
         (
-            "astronomical-menu",
-            vec![
-                "com.apple.security.app-sandbox",
-                "com.apple.security.network.client",
-                "com.apple.security.network.server",
-            ],
+            application_executable.clone(),
+            sandbox_entitlement_keys.clone(),
         ),
-        ("astronomicald", vec!["com.apple.security.inherit"]),
+        (agent_executable.clone(), sandbox_entitlement_keys),
         (
-            "astronomical-inference-worker",
+            macos_directory.join("astronomicald"),
             vec!["com.apple.security.inherit"],
         ),
-    ] {
-        let entitlements_text =
-            signature_entitlements_text(&macos_directory.join(executable_name))?;
+        (
+            macos_directory.join("astronomical-inference-worker"),
+            vec!["com.apple.security.inherit"],
+        ),
+    ])?;
+    check_no_sparkle_linkage(&[application_executable, agent_executable])
+}
+
+/// Every listed executable must carry every entitlement listed with it.
+fn check_entitlements(
+    required_entitlements: &[(std::path::PathBuf, Vec<&str>)],
+) -> Result<(), String> {
+    for (executable_path, entitlement_keys) in required_entitlements {
+        let entitlements_text = signature_entitlements_text(executable_path)?;
         for entitlement_key in entitlement_keys {
             if !entitlements_text.contains(entitlement_key) {
                 return Err(format!(
-                    "App Store executable {executable_name} is missing the {entitlement_key} entitlement"
+                    "App Store executable {} is missing the {entitlement_key} entitlement",
+                    executable_path.display()
                 ));
             }
         }
     }
-    let linked_libraries = run_quiet_tool(
-        Command::new("otool")
-            .arg("-L")
-            .arg(macos_directory.join("astronomical-menu")),
-    )?;
-    if linked_libraries.to_lowercase().contains("sparkle") {
-        return Err("the App Store menu executable must not link the Sparkle framework".to_owned());
+    Ok(())
+}
+
+/// A store build must contain no self-updating code (App Review guideline
+/// 2.4.5(vii)), so neither Swift executable may link Sparkle.
+fn check_no_sparkle_linkage(swift_executables: &[std::path::PathBuf]) -> Result<(), String> {
+    for swift_executable in swift_executables {
+        let linked_libraries =
+            run_quiet_tool(Command::new("otool").arg("-L").arg(swift_executable))?;
+        if linked_libraries.to_lowercase().contains("sparkle") {
+            return Err(format!(
+                "an App Store executable must not link the Sparkle framework: {}",
+                swift_executable.display()
+            ));
+        }
     }
     Ok(())
 }
