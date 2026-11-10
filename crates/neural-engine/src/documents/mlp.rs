@@ -39,13 +39,40 @@ pub struct MlpFp16Weights<'weights> {
     pub down: &'weights [u16],
 }
 
-/// Encodes the chain. `shape` is the whole program's `hidden → hidden` over its
-/// tokens; `contraction_part_width` must divide both contraction depths.
+/// Encodes the chain with fp16 weights. `shape` is the whole program's
+/// `hidden → hidden` over its tokens; `contraction_part_width` must divide both
+/// contraction depths.
 pub fn encode_ml_program_mlp(
     shape: ProgramShape,
     intermediate_channels: usize,
     weights: MlpFp16Weights<'_>,
     contraction_part_width: usize,
+) -> Result<MlProgramPackageContents, ModelDocumentError> {
+    encode_ml_program_mlp_with_encoding(
+        shape,
+        intermediate_channels,
+        weights,
+        contraction_part_width,
+        StageWeightEncoding::Fp16,
+    )
+}
+
+/// Encodes the chain with both projections stored as `weight_encoding`.
+///
+/// A program's file size and the size of the chip-format copy macOS keeps for it both
+/// follow the bytes this choice writes: 8-bit lookup tables halve them against fp16,
+/// while the chip compilation on a first load takes the same time either way (issue
+/// #2064). Serving uses fp16, because the lookup-table builder was made for ternary
+/// checkpoints: on dense weights it moved them by 37 percent (relative RMS) at 16 rows
+/// per table and 1.4 percent at one row per table, and one row per table runs about
+/// 14 times slower on the Neural Engine. This entry point exists so the bench can
+/// measure an encoding before serving adopts it.
+pub fn encode_ml_program_mlp_with_encoding(
+    shape: ProgramShape,
+    intermediate_channels: usize,
+    weights: MlpFp16Weights<'_>,
+    contraction_part_width: usize,
+    weight_encoding: StageWeightEncoding,
 ) -> Result<MlProgramPackageContents, ModelDocumentError> {
     let hidden_channels = shape.input_channels();
     let gate_and_up_shape = validated_stage_shape(
@@ -72,7 +99,7 @@ pub fn encode_ml_program_mlp(
             shape: gate_and_up_shape,
             fp16_weights: weights.gate_and_up,
             part_count: hidden_channels / contraction_part_width,
-            weight_encoding: StageWeightEncoding::Fp16,
+            weight_encoding,
         },
         &mut weight_blob_file,
     )?);
@@ -88,7 +115,7 @@ pub fn encode_ml_program_mlp(
             shape: down_shape,
             fp16_weights: weights.down,
             part_count: intermediate_channels / contraction_part_width,
-            weight_encoding: StageWeightEncoding::Fp16,
+            weight_encoding,
         },
         &mut weight_blob_file,
     )?);

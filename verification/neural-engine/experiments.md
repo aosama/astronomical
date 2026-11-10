@@ -80,6 +80,39 @@ Sampled every 50 ms with nothing else running on the Neural Engine. "Alone" cycl
 
 Prefill speed in the same runs, direct model forwards with the programs running against paused: 0.89× on the 0.8B, 1.12× on the 2B and 1.29× on the 9B.
 
+## What a program's first load costs
+
+macOS compiles a program into the chip's format the first time it is loaded from a path, and keeps the result in a system store that applications cannot read. Later loads reuse it. When the store has lost a program, the cost is paid again while the kept `.mlmodelc` is reused. Issue #2064 holds the full record.
+
+One MLP program of the 9B (about 151 million weights, 960 tokens), three fresh copies of each form, loaded through Core ML. Chip compilations were counted in the system log (`ANECompilerService`, "Start of compilation of network"); the store's growth is the volume's used space before and after, with nothing added to any application-visible cache.
+
+| | fp16 | 8-bit lookup tables |
+| --- | ---: | ---: |
+| First load | 1.14 to 1.16 s | 0.91 to 0.95 s |
+| Chip compilation inside it | 0.76 s | 0.74 s |
+| Added to the system store | 288 MB | 146 MB |
+| Later loads | 0.04 s | 0.04 s |
+| One 960-token prediction | 16.8 ms | 16.5 ms |
+
+- **The compilation does not follow the stored bytes.** Halving the weight bytes halves the file and the system's copy, and shortens the first load by about a fifth.
+- **A whole model pays it per program.** The 9B's 32 MLP programs took 32 s when all were compiled again, against about 2 s with the store intact.
+- **A macOS update empties the store.** So does nothing an application binary does: a rebuilt binary with a new code hash and the same name loaded a kept program with no compilation, while a renamed binary compiled it again. Some programs were also compiled again between application updates on one macOS version, for a reason not yet found.
+- **Read-only program files change nothing:** 1.04 to 1.18 s against 0.98 to 1.10 s.
+- **The lookup-table builder is for ternary weights.** On one part of a real 9B MLP layer it moved the weights by 37 percent (relative RMS) at 16 rows per table, 32 percent at 4 and 1.4 percent at 1, and one row per table runs about 14 times slower. A dense 8-bit form needs its own quantizer before these byte savings can be used (issue #1878).
+
+Core AI (macOS 27) can compile a model ahead of time for a named chip. The same layer, converted with `coreai-torch` and compiled with `coreai-build compile --preferred-compute neural-engine`:
+
+| First load | Ahead-of-time bundle | Source model | Core ML |
+| --- | ---: | ---: | ---: |
+| One layer | 0.90 to 0.97 s | 1.65 to 1.9 s | 1.09 s |
+| Four layers as functions of one model | 6.8 to 7.2 s | 6.0 to 6.1 s | about 4.4 s as four programs |
+
+- **The on-device compilation shrinks, the load does not.** It fell from about 1.25 s to 0.14 s a layer, but the system still copies the bundle's weights into its store on first load.
+- **Bundles must not be loaded one after another.** The large-model compile service exits after each compilation and is restarted no sooner than ten seconds later, so separate bundles took about 11 s each. Layers have to be functions of one model.
+- **A bundle is tied to the runtime that reads it.** One built by the compiler from Xcode 27.2 did not load on macOS 27.0.1.
+
+`cargo test-neural-engine-journeys --filter dense_weight_encoding` repeats the fp16 and lookup-table comparison on fixture weights at the same shape, and the table builder's error on dense weights.
+
 ## How much of a chunk to give the Neural Engine
 
 The same loaded model at each share of a 2,048-token chunk, MLP programs and output gates running, against the GPU alone. One 0.8B row and one 9B row were disturbed by other work on the Mac and are left out.

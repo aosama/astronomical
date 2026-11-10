@@ -24,6 +24,11 @@
 //!   and 8 bits, block shapes) with placement, speed, and fidelity to the 4-bit
 //!   checkpoint. `footprint_of_mlp_gate_and_up_as_<form>` measures one
 //!   100-million-weight load's process-footprint growth.
+//! - `first_load_of_a_dense_mlp`: what one 9B-shaped MLP program's first load costs
+//!   as fp16 and as 8-bit lookup tables, against a second load; seconds.
+//!   `shared_lookup_tables_move_dense_weights` reads how far the table builder moves
+//!   dense weights at 16, 4 and 1 rows per table, with no Neural Engine involved; about a
+//!   minute.
 //! - `discarding_the_compiled_model`: a program keeps predicting after its compiled
 //!   copy leaves the temporary directory, which serving relies on.
 //! - `model_hand_off`: one whole two-engine call per projection, with the
