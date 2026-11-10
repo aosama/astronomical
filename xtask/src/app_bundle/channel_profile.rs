@@ -5,6 +5,18 @@
 //! whole script. Here every channel is one value, and the assembly code asks
 //! the profile questions instead of comparing channel names.
 
+/// The main app's executable in `Contents/MacOS`. Not "Astronomical": the
+/// terminal command there is `astronomical`, and the default Mac file system
+/// treats names that differ only in case as the same file.
+pub(crate) const APPLICATION_EXECUTABLE_NAME: &str = "astronomical-app";
+/// The menu-bar agent's executable, and its SwiftPM product. One agent serves
+/// every channel: it links neither Sparkle nor the chat window.
+pub(crate) const AGENT_EXECUTABLE_NAME: &str = "astronomical-menu";
+/// Where macOS looks for a helper the main app registers to start at login.
+/// Mirrors `loginItemsPathComponents` in the Swift `ApplicationBundleLayout`,
+/// which is how each process finds the other at run time.
+const LOGIN_ITEMS_DIRECTORY: &str = "Contents/Library/LoginItems";
+
 /// A distribution channel of the macOS app.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Channel {
@@ -61,11 +73,17 @@ pub(crate) struct ChannelProfile {
     /// because macOS hands a scheme shared by installed apps to whichever it
     /// prefers, which let Development's Observatory open Stable's chat window.
     pub(crate) chat_url_scheme: &'static str,
-    pub(crate) menu_swift_product: &'static str,
+    /// The main app's SwiftPM product: the direct channels link Sparkle, the
+    /// App Store product does not.
+    pub(crate) application_swift_product: &'static str,
     pub(crate) daemon_cargo_features: Option<&'static str>,
     /// Sparkle is structurally absent from the App Store build.
     pub(crate) ships_sparkle: bool,
     pub(crate) sandbox_policy: SandboxPolicy,
+    /// The name of the app group the bundle's two applications share, without
+    /// its Team ID prefix. Only a sandboxed channel has one: unsandboxed
+    /// applications already see the same home directory.
+    pub(crate) application_group_name: Option<&'static str>,
     /// Release channels refuse a dirty tree so a published build is always
     /// reproducible from its commit.
     pub(crate) requires_clean_worktree: bool,
@@ -83,6 +101,31 @@ impl ChannelProfile {
     pub(crate) fn bundle_directory_name(&self) -> String {
         format!("{}.app", self.bundle_name)
     }
+
+    /// The agent's name in Login Items settings and in Activity Monitor.
+    pub(crate) fn agent_bundle_name(&self) -> String {
+        format!("{} Agent", self.bundle_name)
+    }
+
+    /// A helper's identifier must extend its main app's for the App Store,
+    /// and the main app registers the agent at login under this exact value.
+    /// Mirrors `agentBundleIdentifier` in the Swift `ApplicationChannel`.
+    pub(crate) fn agent_bundle_identifier(&self) -> String {
+        format!("{}.agent", self.bundle_identifier)
+    }
+
+    /// The agent bundle's path inside the main bundle.
+    pub(crate) fn agent_bundle_relative_path(&self) -> String {
+        format!("{LOGIN_ITEMS_DIRECTORY}/{}.app", self.agent_bundle_name())
+    }
+
+    /// The agent executable's path inside the main bundle.
+    pub(crate) fn agent_executable_relative_path(&self) -> String {
+        format!(
+            "{}/Contents/MacOS/{AGENT_EXECUTABLE_NAME}",
+            self.agent_bundle_relative_path()
+        )
+    }
 }
 
 fn development_profile() -> ChannelProfile {
@@ -95,10 +138,11 @@ fn development_profile() -> ChannelProfile {
         state_directory_name: Some(".astronomical-dev"),
         icon_channel: "development",
         chat_url_scheme: "astronomical-dev",
-        menu_swift_product: "astronomical-menu",
+        application_swift_product: "astronomical-app",
         daemon_cargo_features: None,
         ships_sparkle: true,
         sandbox_policy: SandboxPolicy::Unsandboxed,
+        application_group_name: None,
         requires_clean_worktree: false,
     }
 }
@@ -113,10 +157,11 @@ fn stable_profile() -> ChannelProfile {
         state_directory_name: Some(".astronomical"),
         icon_channel: "stable",
         chat_url_scheme: "astronomical",
-        menu_swift_product: "astronomical-menu",
+        application_swift_product: "astronomical-app",
         daemon_cargo_features: None,
         ships_sparkle: true,
         sandbox_policy: SandboxPolicy::Unsandboxed,
+        application_group_name: None,
         requires_clean_worktree: true,
     }
 }
@@ -133,10 +178,11 @@ fn app_store_profile() -> ChannelProfile {
         state_directory_name: None,
         icon_channel: "stable",
         chat_url_scheme: "astronomical",
-        menu_swift_product: "astronomical-menu-app-store",
+        application_swift_product: "astronomical-app-app-store",
         daemon_cargo_features: Some("astronomical-daemon/app-store-state-root"),
         ships_sparkle: false,
         sandbox_policy: SandboxPolicy::AppStoreSandbox,
+        application_group_name: Some("astronomical"),
         requires_clean_worktree: true,
     }
 }

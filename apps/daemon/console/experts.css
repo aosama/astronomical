@@ -53,9 +53,9 @@
 
 .experts-bar-experts { background: var(--resident); }
 .experts-bar-model-core { background: var(--ink); }
-.experts-bar-context { background: rgba(95, 200, 255, 0.28); }
-.experts-bar-runtime { background: rgba(95, 200, 255, 0.55); }
-.experts-bar-available { background: rgba(243, 245, 255, 0.07); }
+.experts-bar-context { background: color-mix(in srgb, var(--data) 28%, transparent); }
+.experts-bar-runtime { background: color-mix(in srgb, var(--data) 55%, transparent); }
+.experts-bar-available { background: var(--hover); }
 .experts-bar-ssd { background: var(--streaming); }
 
 .experts-caption {

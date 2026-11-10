@@ -1,4 +1,4 @@
-// Shared fixtures for the Download Models Observatory behavior tests.
+// Shared fixtures for the Observatory Models page behavior tests.
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -10,8 +10,12 @@ const downloadModelsScriptPath = path.join(__dirname, "download-models.js");
 const downloadModelsScript = fs.readFileSync(downloadModelsScriptPath, "utf8");
 const downloadModelsRenderScriptPath = path.join(__dirname, "download-models-render.js");
 const downloadModelsRenderScript = fs.readFileSync(downloadModelsRenderScriptPath, "utf8");
-const downloadModelsCardFooterScriptPath = path.join(__dirname, "download-models-card-footer.js");
-const downloadModelsCardFooterScript = fs.readFileSync(downloadModelsCardFooterScriptPath, "utf8");
+const downloadModelsGroupsScriptPath = path.join(__dirname, "download-models-groups.js");
+const downloadModelsGroupsScript = fs.readFileSync(downloadModelsGroupsScriptPath, "utf8");
+const downloadModelsRowScriptPath = path.join(__dirname, "download-models-row.js");
+const downloadModelsRowScript = fs.readFileSync(downloadModelsRowScriptPath, "utf8");
+const downloadModelsInstalledScriptPath = path.join(__dirname, "download-models-installed.js");
+const downloadModelsInstalledScript = fs.readFileSync(downloadModelsInstalledScriptPath, "utf8");
 const downloadModelsRemovalScriptPath = path.join(__dirname, "download-models-removal.js");
 const downloadModelsRemovalScript = fs.readFileSync(downloadModelsRemovalScriptPath, "utf8");
 const observatoryShellPath = path.join(__dirname, "index.html");
@@ -26,8 +30,10 @@ function createDownloadModelsContext() {
         setTimeout
     });
     vm.runInContext(downloadModelsScript, scriptContext, { filename: downloadModelsScriptPath });
+    vm.runInContext(downloadModelsGroupsScript, scriptContext, { filename: downloadModelsGroupsScriptPath });
     vm.runInContext(downloadModelsRenderScript, scriptContext, { filename: downloadModelsRenderScriptPath });
-    vm.runInContext(downloadModelsCardFooterScript, scriptContext, { filename: downloadModelsCardFooterScriptPath });
+    vm.runInContext(downloadModelsRowScript, scriptContext, { filename: downloadModelsRowScriptPath });
+    vm.runInContext(downloadModelsInstalledScript, scriptContext, { filename: downloadModelsInstalledScriptPath });
     vm.runInContext(downloadModelsRemovalScript, scriptContext, { filename: downloadModelsRemovalScriptPath });
     return scriptContext;
 }
@@ -156,7 +162,7 @@ function validCatalogEntry(overrides = {}) {
         get_started: false,
         experimental: false,
         public: true,
-        description: "A test model for exercising Download Models rendering.",
+        description: "A test model for exercising Models page rendering.",
         capabilities: {
             supports_reasoning: true,
             supports_vision: false,

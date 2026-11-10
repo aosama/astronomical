@@ -3,7 +3,8 @@
 import XCTest
 
 @testable import AstronomicalMenuCore
-@testable import AstronomicalMenuSparkleUpdateController
+@testable import AstronomicalAppCore
+@testable import AstronomicalSparkleUpdateController
 
 @MainActor
 final class ApplicationUpdateControllerTests: XCTestCase {
@@ -142,7 +143,43 @@ final class SparkleUnbundledUpdateControllerTests: XCTestCase {
     UserDefaults(suiteName: Self.userDefaultsSuiteName)?.string(
       forKey: "AstronomicalSelectedUpdateChannel")
   }
+
+  /// The store installs updates itself, so a store build never has one
+  /// waiting for quit and the main app never stops its agent for it.
+  func test_should_never_report_an_update_waiting_for_quit_in_a_store_build() {
+    let storeController = AppStoreUpdateController()
+
+    XCTAssertFalse(storeController.installsUpdateOnQuit)
+    XCTAssertNil(storeController.prepareForRelaunch)
+  }
+
+  /// A direct build has nothing waiting until Sparkle says so.
+  func test_should_report_no_update_waiting_for_quit_before_sparkle_announces_one() {
+    let sparkleController = SparkleApplicationUpdateController(
+      applicationChannel: .stable, isHostPackagedApplication: false)
+
+    XCTAssertFalse(sparkleController.installsUpdateOnQuit)
+  }
+
+  /// An update that installs at quit has no relaunch to hook, so the main app
+  /// must stop its agent as it terminates. This structural test pins that
+  /// wiring, which no behavioral test reaches without a real update.
+  func test_should_stop_the_agent_at_quit_when_an_update_waits_for_quit() throws {
+    let packageDirectoryURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let applicationSource = try String(
+      contentsOf: packageDirectoryURL.appendingPathComponent(
+        "Sources/AstronomicalAppCore/AstronomicalApplication.swift"),
+      encoding: .utf8)
+    let willTerminateStart = try XCTUnwrap(applicationSource.range(of: "func applicationWillTerminate"))
+    let stopOnQuit = try XCTUnwrap(
+      applicationSource.range(
+        of: "if applicationUpdateController.installsUpdateOnQuit { stopAgentBeforeUpdate() }"))
+
+    XCTAssertLessThan(willTerminateStart.lowerBound, stopOnQuit.lowerBound)
+  }
 }
+
 
 @MainActor
 private final class RecordingApplicationUpdateChecker: ApplicationUpdateChecking {
@@ -151,6 +188,8 @@ private final class RecordingApplicationUpdateChecker: ApplicationUpdateChecking
   var automaticallyChecksForUpdates = true
   private(set) var selectedChannel = ApplicationUpdateChannel.stable
   private(set) var updateCheckRequestCount = 0
+  var prepareForRelaunch: (@MainActor () -> Void)?
+  let installsUpdateOnQuit = false
 
   init(canCheckForUpdates: Bool) {
     self.canCheckForUpdates = canCheckForUpdates

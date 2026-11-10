@@ -3,9 +3,9 @@
 //!
 //! `start` runs the bundled daemon headless from the caller's shell, so
 //! exported `ASTRONOMICAL_*` experiment flags reach it; opening the app
-//! through LaunchServices would drop them. `stop` quits the menu app first,
-//! because a running menu app restarts a daemon it sees disappear. `restart`
-//! reopens a menu app it quit, once the daemon is healthy, so the menu app
+//! through LaunchServices would drop them. `stop` quits the chat app and the
+//! menu-bar agent first, because a running agent restarts a daemon it sees
+//! disappear. `restart` reopens an agent it quit, once the daemon is healthy, so the agent
 //! attaches to that daemon and the person keeps their menu bar icon.
 
 use std::fs::File;
@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 use super::channel_profile::{Channel, ChannelProfile};
 use super::dev_pipeline::DevPipelinePaths;
-use super::running_instance::{open_bundle, quit_menu_app, wait_for_daemon_exit};
+use super::running_instance::{open_agent, quit_bundled_applications, wait_for_daemon_exit};
 
 const HEALTH_WAIT: Duration = Duration::from_secs(30);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -63,37 +63,42 @@ pub(crate) fn run_instance_action(
 }
 
 fn restart_instance(bundle_path: &Path, channel_profile: &ChannelProfile) -> Result<(), String> {
-    let was_menu_app_running = stop_instance(channel_profile)?;
+    let was_agent_running = stop_instance(channel_profile)?;
     start_instance(bundle_path, channel_profile)?;
-    reopen_menu_app_if_it_was_running(was_menu_app_running, bundle_path, open_bundle)
+    reopen_agent_if_it_was_running(
+        was_agent_running,
+        &bundle_path.join(channel_profile.agent_bundle_relative_path()),
+        open_agent,
+    )
 }
 
 /// Returns whether a menu app was running, which `restart` needs to put it back.
 fn stop_instance(channel_profile: &ChannelProfile) -> Result<bool, String> {
-    let was_menu_app_running = quit_menu_app(channel_profile)?;
+    let was_agent_running = quit_bundled_applications(channel_profile)?;
     wait_for_daemon_exit(channel_profile)?;
     println!("[app-instance] {} is stopped", channel_profile.bundle_name);
-    Ok(was_menu_app_running)
+    Ok(was_agent_running)
 }
 
-/// Runs after the daemon is healthy, because a menu app that opens first would
+/// Runs after the daemon is healthy, because an agent that opens first would
 /// start its own daemon, without the caller's exported flags. A headless session
-/// stays headless: a menu app that was not running is not opened.
-pub(crate) fn reopen_menu_app_if_it_was_running(
-    was_menu_app_running: bool,
-    bundle_path: &Path,
-    open_menu_app: fn(&Path) -> Result<(), String>,
+/// stays headless: an agent that was not running is not opened, and the chat
+/// app, which a stop also quits, is never reopened here.
+pub(crate) fn reopen_agent_if_it_was_running(
+    was_agent_running: bool,
+    agent_bundle_path: &Path,
+    open_agent_bundle: fn(&Path) -> Result<(), String>,
 ) -> Result<(), String> {
-    if !was_menu_app_running {
+    if !was_agent_running {
         return Ok(());
     }
-    match open_menu_app(bundle_path) {
+    match open_agent_bundle(agent_bundle_path) {
         Ok(()) => {
-            println!("[app-instance] reopened the menu app");
+            println!("[app-instance] reopened the menu-bar agent");
             Ok(())
         }
         Err(open_error) => Err(format!(
-            "the daemon is running, but the menu app did not reopen: {open_error}"
+            "the daemon is running, but the menu-bar agent did not reopen: {open_error}"
         )),
     }
 }

@@ -1,6 +1,6 @@
 import XCTest
 
-@testable import AstronomicalMenuCore
+@testable import AstronomicalAppCore
 
 /// Contracts for how the menu application maps its channel identity onto the
 /// conversation surface's wire identity. The chat client validates the

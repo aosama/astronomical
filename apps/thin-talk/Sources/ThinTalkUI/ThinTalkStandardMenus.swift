@@ -15,6 +15,9 @@ enum ThinTalkStandardMenus {
     if let checkForUpdates = hostActions.checkForUpdates {
       applicationMenu.addItem(closureItem("Check for Updates…", "", checkForUpdates))
     }
+    for hostSettingsMenuItem in hostActions.hostSettingsMenuItems {
+      applicationMenu.addItem(hostSettingsMenuItem)
+    }
     applicationMenu.addItem(.separator())
     // Settings opens Your Astro in the page, which holds every choice the
     // window has: the welcome's answers and whether Astro is shown at all.
@@ -40,10 +43,14 @@ enum ThinTalkStandardMenus {
     applicationMenu.addItem(
       ThinTalkMainMenu.menuItem("Show All", #selector(NSApplication.unhideAllApplications(_:)), "", nil))
     applicationMenu.addItem(.separator())
-    // Quitting goes through the application's normal terminate path, so the
-    // menu application still stops its server exactly as its own Quit does.
     applicationMenu.addItem(
       ThinTalkMainMenu.menuItem("Quit \(applicationName)", #selector(NSApplication.terminate(_:)), "q", nil))
+    // ⌘Q closes the chat app and leaves the engine serving other clients;
+    // this is the way to stop both from here. It has no shortcut: ⌥⌘Q is
+    // already AppKit's "Quit and Keep Windows", which it adds beside Quit.
+    if let quitEverything = hostActions.quitEverything {
+      applicationMenu.addItem(closureItem("Quit and Stop Engine", "", quitEverything))
+    }
     return applicationMenu
   }
 

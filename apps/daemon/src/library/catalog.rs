@@ -1,6 +1,8 @@
 //! Model catalog: family definitions, projection, and the REST endpoint.
 
+mod catalog_classification;
 mod catalog_endpoint;
+mod catalog_presentation;
 mod catalog_projection;
 mod download_catalog;
 

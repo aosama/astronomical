@@ -38,7 +38,7 @@ export class DescribeChosenImageTool implements ConversationTool {
     const visionModelIDs = await this.client.fetchVisionModelIDs(signal);
     const visionModelID = visionModelIDs.includes(context.modelID) ? context.modelID : visionModelIDs[0];
     if (visionModelID == null) {
-      throw new Error("No model on this Mac can look at images. The user can add a vision model from Download Models in the Observatory.");
+      throw new Error("No model on this Mac can look at images. The user can add a vision model from the Models page in the Observatory.");
     }
     const hostToolUse = await runHostToolUse(this.bridge, this.name, this.label, context, signal);
     if (hostToolUse.outcome !== "chosenImage") {

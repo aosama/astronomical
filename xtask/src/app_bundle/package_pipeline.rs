@@ -10,13 +10,14 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use super::application_group::{application_group_identifier, stamp_application_group};
 use super::build_identity::{BuildIdentity, github_pages_feed_url};
-use super::bundle_assembly::{BundleInputs, assemble_bundle, missing_inputs};
+use super::bundle_assembly::{BundleInputs, BundlePlists, assemble_bundle, missing_inputs};
 use super::bundle_check::check_bundle;
 use super::channel_profile::{Channel, ChannelProfile};
 use super::code_signing::{SigningRequest, sign_bundle};
 use super::icon_cache::cached_channel_icon;
-use super::info_plist::render_info_plist;
+use super::info_plist::{render_agent_info_plist, render_info_plist};
 use super::native_metallib::packaged_metallib_source;
 use super::release_build_steps::ReleaseBuildContext;
 use super::step_reporter::StepReporter;
@@ -31,7 +32,7 @@ pub(crate) const PACKAGE_STEP_NAMES: [&str; 8] = [
     "native-runtime",
     "rust-executables",
     "thin-talk-web",
-    "menu-app",
+    "swift-apps",
     "assemble-and-sign",
     "check-bundle",
 ];
@@ -208,8 +209,8 @@ fn run_release_compile_steps(
     step_reporter.start_step("thin-talk-web");
     release_build.build_thin_talk_web_assets(step_reporter)?;
     step_reporter.finish_step();
-    step_reporter.start_step("menu-app");
-    release_build.build_menu_application(step_reporter)?;
+    step_reporter.start_step("swift-apps");
+    release_build.build_swift_applications(step_reporter)?;
     step_reporter.finish_step();
     Ok(())
 }
@@ -221,19 +222,23 @@ fn assemble_and_sign_release_bundle(
 ) -> Result<PathBuf, String> {
     step_reporter.start_step("assemble-and-sign");
     let bundle_inputs = release_bundle_inputs(release_build)?;
-    let update_feed_url = github_pages_feed_url(&release_build.build_identity.repository_url)?;
-    let info_plist_text = render_info_plist(
-        release_build.channel_profile,
-        release_build.build_identity,
-        &update_feed_url,
-    );
+    let (info_plist_text, agent_info_plist_text) =
+        release_plist_texts(release_build, package_request.signing_identity.as_deref())?;
     let bundle_path = release_build
         .repository_root
         .join("target")
         .join(release_build.channel_profile.output_directory_name)
         .join(release_build.channel_profile.bundle_directory_name());
     remove_previous_bundle(&bundle_path)?;
-    assemble_bundle(&bundle_path, &bundle_inputs, &info_plist_text)?;
+    assemble_bundle(
+        &bundle_path,
+        &bundle_inputs,
+        &BundlePlists {
+            application_info_plist_text: &info_plist_text,
+            agent_info_plist_text: &agent_info_plist_text,
+            agent_bundle_relative_path: &release_build.channel_profile.agent_bundle_relative_path(),
+        },
+    )?;
     sign_bundle(&SigningRequest {
         bundle_path: &bundle_path,
         channel_profile: release_build.channel_profile,
@@ -242,6 +247,30 @@ fn assemble_and_sign_release_bundle(
     })?;
     step_reporter.finish_step();
     Ok(bundle_path)
+}
+
+/// The main app's plist and the agent's. A sandboxed channel's two plists
+/// both name the app group, which each application reads to find the state
+/// they share; the group is named after the signing team, so it is known only
+/// here, once a signing identity has been given.
+fn release_plist_texts(
+    release_build: &ReleaseBuildContext<'_>,
+    signing_identity: Option<&str>,
+) -> Result<(String, String), String> {
+    let application_plist_text = render_info_plist(
+        release_build.channel_profile,
+        release_build.build_identity,
+        &github_pages_feed_url(&release_build.build_identity.repository_url)?,
+    );
+    let agent_plist_text =
+        render_agent_info_plist(release_build.channel_profile, release_build.build_identity);
+    match application_group_identifier(release_build.channel_profile, signing_identity)? {
+        Some(group_identifier) => Ok((
+            stamp_application_group(&application_plist_text, &group_identifier)?,
+            stamp_application_group(&agent_plist_text, &group_identifier)?,
+        )),
+        None => Ok((application_plist_text, agent_plist_text)),
+    }
 }
 
 /// The icon is rendered into the disposable target directory, so a release

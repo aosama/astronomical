@@ -167,7 +167,7 @@ test("should_point_to_download_models_when_no_picture_model_is_installed_in_clas
   installImageDaemon({ models: [CHAT_MODEL] });
   await assert.rejects(
     imageTool().execute({ prompt: "A crown" }, new AbortController().signal, TOOL_CONTEXT),
-    (failure: Error) => /No picture model is installed/.test(failure.message) && /Download Models in the Observatory/.test(failure.message) && !/Pictures card/.test(failure.message),
+    (failure: Error) => /No picture model is installed/.test(failure.message) && /the Models page in the Observatory/.test(failure.message) && !/Pictures card/.test(failure.message),
   );
 });
 

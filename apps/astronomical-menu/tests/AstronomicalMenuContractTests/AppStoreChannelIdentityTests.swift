@@ -5,7 +5,7 @@
 import Foundation
 import XCTest
 
-@testable import AstronomicalMenuCore
+@testable import AstronomicalShared
 
 @MainActor
 final class AppStoreChannelIdentityTests: XCTestCase {

@@ -5,12 +5,39 @@ use std::path::{Path, PathBuf};
 use super::build_identity::{BuildIdentity, github_pages_feed_url};
 use super::channel_profile::{Channel, ChannelProfile};
 use super::dev_pipeline::run_dev_pipeline;
-use super::info_plist::render_info_plist;
+use super::info_plist::{render_agent_info_plist, render_info_plist};
 use super::instance_control::{InstanceAction, run_instance_action};
 use super::package_pipeline::{PackageRequest, run_package, validate_package_request};
 use super::smoke_test::{SmokeTestRequest, run_smoke_test};
 
-pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store";
+pub(crate) const APP_USAGE: &str = "usage: cargo xtask app dev | app instance status|start|stop|restart | app package --channel stable|app-store [--signing-identity NAME] | app smoke-test --app-bundle PATH [--real-model MODEL_ID] | app info-plist --channel development|stable|app-store [--agent]";
+
+/// `info-plist --channel NAME` prints the main app's plist; a trailing
+/// `--agent` prints the menu-bar agent's instead.
+fn parse_info_plist_command(plist_arguments: &[String]) -> Result<AppCommand, String> {
+    let (channel_name, plist_subject) = match plist_arguments {
+        [channel_flag, channel_name] if channel_flag == "--channel" => {
+            (channel_name, PlistSubject::MainApplication)
+        }
+        [channel_flag, channel_name, agent_flag]
+            if channel_flag == "--channel" && agent_flag == "--agent" =>
+        {
+            (channel_name, PlistSubject::Agent)
+        }
+        _ => return Err(APP_USAGE.to_owned()),
+    };
+    Ok(AppCommand::InfoPlist(
+        Channel::from_channel_name(channel_name)?,
+        plist_subject,
+    ))
+}
+
+/// Which of the bundle's two plists `info-plist` prints.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PlistSubject {
+    MainApplication,
+    Agent,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum AppCommand {
@@ -18,7 +45,7 @@ pub(crate) enum AppCommand {
     Dev,
     /// Print the Info.plist a channel would get from this checkout, so the
     /// channel profiles can be inspected without building anything.
-    InfoPlist(Channel),
+    InfoPlist(Channel, PlistSubject),
     /// Control the Development instance headless from the shell.
     Instance(InstanceAction),
     /// Build a release bundle from a clean commit.
@@ -36,9 +63,7 @@ pub(crate) fn parse_app_command(arguments: &[String]) -> Result<AppCommand, Stri
         ("instance", [action_name]) => Ok(AppCommand::Instance(InstanceAction::from_action_name(
             action_name,
         )?)),
-        ("info-plist", [channel_flag, channel_name]) if channel_flag == "--channel" => Ok(
-            AppCommand::InfoPlist(Channel::from_channel_name(channel_name)?),
-        ),
+        ("info-plist", plist_arguments) => parse_info_plist_command(plist_arguments),
         ("package", package_arguments) => Ok(AppCommand::Package(parse_package_request(
             package_arguments,
         )?)),
@@ -117,18 +142,27 @@ pub fn run(repository_root: &Path, arguments: &[String]) -> Result<(), String> {
         AppCommand::SmokeTest(smoke_test_request) => {
             run_smoke_test(repository_root, &smoke_test_request)
         }
-        AppCommand::InfoPlist(channel) => {
-            let build_identity = BuildIdentity::gather(repository_root)?;
-            let update_feed_url = github_pages_feed_url(&build_identity.repository_url)?;
-            print!(
-                "{}",
-                render_info_plist(
-                    &ChannelProfile::for_channel(channel),
-                    &build_identity,
-                    &update_feed_url
-                )
-            );
-            Ok(())
+        AppCommand::InfoPlist(channel, plist_subject) => {
+            print_info_plist(repository_root, channel, plist_subject)
         }
     }
+}
+
+fn print_info_plist(
+    repository_root: &Path,
+    channel: Channel,
+    plist_subject: PlistSubject,
+) -> Result<(), String> {
+    let build_identity = BuildIdentity::gather(repository_root)?;
+    let channel_profile = ChannelProfile::for_channel(channel);
+    let plist_text = match plist_subject {
+        PlistSubject::MainApplication => render_info_plist(
+            &channel_profile,
+            &build_identity,
+            &github_pages_feed_url(&build_identity.repository_url)?,
+        ),
+        PlistSubject::Agent => render_agent_info_plist(&channel_profile, &build_identity),
+    };
+    print!("{plist_text}");
+    Ok(())
 }

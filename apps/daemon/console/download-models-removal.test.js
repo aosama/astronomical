@@ -1,4 +1,4 @@
-// Download Models "Remove from disk" tests: when the button is offered, what the
+// Download Models "Remove" tests: when the button is offered, what the
 // confirmation says, how a refusal reaches the card, and that the request only
 // names the model.
 
@@ -16,12 +16,12 @@ function renderMoreModels(catalogEntries, removalNotice = null, confirmingModelI
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
-    scriptContext.catalogDocument = { schema_version: 3, entries: catalogEntries };
+    scriptContext.catalogDocument = { schema_version: 4, entries: catalogEntries };
     scriptContext.removalNoticeForTest = removalNotice;
     scriptContext.confirmingModelIdForTest = confirmingModelId;
     scriptContext.inFlightModelIdForTest = inFlightModelId;
     vm.runInContext(
-        `downloadModelsActiveTab = "more-models";
+        `
          downloadModelsCatalogDocument = catalogDocument;
          downloadModelsRemovalNotice = removalNoticeForTest;
          downloadModelsRemovalConfirmingId = confirmingModelIdForTest;
@@ -33,8 +33,11 @@ function renderMoreModels(catalogEntries, removalNotice = null, confirmingModelI
 }
 
 function actionLabels(downloadModelsDocument) {
-    return findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-primary-actions")[0]
-        .children.map((actionButton) => actionButton.textContent);
+    // A model that is not on this Mac has no line under On this Mac, so no actions.
+    const installedActions = findRenderedElementsByClass(
+        downloadModelsDocument.catalogContainer, "download-models-installed-actions"
+    )[0];
+    return installedActions ? installedActions.children.map((actionButton) => actionButton.textContent) : [];
 }
 
 const DOWNLOADED_BY_DOWNLOAD_MODELS = {
@@ -48,7 +51,7 @@ const DOWNLOADED_BY_DOWNLOAD_MODELS = {
 test("should_offer_remove_from_disk_for_a_model_download_models_installed", () => {
     const downloadModelsDocument = renderMoreModels([validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)]);
 
-    assert.equal(actionLabels(downloadModelsDocument).includes("Remove from disk"), true);
+    assert.equal(actionLabels(downloadModelsDocument).includes("Remove"), true);
 });
 
 test("should_not_offer_remove_from_disk_for_a_copy_the_person_placed", () => {
@@ -56,7 +59,7 @@ test("should_not_offer_remove_from_disk_for_a_copy_the_person_placed", () => {
         validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, removable_from_disk: false })
     ]);
 
-    assert.equal(actionLabels(downloadModelsDocument).includes("Remove from disk"), false);
+    assert.equal(actionLabels(downloadModelsDocument).includes("Remove"), false);
 });
 
 test("should_not_offer_remove_from_disk_for_a_model_that_is_not_on_this_mac", () => {
@@ -64,7 +67,7 @@ test("should_not_offer_remove_from_disk_for_a_model_that_is_not_on_this_mac", ()
         validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, ready_on_this_mac: false })
     ]);
 
-    assert.equal(actionLabels(downloadModelsDocument).includes("Remove from disk"), false);
+    assert.equal(actionLabels(downloadModelsDocument).includes("Remove"), false);
 });
 
 test("should_name_the_model_its_size_and_the_trash_in_the_confirmation", () => {
@@ -75,7 +78,7 @@ test("should_name_the_model_its_size_and_the_trash_in_the_confirmation", () => {
         scriptContext
     );
 
-    assert.equal(confirmationText, "Move Qwen 3.5 2B 4-bit (1.6 GB) to the Trash? You can download it again at any time.");
+    assert.equal(confirmationText, "Move Qwen 3.5 2B 4-bit to the Trash? This frees 1.6 GB. You can download it again any time.");
 });
 
 test("should_ask_inside_the_card_once_remove_from_disk_is_clicked", () => {
@@ -87,7 +90,7 @@ test("should_ask_inside_the_card_once_remove_from_disk_is_clicked", () => {
 
     const labels = actionLabels(downloadModelsDocument);
 
-    assert.equal(labels.includes("Remove from disk"), false, "the question replaces the button");
+    assert.equal(labels.includes("Remove"), false, "the question replaces the button");
     assert.equal(labels.includes("Move to Trash"), true);
     assert.equal(labels.includes("Keep"), true);
 });
@@ -98,10 +101,10 @@ test("should_ask_only_on_the_card_whose_button_was_clicked", () => {
         validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, huggingface_id: "astronomical-test/other", display_name: "Other" })
     ], null, "astronomical-test/other");
 
-    const labelsByCard = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-primary-actions")
+    const labelsByCard = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-installed-actions")
         .map((actions) => actions.children.map((action) => action.textContent));
 
-    assert.equal(labelsByCard[0].includes("Remove from disk"), true);
+    assert.equal(labelsByCard[0].includes("Remove"), true);
     assert.equal(labelsByCard[1].includes("Move to Trash"), true);
 });
 
@@ -172,8 +175,8 @@ test("should_show_a_refusal_only_on_the_card_of_the_model_it_is_about", () => {
         validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, huggingface_id: "astronomical-test/other", display_name: "Other" })
     ], { huggingfaceId: "astronomical-test/downloaded", message: "This model is loaded right now." });
 
-    const cardNotices = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-model-card")
-        .map((card) => findRenderedElementsByClass(card, "download-models-download-detail").map((detail) => detail.textContent));
+    const cardNotices = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-installed-line")
+        .map((card) => findRenderedElementsByClass(card, "download-models-notice").map((detail) => detail.textContent));
 
     assert.deepEqual(cardNotices, [["This model is loaded right now."], []]);
 });
@@ -182,9 +185,9 @@ test("should_redraw_the_card_when_only_the_removal_question_opens_in_a_page_alre
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
-    scriptContext.catalogDocument = { schema_version: 3, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
+    scriptContext.catalogDocument = { schema_version: 4, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
     vm.runInContext(
-        `downloadModelsActiveTab = "more-models";
+        `
          downloadModelsCatalogDocument = catalogDocument;
          renderDownloadModelsCatalogDocument(catalogDocument);
          downloadModelsRemovalConfirmingId = "astronomical-test/downloaded";
@@ -221,7 +224,7 @@ test("should_show_a_disabled_moving_button_while_the_removal_runs", () => {
 test("should_send_one_request_when_move_to_trash_is_clicked_twice", async () => {
     const scriptContext = createDownloadModelsContext();
     scriptContext.document = createDownloadModelsDocument();
-    scriptContext.catalogDocument = { schema_version: 3, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
+    scriptContext.catalogDocument = { schema_version: 4, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
     let removalRequestCount = 0;
     let answerRemoval;
     scriptContext.fetch = async (requestUrl) => {
@@ -230,7 +233,7 @@ test("should_send_one_request_when_move_to_trash_is_clicked_twice", async () => 
         await new Promise((resolve) => { answerRemoval = resolve; });
         return { ok: true, json: async () => ({ status: "removed" }) };
     };
-    vm.runInContext(`downloadModelsActiveTab = "more-models"; downloadModelsCatalogDocument = catalogDocument;`, scriptContext);
+    vm.runInContext(`downloadModelsCatalogDocument = catalogDocument;`, scriptContext);
     const catalogRow = { huggingfaceId: "astronomical-test/downloaded", displayName: "Downloaded" };
     scriptContext.catalogRowForTest = catalogRow;
 
@@ -248,9 +251,9 @@ test("should_describe_both_answers_by_the_question_and_focus_keep_when_asked", a
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
-    scriptContext.catalogDocument = { schema_version: 3, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
+    scriptContext.catalogDocument = { schema_version: 4, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
     vm.runInContext(
-        `downloadModelsActiveTab = "more-models";
+        `
          downloadModelsCatalogDocument = catalogDocument;
          renderDownloadModelsCatalogDocument(catalogDocument);
          askToRemoveDownloadModelsModel({ huggingfaceId: "astronomical-test/downloaded" });`,
@@ -272,11 +275,11 @@ test("should_show_download_progress_rather_than_an_older_removal_notice", () => 
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
     scriptContext.catalogDocument = {
-        schema_version: 3,
+        schema_version: 4,
         entries: [validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, ready_on_this_mac: false, removable_from_disk: false })]
     };
     vm.runInContext(
-        `downloadModelsActiveTab = "more-models";
+        `
          downloadModelsCatalogDocument = catalogDocument;
          downloadModelsCurrentDownload = { huggingface_id: "astronomical-test/downloaded", state: "downloading", bytes_total: 2, bytes_completed: 1 };
          downloadModelsRemovalNotice = { huggingfaceId: "astronomical-test/downloaded", message: "Downloaded was moved to the Trash." };
@@ -284,20 +287,21 @@ test("should_show_download_progress_rather_than_an_older_removal_notice", () => 
         scriptContext
     );
 
-    const cardDetails = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-download-detail")
-        .map((detail) => detail.textContent);
+    const notices = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-notice");
+    const bannerTitles = findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-banner-title")
+        .map((bannerTitle) => bannerTitle.textContent);
 
-    assert.equal(cardDetails.length, 1);
-    assert.notEqual(cardDetails[0], "Downloaded was moved to the Trash.");
+    assert.deepEqual(notices, []);
+    assert.deepEqual(bannerTitles, ["Downloading Downloaded"]);
 });
 
 function renderWithState(catalogEntries, stateScript) {
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
-    scriptContext.catalogDocument = { schema_version: 3, entries: catalogEntries };
+    scriptContext.catalogDocument = { schema_version: 4, entries: catalogEntries };
     vm.runInContext(
-        `downloadModelsActiveTab = "more-models";
+        `
          downloadModelsCatalogDocument = catalogDocument;
          ${stateScript}
          renderDownloadModelsCatalogDocument(catalogDocument);`,
@@ -307,7 +311,7 @@ function renderWithState(catalogEntries, stateScript) {
 }
 
 function cardDetailElements(downloadModelsDocument) {
-    return findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-download-detail");
+    return findRenderedElementsByClass(downloadModelsDocument.catalogContainer, "download-models-notice");
 }
 
 const MOVED_NOTICE = `{ huggingfaceId: "astronomical-test/downloaded", message: "Downloaded was moved to the Trash.", movedToTrash: true }`;
@@ -376,7 +380,7 @@ test("should_return_focus_to_remove_from_disk_when_keep_is_chosen", async () => 
     vm.runInContext(`cancelDownloadModelsRemoval();`, scriptContext);
     await Promise.resolve();
 
-    assert.equal(downloadModelsDocument.activeElement?.textContent, "Remove from disk");
+    assert.equal(downloadModelsDocument.activeElement?.textContent, "Remove");
 });
 
 test("should_focus_the_download_button_after_the_model_moves_to_the_trash", async () => {
@@ -384,12 +388,12 @@ test("should_focus_the_download_button_after_the_model_moves_to_the_trash", asyn
     const downloadModelsDocument = createDownloadModelsDocument();
     scriptContext.document = downloadModelsDocument;
     const removedEntry = validCatalogEntry({ ...DOWNLOADED_BY_DOWNLOAD_MODELS, ready_on_this_mac: false, removable_from_disk: false });
-    scriptContext.catalogDocument = { schema_version: 3, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
+    scriptContext.catalogDocument = { schema_version: 4, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
     scriptContext.fetch = async (requestUrl) => requestUrl === "/v1/library/remove"
         ? { ok: true, json: async () => ({ status: "removed" }) }
-        : { ok: true, json: async () => ({ schema_version: 3, entries: [removedEntry] }) };
+        : { ok: true, json: async () => ({ schema_version: 4, entries: [removedEntry] }) };
     vm.runInContext(
-        `downloadModelsActiveTab = "more-models";
+        `
          downloadModelsCatalogDocument = catalogDocument;
          renderDownloadModelsCatalogDocument(catalogDocument);`,
         scriptContext
@@ -407,12 +411,12 @@ test("should_focus_the_download_button_after_the_model_moves_to_the_trash", asyn
 test("should_finish_the_removal_when_the_catalog_refetch_fails", async () => {
     const scriptContext = createDownloadModelsContext();
     scriptContext.document = createDownloadModelsDocument();
-    scriptContext.catalogDocument = { schema_version: 3, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
+    scriptContext.catalogDocument = { schema_version: 4, entries: [validCatalogEntry(DOWNLOADED_BY_DOWNLOAD_MODELS)] };
     scriptContext.fetch = async (requestUrl) => {
         if (requestUrl === "/v1/library/remove") return { ok: true, json: async () => ({ status: "removed" }) };
         throw new Error("offline");
     };
-    vm.runInContext(`downloadModelsActiveTab = "more-models"; downloadModelsCatalogDocument = catalogDocument;`, scriptContext);
+    vm.runInContext(`downloadModelsCatalogDocument = catalogDocument;`, scriptContext);
 
     await vm.runInContext(
         `confirmDownloadModelsRemoval({ huggingfaceId: "astronomical-test/downloaded", displayName: "Downloaded" })`,

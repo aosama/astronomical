@@ -15,7 +15,7 @@ export class PictureModelGuidance {
   public noPictureModelResult(): string {
     const whereToGetOne = this.isAstroShown
       ? "The person can download one by choosing the Pictures card in a new chat."
-      : "The person can download one from Download Models in the Observatory.";
+      : "The person can download one from the Models page in the Observatory.";
     return `No picture model is installed on this Mac, so nothing was drawn. ${whereToGetOne} Suggest only that.`;
   }
 }

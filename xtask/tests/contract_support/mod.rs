@@ -14,7 +14,7 @@ pub(crate) const EXPECTED_MACOS_CONCURRENCY_GROUP: &str =
     "macos-integration-${{ github.event_name }}-${{ github.ref }}";
 pub(crate) const EXPECTED_SWIFT_CONCURRENCY_GROUP: &str =
     "macos-swift-node-${{ github.event_name }}-${{ github.ref }}";
-pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str = "node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/memory-control.test.js apps/daemon/console/overview.test.js apps/daemon/console/download-models.test.js apps/daemon/console/download-models-fetch.test.js apps/daemon/console/download-models-pages.test.js apps/daemon/console/download-models-removal.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js apps/daemon/console/neural-engine-panel.test.js";
+pub(crate) const EXPECTED_OBSERVATORY_COMMAND: &str = "node --test --test-reporter=spec apps/daemon/console/console.test.js apps/daemon/console/memory-control.test.js apps/daemon/console/overview.test.js apps/daemon/console/download-models.test.js apps/daemon/console/download-models-fetch.test.js apps/daemon/console/download-models-pages.test.js apps/daemon/console/download-models-removal.test.js apps/daemon/console/download-models-groups.test.js apps/daemon/console/download-models-installed.test.js apps/daemon/console/appearance.test.js apps/daemon/console/connect.test.js apps/daemon/console/experts.test.js apps/daemon/console/configuration.test.js apps/daemon/console/neural-engine-panel.test.js";
 
 pub(crate) fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

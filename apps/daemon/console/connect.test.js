@@ -398,7 +398,7 @@ test("names an obviously fictional example model when nothing is installed", () 
     assert.match(elements["connect-opencode-snippet"].textContent, new RegExp(exampleModelIdentifier));
     assert.match(elements["connect-pi-snippet"].textContent, new RegExp(exampleModelIdentifier));
     assert.match(elements["connect-verification-command"].textContent, new RegExp(exampleModelIdentifier));
-    assert.match(elements["connect-model-guidance"].textContent, /Download Models/);
+    assert.match(elements["connect-model-guidance"].textContent, /the Models page/);
     assert.deepEqual(renderedLineTexts(elements["connect-model-identifiers"]), []);
 });
 

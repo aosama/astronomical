@@ -617,9 +617,13 @@ final class DaemonLifecycleController {
 
   private func bundledDaemonExecutableURL() -> URL? {
     if let configuredDaemonExecutableURL { return configuredDaemonExecutableURL }
-    let daemonExecutableURL = URL(fileURLWithPath: CommandLine.arguments[0])
-      .deletingLastPathComponent().appendingPathComponent("astronomicald")
+    // The engine lives in the main bundle's Contents/MacOS, not beside the
+    // agent, which is nested in Contents/Library/LoginItems.
+    let agentExecutableURL = URL(fileURLWithPath: CommandLine.arguments[0])
       .standardizedFileURL.resolvingSymlinksInPath()
+    let daemonExecutableURL = ApplicationBundleLayout
+      .bundledExecutablesDirectory(forExecutableAt: agentExecutableURL)
+      .appendingPathComponent("astronomicald")
     return FileManager.default.isExecutableFile(atPath: daemonExecutableURL.path)
       ? daemonExecutableURL : nil
   }

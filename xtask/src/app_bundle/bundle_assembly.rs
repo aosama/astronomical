@@ -9,14 +9,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::build_steps::RUST_EXECUTABLE_NAMES;
-use super::channel_profile::ChannelProfile;
+use super::channel_profile::{AGENT_EXECUTABLE_NAME, APPLICATION_EXECUTABLE_NAME, ChannelProfile};
 use super::tool_command::run_quiet_tool;
 
 /// Everything copied into the bundle, resolved before anything is written so
 /// a missing input fails before the old bundle is touched.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BundleInputs {
-    pub(crate) menu_executable: PathBuf,
+    pub(crate) application_executable: PathBuf,
+    pub(crate) agent_executable: PathBuf,
     pub(crate) thin_talk_resource_bundle: PathBuf,
     pub(crate) rust_executables: Vec<(&'static str, PathBuf)>,
     pub(crate) metallib: PathBuf,
@@ -62,9 +63,12 @@ impl BundleInputs {
             sparkle_framework = Some(swift_build_directory.join("release/Sparkle.framework"));
         }
         Self {
-            menu_executable: swift_build_directory
+            application_executable: swift_build_directory
                 .join("release")
-                .join(channel_profile.menu_swift_product),
+                .join(channel_profile.application_swift_product),
+            agent_executable: swift_build_directory
+                .join("release")
+                .join(AGENT_EXECUTABLE_NAME),
             // `.build/release` is the one path both SwiftPM build systems
             // provide: a real directory under the native system, a link to
             // `out/Products/Release` under swiftbuild. Reading the swiftbuild
@@ -83,7 +87,8 @@ impl BundleInputs {
     /// Every input path, so one check can name all missing inputs at once.
     pub(crate) fn every_source_path(&self) -> Vec<&Path> {
         let mut source_paths: Vec<&Path> = vec![
-            &self.menu_executable,
+            &self.application_executable,
+            &self.agent_executable,
             &self.thin_talk_resource_bundle,
             &self.metallib,
             &self.icon,
@@ -111,20 +116,34 @@ pub(crate) fn missing_inputs(bundle_inputs: &BundleInputs) -> Vec<PathBuf> {
     missing_paths
 }
 
+/// The two plists and the agent's place inside the bundle. The agent's path
+/// comes from the channel profile, so assembly itself stays channel-blind.
+pub(crate) struct BundlePlists<'plists> {
+    pub(crate) application_info_plist_text: &'plists str,
+    pub(crate) agent_info_plist_text: &'plists str,
+    pub(crate) agent_bundle_relative_path: &'plists str,
+}
+
 pub(crate) fn assemble_bundle(
     bundle_path: &Path,
     bundle_inputs: &BundleInputs,
-    info_plist_text: &str,
+    bundle_plists: &BundlePlists<'_>,
 ) -> Result<(), String> {
     let contents_path = bundle_path.join("Contents");
     for bundle_subdirectory in ["MacOS", "Frameworks", "Resources/share/mlx"] {
         create_directory(&contents_path.join(bundle_subdirectory))?;
     }
-    write_file(&contents_path.join("Info.plist"), info_plist_text)?;
-    copy_file(
-        &bundle_inputs.menu_executable,
-        &contents_path.join("MacOS/astronomical-menu"),
+    write_file(
+        &contents_path.join("Info.plist"),
+        bundle_plists.application_info_plist_text,
     )?;
+    copy_file(
+        &bundle_inputs.application_executable,
+        &contents_path
+            .join("MacOS")
+            .join(APPLICATION_EXECUTABLE_NAME),
+    )?;
+    assemble_agent_bundle(bundle_path, bundle_inputs, bundle_plists)?;
     for (executable_name, executable_path) in &bundle_inputs.rust_executables {
         copy_file(
             executable_path,
@@ -149,21 +168,66 @@ pub(crate) fn assemble_bundle(
         &bundle_inputs.thin_talk_resource_bundle,
         &contents_path.join("Resources/ThinTalk_ThinTalkCanvas.bundle"),
     )?;
-    if let Some(sparkle_framework) = &bundle_inputs.sparkle_framework {
-        copy_tree(
-            sparkle_framework,
-            &contents_path.join("Frameworks/Sparkle.framework"),
-        )?;
-        // SwiftPM links Sparkle through @loader_path; a bundle keeps
-        // frameworks in Contents/Frameworks, so the standard rpath is added
-        // before signing seals the executable.
-        run_quiet_tool(
-            Command::new("install_name_tool")
-                .args(["-add_rpath", "@executable_path/../Frameworks"])
-                .arg(contents_path.join("MacOS/astronomical-menu")),
-        )?;
+    embed_sparkle_framework(&contents_path, bundle_inputs.sparkle_framework.as_deref())
+}
+
+/// Copies Sparkle into `Contents/Frameworks` for a channel that ships it, and
+/// does nothing for one that does not.
+fn embed_sparkle_framework(
+    contents_path: &Path,
+    sparkle_framework: Option<&Path>,
+) -> Result<(), String> {
+    let Some(sparkle_framework) = sparkle_framework else {
+        return Ok(());
+    };
+    copy_tree(
+        sparkle_framework,
+        &contents_path.join("Frameworks/Sparkle.framework"),
+    )?;
+    // SwiftPM links Sparkle through @loader_path; a bundle keeps
+    // frameworks in Contents/Frameworks, so the standard rpath is added
+    // before signing seals the executable.
+    run_quiet_tool(
+        Command::new("install_name_tool")
+            .args(["-add_rpath", "@executable_path/../Frameworks"])
+            .arg(
+                contents_path
+                    .join("MacOS")
+                    .join(APPLICATION_EXECUTABLE_NAME),
+            ),
+    )
+    .map(drop)
+}
+
+/// The agent is a bundle of its own so macOS can treat it as an accessory
+/// application and start it at login. It carries only its executable, its
+/// plist and the icon its notifications show; the engine it runs stays in the
+/// main bundle's `Contents/MacOS`.
+fn assemble_agent_bundle(
+    bundle_path: &Path,
+    bundle_inputs: &BundleInputs,
+    bundle_plists: &BundlePlists<'_>,
+) -> Result<(), String> {
+    let agent_contents_path = bundle_path
+        .join(bundle_plists.agent_bundle_relative_path)
+        .join("Contents");
+    for agent_subdirectory in ["MacOS", "Resources"] {
+        create_directory(&agent_contents_path.join(agent_subdirectory))?;
     }
-    Ok(())
+    write_file(
+        &agent_contents_path.join("Info.plist"),
+        bundle_plists.agent_info_plist_text,
+    )?;
+    copy_file(
+        &bundle_inputs.agent_executable,
+        &agent_contents_path
+            .join("MacOS")
+            .join(AGENT_EXECUTABLE_NAME),
+    )?;
+    copy_file(
+        &bundle_inputs.icon,
+        &agent_contents_path.join("Resources/Astronomical.icns"),
+    )
 }
 
 fn create_directory(directory_path: &Path) -> Result<(), String> {

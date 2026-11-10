@@ -48,7 +48,7 @@ astronomical launch claude</code></pre>
           </ul>
           <p>OpenAI-protocol clients take the address with <code>/v1</code>, as above. Anthropic-protocol clients take it without, because they append <code>/v1/messages</code> themselves: <code>http://127.0.0.1:6732</code>.</p>
           <p>Each installed channel owns its port, so Stable and Development can run side by side and a client pointed at one never reaches the other. The address is loopback only: no other machine can reach it, and the agent or client must be on this Mac.</p>
-          <p>The server runs while the app runs. The menu popover shows the port of the installed channel, and Observatory, the local console, is served by that same server — open it and choose <strong>Connect</strong> to see the full base URL of the instance you are running, generated from the instance itself rather than copied from this page.</p>
+          <p>The server runs while Astronomical's menu-bar item is showing, including after you close or quit the chat app; Quit in the menu-bar item stops it. The menu popover shows the port of the installed channel, and Observatory, the local console, is served by that same server — open it and choose <strong>Connect</strong> to see the full base URL of the instance you are running, generated from the instance itself rather than copied from this page.</p>
           <p>There is no authorization check, which also means no isolation: any process on this Mac can reach the endpoint. Treat the port as this machine's own business, not as a shared service.</p>
 
           <h2>The model identifier</h2>

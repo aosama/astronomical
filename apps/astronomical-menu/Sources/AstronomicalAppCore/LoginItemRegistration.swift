@@ -1,10 +1,13 @@
 // One shared seam for starting Astronomical at login (issue #1341).
 //
 // The system's Login Items registration is the single source of truth: the
-// popover switch reads the live registration status instead of a cached
+// menu item reads the live registration status instead of a cached
 // preference, so a change made in System Settings under General → Login Items
-// & Extensions is reflected the next time the popover renders, and the switch
+// & Extensions is reflected the next time the menu opens, and the check mark
 // can never disagree with what launchd will actually do.
+//
+// What starts at login is the menu-bar agent, not the main app: the agent owns
+// the engine, so the engine is up after login without a chat window opening.
 
 import Foundation
 import ServiceManagement
@@ -35,14 +38,32 @@ public protocol LoginItemRegistering: AnyObject {
   func openLoginItemsSettings()
 }
 
+/// Releases before the agent existed registered the whole application as the
+/// login item, which would now open a chat window at every login.
 @MainActor
-public final class SystemLoginItemRegistrar: LoginItemRegistering {
-  // Registers the application itself, not a bundled helper: the menu app
-  // supervises the bundled server as a child process, so the application
-  // starting at login brings the whole stack up through the normal launch
-  // path, and quitting keeps today's meaning of stopping the server.
+public protocol WholeApplicationLoginItemRetiring: AnyObject {
+  var wholeApplicationStartsAtLogin: Bool { get }
+  func unregisterWholeApplicationAtLogin() throws
+}
+
+@MainActor
+public final class SystemLoginItemRegistrar: LoginItemRegistering, WholeApplicationLoginItemRetiring {
+  // Registers the agent bundled in Contents/Library/LoginItems, the only
+  // place macOS looks for a helper named by identifier.
+  private let agentLoginItem: SMAppService
+
+  public init(agentBundleIdentifier: String) {
+    agentLoginItem = SMAppService.loginItem(identifier: agentBundleIdentifier)
+  }
+
+  public var wholeApplicationStartsAtLogin: Bool { SMAppService.mainApp.status == .enabled }
+
+  public func unregisterWholeApplicationAtLogin() throws {
+    try SMAppService.mainApp.unregister()
+  }
+
   public var launchAtLoginStatus: LoginItemRegistrationStatus {
-    switch SMAppService.mainApp.status {
+    switch agentLoginItem.status {
     case .notRegistered: .notRegistered
     case .enabled: .enabled
     case .requiresApproval: .requiresApproval
@@ -52,11 +73,11 @@ public final class SystemLoginItemRegistrar: LoginItemRegistering {
   }
 
   public func registerLaunchAtLogin() throws {
-    try SMAppService.mainApp.register()
+    try agentLoginItem.register()
   }
 
   public func unregisterLaunchAtLogin() throws {
-    try SMAppService.mainApp.unregister()
+    try agentLoginItem.unregister()
   }
 
   public func openLoginItemsSettings() {
@@ -71,8 +92,8 @@ func launchAtLoginToggleIsOn(for registrationStatus: LoginItemRegistrationStatus
   registrationStatus == .enabled
 }
 
-/// The menu app supervises the bundled server as a child process, so starting
-/// the application at login is sufficient: the server follows the app. The
+/// The agent supervises the bundled server as a child process, so starting
+/// the agent at login is sufficient: the server follows it. The
 /// control therefore belongs to the product installations a user keeps.
 /// Development launches are contributor workspaces that rebuild and move, and
 /// a bare executable run has no bundle for launchd to register, so neither
@@ -112,4 +133,17 @@ func applyLaunchAtLoginChoice(
     }
   }
   return registrar.launchAtLoginStatus == .notRegistered ? .disabled : .failed
+}
+
+/// Moves a whole-application registration from an earlier release onto the
+/// agent, once. The old registration is removed only after the agent's is in
+/// place, so a failure leaves the person with what they had rather than with
+/// nothing starting at login.
+@MainActor
+func moveWholeApplicationLoginItemToAgent(
+  using registrar: any LoginItemRegistering & WholeApplicationLoginItemRetiring
+) {
+  guard registrar.wholeApplicationStartsAtLogin else { return }
+  guard applyLaunchAtLoginChoice(true, using: registrar) != .failed else { return }
+  try? registrar.unregisterWholeApplicationAtLogin()
 }

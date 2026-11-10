@@ -149,7 +149,7 @@ fn should_fail_when_the_library_has_no_chat_models() {
     assert!(matches!(error, LaunchError::NoChatModels));
     assert_eq!(
         error.to_string(),
-        "No models installed yet. Open Observatory's Download Models page and download one."
+        "No models installed yet. Open Observatory's Models page and download one."
     );
 }
 

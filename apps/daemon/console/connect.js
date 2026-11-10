@@ -38,7 +38,7 @@ const CONNECTION_CREDENTIAL_GUIDANCE =
     "The loopback API performs no authorization check, so no key can be wrong and none is required. An agent that insists on a key can be given this inert placeholder; it is not a secret and never leaves this Mac.";
 
 const CONNECTION_MODEL_GUIDANCE_WITHOUT_MODELS =
-    "No model is installed on this Mac yet. Download one from Download Models, then replace the example identifier in the samples below.";
+    "No model is installed on this Mac yet. Download one from the Models page, then replace the example identifier in the samples below.";
 
 function connectionConsoleOrigin() {
     return typeof window !== "undefined" && window.location

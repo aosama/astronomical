@@ -29,15 +29,9 @@ struct OrbitalTelemetryPopover: View {
   let openChat: () -> Void
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
-  let checkForUpdates: () -> Void
-  @Binding var automaticallyChecksForUpdates: Bool
-  @Binding var selectedUpdateChannel: ApplicationUpdateChannel
-  let updatesSupported: Bool
   let terminalCommandSupported: Bool
   let installTerminalCommand: () -> Void
   let removeTerminalCommand: () -> Void
-  let launchAtLoginSupported: Bool
-  @Binding var launchAtLoginIsEnabled: Bool
   let revealConfiguration: () -> Void
   let showYourAstro: () -> Void
   let quitApplication: () -> Void
@@ -189,25 +183,13 @@ struct OrbitalTelemetryPopover: View {
         Button("Restart server", action: restartServer)
         Spacer()
         Menu {
-          if updatesSupported {
-            Button("Check for Updates…", action: checkForUpdates)
-            Toggle("Check automatically", isOn: $automaticallyChecksForUpdates)
-            Picker("Update channel", selection: $selectedUpdateChannel) {
-              ForEach(ApplicationUpdateChannel.allCases) { updateChannel in
-                Text(updateChannel.displayName).tag(updateChannel)
-              }
-            }
-            Divider()
-          }
           if terminalCommandSupported {
             Button("Install “astronomical” command in terminal…", action: installTerminalCommand)
             Button("Remove “astronomical” terminal command…", action: removeTerminalCommand)
             Divider()
           }
-          if launchAtLoginSupported {
-            Toggle("Launch at Login", isOn: $launchAtLoginIsEnabled)
-            Divider()
-          }
+          // Updates and Launch at Login live in the main app's menu: the
+          // main app owns the updater and registers this agent at login.
           Button("Your Astro…", action: showYourAstro)
           Button("Reveal config", action: revealConfiguration)
           Button("Quit Astronomical", action: quitApplication)

@@ -102,6 +102,12 @@ struct LibraryCatalogEntryResponse {
     huggingface_id: String,
     revision: String,
     display_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    short_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version_label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<String>,
     family: &'static str,
     approximate_size_bytes: u64,
     approximate_memory_bytes: u64,
@@ -153,6 +159,9 @@ impl LibraryCatalogEntryResponse {
             huggingface_id: catalog_entry.huggingface_id().to_owned(),
             revision: catalog_entry.revision().to_owned(),
             display_name: catalog_entry.display_name().to_owned(),
+            short_name: catalog_entry.short_name().map(str::to_owned),
+            version_label: catalog_entry.version_label().map(str::to_owned),
+            summary: catalog_entry.summary().map(str::to_owned),
             family: catalog_entry.family().as_str(),
             approximate_size_bytes: catalog_entry.approximate_size_bytes(),
             approximate_memory_bytes: catalog_entry.approximate_memory_bytes(),

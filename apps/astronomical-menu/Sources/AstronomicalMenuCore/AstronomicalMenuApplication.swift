@@ -1,7 +1,10 @@
 import AppKit
 import SwiftUI
-import ThinTalkUI
 
+/// The menu-bar agent: the status item, its popover, and ownership of the
+/// engine. It is an accessory application for its whole life (its bundle sets
+/// LSUIElement) and never shows a window of its own. Chat belongs to the main
+/// app, which the agent asks for by opening one of its links.
 @MainActor
 public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate, NSPopoverDelegate {
   // The adaptor instantiates the delegate from the executable module, so the
@@ -11,30 +14,24 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private let applicationIdentity = ApplicationIdentity.current()
   private lazy var daemonClient = LocalDaemonClient(applicationIdentity: applicationIdentity)
   private lazy var telemetryStore = TelemetryStore(daemonClient: daemonClient)
-  private lazy var applicationUpdateController: any ApplicationUpdateChecking =
-    ApplicationUpdateControllerInstaller.makeController(
-      applicationChannel: applicationIdentity.channel)
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     daemonClient: daemonClient, applicationIdentity: applicationIdentity)
   private let neuralEngineBannerPresenter = NeuralEngineBannerPresenter()
   private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
-  private lazy var loginItemRegistrar: any LoginItemRegistering = SystemLoginItemRegistrar()
-  private lazy var chatWindowController = ChatWindowController(
-    thinTalkIdentity: ChatLaunchIdentity.chatIdentity(from: applicationIdentity),
-    hostMenuActions: chatMenuActions(),
-    restartEngine: { [weak self] in self?.restartServer() })
+  private lazy var commandChannel = ProcessCommandChannel(channel: applicationIdentity.channel)
+  private var commandObservations: [NSObjectProtocol] = []
   private var statusItem: NSStatusItem?
   private var telemetryPopover: NSPopover?
   private var latestMenuBarTitle = ""
   private var latestMenuBarGlyphState = MenuBarGlyphState.idle
   private var daemonMaintenanceTask: Task<Void, Never>?
 
-  public nonisolated func applicationWillFinishLaunching(_ notification: Notification) {
-    DispatchQueue.main.async { NSApp.setActivationPolicy(.regular) }
-  }
-
   public func applicationDidFinishLaunching(_ notification: Notification) {
-    registerThinTalkOpenHandler()
+    // A packaged agent is an accessory through its bundle's LSUIElement. A
+    // bare executable run has no bundle to say so, and would otherwise take a
+    // Dock icon; the policy is set once here and never changed again.
+    if Bundle.main.bundleIdentifier == nil { NSApp.setActivationPolicy(.accessory) }
+    answerMainApplicationCommands()
     let menuBarStatusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     menuBarStatusItem.button?.target = self
     menuBarStatusItem.button?.action = #selector(toggleTelemetryPopover)
@@ -56,51 +53,15 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         openChat: { [weak self] in self?.showChatWindow() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
-        checkForUpdates: { [weak self] in self?.checkForUpdates() },
-        automaticallyChecksForUpdates: Binding(
-          get: {
-            [weak self] in
-            guard let updateController = self?.applicationUpdateController else { return true }
-            return updateController.automaticallyChecksForUpdates
-          },
-          set: { [weak self] shouldCheckAutomatically in
-            guard let updateController = self?.applicationUpdateController else { return }
-            setAutomaticApplicationUpdateChecks(shouldCheckAutomatically, using: updateController)
-          }
-        ),
-        selectedUpdateChannel: Binding(
-          get: {
-            [weak self] in
-            guard let updateController = self?.applicationUpdateController else { return .stable }
-            return updateController.selectedChannel
-          },
-          set: { [weak self] updateChannel in
-            self?.applicationUpdateController.selectUpdateChannel(updateChannel)
-          }
-        ),
-        updatesSupported: applicationUpdateController.supportsUserUpdateControls,
         terminalCommandSupported: applicationIdentity.channel != .development,
         installTerminalCommand: { [weak self] in self?.installTerminalCommand() },
         removeTerminalCommand: { [weak self] in self?.removeTerminalCommand() },
-        launchAtLoginSupported: launchAtLoginControlsSupported(
-          applicationChannel: applicationIdentity.channel,
-          hostIsPackagedApplication: Bundle.main.bundleIdentifier != nil),
-        launchAtLoginIsEnabled: Binding(
-          get: { [weak self] in
-            guard let loginItemRegistrar = self?.loginItemRegistrar else { return false }
-            return launchAtLoginToggleIsOn(for: loginItemRegistrar.launchAtLoginStatus)
-          },
-          set: { [weak self] isEnabledByUser in
-            self?.applyLaunchAtLoginChoiceFromPopover(isEnabledByUser)
-          }
-        ),
         revealConfiguration: revealConfiguration,
         showYourAstro: { [weak self] in self?.showYourAstro() },
-        quitApplication: { NSApp.terminate(nil) }
+        quitApplication: { [weak self] in self?.quitEverything() }
       )
     )
     telemetryPopover = popover
-    applicationUpdateController.start()
     telemetryStore.onNeuralEngineBannerDue = { [weak self] neuralEngineBanner in
       self?.neuralEngineBannerPresenter.present(neuralEngineBanner)
     }
@@ -132,21 +93,6 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         telemetryStore: telemetryStore)
     }
     telemetryStore.startPolling()
-    // The welcome decision runs before daemon maintenance so a brand-new
-    // install is judged on its empty state directory, not on files the just
-    // started daemon creates during this same launch. The welcome itself is
-    // Astro's first flight in the chat window, which waits for the engine
-    // that daemon maintenance is starting.
-    if isFirstLaunch() {
-      FirstRunWelcomeAcknowledgmentStore(stateDirectoryURL: applicationIdentity.stateDirectoryURL())
-        .acknowledgeWelcome()
-      showChatWindow()
-    } else {
-      // Deferred so the launch finishes first; by then a chat link delivered
-      // during launch may already have opened chat, which keeps the app
-      // regular (see returnToMenuBarOnlyUnlessChatIsOpen).
-      DispatchQueue.main.async { [weak self] in self?.returnToMenuBarOnlyUnlessChatIsOpen() }
-    }
     // Full auto-repair (owner decision on issue #825): a terminal-command
     // link this app owns dangles whenever the bundle moves; recreating it on
     // every launch keeps the command current without user action.
@@ -154,6 +100,10 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   }
 
   public func applicationWillTerminate(_ notification: Notification) {
+    for commandObservation in commandObservations {
+      DistributedNotificationCenter.default().removeObserver(commandObservation)
+    }
+    commandObservations = []
     daemonMaintenanceTask?.cancel()
     daemonMaintenanceTask = nil
     telemetryStore.stopPolling()
@@ -178,9 +128,9 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     // Without this the very first click dismisses the transient popover before
     // it is visible: macOS treats the click gesture as outside the popover the
     // moment this app is not the active app, which it is when you click the
-    // menu-bar icon from another foreground app. The chat window
-    // activates first too; this keeps the tap-to-dismiss behaviour intact while
-    // making the first click reliably stick (issue: menu vanishes on first open).
+    // menu-bar icon from another foreground app. Activating first keeps the
+    // tap-to-dismiss behaviour intact while making the first click reliably
+    // stick (issue: menu vanishes on first open).
     NSApp.activate(ignoringOtherApps: true)
     statusItem?.length = menuBarStatusItemLength(
       popoverIsShown: true, currentButtonWidth: statusButton.bounds.width)
@@ -222,103 +172,66 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     }
   }
 
-  /// The app-level commands the chat window's menu bar offers. Check for
-  /// Updates appears only where this build updates itself (never the App Store
-  /// build), matching the popover's own update controls.
-  private func chatMenuActions() -> ThinTalkHostMenuActions {
-    let checkForUpdatesAction: (@MainActor () -> Void)?
-    if applicationUpdateController.supportsUserUpdateControls {
-      checkForUpdatesAction = { [weak self] in self?.checkForUpdates() }
-    } else {
-      checkForUpdatesAction = nil
-    }
-    // The bundle's own name, so the Development build's menus say
-    // "Quit Astronomical Development" like its menu bar title does.
-    let bundleApplicationName =
-      Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Astronomical"
-    return ThinTalkHostMenuActions(
-      applicationName: bundleApplicationName,
-      checkForUpdates: checkForUpdatesAction,
-      openObservatory: { [weak self] in self?.openObservatory() },
-      helpURL: URL(string: "https://aosama.github.io/astronomical/"))
+  /// The main app asks through these when it needs the engine restarted or
+  /// stopped. A build check from a main app of another build means this agent
+  /// was left running across an update, with the engine of the old build: it
+  /// quits, and the main app starts the agent of its own build.
+  private func answerMainApplicationCommands() {
+    commandObservations = [
+      commandChannel.observe(.restartEngine) { [weak self] _ in self?.restartServer() },
+      commandChannel.observe(.quitAgent) { _ in NSApp.terminate(nil) },
+      commandChannel.observe(.checkAgentBuild) { [weak self] mainApplicationBuildFingerprint in
+        guard let self, let mainApplicationBuildFingerprint,
+          mainApplicationBuildFingerprint != applicationIdentity.buildFingerprint
+        else { return }
+        NSApp.terminate(nil)
+      },
+    ]
   }
 
-  // Closing chat restores the accessory (no Dock icon) posture the menu
-  // application normally keeps.
-  private func showChatWindow() {
-    chatWindowController.showChatWindow(handleClose: { [weak self] in self?.returnToMenuBarOnlyUnlessChatIsOpen() })
+  /// The popover's Quit stops everything a person thinks of as Astronomical:
+  /// the chat app, this agent, and the engine the agent owns.
+  private func quitEverything() {
+    commandChannel.post(.quitApplication)
+    NSApp.terminate(nil)
   }
 
-  /// The one way back to the accessory (menu-bar-only) posture. An accessory
-  /// app never owns the menu bar, so switching while chat is on screen left
-  /// the conversation's menus unclickable; that happened when the launch's
-  /// deferred switch ran after a chat link had already opened the window.
-  private func returnToMenuBarOnlyUnlessChatIsOpen() {
-    guard !chatWindowController.isShowingChat else { return }
-    NSApp.setActivationPolicy(.accessory)
-  }
-
-  // The Observatory console hands chat over through its channel's scheme; macOS
-  // delivers custom-scheme links to a packaged app as a GURL Apple event, so
-  // the handler lives here at launch rather than in a SwiftUI scene hook — the
-  // menu application has no window scene to receive onOpenURL.
-  private func registerThinTalkOpenHandler() {
-    NSAppleEventManager.shared().setEventHandler(
-      self,
-      andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
-      forEventClass: AEEventClass(kInternetEventClass),
-      andEventID: AEEventID(kAEGetURL)
-    )
-  }
-
-  @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent: NSAppleEventDescriptor) {
-    guard let openedURLString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
-      let openedURL = URL(string: openedURLString),
-      isThinTalkChatOpenRequest(openedURL, channel: applicationIdentity.channel)
-    else { return }
-    showChatWindow()
-  }
-
-  private func isFirstLaunch() -> Bool {
-    FirstRunWelcomeAcknowledgmentStore(stateDirectoryURL: applicationIdentity.stateDirectoryURL())
-      .welcomeDecision() == .showWelcome
-  }
+  private func showChatWindow() { openInMainApplication(.chat) }
 
   // The popover's "Your Astro…" opens chat on the page with every welcome
   // answer, so the welcome is always one click from the menu bar.
-  private func showYourAstro() {
-    chatWindowController.showYourAstro(handleClose: { [weak self] in self?.returnToMenuBarOnlyUnlessChatIsOpen() })
+  private func showYourAstro() { openInMainApplication(.yourAstro) }
+
+  /// Opens a link in the main app that contains this agent. Naming the bundle
+  /// keeps the link from reaching another installed copy that registers the
+  /// same scheme; a bare executable run has no enclosing bundle and lets
+  /// macOS choose.
+  private func openInMainApplication(_ applicationLink: ApplicationLink) {
+    guard let linkURL = applicationLink.url(channel: applicationIdentity.channel) else { return }
+    telemetryPopover?.performClose(nil)
+    guard
+      let mainApplicationBundleURL = ApplicationBundleLayout.mainApplicationBundleURL(
+        forAgentBundleAt: Bundle.main.bundleURL)
+    else {
+      NSWorkspace.shared.open(linkURL)
+      return
+    }
+    NSWorkspace.shared.open(
+      [linkURL], withApplicationAt: mainApplicationBundleURL,
+      configuration: NSWorkspace.OpenConfiguration())
   }
 
   private func openObservatory() {
-    do {
-      let observatoryURL = try applicationIdentity.endpointURL(path: "/")
-      guard NSWorkspace.shared.open(observatoryURL) else {
-        throw ObservatoryLaunchError.defaultBrowserUnavailable
-      }
-    } catch {
-      NSApp.presentError(error)
-    }
+    ObservatoryLauncher.open(path: "/", applicationIdentity: applicationIdentity)
   }
 
   private func openDownloadModels() {
-    do {
-      let downloadModelsURL = try applicationIdentity.endpointURL(path: "/download-models")
-      guard NSWorkspace.shared.open(downloadModelsURL) else {
-        throw ObservatoryLaunchError.defaultBrowserUnavailable
-      }
-    } catch {
-      NSApp.presentError(error)
-    }
+    ObservatoryLauncher.open(path: "/download-models", applicationIdentity: applicationIdentity)
   }
 
   private func revealConfiguration() {
     let configurationURL = applicationIdentity.configFileURL()
     NSWorkspace.shared.activateFileViewerSelecting([configurationURL])
-  }
-
-  private func checkForUpdates() {
-    requestManualApplicationUpdateCheck(using: applicationUpdateController)
   }
 
   private func installTerminalCommand() {
@@ -343,35 +256,6 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     }
   }
 
-  private func applyLaunchAtLoginChoiceFromPopover(_ isEnabledByUser: Bool) {
-    let registrationOutcome = applyLaunchAtLoginChoice(isEnabledByUser, using: loginItemRegistrar)
-    switch registrationOutcome {
-    case .enabled, .disabled: break
-    case .needsSystemApproval:
-      presentLaunchAtLoginSettingsPrompt(
-        messageText: "Astronomical is waiting for approval to start at login",
-        informativeText:
-          "Approve Astronomical under System Settings → General → Login Items & Extensions."
-      )
-    case .failed:
-      presentLaunchAtLoginSettingsPrompt(
-        messageText: "Astronomical could not change starting at login",
-        informativeText:
-          "macOS did not accept the change. You can still manage Astronomical under System Settings → General → Login Items & Extensions."
-      )
-    }
-  }
-
-  private func presentLaunchAtLoginSettingsPrompt(messageText: String, informativeText: String) {
-    let loginItemsPrompt = NSAlert()
-    loginItemsPrompt.messageText = messageText
-    loginItemsPrompt.informativeText = informativeText
-    loginItemsPrompt.addButton(withTitle: "Open Login Items Settings")
-    loginItemsPrompt.addButton(withTitle: "Not Now")
-    if loginItemsPrompt.runModal() == .alertFirstButtonReturn {
-      loginItemRegistrar.openLoginItemsSettings()
-    }
-  }
 }
 
 @MainActor
@@ -403,14 +287,6 @@ func maintainDaemonForApplication(
       telemetryStore.failServerStartup(error)
       try? await Task.sleep(for: retryDelay)
     }
-  }
-}
-
-private enum ObservatoryLaunchError: LocalizedError {
-  case defaultBrowserUnavailable
-
-  var errorDescription: String? {
-    "The Observatory could not be opened in the default browser"
   }
 }
 

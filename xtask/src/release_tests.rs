@@ -387,3 +387,30 @@ fn should_default_the_notarization_timeout_and_refuse_bad_values() {
         Ok(())
     );
 }
+
+/// The distribution signature check must look for the agent exactly where the
+/// packager puts it, innermost object first.
+#[test]
+fn should_require_the_stable_agent_before_the_bundle_that_contains_it() {
+    let required_paths = super::distribution_signature::required_code_object_paths();
+    let stable_profile =
+        crate::app_bundle::ChannelProfile::for_channel(crate::app_bundle::Channel::Stable);
+    let position_of = |required_path: &str| {
+        required_paths
+            .iter()
+            .position(|listed_path| listed_path == required_path)
+    };
+
+    let agent_executable_position = position_of(&stable_profile.agent_executable_relative_path())
+        .expect("the agent's executable is required");
+    let agent_bundle_position = position_of(&stable_profile.agent_bundle_relative_path())
+        .expect("the agent's bundle is required");
+
+    assert!(agent_executable_position < agent_bundle_position);
+    assert!(position_of("Contents/MacOS/astronomical-app").is_some());
+    assert!(
+        position_of("Contents/MacOS/astronomical-menu").is_none(),
+        "the agent no longer lives in the main bundle's Contents/MacOS"
+    );
+    assert_eq!(required_paths.len(), 11);
+}

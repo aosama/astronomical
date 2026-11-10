@@ -388,9 +388,11 @@ test("should_offer_no_thin_talk_link_for_an_unknown_channel", () => {
 
 test("should_keep_every_chat_link_out_of_download_models_and_the_shell", () => {
     const downloadModelsRenderScript = fs.readFileSync(path.join(__dirname, "download-models-render.js"), "utf8");
-    const downloadModelsCardFooterScript = fs.readFileSync(path.join(__dirname, "download-models-card-footer.js"), "utf8");
+    const downloadModelsRowScript = fs.readFileSync(path.join(__dirname, "download-models-row.js"), "utf8");
+    const downloadModelsInstalledScript = fs.readFileSync(path.join(__dirname, "download-models-installed.js"), "utf8");
     const consoleShell = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-    for (const hardcodingSource of [downloadModelsRenderScript, downloadModelsCardFooterScript, consoleShell]) {
+    const hardcodingSources = [downloadModelsRenderScript, downloadModelsRowScript, downloadModelsInstalledScript, consoleShell];
+    for (const hardcodingSource of hardcodingSources) {
         assert.equal(hardcodingSource.includes("astronomical://"), false);
         assert.equal(hardcodingSource.includes("astronomical-dev://"), false);
     }

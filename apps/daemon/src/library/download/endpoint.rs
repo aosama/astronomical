@@ -212,7 +212,7 @@ fn coordinator_error_response(download_error: LibraryDownloadCoordinatorError) -
         | LibraryDownloadCoordinatorError::BackgroundTask(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "download_failed",
-            "The model download could not be updated. Retry from Download Models.",
+            "The model download could not be updated. Retry from the Models page.",
         ),
     };
     (

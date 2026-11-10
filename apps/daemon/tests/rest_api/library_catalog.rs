@@ -13,12 +13,15 @@ use tower::ServiceExt;
 use crate::support::ScriptedExecutor;
 
 const VALID_CATALOG_JSON: &str = r#"{
-    "schema_version": 3,
+    "schema_version": 4,
     "entries": [
         {
             "huggingface_id": "astronomical-test/example-qwen",
             "revision": "0123456789abcdef0123456789abcdef01234567",
             "display_name": "Example Qwen",
+            "short_name": "Example",
+            "version_label": "Compact",
+            "summary": "A quick everyday assistant.",
             "family": "qwen3_5",
             "approximate_size_bytes": 4000000000,
             "approximate_memory_bytes": 1825361094,
@@ -53,15 +56,19 @@ const VALID_CATALOG_JSON: &str = r#"{
 }"#;
 
 /// The authored three-entry fixture projected onto the public response, pinning
-/// every field the Library renders for each entry, including the v3 role and flags.
+/// every field the Models page renders for each entry: the role and flags, and the
+/// presentation texts, which are published only for an entry that declares them.
 fn expected_validated_catalog_document() -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 3,
+        "schema_version": 4,
         "entries": [
             {
                 "huggingface_id": "astronomical-test/example-qwen",
                 "revision": "0123456789abcdef0123456789abcdef01234567",
                 "display_name": "Example Qwen",
+                "short_name": "Example",
+                "version_label": "Compact",
+                "summary": "A quick everyday assistant.",
                 "family": "qwen3_5",
                 "approximate_size_bytes": 4_000_000_000_u64,
                 "approximate_memory_bytes": 1_825_361_094_u64,

@@ -369,3 +369,75 @@ fn should_expose_daemon_ipc_socket_path_beside_the_instance_lock_for_every_insta
         stable_paths.instance_lock_file_path()
     );
 }
+
+/// The App Store build is two sandboxed applications with a container each;
+/// the group container is the one place both can open, so the engine's whole
+/// state must resolve beneath it and nowhere else.
+#[test]
+fn should_resolve_every_state_path_beneath_the_application_group_container() {
+    let fictional_group_container =
+        PathBuf::from("/Users/example/Library/Group Containers/TEAM123456.astronomical");
+
+    let stable_paths = AstronomicalInstancePaths::for_application_group_container(
+        &fictional_group_container,
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert_eq!(
+        stable_paths.state_directory(),
+        fictional_group_container.join("Astronomical")
+    );
+    assert_eq!(
+        stable_paths.models_directory(),
+        fictional_group_container.join("Astronomical/models")
+    );
+    assert_eq!(
+        stable_paths.prompt_cache_directory(),
+        fictional_group_container.join("Astronomical/cache")
+    );
+}
+
+/// A state root moved from an app's own Application Support into the group
+/// container must keep its directory name, so the move is a single rename.
+#[test]
+fn should_name_group_container_state_exactly_as_application_support_state() {
+    for runtime_instance in [
+        AstronomicalRuntimeInstance::Stable,
+        AstronomicalRuntimeInstance::Development,
+    ] {
+        let group_paths = AstronomicalInstancePaths::for_application_group_container(
+            PathBuf::from("/group"),
+            runtime_instance,
+        );
+        let application_support_paths =
+            AstronomicalInstancePaths::for_application_support_directory(
+                PathBuf::from("/support"),
+                runtime_instance,
+            );
+
+        assert_eq!(
+            group_paths.state_directory().file_name(),
+            application_support_paths.state_directory().file_name()
+        );
+    }
+}
+
+/// The group container holds the channel's standard instance, not a custom
+/// one: it keeps the channel's own loopback port, which the chat app and the
+/// menu-bar agent both expect, instead of an ephemeral port.
+#[test]
+fn should_serve_group_container_state_as_the_standard_instance() {
+    let stable_group_paths = AstronomicalInstancePaths::for_application_group_container(
+        PathBuf::from("/group"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+    let custom_paths = AstronomicalInstancePaths::for_state_directory(
+        PathBuf::from("/group/Astronomical"),
+        AstronomicalRuntimeInstance::Stable,
+    );
+
+    assert!(stable_group_paths.is_standard_state_directory());
+    assert_eq!(stable_group_paths.default_bind_address().port(), 6732);
+    assert!(!custom_paths.is_standard_state_directory());
+    assert_eq!(custom_paths.default_bind_address().port(), 0);
+}

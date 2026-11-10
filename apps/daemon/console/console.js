@@ -18,7 +18,7 @@ const OBSERVATORY_PATH_MAP = {
 };
 
 // Retired addresses still open the page that replaced them: the Model page was
-// folded into Overview, the Library page was renamed Download Models, and the
+// folded into Overview, the Library page was renamed Download Models and later Models (keeping its route), and the
 // Settings page was folded into Configuration.
 const OBSERVATORY_RETIRED_PATH_DESTINATIONS = {
     "/model": "overview",

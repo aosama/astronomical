@@ -199,6 +199,24 @@ impl AstronomicalInstancePaths {
         )
     }
 
+    /// Resolves instance state beneath an app group container.
+    ///
+    /// The App Store build runs as two sandboxed applications, the chat app
+    /// and the menu-bar agent that owns the engine, and each has a container
+    /// of its own. A group container is the one location both may open, so
+    /// the engine's state lives there; in a single app's container the other
+    /// application could never reach it. The caller supplies the container
+    /// because only the platform can resolve it (it is named after the
+    /// signing team), and the directory names match the Application Support
+    /// layout so a state root can be moved between the two unchanged.
+    #[must_use]
+    pub fn for_application_group_container(
+        application_group_container: impl Into<PathBuf>,
+        runtime_instance: AstronomicalRuntimeInstance,
+    ) -> Self {
+        Self::for_application_support_directory(application_group_container, runtime_instance)
+    }
+
     #[must_use]
     fn for_state_directory_with_standard_endpoint(
         state_directory: PathBuf,

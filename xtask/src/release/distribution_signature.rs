@@ -13,20 +13,41 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::app_bundle::{APPLICATION_EXECUTABLE_NAME, Channel, ChannelProfile};
 use crate::step_log::{log_line, start_step};
 
-/// The objects a Stable bundle must contain, innermost first.
-const REQUIRED_CODE_OBJECT_PATHS: [&str; 9] = [
+/// Sparkle's code objects, innermost first.
+const SPARKLE_CODE_OBJECT_PATHS: [&str; 5] = [
     "Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate",
     "Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app",
     "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc",
     "Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc",
     "Contents/Frameworks/Sparkle.framework",
-    "Contents/MacOS/astronomical-menu",
+];
+/// The Rust executables of the main bundle.
+const RUST_CODE_OBJECT_PATHS: [&str; 3] = [
     "Contents/MacOS/astronomicald",
     "Contents/MacOS/astronomical-inference-worker",
     "Contents/MacOS/astronomical",
 ];
+
+/// The objects a Stable bundle must contain, innermost first. The menu-bar
+/// agent's place comes from the Stable channel profile, the one definition of
+/// where the packager puts it, so this check cannot drift from the layout.
+pub(crate) fn required_code_object_paths() -> Vec<String> {
+    let stable_profile = ChannelProfile::for_channel(Channel::Stable);
+    let mut required_paths = Vec::new();
+    for sparkle_path in SPARKLE_CODE_OBJECT_PATHS {
+        required_paths.push(sparkle_path.to_owned());
+    }
+    required_paths.push(stable_profile.agent_executable_relative_path());
+    required_paths.push(stable_profile.agent_bundle_relative_path());
+    required_paths.push(format!("Contents/MacOS/{APPLICATION_EXECUTABLE_NAME}"));
+    for rust_path in RUST_CODE_OBJECT_PATHS {
+        required_paths.push(rust_path.to_owned());
+    }
+    required_paths
+}
 
 /// A Team ID is ten characters; anything shorter is a typo, not a team.
 const MINIMUM_TEAM_IDENTIFIER_LENGTH: usize = 7;
@@ -44,8 +65,8 @@ pub(crate) fn validate_distribution_app(
     if team_identifier.len() < MINIMUM_TEAM_IDENTIFIER_LENGTH {
         return Err("--team-id is required".to_owned());
     }
-    for required_path in REQUIRED_CODE_OBJECT_PATHS {
-        if !app_bundle.join(required_path).exists() {
+    for required_path in required_code_object_paths() {
+        if !app_bundle.join(&required_path).exists() {
             return Err(format!(
                 "code object is unavailable: {}",
                 app_bundle.join(required_path).display()

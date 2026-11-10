@@ -8,17 +8,28 @@ public struct ThinTalkHostMenuActions {
   public let checkForUpdates: (@MainActor () -> Void)?
   public let openObservatory: (@MainActor () -> Void)?
   public let helpURL: URL?
+  /// App-level settings only the host can offer (how it updates, whether it
+  /// starts at login), placed under Check for Updates. The host builds and
+  /// validates these items itself, so the conversation knows nothing of them.
+  public let hostSettingsMenuItems: [NSMenuItem]
+  /// Quits the host and everything it runs in the background, for a host
+  /// whose ordinary Quit leaves a background engine serving.
+  public let quitEverything: (@MainActor () -> Void)?
 
   public init(
     applicationName: String,
     checkForUpdates: (@MainActor () -> Void)? = nil,
     openObservatory: (@MainActor () -> Void)? = nil,
-    helpURL: URL? = nil
+    helpURL: URL? = nil,
+    hostSettingsMenuItems: [NSMenuItem] = [],
+    quitEverything: (@MainActor () -> Void)? = nil
   ) {
     self.applicationName = applicationName
     self.checkForUpdates = checkForUpdates
     self.openObservatory = openObservatory
     self.helpURL = helpURL
+    self.hostSettingsMenuItems = hostSettingsMenuItems
+    self.quitEverything = quitEverything
   }
 }
 
