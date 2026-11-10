@@ -46,6 +46,61 @@ final class ApplicationBundleLayoutTests: XCTestCase {
       "/Volumes/Contents/Library/LoginItems/Astronomical.app/Contents/MacOS")
   }
 
+  /// launchd starts a login item with its service label as the first launch
+  /// argument. Read as a path that label names a file in `/`, which is how
+  /// the agent lost the engine after every login.
+  func test_should_find_the_engine_directory_when_launchd_passes_a_service_label() throws {
+    let agentExecutableURL = try XCTUnwrap(
+      ApplicationBundleLayout.runningExecutableURL(
+        bundleExecutableURL: URL(fileURLWithPath: agentBundlePath + "/Contents/MacOS/astronomical-menu"),
+        launchArguments: ["dev.astronomical.app.agent"]))
+
+    XCTAssertEqual(agentExecutableURL.path, agentBundlePath + "/Contents/MacOS/astronomical-menu")
+    XCTAssertEqual(
+      ApplicationBundleLayout.bundledExecutablesDirectory(forExecutableAt: agentExecutableURL).path,
+      mainBundlePath + "/Contents/MacOS")
+  }
+
+  func test_should_prefer_the_bundle_executable_over_an_absolute_launch_argument() {
+    XCTAssertEqual(
+      ApplicationBundleLayout.runningExecutableURL(
+        bundleExecutableURL: URL(fileURLWithPath: "/opt/loaded/astronomical-menu"),
+        launchArguments: ["/opt/claimed/astronomical-menu"])?.path,
+      "/opt/loaded/astronomical-menu")
+  }
+
+  func test_should_use_an_absolute_launch_argument_when_the_bundle_names_no_executable() {
+    XCTAssertEqual(
+      ApplicationBundleLayout.runningExecutableURL(
+        bundleExecutableURL: nil, launchArguments: ["/opt/build/../build/astronomical-menu", "--flag"])?.path,
+      "/opt/build/astronomical-menu")
+  }
+
+  func test_should_name_no_executable_from_a_label_a_relative_path_or_no_arguments() {
+    for unusableLaunchArguments in [["dev.astronomical.app.agent"], ["./astronomical-menu"], [""], []] {
+      XCTAssertNil(
+        ApplicationBundleLayout.runningExecutableURL(
+          bundleExecutableURL: nil, launchArguments: unusableLaunchArguments),
+        "\(unusableLaunchArguments) must not be read as the running executable")
+    }
+  }
+
+  func test_should_resolve_a_symbolic_link_to_the_executable_it_points_at() throws {
+    let scratchDirectoryURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("astronomical-layout-\(UUID().uuidString)", isDirectory: true)
+      .resolvingSymlinksInPath()
+    defer { try? FileManager.default.removeItem(at: scratchDirectoryURL) }
+    try FileManager.default.createDirectory(at: scratchDirectoryURL, withIntermediateDirectories: true)
+    let executableURL = scratchDirectoryURL.appendingPathComponent("astronomical-menu")
+    let linkURL = scratchDirectoryURL.appendingPathComponent("linked-menu")
+    XCTAssertTrue(FileManager.default.createFile(atPath: executableURL.path, contents: Data()))
+    try FileManager.default.createSymbolicLink(at: linkURL, withDestinationURL: executableURL)
+
+    XCTAssertEqual(
+      ApplicationBundleLayout.runningExecutableURL(bundleExecutableURL: linkURL, launchArguments: [])?.path,
+      executableURL.path)
+  }
+
   func test_should_name_the_main_bundle_that_contains_an_agent() {
     XCTAssertEqual(
       ApplicationBundleLayout.mainApplicationBundleURL(forAgentBundleAt: URL(fileURLWithPath: agentBundlePath))?
