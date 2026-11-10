@@ -80,9 +80,7 @@ mod seat_planned_complete_layers;
 pub(crate) mod streaming_model;
 
 pub(crate) use crate::qwen3_5_core::model::Qwen3_5ModelBase;
-pub(crate) use crate::qwen3_5_core::model_math::{
-    decoder_layer_weights, error, forward_contract, weights,
-};
+pub(crate) use crate::qwen3_5_core::model_math::{error, forward_contract, weights};
 pub use crate::qwen3_5_streaming::model::streaming_model::Qwen3_5StreamingModel as Qwen3_5Model;
 #[cfg(feature = "direct-mlx")]
 pub use dense_layer_working_memory_probe::DenseLayerProbeShape;
@@ -94,7 +92,6 @@ mod paged_execution_tests;
 #[cfg(feature = "direct-mlx")]
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
-mod decoder_cache_dtype_flow;
 #[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]

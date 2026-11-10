@@ -3,6 +3,8 @@
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod base;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod bound_weight_dtype_flow;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_attention;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod disk_embedding_rows;

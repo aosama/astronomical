@@ -2,7 +2,6 @@
 #[cfg(feature = "direct-mlx")]
 mod artifact_loading;
 #[cfg(feature = "direct-mlx")]
-mod decoder_cache_dtype_flow;
 #[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]

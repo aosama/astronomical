@@ -99,17 +99,19 @@ impl Qwen3_5Model {
     #[doc(hidden)]
     pub fn hidden_state_bytes_per_token(&self) -> usize {
         let hidden_size = self.config.hidden_size() as usize;
-        super::decoder_cache_dtype_flow::embedded_hidden_state_dtype(&self.weights)
-            .ok()
-            .and_then(|hidden_state_dtype| {
-                self.runtime
-                    .zeros(&[1, 1, hidden_size as i32], hidden_state_dtype)
-                    .ok()
-            })
-            .map_or(
-                hidden_size.saturating_mul(WIDEST_ACTIVATION_ELEMENT_BYTES),
-                |one_token_hidden_state| one_token_hidden_state.byte_count(),
-            )
+        crate::qwen3_5_core::model::bound_weight_dtype_flow::embedded_hidden_state_dtype(
+            &self.weights,
+        )
+        .ok()
+        .and_then(|hidden_state_dtype| {
+            self.runtime
+                .zeros(&[1, 1, hidden_size as i32], hidden_state_dtype)
+                .ok()
+        })
+        .map_or(
+            hidden_size.saturating_mul(WIDEST_ACTIVATION_ELEMENT_BYTES),
+            |one_token_hidden_state| one_token_hidden_state.byte_count(),
+        )
     }
 
     /// Runs `token_ids` from `starting_position_tokens` through every decoder

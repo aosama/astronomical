@@ -6,11 +6,13 @@
 //! evaluating arrays, so cache serialization and memory admission describe the
 //! tensors the production graph actually creates.
 //!
-//! The promotion replay itself is shared with the resident engine in
+//! The promotion replay itself lives in
 //! `qwen3_5_core::decoder::decoder_cache_dtype_flow`; this module reduces the
-//! streaming engine's weight types to that replay's dtype contracts and
-//! resolves each sparse layer's expert plan through the pager.
+//! bound weight types both engines share to that replay's dtype contracts.
+//! Each sparse layer's expert plan comes from the slice the caller holds: the
+//! resident engine's prebuilt plans, or the streaming engine's pager plans.
 
+use crate::qwen3_5_core::artifacts::QuantizedExpertLayerPlan;
 use crate::qwen3_5_core::decoder::Qwen3_5DecoderLayerCacheDtypes;
 use crate::qwen3_5_core::decoder::decoder_cache_dtype_flow::{
     AffineDtypeContract, DenseMlpDtypeFlow, FullAttentionDtypeFlow, LinearAttentionDtypeFlow,
@@ -18,16 +20,15 @@ use crate::qwen3_5_core::decoder::decoder_cache_dtype_flow::{
     full_attention_dtypes, linear_attention_dtypes, mixture_of_experts_output_dtype,
     promote_floating_dtypes,
 };
-use crate::qwen3_5_streaming::Qwen3_5ExpertPager;
-
-use super::decoder_layer_weights::{
+use crate::qwen3_5_core::model_math::decoder_layer_weights::{
     Qwen3_5AffineWeights, Qwen3_5AttentionWeights, Qwen3_5DecoderFeedForwardWeights,
 };
-use super::{Qwen3_5ExecutionError, Qwen3_5Weights};
+use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
+use crate::qwen3_5_core::model_math::weights::Qwen3_5Weights;
 
 /// The dtype of the hidden states the embedding lookup hands the first
 /// decoder layer, which every later layer's input inherits.
-pub(super) fn embedded_hidden_state_dtype(
+pub(crate) fn embedded_hidden_state_dtype(
     weights: &Qwen3_5Weights,
 ) -> Result<mlx_c_rust::MlxDtype, Qwen3_5ExecutionError> {
     embedding_output_dtype(&affine_contract(&weights.embedding_weights))
@@ -37,12 +38,11 @@ pub(super) fn embedded_hidden_state_dtype(
 /// evaluating model tensors. The resulting contract therefore follows each
 /// artifact's actual affine scale and bias dtypes instead of its configured
 /// activation dtype alone.
-pub(super) fn derive_decoder_layer_cache_dtypes(
+pub(crate) fn derive_decoder_layer_cache_dtypes(
     weights: &Qwen3_5Weights,
-    expert_pager: Option<&Qwen3_5ExpertPager>,
+    expert_layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<Vec<Qwen3_5DecoderLayerCacheDtypes>, Qwen3_5ExecutionError> {
-    let mut hidden_state_dtype =
-        embedding_output_dtype(&affine_contract(&weights.embedding_weights))?;
+    let mut hidden_state_dtype = embedded_hidden_state_dtype(weights)?;
     let mut decoder_layer_cache_dtypes = Vec::with_capacity(weights.decoder_layer_weights.len());
 
     for (decoder_layer_index, decoder_layer_weights) in
@@ -110,10 +110,11 @@ pub(super) fn derive_decoder_layer_cache_dtypes(
                 })?
             }
             Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
-                let expert_pager = expert_pager.ok_or(Qwen3_5ExecutionError::InvalidInput {
-                    description: "sparse decoder-cache dtype derivation requires an expert pager",
-                })?;
-                let expert_layer_plan = expert_pager.layer_plan(decoder_layer_index)?;
+                let expert_layer_plan = expert_layer_plans.get(decoder_layer_index).ok_or(
+                    Qwen3_5ExecutionError::InvalidInput {
+                        description: "sparse decoder-cache dtype derivation has no layer plan",
+                    },
+                )?;
                 mixture_of_experts_output_dtype(
                     &MixtureOfExpertsDtypeFlow {
                         normalized_attention_dtype,
@@ -141,7 +142,7 @@ pub(super) fn derive_decoder_layer_cache_dtypes(
     Ok(decoder_layer_cache_dtypes)
 }
 
-/// Reduces one streaming affine weight to the shared replay's dtype contract.
+/// Reduces one bound affine weight to the shared replay's dtype contract.
 fn affine_contract(affine_weights: &Qwen3_5AffineWeights) -> AffineDtypeContract {
     match affine_weights {
         Qwen3_5AffineWeights::NativeBfloat16 { .. } => AffineDtypeContract::NativeBfloat16,

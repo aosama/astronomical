@@ -335,7 +335,7 @@ fn decoder_cache_layout_at_tensor_binding(
     expert_layer_plans: &[QuantizedExpertLayerPlan],
 ) -> Result<crate::DecoderCacheLayout, Qwen3_5ExecutionError> {
     let decoder_layer_cache_dtypes =
-        super::decoder_cache_dtype_flow::derive_decoder_layer_cache_dtypes(
+        crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_decoder_layer_cache_dtypes(
             weights,
             expert_layer_plans,
         )?;
