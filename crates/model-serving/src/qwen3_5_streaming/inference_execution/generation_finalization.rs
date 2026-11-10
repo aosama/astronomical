@@ -4,6 +4,7 @@
 //! and before allocator cleanup. Final telemetry then reports the retained
 //! pager ownership after cleanup.
 
+use super::NO_RETAINED_LIVE_PREFIX_BYTES;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
@@ -370,8 +371,3 @@ impl Qwen3_5EngineState {
 }
 
 use crate::MlxMemoryTelemetry;
-
-/// The streaming engine keeps no decoder state between requests, so a
-/// finalized measurement has no retained live prefix to charge to the
-/// context owner.
-const NO_RETAINED_LIVE_PREFIX_BYTES: u64 = 0;

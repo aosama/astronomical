@@ -3,9 +3,8 @@
 //!
 //! This owner is the transaction boundary for sampling state and performance
 //! attribution. State that can be rewound is deliberately kept here rather
-//! than hidden in the model owner. Both engines kept their own copy of this
-//! struct and its methods; the copies differed only in a few engine-only
-//! fields, which now sit behind the `EngineRequestExtension` parameter.
+//! than hidden in the model owner. State only one engine reads sits behind
+//! the `RequestExtension` parameter, so the shared request code compiles once.
 
 use astronomical_ipc_protocol::{
     RequestId, WorkerPersistentPromptCacheRequestDiagnostics, WorkerPromptWorkReuse,
@@ -26,7 +25,7 @@ use crate::{
 /// read live here; `engine_extension` holds what only one engine needs
 /// (speculative decoding in the resident engine, prefill memory recovery in
 /// the streaming engine), so shared request code compiles once.
-pub(crate) struct Qwen3_5EngineRequest<EngineRequestExtension> {
+pub(crate) struct Qwen3_5EngineRequest<RequestExtension> {
     pub(crate) request_decoder_state: RequestDecoderStateStack,
     pub(crate) generated_token_count: u16,
     pub(crate) input_token_ids: Vec<u32>,
@@ -75,10 +74,10 @@ pub(crate) struct Qwen3_5EngineRequest<EngineRequestExtension> {
     pub(crate) structured_generation:
         Option<crate::structured_generation::StructuredTokenConstraint>,
     /// State only the owning engine reads.
-    pub(crate) engine_extension: EngineRequestExtension,
+    pub(crate) engine_extension: RequestExtension,
 }
 
-impl<EngineRequestExtension> Qwen3_5EngineRequest<EngineRequestExtension> {
+impl<RequestExtension> Qwen3_5EngineRequest<RequestExtension> {
     /// Records one generated token in the penalty history, keeping it sorted and unique.
     ///
     /// Only requests with an active penalty call this, so the common path never
@@ -243,3 +242,7 @@ fn sample_generated_token(
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "engine_request_tests.rs"]
+mod engine_request_tests;

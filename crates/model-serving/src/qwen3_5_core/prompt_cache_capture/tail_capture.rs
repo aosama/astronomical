@@ -22,7 +22,7 @@ use crate::{
 };
 
 use super::block_capture::{PromptBlockPublicationFailure, publish_block_with_reclamation_retry};
-use super::capture_engine::Qwen3_5PromptCacheCapture;
+use super::capture_hook::Qwen3_5PromptCacheCapture;
 use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 

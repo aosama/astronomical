@@ -33,7 +33,6 @@ pub(crate) use engine_error_helpers::qwen3_5_runtime_error;
 pub(crate) use engine_state::Qwen3_5EngineState;
 pub use engine_state::Qwen3_5InferenceExecution;
 
-pub use crate::qwen3_5_core::prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use memory_governance::memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use prompt_prefill_lifecycle::prefill_execution_context::Qwen3_5PrefillExecutionContext;
 pub use prompt_prefill_lifecycle::prompt_processing_chunk_sizer::{

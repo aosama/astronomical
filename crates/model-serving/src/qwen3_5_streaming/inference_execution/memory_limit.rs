@@ -1,3 +1,4 @@
+use super::NO_RETAINED_LIVE_PREFIX_BYTES;
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
@@ -196,8 +197,3 @@ fn adjustment_telemetry(
 }
 
 use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
-
-/// The streaming engine keeps no decoder state between requests, so a
-/// finalized measurement has no retained live prefix to charge to the
-/// context owner.
-const NO_RETAINED_LIVE_PREFIX_BYTES: u64 = 0;

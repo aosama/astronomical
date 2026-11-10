@@ -89,9 +89,7 @@ pub use dense_layer_working_memory_probe::DenseLayerProbeShape;
 mod paged_execution_tests;
 
 #[cfg(feature = "direct-mlx")]
-#[cfg(feature = "direct-mlx")]
 mod artifact_loading;
-#[cfg(feature = "direct-mlx")]
 #[cfg(feature = "direct-mlx")]
 mod decoder_layer_forward;
 #[cfg(feature = "direct-mlx")]
@@ -106,7 +104,6 @@ mod forward_graph;
 mod live_memory_limit;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod memory_admission;
-#[cfg(feature = "direct-mlx")]
 #[cfg(feature = "direct-mlx")]
 pub use crate::qwen3_5_core::model::model_chunking_configuration::Qwen3_5ModelChunkingConfiguration;
 #[cfg(feature = "direct-mlx")]

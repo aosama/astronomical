@@ -18,7 +18,7 @@ use astronomical_runtime_integration::MlxMemorySnapshot;
 use mlx_c_rust::MlxArray;
 use std::collections::HashMap;
 
-use super::capture_engine::Qwen3_5PromptCacheCapture;
+use super::capture_hook::Qwen3_5PromptCacheCapture;
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::persistent_cache::capture_planning;
 use crate::qwen3_5_core::engine_errors::qwen3_5_runtime_error;
@@ -26,7 +26,7 @@ use crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest;
 use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 
 /// Converts a required persistence failure into the user-visible engine error.
-pub(crate) fn required_prompt_state_persistence_failure<RequestExtension>(
+pub(super) fn required_prompt_state_persistence_failure<RequestExtension>(
     active_request: &Qwen3_5EngineRequest<RequestExtension>,
     failure_stage: &'static str,
     internal_error: impl std::fmt::Display,
@@ -56,59 +56,17 @@ pub(crate) fn capture_persistent_prompt_cache_blocks<CaptureEngine: Qwen3_5Promp
     let persistent_prompt_cache_block_token_count =
         persistent_prompt_cache.model_contract.block_token_count();
     for boundary_checkpoint in boundary_checkpoints {
-        let capture_planning::CaptureBlockWindow {
+        let PlannedCaptureBlock {
             block_start,
             block_end,
-            block_index,
-        } = match capture_planning::capture_block_window(
+            persistent_prompt_cache_block_key,
+        } = plan_captured_block(
+            persistent_prompt_cache,
+            active_request,
             successful_prefill_start,
-            boundary_checkpoint.completed_prefill_chunk_tokens,
-            persistent_prompt_cache_block_token_count,
             successful_prefill_end,
-        ) {
-            Ok(capture_block_window) => capture_block_window,
-            Err(rejection) => {
-                return Err(required_prompt_state_persistence_failure(
-                    active_request,
-                    "required persistent prompt-state capture",
-                    rejection.description(),
-                ));
-            }
-        };
-        let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
-        let block_causal_input = match capture_planning::select_block_causal_input(
-            &active_request.persistent_prompt_cache_block_causal_inputs,
-            block_index,
-        ) {
-            Ok(capture_planning::BlockCausalInputSelection::Empty) => &empty_block_causal_input,
-            Ok(capture_planning::BlockCausalInputSelection::FromPlan(block_causal_input)) => {
-                block_causal_input
-            }
-            Err(rejection) => {
-                return Err(required_prompt_state_persistence_failure(
-                    active_request,
-                    "required persistent prompt-state capture",
-                    rejection.description(),
-                ));
-            }
-        };
-        let persistent_prompt_cache_block_key = match capture_planning::block_key_for_captured_block(
-            active_request
-                .last_restored_persistent_prompt_cache_block_key
-                .as_ref(),
-            &persistent_prompt_cache.model_contract,
-            &active_request.input_token_ids[block_start..block_end],
-            block_causal_input,
-        ) {
-            Ok(persistent_prompt_cache_block_key) => persistent_prompt_cache_block_key,
-            Err(_) => {
-                return Err(required_prompt_state_persistence_failure(
-                    active_request,
-                    "required persistent prompt-state capture",
-                    "prompt-cache block identity construction failed",
-                ));
-            }
-        };
+            boundary_checkpoint.completed_prefill_chunk_tokens,
+        )?;
         // Extraction returns MLX arrays referencing exact decoder state. Keep
         // these same arrays alive through a possible retry; recapturing after
         // reclamation could observe mutated request state or duplicate work.
@@ -120,9 +78,8 @@ pub(crate) fn capture_persistent_prompt_cache_blocks<CaptureEngine: Qwen3_5Promp
             persistent_prompt_cache_block_token_count,
         )?;
         release_publication_workspace_if_needed(model, active_request)?;
-        // The disk-store API needs mutable attribution while the request also
-        // remains mutably borrowed. Move the owner out temporarily and put it
-        // back on every return path before interpreting publication outcome.
+        // Cloned so publication can borrow the request mutably while still
+        // naming this block's parent.
         let parent_block_key = active_request
             .last_restored_persistent_prompt_cache_block_key
             .clone();
@@ -145,6 +102,83 @@ pub(crate) fn capture_persistent_prompt_cache_blocks<CaptureEngine: Qwen3_5Promp
         )?;
     }
     Ok(())
+}
+
+/// Where one boundary's block sits in the prompt, and its identity.
+struct PlannedCaptureBlock {
+    block_start: usize,
+    block_end: usize,
+    persistent_prompt_cache_block_key: PersistentPromptCacheBlockKey,
+}
+
+/// Plans the block a boundary checkpoint completes: its token window, the
+/// causal input bound into its identity, and the identity itself. Any
+/// inconsistency stops the request, because capture is required.
+fn plan_captured_block<RequestExtension>(
+    persistent_prompt_cache: &PersistentPromptCacheDiskStore,
+    active_request: &Qwen3_5EngineRequest<RequestExtension>,
+    successful_prefill_start: usize,
+    successful_prefill_end: usize,
+    completed_prefill_chunk_tokens: usize,
+) -> Result<PlannedCaptureBlock, InferenceEngineError> {
+    let capture_planning::CaptureBlockWindow {
+        block_start,
+        block_end,
+        block_index,
+    } = match capture_planning::capture_block_window(
+        successful_prefill_start,
+        completed_prefill_chunk_tokens,
+        persistent_prompt_cache.model_contract.block_token_count(),
+        successful_prefill_end,
+    ) {
+        Ok(capture_block_window) => capture_block_window,
+        Err(rejection) => {
+            return Err(required_prompt_state_persistence_failure(
+                active_request,
+                "required persistent prompt-state capture",
+                rejection.description(),
+            ));
+        }
+    };
+    let empty_block_causal_input = PersistentPromptCacheBlockCausalInput::empty();
+    let block_causal_input = match capture_planning::select_block_causal_input(
+        &active_request.persistent_prompt_cache_block_causal_inputs,
+        block_index,
+    ) {
+        Ok(capture_planning::BlockCausalInputSelection::Empty) => &empty_block_causal_input,
+        Ok(capture_planning::BlockCausalInputSelection::FromPlan(block_causal_input)) => {
+            block_causal_input
+        }
+        Err(rejection) => {
+            return Err(required_prompt_state_persistence_failure(
+                active_request,
+                "required persistent prompt-state capture",
+                rejection.description(),
+            ));
+        }
+    };
+    let persistent_prompt_cache_block_key = match capture_planning::block_key_for_captured_block(
+        active_request
+            .last_restored_persistent_prompt_cache_block_key
+            .as_ref(),
+        &persistent_prompt_cache.model_contract,
+        &active_request.input_token_ids[block_start..block_end],
+        block_causal_input,
+    ) {
+        Ok(persistent_prompt_cache_block_key) => persistent_prompt_cache_block_key,
+        Err(_) => {
+            return Err(required_prompt_state_persistence_failure(
+                active_request,
+                "required persistent prompt-state capture",
+                "prompt-cache block identity construction failed",
+            ));
+        }
+    };
+    Ok(PlannedCaptureBlock {
+        block_start,
+        block_end,
+        persistent_prompt_cache_block_key,
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -192,8 +226,8 @@ pub(super) fn publish_block_with_reclamation_retry<CaptureEngine: Qwen3_5PromptC
                     reclamation_error,
                 ));
             }
-            // Reclamation is measured separately from serialization
-            // so performance reports can attribute why publication paused.
+            // The retry gets its own attribution span so serialization time
+            // stays apart from whatever the engine's reclamation measured.
             let mut retry_performance_attribution = std::mem::replace(
                 &mut active_request.performance_attribution,
                 PerformanceAttribution::disabled(),

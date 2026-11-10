@@ -36,8 +36,8 @@ async fn should_restore_the_previous_turns_partial_tail_block_on_an_extended_pro
 
 async fn run_partial_tail_reuse_acceptance() {
     let _direct_mlx_guard = crate::common::direct_mlx_test_guard().await;
-    // The resident sparse-MoE role names whichever Ornith-35B build is
-    // installed; the tail-reuse path is artifact-size independent.
+    // The resident sparse-MoE role names one Ornith-35B build in the test
+    // model registry; the tail-reuse path is artifact-size independent.
     let model_directory = crate::common::configured_resident_sparse_moe_model_directory();
     let persistent_prompt_cache_directory =
         tempfile::tempdir().expect("the test should create a prompt-cache directory");
@@ -105,6 +105,13 @@ async fn run_partial_tail_reuse_acceptance() {
             block_token_count,
         ))
         .expect("the restored token count should fit u32");
+    // Pinned independently of the production rule as well, so a wrong rule
+    // cannot make this journey agree with itself.
+    assert_eq!(
+        expected_restored_token_count as usize,
+        2 * block_token_count + TURN_ONE_TAIL_TOKEN_COUNT - 1,
+        "the tail should end exactly one token short of turn one's prompt"
+    );
     assert_eq!(
         turn_two_start.cached_token_count(),
         expected_restored_token_count,

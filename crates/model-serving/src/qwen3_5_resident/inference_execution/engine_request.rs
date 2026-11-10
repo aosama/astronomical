@@ -58,3 +58,7 @@ impl Qwen3_5EngineRequest {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "engine_request_tests.rs"]
+mod engine_request_tests;

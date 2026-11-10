@@ -600,8 +600,8 @@ fn decoder_cache_layout_at_tensor_binding(
     let decoder_layer_cache_dtypes =
         crate::qwen3_5_core::model::bound_weight_dtype_flow::derive_decoder_layer_cache_dtypes(
             weights,
-            // A sparse layer without a pager finds no plan here and fails
-            // the derivation, exactly as a missing pager did.
+            // A sparse layer without a pager finds no plan here, so the
+            // derivation still fails, now with the shared "no layer plan" text.
             expert_pager.map_or(&[], Qwen3_5ExpertPager::layer_plans),
         )?;
     crate::qwen3_5_core::decoder::qwen3_5_decoder_cache_layout(

@@ -9,8 +9,9 @@ use crate::qwen3_5_core::model::Qwen3_5ModelBase;
 /// Extraction and publication are identical in both engines; only the
 /// response to a publication blocked by the MLX active-memory limit
 /// differs. The streaming engine evicts retained expert pages before its
-/// single retry, while the resident engine holds every expert by design and
-/// has nothing to evict, so the retry relies on allocator cleanup alone.
+/// single retry. The resident engine holds every expert by design and has
+/// nothing to evict, so its retry repeats the first attempt unchanged; the
+/// divergence between the engines is recorded on issue #1637.
 pub(crate) trait Qwen3_5PromptCacheCapture {
     /// The engine's model; capture itself needs only the shared base.
     type Model: std::ops::Deref<Target = Qwen3_5ModelBase>;

@@ -5,8 +5,7 @@
 //! expert while the streaming engine holds a retained subset, and the
 //! streaming engine's model-core bytes exclude dense layers it reads from the
 //! SSD on each forward. Each engine supplies those two figures through
-//! [`Qwen3_5MemoryOwnership`] and inherits everything else, so a fix to the
-//! accounting lands once.
+//! [`Qwen3_5MemoryOwnership`]; the arithmetic itself is written once.
 
 use crate::PerformanceAttribution;
 use crate::PerformanceCounter;
@@ -39,7 +38,8 @@ pub(crate) trait Qwen3_5MemoryOwnership {
         let context_state_payload_bytes = request_decoder_state
             .payload_byte_count()
             .saturating_add(additional_context_state_payload_bytes);
-        self.active_memory_breakdown_with_context_state_payload_bytes(
+        breakdown_with_context_state_payload_bytes(
+            self,
             context_state_payload_bytes,
             mlx_active_memory_bytes,
             additional_model_core_payload_bytes,
@@ -64,7 +64,8 @@ pub(crate) trait Qwen3_5MemoryOwnership {
         live_context_state_payload_bytes: u64,
         additional_model_core_payload_bytes: u64,
     ) -> MlxActiveMemoryBreakdown {
-        self.active_memory_breakdown_with_context_state_payload_bytes(
+        breakdown_with_context_state_payload_bytes(
+            self,
             live_context_state_payload_bytes,
             mlx_active_memory_bytes,
             additional_model_core_payload_bytes,
@@ -102,6 +103,8 @@ pub(crate) trait Qwen3_5MemoryOwnership {
     /// Plans the next request's decode budget from a fresh context while the
     /// context owner keeps the retained live prefix it still holds; the
     /// finalized breakdown's context term is exactly that prefix payload.
+    /// Planning against a zero-byte context instead would promise the retained
+    /// prefix's bytes to the next request a second time.
     fn between_request_memory_ceiling_utilization_for_breakdown(
         &self,
         mlx_active_memory_bytes: u64,
@@ -200,28 +203,32 @@ pub(crate) trait Qwen3_5MemoryOwnership {
             performance_attribution.record_snapshot_counter(counter, amount);
         }
     }
+}
 
-    fn active_memory_breakdown_with_context_state_payload_bytes(
-        &self,
-        context_state_payload_bytes: u64,
-        mlx_active_memory_bytes: u64,
-        additional_model_core_payload_bytes: u64,
-    ) -> MlxActiveMemoryBreakdown {
-        let expert_payload_bytes = self.held_expert_payload_bytes();
-        let model_core_payload_bytes = self
-            .held_model_core_payload_bytes()
-            .saturating_add(
-                self.model_base()
-                    .vision_model
-                    .as_ref()
-                    .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
-            )
-            .saturating_add(additional_model_core_payload_bytes);
-        MlxActiveMemoryBreakdown::reconcile(
-            mlx_active_memory_bytes,
-            expert_payload_bytes,
-            model_core_payload_bytes,
-            context_state_payload_bytes,
+/// The breakdown for a known context-state payload. A free function rather
+/// than a trait method so it stays private to this module: callers compose
+/// the context term through the trait's public entry points.
+fn breakdown_with_context_state_payload_bytes(
+    memory_owner: &(impl Qwen3_5MemoryOwnership + ?Sized),
+    context_state_payload_bytes: u64,
+    mlx_active_memory_bytes: u64,
+    additional_model_core_payload_bytes: u64,
+) -> MlxActiveMemoryBreakdown {
+    let expert_payload_bytes = memory_owner.held_expert_payload_bytes();
+    let model_core_payload_bytes = memory_owner
+        .held_model_core_payload_bytes()
+        .saturating_add(
+            memory_owner
+                .model_base()
+                .vision_model
+                .as_ref()
+                .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
         )
-    }
+        .saturating_add(additional_model_core_payload_bytes);
+    MlxActiveMemoryBreakdown::reconcile(
+        mlx_active_memory_bytes,
+        expert_payload_bytes,
+        model_core_payload_bytes,
+        context_state_payload_bytes,
+    )
 }

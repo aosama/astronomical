@@ -52,41 +52,10 @@ pub(crate) fn derive_decoder_layer_cache_dtypes(
             hidden_state_dtype,
             decoder_layer_weights.input_normalization_weight.dtype(),
         )?;
-        let (decoder_layer_cache_dtype, attention_output_dtype) = match &decoder_layer_weights
-            .attention_weights
-        {
-            Qwen3_5AttentionWeights::Linear(linear_attention_weights) => {
-                linear_attention_dtypes(&LinearAttentionDtypeFlow {
-                    normalized_input_dtype,
-                    input_queries_keys_values_projection: affine_contract(
-                        &linear_attention_weights.input_queries_keys_values_projection,
-                    ),
-                    convolution_weight_dtype: linear_attention_weights.convolution_weight.dtype(),
-                    normalization_weight_dtype: linear_attention_weights
-                        .normalization_weight
-                        .dtype(),
-                    output_gate_projection: affine_contract(
-                        &linear_attention_weights.output_gate_projection,
-                    ),
-                    output_projection: affine_contract(&linear_attention_weights.output_projection),
-                })?
-            }
-            Qwen3_5AttentionWeights::Full(full_attention_weights) => {
-                full_attention_dtypes(&FullAttentionDtypeFlow {
-                    normalized_input_dtype,
-                    query_projection: affine_contract(&full_attention_weights.query_projection),
-                    query_normalization_weight_dtype: full_attention_weights
-                        .query_normalization_weight
-                        .dtype(),
-                    key_projection: affine_contract(&full_attention_weights.key_projection),
-                    key_normalization_weight_dtype: full_attention_weights
-                        .key_normalization_weight
-                        .dtype(),
-                    value_projection: affine_contract(&full_attention_weights.value_projection),
-                    output_projection: affine_contract(&full_attention_weights.output_projection),
-                })?
-            }
-        };
+        let (decoder_layer_cache_dtype, attention_output_dtype) = attention_dtypes(
+            normalized_input_dtype,
+            &decoder_layer_weights.attention_weights,
+        )?;
         decoder_layer_cache_dtypes.push(decoder_layer_cache_dtype);
 
         // Residual promotion becomes the input dtype for the following MLP and
@@ -100,46 +69,97 @@ pub(crate) fn derive_decoder_layer_cache_dtypes(
                 .post_attention_normalization_weight
                 .dtype(),
         )?;
-        let feed_forward_output_dtype = match &decoder_layer_weights.mlp_weights {
-            Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
-                dense_mlp_output_dtype(&DenseMlpDtypeFlow {
-                    normalized_attention_dtype,
-                    gate_projection: affine_contract(&dense_mlp_weights.gate_projection),
-                    up_projection: affine_contract(&dense_mlp_weights.up_projection),
-                    down_projection: affine_contract(&dense_mlp_weights.down_projection),
-                })?
-            }
-            Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
-                let expert_layer_plan = expert_layer_plans.get(decoder_layer_index).ok_or(
-                    Qwen3_5ExecutionError::InvalidInput {
-                        description: "sparse decoder-cache dtype derivation has no layer plan",
-                    },
-                )?;
-                mixture_of_experts_output_dtype(
-                    &MixtureOfExpertsDtypeFlow {
-                        normalized_attention_dtype,
-                        shared_expert_gate_projection: affine_contract(
-                            &mixture_of_experts_weights.shared_expert_gate_projection,
-                        ),
-                        shared_expert_up_projection: affine_contract(
-                            &mixture_of_experts_weights.shared_expert_up_projection,
-                        ),
-                        shared_expert_down_projection: affine_contract(
-                            &mixture_of_experts_weights.shared_expert_down_projection,
-                        ),
-                        shared_expert_output_gate_projection: affine_contract(
-                            &mixture_of_experts_weights.shared_expert_output_gate_projection,
-                        ),
-                    },
-                    expert_layer_plan,
-                )?
-            }
-        };
+        let feed_forward_output_dtype = feed_forward_output_dtype(
+            normalized_attention_dtype,
+            &decoder_layer_weights.mlp_weights,
+            expert_layer_plans.get(decoder_layer_index),
+        )?;
         hidden_state_dtype =
             promote_floating_dtypes(attention_residual_dtype, feed_forward_output_dtype)?;
     }
 
     Ok(decoder_layer_cache_dtypes)
+}
+
+/// The cache dtypes one attention layer stores and the dtype it outputs.
+fn attention_dtypes(
+    normalized_input_dtype: mlx_c_rust::MlxDtype,
+    attention_weights: &Qwen3_5AttentionWeights,
+) -> Result<(Qwen3_5DecoderLayerCacheDtypes, mlx_c_rust::MlxDtype), Qwen3_5ExecutionError> {
+    Ok(match attention_weights {
+        Qwen3_5AttentionWeights::Linear(linear_attention_weights) => {
+            linear_attention_dtypes(&LinearAttentionDtypeFlow {
+                normalized_input_dtype,
+                input_queries_keys_values_projection: affine_contract(
+                    &linear_attention_weights.input_queries_keys_values_projection,
+                ),
+                convolution_weight_dtype: linear_attention_weights.convolution_weight.dtype(),
+                normalization_weight_dtype: linear_attention_weights.normalization_weight.dtype(),
+                output_gate_projection: affine_contract(
+                    &linear_attention_weights.output_gate_projection,
+                ),
+                output_projection: affine_contract(&linear_attention_weights.output_projection),
+            })?
+        }
+        Qwen3_5AttentionWeights::Full(full_attention_weights) => {
+            full_attention_dtypes(&FullAttentionDtypeFlow {
+                normalized_input_dtype,
+                query_projection: affine_contract(&full_attention_weights.query_projection),
+                query_normalization_weight_dtype: full_attention_weights
+                    .query_normalization_weight
+                    .dtype(),
+                key_projection: affine_contract(&full_attention_weights.key_projection),
+                key_normalization_weight_dtype: full_attention_weights
+                    .key_normalization_weight
+                    .dtype(),
+                value_projection: affine_contract(&full_attention_weights.value_projection),
+                output_projection: affine_contract(&full_attention_weights.output_projection),
+            })?
+        }
+    })
+}
+
+/// The dtype one feed-forward block outputs. A sparse block needs its expert
+/// plan; the caller passes `None` when the plan list does not cover it.
+fn feed_forward_output_dtype(
+    normalized_attention_dtype: mlx_c_rust::MlxDtype,
+    mlp_weights: &Qwen3_5DecoderFeedForwardWeights,
+    expert_layer_plan: Option<&QuantizedExpertLayerPlan>,
+) -> Result<mlx_c_rust::MlxDtype, Qwen3_5ExecutionError> {
+    Ok(match mlp_weights {
+        Qwen3_5DecoderFeedForwardWeights::Dense(dense_mlp_weights) => {
+            dense_mlp_output_dtype(&DenseMlpDtypeFlow {
+                normalized_attention_dtype,
+                gate_projection: affine_contract(&dense_mlp_weights.gate_projection),
+                up_projection: affine_contract(&dense_mlp_weights.up_projection),
+                down_projection: affine_contract(&dense_mlp_weights.down_projection),
+            })?
+        }
+        Qwen3_5DecoderFeedForwardWeights::MixtureOfExperts(mixture_of_experts_weights) => {
+            let expert_layer_plan =
+                expert_layer_plan.ok_or(Qwen3_5ExecutionError::InvalidInput {
+                    description: "sparse decoder-cache dtype derivation has no layer plan",
+                })?;
+            mixture_of_experts_output_dtype(
+                &MixtureOfExpertsDtypeFlow {
+                    normalized_attention_dtype,
+                    shared_expert_gate_projection: affine_contract(
+                        &mixture_of_experts_weights.shared_expert_gate_projection,
+                    ),
+                    shared_expert_up_projection: affine_contract(
+                        &mixture_of_experts_weights.shared_expert_up_projection,
+                    ),
+                    shared_expert_down_projection: affine_contract(
+                        &mixture_of_experts_weights.shared_expert_down_projection,
+                    ),
+                    shared_expert_output_gate_projection: affine_contract(
+                        &mixture_of_experts_weights.shared_expert_output_gate_projection,
+                    ),
+                },
+                expert_layer_plan,
+            )?
+        }
+    })
 }
 
 /// Reduces one bound affine weight to the shared replay's dtype contract.

@@ -17,7 +17,6 @@ mod prefill_invalid_input_error_constructors;
 mod prefill_memory_admission;
 mod prefill_terminal_failure_descriptions;
 mod prompt_prefill;
-mod prompt_prefill_counters;
 mod prompt_prefill_errors;
 pub(super) mod prompt_processing_chunk_sizer;
 mod terminal_prefill_seed;

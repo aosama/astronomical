@@ -26,7 +26,6 @@ mod prefill_memory_recovery;
 mod prefill_staging_yield;
 mod prompt_cache_capture_engine;
 mod prompt_prefill;
-mod prompt_prefill_counters;
 mod prompt_prefill_errors;
 mod prompt_processing_chunk_sizer;
 mod request_memory_release;
@@ -56,7 +55,6 @@ use self::engine_request::Qwen3_5EngineRequest;
 use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
 
-pub use crate::qwen3_5_core::prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
 pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
 pub use prompt_processing_chunk_sizer::{
@@ -405,5 +403,10 @@ impl Qwen3_5EngineState {
 }
 
 pub(crate) use crate::qwen3_5_core::engine_errors::{fatal_engine_error, qwen3_5_runtime_error};
+
+/// The streaming engine keeps no decoder state between requests, so a
+/// finalized measurement has no retained live prefix to charge to the
+/// context owner.
+pub(super) const NO_RETAINED_LIVE_PREFIX_BYTES: u64 = 0;
 
 use crate::{EngineGenerationStart, MlxMemoryLimitAdjustment, MlxMemoryTelemetry};

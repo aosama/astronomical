@@ -2,8 +2,9 @@
 //!
 //! The children own one concern: durable prompt-prefix reuse. The restore
 //! path (`decoder_state_reuse`) rebuilds decoder state from on-disk blocks,
-//! capture (`persistent_prompt_cache_capture`, tail capture) publishes new
-//! blocks after durable boundaries, identity (`visual_identity`) decides
+//! capture publishes new blocks after durable boundaries through the shared
+//! `qwen3_5_core::prompt_cache_capture`, with this engine's retry behaviour
+//! in `prompt_cache_capture_engine`, identity (`visual_identity`) decides
 //! block eligibility, in-memory adoption (`retained_live_prefix`, adopt)
 //! reuses the still-live previous state, and startup logging reports the
 //! store's condition. Both phase folders consume this machinery; this root

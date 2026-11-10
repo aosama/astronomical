@@ -101,7 +101,9 @@ impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership
     /// Excludes dense layers read from the SSD on each forward, which the
     /// base's bound-weight count would otherwise charge to the model core.
     fn held_model_core_payload_bytes(&self) -> u64 {
-        self.resident_model_payload_byte_count()
+        // Named explicitly: method syntax would fall through to the base's
+        // count, which includes the streamed layers, if this were renamed.
+        Qwen3_5StreamingModel::resident_model_payload_byte_count(self)
     }
 }
 

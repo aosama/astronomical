@@ -1,8 +1,8 @@
 //! Pure planning for the partial-tail prompt-cache capture, shared by the
 //! streaming and resident engines: which tail span a terminal prefill chunk
 //! can capture, which causal input the tail block binds, and the tail block's
-//! identity. These units were byte-identical copies in both engines; each
-//! engine's tail capture now keeps only extraction and publication.
+//! identity. Extraction and publication of the tail live in
+//! `qwen3_5_core::prompt_cache_capture::tail_capture`.
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::persistent_cache::block_key::{

@@ -13,8 +13,8 @@ impl Qwen3_5PromptCacheCapture for Qwen3_5EngineState {
     type RequestExtension = ResidentRequestExtension;
 
     /// Reclaims nothing: the resident engine holds every expert by design,
-    /// so there is no pageable payload to evict, and the retry relies on the
-    /// allocator cleanup that already ran before publication.
+    /// so there is no pageable payload to evict, and the retry repeats the
+    /// first attempt with nothing changed in between (issue #1637).
     fn reclaim_before_publication_retry(
         &self,
         _model: &Qwen3_5ResidentModel,

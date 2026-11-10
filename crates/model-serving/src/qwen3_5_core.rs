@@ -25,6 +25,8 @@ pub(crate) mod dense;
 pub(crate) mod engine_errors;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod engine_request;
+#[cfg(all(test, feature = "direct-mlx"))]
+pub(crate) mod engine_request_test_support;
 #[cfg(test)]
 pub(crate) mod frozen_config_test_support;
 pub(crate) mod model;
