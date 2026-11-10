@@ -46,7 +46,10 @@ pub(crate) fn quit_bundled_applications(channel_profile: &ChannelProfile) -> Res
     quit_bundled_application(&BundledApplication {
         description: "menu-bar agent",
         bundle_identifier: channel_profile.agent_bundle_identifier(),
-        command_line_pattern: agent_process_pattern(channel_profile),
+        command_line_pattern: login_or_path_command_line_pattern(
+            &agent_process_pattern(channel_profile),
+            &channel_profile.agent_bundle_identifier(),
+        ),
     })
 }
 
@@ -104,6 +107,41 @@ pub(crate) fn agent_process_pattern(channel_profile: &ChannelProfile) -> String 
     )
 }
 
+/// The `pgrep -f` pattern for an application that macOS may also start as a
+/// login item: a command line holding `executable_path_fragment`, or one that
+/// is nothing but `service_label`.
+///
+/// launchd starts a login item with its service label, which is its bundle
+/// identifier, as the whole command line. Matched by path alone, an agent
+/// started that way was never seen: a stop reported the instance as stopped
+/// and left the agent holding the channel's single-agent lock. `ps` offers no
+/// way round the command line, because on macOS its `comm` column also
+/// reports the first launch argument and not the file the kernel loaded.
+/// Both parts are escaped, so the dots of a bundle identifier match only
+/// dots and a longer identifier of another channel is not taken for this one.
+pub(crate) fn login_or_path_command_line_pattern(
+    executable_path_fragment: &str,
+    service_label: &str,
+) -> String {
+    format!(
+        "{}|^{}$",
+        escape_extended_regular_expression(executable_path_fragment),
+        escape_extended_regular_expression(service_label)
+    )
+}
+
+/// `literal_text` as an extended regular expression that matches only itself.
+pub(crate) fn escape_extended_regular_expression(literal_text: &str) -> String {
+    let mut escaped_expression = String::with_capacity(literal_text.len());
+    for literal_character in literal_text.chars() {
+        if r".[]()*+?{}|^$\".contains(literal_character) {
+            escaped_expression.push('\\');
+        }
+        escaped_expression.push(literal_character);
+    }
+    escaped_expression
+}
+
 /// The same fragment for the channel's main app.
 pub(crate) fn application_process_pattern(channel_profile: &ChannelProfile) -> String {
     format!(
@@ -155,7 +193,7 @@ fn process_is_running(command_line_pattern: &str) -> bool {
     running_process_count(command_line_pattern) > 0
 }
 
-fn running_process_count(command_line_pattern: &str) -> usize {
+pub(crate) fn running_process_count(command_line_pattern: &str) -> usize {
     match Command::new("pgrep")
         .args(["-f", command_line_pattern])
         .output()
