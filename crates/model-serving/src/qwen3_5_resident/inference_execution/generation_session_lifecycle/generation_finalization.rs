@@ -9,6 +9,7 @@ use crate::decoder_cache::DecoderCacheState;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use crate::{
     GenerationFinalization, GenerationPerformanceAttributionMetadata, InferenceEngineError,
     PerformanceAttribution, PerformanceAttributionOutcome, PerformanceOperation,

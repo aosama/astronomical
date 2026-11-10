@@ -23,6 +23,8 @@ pub(crate) mod gated_delta;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod loading_pipeline;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod memory_breakdown;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod output_gate_engine;

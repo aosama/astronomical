@@ -19,7 +19,6 @@ mod live_memory_limit;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod memory_admission;
 #[cfg(feature = "direct-mlx")]
-mod memory_breakdown;
 #[cfg(feature = "direct-mlx")]
 mod resident_execution;
 #[cfg(feature = "direct-mlx")]

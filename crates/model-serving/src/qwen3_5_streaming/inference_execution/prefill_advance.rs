@@ -22,6 +22,7 @@
 //! exception is a layer-major group that does not fit: its tokens run again as
 //! the chunks it was made of, which fit before, and never as smaller ones.
 
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
 use astronomical_ipc_protocol::RequestId;

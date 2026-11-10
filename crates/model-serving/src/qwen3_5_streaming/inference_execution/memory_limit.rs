@@ -1,3 +1,4 @@
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
 use crate::{InferenceEngineError, safe_minimum_active_memory_ceiling_bytes};
@@ -169,7 +170,11 @@ fn adjustment_telemetry(
     allocator_cache_memory_bytes: u64,
     peak_memory_bytes: u64,
 ) -> (crate::ExpertResidencyTelemetry, MlxMemoryTelemetry) {
-    let active_memory_breakdown = model.finalized_active_memory_breakdown(active_memory_bytes, 0);
+    let active_memory_breakdown = model.finalized_active_memory_breakdown(
+        active_memory_bytes,
+        NO_RETAINED_LIVE_PREFIX_BYTES,
+        0,
+    );
     let expert_residency = model.expert_residency_telemetry_for_breakdown(&active_memory_breakdown);
     let mlx_memory_telemetry = MlxMemoryTelemetry::new(
         active_memory_bytes,
@@ -191,3 +196,8 @@ fn adjustment_telemetry(
 }
 
 use crate::{MlxMemoryLimitAdjustment, MlxMemoryTelemetry};
+
+/// The streaming engine keeps no decoder state between requests, so a
+/// finalized measurement has no retained live prefix to charge to the
+/// context owner.
+const NO_RETAINED_LIVE_PREFIX_BYTES: u64 = 0;

@@ -18,6 +18,7 @@
 //! every per-chunk fixed cost, so throughput collapsed exactly when memory
 //! was tight; the configured chunk size is the only prefill chunk size.
 
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::{Duration, Instant};
 
 use crate::{
