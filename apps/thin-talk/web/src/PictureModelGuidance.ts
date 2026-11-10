@@ -1,7 +1,7 @@
 /**
  * Where a person can get a picture model, in the words that match what is on
  * their screen: the Pictures card while Astro is shown, the Observatory's
- * Download Models page in classic Thin Talk. The drawing tool reads it when no picture
+ * Models page in classic Thin Talk. The drawing tool reads it when no picture
  * model is installed, so the chat model points to a place that exists instead
  * of inventing one, and the step's result reads sensibly to a person too.
  */

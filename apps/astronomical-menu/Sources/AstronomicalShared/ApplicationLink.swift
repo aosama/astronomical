@@ -11,6 +11,10 @@ public enum ApplicationLink: String, CaseIterable, Sendable {
   case chat
   /// The conversation window, opened on Your Astro.
   case yourAstro = "your-astro"
+  /// An update check. The main app owns the updater, so the agent's popover
+  /// asks for a check this way. The link only ever shows the updater's own
+  /// prompt, which is why it is safe for anything on the Mac to open it.
+  case checkForUpdates = "check-for-updates"
 
   public func url(channel: ApplicationChannel) -> URL? {
     URL(string: "\(channel.chatURLScheme)://\(rawValue)")

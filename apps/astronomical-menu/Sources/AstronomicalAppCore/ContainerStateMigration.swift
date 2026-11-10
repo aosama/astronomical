@@ -31,24 +31,49 @@ struct ContainerStateMigration {
 
   func moveLegacyStateIntoGroupContainer() -> Outcome {
     guard fileManager.fileExists(atPath: legacyStateDirectoryURL.path) else { return .nothingToMove }
-    guard !fileManager.fileExists(atPath: groupStateDirectoryURL.path) else {
-      return .alreadyInGroupContainer
-    }
     do {
-      try fileManager.createDirectory(
-        at: groupStateDirectoryURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-      try fileManager.moveItem(at: legacyStateDirectoryURL, to: groupStateDirectoryURL)
+      guard fileManager.fileExists(atPath: groupStateDirectoryURL.path) else {
+        try fileManager.createDirectory(
+          at: groupStateDirectoryURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fileManager.moveItem(at: legacyStateDirectoryURL, to: groupStateDirectoryURL)
+        return .moved
+      }
+      guard try !groupContainerHoldsState() else { return .alreadyInGroupContainer }
+      try moveLegacyEntriesIntoExistingGroupDirectory()
       return .moved
     } catch {
       return .failed(error.localizedDescription)
     }
   }
+
+  /// A group state directory that holds nothing but the agent's lock file is
+  /// still empty of state: an agent that started first created it. Treating
+  /// that as "already moved" would strand the old state for good, since every
+  /// later launch would find the directory and give up again.
+  private func groupContainerHoldsState() throws -> Bool {
+    let groupEntryNames = try fileManager.contentsOfDirectory(atPath: groupStateDirectoryURL.path)
+    return groupEntryNames.contains { $0 != ApplicationIdentity.agentInstanceLockFileName }
+  }
+
+  /// The directory itself cannot be replaced while an agent holds its lock
+  /// file open inside it, so the old state moves in entry by entry. Each is
+  /// still a rename on the same volume.
+  private func moveLegacyEntriesIntoExistingGroupDirectory() throws {
+    for legacyEntryName in try fileManager.contentsOfDirectory(atPath: legacyStateDirectoryURL.path)
+    where legacyEntryName != ApplicationIdentity.agentInstanceLockFileName {
+      try fileManager.moveItem(
+        at: legacyStateDirectoryURL.appendingPathComponent(legacyEntryName),
+        to: groupStateDirectoryURL.appendingPathComponent(legacyEntryName))
+    }
+    try fileManager.removeItem(at: legacyStateDirectoryURL)
+  }
 }
 
 /// Runs the move for a build that has an app group, and does nothing for
 /// every other build. A failure is logged and launch carries on: the engine
-/// then starts with an empty group container, and the old state stays where
-/// it was for the next launch to try again.
+/// then starts with an empty group container. The old state stays where it
+/// was, and the next launch moves it only if the engine has written nothing
+/// to the group container in the meantime, because the two are never merged.
 @MainActor
 func moveContainerStateIntoGroupContainerIfNeeded(
   applicationIdentity: ApplicationIdentity,

@@ -215,6 +215,11 @@ public struct ApplicationIdentity: Equatable, Sendable {
     homeDirectoryURL.appendingPathComponent("Library/Application Support", isDirectory: true)
   }
 
+  /// The file the menu-bar agent locks so that only one agent runs. The agent
+  /// creates it, and with it the state directory, before the engine has
+  /// written anything, so its presence alone does not mean state exists.
+  public static let agentInstanceLockFileName = "menu-agent.lock"
+
   public func configFileURL(homeDirectoryURL: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
     stateDirectoryURL(homeDirectoryURL: homeDirectoryURL).appendingPathComponent("config.json")
   }

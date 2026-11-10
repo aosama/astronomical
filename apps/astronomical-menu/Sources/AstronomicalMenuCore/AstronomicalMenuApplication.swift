@@ -53,6 +53,8 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         openChat: { [weak self] in self?.showChatWindow() },
         reloadConfiguration: { [weak self] in self?.telemetryStore.reloadConfiguration() },
         restartServer: { [weak self] in self?.restartServer() },
+        updateCheckSupported: updateCheckSupported(applicationChannel: applicationIdentity.channel),
+        checkForUpdates: { [weak self] in self?.openInMainApplication(.checkForUpdates) },
         terminalCommandSupported: applicationIdentity.channel != .development,
         installTerminalCommand: { [weak self] in self?.installTerminalCommand() },
         removeTerminalCommand: { [weak self] in self?.removeTerminalCommand() },
@@ -310,4 +312,11 @@ func popoverAnchorRect(
     return statusItemImageRect
   }
   return statusButtonBounds
+}
+
+/// Whether the popover offers an update check. A store build receives its
+/// updates from the App Store and must show no update control of its own;
+/// every direct build carries the updater in its main app.
+func updateCheckSupported(applicationChannel: ApplicationChannel) -> Bool {
+  applicationChannel != .appStore
 }

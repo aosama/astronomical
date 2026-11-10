@@ -11,7 +11,7 @@ import Foundation
 /// the kernel grants it to one process only and releases it when that
 /// process ends, however it ends.
 public final class AgentInstanceLock {
-  static let lockFileName = "menu-agent.lock"
+  static let lockFileName = ApplicationIdentity.agentInstanceLockFileName
 
   private let lockFileDescriptor: Int32
 

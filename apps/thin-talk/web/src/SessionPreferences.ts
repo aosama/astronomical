@@ -14,7 +14,7 @@ export class SessionPreferences {
    * model at load time. */
   public modelID: string | null;
   /** The image model the user chose last, or null before any choice. A stored
-   * id that is no longer installed falls back to the Download Models Image Generation pick,
+   * id that is no longer installed falls back to the Models page Image Generation pick,
    * then to the first installed image model. */
   public imageModelID: string | null;
   /** The Tools switch. On by default: tools are offered only to models that

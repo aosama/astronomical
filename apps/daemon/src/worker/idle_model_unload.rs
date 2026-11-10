@@ -26,10 +26,51 @@ use crate::{WorkerHealthSnapshot, WorkerHealthStatus};
 /// model is requested, rather than meaning a zero-second span.
 const IDLE_UNLOAD_DISABLED_SENTINEL_SECONDS: u64 = 0;
 
+/// How long a Neural Engine preparation may go without finishing another
+/// program before the idle clock stops waiting for it.
+///
+/// One program compiles in seconds, or about a minute for the largest models
+/// on a first run, so ten minutes without progress means the preparation is
+/// stuck. Waiting for it any longer would keep gigabytes of model loaded for
+/// good, which is the very thing the idle unload exists to prevent.
+const STALLED_PREPARATION_HOLD: Duration = Duration::from_secs(10 * 60);
+
+/// How far a Neural Engine preparation has come, as the idle clock sees it.
+/// Any change between two idle checks counts as progress.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct NeuralEnginePreparationProgress {
+    pub(crate) completed_program_count: u32,
+    pub(crate) is_waiting_to_measure: bool,
+}
+
+impl NeuralEnginePreparationProgress {
+    /// The progress a published status describes, or `None` when the status
+    /// is not a preparation under way.
+    pub(crate) fn from_status(
+        neural_engine_prefill: Option<&astronomical_ipc_protocol::NeuralEnginePrefillStatus>,
+    ) -> Option<Self> {
+        match neural_engine_prefill {
+            Some(astronomical_ipc_protocol::NeuralEnginePrefillStatus::Preparing {
+                completed_program_count,
+                is_waiting_to_measure,
+                ..
+            }) => Some(Self {
+                completed_program_count: *completed_program_count,
+                is_waiting_to_measure: *is_waiting_to_measure,
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// The worker loop's idle clock and the live idle-unload setting it reads.
 pub(crate) struct IdleModelUnloadClock {
     idle_model_unload_seconds: Arc<AtomicU64>,
     last_activity_at: Instant,
+    /// The preparation progress seen at the last idle check and when it last
+    /// changed, so a preparation that stops advancing stops holding the model.
+    last_preparation_progress: Option<NeuralEnginePreparationProgress>,
+    preparation_progress_at: Instant,
     /// The same restart on the idle clock's own millisecond scale, shared with
     /// the worker handle so `/v1/status` can say when the model will unload.
     last_activity_clock_millis: Arc<AtomicU64>,
@@ -46,6 +87,8 @@ impl IdleModelUnloadClock {
         let mut idle_clock = Self {
             idle_model_unload_seconds,
             last_activity_at: now,
+            last_preparation_progress: None,
+            preparation_progress_at: now,
             last_activity_clock_millis,
         };
         idle_clock.record_activity(now);
@@ -70,20 +113,30 @@ impl IdleModelUnloadClock {
     }
 
     /// Restarts the idle clock while the worker prepares Neural Engine
-    /// programs beside a served model.
+    /// programs beside a served model, as long as the preparation advances.
     ///
     /// Preparation runs in the background for about a minute after the last
     /// request, which is the default idle span. Counted as idleness, it had
     /// the model unloaded the moment its programs were ready, so the next
     /// message loaded the model and prepared them all over again and the
     /// Neural Engine never engaged. The span therefore starts when
-    /// preparation ends.
+    /// preparation ends. A preparation that has made no progress for
+    /// `STALLED_PREPARATION_HOLD` no longer restarts the clock, so a stuck
+    /// one cannot keep a model loaded for good.
     pub(crate) fn observe_background_preparation(
         &mut self,
-        is_preparing_neural_engine_programs: bool,
+        preparation_progress: Option<NeuralEnginePreparationProgress>,
         now: Instant,
     ) {
-        if is_preparing_neural_engine_programs {
+        let Some(preparation_progress) = preparation_progress else {
+            self.last_preparation_progress = None;
+            return;
+        };
+        if self.last_preparation_progress != Some(preparation_progress) {
+            self.last_preparation_progress = Some(preparation_progress);
+            self.preparation_progress_at = now;
+        }
+        if now.saturating_duration_since(self.preparation_progress_at) < STALLED_PREPARATION_HOLD {
             self.record_activity(now);
         }
     }
@@ -181,19 +234,16 @@ impl WorkerIdleness {
     }
 }
 
-/// Whether the published worker health says Neural Engine programs are still
-/// being prepared. A poisoned snapshot answers no, so a fault elsewhere never
-/// keeps a model loaded for good.
-fn is_preparing_neural_engine_programs(runtime: &WorkerLoopRuntime) -> bool {
-    runtime
-        .health_snapshot
-        .read()
-        .is_ok_and(|worker_health_snapshot| {
-            matches!(
-                worker_health_snapshot.neural_engine_prefill,
-                Some(astronomical_ipc_protocol::NeuralEnginePrefillStatus::Preparing { .. })
-            )
-        })
+/// The Neural Engine preparation the published worker health reports, if one
+/// is under way. A poisoned snapshot answers none, so a fault elsewhere never
+/// keeps a model loaded.
+fn published_preparation_progress(
+    runtime: &WorkerLoopRuntime,
+) -> Option<NeuralEnginePreparationProgress> {
+    let worker_health_snapshot = runtime.health_snapshot.read().ok()?;
+    NeuralEnginePreparationProgress::from_status(
+        worker_health_snapshot.neural_engine_prefill.as_ref(),
+    )
 }
 
 /// Whether the loop may unload now: a model is loaded, the configured span
@@ -204,10 +254,10 @@ pub(in crate::worker) fn should_unload_idle_model(
     has_loaded_model: bool,
     now: Instant,
 ) -> bool {
-    let is_preparing_neural_engine_programs = is_preparing_neural_engine_programs(runtime);
+    let preparation_progress = published_preparation_progress(runtime);
     runtime
         .idle_model_unload
-        .observe_background_preparation(is_preparing_neural_engine_programs, now);
+        .observe_background_preparation(preparation_progress, now);
     let worker_idleness = WorkerIdleness {
         has_loaded_model,
         has_active_request: runtime.active_generation.is_some(),

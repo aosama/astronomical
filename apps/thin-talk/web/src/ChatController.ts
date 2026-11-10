@@ -27,6 +27,21 @@ export type LoadPhase = "idle" | "loading" | "ready" | "empty" | "failed";
 const MODEL_RELOAD_GRACE_MILLISECONDS = 120_000;
 
 /**
+ * How the window waits for an engine that was not answering when it opened.
+ * The engine normally starts within a few seconds, so the first retries are
+ * quick; after that a stopped engine is asked rarely, which still brings the
+ * window back by itself once the engine returns. Tests shorten these.
+ */
+export const ENGINE_START_PATIENCE = {
+  quickRetryMilliseconds: 1_000,
+  quickRetryCount: 30,
+  slowRetryMilliseconds: 5_000,
+};
+
+/** What the window says while it waits for an engine that has not answered. */
+export const WAITING_FOR_ENGINE_NOTICE = "Waiting for the engine to start…";
+
+/**
  * Owns the conversation: asks the turn streamer for each answer, keeps the
  * message history and the session lifecycle, and preserves the user's ask so a
  * failure always offers a recoverable next action. It only publishes state; the
@@ -52,6 +67,9 @@ export class ChatController {
   private stallFailure: ChatFailure | null = null;
   private loadPhase: LoadPhase = "idle";
   private loadFailureMessage = "";
+  private loadAttemptInFlight: Promise<void> | null = null;
+  private loadRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private failedLoadAttemptCount = 0;
   private failure: ChatFailure | null = null;
   private models: ChatModel[] = [];
   private selectedModelID: string | null = null;
@@ -94,6 +112,30 @@ export class ChatController {
   public async load(): Promise<void> {
     this.loadPhase = "loading";
     this.publish();
+    await this.attemptLoad();
+  }
+
+  /**
+   * One start-up attempt. The window opens with the app, at the same moment
+   * the menu-bar agent starts the engine, so the first attempt can reach a
+   * port nothing listens on yet. A failed attempt is therefore repeated until
+   * the engine answers: without that the window kept "Load failed" and an
+   * empty model list until the app was quit and opened again.
+   *
+   * Attempts made at the same moment share one run, so the retry timer and a
+   * caller such as a model landing never start the session twice.
+   */
+  private attemptLoad(): Promise<void> {
+    if (this.loadAttemptInFlight === null) {
+      this.clearLoadRetry();
+      this.loadAttemptInFlight = this.runLoadAttempt().finally(() => {
+        this.loadAttemptInFlight = null;
+      });
+    }
+    return this.loadAttemptInFlight;
+  }
+
+  private async runLoadAttempt(): Promise<void> {
     try {
       this.preferences = SessionPreferences.fromPlain(await this.bridge.loadPrefs());
     } catch {
@@ -107,10 +149,17 @@ export class ChatController {
       this.loadPhase = this.models.length === 0 ? "empty" : "ready";
     } catch (error) {
       this.loadPhase = "failed";
-      this.loadFailureMessage = error instanceof Error ? error.message : String(error);
+      this.loadFailureMessage = ChatController.describeLoadFailure(error);
       this.publish();
+      // Only what the network or the engine reported can change by itself.
+      // An engine of another channel, or one whose answer makes no sense,
+      // will answer the same way every time, so asking again helps nobody.
+      if (error instanceof ChatFailure) {
+        this.scheduleLoadRetry();
+      }
       return;
     }
+    this.failedLoadAttemptCount = 0;
     try {
       await this.restoreMostRecentSession();
     } catch {
@@ -120,6 +169,35 @@ export class ChatController {
     // Image models only decorate the composer, so they are listed after chat
     // is ready rather than delaying it.
     void this.refreshImageModels();
+  }
+
+  /** An engine that does not answer is being waited for, and the window says
+   * so in its own words: the browser's text for a refused connection ("Load
+   * failed") reads as a broken app. Any other failure is the engine's own
+   * explanation and is shown as it is. */
+  private static describeLoadFailure(error: unknown): string {
+    if (error instanceof ChatFailure && error.kind === ChatFailureKind.WORKER_UNAVAILABLE) {
+      return WAITING_FOR_ENGINE_NOTICE;
+    }
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  private scheduleLoadRetry(): void {
+    this.failedLoadAttemptCount += 1;
+    const retryDelayMilliseconds = this.failedLoadAttemptCount <= ENGINE_START_PATIENCE.quickRetryCount
+      ? ENGINE_START_PATIENCE.quickRetryMilliseconds
+      : ENGINE_START_PATIENCE.slowRetryMilliseconds;
+    this.loadRetryTimer = setTimeout(() => {
+      this.loadRetryTimer = null;
+      void this.attemptLoad();
+    }, retryDelayMilliseconds);
+  }
+
+  private clearLoadRetry(): void {
+    if (this.loadRetryTimer !== null) {
+      clearTimeout(this.loadRetryTimer);
+      this.loadRetryTimer = null;
+    }
   }
 
   private async restoreMostRecentSession(): Promise<void> {
@@ -190,7 +268,7 @@ export class ChatController {
     if (this.loadPhase === "failed") {
       // The window never reached the daemon; a model landing means it can
       // now, so the whole start-up runs again rather than half of it.
-      await this.load();
+      await this.attemptLoad();
       return;
     }
     if (this.loadPhase !== "ready" && this.loadPhase !== "empty") {
