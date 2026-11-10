@@ -4,9 +4,9 @@ use crate::application::ApplicationState;
 use astronomical_config::{DiscoveredModel, ModelCapabilities};
 use astronomical_ipc_protocol::WorkerModelCapabilities;
 use astronomical_rest_contract::{
-    OpenAiEmbeddingModelParts, OpenAiErrorResponse, OpenAiImageModelParts, OpenAiModel,
-    OpenAiModelList, OpenAiModelParts, OpenAiModelValidationError,
-    STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK,
+    OpenAiDecisionModelParts, OpenAiEmbeddingModelParts, OpenAiErrorResponse,
+    OpenAiImageModelParts, OpenAiModel, OpenAiModelList, OpenAiModelParts,
+    OpenAiModelValidationError, STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK,
 };
 use axum::{
     Json,
@@ -118,27 +118,22 @@ fn openai_model_from_ready_worker_capabilities(
         chat,
         image_generation,
         embeddings,
+        decisions,
     } = ready_model_capabilities;
     let Some(chat_capabilities) = chat else {
-        if let Some(embedding_capabilities) = embeddings {
-            return OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
-                model_id: ready_model_id,
-                created: model_advertisement_created_at_unix_seconds,
-                owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
-                vector_width: embedding_capabilities.vector_width,
-                max_input_tokens: embedding_capabilities.max_input_tokens,
-            });
+        if let Some(decision_capabilities) = decisions {
+            return openai_decision_model(
+                ready_model_id,
+                model_advertisement_created_at_unix_seconds,
+                decision_capabilities.maximum_tokens_per_question,
+            );
         }
-        return OpenAiModel::from_image_parts(OpenAiImageModelParts {
-            model_id: ready_model_id,
-            created: model_advertisement_created_at_unix_seconds,
-            owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
-            input_modalities: vec![TEXT_INPUT_MODALITY.to_owned()],
-            output_modalities: vec![IMAGE_OUTPUT_MODALITY.to_owned()],
-            supported_endpoints: image_generation
-                .map(|_| vec![IMAGE_GENERATIONS_ENDPOINT_PATH.to_owned()])
-                .unwrap_or_default(),
-        });
+        return openai_model_from_ready_embedding_or_image_capabilities(
+            ready_model_id,
+            model_advertisement_created_at_unix_seconds,
+            embeddings,
+            image_generation,
+        );
     };
     OpenAiModel::from_parts(OpenAiModelParts {
         model_id: ready_model_id,
@@ -157,6 +152,35 @@ fn openai_model_from_ready_worker_capabilities(
         supported_endpoints: supported_generation_endpoint_paths(),
         supports_structured_outputs: true,
         structured_output_enforcement: Some(STRUCTURED_OUTPUT_ENFORCEMENT_LOGITS_MASK.to_owned()),
+    })
+}
+
+/// Advertises a loaded model that neither chats nor decides: an embedding
+/// model when it has a vector width, and an image model otherwise.
+fn openai_model_from_ready_embedding_or_image_capabilities(
+    ready_model_id: String,
+    model_advertisement_created_at_unix_seconds: u64,
+    embeddings: Option<astronomical_ipc_protocol::WorkerEmbeddingCapabilities>,
+    image_generation: Option<astronomical_ipc_protocol::ImageGenerationCapabilities>,
+) -> Result<OpenAiModel, OpenAiModelValidationError> {
+    if let Some(embedding_capabilities) = embeddings {
+        return OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
+            model_id: ready_model_id,
+            created: model_advertisement_created_at_unix_seconds,
+            owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+            vector_width: embedding_capabilities.vector_width,
+            max_input_tokens: embedding_capabilities.max_input_tokens,
+        });
+    }
+    OpenAiModel::from_image_parts(OpenAiImageModelParts {
+        model_id: ready_model_id,
+        created: model_advertisement_created_at_unix_seconds,
+        owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+        input_modalities: vec![TEXT_INPUT_MODALITY.to_owned()],
+        output_modalities: vec![IMAGE_OUTPUT_MODALITY.to_owned()],
+        supported_endpoints: image_generation
+            .map(|_| vec![IMAGE_GENERATIONS_ENDPOINT_PATH.to_owned()])
+            .unwrap_or_default(),
     })
 }
 
@@ -185,16 +209,58 @@ fn openai_model_from_discovered_model(
                 },
             })
         }
-        ModelCapabilities::Embeddings(capabilities) => {
-            OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
-                model_id: discovered_model.model_id.clone(),
-                created: model_advertisement_created_at_unix_seconds,
-                owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
-                vector_width: capabilities.vector_width,
-                max_input_tokens: capabilities.max_input_tokens,
-            })
+        ModelCapabilities::Embeddings(_) | ModelCapabilities::Decisions(_) => {
+            openai_model_from_discovered_helper_model(
+                discovered_model,
+                model_advertisement_created_at_unix_seconds,
+            )
         }
     }
+}
+
+/// Advertises a discovered model that answers in one step: a decision model
+/// when its capabilities say so, and an embedding model otherwise.
+fn openai_model_from_discovered_helper_model(
+    discovered_model: &DiscoveredModel,
+    model_advertisement_created_at_unix_seconds: u64,
+) -> Result<OpenAiModel, OpenAiModelValidationError> {
+    if let ModelCapabilities::Decisions(capabilities) = &discovered_model.capabilities {
+        return openai_decision_model(
+            discovered_model.model_id.clone(),
+            model_advertisement_created_at_unix_seconds,
+            capabilities.maximum_tokens_per_question,
+        );
+    }
+    // Anything that is not an embedding model has no vector width, and a
+    // zero width fails advertisement closed instead of inventing a surface.
+    let (vector_width, max_input_tokens) = match &discovered_model.capabilities {
+        ModelCapabilities::Embeddings(capabilities) => {
+            (capabilities.vector_width, capabilities.max_input_tokens)
+        }
+        _ => (0, 0),
+    };
+    OpenAiModel::from_embedding_parts(OpenAiEmbeddingModelParts {
+        model_id: discovered_model.model_id.clone(),
+        created: model_advertisement_created_at_unix_seconds,
+        owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+        vector_width,
+        max_input_tokens,
+    })
+}
+
+/// The advertisement of a decision model, whether it is described by
+/// discovery or by the worker that has it loaded.
+fn openai_decision_model(
+    model_id: String,
+    model_advertisement_created_at_unix_seconds: u64,
+    maximum_tokens_per_question: u32,
+) -> Result<OpenAiModel, OpenAiModelValidationError> {
+    OpenAiModel::from_decision_parts(OpenAiDecisionModelParts {
+        model_id,
+        created: model_advertisement_created_at_unix_seconds,
+        owned_by: ASTRONOMICAL_MODEL_OWNER.to_owned(),
+        maximum_tokens_per_question,
+    })
 }
 
 fn openai_model_from_discovered_chat_model(

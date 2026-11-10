@@ -329,6 +329,8 @@ async fn should_admit_chat_generation_for_a_model_the_worker_has_not_loaded_yet(
         received_commands: Mutex::new(Vec::new()),
         embeddings_output: None,
         received_embeddings_commands: Mutex::new(Vec::new()),
+        decisions_output: None,
+        received_decisions_commands: Mutex::new(Vec::new()),
         image_output: None,
         received_image_commands: Mutex::new(Vec::new()),
     });
@@ -388,6 +390,8 @@ async fn should_reject_chat_generation_for_a_model_unknown_to_the_policy_catalog
         received_commands: Mutex::new(Vec::new()),
         embeddings_output: None,
         received_embeddings_commands: Mutex::new(Vec::new()),
+        decisions_output: None,
+        received_decisions_commands: Mutex::new(Vec::new()),
         image_output: None,
         received_image_commands: Mutex::new(Vec::new()),
     });
@@ -448,6 +452,8 @@ async fn should_reject_chat_generation_when_the_worker_is_unavailable() {
         received_commands: Mutex::new(Vec::new()),
         embeddings_output: None,
         received_embeddings_commands: Mutex::new(Vec::new()),
+        decisions_output: None,
+        received_decisions_commands: Mutex::new(Vec::new()),
         image_output: None,
         received_image_commands: Mutex::new(Vec::new()),
     });

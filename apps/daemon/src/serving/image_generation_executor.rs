@@ -9,7 +9,8 @@ use astronomical_ipc_protocol::{
 use tokio::sync::mpsc;
 
 use crate::{
-    ChatGenerationExecutor, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
+    ChatGenerationExecutor, DecisionsExecutionError, DecisionsOutput, EmbeddingsExecutionError,
+    EmbeddingsOutput, GenerationStartError,
 };
 
 /// One completed worker image and its reproducibility metadata.
@@ -108,6 +109,27 @@ pub trait ImageGenerationExecutor: ChatGenerationExecutor {
     ) -> GenerationOutcomeStartFuture<'_, EmbeddingsOutput, EmbeddingsExecutionError> {
         let _admission_signal_result = admission_sender.send(());
         self.start_embeddings_generation(embeddings_command)
+    }
+
+    /// Starts one decisions request on this executor.
+    ///
+    /// Decisions share this trait for the same reason embeddings do; the
+    /// default leaves test executors compiling without a decisions impl.
+    fn start_decisions_generation(
+        &self,
+        _decisions_command: astronomical_ipc_protocol::DecisionsCommand,
+    ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
+        Box::pin(async { Err(GenerationStartError::WorkerUnavailable) })
+    }
+
+    /// Signals once a decisions request owns a place in the immutable FIFO queue.
+    fn start_decisions_generation_with_admission_signal(
+        &self,
+        decisions_command: astronomical_ipc_protocol::DecisionsCommand,
+        admission_sender: tokio::sync::oneshot::Sender<()>,
+    ) -> GenerationOutcomeStartFuture<'_, DecisionsOutput, DecisionsExecutionError> {
+        let _admission_signal_result = admission_sender.send(());
+        self.start_decisions_generation(decisions_command)
     }
 }
 

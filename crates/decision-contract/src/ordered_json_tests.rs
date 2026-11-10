@@ -79,3 +79,21 @@ fn should_name_each_json_type_for_error_messages() {
     assert_eq!(ordered_json("[]").type_name(), "array");
     assert_eq!(ordered_json("{}").type_name(), "object");
 }
+
+#[test]
+fn should_write_object_members_back_in_their_kept_order() {
+    let json_text =
+        r#"{"zebra":1,"apple":{"y":2,"x":[true,null,1.5,"s"]},"big":9223372036854775808}"#;
+    let parsed_value = ordered_json(json_text);
+    assert_eq!(
+        serde_json::to_string(&parsed_value).expect("an ordered value serializes"),
+        json_text
+    );
+}
+
+#[test]
+fn should_survive_a_round_trip_through_json() {
+    let parsed_value = ordered_json(r#"{"b":[1,-2,0.1,1e16],"a":"é☕","empty":{},"none":[]}"#);
+    let json_text = serde_json::to_string(&parsed_value).expect("an ordered value serializes");
+    assert_eq!(ordered_json(&json_text), parsed_value);
+}

@@ -168,7 +168,10 @@ impl DownloadExecutablePreflight {
         };
         match model_family {
             // Families whose shallow rules need files on disk keep publication as their backstop.
-            ModelFamily::ModernBert | ModelFamily::Flux2Klein | ModelFamily::QwenImage21 => Ok(()),
+            ModelFamily::ModernBert
+            | ModelFamily::Laya
+            | ModelFamily::Flux2Klein
+            | ModelFamily::QwenImage21 => Ok(()),
             ModelFamily::Qwen3_5 => {
                 self.validate_qwen3_5_manifest_shape(
                     manifest,

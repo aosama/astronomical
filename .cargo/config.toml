@@ -144,6 +144,16 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 # measurement for them. It prints numbers and asserts no threshold; a few
 # seconds after the build.
 measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_measure_laya_decision_latency_at_the_token_limit"
+# The decisions lane from the outside in (issue #2032): the `astronomical
+# decide` verb against a stub daemon, POST /v1/systemone and the daemon IPC
+# frame against scripted workers, the worker's decisions slot, and discovery
+# of a Laya repository and the checkpoints it bundles. No model is loaded, so
+# these run in the ordinary integration and REST lanes too; the aliases exist
+# to run just this lane while working on it.
+test-decide-verb = "test -p astronomical-cli decide"
+test-decisions-daemon = "test -p astronomical-daemon --lib --test integration_tests --test rest_api_tests -- decisions system_one decision_model"
+test-decisions-worker = "test -p astronomical-model-serving --lib engine_backed_worker::tests::decisions"
+test-laya-discovery = "test -p astronomical-config --test integration_tests model_discovery::laya"
 
 # Dense streaming speed ladder (issue #1985), on an optimized build with the
 # weight files kept out of the macOS file cache: the raw layer read rate, one

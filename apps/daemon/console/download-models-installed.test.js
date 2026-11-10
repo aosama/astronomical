@@ -160,7 +160,7 @@ test("should_offer_the_thin_talk_handoff_for_a_chat_model_on_this_mac", () => {
     assert.deepEqual(installedActionLabelsFor({ removable_from_disk: true }), ["Open in Thin Talk", "Remove"]);
 });
 
-test("should_not_offer_the_thin_talk_handoff_for_an_image_or_embedding_model", () => {
+test("should_not_offer_the_thin_talk_handoff_for_an_image_embedding_or_decision_model", () => {
     const pictureModelLabels = installedActionLabelsFor({
         role: "image_generation", capabilities: { supports_image_generation: true }
     });
@@ -170,6 +170,10 @@ test("should_not_offer_the_thin_talk_handoff_for_an_image_or_embedding_model", (
 
     assert.equal(pictureModelLabels.includes("Open in Thin Talk"), false);
     assert.equal(embeddingModelLabels.includes("Open in Thin Talk"), false);
+    const decisionModelLabels = installedActionLabelsFor({
+        role: "decision", capabilities: { supports_decisions: true }
+    });
+    assert.equal(decisionModelLabels.includes("Open in Thin Talk"), false);
 });
 
 test("should_show_a_copy_the_person_placed_in_finder_instead_of_offering_to_remove_it", () => {

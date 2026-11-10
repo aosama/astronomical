@@ -8,7 +8,9 @@
 
 use std::time::Duration;
 
-use astronomical_config::{BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID};
+use astronomical_config::{
+    BUILTIN_DEFAULT_DECISION_MODEL_ID, BUILTIN_DEFAULT_IMAGE_MODEL_ID, BUILTIN_DEFAULT_MODEL_ID,
+};
 use astronomical_ipc_protocol::{
     DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel, DaemonWorkerStatus,
 };
@@ -82,32 +84,85 @@ pub enum RequiredCapability {
     Chat,
     Embeddings,
     ImageGeneration,
+    Decisions,
+}
+
+/// What differs between the capabilities a verb can need, kept in one place
+/// so a new capability is described once.
+struct CapabilityProfile {
+    /// The article that reads correctly before `capability_word`.
+    article: &'static str,
+    capability_word: &'static str,
+    /// The model a verb uses when its invocation names none, for the
+    /// capabilities the persisted default cannot serve: that default is a
+    /// chat model.
+    own_default_model_id: Option<&'static str>,
+}
+
+/// What one model, installed or offered by the catalog, can do.
+struct ServedCapabilities {
+    chat: bool,
+    embeddings: bool,
+    image_generation: bool,
+    decisions: bool,
 }
 
 impl RequiredCapability {
+    fn profile(self) -> CapabilityProfile {
+        let (article, capability_word, own_default_model_id) = match self {
+            RequiredCapability::Chat => ("a", "chat", None),
+            RequiredCapability::Embeddings => ("an", "embeddings", None),
+            RequiredCapability::ImageGeneration => (
+                "an",
+                "image-generation",
+                Some(BUILTIN_DEFAULT_IMAGE_MODEL_ID),
+            ),
+            RequiredCapability::Decisions => {
+                ("a", "decision", Some(BUILTIN_DEFAULT_DECISION_MODEL_ID))
+            }
+        };
+        CapabilityProfile {
+            article,
+            capability_word,
+            own_default_model_id,
+        }
+    }
+
     /// The capability word and the article that reads correctly before it.
     fn capability_text(self) -> (&'static str, &'static str) {
+        let capability_profile = self.profile();
+        (
+            capability_profile.article,
+            capability_profile.capability_word,
+        )
+    }
+
+    fn is_among(self, served_capabilities: &ServedCapabilities) -> bool {
         match self {
-            RequiredCapability::Chat => ("a", "chat"),
-            RequiredCapability::Embeddings => ("an", "embeddings"),
-            RequiredCapability::ImageGeneration => ("an", "image-generation"),
+            RequiredCapability::Chat => served_capabilities.chat,
+            RequiredCapability::Embeddings => served_capabilities.embeddings,
+            RequiredCapability::ImageGeneration => served_capabilities.image_generation,
+            RequiredCapability::Decisions => served_capabilities.decisions,
         }
     }
 
     fn describes_installed_model(self, listed_model: &DaemonListedModel) -> bool {
-        match self {
-            RequiredCapability::Chat => listed_model.context_window.is_some(),
-            RequiredCapability::Embeddings => listed_model.supports_embeddings,
-            RequiredCapability::ImageGeneration => listed_model.supports_image_generation,
-        }
+        self.is_among(&ServedCapabilities {
+            // Only a chat model has a context window.
+            chat: listed_model.context_window.is_some(),
+            embeddings: listed_model.supports_embeddings,
+            image_generation: listed_model.supports_image_generation,
+            decisions: listed_model.supports_decisions,
+        })
     }
 
     fn describes_catalog_entry(self, catalog_entry: &DaemonCatalogEntry) -> bool {
-        match self {
-            RequiredCapability::Chat => catalog_entry.context_window.is_some(),
-            RequiredCapability::Embeddings => catalog_entry.supports_embeddings,
-            RequiredCapability::ImageGeneration => catalog_entry.supports_image_generation,
-        }
+        self.is_among(&ServedCapabilities {
+            chat: catalog_entry.context_window.is_some(),
+            embeddings: catalog_entry.supports_embeddings,
+            image_generation: catalog_entry.supports_image_generation,
+            decisions: catalog_entry.supports_decisions,
+        })
     }
 }
 
@@ -244,8 +299,8 @@ impl ModelLifecycle {
         if let Some(requested_model_id) = requested_model_id {
             return Ok(requested_model_id.to_owned());
         }
-        if required_capability == RequiredCapability::ImageGeneration {
-            return Ok(BUILTIN_DEFAULT_IMAGE_MODEL_ID.to_owned());
+        if let Some(own_default_model_id) = required_capability.profile().own_default_model_id {
+            return Ok(own_default_model_id.to_owned());
         }
         if let Some(default_model_id) = &status_snapshot.default_model_id {
             return Ok(default_model_id.clone());

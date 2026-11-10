@@ -206,6 +206,7 @@ fn should_carry_the_observatory_across_replacement_for_the_same_model() {
             chat: None,
             image_generation: None,
             embeddings: None,
+            decisions: None,
         },
     )));
     publish_expert_streaming_stats(
@@ -226,6 +227,7 @@ fn should_carry_the_observatory_across_replacement_for_the_same_model() {
                 chat: None,
                 image_generation: None,
                 embeddings: None,
+                decisions: None,
             },
         ),
     );
@@ -254,6 +256,7 @@ fn should_carry_the_observatory_across_a_model_less_idle_replacement() {
             chat: None,
             image_generation: None,
             embeddings: None,
+            decisions: None,
         },
     )));
     publish_expert_streaming_stats(
@@ -310,6 +313,7 @@ fn should_carry_the_observatory_across_a_re_ready_without_a_published_model_clai
                 chat: None,
                 image_generation: None,
                 embeddings: None,
+                decisions: None,
             },
         ),
     );
@@ -337,6 +341,7 @@ fn should_reset_the_observatory_when_the_replacement_changes_the_model() {
             chat: None,
             image_generation: None,
             embeddings: None,
+            decisions: None,
         },
     )));
     publish_expert_streaming_stats(
@@ -356,6 +361,7 @@ fn should_reset_the_observatory_when_the_replacement_changes_the_model() {
                 chat: None,
                 image_generation: None,
                 embeddings: None,
+                decisions: None,
             },
         ),
     );

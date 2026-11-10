@@ -77,11 +77,17 @@ fn build_listed_models(
                 ModelCapabilities::Chat(chat_capabilities) => {
                     Some(chat_capabilities.context_window)
                 }
-                ModelCapabilities::ImageGeneration(_) | ModelCapabilities::Embeddings(_) => None,
+                ModelCapabilities::ImageGeneration(_)
+                | ModelCapabilities::Embeddings(_)
+                | ModelCapabilities::Decisions(_) => None,
             },
             supports_embeddings: matches!(
                 discovered_model.capabilities,
                 ModelCapabilities::Embeddings(_)
+            ),
+            supports_decisions: matches!(
+                discovered_model.capabilities,
+                ModelCapabilities::Decisions(_)
             ),
             supports_image_generation: matches!(
                 &discovered_model.capabilities,
@@ -149,6 +155,7 @@ fn build_catalog_response(projections: &[CatalogEntryProjection]) -> DaemonRespo
                 supports_tool_calls: capabilities.supports_tool_calls,
                 supports_image_generation: capabilities.supports_image_generation,
                 supports_embeddings: capabilities.supports_embeddings,
+                supports_decisions: capabilities.supports_decisions,
             }
         })
         .collect();

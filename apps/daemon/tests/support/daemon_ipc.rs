@@ -20,15 +20,17 @@ use astronomical_config::{
 };
 use astronomical_daemon::{
     ChatGenerationExecutor, ChatGenerationStreamEvent, DaemonIpcGenerationContext,
-    DaemonIpcService, DaemonPerformanceAttributionLog, EmbeddingsExecutionError, EmbeddingsOutput,
-    GenerationStartError, ImageGenerationExecutionError, ImageGenerationExecutor,
-    ImageGenerationOutput, ResolvedRuntimeConfig, RuntimeModelGenerationDefaults,
-    RuntimeModelPolicy, WorkerHealthSnapshot, start_daemon_ipc_service,
+    DaemonIpcService, DaemonPerformanceAttributionLog, DecisionsExecutionError, DecisionsOutput,
+    EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
+    ImageGenerationExecutionError, ImageGenerationExecutor, ImageGenerationOutput,
+    ResolvedRuntimeConfig, RuntimeModelGenerationDefaults, RuntimeModelPolicy,
+    WorkerHealthSnapshot, start_daemon_ipc_service,
 };
 use astronomical_ipc_protocol::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationSettings, ChatMessage,
-    ChatModelCapabilities, DaemonRequest, EmbeddingsCommand, ImageGenerationCommand,
-    WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration, WorkerModelConfiguration,
+    ChatModelCapabilities, DaemonRequest, DecisionsCommand, EmbeddingsCommand,
+    ImageGenerationCommand, WorkerAutoregressiveModelConfiguration, WorkerChunkingConfiguration,
+    WorkerModelConfiguration,
 };
 use tokio::{sync::mpsc, time::timeout};
 
@@ -188,6 +190,9 @@ pub(crate) struct StubGenerationExecutor {
     /// Present when the stub should serve embeddings requests.
     pub(crate) embeddings_output: Option<Result<EmbeddingsOutput, EmbeddingsExecutionError>>,
     pub(crate) received_embeddings_commands: Mutex<Vec<EmbeddingsCommand>>,
+    /// Present when the stub should serve decision requests.
+    pub(crate) decisions_output: Option<Result<DecisionsOutput, DecisionsExecutionError>>,
+    pub(crate) received_decisions_commands: Mutex<Vec<DecisionsCommand>>,
     /// Present when the stub should serve image requests.
     pub(crate) image_output: Option<Result<ImageGenerationOutput, ImageGenerationExecutionError>>,
     /// Every image command the daemon admitted to the executor; a request the
@@ -213,6 +218,15 @@ impl StubGenerationExecutor {
         self.received_image_commands
             .lock()
             .expect("the stub image command log lock should not be poisoned")
+            .clone()
+    }
+
+    /// An owned snapshot of the logged decisions commands, for the same
+    /// guard-free assertions as `logged_commands`.
+    pub(crate) fn logged_decisions_commands(&self) -> Vec<DecisionsCommand> {
+        self.received_decisions_commands
+            .lock()
+            .expect("the stub decisions command log lock should not be poisoned")
             .clone()
     }
 
@@ -326,6 +340,37 @@ impl ImageGenerationExecutor for StubGenerationExecutor {
             Ok(embeddings_result_receiver)
         })
     }
+
+    fn start_decisions_generation(
+        &self,
+        decisions_command: DecisionsCommand,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        mpsc::Receiver<Result<DecisionsOutput, DecisionsExecutionError>>,
+                        GenerationStartError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        self.received_decisions_commands
+            .lock()
+            .expect("the stub decisions command log lock should not be poisoned")
+            .push(decisions_command);
+        let decisions_output = self.decisions_output.clone();
+        Box::pin(async move {
+            let Some(decisions_output) = decisions_output else {
+                return Err(GenerationStartError::WorkerUnavailable);
+            };
+            let (decisions_result_sender, decisions_result_receiver) = mpsc::channel(1);
+            tokio::spawn(async move {
+                let _ = decisions_result_sender.send(decisions_output).await;
+            });
+            Ok(decisions_result_receiver)
+        })
+    }
 }
 
 pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExecutor> {
@@ -356,6 +401,8 @@ pub(crate) fn ready_stub_executor(ready_model_id: &str) -> Arc<StubGenerationExe
         received_commands: Mutex::new(Vec::new()),
         embeddings_output: None,
         received_embeddings_commands: Mutex::new(Vec::new()),
+        decisions_output: None,
+        received_decisions_commands: Mutex::new(Vec::new()),
         image_output: None,
         received_image_commands: Mutex::new(Vec::new()),
     })
@@ -394,6 +441,36 @@ pub(crate) fn ipc_image_discovered_model(model_id: &str) -> DiscoveredModel {
         }),
         license: None,
         model_size_bytes: 2_000_000_000,
+    }
+}
+
+/// A ready stub whose worker serves decision requests with the given outcome.
+pub(crate) fn ready_stub_executor_with_decisions(
+    ready_model_id: &str,
+    decisions_output: Result<DecisionsOutput, DecisionsExecutionError>,
+) -> Arc<StubGenerationExecutor> {
+    let mut stub_executor = ready_stub_executor(ready_model_id);
+    Arc::get_mut(&mut stub_executor)
+        .expect("the stub executor should be uniquely owned here")
+        .decisions_output = Some(decisions_output);
+    stub_executor
+}
+
+/// A discovered decision model with the English Laya checkpoint's limit.
+pub(crate) fn ipc_decision_discovered_model(model_id: &str) -> DiscoveredModel {
+    DiscoveredModel {
+        model_id: model_id.to_owned(),
+        provider_model_id: None,
+        model_family: ModelFamily::Laya,
+        revision: "ipc-decision-test-revision".to_owned(),
+        model_directory: PathBuf::from(format!("/tmp/models/{model_id}")),
+        capabilities: ModelCapabilities::Decisions(
+            astronomical_config::DecisionModelCapabilities {
+                maximum_tokens_per_question: 512,
+            },
+        ),
+        license: None,
+        model_size_bytes: 500_000_000,
     }
 }
 

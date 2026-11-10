@@ -13,6 +13,7 @@ fn no_capabilities() -> WorkerModelCapabilities {
         chat: None,
         image_generation: None,
         embeddings: None,
+        decisions: None,
     }
 }
 

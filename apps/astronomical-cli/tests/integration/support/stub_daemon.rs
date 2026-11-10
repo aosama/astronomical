@@ -12,6 +12,7 @@ use std::{
     time::Duration,
 };
 
+use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
 use astronomical_ipc_protocol::{
     ChatGenerationSettings, ChatImageInput, ChatMessage, DAEMON_APPLICATION_NAME,
     DAEMON_PROTOCOL_VERSION, DaemonCatalogEntry, DaemonDownloadJob, DaemonListedModel,
@@ -20,110 +21,7 @@ use astronomical_ipc_protocol::{
     ModelLoadInFlight, ProtocolReader, ProtocolWriter,
 };
 
-/// One installed model the stub reports for `ModelsList`.
-pub struct StubInstalledModel {
-    pub model_id: String,
-    pub context_window: Option<u32>,
-    pub supports_embeddings: bool,
-    pub supports_image_generation: bool,
-    pub is_resident: bool,
-}
-
-impl StubInstalledModel {
-    /// An installed text-to-image model.
-    pub fn image(model_id: &str, is_resident: bool) -> Self {
-        StubInstalledModel {
-            model_id: model_id.to_owned(),
-            context_window: None,
-            supports_embeddings: false,
-            supports_image_generation: true,
-            is_resident,
-        }
-    }
-
-    /// A chat-capable installed model.
-    pub fn chat(model_id: &str, is_resident: bool) -> Self {
-        StubInstalledModel {
-            model_id: model_id.to_owned(),
-            context_window: Some(32_768),
-            supports_embeddings: false,
-            supports_image_generation: false,
-            is_resident,
-        }
-    }
-
-    /// An embeddings-only installed model.
-    pub fn embeddings(model_id: &str, is_resident: bool) -> Self {
-        StubInstalledModel {
-            model_id: model_id.to_owned(),
-            context_window: None,
-            supports_embeddings: true,
-            supports_image_generation: false,
-            is_resident,
-        }
-    }
-}
-
-/// One catalog entry the stub reports for `Catalog`.
-#[derive(Clone)]
-pub struct StubCatalogEntry {
-    pub huggingface_id: String,
-    pub requestable_model_id: Option<String>,
-    pub ready_on_this_mac: bool,
-    pub download_state: Option<String>,
-    pub context_window: Option<u32>,
-    pub supports_embeddings: bool,
-    pub supports_image_generation: bool,
-}
-
-impl StubCatalogEntry {
-    /// A downloadable text-to-image model.
-    pub fn image(
-        huggingface_id: &str,
-        requestable_model_id: &str,
-        ready_on_this_mac: bool,
-    ) -> Self {
-        StubCatalogEntry {
-            huggingface_id: huggingface_id.to_owned(),
-            requestable_model_id: Some(requestable_model_id.to_owned()),
-            ready_on_this_mac,
-            download_state: None,
-            context_window: None,
-            supports_embeddings: false,
-            supports_image_generation: true,
-        }
-    }
-
-    /// A downloadable chat model.
-    pub fn chat(huggingface_id: &str, requestable_model_id: &str, ready_on_this_mac: bool) -> Self {
-        StubCatalogEntry {
-            huggingface_id: huggingface_id.to_owned(),
-            requestable_model_id: Some(requestable_model_id.to_owned()),
-            ready_on_this_mac,
-            download_state: None,
-            context_window: Some(32_768),
-            supports_embeddings: false,
-            supports_image_generation: false,
-        }
-    }
-
-    /// A downloadable embeddings-only model.
-    pub fn embeddings(
-        huggingface_id: &str,
-        requestable_model_id: &str,
-        ready_on_this_mac: bool,
-    ) -> Self {
-        StubCatalogEntry {
-            huggingface_id: huggingface_id.to_owned(),
-            requestable_model_id: Some(requestable_model_id.to_owned()),
-            ready_on_this_mac,
-            download_state: None,
-            context_window: None,
-            supports_embeddings: true,
-            supports_image_generation: false,
-        }
-    }
-}
+pub use super::stub_inventory::{StubCatalogEntry, StubInstalledModel};
 
 /// Scripted result of an image request.
 pub enum StubImageOutcome {
@@ -141,6 +39,16 @@ pub enum StubImageOutcome {
 pub enum StubEmbeddingsOutcome {
     Completed,
     ContextLengthExceeded,
+}
+
+/// Scripted result of a decision request.
+pub enum StubDecisionsOutcome {
+    /// The daemon answers with these outcomes, one per question.
+    Completed(Vec<QuestionOutcome>),
+    /// The worker fails the request after admission.
+    Failed(DecisionFailure),
+    /// The daemon refuses before admission, with this reason.
+    Rejected(String),
 }
 
 /// Scripted behaviour of the stub daemon for one test.
@@ -172,6 +80,11 @@ pub struct StubDaemonConfig {
     /// a queue or a model load inside the real daemon.
     pub embeddings_first_frame_delay: Duration,
     pub embedding_vector: Vec<f32>,
+    /// What the daemon does with a `DecideGenerate` request.
+    pub decisions_outcome: StubDecisionsOutcome,
+    /// Captures the most recent `DecideGenerate` request the CLI sent, so a
+    /// test can assert the state and questions that crossed the socket.
+    pub decide_request_capture: Arc<std::sync::Mutex<Option<DaemonRequest>>>,
     /// What the daemon does with an `ImageGenerate` request.
     pub image_outcome: StubImageOutcome,
     /// Captures the most recent `ImageGenerate` request the CLI sent, so a
@@ -211,6 +124,8 @@ impl Default for StubDaemonConfig {
             embeddings_outcome: StubEmbeddingsOutcome::Completed,
             embeddings_first_frame_delay: Duration::ZERO,
             embedding_vector: vec![0.25, -0.5],
+            decisions_outcome: StubDecisionsOutcome::Completed(Vec::new()),
+            decide_request_capture: Arc::new(std::sync::Mutex::new(None)),
             image_outcome: StubImageOutcome::Completed(Vec::new()),
             image_request_capture: Arc::new(std::sync::Mutex::new(None)),
             download_jobs: Vec::new(),
@@ -382,6 +297,7 @@ pub fn spawn_stub_daemon(
                                     family: "stub".to_owned(),
                                     context_window: installed_model.context_window,
                                     supports_embeddings: installed_model.supports_embeddings,
+                                    supports_decisions: installed_model.supports_decisions,
                                     supports_image_generation: installed_model
                                         .supports_image_generation,
                                     is_resident: installed_model.is_resident,
@@ -430,6 +346,7 @@ pub fn spawn_stub_daemon(
                                         supports_image_generation: catalog_entry
                                             .supports_image_generation,
                                         supports_embeddings: catalog_entry.supports_embeddings,
+                                        supports_decisions: catalog_entry.supports_decisions,
                                     }
                                 })
                                 .collect();
@@ -535,33 +452,18 @@ pub fn spawn_stub_daemon(
                             let _ = protocol_writer.close().await;
                             return;
                         }
-                        DaemonRequest::EmbedGenerate { model, .. } => {
-                            tokio::time::sleep(config.embeddings_first_frame_delay).await;
-                            let embeddings_response = match config.embeddings_outcome {
-                                StubEmbeddingsOutcome::Completed => {
-                                    DaemonResponse::EmbeddingsCompleted {
-                                        model: model.unwrap_or_else(|| {
-                                            resident_model_id
-                                                .clone()
-                                                .expect("the completed stub always has a model")
-                                        }),
-                                        vectors: vec![config.embedding_vector.clone()],
-                                        input_token_counts: vec![3],
-                                    }
-                                }
-                                StubEmbeddingsOutcome::ContextLengthExceeded => {
-                                    DaemonResponse::EmbeddingsFailed {
-                                        reason: EmbeddingsFailureReason::ContextLengthExceeded {
-                                            actual_total_context_tokens: 5_000,
-                                            maximum_context_tokens: 2_048,
-                                        },
-                                    }
-                                }
-                            };
+                        helper_model_request @ (DaemonRequest::EmbedGenerate { .. }
+                        | DaemonRequest::DecideGenerate { .. }) => {
+                            let helper_model_response = scripted_helper_model_response(
+                                &config,
+                                resident_model_id.clone(),
+                                helper_model_request,
+                            )
+                            .await;
                             protocol_writer
-                                .send_daemon_response(&embeddings_response)
+                                .send_daemon_response(&helper_model_response)
                                 .await
-                                .expect("the stub embeddings frame should transmit");
+                                .expect("the stub helper-model frame should transmit");
                             let _ = protocol_writer.close().await;
                             return;
                         }
@@ -623,6 +525,66 @@ async fn scripted_image_response(
             tokio::time::sleep(std::time::Duration::from_secs(3_600)).await;
             None
         }
+    }
+}
+
+/// The one terminal frame for a request a helper model answers in one step:
+/// an embed request after its scripted delay, or a decide request, which is
+/// also captured so a test can read what crossed the socket.
+async fn scripted_helper_model_response(
+    config: &StubDaemonConfig,
+    resident_model_id: Option<String>,
+    helper_model_request: DaemonRequest,
+) -> DaemonResponse {
+    let requested_model_id = match &helper_model_request {
+        DaemonRequest::EmbedGenerate { model, .. }
+        | DaemonRequest::DecideGenerate { model, .. } => model.clone(),
+        _ => None,
+    };
+    let answering_model_id = requested_model_id
+        .or(resident_model_id)
+        .expect("the completed stub always has a model");
+    if matches!(helper_model_request, DaemonRequest::DecideGenerate { .. }) {
+        *config
+            .decide_request_capture
+            .lock()
+            .expect("the stub decide capture should stay live") = Some(helper_model_request);
+        return scripted_decisions_response(&config.decisions_outcome, answering_model_id);
+    }
+    tokio::time::sleep(config.embeddings_first_frame_delay).await;
+    match config.embeddings_outcome {
+        StubEmbeddingsOutcome::Completed => DaemonResponse::EmbeddingsCompleted {
+            model: answering_model_id,
+            vectors: vec![config.embedding_vector.clone()],
+            input_token_counts: vec![3],
+        },
+        StubEmbeddingsOutcome::ContextLengthExceeded => DaemonResponse::EmbeddingsFailed {
+            reason: EmbeddingsFailureReason::ContextLengthExceeded {
+                actual_total_context_tokens: 5_000,
+                maximum_context_tokens: 2_048,
+            },
+        },
+    }
+}
+
+/// The one terminal frame the scripted outcome stands for.
+fn scripted_decisions_response(
+    decisions_outcome: &StubDecisionsOutcome,
+    answering_model_id: String,
+) -> DaemonResponse {
+    match decisions_outcome {
+        StubDecisionsOutcome::Completed(question_outcomes) => DaemonResponse::DecisionsCompleted {
+            model: answering_model_id,
+            question_outcomes: question_outcomes.clone(),
+            input_token_count: 42,
+            elapsed_millis: 7,
+        },
+        StubDecisionsOutcome::Failed(failure_reason) => DaemonResponse::DecisionsFailed {
+            reason: failure_reason.clone(),
+        },
+        StubDecisionsOutcome::Rejected(reason) => DaemonResponse::GenerationRejected {
+            reason: reason.clone(),
+        },
     }
 }
 

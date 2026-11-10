@@ -17,16 +17,16 @@ use tokio::sync::mpsc;
 use tokio::time::Interval;
 
 use crate::serving::chat_generation_executor::{wait_for_deadline, wait_for_stream_disconnect};
+use crate::serving::decisions_executor::DecisionsResultSender;
 use crate::worker::cache_clear::handle_prompt_cache_clear_command;
-use crate::worker::embeddings_request::handle_generate_embeddings_command;
 use crate::worker::event_reaction::{
     cancel_active_request, fail_model_load_deadline, react_to_worker_event_outcome,
     sample_idle_mlx_memory_telemetry, send_image_deadline_exceeded,
 };
 use crate::worker::generation::generate::handle_generate_command;
 use crate::worker::idle_drain::{
-    drain_pending_idle_work, wait_for_embeddings_execution_deadline,
-    wait_for_image_execution_deadline,
+    drain_pending_idle_work, wait_for_image_execution_deadline,
+    wait_for_single_shot_execution_deadline,
 };
 use crate::worker::idle_model_unload::{should_unload_idle_model, unload_idle_model};
 use crate::worker::image_request::handle_generate_image_command;
@@ -41,6 +41,7 @@ use crate::worker::process::containment::{
 };
 use crate::worker::process::failure_relaunch::relaunch_contained_worker;
 use crate::worker::process::replacement::WorkerReplacement;
+use crate::worker::single_shot_command_arms::admit_single_shot_generation_command;
 use crate::{
     ChatGenerationStreamEvent, EmbeddingsExecutionError, EmbeddingsOutput, GenerationStartError,
     ImageGenerationExecutionError, ImageGenerationOutput, WorkerControlError,
@@ -66,6 +67,7 @@ pub(in crate::worker) struct WorkerLoopIterationInputs {
         Option<mpsc::Sender<Result<ImageGenerationOutput, ImageGenerationExecutionError>>>,
     pub embeddings_result_sender:
         Option<mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>>,
+    pub decisions_result_sender: Option<DecisionsResultSender>,
     pub is_worker_running: bool,
     pub has_loaded_model: bool,
 }
@@ -90,6 +92,10 @@ pub(in crate::worker) fn prepare_worker_loop_iteration(
             .active_generation
             .as_ref()
             .and_then(ActiveWorkerRequest::embeddings_result_sender),
+        decisions_result_sender: runtime
+            .active_generation
+            .as_ref()
+            .and_then(ActiveWorkerRequest::decisions_result_sender),
         is_worker_running: runtime.worker_process.process_id().is_some(),
         has_loaded_model: runtime
             .health_snapshot
@@ -134,6 +140,7 @@ pub(in crate::worker) async fn run_worker_iteration(
         chat_stream_event_sender,
         image_result_sender,
         embeddings_result_sender,
+        decisions_result_sender,
         is_worker_running,
         has_loaded_model,
     } = prepare_worker_loop_iteration(runtime);
@@ -169,8 +176,15 @@ pub(in crate::worker) async fn run_worker_iteration(
             if matches!(runtime.active_generation, Some(ActiveWorkerRequest::Embeddings(_))) => {
             cancel_active_request(runtime).await;
         }
-        () = wait_for_embeddings_execution_deadline(&runtime.active_generation),
-            if matches!(runtime.active_generation, Some(ActiveWorkerRequest::Embeddings(_))) => {
+        () = crate::serving::decisions_executor::wait_for_decisions_disconnect(decisions_result_sender),
+            if matches!(runtime.active_generation, Some(ActiveWorkerRequest::Decisions(_))) => {
+            cancel_active_request(runtime).await;
+        }
+        () = wait_for_single_shot_execution_deadline(&runtime.active_generation),
+            if matches!(
+                runtime.active_generation,
+                Some(ActiveWorkerRequest::Embeddings(_) | ActiveWorkerRequest::Decisions(_))
+            ) => {
             cancel_active_request(runtime).await;
         }
         () = wait_for_image_execution_deadline(&runtime.active_generation),
@@ -234,8 +248,9 @@ pub(in crate::worker) async fn handle_worker_loop_command(
             admit_image_generation_command(runtime, is_worker_running, routed_command).await;
             WorkerLoopFlow::Continue
         }
-        routed_command @ WorkerLoopCommand::GenerateEmbeddings { .. } => {
-            admit_embeddings_generation_command(runtime, is_worker_running, routed_command).await;
+        routed_command @ (WorkerLoopCommand::GenerateEmbeddings { .. }
+        | WorkerLoopCommand::GenerateDecisions { .. }) => {
+            admit_single_shot_generation_command(runtime, is_worker_running, routed_command).await;
             WorkerLoopFlow::Continue
         }
         routed_command @ WorkerLoopCommand::Shutdown { .. } => {
@@ -403,75 +418,6 @@ async fn admit_image_generation_command(
         runtime.model_load_timeout,
         runtime.cancellation_acknowledgement_timeout,
         runtime.image_generation_timeouts,
-    )
-    .await
-    {
-        contain_worker_failure(
-            &mut runtime.worker_process,
-            &runtime.health_snapshot,
-            &mut runtime.active_generation,
-            control_error,
-        )
-        .await;
-        runtime.is_ready = false;
-    }
-}
-
-/// Handles an embeddings generation command. Mirrors the inlined
-/// `GenerateEmbeddings` arm.
-async fn admit_embeddings_generation_command(
-    runtime: &mut WorkerLoopRuntime,
-    is_worker_running: bool,
-    routed_command: WorkerLoopCommand,
-) {
-    let WorkerLoopCommand::GenerateEmbeddings {
-        active_generation_permit,
-        embeddings_command,
-        start_sender,
-        embeddings_result_sender,
-        admitted_at,
-        queue_wait_elapsed,
-    } = routed_command
-    else {
-        return;
-    };
-    if reject_unavailable_worker(runtime.is_ready, is_worker_running) {
-        let _send_outcome = start_sender.send(Err(GenerationStartError::WorkerUnavailable));
-        return;
-    }
-    let Some(start_sender) = take_generation_start_after_pending_memory_limit(
-        &mut runtime.pending_mlx_memory_limit_update,
-        &mut runtime.worker_process,
-        runtime.model_load_timeout,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
-        start_sender,
-    )
-    .await
-    else {
-        return;
-    };
-    if let Err(control_error) = handle_generate_embeddings_command(
-        &mut runtime.worker_process,
-        active_generation_permit,
-        embeddings_command,
-        start_sender,
-        embeddings_result_sender,
-        admitted_at,
-        queue_wait_elapsed,
-        &runtime.health_snapshot,
-        &mut runtime.is_ready,
-        &mut runtime.model_load_deadline,
-        &mut runtime.active_generation,
-        &mut runtime.performance_log,
-        &mut runtime.completion_log,
-        &runtime.model_policy_catalog,
-        runtime.model_load_timeout,
-        runtime.cancellation_acknowledgement_timeout,
     )
     .await
     {

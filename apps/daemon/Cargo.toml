@@ -86,6 +86,7 @@ app-store-state-root = ["astronomical-config/app-store-state-root"]
 
 [dependencies]
 astronomical-config = { path = "../../crates/config" }
+astronomical-decision-contract = { path = "../../crates/decision-contract" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
 astronomical-lowercase-hex = { path = "../../crates/lowercase-hex" }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }

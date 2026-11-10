@@ -20,6 +20,32 @@
             "upstream_license": "Apache-2.0"
         },
         {
+            "huggingface_id": "cavi-ai/laya-MLX-8bit",
+            "revision": "63ebab6e421811b6d44765fa81e08e413cb717ee",
+            "display_name": "Laya 8-bit",
+            "short_name": "Laya",
+            "summary": "Answers set questions about text in a fraction of a second.",
+            "family": "laya",
+            "approximate_size_bytes": 1093284299,
+            "approximate_memory_bytes": 1073741824,
+            "role": "decision",
+            "public": true,
+            "description": "Answers set questions about a text - pick an option, rate on a scale, or say yes or no - with a probability for every answer. It writes no text, so it answers in a fraction of a second. Holds two models: laya-MLX-8bit for English, reading up to 512 tokens for each question (about 380 words), and laya-MLX-8bit-multilingual for other languages, reading up to 1,024 tokens. Longer text is cut to fit and the answer says so. Best with up to about 20 options for each question.",
+            "capabilities": {
+                "supports_decisions": true
+            },
+            "included_paths": [
+                "LICENSE",
+                "config.json",
+                "model.safetensors",
+                "tokenizer.json",
+                "tokenizer_config.json",
+                "multilingual/"
+            ],
+            "quantization_label": "8-bit affine (group 32)",
+            "upstream_license": "Apache-2.0"
+        },
+        {
             "huggingface_id": "mlx-community/Qwen3.5-0.8B-MLX-4bit",
             "revision": "5d894f8cc4ef3e6c88537bf3746ed262f549da6a",
             "display_name": "Qwen 3.5 0.8B 4-bit",

@@ -133,17 +133,43 @@ pub(super) fn handle_worker_event(
                 performance_log,
             )?;
         }
-        embeddings_event @ (WorkerEvent::EmbeddingsCompleted { .. }
+        single_shot_event @ (WorkerEvent::DecisionsCompleted { .. }
+        | WorkerEvent::DecisionsFailed { .. }
+        | WorkerEvent::DecisionsFinalized { .. }
+        | WorkerEvent::EmbeddingsCompleted { .. }
         | WorkerEvent::EmbeddingsFailed { .. }
         | WorkerEvent::EmbeddingsFinalized { .. }) => {
-            crate::worker::embeddings_event::handle_worker_embeddings_event(
-                embeddings_event,
-                health_snapshot,
-                active_request,
-            )?;
+            dispatch_single_shot_worker_event(single_shot_event, health_snapshot, active_request)?;
         }
     }
     Ok(())
+}
+
+/// Routes the events of a request that answers in one step: decisions and
+/// embeddings. Both follow the same completed-or-failed-then-finalized
+/// order, so one arm of the dispatch match hands them here.
+fn dispatch_single_shot_worker_event(
+    worker_event: WorkerEvent,
+    health_snapshot: &Arc<RwLock<WorkerHealthSnapshot>>,
+    active_request: &mut Option<ActiveWorkerRequest>,
+) -> Result<(), WorkerControlError> {
+    if matches!(
+        worker_event,
+        WorkerEvent::DecisionsCompleted { .. }
+            | WorkerEvent::DecisionsFailed { .. }
+            | WorkerEvent::DecisionsFinalized { .. }
+    ) {
+        return crate::worker::decisions_event::handle_worker_decisions_event(
+            worker_event,
+            health_snapshot,
+            active_request,
+        );
+    }
+    crate::worker::embeddings_event::handle_worker_embeddings_event(
+        worker_event,
+        health_snapshot,
+        active_request,
+    )
 }
 
 /// Publishes prompt-cache and expert-streaming snapshots that ride alongside

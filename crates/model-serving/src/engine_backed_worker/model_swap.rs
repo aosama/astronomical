@@ -1,8 +1,8 @@
 //! Transactional typed runtime replacement for autoregressive and image models.
 
 use astronomical_ipc_protocol::{
-    ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter, WorkerEvent,
-    WorkerModelCapabilities, WorkerModelConfiguration,
+    ImageGenerationFailureReason, MlxMemorySnapshotSource, ProtocolWriter,
+    WorkerDecisionCapabilities, WorkerEvent, WorkerModelCapabilities, WorkerModelConfiguration,
 };
 use tokio::io::AsyncWrite;
 
@@ -94,8 +94,10 @@ struct LoadedReplacement<
     Engine: InferenceEngine + Send + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
+    DecisionsEngine: crate::DecisionEngine,
 > {
-    replacement_runtime: LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+    replacement_runtime:
+        LoadedRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
     model_swapped_event: WorkerEvent,
     minimum_mlx_memory_ceiling_bytes: u64,
     runtime_configuration: astronomical_ipc_protocol::WorkerLoadedModelRuntimeConfiguration,
@@ -104,14 +106,17 @@ struct LoadedReplacement<
     neural_engine_prefill_event: Option<WorkerEvent>,
 }
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+        + Send
+        + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
+    DecisionsEngine: crate::DecisionEngine,
 {
     pub(super) async fn swap_model<WriteTransport>(
         &mut self,
@@ -227,11 +232,17 @@ where
     /// embedding engines load synchronously with identity verification.
     async fn load_replacement_runtime<WriteTransport>(
         &self,
-        factory_runtime: ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+        factory_runtime: ModelFactoryRuntime<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+        >,
         model_configuration: &WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
         WorkerRuntimeError,
     >
     where
@@ -256,10 +267,43 @@ where
                 self.load_image_replacement(image_engine, model_configuration)
                     .await
             }
+            single_shot_runtime @ (ModelFactoryRuntime::Embeddings(_)
+            | ModelFactoryRuntime::Decisions(_)) => {
+                self.load_single_shot_replacement(single_shot_runtime, model_configuration)
+                    .await
+            }
+        }
+    }
+
+    /// Loads a replacement that answers in one forward pass: a decision
+    /// engine or an embedding engine.
+    async fn load_single_shot_replacement(
+        &self,
+        single_shot_runtime: ModelFactoryRuntime<
+            Processor,
+            Engine,
+            ImageEngine,
+            EmbeddingsEngine,
+            DecisionsEngine,
+        >,
+        model_configuration: &WorkerModelConfiguration,
+    ) -> Result<
+        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        WorkerRuntimeError,
+    > {
+        match single_shot_runtime {
+            ModelFactoryRuntime::Decisions(decision_engine) => {
+                self.load_decision_replacement(decision_engine, model_configuration)
+            }
             ModelFactoryRuntime::Embeddings(embedding_engine) => {
                 self.load_embedding_replacement(embedding_engine, model_configuration)
                     .await
             }
+            // `load_replacement_runtime` loads every other kind itself.
+            _ => Err(WorkerRuntimeError::ModelSwapFailed {
+                model_load_failure_reason: "the selected model is not a single-pass model"
+                    .to_owned(),
+            }),
         }
     }
 
@@ -274,7 +318,7 @@ where
         model_configuration: &WorkerModelConfiguration,
         event_writer: &mut ProtocolWriter<WriteTransport>,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
         WorkerRuntimeError,
     >
     where
@@ -312,7 +356,7 @@ where
         mut image_engine: ImageEngine,
         model_configuration: &WorkerModelConfiguration,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
         WorkerRuntimeError,
     > {
         let image_load_result = image_engine.load().map_err(|failure_reason| {
@@ -355,7 +399,7 @@ where
         mut embedding_engine: EmbeddingsEngine,
         model_configuration: &WorkerModelConfiguration,
     ) -> Result<
-        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
         WorkerRuntimeError,
     > {
         let embedding_load_result = embedding_engine.load().map_err(|failure_reason| {
@@ -390,6 +434,58 @@ where
             neural_engine_prefill_event: None,
         })
     }
+
+    /// Loads the decision replacement and builds its swapped event.
+    fn load_decision_replacement(
+        &self,
+        mut decision_engine: DecisionsEngine,
+        model_configuration: &WorkerModelConfiguration,
+    ) -> Result<
+        LoadedReplacement<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        WorkerRuntimeError,
+    > {
+        let decision_load_result = match decision_engine.load() {
+            Ok(decision_load_result) => decision_load_result,
+            Err(load_failure) => {
+                tracing::error!(model_directory = ?model_configuration.model_id(), reason = ?load_failure, "decision engine load failed after swap creation");
+                return Err(WorkerRuntimeError::ModelSwapFailed {
+                    model_load_failure_reason: bounded_decision_engine_load_failure(&load_failure),
+                });
+            }
+        };
+        if decision_load_result.model_id != model_configuration.model_id() {
+            return Err(WorkerRuntimeError::ModelSwapFailed {
+                model_load_failure_reason:
+                    "loaded decision model identity does not match the selected model".to_owned(),
+            });
+        }
+        let minimum = decision_engine.minimum_mlx_memory_ceiling_bytes();
+        let event = WorkerEvent::ModelSwapped {
+            model_id: decision_load_result.model_id,
+            capabilities: WorkerModelCapabilities::decisions(WorkerDecisionCapabilities {
+                maximum_tokens_per_question: decision_load_result.maximum_tokens_per_question,
+            }),
+            expert_memory_mode: None,
+            minimum_mlx_memory_ceiling_bytes: minimum,
+        };
+        Ok(LoadedReplacement {
+            replacement_runtime: LoadedRuntime::Decisions(decision_engine),
+            model_swapped_event: event,
+            minimum_mlx_memory_ceiling_bytes: minimum,
+            runtime_configuration: model_configuration.runtime_configuration(),
+            // No autoregressive engine is loaded, so there is no placement.
+            engine_placement: None,
+            startup_residency_facts: None,
+            neural_engine_prefill_event: None,
+        })
+    }
+}
+
+/// A load failure cut to the length the model-swap event carries.
+fn bounded_decision_engine_load_failure(
+    load_failure: &astronomical_decision_contract::DecisionFailure,
+) -> String {
+    load_failure.to_string().chars().take(256).collect()
 }
 
 fn bounded_image_engine_load_failure(failure_reason: ImageGenerationFailureReason) -> String {
@@ -439,8 +535,15 @@ pub(super) fn factory_runtime_matches_configuration<
     Engine,
     ImageEngine,
     EmbeddingsEngine,
+    DecisionsEngine,
 >(
-    factory_runtime: &ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+    factory_runtime: &ModelFactoryRuntime<
+        Processor,
+        Engine,
+        ImageEngine,
+        EmbeddingsEngine,
+        DecisionsEngine,
+    >,
     model_configuration: &WorkerModelConfiguration,
 ) -> bool {
     matches!(
@@ -457,6 +560,9 @@ pub(super) fn factory_runtime_matches_configuration<
         ) | (
             ModelFactoryRuntime::Embeddings(_),
             WorkerModelConfiguration::Embeddings(_)
+        ) | (
+            ModelFactoryRuntime::Decisions(_),
+            WorkerModelConfiguration::Decisions(_)
         )
     )
 }

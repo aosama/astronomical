@@ -16,6 +16,7 @@ mod batching;
 mod configuration;
 mod engine;
 mod head;
+mod memory_telemetry;
 mod tokenizer;
 
 pub use engine::LayaDecisionEngine;

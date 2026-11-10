@@ -1,9 +1,11 @@
 //! Why a decision request could not be answered.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// A decision request's failure, in the two classes a caller acts on differently.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, Error, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DecisionFailure {
     /// The request itself cannot be answered by this model; sending it again
     /// unchanged fails the same way. The reason names what to change.
@@ -12,6 +14,9 @@ pub enum DecisionFailure {
     /// The model could not run. The request may be fine.
     #[error("{reason}")]
     FatalExecution { reason: String },
+    /// Another request already owns the worker; this one may be sent again.
+    #[error("another request is already running")]
+    EngineBusy,
 }
 
 /// The longest failure reason kept, in characters.

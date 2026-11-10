@@ -17,6 +17,8 @@ pub enum SettingsFreeModelKind {
     ImageGeneration,
     /// Turns text into numbers for search.
     Embeddings,
+    /// Answers typed questions with probabilities.
+    Decisions,
 }
 
 /// The effect of one `models` entry on the installed models.
@@ -115,16 +117,23 @@ fn model_config_entry_outcome(
 
 fn applied_outcome(discovered_model: &DiscoveredModel) -> ModelConfigEntryOutcome {
     let model_id = discovered_model.model_id.clone();
-    match discovered_model.capabilities {
-        ModelCapabilities::Chat(_) => ModelConfigEntryOutcome::Applies { model_id },
-        ModelCapabilities::ImageGeneration(_) => ModelConfigEntryOutcome::ModelTakesNoSettings {
+    match settings_free_kind_of(&discovered_model.capabilities) {
+        Some(model_kind) => ModelConfigEntryOutcome::ModelTakesNoSettings {
             model_id,
-            model_kind: SettingsFreeModelKind::ImageGeneration,
+            model_kind,
         },
-        ModelCapabilities::Embeddings(_) => ModelConfigEntryOutcome::ModelTakesNoSettings {
-            model_id,
-            model_kind: SettingsFreeModelKind::Embeddings,
-        },
+        None => ModelConfigEntryOutcome::Applies { model_id },
+    }
+}
+
+/// Which kind of settings-free model these capabilities describe, or `None`
+/// for a chat model, the only kind a `models` entry configures.
+fn settings_free_kind_of(model_capabilities: &ModelCapabilities) -> Option<SettingsFreeModelKind> {
+    match model_capabilities {
+        ModelCapabilities::Chat(_) => None,
+        ModelCapabilities::ImageGeneration(_) => Some(SettingsFreeModelKind::ImageGeneration),
+        ModelCapabilities::Embeddings(_) => Some(SettingsFreeModelKind::Embeddings),
+        ModelCapabilities::Decisions(_) => Some(SettingsFreeModelKind::Decisions),
     }
 }
 

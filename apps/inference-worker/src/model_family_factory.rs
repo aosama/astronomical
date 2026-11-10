@@ -14,16 +14,17 @@ use astronomical_config::{
     verify_qwen_image_21_model_directory,
 };
 use astronomical_ipc_protocol::{
-    WorkerAutoregressiveModelConfiguration, WorkerDecodeExpertCachePolicy,
-    WorkerDiagnosticQwen3_5EngineOverride, WorkerEmbeddingModelConfiguration,
-    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily, WorkerModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
+    WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride,
+    WorkerEmbeddingModelConfiguration, WorkerFlux2KleinModelConfiguration,
+    WorkerImageGenerationModelFamily, WorkerModelConfiguration,
     WorkerQwenImage21ModelConfiguration,
 };
 use astronomical_model_serving::{
-    EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine, ModelFactory,
-    ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
-    ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
-    QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
+    DecisionEngine, EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
+    LayaDecisionEngine, ModelFactory, ModelFactoryRuntime, ModelFamilyGenerationProcessor,
+    ModelFamilyImageEngine, ModelFamilyInferenceEngine, ModernBertEmbeddingEngine,
+    PrismHadamardQwen35ServingSettings, QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
     initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
@@ -59,12 +60,24 @@ pub struct ModelFamilyFactory {
     floor_raise_limit_bytes: u64,
 }
 
+/// The one unloaded runtime the factory hands the worker for any model
+/// family: a chat engine, an image engine, the embedding engine, or a
+/// decision engine of whichever family the model belongs to.
+type ModelFamilyRuntime = ModelFactoryRuntime<
+    ModelFamilyGenerationProcessor,
+    ModelFamilyInferenceEngine,
+    ModelFamilyImageEngine,
+    ModernBertEmbeddingEngine,
+    Box<dyn DecisionEngine>,
+>;
+
 pub(crate) type InferenceWorker = EngineBackedWorker<
     ModelFamilyGenerationProcessor,
     ModelFamilyInferenceEngine,
     ModelFamilyFactory,
     ModelFamilyImageEngine,
     ModernBertEmbeddingEngine,
+    Box<dyn DecisionEngine>,
 >;
 
 impl ModelFamilyFactory {
@@ -135,6 +148,33 @@ impl ModelFamilyFactory {
     }
 
     #[allow(clippy::type_complexity)]
+    /// Builds the engine of a model that runs on a ModernBERT encoder: the
+    /// embedding engine for ModernBERT itself, the decision engine for Laya.
+    /// A family paired with the other family's configuration is refused.
+    async fn create_encoder_model_engine(
+        &self,
+        encoder_family: Option<ModelFamily>,
+        model_directory_path: PathBuf,
+        encoder_model_configuration: WorkerModelConfiguration,
+    ) -> Result<ModelFamilyRuntime, String> {
+        match (encoder_family, encoder_model_configuration) {
+            (
+                Some(ModelFamily::ModernBert),
+                WorkerModelConfiguration::Embeddings(model_configuration),
+            ) => {
+                self.create_modern_bert_embeddings_engine(model_directory_path, model_configuration)
+                    .await
+            }
+            (Some(ModelFamily::Laya), WorkerModelConfiguration::Decisions(model_configuration)) => {
+                self.create_laya_decision_engine(&model_directory_path, model_configuration)
+            }
+            _ => Err(
+                "selected model configuration does not match its classified model family"
+                    .to_owned(),
+            ),
+        }
+    }
+
     async fn create_qwen3_5_runtime(
         &self,
         model_directory_path: PathBuf,
@@ -190,21 +230,14 @@ impl
         ModelFamilyInferenceEngine,
         ModelFamilyImageEngine,
         ModernBertEmbeddingEngine,
+        Box<dyn DecisionEngine>,
     > for ModelFamilyFactory
 {
     async fn create(
         &self,
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let model_directory_path = PathBuf::from(model_directory);
         let classification_directory_path = model_directory_path.clone();
         let classification_task_result = tokio::task::spawn_blocking(move || {
@@ -250,11 +283,16 @@ impl
                 .await
             }
             (
-                Some(ModelFamily::ModernBert),
-                WorkerModelConfiguration::Embeddings(model_configuration),
+                encoder_family @ Some(ModelFamily::ModernBert | ModelFamily::Laya),
+                encoder_model_configuration @ (WorkerModelConfiguration::Embeddings(_)
+                | WorkerModelConfiguration::Decisions(_)),
             ) => {
-                self.create_modern_bert_embeddings_engine(model_directory_path, model_configuration)
-                    .await
+                self.create_encoder_model_engine(
+                    encoder_family,
+                    model_directory_path,
+                    encoder_model_configuration,
+                )
+                .await
             }
             (Some(_), _) => Err(
                 "selected model configuration does not match its classified model family"
@@ -272,15 +310,7 @@ impl
         &self,
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let WorkerModelConfiguration::Autoregressive(model_configuration) = model_configuration
         else {
             return Err("streaming retry requires an autoregressive model".to_owned());
@@ -306,15 +336,7 @@ impl
         &self,
         model_directory: &str,
         model_configuration: WorkerModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let WorkerModelConfiguration::Autoregressive(model_configuration) = model_configuration
         else {
             return Err("resident promotion requires an autoregressive model".to_owned());
@@ -370,15 +392,7 @@ impl ModelFamilyFactory {
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerAutoregressiveModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let (generation_processor, qwen3_5_engine, engine_placement) = self
             .create_qwen3_5_runtime(
                 model_directory_path,
@@ -399,15 +413,7 @@ impl ModelFamilyFactory {
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerFlux2KleinModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let verification_directory_path = model_directory_path.clone();
         let verification_task_result = tokio::task::spawn_blocking(move || {
             verify_flux2_klein_model_directory(&verification_directory_path)
@@ -454,15 +460,7 @@ impl ModelFamilyFactory {
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerQwenImage21ModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let verification_directory_path = model_directory_path.clone();
         let verification_task_result = tokio::task::spawn_blocking(move || {
             verify_qwen_image_21_model_directory(&verification_directory_path)
@@ -512,15 +510,7 @@ impl ModelFamilyFactory {
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerAutoregressiveModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let effective_mlx_memory_ceiling_bytes = self.effective_mlx_memory_ceiling_bytes;
         let allocator_cache_memory_limit_bytes = self.allocator_cache_memory_limit_bytes;
         let performance_attribution_enabled = self.performance_attribution_enabled;
@@ -564,6 +554,29 @@ impl ModelFamilyFactory {
         ))
     }
 
+    /// Builds the Laya decision engine for a directory already classified as
+    /// Laya. The unloaded engine only reads the config and tokenizer bytes;
+    /// MLX runtime initialization stays inside load() on the worker runtime
+    /// thread.
+    fn create_laya_decision_engine(
+        &self,
+        model_directory_path: &std::path::Path,
+        model_configuration: WorkerDecisionModelConfiguration,
+    ) -> Result<ModelFamilyRuntime, String> {
+        match LayaDecisionEngine::new(
+            model_configuration.model_id,
+            model_directory_path,
+            self.effective_mlx_memory_ceiling_bytes,
+            self.allocator_cache_memory_limit_bytes,
+        ) {
+            Ok(decision_engine) => Ok(ModelFactoryRuntime::Decisions(Box::new(decision_engine))),
+            // The failure text is the engine's own bounded, path-free reason.
+            Err(initialization_failure) => Err(format!(
+                "selected decision artifact failed initialization: {initialization_failure}"
+            )),
+        }
+    }
+
     /// Verifies the directory classifies as ModernBert and builds the
     /// embeddings engine. The unloaded engine only reads config and tokenizer
     /// bytes; MLX runtime initialization stays inside load() on the worker
@@ -572,15 +585,7 @@ impl ModelFamilyFactory {
         &self,
         model_directory_path: PathBuf,
         model_configuration: WorkerEmbeddingModelConfiguration,
-    ) -> Result<
-        ModelFactoryRuntime<
-            ModelFamilyGenerationProcessor,
-            ModelFamilyInferenceEngine,
-            ModelFamilyImageEngine,
-            ModernBertEmbeddingEngine,
-        >,
-        String,
-    > {
+    ) -> Result<ModelFamilyRuntime, String> {
         let verification_directory_path = model_directory_path.clone();
         let classified_provider_model_id = tokio::task::spawn_blocking(move || {
             classify_model_directory(&verification_directory_path)

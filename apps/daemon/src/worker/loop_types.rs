@@ -13,10 +13,11 @@ use astronomical_ipc_protocol::{
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::time::Instant;
 
+use crate::serving::decisions_executor::DecisionsResultSender;
 use crate::worker::memory::limit::PendingMlxMemoryLimitUpdate;
 use crate::worker::process::failure_relaunch::ContainedFailureRelaunch;
 use crate::{
-    ChatGenerationStreamEvent, CompletedToolCall, CompletionAttributionLog,
+    ChatGenerationStreamEvent, CompletedToolCall, CompletionAttributionLog, DecisionsOutput,
     EmbeddingsExecutionError, EmbeddingsOutput, GenerationPerformanceLog, GenerationStartError,
     ImageGenerationExecutionError, ImageGenerationOutput, MlxMemoryLimitUpdateOutcome,
     PromptCacheClearOutcome, RuntimeModelPolicy, WorkerControlError, WorkerHealthSnapshot,
@@ -83,6 +84,12 @@ pub(crate) enum WorkerLoopCommand {
         admitted_at: Instant,
         queue_wait_elapsed: std::time::Duration,
     },
+    GenerateDecisions {
+        active_generation_permit: OwnedSemaphorePermit,
+        decisions_command: astronomical_ipc_protocol::DecisionsCommand,
+        start_sender: oneshot::Sender<Result<(), GenerationStartError>>,
+        decisions_result_sender: DecisionsResultSender,
+    },
     Shutdown {
         shutdown_sender: oneshot::Sender<Result<WorkerTerminationOutcome, WorkerControlError>>,
     },
@@ -122,42 +129,43 @@ pub(crate) enum ActiveWorkerRequest {
     Chat(ActiveGeneration),
     Image(ActiveImageGeneration),
     Embeddings(ActiveEmbeddingsGeneration),
+    Decisions(ActiveDecisionsGeneration),
 }
 
 impl ActiveWorkerRequest {
     pub(crate) fn request_id(&self) -> RequestId {
-        match self {
-            Self::Chat(request) => request.request_id,
-            Self::Image(request) => request.request_id,
-            Self::Embeddings(request) => request.request_id,
-        }
+        astronomical_config::exhaustive_table!(
+            self,
+            request => request.request_id,
+            [Self::Chat, Self::Image, Self::Embeddings, Self::Decisions]
+        )
     }
 
     pub(crate) fn chat(&self) -> Option<&ActiveGeneration> {
         match self {
             Self::Chat(request) => Some(request),
-            Self::Image(_) | Self::Embeddings(_) => None,
+            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
         }
     }
 
     pub(crate) fn chat_mut(&mut self) -> Option<&mut ActiveGeneration> {
         match self {
             Self::Chat(request) => Some(request),
-            Self::Image(_) | Self::Embeddings(_) => None,
+            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
         }
     }
 
     pub(crate) fn image_mut(&mut self) -> Option<&mut ActiveImageGeneration> {
         match self {
             Self::Image(request) => Some(request),
-            Self::Chat(_) | Self::Embeddings(_) => None,
+            Self::Chat(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
         }
     }
 
     pub(crate) fn embeddings_mut(&mut self) -> Option<&mut ActiveEmbeddingsGeneration> {
         match self {
             Self::Embeddings(request) => Some(request),
-            Self::Chat(_) | Self::Image(_) => None,
+            Self::Chat(_) | Self::Image(_) | Self::Decisions(_) => None,
         }
     }
 
@@ -169,7 +177,7 @@ impl ActiveWorkerRequest {
     ) -> Option<mpsc::Sender<ChatGenerationStreamEvent>> {
         match self {
             Self::Chat(request) => Some(request.stream_event_sender.clone()),
-            Self::Image(_) | Self::Embeddings(_) => None,
+            Self::Image(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
         }
     }
 
@@ -180,7 +188,7 @@ impl ActiveWorkerRequest {
     ) -> Option<mpsc::Sender<Result<ImageGenerationOutput, ImageGenerationExecutionError>>> {
         match self {
             Self::Image(request) => Some(request.image_result_sender.clone()),
-            Self::Chat(_) | Self::Embeddings(_) => None,
+            Self::Chat(_) | Self::Embeddings(_) | Self::Decisions(_) => None,
         }
     }
 
@@ -191,9 +199,47 @@ impl ActiveWorkerRequest {
     ) -> Option<mpsc::Sender<Result<EmbeddingsOutput, EmbeddingsExecutionError>>> {
         match self {
             Self::Embeddings(request) => Some(request.embeddings_result_sender.clone()),
+            Self::Chat(_) | Self::Image(_) | Self::Decisions(_) => None,
+        }
+    }
+}
+
+impl ActiveWorkerRequest {
+    pub(crate) fn decisions_mut(&mut self) -> Option<&mut ActiveDecisionsGeneration> {
+        match self {
+            Self::Decisions(request) => Some(request),
+            Self::Chat(_) | Self::Image(_) | Self::Embeddings(_) => None,
+        }
+    }
+
+    /// The active decisions request's result channel, or `None` for any other
+    /// modality.
+    pub(crate) fn decisions_result_sender(&self) -> Option<DecisionsResultSender> {
+        match self {
+            Self::Decisions(request) => Some(request.decisions_result_sender.clone()),
+            Self::Chat(_) | Self::Image(_) | Self::Embeddings(_) => None,
+        }
+    }
+
+    /// When a request that runs as one forward pass must have finished, or
+    /// `None` for a request that reports progress instead.
+    pub(crate) fn single_shot_execution_deadline(&self) -> Option<Instant> {
+        match self {
+            Self::Embeddings(request) => Some(request.execution_deadline),
+            Self::Decisions(request) => Some(request.execution_deadline),
             Self::Chat(_) | Self::Image(_) => None,
         }
     }
+}
+
+pub(crate) struct ActiveDecisionsGeneration {
+    pub(crate) _active_generation_permit: OwnedSemaphorePermit,
+    pub(crate) request_id: RequestId,
+    pub(crate) terminal_received_at: Option<tokio::time::Instant>,
+    pub(crate) execution_deadline: Instant,
+    pub(crate) decisions_result_sender: DecisionsResultSender,
+    pub(crate) terminal_outcome:
+        Option<Result<DecisionsOutput, astronomical_decision_contract::DecisionFailure>>,
 }
 
 pub(crate) struct ActiveImageGeneration {

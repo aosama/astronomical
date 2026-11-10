@@ -5,6 +5,7 @@
 //! probability of "true", and into the two confidence numbers callers gate
 //! on, is identical across families, so it is done once here.
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::criterion_text::criterion_text;
@@ -14,7 +15,8 @@ use crate::question::{
 };
 
 /// The answer to one question.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", content = "answer", rename_all = "snake_case")]
 pub enum DecisionAnswer {
     Choice(ChoiceAnswer),
     Score(ScoreAnswer),
@@ -22,7 +24,7 @@ pub enum DecisionAnswer {
 }
 
 /// The answer to a `choice` question.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ChoiceAnswer {
     /// The key of the most probable option; the first one when several tie.
     pub chosen_key: String,
@@ -35,14 +37,14 @@ pub struct ChoiceAnswer {
 }
 
 /// One option's key and probability.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct OptionProbability {
     pub key: String,
     pub probability: f64,
 }
 
 /// The answer to a `score` question.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ScoreAnswer {
     /// The probability-weighted average of the level indices, so it can fall between levels.
     pub expected_level: f64,
@@ -55,7 +57,7 @@ pub struct ScoreAnswer {
 }
 
 /// The answer to a `noul` question.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct NoulAnswer {
     /// The probability that the statement holds.
     pub probability_true: f64,

@@ -15,7 +15,7 @@ const LIBRARY_REVEAL_URL = "/v1/library/reveal";
 // Schema 4 adds the short name, version label and summary the Models page
 // groups builds into one row per model with.
 const LIBRARY_CATALOG_SCHEMA_VERSION = 4;
-const DOWNLOAD_MODELS_ROLES = ["chat", "coding", "image_generation", "helper"];
+const DOWNLOAD_MODELS_ROLES = ["chat", "coding", "image_generation", "helper", "decision"];
 
 let downloadModelsCatalogLoadPromise = null;
 let downloadModelsCatalogDocument = null;
@@ -259,6 +259,7 @@ function downloadModelsCatalogRowFromEntry(catalogEntry) {
         supportsToolCalls: capabilities.supports_tool_calls === true,
         supportsImageGeneration: capabilities.supports_image_generation === true,
         supportsEmbeddings: capabilities.supports_embeddings === true,
+        supportsDecisions: capabilities.supports_decisions === true,
         contextWindow: typeof capabilities.context_window === "number"
             ? capabilities.context_window
             : null,

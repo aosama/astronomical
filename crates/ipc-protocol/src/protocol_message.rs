@@ -1,10 +1,11 @@
+use astronomical_decision_contract::{DecisionFailure, QuestionOutcome};
 use serde::{Deserialize, Serialize};
 
 use crate::expert_layer_seating::ExpertLayerSeatingCounts;
 use crate::{
     ChatGenerationCommand, ChatGenerationCompletionReason, ChatGenerationFailureReason,
-    ChatGenerationOutput, EmbeddingsCommand, EmbeddingsFailureReason, GeneratedImage,
-    ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
+    ChatGenerationOutput, DecisionsCommand, EmbeddingsCommand, EmbeddingsFailureReason,
+    GeneratedImage, ImageGenerationCommand, ImageGenerationFailureReason, ImageGenerationPhase,
     ImageGenerationResultMetadata, WorkerModelCapabilities, WorkerModelConfiguration,
     WorkerPersistentPromptCacheRequestDiagnostics, WorkerRuntimeFeatureConfiguration,
     WorkerStartupConfiguration,
@@ -220,7 +221,9 @@ pub struct WorkerMemoryCeilingUtilizationSnapshot {
 }
 
 /// A command sent from the HTTP process to its one inference worker.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+// Not `Eq`: a decisions command carries the caller's JSON, whose floats
+// have no total equality.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerCommand {
     /// Supplies immutable startup configuration before any worker operation.
@@ -237,6 +240,8 @@ pub enum WorkerCommand {
     GenerateImage(ImageGenerationCommand),
     /// Starts one bounded text-embedding request.
     GenerateEmbeddings(EmbeddingsCommand),
+    /// Starts one decision request: typed questions about a state.
+    GenerateDecisions(DecisionsCommand),
     /// Stops the active generation with this request identifier.
     Cancel { request_id: RequestId },
     /// Swaps the loaded model to a different model directory.
@@ -426,6 +431,26 @@ pub enum WorkerEvent {
         request_id: RequestId,
         elapsed_millis: u64,
         /// Present when the embedding engine observed MLX after releasing request arrays and cache.
+        mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
+    },
+    /// Delivers one outcome per question, in request order.
+    DecisionsCompleted {
+        request_id: RequestId,
+        question_outcomes: Vec<QuestionOutcome>,
+        /// The tokens the model read across all questions.
+        input_token_count: u32,
+        elapsed_millis: u64,
+    },
+    /// Reports a request-scoped decisions failure that leaves the worker responsive.
+    DecisionsFailed {
+        request_id: RequestId,
+        reason: DecisionFailure,
+    },
+    /// Confirms that decisions request state has been released after any outcome.
+    DecisionsFinalized {
+        request_id: RequestId,
+        elapsed_millis: u64,
+        /// Present when the decision engine observed MLX after releasing request arrays and cache.
         mlx_memory_snapshot: Option<WorkerMlxMemorySnapshot>,
     },
     /// Reports that the configured model finished loading.

@@ -9,14 +9,17 @@ use crate::{ImageGenerationEngine, InferenceEngine};
 
 use super::EngineBackedWorker;
 
-impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
-    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine>
+impl<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+    EngineBackedWorker<Processor, Engine, Factory, ImageEngine, EmbeddingsEngine, DecisionsEngine>
 where
     Processor: ModelGenerationProcessor + Send + 'static,
     Engine: InferenceEngine<Request = Processor::InferenceRequest> + Send + 'static,
-    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> + Send + 'static,
+    Factory: ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+        + Send
+        + 'static,
     ImageEngine: ImageGenerationEngine,
     EmbeddingsEngine: crate::EmbeddingEngine,
+    DecisionsEngine: crate::DecisionEngine,
 {
     pub(crate) async fn serve_idle_command<WriteTransport>(
         &mut self,
@@ -43,8 +46,9 @@ where
                 .start_image_generation(generation_command, event_writer)
                 .await
                 .map(|generation| generation.map(ActiveWorkerRequest::Image)),
-            WorkerCommand::GenerateEmbeddings(embeddings_command) => {
-                self.start_embeddings(embeddings_command, event_writer)
+            single_shot_command @ (WorkerCommand::GenerateEmbeddings(_)
+            | WorkerCommand::GenerateDecisions(_)) => {
+                self.start_single_shot_request(single_shot_command, event_writer)
                     .await?;
                 Ok(None)
             }

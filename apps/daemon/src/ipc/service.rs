@@ -250,6 +250,20 @@ async fn handle_streaming_daemon_request(
             )
             .await
         }
+        DaemonRequest::DecideGenerate {
+            model,
+            state,
+            questions,
+        } => {
+            crate::ipc::decisions::run_decisions_generation(
+                &generation_context,
+                model,
+                state,
+                questions,
+                streaming_response_writer,
+            )
+            .await
+        }
         DaemonRequest::EmbedGenerate {
             model,
             inputs,
@@ -273,26 +287,52 @@ async fn handle_streaming_daemon_request(
             )
             .await
         }
-        DaemonRequest::ModelsList => {
-            crate::ipc::models::handle_models_list(
+        model_management_request @ (DaemonRequest::ModelsList
+        | DaemonRequest::Catalog
+        | DaemonRequest::DownloadStart { .. }
+        | DaemonRequest::DownloadStatus
+        | DaemonRequest::DefaultModelSet { .. }) => {
+            handle_model_management_request(
                 &generation_context,
                 &daemon_attribution_log,
+                model_management_request,
+                streaming_response_writer,
+            )
+            .await
+        }
+    }
+}
+
+/// Answers the requests that read or change the model inventory: the
+/// installed list, the catalog, downloads and the default model. None of
+/// them reaches the worker.
+async fn handle_model_management_request(
+    generation_context: &DaemonIpcGenerationContext,
+    daemon_attribution_log: &DaemonPerformanceAttributionLog,
+    model_management_request: DaemonRequest,
+    streaming_response_writer: StreamingResponseWriter,
+) -> Result<(), DaemonTransportError> {
+    match model_management_request {
+        DaemonRequest::ModelsList => {
+            crate::ipc::models::handle_models_list(
+                generation_context,
+                daemon_attribution_log,
                 streaming_response_writer,
             )
             .await
         }
         DaemonRequest::Catalog => {
             crate::ipc::models::handle_catalog(
-                &generation_context,
-                &daemon_attribution_log,
+                generation_context,
+                daemon_attribution_log,
                 streaming_response_writer,
             )
             .await
         }
         DaemonRequest::DownloadStart { model_id } => {
             crate::ipc::models::handle_download_start(
-                &generation_context,
-                &daemon_attribution_log,
+                generation_context,
+                daemon_attribution_log,
                 model_id,
                 streaming_response_writer,
             )
@@ -300,21 +340,24 @@ async fn handle_streaming_daemon_request(
         }
         DaemonRequest::DownloadStatus => {
             crate::ipc::models::handle_download_status(
-                &generation_context,
-                &daemon_attribution_log,
+                generation_context,
+                daemon_attribution_log,
                 streaming_response_writer,
             )
             .await
         }
         DaemonRequest::DefaultModelSet { model_id } => {
             crate::ipc::models::handle_default_model_set(
-                &generation_context,
-                &daemon_attribution_log,
+                generation_context,
+                daemon_attribution_log,
                 model_id,
                 streaming_response_writer,
             )
             .await
         }
+        // The dispatch match routes only inventory requests here; every
+        // other request has its own arm there and is answered before this.
+        _generation_request => Ok(()),
     }
 }
 

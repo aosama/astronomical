@@ -109,13 +109,18 @@ pub(super) async fn wait_for_image_execution_deadline(
     tokio::time::sleep_until(next_deadline).await;
 }
 
-/// Waits until the embeddings request's execution deadline.
-pub(super) async fn wait_for_embeddings_execution_deadline(
+/// Waits until the execution deadline of a request that runs as one forward
+/// pass (embeddings or decisions); never resolves for any other request.
+pub(super) async fn wait_for_single_shot_execution_deadline(
     active_request: &Option<ActiveWorkerRequest>,
 ) {
-    let Some(ActiveWorkerRequest::Embeddings(active_embeddings)) = active_request else {
+    let execution_deadline = match active_request {
+        Some(single_shot_request) => single_shot_request.single_shot_execution_deadline(),
+        None => None,
+    };
+    let Some(execution_deadline) = execution_deadline else {
         std::future::pending::<()>().await;
         return;
     };
-    tokio::time::sleep_until(active_embeddings.execution_deadline).await;
+    tokio::time::sleep_until(execution_deadline).await;
 }

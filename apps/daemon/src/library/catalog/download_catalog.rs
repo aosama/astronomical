@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use thiserror::Error;
 
+pub use super::catalog_capabilities::DownloadCatalogCapabilities;
+use super::catalog_capabilities::{DownloadCatalogCapabilitiesDocument, parse_entry_capabilities};
 pub use super::catalog_classification::{DownloadCatalogFamily, DownloadCatalogRole};
 use super::catalog_presentation::{
     AuthoredEntryPresentation, CatalogEntryPresentation, parse_entry_presentation,
@@ -57,18 +59,6 @@ pub struct DownloadCatalogEntry {
     upstream_license: Option<String>,
     presentation: CatalogEntryPresentation,
     download_path_selection: DownloadPathSelection,
-}
-
-/// Human-facing capability badges surfaced from the catalog so users can compare models.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DownloadCatalogCapabilities {
-    pub supports_reasoning: bool,
-    pub supports_vision: bool,
-    pub supports_tool_calls: bool,
-    pub context_window: Option<u32>,
-    pub max_output_tokens: Option<u32>,
-    pub supports_image_generation: bool,
-    pub supports_embeddings: bool,
 }
 
 /// Catalog syntax or semantic validation failure.
@@ -170,23 +160,6 @@ struct DownloadCatalogEntryDocument {
     version_label: Option<String>,
     summary: Option<String>,
     included_paths: Option<Vec<String>>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DownloadCatalogCapabilitiesDocument {
-    #[serde(default)]
-    supports_reasoning: bool,
-    #[serde(default)]
-    supports_vision: bool,
-    #[serde(default)]
-    supports_tool_calls: bool,
-    context_window: Option<u32>,
-    max_output_tokens: Option<u32>,
-    #[serde(default)]
-    supports_image_generation: bool,
-    #[serde(default)]
-    supports_embeddings: bool,
 }
 
 impl DownloadCatalog {
@@ -444,7 +417,7 @@ fn validate_get_started_pick(
     }
     if entry_document.experimental
         || entry_document.retiring
-        || entry_document.role == DownloadCatalogRole::Helper
+        || entry_document.role.serves_other_programs()
     {
         return Err(DownloadCatalogError::InvalidGetStartedPick { entry_index });
     }
@@ -471,37 +444,6 @@ fn parse_optional_entry_description(
         return Err(DownloadCatalogError::InvalidDescription { entry_index });
     }
     Ok(Some(description.to_owned()))
-}
-
-/// An absent capabilities document means no badges; a present one must declare
-/// at least one badge, otherwise the catalog would advertise an empty model.
-fn parse_entry_capabilities(
-    capabilities_document: Option<&DownloadCatalogCapabilitiesDocument>,
-    entry_index: usize,
-) -> Result<DownloadCatalogCapabilities, DownloadCatalogError> {
-    let Some(capabilities_document) = capabilities_document else {
-        return Ok(DownloadCatalogCapabilities::default());
-    };
-    if capabilities_document.supports_reasoning
-        || capabilities_document.supports_vision
-        || capabilities_document.supports_tool_calls
-        || capabilities_document.context_window.is_some()
-        || capabilities_document.max_output_tokens.is_some()
-        || capabilities_document.supports_image_generation
-        || capabilities_document.supports_embeddings
-    {
-        Ok(DownloadCatalogCapabilities {
-            supports_reasoning: capabilities_document.supports_reasoning,
-            supports_vision: capabilities_document.supports_vision,
-            supports_tool_calls: capabilities_document.supports_tool_calls,
-            context_window: capabilities_document.context_window,
-            max_output_tokens: capabilities_document.max_output_tokens,
-            supports_image_generation: capabilities_document.supports_image_generation,
-            supports_embeddings: capabilities_document.supports_embeddings,
-        })
-    } else {
-        Err(DownloadCatalogError::InvalidCapabilities { entry_index })
-    }
 }
 
 /// Whitespace-only or absent quantization labels stay absent; a present label

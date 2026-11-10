@@ -15,9 +15,13 @@ mod daemon_protocol;
 #[cfg(test)]
 mod daemon_protocol_tests;
 mod daemon_transport_error;
+mod decisions;
+#[cfg(test)]
+mod decisions_tests;
 mod embeddings;
 #[cfg(test)]
 mod embeddings_tests;
+mod exhaustive_table;
 mod expert_layer_seating;
 mod image_generation;
 #[cfg(test)]
@@ -63,6 +67,10 @@ pub use daemon_protocol::{
     DaemonListedModel, DaemonRequest, DaemonResponse, DaemonWorkerStatus, ImageGenerateRequest,
 };
 pub use daemon_transport_error::DaemonTransportError;
+pub use decisions::{
+    DecisionsCommand, DecisionsValidationError, MINIMUM_DECISION_TOKENS_PER_QUESTION,
+    WorkerDecisionCapabilities,
+};
 pub use embeddings::{
     EmbeddingEncodingFormat, EmbeddingsCommand, EmbeddingsFailureReason, EmbeddingsValidationError,
 };
@@ -101,11 +109,11 @@ pub use worker_chunking_configuration::{
     WorkerChunkingConfiguration, graph_submission_layer_interval,
 };
 pub use worker_model_configuration::{
-    WorkerAutoregressiveModelConfiguration, WorkerEmbeddingModelConfiguration,
-    WorkerEmbeddingModelFamily, WorkerFlux2KleinModelConfiguration,
-    WorkerImageGenerationModelFamily, WorkerLoadedAutoregressiveModelRuntimeConfiguration,
-    WorkerLoadedModelRuntimeConfiguration, WorkerModelConfiguration,
-    WorkerQwenImage21ModelConfiguration,
+    WorkerAutoregressiveModelConfiguration, WorkerDecisionModelConfiguration,
+    WorkerDecisionModelFamily, WorkerEmbeddingModelConfiguration, WorkerEmbeddingModelFamily,
+    WorkerFlux2KleinModelConfiguration, WorkerImageGenerationModelFamily,
+    WorkerLoadedAutoregressiveModelRuntimeConfiguration, WorkerLoadedModelRuntimeConfiguration,
+    WorkerModelConfiguration, WorkerQwenImage21ModelConfiguration,
 };
 pub use worker_startup_configuration::{
     WorkerDecodeExpertCachePolicy, WorkerDiagnosticQwen3_5EngineOverride, WorkerLogLevel,

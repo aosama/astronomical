@@ -1,5 +1,6 @@
 mod admission;
 mod chat;
+mod decisions;
 mod image;
 
 /// Skips load-progress reports, which every autoregressive load now sends ahead of

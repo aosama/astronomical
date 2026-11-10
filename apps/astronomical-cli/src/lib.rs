@@ -19,6 +19,9 @@ pub use transport::ipc::{DaemonProbe, DaemonProbeError, DaemonStatusSnapshot};
 pub use verbs::convert_atlas::{
     ConvertAtlasArguments, ConvertAtlasDependencies, ConvertAtlasError, run_convert_atlas,
 };
+pub use verbs::decide::{
+    DecideArguments, DecideDependencies, DecideError, DecideQuestionsSource, run_decide,
+};
 pub use verbs::doctor::{DoctorDependencies, DoctorError, run_doctor};
 pub use verbs::embed::{EmbedArguments, EmbedDependencies, EmbedError, run_embed};
 pub use verbs::image::{ImageArguments, ImageDependencies, ImageError, run_image};

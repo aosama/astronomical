@@ -38,13 +38,18 @@ fn should_accept_complete_entries_for_all_executable_families_in_authored_order(
             valid_entry("astronomical-test/example-flux", "flux2_klein"),
             valid_entry("astronomical-test/example-embedder", "modernbert"),
             valid_entry("astronomical-test/example-prism", "prism_hadamard_qwen35"),
+            valid_entry("astronomical-test/example-decider", "laya"),
         ]
     });
 
     let download_catalog = DownloadCatalog::parse_json(&catalog_json.to_string())
         .expect("complete fictional entries should be accepted");
 
-    assert_eq!(download_catalog.entries().len(), 4);
+    assert_eq!(download_catalog.entries().len(), 5);
+    assert_eq!(
+        download_catalog.entries()[4].huggingface_id(),
+        "astronomical-test/example-decider"
+    );
     assert_eq!(
         download_catalog.entries()[0].huggingface_id(),
         "astronomical-test/example-qwen"
@@ -61,6 +66,54 @@ fn should_accept_complete_entries_for_all_executable_families_in_authored_order(
         download_catalog.entries()[3].huggingface_id(),
         "astronomical-test/example-prism"
     );
+}
+
+#[test]
+fn should_accept_a_decision_entry_and_carry_its_capability() {
+    let decision_entry = entry_with_overrides(serde_json::json!({
+        "family": "laya",
+        "role": "decision",
+        "capabilities": {"supports_decisions": true}
+    }));
+
+    let download_catalog =
+        DownloadCatalog::parse_json(&catalog_with_entry(decision_entry).to_string())
+            .expect("a decision entry should be accepted");
+
+    let catalog_entry = &download_catalog.entries()[0];
+    assert_eq!(catalog_entry.role(), DownloadCatalogRole::Decision);
+    assert_eq!(catalog_entry.role().as_str(), "decision");
+    assert!(catalog_entry.capabilities().supports_decisions);
+    assert!(!catalog_entry.capabilities().supports_embeddings);
+}
+
+/// The shipped Laya entry downloads the two checkpoints whose answers were
+/// compared with the reference implementation, and nothing else from the
+/// repository.
+#[test]
+fn should_ship_laya_as_a_decision_model_with_only_its_checked_checkpoints() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let mut laya_entry = None;
+    for catalog_entry in download_catalog.entries() {
+        if catalog_entry.huggingface_id() == "cavi-ai/laya-MLX-8bit" {
+            laya_entry = Some(catalog_entry);
+        }
+    }
+    let laya_entry = laya_entry.expect("the shipped catalog should offer Laya");
+
+    assert_eq!(laya_entry.role(), DownloadCatalogRole::Decision);
+    assert!(laya_entry.capabilities().supports_decisions);
+    assert_eq!(laya_entry.upstream_license(), Some("Apache-2.0"));
+    let selection = laya_entry.download_path_selection();
+    assert!(selection.includes("model.safetensors"));
+    assert!(selection.includes("multilingual/model.safetensors"));
+    assert!(!selection.includes("typed-decisions/model.safetensors"));
+    assert!(!selection.includes("laya/laya.py"));
+    let description = laya_entry
+        .description()
+        .expect("the Laya entry should state its limits");
+    assert!(description.contains("512 tokens") && description.contains("1,024 tokens"));
 }
 
 #[test]

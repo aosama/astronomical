@@ -5,8 +5,9 @@ use std::{
 };
 
 use astronomical_ipc_protocol::{
-    ChatGenerationCommand, EmbeddingsCommand, ImageGenerationCommand, ProtocolReader,
-    ProtocolWriter, RequestId, WorkerCommand, WorkerEvent, WorkerStartupConfiguration,
+    ChatGenerationCommand, DecisionsCommand, EmbeddingsCommand, ImageGenerationCommand,
+    ProtocolReader, ProtocolWriter, RequestId, WorkerCommand, WorkerEvent,
+    WorkerStartupConfiguration,
 };
 use tokio::{
     io::AsyncReadExt,
@@ -291,6 +292,14 @@ impl WorkerProcess {
         generation_command: ImageGenerationCommand,
     ) -> Result<(), WorkerControlError> {
         self.send_command_with_timeout(&WorkerCommand::GenerateImage(generation_command))
+            .await
+    }
+
+    pub async fn start_decisions_generation(
+        &mut self,
+        decisions_command: DecisionsCommand,
+    ) -> Result<(), WorkerControlError> {
+        self.send_command_with_timeout(&WorkerCommand::GenerateDecisions(decisions_command))
             .await
     }
 

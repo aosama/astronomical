@@ -17,6 +17,7 @@ pub enum ModelFactoryRuntime<
     Engine,
     ImageEngine = ImageGenerationUnavailableEngine,
     EmbeddingEngine = crate::EmbeddingUnavailableEngine,
+    DecisionsEngine = crate::DecisionUnavailableEngine,
 > {
     Autoregressive {
         processor: Processor,
@@ -32,10 +33,11 @@ pub enum ModelFactoryRuntime<
     },
     Image(ImageEngine),
     Embeddings(EmbeddingEngine),
+    Decisions(DecisionsEngine),
 }
 
-impl<Processor, Engine, ImageEngine, EmbeddingsEngine>
-    ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>
+impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+    ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
 {
     #[must_use]
     pub fn autoregressive(
@@ -79,6 +81,7 @@ pub trait ModelFactory<
     Engine,
     ImageEngine = ImageGenerationUnavailableEngine,
     EmbeddingsEngine = crate::EmbeddingUnavailableEngine,
+    DecisionsEngine = crate::DecisionUnavailableEngine,
 >: Send + Sync + 'static
 {
     /// Creates one unloaded runtime for the exact tagged model configuration.
@@ -91,7 +94,7 @@ pub trait ModelFactory<
         model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<
         Output = Result<
-            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
             String,
         >,
     > + Send;
@@ -108,7 +111,7 @@ pub trait ModelFactory<
         _model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<
         Output = Result<
-            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
             String,
         >,
     > + Send {
@@ -128,7 +131,7 @@ pub trait ModelFactory<
         _model_configuration: WorkerModelConfiguration,
     ) -> impl std::future::Future<
         Output = Result<
-            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>,
+            ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
             String,
         >,
     > + Send {
@@ -163,14 +166,17 @@ pub trait ModelFactory<
     }
 }
 
-impl<Processor, Engine, ImageEngine, EmbeddingsEngine>
-    ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine> for ()
+impl<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>
+    ModelFactory<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine> for ()
 {
     async fn create(
         &self,
         _model_directory: &str,
         _model_configuration: WorkerModelConfiguration,
-    ) -> Result<ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine>, String> {
+    ) -> Result<
+        ModelFactoryRuntime<Processor, Engine, ImageEngine, EmbeddingsEngine, DecisionsEngine>,
+        String,
+    > {
         Err("model swapping is unavailable because no model factory was configured".to_owned())
     }
 }

@@ -93,14 +93,10 @@ impl ResolvedConfigurationGeneration {
     }
 }
 
+/// The family's wire label, which discovery already owns; a second copy of
+/// that table here could drift from it and silently change every generation.
 fn model_family_identity(model_family: ModelFamily) -> &'static str {
-    match model_family {
-        ModelFamily::Qwen3_5 => "qwen3_5",
-        ModelFamily::PrismHadamardQwen35 => "prism_hadamard_qwen35",
-        ModelFamily::Flux2Klein => "flux2_klein",
-        ModelFamily::QwenImage21 => "qwen_image_21",
-        ModelFamily::ModernBert => "modernbert",
-    }
+    model_family.as_str()
 }
 
 fn update_model_capabilities(
@@ -126,11 +122,27 @@ fn update_model_capabilities(
                 capabilities.supports_multiple_reference_images,
             );
         }
-        ModelCapabilities::Embeddings(capabilities) => {
-            update_text(generation_digest, "embeddings");
-            update_number(generation_digest, capabilities.vector_width);
-            update_number(generation_digest, capabilities.max_input_tokens);
+        ModelCapabilities::Embeddings(_) | ModelCapabilities::Decisions(_) => {
+            update_helper_model_capabilities(generation_digest, model_capabilities);
         }
+    }
+}
+
+/// Digests the capabilities of a model that answers in one step: an
+/// embedding model or a decision model. Any other kind adds nothing here;
+/// `update_model_capabilities` digests those itself.
+fn update_helper_model_capabilities(
+    generation_digest: &mut Sha256,
+    model_capabilities: &ModelCapabilities,
+) {
+    if let ModelCapabilities::Embeddings(capabilities) = model_capabilities {
+        update_text(generation_digest, "embeddings");
+        update_number(generation_digest, capabilities.vector_width);
+        update_number(generation_digest, capabilities.max_input_tokens);
+    }
+    if let ModelCapabilities::Decisions(capabilities) = model_capabilities {
+        update_text(generation_digest, "decisions");
+        update_number(generation_digest, capabilities.maximum_tokens_per_question);
     }
 }
 

@@ -5,6 +5,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use thiserror::Error;
 
+use crate::verbs::decide::DecideArguments;
 use crate::verbs::embed::EmbedArguments;
 use crate::verbs::image::{ImageArguments, parse_image_arguments};
 use crate::verbs::models::ModelsCommand;
@@ -13,8 +14,10 @@ use crate::verbs::respond::RespondArguments;
 use crate::verbs::schema::SchemaArguments;
 use crate::verbs::validate_config::ValidateConfigArguments;
 use crate::verbs::vision::VisionCommand;
+use decide_arguments::parse_decide_arguments;
 use embed_arguments::parse_embed_arguments;
 
+mod decide_arguments;
 mod embed_arguments;
 
 const HELP_TEXT: &str = concat!(
@@ -27,6 +30,8 @@ const HELP_TEXT: &str = concat!(
     "                                   [--instructions TEXT] [--thinking-budget N] [--schema FILE]\n",
     "                                   [--no-stream]\n",
     "       astronomical embed [TEXT | --file PATH] [--model MODEL_ID]\n",
+    "       astronomical decide [STATE | --state-file PATH] [--json-state] [--model MODEL_ID]\n",
+    "                           (--ask QUESTION | --questions JSON | --questions-file PATH)\n",
     "       astronomical image PROMPT [--size WIDTHxHEIGHT] [--model MODEL_ID] [--seed N]\n",
     "                                 [--output PATH]\n",
     "       astronomical models list | supported | programs | default [MODEL_ID] | download MODEL_ID\n",
@@ -61,6 +66,9 @@ const HELP_TEXT: &str = concat!(
     "                   model automatically when it is not resident yet\n",
     "  embed [TEXT]     One-shot embedding vector as one JSON document; the daemon\n",
     "                   loads or downloads the model automatically when needed\n",
+    "  decide [STATE]   Answer typed questions about a state with a decision model: one JSON\n",
+    "                   document with a probability for every allowed answer and no generated\n",
+    "                   text; STATE is read from standard input when not given\n",
     "  image PROMPT     Draw one image from text and save it as a PNG (default: 1024x1024 in the\n",
     "                   working directory); prints the saved path; the daemon loads or downloads\n",
     "                   the image model automatically; never overwrites an existing file\n",
@@ -93,6 +101,12 @@ const HELP_TEXT: &str = concat!(
     "  --image PATH         Attach a raster image (png, jpg, jpeg, webp) to the respond prompt; repeatable\n",
     "  --schema FILE        Force the respond reply to be one JSON object matching the JSON schema in FILE\n",
     "  --file PATH          Embed the file's contents instead of TEXT or stdin\n",
+    "  --ask QUESTION       One yes-or-no question for decide; answered as the probability it is true\n",
+    "  --questions JSON     Typed questions for decide, as a JSON object of name -> {type, instructions,\n",
+    "                       criteria}; type is choice, score, or noul (yes or no)\n",
+    "  --questions-file PATH  Read the decide questions object from a file\n",
+    "  --state-file PATH    Read the decide state from a file instead of STATE or stdin\n",
+    "  --json-state         Read the decide state as JSON data, not as plain text\n",
     "  --size WIDTHxHEIGHT  Image size in pixels for image, e.g. 1024x576 (default: 1024x1024)\n",
     "  --seed N             Reproducibility seed for image; the run reports the seed it used\n",
     "  --output PATH        Where image saves the PNG; must end in .png and not exist yet\n",
@@ -111,6 +125,7 @@ pub enum CliCommand {
     Launch(LaunchArguments),
     Respond(RespondArguments),
     Embed(EmbedArguments),
+    Decide(DecideArguments),
     Image(ImageArguments),
     Models(ModelsCommand),
     Status,
@@ -159,7 +174,7 @@ pub fn parse_command(
     match command_name {
         "launch" => parse_launch_arguments(&remaining_arguments[1..]).map(CliCommand::Launch),
         "respond" => parse_respond_arguments(&remaining_arguments[1..]).map(CliCommand::Respond),
-        "embed" => parse_embed_arguments(&remaining_arguments[1..]).map(CliCommand::Embed),
+        "embed" | "decide" => parse_helper_model_verb(command_name, &remaining_arguments[1..]),
         "image" => parse_image_arguments(&remaining_arguments[1..]).map(CliCommand::Image),
         "models" => parse_models_verb(&remaining_arguments[1..]),
         "status" => command_taking_no_arguments(&remaining_arguments[1..], CliCommand::Status),
@@ -174,6 +189,18 @@ pub fn parse_command(
             .map(CliCommand::Vision),
         other => Err(UsageError::UnknownCommand(other.to_owned())),
     }
+}
+
+/// Parses a verb served by a helper model that answers in one step:
+/// `decide`, or else `embed`.
+fn parse_helper_model_verb(
+    command_name: &str,
+    verb_arguments: &[OsString],
+) -> Result<CliCommand, UsageError> {
+    if command_name == "decide" {
+        return parse_decide_arguments(verb_arguments).map(CliCommand::Decide);
+    }
+    parse_embed_arguments(verb_arguments).map(CliCommand::Embed)
 }
 
 fn command_taking_no_arguments(
@@ -630,6 +657,14 @@ pub enum UsageError {
     InvalidThinkingBudget(String),
     #[error("embed takes one input. Pass TEXT, --file PATH, or pipe stdin — not several.")]
     EmbedInputConflict,
+    #[error("decide takes one state. Pass STATE, --state-file PATH, or pipe stdin — not several.")]
+    DecideStateConflict,
+    #[error(
+        "decide needs questions. Try: astronomical decide 'We were billed twice.' --ask 'Is a refund requested?'"
+    )]
+    DecideQuestionsRequired,
+    #[error("decide takes its questions one way: --ask, --questions, or --questions-file.")]
+    DecideQuestionsConflict,
     #[error("image needs a prompt. Try: astronomical image 'a lighthouse at dusk'")]
     ImagePromptRequired,
     #[error("--size must look like 1024x576 (width x height, positive whole pixels): {0}")]

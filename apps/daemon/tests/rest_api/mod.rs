@@ -17,3 +17,4 @@ mod openai_models_endpoint;
 mod openai_responses_endpoint;
 mod request_body_budget;
 mod scripted_chat_executor;
+mod system_one_endpoint;
