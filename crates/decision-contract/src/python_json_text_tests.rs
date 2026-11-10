@@ -110,3 +110,26 @@ fn should_write_negative_integers() {
         "[-1, -9223372036854775808]"
     );
 }
+
+/// Seventeen-digit decimals are where a fast float parser can land one unit
+/// in the last place away from the nearest double. Python's `json.loads` is
+/// correctly rounded, so the text a model reads must survive a round trip
+/// exactly, or the request is tokenized differently from the reference.
+#[test]
+fn should_write_seventeen_digit_floats_back_exactly_as_python_reads_them() {
+    for float_text in [
+        "0.10058280825614929",
+        "1.7601518630981445",
+        "1.0000158548355103",
+        "2.2250738585072014e-308",
+        "0.30000000000000004",
+    ] {
+        let value = ordered_json(&format!("[{float_text}]"));
+
+        assert_eq!(
+            python_json_text(&value, JsonTextStyle::PYTHON_DEFAULT),
+            format!("[{float_text}]"),
+            "{float_text} must be written back as Python writes it"
+        );
+    }
+}

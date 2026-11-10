@@ -1,14 +1,17 @@
 """Regenerates the Laya reference decisions used by the real-checkpoint parity journey.
 
-Run it with a Python environment that has `laya==0.4.15` installed:
+Run it with a Python environment that has `laya==0.4.15` and `huggingface_hub`
+installed:
 
-    python generate_laya_reference_decisions.py CHECKPOINT_DIRECTORY > laya_reference_decisions.json
+    python generate_laya_reference_decisions.py > laya_reference_decisions.json
 
-CHECKPOINT_DIRECTORY holds the original `convaiinnovations/laya` checkpoints: the
-English one at its root and the multilingual one in `multilingual/`. Each case is
-answered by the reference implementation in float32 on the CPU, and the fixture
-records what the model read (token identifiers and marker positions), its raw
-option logits, the temperature applied and the resulting probabilities.
+It downloads the original `convaiinnovations/laya` checkpoints at the pinned
+revision below into the Hugging Face cache (the English one at the repository's
+root, the multilingual one in `multilingual/`) and records that revision in the
+fixture, so the fixture always says exactly which weights it describes. Each case
+is answered by the reference implementation in float32 on the CPU, and the
+fixture records what the model read (token identifiers and marker positions),
+its raw option logits, the temperature applied and the resulting probabilities.
 """
 
 import json
@@ -18,8 +21,28 @@ import numpy as np
 import torch
 
 import laya
+from huggingface_hub import snapshot_download
 from laya import common
 from laya.agent import Agent
+
+REFERENCE_REPOSITORY = "convaiinnovations/laya"
+# The revision `cavi-ai/laya-MLX-8bit` was converted from. Later revisions of the
+# repository changed only its model card; the weights, configs and tokenizers
+# are byte-identical, so pinning this one keeps the MLX build and the reference
+# describing the same model.
+REFERENCE_REVISION = "55cf4c4ebb4ebe31b2550e8bdf3bd21b99753851"
+# Only the two checkpoints the fixture answers with; the repository also holds
+# a typed-decisions checkpoint, images and evaluation reports.
+REFERENCE_FILE_PATTERNS = [
+    "model.safetensors",
+    "rl_agent_config.json",
+    "encoder/*",
+    "tokenizer/*",
+    "multilingual/model.safetensors",
+    "multilingual/rl_agent_config.json",
+    "multilingual/encoder/*",
+    "multilingual/tokenizer/*",
+]
 
 ROMEO_OPENING = (
     "Two households, both alike in dignity, In fair Verona, where we lay our scene, "
@@ -167,8 +190,17 @@ def reference_case(agent, case):
 
 
 def main():
-    checkpoint_directory = sys.argv[1]
-    fixture = {"reference": "laya==0.4.15, float32 on the CPU", "checkpoints": []}
+    checkpoint_directory = snapshot_download(
+        REFERENCE_REPOSITORY,
+        revision=REFERENCE_REVISION,
+        allow_patterns=REFERENCE_FILE_PATTERNS,
+    )
+    fixture = {
+        "reference": "laya==0.4.15, float32 on the CPU",
+        "checkpoint_repository": REFERENCE_REPOSITORY,
+        "checkpoint_revision": REFERENCE_REVISION,
+        "checkpoints": [],
+    }
     for checkpoint in CHECKPOINTS:
         agent = laya.load(checkpoint_directory, device="cpu", subfolder=checkpoint["subfolder"])
         sys.stderr.write("loaded %s dtype=%s amp=%s\n" % (checkpoint["name"], agent.dtype, agent.amp_enabled))

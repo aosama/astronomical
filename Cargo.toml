@@ -113,7 +113,12 @@ reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 safetensors = { version = "=0.8.0", default-features = false, features = ["alloc"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# Correctly rounded float parsing. Without it a 16- or 17-digit decimal can be
+# read one unit in the last place away from the nearest double, and decision
+# models re-print the numbers in a request's state as text: the reference
+# implementations parse with Python, which is correctly rounded, so a number
+# read one unit off would be tokenized differently from the reference.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 serde_yaml = "0.9"
 serial_test = "4"
 sha1 = "=0.11.0"

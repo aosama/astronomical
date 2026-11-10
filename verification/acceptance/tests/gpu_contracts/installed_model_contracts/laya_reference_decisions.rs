@@ -2,10 +2,11 @@
 //!
 //! The fixture (`tests/fixtures/laya_reference_decisions.json`) holds what the
 //! reference package produced in float32 on the CPU from the original
-//! checkpoints: for every question, the token sequence the model read, its raw
-//! option logits, the temperature applied and the resulting probabilities.
-//! This journey loads the 8-bit MLX conversion of the same checkpoints and
-//! checks two things:
+//! `convaiinnovations/laya` checkpoints, at the revision the fixture records:
+//! for every question, the token sequence the model read, its raw option
+//! logits, the temperature applied and the resulting probabilities. This
+//! journey loads an 8-bit MLX conversion of the same checkpoints and checks
+//! two things:
 //!
 //! * the token sequences are identical, which proves the prompt layout on the
 //!   real tokenizer, and
@@ -13,9 +14,10 @@
 //!   8-bit weights and a different runtime change.
 //!
 //! Run it with `cargo test-laya-reference-decisions --configuration PATH`,
-//! where the configuration's `model_directory` is the MLX Laya repository
-//! folder: the English checkpoint at its root, the multilingual one in
-//! `multilingual/`. The states are Shakespeare passages, in English and, for
+//! where the configuration's `model_directory` is an MLX Laya folder: the
+//! published `cavi-ai/laya-MLX-8bit` build, or the output of
+//! `cargo xtask convert-laya`. Either way the English checkpoint sits at its
+//! root and the multilingual one in `multilingual/`. The states are Shakespeare passages, in English and, for
 //! the multilingual checkpoint, also in German and French.
 
 use std::path::Path;
