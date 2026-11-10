@@ -7,37 +7,23 @@
 //! is best-effort by contract: the request never depends on tail reuse, so
 //! every failure is logged and skipped.
 
+use crate::persistent_cache::tail_capture_planning::{
+    PromptTailCaptureSpan, TailBlockCausalInputResolution, build_tail_block_key,
+    prompt_tail_capture_span, resolve_tail_block_causal_input,
+};
 use std::collections::HashMap;
 
 use mlx_c_rust::MlxArray;
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{
-    PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError,
-    PersistentPromptCacheDiskStore, PersistentPromptCacheModelContract,
+    PerformanceOperation, PersistentPromptCacheBlockKey, PersistentPromptCacheDiskStore,
     PersistentPromptCachePublicationOutcome,
 };
 
 use super::engine_request::Qwen3_5EngineRequest;
 use super::persistent_prompt_cache_capture::PromptBlockPublicationFailure;
 use super::{Qwen3_5EngineState, Qwen3_5Model};
-
-/// Token geometry of the partial tail one terminal prefill chunk can capture.
-#[derive(Debug, Eq, PartialEq)]
-struct PromptTailCaptureSpan {
-    tail_capture_end: usize,
-    tail_block_start: usize,
-    tail_block_index: usize,
-    persistent_prompt_cache_block_token_count: usize,
-}
-
-/// Outcome of resolving the causal input bound into the tail block identity.
-#[derive(Debug)]
-enum TailBlockCausalInputResolution<'a> {
-    Planned(&'a PersistentPromptCacheBlockCausalInput),
-    EmptyFallback,
-    MissingFromPlan,
-}
 
 /// Everything publication needs about one captured tail block, grouped so the
 /// publication step keeps a short signature.
@@ -46,83 +32,6 @@ struct TailBlockPublicationInputs<'a> {
     parent_block_key: Option<&'a PersistentPromptCacheBlockKey>,
     kv_block_tensors: &'a HashMap<String, MlxArray>,
     recurrent_snapshot_tensors: &'a HashMap<String, MlxArray>,
-}
-
-/// Computes the token span of the partial tail a terminal prefill chunk can
-/// capture, or `None` when this chunk ends anywhere but the capture boundary.
-fn prompt_tail_capture_span(
-    can_use_persistent_prompt_cache: bool,
-    prompt_token_count: usize,
-    persistent_prompt_cache_block_token_count: usize,
-    prefill_end: usize,
-) -> Option<PromptTailCaptureSpan> {
-    if !can_use_persistent_prompt_cache {
-        return None;
-    }
-    // The generation-start lookup never consumes the final prompt token —
-    // the terminal forward needs it to produce the first logits — so a tail
-    // saved through that token could never be probed again. Capture stops
-    // one token short, matching the partial-tail probe's retained-suffix
-    // rule; the prefill clamp guarantees the chunk ending exactly here
-    // carries the complete tail span in decoder state.
-    let tail_capture_end = crate::persistent_prompt_cache_partial_tail_capture_end(
-        prompt_token_count,
-        persistent_prompt_cache_block_token_count,
-    );
-    if prefill_end != tail_capture_end {
-        return None;
-    }
-    let tail_token_count = tail_capture_end % persistent_prompt_cache_block_token_count;
-    if tail_token_count == 0 {
-        return None;
-    }
-    let tail_block_index = tail_capture_end / persistent_prompt_cache_block_token_count;
-    let tail_block_start = tail_block_index * persistent_prompt_cache_block_token_count;
-    Some(PromptTailCaptureSpan {
-        tail_capture_end,
-        tail_block_start,
-        tail_block_index,
-        persistent_prompt_cache_block_token_count,
-    })
-}
-
-/// Resolves the causal input bound into the tail block identity: the plan
-/// entry for the tail block, the empty fallback when the request carries no
-/// causal-input plan at all.
-fn resolve_tail_block_causal_input<'a>(
-    planned_block_causal_inputs: &'a [PersistentPromptCacheBlockCausalInput],
-    tail_block_index: usize,
-) -> TailBlockCausalInputResolution<'a> {
-    if planned_block_causal_inputs.is_empty() {
-        return TailBlockCausalInputResolution::EmptyFallback;
-    }
-    match planned_block_causal_inputs.get(tail_block_index) {
-        Some(tail_block_causal_input) => {
-            TailBlockCausalInputResolution::Planned(tail_block_causal_input)
-        }
-        None => TailBlockCausalInputResolution::MissingFromPlan,
-    }
-}
-
-/// Builds the content-addressed identity of the tail block: a root identity
-/// when the request restored no parent block, a chained child identity
-/// otherwise.
-fn build_tail_block_key(
-    persistent_prompt_cache_model_contract: &PersistentPromptCacheModelContract,
-    tail_tokens: &[u32],
-    tail_block_causal_input: &PersistentPromptCacheBlockCausalInput,
-    parent_block_key: Option<&PersistentPromptCacheBlockKey>,
-) -> Result<PersistentPromptCacheBlockKey, PersistentPromptCacheBlockKeyError> {
-    match parent_block_key {
-        None => PersistentPromptCacheBlockKey::for_root_block_with_causal_input(
-            persistent_prompt_cache_model_contract,
-            tail_tokens,
-            tail_block_causal_input,
-        ),
-        Some(parent_block_key) => {
-            parent_block_key.for_child_block_with_causal_input(tail_tokens, tail_block_causal_input)
-        }
-    }
 }
 
 /// Extracts the tail span's full-attention KV tensors under one
@@ -307,7 +216,3 @@ impl Qwen3_5EngineState {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "persistent_prompt_cache_tail_capture_tests.rs"]
-mod persistent_prompt_cache_tail_capture_tests;
