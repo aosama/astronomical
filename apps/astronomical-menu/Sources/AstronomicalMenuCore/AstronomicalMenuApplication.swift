@@ -17,6 +17,17 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   private lazy var daemonLifecycleController = DaemonLifecycleController(
     daemonClient: daemonClient, applicationIdentity: applicationIdentity)
   private let neuralEngineBannerPresenter = NeuralEngineBannerPresenter()
+  private let notificationRouter = AgentNotificationRouter()
+  private lazy var updateNoticeCoordinator = UpdateNoticeCoordinator(
+    store: UpdateNoticeStore(
+      installedBuildNumber: Int(applicationIdentity.buildNumber) ?? 0,
+      settingsReader: BundledMainApplicationUpdateSettingsReader(
+        applicationChannel: applicationIdentity.channel, agentBundleURL: Bundle.main.bundleURL)),
+    presenter: UpdateNoticePresenter(),
+    announcementRecord: UpdateAnnouncementRecord(userDefaults: .standard),
+    mainApplicationPresence: RunningMainApplicationPresence(
+      mainApplicationBundleIdentifier: applicationIdentity.channel.applicationBundleIdentifier),
+    activityIdentifier: "\(applicationIdentity.channel.agentBundleIdentifier).update-notice")
   private lazy var cliLinkInstaller = CliLinkInstaller(channel: applicationIdentity.channel)
   private lazy var commandChannel = ProcessCommandChannel(channel: applicationIdentity.channel)
   private var commandObservations: [NSObjectProtocol] = []
@@ -47,6 +58,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     popover.contentViewController = NSHostingController(
       rootView: OrbitalTelemetryPopover(
         telemetryStore: telemetryStore,
+        updateNoticeStore: updateNoticeCoordinator.store,
         applicationIdentity: applicationIdentity,
         openObservatory: { [weak self] in self?.openObservatory() },
         openDownloadModels: { [weak self] in self?.openDownloadModels() },
@@ -95,6 +107,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         telemetryStore: telemetryStore)
     }
     telemetryStore.startPolling()
+    startUpdateNotices()
     // Full auto-repair (owner decision on issue #825): a terminal-command
     // link this app owns dangles whenever the bundle moves; recreating it on
     // every launch keeps the command current without user action.
@@ -108,8 +121,20 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
     commandObservations = []
     daemonMaintenanceTask?.cancel()
     daemonMaintenanceTask = nil
+    updateNoticeCoordinator.stop()
     telemetryStore.stopPolling()
     daemonLifecycleController.stopChannelDaemonOnApplicationQuit()
+  }
+
+  /// Starts the daily look at the update feed on builds that update
+  /// themselves. Clicking the notification leads to the same place as the
+  /// popover's row: the main app's updater.
+  private func startUpdateNotices() {
+    guard updateCheckSupported(applicationChannel: applicationIdentity.channel) else { return }
+    notificationRouter.onUpdateNoticeOpened = { [weak self] in
+      self?.openInMainApplication(.checkForUpdates)
+    }
+    updateNoticeCoordinator.start()
   }
 
   // Status polls arrive every few seconds; redrawing only on a state change
@@ -143,6 +168,9 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
       ), of: statusButton,
       preferredEdge: .minY)
     telemetryStore.setPopoverVisible(true)
+    // A version skipped, or automatic checks turned off, in the main app
+    // since the last look should not still be offered here.
+    updateNoticeCoordinator.store.applyCurrentSettings()
   }
 
   public func popoverDidClose(_ notification: Notification) {
