@@ -41,13 +41,22 @@ const TEST_ALLOCATOR_CACHE_LIMIT_BYTES: usize = 1024 * 1024 * 1024;
 /// request that added each fixture.
 const MAXIMUM_PROBABILITY_DIFFERENCE: f64 = 0.05;
 /// Each fixture, by the base model its adapter was trained on.
-const REFERENCE_FIXTURES: [(&str, &str); 1] = [(
-    "Qwen/Qwen3.5-0.8B-Base",
-    include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/tests/fixtures/kev_reference_decisions_0_8b.json"
-    )),
-)];
+const REFERENCE_FIXTURES: [(&str, &str); 2] = [
+    (
+        "Qwen/Qwen3.5-0.8B-Base",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/kev_reference_decisions_0_8b.json"
+        )),
+    ),
+    (
+        "Qwen/Qwen3.5-9B-Base",
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/kev_reference_decisions_9b.json"
+        )),
+    ),
+];
 
 /// What one checkpoint's comparison measured.
 #[derive(Default)]

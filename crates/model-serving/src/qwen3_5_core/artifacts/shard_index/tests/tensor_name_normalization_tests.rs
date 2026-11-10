@@ -70,7 +70,7 @@ fn should_reject_tensor_names_outside_the_executable_model_prefixes() {
         canonical_model_tensor_name("model.embed_tokens.weight"),
         None
     );
-    assert_eq!(canonical_model_tensor_name("lm_head.weight"), None);
+    assert_eq!(canonical_model_tensor_name("output_head.weight"), None);
     assert_eq!(canonical_model_tensor_name(""), None);
 }
 
@@ -82,12 +82,59 @@ fn should_treat_prefix_boundaries_exactly() {
     assert_eq!(canonical_model_tensor_name("model.visual"), None);
     assert_eq!(canonical_model_tensor_name("language_model"), None);
     assert_eq!(canonical_model_tensor_name("mtp"), None);
+    assert_eq!(canonical_model_tensor_name("lm_head"), None);
+    assert_eq!(canonical_model_tensor_name("lm_headx.weight"), None);
     // A different tower number never matches the visual prefix.
     assert_eq!(canonical_model_tensor_name("model.visual2.weight"), None);
     // The degenerate empty-suffix form still normalizes deterministically.
     assert_eq!(
         canonical_model_tensor_name("model.language_model."),
         Some("language_model.model.".to_owned())
+    );
+}
+
+#[test]
+fn should_map_a_unified_untied_output_head_into_the_language_model() {
+    assert_eq!(
+        canonical_model_tensor_name("lm_head.weight"),
+        Some("language_model.lm_head.weight".to_owned())
+    );
+    assert_eq!(
+        canonical_model_tensor_name("lm_head.scales"),
+        Some("language_model.lm_head.scales".to_owned())
+    );
+}
+
+#[test]
+fn should_read_a_unified_untied_output_head_from_its_stored_spelling() {
+    let mut weight_map = BTreeMap::new();
+    weight_map.insert(
+        "model.language_model.embed_tokens.weight".to_owned(),
+        "model-00001.safetensors".to_owned(),
+    );
+    weight_map.insert(
+        "lm_head.weight".to_owned(),
+        "model-00002.safetensors".to_owned(),
+    );
+    let index_bytes = serialize_index_bytes(weight_map);
+    let language_tensor_profiles = [
+        synthetic_unquantized_language_tensor_profile("language_model.model.embed_tokens.weight"),
+        synthetic_unquantized_language_tensor_profile("language_model.lm_head.weight"),
+    ];
+
+    let shard_index = Qwen3_5ShardIndex::from_json_bytes(&index_bytes, &language_tensor_profiles)
+        .expect("a unified index with an untied head should parse");
+
+    assert_eq!(
+        shard_index
+            .language_tensor_name_to_shard_file_name()
+            .get("language_model.lm_head.weight")
+            .map(String::as_str),
+        Some("model-00002.safetensors")
+    );
+    assert_eq!(
+        shard_index.stored_tensor_name_for("language_model.lm_head.weight"),
+        "lm_head.weight"
     );
 }
 

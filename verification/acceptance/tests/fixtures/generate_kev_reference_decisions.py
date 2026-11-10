@@ -7,7 +7,11 @@ Qwen3.5 support), `safetensors` and `huggingface_hub` installed:
 
 It downloads the original `jaredpalmer/kev-*` adapter and the Qwen3.5 base it
 names, both at pinned revisions, into the Hugging Face cache, and answers each
-case in float32 on the CPU with the backbone loaded by transformers.
+case in float32 on the CPU with the backbone loaded by transformers. The base
+is stored in bfloat16 and each decoder layer is widened to float32 only while
+it runs; its float32-stored tensors are restored and never narrowed, so this
+is exact float32 arithmetic, and it keeps the 9B base within about 20 GB of
+memory.
 
 The scoring follows Kev's published model code (`kev/model.py` and
 `kev/api.py` at the pinned commit noted below), rewritten here rather than
@@ -32,6 +36,7 @@ import math
 import re
 import sys
 import time
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -40,6 +45,7 @@ import transformers
 from huggingface_hub import snapshot_download
 from safetensors import safe_open
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS
 
 # The Kev source the rendering and layout below follow.
 KEV_SOURCE_COMMIT = "2074cc44"
@@ -197,13 +203,17 @@ def question_row(tokenizer, state_token_ids, question):
 
 
 class LoraBesideLinear(nn.Module):
-    """peft's LoRA at inference: the frozen projection plus the scaled low-rank path."""
+    """peft's LoRA at inference: the frozen projection plus the scaled low-rank path.
+
+    The factors are plain float32 tensors, not parameters, so the per-layer
+    widening below never rounds them to bfloat16.
+    """
 
     def __init__(self, frozen_projection, lora_a_weight, lora_b_weight, scale):
         super().__init__()
         self.frozen_projection = frozen_projection
-        self.lora_a_weight = nn.Parameter(lora_a_weight.float(), requires_grad=False)
-        self.lora_b_weight = nn.Parameter(lora_b_weight.float(), requires_grad=False)
+        self.lora_a_weight = lora_a_weight.float()
+        self.lora_b_weight = lora_b_weight.float()
         self.scale = scale
 
     def forward(self, hidden_states):
@@ -231,6 +241,80 @@ def attach_adapter(text_model, adapter_directory):
     return attached_count, scale
 
 
+TEXT_MODEL_PREFIXES = ("model.language_model.", "model.")
+
+
+def float32_stored_tensors(base_directory):
+    """The base's tensors stored in float32 (Qwen3.5 keeps its gated-delta
+    `A_log` and norms so), by their name inside the text model."""
+    stored_tensors = {}
+    for shard_path in sorted(Path(base_directory).glob("*.safetensors")):
+        with safe_open(str(shard_path), "pt") as shard_file:
+            for tensor_name in shard_file.keys():
+                if shard_file.get_slice(tensor_name).get_dtype() != "F32":
+                    continue
+                for text_model_prefix in TEXT_MODEL_PREFIXES:
+                    if tensor_name.startswith(text_model_prefix):
+                        stored_tensors[tensor_name.removeprefix(text_model_prefix)] = shard_file.get_tensor(tensor_name)
+                        break
+    return stored_tensors
+
+
+def restore_float32_tensors(text_model, base_directory):
+    """Puts back, in float32, the tensors a bfloat16 load rounded, and
+    returns them so the per-layer narrowing leaves them alone."""
+    kept_parameters = set()
+    parameters_by_name = dict(text_model.named_parameters())
+    for tensor_name, stored_tensor in float32_stored_tensors(base_directory).items():
+        parameter = parameters_by_name.get(tensor_name)
+        if parameter is None:
+            continue
+        parameter.data = stored_tensor.float()
+        kept_parameters.add(id(parameter))
+    return kept_parameters
+
+
+class LayerwiseFloat32:
+    """Stores each decoder layer in bfloat16 and runs it in float32.
+
+    The base's bfloat16 weights widen exactly, and its float32-stored tensors
+    are never narrowed, so each layer computes exactly what a float32 copy of
+    the model computes. Only the running layer is held in float32, so a 9B
+    base needs about 20 GB of memory instead of 36.
+    """
+
+    def __init__(self, kept_parameters):
+        self.kept_parameters = kept_parameters
+
+    def attach(self, decoder_layer):
+        decoder_layer.register_forward_pre_hook(self.widen_layer)
+        decoder_layer.register_forward_hook(self.narrow_layer)
+        self.narrow_layer(decoder_layer, None, None)
+
+    def widen_layer(self, decoder_layer, _layer_inputs):
+        for parameter in decoder_layer.parameters():
+            parameter.data = parameter.data.float()
+
+    def narrow_layer(self, decoder_layer, _layer_inputs, _layer_outputs):
+        for parameter in decoder_layer.parameters():
+            if id(parameter) not in self.kept_parameters:
+                parameter.data = parameter.data.to(torch.bfloat16)
+
+
+def float32_outside_the_layers(text_model):
+    """Embeddings and the final norm in float32, and the rotary frequencies
+    recomputed in float32, since loading in bfloat16 would have rounded them."""
+    text_model.embed_tokens.float()
+    text_model.norm.float()
+    rotary_embedding = text_model.rotary_emb
+    rope_initialization = rotary_embedding.compute_default_rope_parameters
+    if rotary_embedding.rope_type != "default":
+        rope_initialization = ROPE_INIT_FUNCTIONS[rotary_embedding.rope_type]
+    inverse_frequencies, _attention_scaling = rope_initialization(rotary_embedding.config)
+    rotary_embedding.inv_freq = inverse_frequencies.float()
+    rotary_embedding.original_inv_freq = inverse_frequencies.float().clone()
+
+
 def load_reference(checkpoint):
     adapter_directory = snapshot_download(
         checkpoint["adapter_repository"], revision=checkpoint["adapter_revision"], allow_patterns=ADAPTER_FILES,
@@ -240,12 +324,16 @@ def load_reference(checkpoint):
         head_checkpoint["base"], revision=head_checkpoint["base_revision"], allow_patterns=BASE_FILES,
     )
     causal_model, loading_info = AutoModelForCausalLM.from_pretrained(
-        base_directory, dtype=torch.float32, attn_implementation="eager", output_loading_info=True,
+        base_directory, dtype=torch.bfloat16, attn_implementation="eager", output_loading_info=True,
     )
     if loading_info["missing_keys"]:
         raise SystemExit(f"the base is missing weights: {sorted(loading_info['missing_keys'])[:5]}")
     text_model = causal_model.model.eval()
+    float32_outside_the_layers(text_model)
+    layerwise_float32 = LayerwiseFloat32(restore_float32_tensors(text_model, base_directory))
     attached_count, scale = attach_adapter(text_model, adapter_directory)
+    for decoder_layer in text_model.layers:
+        layerwise_float32.attach(decoder_layer)
     head_state = head_checkpoint["head"]
     pointer_dimension = head_state["q.weight"].shape[0]
     query_projection = nn.Linear(head_state["q.weight"].shape[1], pointer_dimension)
