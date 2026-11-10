@@ -500,42 +500,20 @@ function recordDownloadModelsProgressMeasurement(activeDownload, sampledAtMillis
         : null;
 }
 
-function formatDownloadModelsRate(bytesPerSecond) {
-    if (bytesPerSecond >= 1073741824) {
-        return (bytesPerSecond / 1073741824).toFixed(1) + " GB/s";
-    }
-    if (bytesPerSecond >= 1_000_000) {
-        return (bytesPerSecond / 1_000_000).toFixed(1) + " MB/s";
-    }
-    return Math.max(1, Math.round(bytesPerSecond / 1_000)) + " KB/s";
-}
-
-function formatDownloadModelsRemainingTime(remainingSeconds) {
-    if (!(remainingSeconds > 0) || !Number.isFinite(remainingSeconds)) {
-        return "Calculating time remaining";
-    }
-    if (remainingSeconds < 60) return "Less than a minute left";
-    const remainingMinutes = Math.round(remainingSeconds / 60);
-    if (remainingMinutes < 60) {
-        return remainingMinutes === 1
-            ? "About 1 minute left"
-            : "About " + remainingMinutes + " minutes left";
-    }
-    const remainingHours = Math.round(remainingMinutes / 60);
-    return remainingHours === 1
-        ? "About 1 hour left"
-        : "About " + remainingHours + " hours left";
-}
-
 function downloadModelsFailureTitle(errorCode) {
     const messages = {
         insufficient_disk: "Not enough disk space",
         download_gated: "This model requires Hugging Face access",
         checksum_mismatch: "Downloaded files did not pass verification",
-        model_already_present: "Another model already uses this download location. Move it elsewhere, then cancel this download and try again."
+        model_already_present: "Another model already uses this download location. Move it elsewhere, then cancel this download and try again.",
+        model_not_executable: "This version of Astronomical cannot run this model. Cancel to free the download."
     };
     return messages[errorCode] || "Download failed. You can resume it.";
 }
+
+// Failures that resuming cannot fix: the same files would be refused again, so
+// the card offers only Cancel instead of a Resume that fails the same way.
+const DOWNLOAD_MODELS_CANCEL_ONLY_ERROR_CODES = ["model_already_present", "model_not_executable"];
 
 function downloadModelsActionButtons(catalogRow) {
     if (catalogRow.readyOnThisMac) return [];
@@ -543,7 +521,7 @@ function downloadModelsActionButtons(catalogRow) {
     const state = downloadModelsRowDownloadState(catalogRow);
     if (state === "verifying" || state === "publishing") return [];
     if (isCurrentDownload && state === "failed"
-        && downloadModelsCurrentDownload.error_code === "model_already_present") {
+        && DOWNLOAD_MODELS_CANCEL_ONLY_ERROR_CODES.includes(downloadModelsCurrentDownload.error_code)) {
         return [downloadModelsActionButton("Cancel", "cancel")];
     }
     if (state === "paused" || state === "failed") {

@@ -3,11 +3,21 @@
 // details, hero summary, and filter bar. All catalog values enter the document
 // only through textContent and created elements.
 
+// Every family in registry/download_catalog.json needs a name here: the family
+// filter otherwise shows the catalog's internal key. download-models.test.js
+// reads the shipped catalog and fails when a family has no name.
+const DOWNLOAD_MODELS_FAMILY_LABELS = {
+    qwen3_5: "Qwen 3.5",
+    flux2_klein: "FLUX.2 Klein",
+    modernbert: "ModernBERT",
+    qwen_image_21: "Qwen-Image 2.1",
+    prism_hadamard_qwen35: "Ternary Bonsai"
+};
+
 function downloadModelsFamilyLabel(family) {
-    if (family === "qwen3_5") return "Qwen 3.5";
-    if (family === "flux2_klein") return "FLUX.2 Klein";
-    if (family === "modernbert") return "ModernBERT";
-    return family;
+    return Object.hasOwn(DOWNLOAD_MODELS_FAMILY_LABELS, family)
+        ? DOWNLOAD_MODELS_FAMILY_LABELS[family]
+        : family;
 }
 
 // Plain-language copy for each role. The same wording labels the Get started
@@ -318,6 +328,34 @@ function formatDownloadModelsContextTokens(tokenCount) {
         return (tokenCount / 1_000).toFixed(0) + "K context";
     }
     return tokenCount + " context";
+}
+
+// Transfer rate and time left as the download card prints them.
+function formatDownloadModelsRate(bytesPerSecond) {
+    if (bytesPerSecond >= 1073741824) {
+        return (bytesPerSecond / 1073741824).toFixed(1) + " GB/s";
+    }
+    if (bytesPerSecond >= 1_000_000) {
+        return (bytesPerSecond / 1_000_000).toFixed(1) + " MB/s";
+    }
+    return Math.max(1, Math.round(bytesPerSecond / 1_000)) + " KB/s";
+}
+
+function formatDownloadModelsRemainingTime(remainingSeconds) {
+    if (!(remainingSeconds > 0) || !Number.isFinite(remainingSeconds)) {
+        return "Calculating time remaining";
+    }
+    if (remainingSeconds < 60) return "Less than a minute left";
+    const remainingMinutes = Math.round(remainingSeconds / 60);
+    if (remainingMinutes < 60) {
+        return remainingMinutes === 1
+            ? "About 1 minute left"
+            : "About " + remainingMinutes + " minutes left";
+    }
+    const remainingHours = Math.round(remainingMinutes / 60);
+    return remainingHours === 1
+        ? "About 1 hour left"
+        : "About " + remainingHours + " hours left";
 }
 
 function createDownloadModelsHeroSummary(catalogRows, catalogDocument) {

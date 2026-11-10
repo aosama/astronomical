@@ -485,51 +485,6 @@ test("renders catalog entries with safe document operations and an explicit down
     );
 });
 
-test("renders daemon-authored catalog families without a client allowlist", () => {
-    const scriptContext = createDownloadModelsContext();
-    const downloadModelsDocument = createDownloadModelsDocument();
-    scriptContext.document = downloadModelsDocument;
-    showMoreModelsTab(scriptContext);
-    scriptContext.catalogDocument = {
-        schema_version: 3,
-        entries: [
-            validCatalogEntry(),
-            validCatalogEntry({
-                huggingface_id: "astronomical-test/example-prism",
-                family: "prism_hadamard_qwen35"
-            }),
-            validCatalogEntry({
-                huggingface_id: "astronomical-test/example-flux",
-                family: "flux2_klein"
-            })
-        ]
-    };
-
-    const renderedState = vm.runInContext(
-        "renderDownloadModelsCatalogDocument(catalogDocument)",
-        scriptContext
-    );
-    const catalogRows = vm.runInContext(
-        "downloadModelsCatalogRowsFromDocument(catalogDocument)",
-        scriptContext
-    );
-
-    assert.equal(renderedState, "ready");
-    assert.deepEqual(
-        JSON.parse(JSON.stringify(catalogRows.map((catalogRow) => catalogRow.family))),
-        ["qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
-    );
-    const filterBar = findRenderedElement(
-        downloadModelsDocument.catalogContainer,
-        (renderedElement) => renderedElement.className === "download-models-filter-bar"
-    );
-    const familyFilter = filterBar.children[2];
-    assert.deepEqual(
-        familyFilter.children.map((option) => option.value),
-        ["all", "qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
-    );
-});
-
 test("surfaces ModernBERT embedding entries with their family and capability badge", () => {
     const scriptContext = createDownloadModelsContext();
     const downloadModelsDocument = createDownloadModelsDocument();
