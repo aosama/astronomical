@@ -3,7 +3,7 @@
 
 use super::super::half_float::f32_to_half_bits;
 use super::super::safetensors_file::TensorElementType;
-use super::{decoded_weights, half_bits_bytes, half_precision_bytes};
+use super::{float32_values, half_bits_bytes, half_precision_bytes};
 
 fn single_precision_bytes(values: &[f32]) -> Vec<u8> {
     let mut single_bytes = Vec::with_capacity(values.len() * 4);
@@ -17,7 +17,7 @@ fn single_precision_bytes(values: &[f32]) -> Vec<u8> {
 fn should_decode_half_precision_bytes_into_their_values() {
     let half_bytes = half_bits_bytes(&[0x3C00, 0xC000, 0x3800]);
 
-    let weights = decoded_weights(&half_bytes, TensorElementType::Float16)
+    let weights = float32_values(&half_bytes, TensorElementType::Float16)
         .expect("half-precision bytes should decode");
 
     assert_eq!(weights, vec![1.0, -2.0, 0.5]);
@@ -25,7 +25,7 @@ fn should_decode_half_precision_bytes_into_their_values() {
 
 #[test]
 fn should_decode_single_precision_bytes_into_their_values() {
-    let weights = decoded_weights(
+    let weights = float32_values(
         &single_precision_bytes(&[0.1, -3.25, 1.0e-6]),
         TensorElementType::Float32,
     )
@@ -36,7 +36,7 @@ fn should_decode_single_precision_bytes_into_their_values() {
 
 #[test]
 fn should_refuse_to_read_an_integer_tensor_as_weights() {
-    assert!(decoded_weights(&[0; 8], TensorElementType::Unsigned32).is_err());
+    assert!(float32_values(&[0; 8], TensorElementType::Unsigned32).is_err());
 }
 
 #[test]

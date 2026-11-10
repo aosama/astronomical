@@ -155,7 +155,7 @@ fn should_refuse_a_tensor_whose_byte_range_disagrees_with_its_shape() {
 }
 
 #[test]
-fn should_refuse_an_element_type_a_laya_checkpoint_never_holds() {
+fn should_refuse_an_element_type_no_converter_reads() {
     let checkpoint_directory = checkpoint_file_with(
         r#"{"a":{"dtype":"I64","shape":[1],"data_offsets":[0,8]}}"#,
         &[0; 8],
@@ -212,4 +212,22 @@ fn should_accept_a_tensor_that_ends_exactly_at_the_end_of_the_file() {
     );
 
     assert!(SourceCheckpoint::open(&checkpoint_directory.path().join("model.safetensors")).is_ok());
+}
+
+#[test]
+fn should_read_a_bfloat16_tensor_record() {
+    let checkpoint_directory = checkpoint_file_with(
+        r#"{"a":{"dtype":"BF16","shape":[2,3],"data_offsets":[0,12]}}"#,
+        &[0; 12],
+    );
+
+    let source_checkpoint =
+        SourceCheckpoint::open(&checkpoint_directory.path().join("model.safetensors"))
+            .expect("a bfloat16 tensor should open");
+
+    assert_eq!(
+        source_checkpoint.tensor_records[0].element_type,
+        TensorElementType::BFloat16
+    );
+    assert_eq!(source_checkpoint.tensor_records[0].byte_count, 12);
 }

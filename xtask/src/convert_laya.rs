@@ -15,21 +15,21 @@
 //! source config is never copied.
 
 mod affine_quantization;
-mod half_float;
 mod laya_config;
-mod progress;
-mod safetensors_file;
-mod tensor_bytes;
 mod tensor_plan;
+
+// Shared with the other converters; imported here so this converter's
+// modules reach them as `super::half_float` and `super::safetensors_file`.
+use crate::model_files::{half_float, safetensors_file};
 
 use std::fs;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
+use crate::model_files::conversion_progress::ConversionProgress;
+use crate::model_files::tensor_values::{float32_values, half_bits_bytes, half_precision_bytes};
 use affine_quantization::quantize_matrix;
-use progress::ConversionProgress;
 use safetensors_file::{OutputCheckpoint, PlannedTensor, SourceCheckpoint, TensorRecord};
-use tensor_bytes::{decoded_weights, half_bits_bytes, half_precision_bytes};
 use tensor_plan::{TensorTreatment, planned_output_tensors, tensor_treatment};
 
 const USAGE: &str = "usage: cargo xtask convert-laya --checkpoint DIRECTORY --output DIRECTORY";
@@ -135,7 +135,7 @@ fn convert_weights(
         .map_err(|create_error| format!("could not create the weights file: {create_error}"))?;
     let mut output_checkpoint =
         OutputCheckpoint::begin(BufWriter::new(weights_file), planned_tensors)?;
-    let mut conversion_progress = ConversionProgress::start(total_source_bytes);
+    let mut conversion_progress = ConversionProgress::start("convert-laya", total_source_bytes);
     for source_record in &source_records {
         let source_bytes = source_checkpoint.read_tensor_bytes(source_record)?;
         append_converted_tensor(&mut output_checkpoint, source_record, source_bytes)?;
@@ -163,7 +163,7 @@ fn append_converted_tensor<OutputSink: std::io::Write>(
             &half_precision_bytes(source_bytes, source_record.element_type)?,
         ),
         TensorTreatment::Quantized { module_name } => {
-            let weights = decoded_weights(&source_bytes, source_record.element_type)?;
+            let weights = float32_values(&source_bytes, source_record.element_type)?;
             let quantized_matrix = quantize_matrix(&weights)
                 .map_err(|quantization_error| format!("{module_name}: {quantization_error}"))?;
             // Four one-byte levels packed lowest first are the little-endian
