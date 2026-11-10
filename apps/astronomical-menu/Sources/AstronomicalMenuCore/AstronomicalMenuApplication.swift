@@ -142,7 +142,10 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
         .acknowledgeWelcome()
       showChatWindow()
     } else {
-      DispatchQueue.main.async { NSApp.setActivationPolicy(.accessory) }
+      // Deferred so the launch finishes first; by then a chat link delivered
+      // during launch may already have opened chat, which keeps the app
+      // regular (see returnToMenuBarOnlyUnlessChatIsOpen).
+      DispatchQueue.main.async { [weak self] in self?.returnToMenuBarOnlyUnlessChatIsOpen() }
     }
     // Full auto-repair (owner decision on issue #825): a terminal-command
     // link this app owns dangles whenever the bundle moves; recreating it on
@@ -243,7 +246,16 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   // Closing chat restores the accessory (no Dock icon) posture the menu
   // application normally keeps.
   private func showChatWindow() {
-    chatWindowController.showChatWindow(handleClose: { _ = NSApp.setActivationPolicy(.accessory) })
+    chatWindowController.showChatWindow(handleClose: { [weak self] in self?.returnToMenuBarOnlyUnlessChatIsOpen() })
+  }
+
+  /// The one way back to the accessory (menu-bar-only) posture. An accessory
+  /// app never owns the menu bar, so switching while chat is on screen left
+  /// the conversation's menus unclickable; that happened when the launch's
+  /// deferred switch ran after a chat link had already opened the window.
+  private func returnToMenuBarOnlyUnlessChatIsOpen() {
+    guard !chatWindowController.isShowingChat else { return }
+    NSApp.setActivationPolicy(.accessory)
   }
 
   // The Observatory console hands chat over through its channel's scheme; macOS
@@ -275,7 +287,7 @@ public final class AstronomicalMenuApplication: NSObject, NSApplicationDelegate,
   // The popover's "Your Astro…" opens chat on the page with every welcome
   // answer, so the welcome is always one click from the menu bar.
   private func showYourAstro() {
-    chatWindowController.showYourAstro(handleClose: { _ = NSApp.setActivationPolicy(.accessory) })
+    chatWindowController.showYourAstro(handleClose: { [weak self] in self?.returnToMenuBarOnlyUnlessChatIsOpen() })
   }
 
   private func openObservatory() {
