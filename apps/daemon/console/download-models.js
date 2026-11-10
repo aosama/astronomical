@@ -506,7 +506,7 @@ function downloadModelsFailureTitle(errorCode) {
         download_gated: "This model requires Hugging Face access",
         checksum_mismatch: "Downloaded files did not pass verification",
         model_already_present: "Another model already uses this download location. Move it elsewhere, then cancel this download and try again.",
-        model_not_executable: "This version of Astronomical cannot run this model. Cancel to free the download."
+        model_not_executable: "This version of Astronomical cannot run this model. Cancel it to download another model."
     };
     return messages[errorCode] || "Download failed. You can resume it.";
 }

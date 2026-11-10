@@ -1,6 +1,7 @@
 // Astronomical Observatory Download Models rendering engine.
 // Owns model card construction, capability badges, download hero, expandable
-// details, hero summary, and filter bar. All catalog values enter the document
+// details, hero summary, filter bar, and the transfer rate and time-left text
+// the download progress line prints. All catalog values enter the document
 // only through textContent and created elements.
 
 // Every family in registry/download_catalog.json needs a name here: the family
