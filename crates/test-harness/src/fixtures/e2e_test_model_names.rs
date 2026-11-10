@@ -99,6 +99,9 @@ pub fn flux2_klein_model_id() -> &'static str {
     model_id_for_role(FLUX2_KLEIN_ROLE)
 }
 
+/// The largest sparse model in the catalog: its 4,096-token prefill chunk
+/// leaves almost no headroom at a 37 GiB ceiling, which is what exposed the
+/// prefill memory-recovery freeze being undone (issue #1729).
 pub fn largest_sparse_moe_streaming_model_id() -> &'static str {
     model_id_for_role(LARGEST_SPARSE_MOE_STREAMING_ROLE)
 }
