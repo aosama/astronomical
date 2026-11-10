@@ -123,7 +123,8 @@ impl ResolvedModelPolicyCatalog {
             | ModelFamily::PrismHadamardQwen35
             | ModelFamily::ModernBert
             | ModelFamily::Laya
-            | ModelFamily::Kev => {
+            | ModelFamily::Kev
+            | ModelFamily::Clef => {
                 WorkerModelConfiguration::Flux2Klein(WorkerFlux2KleinModelConfiguration {
                     model_id: discovered_model.model_id.clone(),
                     model_family: WorkerImageGenerationModelFamily::Flux2Klein,
@@ -207,13 +208,20 @@ impl ResolvedModelPolicyCatalog {
 }
 
 /// The worker's name for a decision family. A decision capability is only
-/// ever discovered on Kev and Laya folders; any other family is reported as
-/// Laya, and the worker refuses it at load because the folder is not one.
+/// ever discovered on Kev, Clef and Laya folders; any other family is
+/// reported as Laya, and the worker refuses it at load because the folder
+/// is not one.
 fn worker_decision_family(model_family: ModelFamily) -> WorkerDecisionModelFamily {
-    if model_family == ModelFamily::Kev {
-        return WorkerDecisionModelFamily::Kev;
-    }
-    WorkerDecisionModelFamily::Laya
+    astronomical_config::exhaustive_table!(model_family, {
+        ModelFamily::Kev => WorkerDecisionModelFamily::Kev,
+        ModelFamily::Clef => WorkerDecisionModelFamily::Clef,
+        ModelFamily::Laya => WorkerDecisionModelFamily::Laya,
+        ModelFamily::Qwen3_5 => WorkerDecisionModelFamily::Laya,
+        ModelFamily::PrismHadamardQwen35 => WorkerDecisionModelFamily::Laya,
+        ModelFamily::Flux2Klein => WorkerDecisionModelFamily::Laya,
+        ModelFamily::QwenImage21 => WorkerDecisionModelFamily::Laya,
+        ModelFamily::ModernBert => WorkerDecisionModelFamily::Laya,
+    })
 }
 
 #[cfg(test)]

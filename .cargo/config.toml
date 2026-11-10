@@ -144,6 +144,11 @@ test-laya-engine-requests = "run -p xtask -- test-run --package astronomical-acc
 # measurement for them. It prints numbers and asserts no threshold; a few
 # seconds after the build.
 measure-laya-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --filter should_measure_laya_decision_latency_at_the_token_limit"
+# Clef latency on an optimized build: after one warmup request, the median of
+# 3 requests with 1, 5 and 10 questions, each a full 16,384-token sequence (a
+# long Romeo and Juliet state cut to fit). It prints numbers, with progress
+# and an ETA every 5 seconds, and asserts no threshold.
+measure-clef-decision-latency = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --release --ignored --case-budget-seconds 1800 --filter should_measure_clef_decision_latency_at_the_sequence_limit"
 # Kev latency on an optimized build: after one warmup request, one request
 # each with 1, 5 and 10 questions on a Romeo and Juliet state at Kev's
 # 65,536-token state limit, with the state's prefill rate. It prints numbers,
@@ -168,6 +173,12 @@ test-kev-engine-requests = "run -p xtask -- test-run --package astronomical-acce
 # row's tokens identical, probabilities within 0.05 of the float32 reference.
 # Regenerate a fixture with tests/fixtures/generate_kev_reference_decisions.py.
 test-kev-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter kev_reference_decisions"
+# Clef parity with Clef's reference scoring (issue #2032 phase 8) on the
+# `mlx-community/clef-flash-8bit` folder given as `model_directory`: the
+# sequence's tokens identical, probabilities within 0.05 of a float32
+# reference on the same weights. Regenerate the fixture with
+# tests/fixtures/generate_clef_reference_decisions.py.
+test-clef-reference-decisions = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter clef_reference_decisions"
 # The decisions lane from the outside in (issue #2032): the `astronomical
 # decide` verb against a stub daemon, POST /v1/systemone and the daemon IPC
 # frame against scripted workers, the worker's decisions slot, and discovery

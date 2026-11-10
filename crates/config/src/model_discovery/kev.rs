@@ -11,6 +11,7 @@ use std::fs;
 use std::path::Path;
 
 use super::bounded_artifact_file;
+use super::marked_decision_folder::{MarkedDecisionMetadata, safetensors_total_bytes};
 
 const KEV_SETTINGS_FILE_NAME: &str = "kev_decision.json";
 const KEV_HEAD_FILE_NAME: &str = "kev_head.safetensors";
@@ -19,12 +20,6 @@ const MAXIMUM_SETTINGS_BYTES: u64 = 64 * 1024;
 /// token included, and 8,192 more for the question (the reference's
 /// `SERVE_MAX_STATE` and `SERVE_MAX_BRANCH`).
 const KEV_MAXIMUM_TOKENS_PER_QUESTION: u32 = 65_536 + 8_192;
-
-/// Family-derived metadata returned to neutral discovery orchestration.
-pub(super) struct KevDiscoveredModelMetadata {
-    pub maximum_tokens_per_question: u32,
-    pub model_size_bytes: u64,
-}
 
 /// Whether `model_directory` is marked as a Kev decision model.
 pub(super) fn classifies_directory(model_directory: &Path) -> bool {
@@ -44,24 +39,13 @@ pub(super) fn classifies_directory(model_directory: &Path) -> bool {
 }
 
 /// Validates shallow Kev completeness and derives public discovery metadata.
-pub(super) fn discover_model_metadata(
-    model_directory: &Path,
-) -> Option<KevDiscoveredModelMetadata> {
+pub(super) fn discover_model_metadata(model_directory: &Path) -> Option<MarkedDecisionMetadata> {
     for required_file_name in [KEV_HEAD_FILE_NAME, "tokenizer.json", "config.json"] {
         if !model_directory.join(required_file_name).is_file() {
             return None;
         }
     }
-    let mut model_size_bytes = 0;
-    for directory_entry in fs::read_dir(model_directory).ok()?.flatten() {
-        if directory_entry
-            .file_name()
-            .to_string_lossy()
-            .ends_with(".safetensors")
-        {
-            model_size_bytes += directory_entry.metadata().ok()?.len();
-        }
-    }
+    let model_size_bytes = safetensors_total_bytes(model_directory)?;
     // The head alone is a few megabytes; a folder without backbone weights
     // is an incomplete download, not a model.
     let head_bytes = fs::metadata(model_directory.join(KEV_HEAD_FILE_NAME))
@@ -70,8 +54,9 @@ pub(super) fn discover_model_metadata(
     if model_size_bytes <= head_bytes {
         return None;
     }
-    Some(KevDiscoveredModelMetadata {
+    Some(MarkedDecisionMetadata {
         maximum_tokens_per_question: KEV_MAXIMUM_TOKENS_PER_QUESTION,
         model_size_bytes,
+        settings_file_name: KEV_SETTINGS_FILE_NAME,
     })
 }

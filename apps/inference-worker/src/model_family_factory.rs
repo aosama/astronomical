@@ -21,11 +21,12 @@ use astronomical_ipc_protocol::{
     WorkerQwenImage21ModelConfiguration,
 };
 use astronomical_model_serving::{
-    DecisionEngine, EngineBackedWorker, Flux2KleinArtifactProvenance, Flux2KleinImageEngine,
-    KevDecisionEngine, LayaDecisionEngine, ModelFactory, ModelFactoryRuntime,
-    ModelFamilyGenerationProcessor, ModelFamilyImageEngine, ModelFamilyInferenceEngine,
-    ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings, QwenImage21ArtifactProvenance,
-    QwenImage21ImageEngine, initialize_prism_hadamard_qwen35_model_with_serving_settings,
+    ClefDecisionEngine, DecisionEngine, EngineBackedWorker, Flux2KleinArtifactProvenance,
+    Flux2KleinImageEngine, KevDecisionEngine, LayaDecisionEngine, ModelFactory,
+    ModelFactoryRuntime, ModelFamilyGenerationProcessor, ModelFamilyImageEngine,
+    ModelFamilyInferenceEngine, ModernBertEmbeddingEngine, PrismHadamardQwen35ServingSettings,
+    QwenImage21ArtifactProvenance, QwenImage21ImageEngine,
+    initialize_prism_hadamard_qwen35_model_with_serving_settings,
 };
 
 mod qwen3_5_dense_engine_placement;
@@ -166,7 +167,7 @@ impl ModelFamilyFactory {
                     .await
             }
             (
-                Some(decision_family @ (ModelFamily::Laya | ModelFamily::Kev)),
+                Some(decision_family @ (ModelFamily::Laya | ModelFamily::Kev | ModelFamily::Clef)),
                 WorkerModelConfiguration::Decisions(model_configuration),
             ) => self.create_decision_engine(
                 decision_family,
@@ -289,7 +290,10 @@ impl
             }
             (
                 encoder_family @ Some(
-                    ModelFamily::ModernBert | ModelFamily::Laya | ModelFamily::Kev,
+                    ModelFamily::ModernBert
+                    | ModelFamily::Laya
+                    | ModelFamily::Kev
+                    | ModelFamily::Clef,
                 ),
                 encoder_model_configuration @ (WorkerModelConfiguration::Embeddings(_)
                 | WorkerModelConfiguration::Decisions(_)),
@@ -571,23 +575,13 @@ impl ModelFamilyFactory {
         model_directory_path: &std::path::Path,
         model_configuration: WorkerDecisionModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
-        let decision_engine = if decision_family == ModelFamily::Kev {
-            KevDecisionEngine::new(
-                model_configuration.model_id,
-                model_directory_path,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.allocator_cache_memory_limit_bytes,
-            )
-            .map(boxed_decision_engine)
-        } else {
-            LayaDecisionEngine::new(
-                model_configuration.model_id,
-                model_directory_path,
-                self.effective_mlx_memory_ceiling_bytes,
-                self.allocator_cache_memory_limit_bytes,
-            )
-            .map(boxed_decision_engine)
-        };
+        let decision_engine = unloaded_decision_engine(
+            decision_family,
+            model_configuration.model_id,
+            model_directory_path,
+            self.effective_mlx_memory_ceiling_bytes,
+            self.allocator_cache_memory_limit_bytes,
+        );
         match decision_engine {
             Ok(decision_engine) => Ok(ModelFactoryRuntime::Decisions(decision_engine)),
             // The failure text is the engine's own bounded, path-free reason.
@@ -634,6 +628,42 @@ impl ModelFamilyFactory {
         })?;
         Ok(ModelFactoryRuntime::Embeddings(embedding_engine))
     }
+}
+
+/// The unloaded engine of a decision family, behind the trait object the
+/// worker serves from. Only decision families reach here; any other is
+/// refused as a mismatch before this is called.
+fn unloaded_decision_engine(
+    decision_family: ModelFamily,
+    model_id: String,
+    model_directory_path: &std::path::Path,
+    effective_mlx_memory_ceiling_bytes: usize,
+    allocator_cache_memory_limit_bytes: usize,
+) -> Result<Box<dyn DecisionEngine>, String> {
+    let engine_outcome = match decision_family {
+        ModelFamily::Kev => KevDecisionEngine::new(
+            model_id,
+            model_directory_path,
+            effective_mlx_memory_ceiling_bytes,
+            allocator_cache_memory_limit_bytes,
+        )
+        .map(boxed_decision_engine),
+        ModelFamily::Clef => ClefDecisionEngine::new(
+            model_id,
+            model_directory_path,
+            effective_mlx_memory_ceiling_bytes,
+            allocator_cache_memory_limit_bytes,
+        )
+        .map(boxed_decision_engine),
+        _ => LayaDecisionEngine::new(
+            model_id,
+            model_directory_path,
+            effective_mlx_memory_ceiling_bytes,
+            allocator_cache_memory_limit_bytes,
+        )
+        .map(boxed_decision_engine),
+    };
+    engine_outcome.map_err(|initialization_failure| initialization_failure.to_string())
 }
 
 /// One decision engine behind the trait object the worker serves from.

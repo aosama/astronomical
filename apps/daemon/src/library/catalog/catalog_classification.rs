@@ -20,6 +20,8 @@ pub enum DownloadCatalogFamily {
     PrismHadamardQwen35,
     /// A decision model; the wire name matches the discovery model_type.
     Laya,
+    /// A decision model; the wire name matches the discovery family.
+    Clef,
 }
 
 impl DownloadCatalogFamily {
@@ -32,6 +34,7 @@ impl DownloadCatalogFamily {
             Self::ModernBert => "modernbert",
             Self::PrismHadamardQwen35 => "prism_hadamard_qwen35",
             Self::Laya => "laya",
+            Self::Clef => "clef",
         })
     }
 }

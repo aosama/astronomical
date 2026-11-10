@@ -116,6 +116,35 @@ fn should_ship_laya_as_a_decision_model_with_only_its_checked_checkpoints() {
     assert!(description.contains("512 tokens") && description.contains("1,024 tokens"));
 }
 
+/// The shipped Clef entry downloads the backbone, the joint head and the
+/// tokenizer the reference comparison used, and not the build's own Python.
+#[test]
+fn should_ship_clef_flash_as_a_decision_model_with_its_head_and_limit() {
+    let download_catalog =
+        DownloadCatalog::load_bundled().expect("the shipped bundled catalog should parse");
+    let mut clef_entry = None;
+    for catalog_entry in download_catalog.entries() {
+        if catalog_entry.huggingface_id() == "mlx-community/clef-flash-8bit" {
+            clef_entry = Some(catalog_entry);
+        }
+    }
+    let clef_entry = clef_entry.expect("the shipped catalog should offer Clef Flash");
+
+    assert_eq!(clef_entry.role(), DownloadCatalogRole::Decision);
+    assert_eq!(clef_entry.family().as_str(), "clef");
+    assert!(clef_entry.capabilities().supports_decisions);
+    assert_eq!(clef_entry.upstream_license(), Some("Apache-2.0"));
+    let selection = clef_entry.download_path_selection();
+    assert!(selection.includes("joint_head.safetensors"));
+    assert!(selection.includes("joint_head_config.json"));
+    assert!(selection.includes("model-00002-of-00002.safetensors"));
+    assert!(!selection.includes("clef_mlx.py"));
+    let description = clef_entry
+        .description()
+        .expect("the Clef entry should state its limits");
+    assert!(description.contains("16,384 tokens") && description.contains("Text only"));
+}
+
 #[test]
 fn should_accept_bounded_executable_payload_selection_and_reject_unsafe_rules() {
     let selected_entry = entry_with_overrides(serde_json::json!({

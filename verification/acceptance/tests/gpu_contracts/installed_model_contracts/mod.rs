@@ -1,3 +1,7 @@
+#[cfg(feature = "direct-mlx")]
+mod clef_decision_latency;
+#[cfg(feature = "direct-mlx")]
+mod clef_reference_decisions;
 mod config;
 #[cfg(feature = "direct-mlx")]
 mod decision_reference_fixture;
