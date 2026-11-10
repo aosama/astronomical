@@ -171,6 +171,7 @@ impl DownloadExecutablePreflight {
             ModelFamily::ModernBert
             | ModelFamily::Laya
             | ModelFamily::Kev
+            | ModelFamily::Clef
             | ModelFamily::Flux2Klein
             | ModelFamily::QwenImage21 => Ok(()),
             ModelFamily::Qwen3_5 => {

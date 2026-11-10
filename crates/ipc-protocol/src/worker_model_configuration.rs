@@ -66,6 +66,9 @@ pub enum WorkerDecisionModelFamily {
     /// A Qwen3.5 backbone whose pointer head scores each option's closing
     /// token against its question's decision token.
     Kev,
+    /// A Qwen3.5 backbone read once over the whole request, whose joint
+    /// schema head scores every option of every question together.
+    Clef,
 }
 
 /// Exact decision artifact identity required by the selected profile.

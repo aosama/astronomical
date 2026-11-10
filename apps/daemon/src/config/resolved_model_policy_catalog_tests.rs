@@ -14,6 +14,14 @@ fn should_name_a_kev_model_kev_to_the_worker() {
 }
 
 #[test]
+fn should_name_a_clef_model_clef_to_the_worker() {
+    assert_eq!(
+        worker_decision_family(ModelFamily::Clef),
+        WorkerDecisionModelFamily::Clef
+    );
+}
+
+#[test]
 fn should_name_a_laya_model_laya_to_the_worker() {
     assert_eq!(
         worker_decision_family(ModelFamily::Laya),

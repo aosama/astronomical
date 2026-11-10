@@ -5,7 +5,9 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use super::flux2_klein_mlx_4bit;
-use super::{flux2_klein, kev, laya, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5};
+use super::{
+    clef, flux2_klein, kev, laya, modernbert, prism_hadamard_qwen35, qwen_image_21, qwen3_5,
+};
 
 const MAXIMUM_FAMILY_CONFIG_BYTES: u64 = 4 * 1024 * 1024;
 const MAXIMUM_PIPELINE_INDEX_BYTES: u64 = 1024 * 1024;
@@ -23,6 +25,9 @@ pub enum ModelFamily {
     /// A decision model: a Qwen3.5 backbone with a pointer head over the
     /// options, marked by `kev_decision.json`.
     Kev,
+    /// A decision model: a Qwen3.5 backbone read once over the whole
+    /// request, with a joint schema head, marked by `joint_head.safetensors`.
+    Clef,
 }
 
 impl ModelFamily {
@@ -61,6 +66,7 @@ impl ModelFamily {
             Self::ModernBert => "modernbert",
             Self::Laya => "laya",
             Self::Kev => "kev",
+            Self::Clef => "clef",
         })
     }
 }
@@ -123,15 +129,30 @@ pub fn classify_model_directory(
     classify_config_directory(model_directory)
 }
 
+/// Each family a marker file declares, with the check that finds its marker.
+/// Whether a folder carries one family's marker file.
+type MarkerCheck = fn(&Path) -> bool;
+
+const FAMILIES_MARKED_BY_FILE: [(MarkerCheck, ModelFamily); 3] = [
+    (
+        flux2_klein_mlx_4bit::classifies_directory,
+        ModelFamily::Flux2Klein,
+    ),
+    (kev::classifies_directory, ModelFamily::Kev),
+    (clef::classifies_directory, ModelFamily::Clef),
+];
+
 /// The families a folder declares with a marker file rather than with its
 /// config's model type: the 4-bit FLUX.2 Klein build, whose pipeline index
-/// lives under its transformer, and Kev, whose config is its Qwen3.5
-/// backbone's.
+/// lives under its transformer, and Kev and Clef, whose configs are their
+/// Qwen3.5 backbones'.
 fn family_marked_by_file(model_directory: &Path) -> Option<ModelFamily> {
-    if flux2_klein_mlx_4bit::classifies_directory(model_directory) {
-        return Some(ModelFamily::Flux2Klein);
+    for (classifies_directory, marked_family) in FAMILIES_MARKED_BY_FILE {
+        if classifies_directory(model_directory) {
+            return Some(marked_family);
+        }
     }
-    kev::classifies_directory(model_directory).then_some(ModelFamily::Kev)
+    None
 }
 
 /// Reads `model_type` from the directory's `config.json`.
