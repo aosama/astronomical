@@ -48,14 +48,14 @@ struct OrbitalTelemetryPopover: View {
         VStack(alignment: .leading, spacing: 4) {
           HStack(spacing: 6) {
             Text("ASTRONOMICAL").font(PopoverTypography.boldCaption).tracking(2).foregroundStyle(
-              applicationIdentity.channel == .development ? .orange : .cyan)
+              applicationIdentity.channel == .development ? .orange : AstronomicalBrandPalette.accentColor)
             Text(applicationIdentity.channel.displayName.uppercased())
               .font(PopoverTypography.semiboldCaption)
               .padding(.horizontal, 6)
               .padding(.vertical, 2)
               .background(
                 applicationIdentity.channel == .development
-                  ? .orange.opacity(0.2) : .cyan.opacity(0.2),
+                  ? Color.orange.opacity(0.2) : AstronomicalBrandPalette.accentColor.opacity(0.2),
                 in: Capsule())
           }
           HStack(alignment: .center, spacing: 6) {
@@ -80,7 +80,7 @@ struct OrbitalTelemetryPopover: View {
           .padding(.horizontal, 8).padding(.vertical, 4)
           .background(
             statusDocument.isActive || statusDocument.isLoadingModel
-              ? .cyan.opacity(0.2) : .secondary.opacity(0.15), in: Capsule())
+              ? AstronomicalBrandPalette.accentColor.opacity(0.2) : Color.secondary.opacity(0.15), in: Capsule())
       }
       HStack(alignment: .top, spacing: 16) {
         summaryMetric("Size on disk", statusDocument.modelDiskSizeTitle)
@@ -179,13 +179,13 @@ struct OrbitalTelemetryPopover: View {
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)
-      .tint(.cyan)
+      .tint(AstronomicalBrandPalette.accentColor)
       Button(action: openChat) {
         Label("Chat", systemImage: "bubble.left.and.bubble.right")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)
-      .tint(.indigo)
+      .tint(AstronomicalBrandPalette.accentColor)
       HStack {
         Button("Reload config", action: reloadConfiguration)
         Button("Restart server", action: restartServer)
@@ -384,7 +384,7 @@ struct PromptReuseBar: View {
         Spacer()
         Text(percentageTitle).font(PopoverTypography.monospacedBody)
       }
-      HorizontalUsageBar(usageFraction: usageBarFillFraction(reusedFraction), fillColor: .cyan)
+      HorizontalUsageBar(usageFraction: usageBarFillFraction(reusedFraction), fillColor: AstronomicalBrandPalette.accentColor)
       HStack {
         Text("Target work").foregroundStyle(.secondary)
         Spacer()

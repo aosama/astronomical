@@ -13,6 +13,8 @@ import "./chatJourney.test";
 import "./modelSelection.test";
 import "./imageModelPillView.test";
 import "./composerStylesheet.test";
+import "./paletteContrast.test";
+import "./diagramTheme.test";
 import "./imageModelDirectory.test";
 import "./imageModelCatalog.test";
 import "./imageModelSelection.test";

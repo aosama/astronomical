@@ -1,20 +1,91 @@
 /*
  * Design tokens — the single source of the app's look. The sidebar, composer,
  * and failure banner draw from the same tokens as the transcript.
+ *
+ * The palette is the app icon's: graphite neutrals that lean a hair warm toward
+ * the icon's silver, and its violet as the one accent. No neutral carries blue,
+ * because a navy-tinted gray tints everything drawn on it and reads as a
+ * different platform's app. The names match Observatory's console.css so the
+ * two surfaces read as one product. Text colours hold at least 4.5:1 on
+ * --ground, --sidebar, --surface and --sunk in both appearances.
  */
 :root {
-  --window-background: #0f121a;
-  --panel: #1a1f29;
-  --panel-alt: #242933;
-  --border: #384052;
-  --accent: #5966f2;
-  --text-primary: #f2f2f5;
-  --text-secondary: #b8bdcc;
-  --link: #7394ff;
-  --danger: #f27373;
-  --code-background: #12161f;
+  color-scheme: light dark;
+  --ground: #f5f4f1;
+  --sidebar: #ecebe7;
+  --surface: #ffffff;
+  --sunk: #e8e6e1;
+  /* Lines and fills are the ink colour at low strength rather than solid
+     grays, so one value sits correctly on every surface above. */
+  --line: rgb(28 27 25 / 12%);
+  --line-strong: rgb(28 27 25 / 24%);
+  --fill: rgb(28 27 25 / 5%);
+  --hover: rgb(28 27 25 / 5%);
+  --active: rgb(28 27 25 / 9%);
+  --ink: #1c1b19;
+  --ink-2: #4a4843;
+  --ink-3: #6a6761;
+  --accent: #6a3fc4;
+  --accent-ink: #ffffff;
+  --accent-soft: #ede8fa;
+  --accent-text: #5a33b8;
+  --danger: #b3261e;
+  --danger-soft: #fbedeb;
+  --bubble-user: #e8e6e1;
+  --popover-shadow: 0 10px 30px rgb(0 0 0 / 14%);
+  --syntax-keyword: #b31d28;
+  --syntax-title: #5a32a3;
+  --syntax-attribute: #0550ae;
+  --syntax-string: #0a3069;
+  --syntax-built-in: #953800;
+  --syntax-comment: #5f6670;
+  --syntax-name: #116329;
+  --syntax-bullet: #7d4e00;
+  --syntax-addition: #116329;
+  --syntax-addition-ground: #d5efd9;
+  --syntax-deletion: #82071e;
+  --syntax-deletion-ground: #fbd9da;
   --reading-column: 820px;
   --sidebar-width: 248px;
+}
+
+/* The app follows the Mac's appearance; it has no switch of its own because the
+   window's native title bar follows the Mac too and the two must agree. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #181817;
+    --sidebar: #1f1f1d;
+    --surface: #232321;
+    --sunk: #121211;
+    --line: rgb(236 234 228 / 12%);
+    --line-strong: rgb(236 234 228 / 24%);
+    --fill: rgb(236 234 228 / 7%);
+    --hover: rgb(236 234 228 / 6%);
+    --active: rgb(236 234 228 / 11%);
+    --ink: #eceae4;
+    --ink-2: #bdbab2;
+    --ink-3: #98958d;
+    --accent: #a68cff;
+    --accent-ink: #17122b;
+    --accent-soft: #2a2342;
+    --accent-text: #b9a4ff;
+    --danger: #ff9087;
+    --danger-soft: #3a1d1a;
+    --bubble-user: #2b2b28;
+    --popover-shadow: 0 10px 30px rgb(0 0 0 / 45%);
+    --syntax-keyword: #ff7b72;
+    --syntax-title: #d2a8ff;
+    --syntax-attribute: #79c0ff;
+    --syntax-string: #a5d6ff;
+    --syntax-built-in: #ffa657;
+    --syntax-comment: #8b949e;
+    --syntax-name: #7ee787;
+    --syntax-bullet: #f2cc60;
+    --syntax-addition: #aff5b4;
+    --syntax-addition-ground: #033a16;
+    --syntax-deletion: #ffdcd7;
+    --syntax-deletion-ground: #67060c;
+  }
 }
 
 * {
@@ -26,8 +97,8 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--window-background);
-  color: var(--text-primary);
+  background: var(--ground);
+  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   font-size: 18px;
   line-height: 1.62;
@@ -46,7 +117,7 @@ body {
   border: 3px solid transparent;
   border-radius: 999px;
   background-clip: content-box;
-  background-color: rgb(56 64 82 / 85%);
+  background-color: var(--line-strong);
 }
 
 ::-webkit-scrollbar-track {

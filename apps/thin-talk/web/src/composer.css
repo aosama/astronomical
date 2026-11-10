@@ -9,8 +9,8 @@
   margin: 4px 24px 14px;
   padding: 0 4px 8px;
   border-radius: 22px;
-  background: var(--panel);
-  border: 1px solid rgb(89 102 242 / 45%);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
 }
 
 #composer-input {
@@ -22,7 +22,7 @@
   padding: 14px 14px 12px;
   border: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--ink);
   font-family: inherit;
   /* Matches the conversation text, so what you type reads at the same size
    * as the replies above it. */
@@ -38,7 +38,7 @@
 }
 
 #composer-input::placeholder {
-  color: var(--text-secondary);
+  color: var(--ink-2);
   opacity: 0.75;
 }
 
@@ -69,8 +69,8 @@
   padding: 4px 10px;
   border: none;
   border-radius: 999px;
-  background: var(--panel-alt);
-  color: var(--text-primary);
+  background: var(--fill);
+  color: var(--ink);
   font: inherit;
   font-size: 17px;
   cursor: default;
@@ -81,7 +81,7 @@
   height: 32px;
   justify-content: center;
   padding: 0;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 .composer__icon:disabled,
@@ -98,7 +98,7 @@
 
 .composer__chevron,
 .composer__pill-icon {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 /* The model names are shown in full. Only when the window is too narrow for
@@ -140,9 +140,9 @@
   padding: 6px;
   list-style: none;
   border-radius: 12px;
-  background: var(--panel-alt);
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 35%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--popover-shadow);
 }
 
 .composer__menu[hidden] {
@@ -156,7 +156,7 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--ink);
   font: inherit;
   font-size: 17px;
   text-align: left;
@@ -165,15 +165,15 @@
 }
 
 .composer__menu button:hover {
-  background: rgb(89 102 242 / 18%);
+  background: var(--active);
 }
 
 .composer__menu button[aria-checked="true"] {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .composer__menu button:disabled {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 .composer__menu button:disabled:hover {
@@ -188,7 +188,7 @@
 .composer__menu-separator {
   height: 1px;
   margin: 6px 4px;
-  background: var(--border);
+  background: var(--line);
 }
 
 .composer__send {
@@ -197,18 +197,18 @@
   justify-content: center;
   padding: 0;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--accent-ink);
 }
 
 .composer__send:disabled {
-  /* Keep the arrow at full white so the idle button still reads as "send";
+  /* Keep the arrow at full strength so the idle button still reads as "send";
      dim only the fill so it reads as off, not active. */
-  background: #3d47b8;
-  color: #ffffff;
+  background: color-mix(in srgb, var(--accent) 45%, var(--surface));
+  color: var(--accent-ink);
 }
 
 .composer__send--stop {
-  background: rgb(242 115 115 / 80%);
+  background: var(--danger);
 }
 
 /* These classes set display: inline-flex, which beats the browser's own
@@ -230,8 +230,8 @@
   margin: 0 24px 8px;
   padding: 10px 16px;
   border-radius: 14px;
-  background: rgb(242 115 115 / 8%);
-  border: 1px solid rgb(242 115 115 / 35%);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 }
 
 #failure-banner[hidden] {
@@ -250,7 +250,7 @@
 
 .failure-banner__next {
   margin: 2px 0 0;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-size: 14px;
 }
 
@@ -260,7 +260,7 @@
   border: none;
   border-radius: 10px;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--accent-ink);
   font: inherit;
   font-size: 15px;
   cursor: default;

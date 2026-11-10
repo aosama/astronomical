@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import type { Config } from "dompurify";
 import { ContentKey } from "./ContentKey";
+import { mermaidThemeFor } from "./DiagramTheme";
 
 /**
  * Mermaid emits its theme as a `<style>` block inside the SVG; without it the
@@ -97,7 +98,7 @@ export class DiagramPipeline {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: "strict",
-      theme: "dark",
+      theme: mermaidThemeFor(window),
       // Mermaid labels flowcharts as HTML inside <foreignObject> by default, which
       // the SVG sanitiser forbids outright because it can carry arbitrary markup.
       // BOTH keys are required: measured in this shell, the flowchart key alone

@@ -1,21 +1,37 @@
 /*
- * Astro: the first flight and Astro's home. One deliberate space look, drawn
- * from the concept art: deep navy, a pastel trail, and the skill cards'
- * colours. SF Pro Rounded (ui-rounded) gives the friendly display type without
+ * Astro: the first flight and Astro's home. Colour lives in Astro, the trail
+ * and the skill cards. The deep-navy space look from the concept art is a
+ * scene (.first-flight, .your-astro), not the colour of the window: on Astro's
+ * home the same controls sit on the app's own ground and follow the Mac's
+ * light or dark appearance. The scene-or-ground tokens below carry that split. SF Pro Rounded (ui-rounded) gives the friendly display type without
  * bundling a font, which the page's content policy would have to allow.
  */
 :root {
   --astro-space: #0d0f2e;
   --astro-space-deep: #080a22;
   --astro-panel: #1a1d4a;
-  --astro-ink: #eef0ff;
-  --astro-muted: #a6acda;
   --astro-violet: #8c6bff;
   --astro-star: #ffe27a;
-  --astro-chat: #8467f0;
-  --astro-pictures: #4c8bf5;
-  --astro-look: #2fae8f;
-  --astro-read: #e39a55;
+  /* Scene-or-ground tokens: these defaults are for the app's ground and are
+     redefined inside the space scene further down. */
+  --astro-ink: var(--ink);
+  --astro-muted: var(--ink-2);
+  --astro-ink-reverse: var(--ground);
+  --astro-veil: var(--fill);
+  --astro-veil-line: var(--line-strong);
+  --astro-action: var(--accent);
+  --astro-action-ink: var(--accent-ink);
+  --astro-action-glow: none;
+  /* The star-yellow focus ring vanishes on a light ground, so the ground uses
+     the accent and only the scene keeps the star. */
+  --astro-focus: var(--accent);
+  --astro-card-shadow: 0 6px 16px rgb(0 0 0 / 16%);
+  /* Skill colours share one depth so white labels and icons hold at least
+     4.5:1 on every card, on the light ground, the dark ground and the scene. */
+  --astro-chat: #6c4bd8;
+  --astro-pictures: #2b68d4;
+  --astro-look: #1b7a63;
+  --astro-read: #a85a14;
   --astro-voice: #5d628c;
   --astro-trail-1: #4fc3ff;
   --astro-trail-2: #8c6bff;
@@ -119,13 +135,13 @@
   border-radius: 999px;
   padding: 15px 26px;
   cursor: pointer;
-  background: var(--astro-violet);
-  color: #fff;
-  box-shadow: 0 8px 22px rgb(140 107 255 / 45%);
+  background: var(--astro-action);
+  color: var(--astro-action-ink);
+  box-shadow: var(--astro-action-glow);
 }
 
 .astro-button--quiet {
-  background: rgb(255 255 255 / 10%);
+  background: var(--astro-veil);
   color: var(--astro-ink);
   box-shadow: none;
 }
@@ -141,19 +157,19 @@
 .first-flight__choice:focus-visible,
 .your-astro__switch:focus-visible,
 .first-flight__name-field:focus-visible {
-  outline: 3px solid var(--astro-star);
+  outline: 3px solid var(--astro-focus);
   outline-offset: 3px;
 }
 
 .astro-chip {
   font: 500 14px/1.2 -apple-system, system-ui, sans-serif;
   padding: 10px 15px;
-  border: 1px solid rgb(255 255 255 / 16%);
+  border: 1px solid var(--astro-veil-line);
 }
 
 .astro-chip[aria-pressed="true"] {
   background: var(--astro-ink);
-  color: var(--astro-space);
+  color: var(--astro-ink-reverse);
 }
 
 /* ---------- The first flight ---------- */
@@ -167,6 +183,19 @@
   grid-template-rows: minmax(0, 1fr) auto;
   padding: calc(var(--titlebar-inset, 0px) + 12px) 24px 5vh;
   overflow: hidden;
+  --astro-ink: #eef0ff;
+  --astro-muted: #a6acda;
+  --astro-ink-reverse: var(--astro-space);
+  --astro-veil: rgb(255 255 255 / 10%);
+  --astro-veil-line: rgb(255 255 255 / 16%);
+  --astro-action: var(--astro-violet);
+  --astro-action-ink: #fff;
+  --astro-action-glow: 0 8px 22px rgb(140 107 255 / 45%);
+  --astro-focus: var(--astro-star);
+  --astro-card-shadow: 0 12px 30px rgb(0 0 0 / 35%);
+  /* The scene is dark whatever the Mac's appearance, so native controls and
+     scrollbars inside it must be dark too. */
+  color-scheme: dark;
   color: var(--astro-ink);
   background:
     radial-gradient(1200px 520px at 70% 110%, rgb(140 107 255 / 28%), transparent 60%),
@@ -401,7 +430,7 @@
   height: 14px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgb(255 255 255 / 10%);
+  background: var(--astro-veil);
 }
 
 .download-meter__fill {
@@ -446,7 +475,7 @@
   cursor: grab;
   touch-action: none;
   user-select: none;
-  box-shadow: 0 12px 30px rgb(0 0 0 / 35%), inset 0 0 0 1px rgb(255 255 255 / 18%);
+  box-shadow: var(--astro-card-shadow), inset 0 0 0 1px rgb(255 255 255 / 18%);
   transition: transform 0.2s ease;
 }
 
@@ -549,7 +578,7 @@
 
 .astro-home__prompt {
   margin: 4px 0 0;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-size: 17px;
 }
 
