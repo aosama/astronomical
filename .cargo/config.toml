@@ -111,6 +111,18 @@ test-dense-checkpoint-parity = "run -p xtask -- test-run --package astronomical-
 # forward (two layer slots plus the probed working memory). About ten seconds.
 test-dense-prompt-forward-memory = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_keep_a_streamed_prompt_forward_within_the_planned_reserve"
 
+# The ModernBERT trunk shared by embeddings and decision models (issue #2032).
+# `test-modernbert` runs its lib tests: pure checks of batching, masks and
+# config forms, plus contracts on a small synthetic ModernBERT built on the
+# graphics processor (a padded row gets the hidden states it gets alone);
+# about three seconds, no installed model. `test-modernbert-embedding-vectors`
+# embeds three Romeo and Juliet excerpts with the real embedding model and
+# compares every component against vectors recorded before the trunk was
+# restructured; pass `--configuration PATH` naming a JSON file whose
+# `model_directory` is the nomicai-modernbert-embed-base-8bit folder.
+test-modernbert = "test -p astronomical-model-serving --features direct-mlx --lib modernbert"
+test-modernbert-embedding-vectors = "run -p xtask -- test-run --package astronomical-acceptance --features direct-mlx --test installed_model_contracts --ignored --filter should_reproduce_the_embedding_vectors_recorded_before_the_trunk_was_restructured"
+
 # Dense streaming speed ladder (issue #1985), on an optimized build with the
 # weight files kept out of the macOS file cache: the raw layer read rate, one
 # streamed layer, then 10,000 Shakespeare tokens in and 500 out at 0, 8, 16

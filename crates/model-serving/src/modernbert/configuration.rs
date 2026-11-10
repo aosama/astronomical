@@ -45,8 +45,8 @@ impl ModernBertConfiguration {
             maximum_position_count: positive_u32(config_value, "max_position_embeddings")?,
             local_attention_window: positive_u32(config_value, "local_attention")?,
             global_attn_every_n_layers: positive_u32(config_value, "global_attn_every_n_layers")?,
-            global_rope_theta: positive_f32(config_value, "global_rope_theta")?,
-            local_rope_theta: positive_f32(config_value, "local_rope_theta")?,
+            global_rope_theta: rope_theta(config_value, "global_rope_theta", "full_attention")?,
+            local_rope_theta: rope_theta(config_value, "local_rope_theta", "sliding_attention")?,
             layer_norm_epsilon: positive_f32(config_value, "layer_norm_eps")?,
             pad_token_id: token_id_field(config_value, "pad_token_id")?,
             cls_token_id: token_id_field(config_value, "cls_token_id")?,
@@ -118,6 +118,37 @@ impl ModernBertConfiguration {
     #[must_use]
     pub const fn head_dimension(&self) -> u32 {
         self.hidden_size / self.attention_head_count
+    }
+}
+
+/// One layer type's rotary base, from whichever of the two config forms is present.
+///
+/// Older configs carry flat `global_rope_theta` / `local_rope_theta` fields.
+/// Newer ones nest the same numbers as
+/// `rope_parameters.<layer type>.rope_theta`. The flat field wins when both
+/// are present, so a config this engine already read keeps its meaning.
+fn rope_theta(
+    config_value: &serde_json::Value,
+    flat_field_name: &'static str,
+    layer_type_name: &str,
+) -> Result<f32, ModernBertConfigurationError> {
+    if config_value.get(flat_field_name).is_some() {
+        return positive_f32(config_value, flat_field_name);
+    }
+    let missing_rotary_base = ModernBertConfigurationError::MissingField {
+        field_name: flat_field_name,
+    };
+    let Some(rope_parameters) = config_value.get("rope_parameters") else {
+        return Err(missing_rotary_base);
+    };
+    let Some(layer_type_parameters) = rope_parameters.get(layer_type_name) else {
+        return Err(missing_rotary_base);
+    };
+    match positive_f32(layer_type_parameters, "rope_theta") {
+        Ok(nested_rope_theta) => Ok(nested_rope_theta),
+        // Reported under the flat name so one field name identifies a missing
+        // rotary base whichever form the config uses.
+        Err(_) => Err(missing_rotary_base),
     }
 }
 

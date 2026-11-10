@@ -20,9 +20,11 @@ use tokenizers::Tokenizer;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
 use crate::modernbert::artifact::ModernBertArtifact;
 use crate::modernbert::configuration::ModernBertConfiguration;
-use crate::modernbert::forward;
+use crate::modernbert::embedding_pooling;
 use crate::modernbert::memory_utilization;
 use crate::modernbert::tokenizer;
+use crate::modernbert::trunk::ModernBertTrunk;
+use crate::modernbert::weight_layout::ModernBertWeightLayout;
 use crate::performance_attribution::{
     ModelLoadingPerformanceAttributionMetadata, PerformanceAttribution, PerformanceAttributionLog,
     PerformanceAttributionOutcome, PerformanceOperation,
@@ -48,6 +50,7 @@ struct LoadedModernBertState {
     runtime: MlxRuntime,
     tensors: MlxSafetensors,
     configuration: ModernBertConfiguration,
+    weight_layout: ModernBertWeightLayout,
     tokenizer: Tokenizer,
 }
 
@@ -198,6 +201,7 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
             runtime,
             tensors,
             configuration: artifact.configuration,
+            weight_layout: ModernBertWeightLayout::embedding_artifact(),
             tokenizer,
         });
         let attribution_report = performance_attribution.finish_model_loading(
@@ -254,11 +258,15 @@ impl EmbeddingEngine for ModernBertEmbeddingEngine {
             |_performance_attribution| {
                 let mut output_embeddings = Vec::with_capacity(encoded_inputs.len());
                 let mut input_token_counts = Vec::with_capacity(encoded_inputs.len());
+                let trunk = ModernBertTrunk {
+                    runtime: &loaded_state.runtime,
+                    tensors: &loaded_state.tensors,
+                    configuration: &loaded_state.configuration,
+                    weight_layout: &loaded_state.weight_layout,
+                };
                 for encoded_input in &encoded_inputs {
-                    output_embeddings.push(forward::embed_token_ids(
-                        &loaded_state.runtime,
-                        &loaded_state.tensors,
-                        &loaded_state.configuration,
+                    output_embeddings.push(embedding_pooling::embed_token_ids(
+                        &trunk,
                         &encoded_input.token_ids,
                         embeddings_command.dimensions,
                     )?);

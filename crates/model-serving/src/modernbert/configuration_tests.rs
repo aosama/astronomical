@@ -124,3 +124,91 @@ fn should_refuse_a_vanishing_layer_norm_epsilon() {
         ModernBertConfigurationError::UnsupportedLayerNormEpsilon { .. }
     ));
 }
+
+/// The base geometry with its rotary bases in the nested form newer configs use.
+fn config_with_nested_rope_parameters() -> serde_json::Value {
+    let mut config_value = modernbert_base_config();
+    let config_fields = config_value
+        .as_object_mut()
+        .expect("the fixture is an object");
+    config_fields.remove("global_rope_theta");
+    config_fields.remove("local_rope_theta");
+    config_fields.insert(
+        "rope_parameters".to_owned(),
+        serde_json::json!({
+            "full_attention": { "rope_theta": 160_000.0, "rope_type": "default" },
+            "sliding_attention": { "rope_theta": 10_000.0, "rope_type": "default" },
+        }),
+    );
+    config_value
+}
+
+#[test]
+fn should_read_rotary_bases_from_the_nested_rope_parameters_form() {
+    let configuration =
+        ModernBertConfiguration::from_config_value(&config_with_nested_rope_parameters())
+            .expect("the nested form is supported");
+    assert_eq!(configuration.global_rope_theta, 160_000.0);
+    assert_eq!(configuration.local_rope_theta, 10_000.0);
+}
+
+#[test]
+fn should_prefer_the_flat_rotary_fields_when_both_forms_are_present() {
+    let mut config_value = config_with_nested_rope_parameters();
+    config_value["global_rope_theta"] = serde_json::json!(5.0);
+    config_value["local_rope_theta"] = serde_json::json!(7.0);
+    let configuration = ModernBertConfiguration::from_config_value(&config_value)
+        .expect("both forms together are supported");
+    assert_eq!(configuration.global_rope_theta, 5.0);
+    assert_eq!(configuration.local_rope_theta, 7.0);
+}
+
+#[test]
+fn should_refuse_a_config_with_neither_rotary_form() {
+    let mut config_value = config_with_nested_rope_parameters();
+    config_value
+        .as_object_mut()
+        .expect("the fixture is an object")
+        .remove("rope_parameters");
+    assert_eq!(
+        parse_error_of(&config_value),
+        ModernBertConfigurationError::MissingField {
+            field_name: "global_rope_theta"
+        }
+    );
+}
+
+#[test]
+fn should_refuse_a_nested_rotary_base_that_is_missing_or_not_positive() {
+    let mut missing_layer_type = config_with_nested_rope_parameters();
+    missing_layer_type["rope_parameters"]
+        .as_object_mut()
+        .expect("an object")
+        .remove("sliding_attention");
+    assert_eq!(
+        parse_error_of(&missing_layer_type),
+        ModernBertConfigurationError::MissingField {
+            field_name: "local_rope_theta"
+        }
+    );
+    let mut zero_base = config_with_nested_rope_parameters();
+    zero_base["rope_parameters"]["full_attention"]["rope_theta"] = serde_json::json!(0.0);
+    assert_eq!(
+        parse_error_of(&zero_base),
+        ModernBertConfigurationError::MissingField {
+            field_name: "global_rope_theta"
+        }
+    );
+}
+
+#[test]
+fn should_refuse_rope_parameters_that_are_not_an_object() {
+    let mut config_value = config_with_nested_rope_parameters();
+    config_value["rope_parameters"] = serde_json::json!("default");
+    assert_eq!(
+        parse_error_of(&config_value),
+        ModernBertConfigurationError::MissingField {
+            field_name: "global_rope_theta"
+        }
+    );
+}
