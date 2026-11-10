@@ -17,8 +17,6 @@ import Sparkle
 
 @MainActor
 public final class SparkleApplicationUpdateController: NSObject, ApplicationUpdateChecking, SPUUpdaterDelegate {
-  private static let selectedChannelUserDefaultsKey = "AstronomicalSelectedUpdateChannel"
-
   private let userDefaults: UserDefaults
   private let isHostPackagedApplication: Bool
   private var allowedChannels: Set<String>
@@ -41,13 +39,8 @@ public final class SparkleApplicationUpdateController: NSObject, ApplicationUpda
   ) {
     self.userDefaults = userDefaults
     self.isHostPackagedApplication = isHostPackagedApplication
-    let defaultUpdateChannel: ApplicationUpdateChannel =
-      applicationChannel == .stable ? .stable : .development
-    selectedChannel = defaultUpdateChannel
-    let storedChannelValue = userDefaults.string(forKey: Self.selectedChannelUserDefaultsKey)
-    if let storedChannelValue, let storedChannel = ApplicationUpdateChannel(rawValue: storedChannelValue) {
-      selectedChannel = storedChannel
-    }
+    selectedChannel = UpdateChannelSelection.storedChannel(
+      in: userDefaults, applicationChannel: applicationChannel)
     allowedChannels = sparkleUpdateChannels(for: selectedChannel)
   }
 
@@ -105,18 +98,10 @@ public final class SparkleApplicationUpdateController: NSObject, ApplicationUpda
   public func selectUpdateChannel(_ selectedChannel: ApplicationUpdateChannel) {
     self.selectedChannel = selectedChannel
     allowedChannels = sparkleUpdateChannels(for: selectedChannel)
-    userDefaults.set(selectedChannel.rawValue, forKey: Self.selectedChannelUserDefaultsKey)
+    userDefaults.set(selectedChannel.rawValue, forKey: UpdateChannelSelection.userDefaultsKey)
     // The channel choice stays persisted while dormant so a later packaged
     // launch picks it up; only a live updater needs its cycle reset.
     guard isHostPackagedApplication else { return }
     sparkleUpdaterController.updater.resetUpdateCycleAfterShortDelay()
-  }
-}
-
-public func sparkleUpdateChannels(for updateChannel: ApplicationUpdateChannel) -> Set<String> {
-  switch updateChannel {
-  case .stable: []
-  case .releaseCandidate: ["release-candidate"]
-  case .development: ["release-candidate", "development"]
   }
 }

@@ -23,6 +23,7 @@ enum PopoverLayout {
 struct OrbitalTelemetryPopover: View {
   @Environment(\.colorScheme) private var colorScheme
   @ObservedObject var telemetryStore: TelemetryStore
+  @ObservedObject var updateNoticeStore: UpdateNoticeStore
   let applicationIdentity: ApplicationIdentity
   let openObservatory: () -> Void
   let openDownloadModels: () -> Void
@@ -30,6 +31,8 @@ struct OrbitalTelemetryPopover: View {
   let reloadConfiguration: () -> Void
   let restartServer: () -> Void
   let updateCheckSupported: Bool
+  /// Opens the main app's updater. The overflow menu's "Check for Updates…"
+  /// and the row about an available version both lead there.
   let checkForUpdates: () -> Void
   let terminalCommandSupported: Bool
   let installTerminalCommand: () -> Void
@@ -87,6 +90,9 @@ struct OrbitalTelemetryPopover: View {
         let statusRefreshErrorMessage = telemetryStore.lastStatusRefreshErrorMessage
       {
         StatusRefreshErrorView(message: statusRefreshErrorMessage)
+      }
+      if let availableUpdate = updateNoticeStore.availableUpdate {
+        UpdateAvailableRow(availableUpdate: availableUpdate, openUpdater: checkForUpdates)
       }
       Divider()
       metricRow("Flight", statusDocument.flightTitle)

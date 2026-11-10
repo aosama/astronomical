@@ -10,22 +10,6 @@
 
 import Foundation
 
-public enum ApplicationUpdateChannel: String, CaseIterable, Hashable, Identifiable {
-  case stable
-  case releaseCandidate = "release-candidate"
-  case development
-
-  public var id: String { rawValue }
-
-  public var displayName: String {
-    switch self {
-    case .stable: "Stable"
-    case .releaseCandidate: "Release Candidate"
-    case .development: "Development"
-    }
-  }
-}
-
 @MainActor
 public protocol ApplicationUpdateChecking: AnyObject {
   /// Whether this build surfaces update controls in the user interface.
