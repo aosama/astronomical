@@ -70,6 +70,8 @@ const chatModel = {
   id: "preview-chat-model",
   input_modalities: ["text"],
   supported_endpoints: ["/v1/chat/completions"],
+  // Tools on, so the brain panel shows its Pictures section as in the app.
+  supports_tool_calls: true,
 };
 
 /**
@@ -134,9 +136,12 @@ const previewImageModels = [
   { id: "FLUX.2-klein-4B", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
   { id: "flux2-klein-4b-4bit", object: "model", input_modalities: ["text"], supported_endpoints: ["/v1/images/generations"] },
 ];
-const previewLibraryImageEntries = [
-  { display_name: "FLUX.2 Klein 4B full precision", role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
-  { display_name: "FLUX.2 Klein 4B 4-bit", role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
+/** The Library's plain names and details, so the preview's brain control and
+ * panel read the way the app does instead of showing folder names. */
+const previewLibraryEntries = [
+  { short_name: "Preview Chat 9B", version_label: "6-bit", approximate_size_bytes: 8208531833, capabilities: { supports_vision: true }, role: "chat", requestable_model_id: "preview-chat-model" },
+  { display_name: "FLUX.2 Klein 4B full precision", short_name: "FLUX.2 Klein 4B", version_label: "Full precision", approximate_size_bytes: 16000000000, role: "image_generation", get_started: false, requestable_model_id: "FLUX.2-klein-4B" },
+  { display_name: "FLUX.2 Klein 4B 4-bit", short_name: "FLUX.2 Klein 4B", version_label: "4-bit", approximate_size_bytes: 4500000000, role: "image_generation", get_started: true, requestable_model_id: "flux2-klein-4b-4bit" },
 ];
 
 const server = http.createServer((request, response) => {
@@ -163,7 +168,7 @@ const server = http.createServer((request, response) => {
   }
   if (url.pathname === "/v1/library/catalog") {
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ entries: previewLibraryImageEntries }));
+    response.end(JSON.stringify({ entries: previewLibraryEntries }));
     return;
   }
   if (url.pathname === "/v1/chat/completions" && request.method === "POST") {

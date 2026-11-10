@@ -83,7 +83,7 @@ export function bootChatClient(): AppShell {
   });
 
   // One choice of image model and one list of installed image models, shared
-  // by the controller (which draws the composer's pill) and the image tool
+  // by the controller (which draws the composer's brain panel) and the image tool
   // (which draws pictures), so the two can never disagree.
   const imageModelDirectory = new ImageModelDirectory(client);
   const imageModelSelection = new ImageModelSelection();
@@ -94,12 +94,9 @@ export function bootChatClient(): AppShell {
     sendButton: requireElement<HTMLButtonElement>('[data-testid="composer-send"]'),
     stopButton: requireElement<HTMLButtonElement>('[data-testid="composer-stop"]'),
     retryButton: requireElement<HTMLButtonElement>('[data-testid="composer-retry"]'),
-    modelPill: requireElement<HTMLButtonElement>('[data-testid="composer-model"]'),
-    modelLabel: requireElement<HTMLElement>('[data-testid="composer-model-label"]'),
-    modelMenu: requireElement<HTMLElement>('[data-testid="composer-model-menu"]'),
-    imageModelPill: requireElement<HTMLButtonElement>('[data-testid="composer-image-model"]'),
-    imageModelLabel: requireElement<HTMLElement>('[data-testid="composer-image-model-label"]'),
-    imageModelMenu: requireElement<HTMLElement>('[data-testid="composer-image-model-menu"]'),
+    brainControl: requireElement<HTMLButtonElement>('[data-testid="composer-model"]'),
+    brainLabel: requireElement<HTMLElement>('[data-testid="composer-model-label"]'),
+    brainPanel: requireElement<HTMLElement>('[data-testid="composer-model-menu"]'),
     banner: requireElement<HTMLElement>('[data-testid="composer-banner"]'),
     bannerMessage: requireElement<HTMLElement>('[data-testid="banner-message"]'),
     bannerNextAction: requireElement<HTMLElement>('[data-testid="banner-next-action"]'),
@@ -120,11 +117,15 @@ export function bootChatClient(): AppShell {
         case "selectImageModel":
           controller.selectImageModel(action.detail);
           return;
-        case "openImageModels":
+        case "openBrainPanel":
           void controller.refreshImageModels();
           return;
         case "setTools":
           controller.setToolsEnabled(action.detail === "on");
+          return;
+        case "openModelsPage":
+          // The Observatory is served by the same engine the window talks to.
+          host.postAction("openExternal", "", `${config.daemonBaseURL}/download-models`);
           return;
       }
     },
