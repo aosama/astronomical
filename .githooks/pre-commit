@@ -38,8 +38,9 @@ fi
 # only improve, growth fails the commit, and a function the baseline does
 # not list yet may not exceed cyclomatic complexity 15 unless
 # crap-admissions.json names it. The gate also runs when only the baseline,
-# the admissions or the cargo-crap configuration change. A missing cargo-crap is a hard failure too: install
-# it with `brew install cargo-binstall && cargo binstall cargo-crap`.
+# the admissions or the cargo-crap configuration change. A missing cargo-crap
+# is a hard failure too: install it with
+# `brew install cargo-binstall && cargo binstall cargo-crap`.
 if git diff --cached --name-only | grep -Eq '\.rs$|^crap-baseline\.json$|^crap-admissions\.json$|^\.cargo-crap\.toml$'; then
     printf '%s\n' "[pre-commit] status=start check=crap-complexity-ratchet root=${REPOSITORY_ROOT}"
     gate_started_epoch_seconds="$(date +%s)"
@@ -58,7 +59,11 @@ if git diff --cached --name-only | grep -Eq '\.rs$|^crap-baseline\.json$|^crap-a
         printf '%s\n' '[pre-commit] hint=each violation line above names its own remedy' >&2
         exit 1
     fi
+fi
 
+# The clippy pass below only matters when Rust source changed, so a commit
+# touching only the baseline, the admissions or .cargo-crap.toml skips it.
+if git diff --cached --name-only | grep -q '\.rs$'; then
     # The 100-code-line budget (clippy.toml, issue #1637) — enforced HERE
     # and only here: no clippy runs in GitHub Actions. The workspace lints
     # tables deny clippy::too_many_lines, and the 68 pre-existing

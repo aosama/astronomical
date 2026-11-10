@@ -166,16 +166,8 @@ impl GatedDeltaSequenceShape {
     /// blocked kernel's own limits, each reported on its own so a model that
     /// breaks one learns which.
     fn validate_kernel_geometry(&self) -> Result<(), MlxRuntimeError> {
-        if self.token_count <= 0 {
-            return Err(gated_delta_sequence_error(
-                NON_POSITIVE_DIMENSION_DESCRIPTION,
-            ));
-        }
-        if let Err(head_geometry_violation) = self.head_geometry().check() {
-            return Err(gated_delta_sequence_error(
-                head_geometry_violation_description(head_geometry_violation),
-            ));
-        }
+        self.check_head_geometry()
+            .map_err(head_geometry_violation_error)?;
         if self.key_head_dimension != PIPELINED_KEY_HEAD_DIMENSION {
             return Err(gated_delta_sequence_error(
                 "pipelined gated-delta key dimension must be 128",
@@ -201,6 +193,16 @@ impl GatedDeltaSequenceShape {
             && input_shapes.recurrent_state_shape == recurrent_state_shape
     }
 
+    /// Checks the head-geometry rules with the token axis included: a
+    /// non-positive token count reads as a non-positive dimension, which is
+    /// what the shared rules report for every other axis.
+    fn check_head_geometry(&self) -> Result<(), GatedDeltaHeadGeometryViolation> {
+        if self.token_count <= 0 {
+            return Err(GatedDeltaHeadGeometryViolation::NonPositiveDimension);
+        }
+        self.head_geometry().check()
+    }
+
     /// The token-free part of the geometry, which the step path shares.
     fn head_geometry(&self) -> GatedDeltaHeadGeometry {
         GatedDeltaHeadGeometry {
@@ -214,40 +216,36 @@ impl GatedDeltaSequenceShape {
 }
 
 /// Applies the shared dtype rules with the fused kernels' error text.
-/// The fused kernel's wording for each shared head-geometry violation.
-fn head_geometry_violation_description(
-    head_geometry_violation: GatedDeltaHeadGeometryViolation,
-) -> &'static str {
-    match head_geometry_violation {
+fn validate_sequence_dtypes(
+    recurrent_state_dtype: MlxDtype,
+    activation_dtypes: [MlxDtype; 5],
+) -> Result<(), MlxRuntimeError> {
+    check_gated_delta_dtypes(recurrent_state_dtype, activation_dtypes)
+        .map_err(dtype_violation_error)
+}
+
+/// The fused kernels' error text for a broken head-geometry rule.
+fn head_geometry_violation_error(
+    geometry_violation: GatedDeltaHeadGeometryViolation,
+) -> MlxRuntimeError {
+    gated_delta_sequence_error(match geometry_violation {
         GatedDeltaHeadGeometryViolation::NonPositiveDimension => NON_POSITIVE_DIMENSION_DESCRIPTION,
         GatedDeltaHeadGeometryViolation::ValueHeadsNotMultipleOfKeyHeads => {
             "pipelined gated-delta value heads must be a multiple of key heads"
         }
-    }
+    })
 }
 
-/// The fused kernel's wording for each shared dtype violation.
-fn dtype_violation_description(dtype_violation: GatedDeltaDtypeViolation) -> &'static str {
-    match dtype_violation {
+/// The fused kernels' error text for a broken dtype rule.
+fn dtype_violation_error(dtype_violation: GatedDeltaDtypeViolation) -> MlxRuntimeError {
+    gated_delta_sequence_error(match dtype_violation {
         GatedDeltaDtypeViolation::RecurrentStateNotFloat32 => {
             "fused gated-delta recurrent state must use float32"
         }
         GatedDeltaDtypeViolation::UnsupportedActivationDtype => {
             "fused gated-delta inputs must use float16, bfloat16, or float32"
         }
-    }
-}
-
-fn validate_sequence_dtypes(
-    recurrent_state_dtype: MlxDtype,
-    activation_dtypes: [MlxDtype; 5],
-) -> Result<(), MlxRuntimeError> {
-    match check_gated_delta_dtypes(recurrent_state_dtype, activation_dtypes) {
-        Ok(()) => Ok(()),
-        Err(dtype_violation) => Err(gated_delta_sequence_error(dtype_violation_description(
-            dtype_violation,
-        ))),
-    }
+    })
 }
 
 pub(super) fn gated_delta_sequence_error(description: &'static str) -> MlxRuntimeError {

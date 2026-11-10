@@ -98,6 +98,20 @@ test("should_explain_a_stopped_download_by_its_cause_and_draw_it_as_a_problem", 
     assert.deepEqual(outOfSpace.progressBars, [], "a stopped download draws no progress bar");
 });
 
+// A model this version cannot run would be refused again on a retry, so its
+// banner says so and offers only the way out.
+test("should_say_this_version_cannot_run_the_model_and_offer_only_cancel", () => {
+    const banner = bannerOf(renderWithDownload({
+        huggingface_id: DOWNLOADING_MODEL_ID, state: "failed", error_code: "model_not_executable"
+    }));
+
+    assert.equal(banner.title, "The Talker download stopped");
+    assert.equal(
+        banner.detail, "This version of Astronomical cannot run this model. Cancel it to download another model."
+    );
+    assert.deepEqual(banner.controls, ["Cancel"]);
+});
+
 test("should_show_a_preparing_banner_without_a_bar_before_any_bytes_are_known", () => {
     const banner = bannerOf(renderWithDownload({ huggingface_id: DOWNLOADING_MODEL_ID, state: "checking_disk" }));
 

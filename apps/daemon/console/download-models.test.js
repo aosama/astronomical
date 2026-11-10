@@ -145,6 +145,26 @@ test("should_offer_only_cancel_when_another_model_occupies_the_download_location
     assert.deepEqual(downloadControlLabelsFor("failed", "model_already_present"), ["Cancel"]);
 });
 
+// Trying again would be refused the same way, so no Try again is offered.
+test("should_offer_only_cancel_when_this_version_cannot_run_the_model", () => {
+    assert.deepEqual(downloadControlLabelsFor("failed", "model_not_executable"), ["Cancel"]);
+});
+
+test("should_explain_each_failure_that_trying_again_cannot_fix_and_fall_back_for_the_rest", () => {
+    const scriptContext = createDownloadModelsContext();
+    const explanationFor = (errorCode) => vm.runInContext(
+        `downloadModelsFailureExplanation(${JSON.stringify(errorCode)})`, scriptContext
+    );
+
+    assert.equal(
+        explanationFor("model_not_executable"),
+        "This version of Astronomical cannot run this model. Cancel it to download another model."
+    );
+    assert.match(explanationFor("model_already_present"), /cancel this download/);
+    assert.match(explanationFor("some_unlisted_code"), /picks up where it left off/);
+    assert.match(explanationFor(undefined), /picks up where it left off/);
+});
+
 test("should_keep_get_usable_after_a_failure_and_busy_during_any_other_download_state", () => {
     const scriptContext = createDownloadModelsContext();
     const isSlotBusyIn = (downloadState) => vm.runInContext(

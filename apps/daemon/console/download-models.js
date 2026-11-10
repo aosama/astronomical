@@ -446,10 +446,15 @@ function downloadModelsFailureExplanation(errorCode) {
         insufficient_disk: "This Mac does not have enough free space for it. Remove a model below or free up space, then try again.",
         download_gated: "Hugging Face asks for permission before sharing this model, so it cannot be downloaded from here.",
         checksum_mismatch: "The files that arrived did not pass their check. Trying again downloads the damaged parts.",
-        model_already_present: "Another model already uses this download location. Move it elsewhere, then cancel this download and try again."
+        model_already_present: "Another model already uses this download location. Move it elsewhere, then cancel this download and try again.",
+        model_not_executable: "This version of Astronomical cannot run this model. Cancel it to download another model."
     };
     return explanations[errorCode] || "The connection dropped. What arrived is saved, so it picks up where it left off.";
 }
+
+// Failures that trying again cannot fix: the same files would be refused again,
+// so the banner offers only Cancel instead of a Try again that fails the same way.
+const DOWNLOAD_MODELS_CANCEL_ONLY_ERROR_CODES = ["model_already_present", "model_not_executable"];
 
 // The controls for the one download in flight: what the person can do next and
 // nothing else. A finished transfer that is being checked offers no control.
@@ -459,7 +464,7 @@ function downloadModelsActionButtons(catalogRow) {
     const state = downloadModelsRowDownloadState(catalogRow);
     if (!state || state === "idle" || state === "verifying" || state === "publishing") return [];
     if (isCurrentDownload && state === "failed"
-        && downloadModelsCurrentDownload.error_code === "model_already_present") {
+        && DOWNLOAD_MODELS_CANCEL_ONLY_ERROR_CODES.includes(downloadModelsCurrentDownload.error_code)) {
         return [downloadModelsActionButton("Cancel", "cancel")];
     }
     if (state === "paused") {
