@@ -1,5 +1,6 @@
-// Download Models page tests: Get started role cards, More models groups, fit labels
-// against the serving memory ceiling, and keyboard access to the page tabs.
+// Download Models page tests: Get started role cards, More models groups and family
+// names, fit labels against the serving memory ceiling, failure controls, and keyboard
+// access to the page tabs.
 
 const {
     assert,
@@ -7,6 +8,8 @@ const {
     createDownloadModelsDocument,
     findRenderedElement,
     findRenderedElementsByClass,
+    fs,
+    path,
     renderedTexts,
     test,
     validCatalogEntry,
@@ -450,4 +453,115 @@ test("should_show_no_badge_for_a_model_that_is_only_downloadable", () => {
     ], { activeTab: "more-models" });
 
     assert.deepEqual(availabilityBadgeTexts(downloadModelsDocument), [[]], "the Download button already says it can be downloaded");
+});
+
+test("renders daemon-authored catalog families without a client allowlist", () => {
+    const scriptContext = createDownloadModelsContext();
+    const downloadModelsDocument = createDownloadModelsDocument();
+    scriptContext.document = downloadModelsDocument;
+    vm.runInContext('downloadModelsActiveTab = "more-models"', scriptContext);
+    scriptContext.catalogDocument = {
+        schema_version: 3,
+        entries: [
+            validCatalogEntry(),
+            validCatalogEntry({
+                huggingface_id: "astronomical-test/example-prism",
+                family: "prism_hadamard_qwen35"
+            }),
+            validCatalogEntry({
+                huggingface_id: "astronomical-test/example-flux",
+                family: "flux2_klein"
+            })
+        ]
+    };
+
+    const renderedState = vm.runInContext(
+        "renderDownloadModelsCatalogDocument(catalogDocument)",
+        scriptContext
+    );
+    const catalogRows = vm.runInContext(
+        "downloadModelsCatalogRowsFromDocument(catalogDocument)",
+        scriptContext
+    );
+
+    assert.equal(renderedState, "ready");
+    assert.deepEqual(
+        JSON.parse(JSON.stringify(catalogRows.map((catalogRow) => catalogRow.family))),
+        ["qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
+    );
+    const filterBar = findRenderedElement(
+        downloadModelsDocument.catalogContainer,
+        (renderedElement) => renderedElement.className === "download-models-filter-bar"
+    );
+    const familyFilter = filterBar.children[2];
+    assert.deepEqual(
+        familyFilter.children.map((option) => option.value),
+        ["all", "qwen3_5", "prism_hadamard_qwen35", "flux2_klein"]
+    );
+    assert.deepEqual(
+        familyFilter.children.map((option) => option.textContent),
+        ["All families", "Qwen 3.5", "Ternary Bonsai", "FLUX.2 Klein"]
+    );
+});
+
+test("should_name_every_family_the_shipped_catalog_offers", () => {
+    const scriptContext = createDownloadModelsContext();
+    const shippedCatalogPath = path.join(__dirname, "..", "..", "..", "registry", "download_catalog.json");
+    const shippedFamilies = new Set(
+        JSON.parse(fs.readFileSync(shippedCatalogPath, "utf8")).entries.map((catalogEntry) => catalogEntry.family)
+    );
+    assert.ok(shippedFamilies.size > 0);
+    for (const shippedFamily of shippedFamilies) {
+        scriptContext.shippedFamily = shippedFamily;
+        assert.notEqual(
+            vm.runInContext("downloadModelsFamilyLabel(shippedFamily)", scriptContext),
+            shippedFamily,
+            `family ${shippedFamily} has no name in DOWNLOAD_MODELS_FAMILY_LABELS`
+        );
+    }
+});
+
+test("should_fall_back_to_the_key_for_a_family_with_no_name", () => {
+    const scriptContext = createDownloadModelsContext();
+    assert.equal(vm.runInContext('downloadModelsFamilyLabel("future_family")', scriptContext), "future_family");
+    // Inherited object keys are not names: a family called "constructor" must
+    // not render a function's source text.
+    assert.equal(vm.runInContext('downloadModelsFamilyLabel("constructor")', scriptContext), "constructor");
+    assert.equal(vm.runInContext('downloadModelsFamilyLabel("")', scriptContext), "");
+});
+
+test("should_offer_only_cancel_when_this_version_cannot_run_the_model", () => {
+    const scriptContext = createDownloadModelsContext();
+    scriptContext.document = createDownloadModelsDocument();
+    scriptContext.catalogRow = {
+        huggingfaceId: "astronomical-test/example-qwen",
+        displayName: "Example model",
+        readyOnThisMac: false,
+        downloadState: null
+    };
+    const failWith = (errorCode) => vm.runInContext(
+        `downloadModelsCurrentDownload = {
+            state: "failed",
+            huggingface_id: "astronomical-test/example-qwen",
+            error_code: ${JSON.stringify(errorCode)}
+        }`,
+        scriptContext
+    );
+    const buttonLabels = () => JSON.parse(JSON.stringify(vm.runInContext(
+        "downloadModelsActionButtons(catalogRow).map(button => button.textContent)",
+        scriptContext
+    )));
+    const stateTitle = () => vm.runInContext("downloadModelsStateTitle(catalogRow)", scriptContext);
+
+    failWith("model_not_executable");
+    assert.deepEqual(buttonLabels(), ["Cancel"]);
+    assert.match(stateTitle(), /cannot run this model/);
+    assert.doesNotMatch(stateTitle(), /resume/i);
+
+    // A transfer failure can still be resumed, and an unknown code falls back to that.
+    failWith("download_failed");
+    assert.deepEqual(buttonLabels(), ["Resume", "Cancel"]);
+    failWith(null);
+    assert.deepEqual(buttonLabels(), ["Resume", "Cancel"]);
+    assert.equal(stateTitle(), "Download failed. You can resume it.");
 });
