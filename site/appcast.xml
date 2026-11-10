@@ -4,23 +4,20 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
     <channel>
         <title>Astronomical</title>
         <item>
-            <title>0.2.100</title>
-            <pubDate>Tue, 10 Nov 2026 12:40:12 -0500</pubDate>
-            <sparkle:version>2228</sparkle:version>
-            <sparkle:shortVersionString>0.2.100</sparkle:shortVersionString>
+            <title>0.2.101</title>
+            <pubDate>Tue, 10 Nov 2026 15:38:06 -0500</pubDate>
+            <sparkle:version>2233</sparkle:version>
+            <sparkle:shortVersionString>0.2.101</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description sparkle:format="markdown"><![CDATA[## What's new
+            <description sparkle:format="markdown"><![CDATA[## What's fixed
 
-- **One calm palette everywhere.** The chat window, Observatory and the menu-bar panel share graphite neutrals and the app icon's violet as their only accent. The chat window now follows your Mac's Light or Dark appearance.
-- **A simpler message field.** The skill buttons are three quiet icons inside the field. One brain control beside Send shows the chat model by its plain name and opens a single panel with your chat models, picture models, the Tools switch and "Get more models…".
-- **Update notices from the menu bar.** The menu-bar agent now notices an available update even while the chat window is closed.
-- **Decision models (preview).** A new decisions lane answers typed questions with a probability for every allowed answer: the Laya and Kev backends, `POST /v1/systemone`, `astronomical decide`, and converters that build Laya and Kev models from PyTorch checkpoints.
+- **The engine starts after a restart or login.** With Launch at Login on, Astronomical could come back from a restart with its menu-bar icon showing but the engine stopped, so chat, the terminal command and the local endpoint all reported that Astronomical was not running. The menu-bar agent now finds the engine however macOS starts it.
 
 ## Maintenance
 
-- The MLX-C Rust bridge dependency now uses its new name, `mlx-bridge`.
-- Continuous integration builds and tests with the same Xcode that builds releases.
+- The acceptance tests compile again after the addition of decision models.
+- The README has a Download for Mac button and a quick start.
 
 ## Compatibility
 
@@ -29,10 +26,10 @@ IMPORTANT: This file was signed by Sparkle. Any modifications to this file requi
 
 This release is signed with a Developer ID, notarized by Apple, and delivered through the signed Sparkle update feed.
 ]]></description>
-            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.100/Astronomical-0.2.100-macOS-arm64.dmg" length="21526971" type="application/octet-stream" sparkle:edSignature="C0Fl49tB+wd/CKyOmBeqEuywVpWOP5obvda2f6xWGF5Km6eVKPNgDc4evpRLQBLKmwnEHsp8hDwkR8Twn4t/Dg=="></enclosure>
+            <enclosure url="https://github.com/aosama/astronomical/releases/download/v0.2.101/Astronomical-0.2.101-macOS-arm64.dmg" length="21521515" type="application/octet-stream" sparkle:edSignature="xwjODpEB5KsX8UKOymHq1Z21bQ0S/EJd1gD/O74/JMLOJcwph9uEjhQrM+9m0z4FJ06x4pv4KS7I3PVNmmWLAQ=="></enclosure>
         </item>
     </channel>
 </rss><!-- sparkle-signatures:
-edSignature: zmLOD0c7UJXURwd0r+m+pVWJgWneARRIJA/39c/XZhOWp2tUGdQNtRFEfHVpvqt4EU2kTF+VLxqMZhGB43MmAw==
-length: 2581
+edSignature: VFH/LB3haKPUQHOCdXuAttdnSR1ySb7pzEROMgVV/JVZUnKBO5MTCbvPzDpFtZ/Fkl2NjvIUunKA0OG0HIbmDw==
+length: 2020
 -->
