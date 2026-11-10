@@ -69,6 +69,25 @@ impl IdleModelUnloadClock {
         }
     }
 
+    /// Restarts the idle clock while the worker prepares Neural Engine
+    /// programs beside a served model.
+    ///
+    /// Preparation runs in the background for about a minute after the last
+    /// request, which is the default idle span. Counted as idleness, it had
+    /// the model unloaded the moment its programs were ready, so the next
+    /// message loaded the model and prepared them all over again and the
+    /// Neural Engine never engaged. The span therefore starts when
+    /// preparation ends.
+    pub(crate) fn observe_background_preparation(
+        &mut self,
+        is_preparing_neural_engine_programs: bool,
+        now: Instant,
+    ) {
+        if is_preparing_neural_engine_programs {
+            self.record_activity(now);
+        }
+    }
+
     /// Whether the worker has been unused for at least the configured span.
     pub(crate) fn is_unload_due(&self, now: Instant) -> bool {
         let idle_model_unload_seconds = self.idle_model_unload_seconds.load(Ordering::Relaxed);
@@ -162,13 +181,33 @@ impl WorkerIdleness {
     }
 }
 
+/// Whether the published worker health says Neural Engine programs are still
+/// being prepared. A poisoned snapshot answers no, so a fault elsewhere never
+/// keeps a model loaded for good.
+fn is_preparing_neural_engine_programs(runtime: &WorkerLoopRuntime) -> bool {
+    runtime
+        .health_snapshot
+        .read()
+        .is_ok_and(|worker_health_snapshot| {
+            matches!(
+                worker_health_snapshot.neural_engine_prefill,
+                Some(astronomical_ipc_protocol::NeuralEnginePrefillStatus::Preparing { .. })
+            )
+        })
+}
+
 /// Whether the loop may unload now: a model is loaded, the configured span
-/// has passed, and no request is active or waiting for admission.
+/// has passed since the last request or the end of Neural Engine
+/// preparation, and no request is active or waiting for admission.
 pub(in crate::worker) fn should_unload_idle_model(
-    runtime: &WorkerLoopRuntime,
+    runtime: &mut WorkerLoopRuntime,
     has_loaded_model: bool,
     now: Instant,
 ) -> bool {
+    let is_preparing_neural_engine_programs = is_preparing_neural_engine_programs(runtime);
+    runtime
+        .idle_model_unload
+        .observe_background_preparation(is_preparing_neural_engine_programs, now);
     let worker_idleness = WorkerIdleness {
         has_loaded_model,
         has_active_request: runtime.active_generation.is_some(),
