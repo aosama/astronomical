@@ -37,6 +37,21 @@ impl std::ops::Deref for Qwen3_5ResidentModel {
     }
 }
 
+impl crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership for Qwen3_5ResidentModel {
+    fn model_base(&self) -> &Qwen3_5ModelBase {
+        &self.base
+    }
+
+    fn held_expert_payload_bytes(&self) -> u64 {
+        self.expert_weight_memory_cache_statistics()
+            .resident_payload_byte_count
+    }
+
+    fn held_model_core_payload_bytes(&self) -> u64 {
+        self.base.resident_model_payload_byte_count()
+    }
+}
+
 impl std::ops::DerefMut for Qwen3_5ResidentModel {
     fn deref_mut(&mut self) -> &mut Qwen3_5ModelBase {
         &mut self.base

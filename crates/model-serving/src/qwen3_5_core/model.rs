@@ -3,6 +3,8 @@
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod base;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod bound_weight_dtype_flow;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod decoder_layer_attention;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod disk_embedding_rows;
@@ -20,6 +22,8 @@ pub(crate) mod full_attention;
 pub(crate) mod gated_delta;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod loading_pipeline;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod memory_breakdown;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod model_chunking_configuration;
 #[cfg(feature = "direct-mlx")]

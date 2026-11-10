@@ -1,3 +1,4 @@
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use std::time::Instant;
 
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;

@@ -422,7 +422,7 @@ fn assert_replacement_cleanup_order(replacement_model_loading_report: &Value) {
 /// request finalization). A third is legitimate: prompt-cache capture
 /// publication wipes the allocator cache when active memory sits within the
 /// publication comfort headroom of the ceiling
-/// (persistent_prompt_cache_capture.rs) — exactly this journey's
+/// (qwen3_5_core/prompt_cache_capture/block_capture.rs) — exactly this journey's
 /// tight-ceiling scenario — so the count is a floor, not an exact tally.
 fn assert_minimum_mlx_allocator_cleanup_count(cleanup_operation: &Value) {
     let cleanup_occurrence_count = cleanup_operation["occurrence_count"].as_u64().unwrap_or(0);

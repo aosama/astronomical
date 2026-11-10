@@ -1,5 +1,5 @@
-//! Beside-source unit tests for the pure units extracted out of the tail
-//! capture step (`persistent_prompt_cache_tail_capture.rs`): the tail token
+//! Unit tests for the partial-tail capture planning
+//! (`tail_capture_planning.rs`): the tail token
 //! span geometry, the causal-input resolution, and the tail block identity
 //! construction. The end-to-end best-effort capture journey stays with the
 //! engine-level tests.

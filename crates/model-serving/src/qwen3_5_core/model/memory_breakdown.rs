@@ -1,13 +1,34 @@
+//! The ownership view of MLX active memory for both Qwen3.5 engines.
+//!
+//! The breakdown and the ceiling-utilization split are the same arithmetic in
+//! both engines; only two figures differ. The resident engine holds every
+//! expert while the streaming engine holds a retained subset, and the
+//! streaming engine's model-core bytes exclude dense layers it reads from the
+//! SSD on each forward. Each engine supplies those two figures through
+//! [`Qwen3_5MemoryOwnership`]; the arithmetic itself is written once.
+
 use crate::PerformanceAttribution;
 use crate::PerformanceCounter;
 use crate::memory::MemoryCeilingUtilization;
 use crate::memory::telemetry::MlxActiveMemoryBreakdown;
+use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::vision::Qwen3_5VisionModel;
 
-use super::{Qwen3_5ResidentModel, Qwen3_5VisionModel, RequestDecoderStateStack};
+use super::Qwen3_5ModelBase;
 
-impl Qwen3_5ResidentModel {
+/// What one engine model holds in MLX memory, and the breakdown built on it.
+pub(crate) trait Qwen3_5MemoryOwnership {
+    /// The base both engines share: the vision tower and the RAM budget.
+    fn model_base(&self) -> &Qwen3_5ModelBase;
+
+    /// Expert weight bytes this engine currently holds in MLX memory.
+    fn held_expert_payload_bytes(&self) -> u64;
+
+    /// Text weight bytes, other than experts, this engine keeps in memory.
+    fn held_model_core_payload_bytes(&self) -> u64;
+
     #[must_use]
-    pub(crate) fn active_memory_breakdown(
+    fn active_memory_breakdown(
         &self,
         request_decoder_state: &RequestDecoderStateStack,
         additional_context_state_payload_bytes: u64,
@@ -17,7 +38,8 @@ impl Qwen3_5ResidentModel {
         let context_state_payload_bytes = request_decoder_state
             .payload_byte_count()
             .saturating_add(additional_context_state_payload_bytes);
-        self.active_memory_breakdown_with_context_state_payload_bytes(
+        breakdown_with_context_state_payload_bytes(
+            self,
             context_state_payload_bytes,
             mlx_active_memory_bytes,
             additional_model_core_payload_bytes,
@@ -33,15 +55,17 @@ impl Qwen3_5ResidentModel {
     /// (issue #1236): reporting zero context state charged the retained
     /// prefix against the activation-and-workspace reserve, a one-decode-step
     /// transient reserve far narrower than the retained state, and the clamp
-    /// surfaced the excess as a phantom owner overrun.
+    /// surfaced the excess as a phantom owner overrun. The streaming engine
+    /// retains no live prefix between requests and passes zero.
     #[must_use]
-    pub(crate) fn finalized_active_memory_breakdown(
+    fn finalized_active_memory_breakdown(
         &self,
         mlx_active_memory_bytes: u64,
         live_context_state_payload_bytes: u64,
         additional_model_core_payload_bytes: u64,
     ) -> MlxActiveMemoryBreakdown {
-        self.active_memory_breakdown_with_context_state_payload_bytes(
+        breakdown_with_context_state_payload_bytes(
+            self,
             live_context_state_payload_bytes,
             mlx_active_memory_bytes,
             additional_model_core_payload_bytes,
@@ -54,7 +78,7 @@ impl Qwen3_5ResidentModel {
     /// published split and the engine's own admission decisions can never
     /// drift apart. Callers pass the breakdown reconciled from the same
     /// measurement, keeping every term pinned to one instant.
-    pub(crate) fn memory_ceiling_utilization_for_breakdown(
+    fn memory_ceiling_utilization_for_breakdown(
         &self,
         phase: crate::MemoryPhase,
         context_token_count: u64,
@@ -63,9 +87,12 @@ impl Qwen3_5ResidentModel {
         active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.mlx_ram_budget
-                .borrow()
-                .plan(phase, context_token_count, operation_token_count, 0),
+            self.model_base().mlx_ram_budget.borrow().plan(
+                phase,
+                context_token_count,
+                operation_token_count,
+                0,
+            ),
             mlx_active_memory_bytes,
             active_breakdown,
         )
@@ -76,13 +103,16 @@ impl Qwen3_5ResidentModel {
     /// Plans the next request's decode budget from a fresh context while the
     /// context owner keeps the retained live prefix it still holds; the
     /// finalized breakdown's context term is exactly that prefix payload.
-    pub(crate) fn between_request_memory_ceiling_utilization_for_breakdown(
+    /// Planning against a zero-byte context instead would promise the retained
+    /// prefix's bytes to the next request a second time.
+    fn between_request_memory_ceiling_utilization_for_breakdown(
         &self,
         mlx_active_memory_bytes: u64,
         finalized_active_breakdown: MlxActiveMemoryBreakdown,
     ) -> MemoryCeilingUtilization {
         MemoryCeilingUtilization::compose(
-            self.mlx_ram_budget
+            self.model_base()
+                .mlx_ram_budget
                 .borrow()
                 .plan_holding_live_context_state(
                     crate::MemoryPhase::Decode,
@@ -104,7 +134,7 @@ impl Qwen3_5ResidentModel {
     /// maximum would mix terms from different steps and break the identity the
     /// acceptance journey asserts. `record_maximum_counter` alone cannot express
     /// that, so the peak is read back before re-recording the whole split.
-    pub(crate) fn record_memory_ceiling_utilization(
+    fn record_memory_ceiling_utilization(
         &self,
         phase: crate::MemoryPhase,
         context_token_count: u64,
@@ -173,30 +203,32 @@ impl Qwen3_5ResidentModel {
             performance_attribution.record_snapshot_counter(counter, amount);
         }
     }
+}
 
-    fn active_memory_breakdown_with_context_state_payload_bytes(
-        &self,
-        context_state_payload_bytes: u64,
-        mlx_active_memory_bytes: u64,
-        additional_model_core_payload_bytes: u64,
-    ) -> MlxActiveMemoryBreakdown {
-        let paged_expert_payload_bytes = self
-            .expert_weight_memory_cache_statistics()
-            .resident_payload_byte_count;
-        let expert_payload_bytes = paged_expert_payload_bytes;
-        let model_core_payload_bytes = self
-            .resident_model_payload_byte_count()
-            .saturating_add(
-                self.vision_model
-                    .as_ref()
-                    .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
-            )
-            .saturating_add(additional_model_core_payload_bytes);
-        MlxActiveMemoryBreakdown::reconcile(
-            mlx_active_memory_bytes,
-            expert_payload_bytes,
-            model_core_payload_bytes,
-            context_state_payload_bytes,
+/// The breakdown for a known context-state payload. A free function rather
+/// than a trait method so it stays private to this module: callers compose
+/// the context term through the trait's public entry points.
+fn breakdown_with_context_state_payload_bytes(
+    memory_owner: &(impl Qwen3_5MemoryOwnership + ?Sized),
+    context_state_payload_bytes: u64,
+    mlx_active_memory_bytes: u64,
+    additional_model_core_payload_bytes: u64,
+) -> MlxActiveMemoryBreakdown {
+    let expert_payload_bytes = memory_owner.held_expert_payload_bytes();
+    let model_core_payload_bytes = memory_owner
+        .held_model_core_payload_bytes()
+        .saturating_add(
+            memory_owner
+                .model_base()
+                .vision_model
+                .as_ref()
+                .map_or(0, Qwen3_5VisionModel::resident_payload_bytes),
         )
-    }
+        .saturating_add(additional_model_core_payload_bytes);
+    MlxActiveMemoryBreakdown::reconcile(
+        mlx_active_memory_bytes,
+        expert_payload_bytes,
+        model_core_payload_bytes,
+        context_state_payload_bytes,
+    )
 }

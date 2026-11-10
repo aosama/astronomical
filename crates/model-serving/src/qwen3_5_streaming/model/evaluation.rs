@@ -16,22 +16,6 @@ impl Qwen3_5Model {
         Ok(selected_token.item_u32()?)
     }
 
-    /// Returns highest-logit token IDs for each row in a logits tensor.
-    pub fn highest_logit_token_ids(
-        &self,
-        position_logits: &MlxArray,
-    ) -> Result<Vec<u32>, Qwen3_5ExecutionError> {
-        let selected_tokens = self.select_highest_logit_token(position_logits)?;
-        Ok(selected_tokens.to_vec_u32()?)
-    }
-
-    pub(crate) fn select_highest_logit_token(
-        &self,
-        final_position_logits: &MlxArray,
-    ) -> Result<MlxArray, Qwen3_5ExecutionError> {
-        Ok(self.runtime.argmax_axis(final_position_logits, -1)?)
-    }
-
     /// Materializes final logits and mutable decoder state for one forward pass.
     pub(crate) fn evaluate_forward_state(
         &self,

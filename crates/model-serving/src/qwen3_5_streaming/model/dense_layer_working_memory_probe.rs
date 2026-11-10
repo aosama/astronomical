@@ -9,9 +9,9 @@
 use mlx_c_rust::MlxArray;
 
 use super::Qwen3_5Model;
-use super::decoder_cache_dtype_flow::embedded_hidden_state_dtype;
 use crate::PerformanceAttribution;
 use crate::qwen3_5_core::decoder::RequestDecoderStateStack;
+use crate::qwen3_5_core::model::bound_weight_dtype_flow::embedded_hidden_state_dtype;
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;
 use crate::qwen3_5_streaming::model::paged_execution_mode::Qwen3_5MoEPagedExecutionMode;

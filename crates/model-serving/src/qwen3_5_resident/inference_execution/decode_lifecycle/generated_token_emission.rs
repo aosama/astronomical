@@ -1,3 +1,4 @@
+use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
 use mlx_c_rust::MlxArray;
 
 use crate::{GeneratedToken, InferenceEngineError, PerformanceCounter, PerformanceOperation};

@@ -7,7 +7,7 @@ use crate::{
 use astronomical_ipc_protocol::WorkerPersistentPromptCacheRequestDiagnostics;
 use mlx_c_rust::MlxArray;
 
-use super::engine_request::Qwen3_5EngineRequest;
+use super::engine_request::{Qwen3_5EngineRequest, StreamingRequestExtension};
 use super::persistent_prompt_cache_visual_identity::{
     Qwen3_5PersistentPromptCacheVisualIdentity, Qwen3_5PersistentPromptCacheVisualIdentityInput,
 };
@@ -568,13 +568,15 @@ impl Qwen3_5EngineState {
                 .persistent_prompt_cache_diagnostics
                 .clone(),
             generation_residency_preparation_attempted: false,
-            has_opened_prefill_demand_window: false,
-            reserved_context_tokens,
-            completed_prefill_memory_recovery_attempt_count: 0,
-            layer_major_prefill_declined: false,
             first_decode_forward_elapsed_millis: None,
             generation_preparation_announced: false,
             structured_generation: inference_request.take_structured_generation(),
+            engine_extension: StreamingRequestExtension {
+                has_opened_prefill_demand_window: false,
+                reserved_context_tokens,
+                completed_prefill_memory_recovery_attempt_count: 0,
+                layer_major_prefill_declined: false,
+            },
         });
         let restored_prompt_prefix_token_count =
             u32::try_from(restored_prompt_prefix_session.prefill_cursor).map_err(|_| {

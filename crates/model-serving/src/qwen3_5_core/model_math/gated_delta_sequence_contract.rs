@@ -171,18 +171,10 @@ impl GatedDeltaSequenceShape {
                 NON_POSITIVE_DIMENSION_DESCRIPTION,
             ));
         }
-        match self.head_geometry().check() {
-            Ok(()) => {}
-            Err(GatedDeltaHeadGeometryViolation::NonPositiveDimension) => {
-                return Err(gated_delta_sequence_error(
-                    NON_POSITIVE_DIMENSION_DESCRIPTION,
-                ));
-            }
-            Err(GatedDeltaHeadGeometryViolation::ValueHeadsNotMultipleOfKeyHeads) => {
-                return Err(gated_delta_sequence_error(
-                    "pipelined gated-delta value heads must be a multiple of key heads",
-                ));
-            }
+        if let Err(head_geometry_violation) = self.head_geometry().check() {
+            return Err(gated_delta_sequence_error(
+                head_geometry_violation_description(head_geometry_violation),
+            ));
         }
         if self.key_head_dimension != PIPELINED_KEY_HEAD_DIMENSION {
             return Err(gated_delta_sequence_error(
@@ -222,20 +214,39 @@ impl GatedDeltaSequenceShape {
 }
 
 /// Applies the shared dtype rules with the fused kernels' error text.
+/// The fused kernel's wording for each shared head-geometry violation.
+fn head_geometry_violation_description(
+    head_geometry_violation: GatedDeltaHeadGeometryViolation,
+) -> &'static str {
+    match head_geometry_violation {
+        GatedDeltaHeadGeometryViolation::NonPositiveDimension => NON_POSITIVE_DIMENSION_DESCRIPTION,
+        GatedDeltaHeadGeometryViolation::ValueHeadsNotMultipleOfKeyHeads => {
+            "pipelined gated-delta value heads must be a multiple of key heads"
+        }
+    }
+}
+
+/// The fused kernel's wording for each shared dtype violation.
+fn dtype_violation_description(dtype_violation: GatedDeltaDtypeViolation) -> &'static str {
+    match dtype_violation {
+        GatedDeltaDtypeViolation::RecurrentStateNotFloat32 => {
+            "fused gated-delta recurrent state must use float32"
+        }
+        GatedDeltaDtypeViolation::UnsupportedActivationDtype => {
+            "fused gated-delta inputs must use float16, bfloat16, or float32"
+        }
+    }
+}
+
 fn validate_sequence_dtypes(
     recurrent_state_dtype: MlxDtype,
     activation_dtypes: [MlxDtype; 5],
 ) -> Result<(), MlxRuntimeError> {
     match check_gated_delta_dtypes(recurrent_state_dtype, activation_dtypes) {
         Ok(()) => Ok(()),
-        Err(GatedDeltaDtypeViolation::RecurrentStateNotFloat32) => Err(gated_delta_sequence_error(
-            "fused gated-delta recurrent state must use float32",
-        )),
-        Err(GatedDeltaDtypeViolation::UnsupportedActivationDtype) => {
-            Err(gated_delta_sequence_error(
-                "fused gated-delta inputs must use float16, bfloat16, or float32",
-            ))
-        }
+        Err(dtype_violation) => Err(gated_delta_sequence_error(dtype_violation_description(
+            dtype_violation,
+        ))),
     }
 }
 

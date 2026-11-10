@@ -47165,7 +47165,25 @@
     {
       "file": "crates/model-serving/src/lib.rs",
       "function": "validate_bounded_safetensors_with_partial_profiles",
-      "line": 606,
+      "line": 608,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/memory/admission/adaptive_ram_growth_logging.rs",
+      "function": "log_adaptive_ram_growth_admission_decision",
+      "line": 4,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/memory/admission/adaptive_ram_growth_logging.rs",
+      "function": "log_adaptive_ram_growth_pressure",
+      "line": 49,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -52071,6 +52089,42 @@
       "file": "crates/model-serving/src/persistent_cache/startup_cleanup_evidence.rs",
       "function": "PersistentPromptCacheStartupCleanupEvidence::merge",
       "line": 56,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/persistent_cache/tail_capture_planning.rs",
+      "function": "build_tail_block_key",
+      "line": 89,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/persistent_cache/tail_capture_planning.rs",
+      "function": "prompt_tail_capture_span",
+      "line": 32,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/persistent_cache/tail_capture_planning.rs",
+      "function": "resolve_tail_block_causal_input",
+      "line": 71,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/persistent_cache/tail_capture_planning_tests.rs",
+      "function": "synthetic_tail_capture_contract",
+      "line": 178,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57234,6 +57288,141 @@
       "crate": "astronomical-model-serving"
     },
     {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_errors.rs",
+      "function": "fatal_engine_error",
+      "line": 9,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_errors.rs",
+      "function": "qwen3_5_runtime_error",
+      "line": 5,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::advance_position",
+      "line": 166,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::build_generated_token",
+      "line": 117,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::is_forcing_thinking_transition",
+      "line": 204,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::is_inside_thinking",
+      "line": 179,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::measure_operation_with_request",
+      "line": 92,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::next_forced_thinking_transition_token_id",
+      "line": 183,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::observe_committed_thinking_token",
+      "line": 193,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::observe_penalized_token_id",
+      "line": 85,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "Qwen3_5EngineRequest::set_pending_generated_token",
+      "line": 208,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request.rs",
+      "function": "sample_generated_token",
+      "line": 218,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request_test_support.rs",
+      "function": "empty_ornith_decoder_state",
+      "line": 55,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request_test_support.rs",
+      "function": "test_engine_request",
+      "line": 19,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/engine_request_tests.rs",
+      "function": "observe_next_position",
+      "line": 61,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
       "file": "crates/model-serving/src/qwen3_5_core/frozen_config_test_support.rs",
       "function": "expected_layer_types",
       "line": 455,
@@ -57353,7 +57542,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::config",
-      "line": 112,
+      "line": 128,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57362,7 +57551,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::decoder_cache_layout",
-      "line": 118,
+      "line": 134,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57371,7 +57560,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::embedding_lookup",
-      "line": 200,
+      "line": 216,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -57380,7 +57569,16 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::embedding_residency",
-      "line": 193,
+      "line": 209,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
+      "function": "Qwen3_5ModelBase::highest_logit_token_ids",
+      "line": 69,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -57389,7 +57587,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::learn_context_state_payload",
-      "line": 87,
+      "line": 103,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57398,7 +57596,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::materialize_target_weights_with",
-      "line": 174,
+      "line": 190,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -57407,7 +57605,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::mlx_ram_budget",
-      "line": 76,
+      "line": 92,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57416,7 +57614,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::mlx_ram_budget_mut",
-      "line": 81,
+      "line": 97,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57425,7 +57623,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::quantized_linear",
-      "line": 245,
+      "line": 261,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -57434,7 +57632,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::release_vision_tower_after_image_request",
-      "line": 136,
+      "line": 152,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -57443,7 +57641,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::resident_embedding_lookup",
-      "line": 214,
+      "line": 230,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -57452,7 +57650,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::resident_model_payload_byte_count",
-      "line": 164,
+      "line": 180,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57461,7 +57659,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::runtime",
-      "line": 70,
+      "line": 86,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57469,8 +57667,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
+      "function": "Qwen3_5ModelBase::select_highest_logit_token",
+      "line": 77,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::sorted_expert_weighted_sum_kernel",
-      "line": 100,
+      "line": 116,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57479,7 +57686,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "Qwen3_5ModelBase::vision_model",
-      "line": 124,
+      "line": 140,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -57488,10 +57695,55 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model/base.rs",
       "function": "gather_quantized_embedding_rows",
-      "line": 282,
+      "line": 298,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/bound_weight_dtype_flow.rs",
+      "function": "affine_contract",
+      "line": 166,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/bound_weight_dtype_flow.rs",
+      "function": "attention_dtypes",
+      "line": 85,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/bound_weight_dtype_flow.rs",
+      "function": "derive_decoder_layer_cache_dtypes",
+      "line": 41,
+      "cyclomatic": 9.0,
+      "coverage": null,
+      "crap": 90.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/bound_weight_dtype_flow.rs",
+      "function": "embedded_hidden_state_dtype",
+      "line": 31,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/bound_weight_dtype_flow.rs",
+      "function": "feed_forward_output_dtype",
+      "line": 124,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -57891,6 +58143,60 @@
       "crate": "astronomical-model-serving"
     },
     {
+      "file": "crates/model-serving/src/qwen3_5_core/model/memory_breakdown.rs",
+      "function": "Qwen3_5MemoryOwnership::active_memory_breakdown",
+      "line": 31,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/memory_breakdown.rs",
+      "function": "Qwen3_5MemoryOwnership::between_request_memory_ceiling_utilization_for_breakdown",
+      "line": 108,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/memory_breakdown.rs",
+      "function": "Qwen3_5MemoryOwnership::finalized_active_memory_breakdown",
+      "line": 61,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/memory_breakdown.rs",
+      "function": "Qwen3_5MemoryOwnership::memory_ceiling_utilization_for_breakdown",
+      "line": 81,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/memory_breakdown.rs",
+      "function": "Qwen3_5MemoryOwnership::record_memory_ceiling_utilization",
+      "line": 137,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model/memory_breakdown.rs",
+      "function": "breakdown_with_context_state_payload_bytes",
+      "line": 211,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
       "file": "crates/model-serving/src/qwen3_5_core/model/model_chunking_configuration.rs",
       "function": "Qwen3_5ModelChunkingConfiguration::new",
       "line": 21,
@@ -58224,6 +58530,51 @@
       "crate": "astronomical-model-serving"
     },
     {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "GatedDeltaHeadGeometry::check",
+      "line": 36,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "GatedDeltaHeadGeometry::expected_recurrent_state_shape",
+      "line": 55,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "check_gated_delta_dtypes",
+      "line": 77,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "is_supported_activation_dtype",
+      "line": 93,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules_tests.rs",
+      "function": "qwen3_5_head_geometry",
+      "line": 10,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_pipelined_kernel.rs",
       "function": "checkpoint_write_source_for_token",
       "line": 305,
@@ -58369,8 +58720,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
+      "function": "GatedDeltaSequenceShape::head_geometry",
+      "line": 205,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "GatedDeltaSequenceShape::matches_companion_shapes",
-      "line": 192,
+      "line": 194,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -58379,7 +58739,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "GatedDeltaSequenceShape::validate_kernel_geometry",
-      "line": 158,
+      "line": 168,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -58387,8 +58747,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
+      "function": "dtype_violation_description",
+      "line": 230,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "gated_delta_sequence_error",
-      "line": 237,
+      "line": 253,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -58396,17 +58765,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
-      "function": "is_supported_activation_dtype",
-      "line": 230,
-      "cyclomatic": 1.0,
+      "function": "head_geometry_violation_description",
+      "line": 218,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
       "crate": "astronomical-model-serving"
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "sequence_shape_from_input_shapes",
-      "line": 119,
+      "line": 128,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -58415,7 +58784,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "template_arguments",
-      "line": 37,
+      "line": 46,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -58424,7 +58793,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "validate_gated_delta_sequence_shapes",
-      "line": 70,
+      "line": 79,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -58433,7 +58802,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "validate_sequence_dtypes",
-      "line": 210,
+      "line": 241,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -58469,7 +58838,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
       "function": "evaluate_linear_attention_section",
-      "line": 12,
+      "line": 15,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -58478,16 +58847,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
       "function": "gated_delta_error",
-      "line": 151,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
-      "function": "is_supported_activation_dtype",
-      "line": 144,
+      "line": 192,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -58496,7 +58856,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
       "function": "qwen3_5_gated_delta_step",
-      "line": 29,
+      "line": 32,
       "cyclomatic": 25.0,
       "coverage": null,
       "crap": 650.0,
@@ -58504,11 +58864,56 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
-      "function": "validate_gated_delta_shapes",
-      "line": 69,
-      "cyclomatic": 22.0,
+      "function": "repeat_factor_from_step_input_shapes",
+      "line": 123,
+      "cyclomatic": 11.0,
       "coverage": null,
-      "crap": 506.0,
+      "crap": 132.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
+      "function": "validate_gated_delta_shapes",
+      "line": 74,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
+      "function": "validate_step_dtypes",
+      "line": 177,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step_tests.rs",
+      "function": "StepShapes::qwen3_5_decode_token",
+      "line": 20,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step_tests.rs",
+      "function": "StepShapes::repeat_factor",
+      "line": 31,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step_tests.rs",
+      "function": "refusal_of",
+      "line": 44,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -58995,6 +59400,150 @@
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "apply_publication_outcome",
+      "line": 346,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "capture_persistent_prompt_cache_blocks",
+      "line": 47,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "configured_memory_limit_bytes_u64",
+      "line": 388,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "extract_kv_block_tensors_with_measurement",
+      "line": 253,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "memory_snapshot_active_memory_bytes",
+      "line": 380,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "memory_snapshot_allocator_cache_bytes",
+      "line": 384,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "persistent_prompt_cache_publication_advances_parent_chain",
+      "line": 402,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "plan_captured_block",
+      "line": 117,
+      "cyclomatic": 8.0,
+      "coverage": null,
+      "crap": 72.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "publish_block_with_reclamation_retry",
+      "line": 189,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "release_publication_workspace_if_needed",
+      "line": 294,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/block_capture.rs",
+      "function": "required_prompt_state_persistence_failure",
+      "line": 29,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/boundary_checkpoint.rs",
+      "function": "record_persistent_prompt_cache_boundary_checkpoint",
+      "line": 10,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/tail_capture.rs",
+      "function": "capture_persistent_prompt_cache_partial_tail_block",
+      "line": 100,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/tail_capture.rs",
+      "function": "extract_tail_kv_block_tensors",
+      "line": 40,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/tail_capture.rs",
+      "function": "extract_tail_recurrent_snapshot_tensors",
+      "line": 73,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/prompt_cache_capture/tail_capture.rs",
+      "function": "publish_captured_tail_block",
+      "line": 180,
+      "cyclomatic": 6.0,
+      "coverage": null,
+      "crap": 42.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -63321,9 +63870,9 @@
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "Qwen3_5EngineState::advance_active_request",
       "line": 83,
-      "cyclomatic": 26.0,
+      "cyclomatic": 25.0,
       "coverage": null,
-      "crap": 702.0,
+      "crap": 650.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -63338,7 +63887,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "Qwen3_5EngineState::announce_generation_preparation",
-      "line": 207,
+      "line": 205,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -63347,7 +63896,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "Qwen3_5EngineState::build_forced_thinking_transition_token",
-      "line": 272,
+      "line": 270,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -63356,7 +63905,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "Qwen3_5EngineState::complete_generation_if_terminal",
-      "line": 381,
+      "line": 379,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -63365,7 +63914,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "Qwen3_5EngineState::current_generated_token_for_decode",
-      "line": 233,
+      "line": 231,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -63374,7 +63923,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "Qwen3_5EngineState::decode_first_token_from_final_prompt",
-      "line": 304,
+      "line": 302,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -63383,7 +63932,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "Qwen3_5EngineState::decode_next_token_and_collect_memory",
-      "line": 413,
+      "line": 411,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -63392,7 +63941,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/advance_generation.rs",
       "function": "adaptive_decode_ram_growth_context",
-      "line": 480,
+      "line": 478,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -63410,7 +63959,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/generated_token_emission.rs",
       "function": "Qwen3_5EngineState::build_generated_token_emission",
-      "line": 26,
+      "line": 27,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -63419,7 +63968,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/generated_token_emission.rs",
       "function": "Qwen3_5EngineState::generated_token_will_be_terminal",
-      "line": 16,
+      "line": 17,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -63428,7 +63977,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/generated_token_emission.rs",
       "function": "decode_mlx_memory_telemetry_from_completed_forward",
-      "line": 110,
+      "line": 111,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -63437,7 +63986,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/decode_lifecycle/generated_token_emission.rs",
       "function": "synchronize_generated_token_id",
-      "line": 86,
+      "line": 87,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -63543,120 +64092,30 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_error_helpers.rs",
-      "function": "fatal_engine_error",
-      "line": 9,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_error_helpers.rs",
-      "function": "qwen3_5_runtime_error",
-      "line": 5,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::advance_position",
-      "line": 199,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::build_generated_token",
-      "line": 150,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::is_forcing_thinking_transition",
-      "line": 242,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::is_inside_thinking",
-      "line": 213,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::measure_operation_with_request",
-      "line": 125,
+      "function": "Qwen3_5EngineRequest::has_speculative_tokens_to_advance",
+      "line": 31,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::next_forced_thinking_transition_token_id",
-      "line": 217,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::observe_committed_thinking_token",
-      "line": 229,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::observe_penalized_token_id",
-      "line": 118,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::set_pending_generated_token",
-      "line": 246,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
       "function": "Qwen3_5EngineRequest::suspend_speculative_session",
-      "line": 100,
+      "line": 44,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request.rs",
-      "function": "sample_generated_token",
-      "line": 258,
-      "cyclomatic": 4.0,
+      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/engine_request_tests.rs",
+      "function": "speculative_extension",
+      "line": 6,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 20.0,
+      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -63905,7 +64364,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::collect_current_mlx_memory_telemetry",
-      "line": 45,
+      "line": 46,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -63914,7 +64373,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::collect_generation_finalization",
-      "line": 260,
+      "line": 261,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -63923,7 +64382,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::finalize_generation_request",
-      "line": 127,
+      "line": 128,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -63932,7 +64391,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::finalize_generation_request_after_error",
-      "line": 98,
+      "line": 99,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -63941,7 +64400,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::record_generation_performance_attribution",
-      "line": 368,
+      "line": 369,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -63950,7 +64409,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::retain_completed_live_prefix",
-      "line": 181,
+      "line": 182,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
@@ -63959,7 +64418,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::snapshot_active_memory_bytes_option",
-      "line": 355,
+      "line": 356,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -63968,7 +64427,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::snapshot_allocator_cache_memory_bytes_option",
-      "line": 362,
+      "line": 363,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -63977,7 +64436,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "Qwen3_5EngineState::snapshot_peak_memory_bytes_option",
-      "line": 348,
+      "line": 349,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -63986,7 +64445,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "snapshot_active_memory_bytes_option",
-      "line": 31,
+      "line": 32,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -63995,7 +64454,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "snapshot_allocator_cache_memory_bytes_option",
-      "line": 38,
+      "line": 39,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64004,7 +64463,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_finalization.rs",
       "function": "snapshot_peak_memory_bytes_option",
-      "line": 24,
+      "line": 25,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64067,7 +64526,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_session_validate_admit_restore_install.rs",
       "function": "Qwen3_5EngineState::build_generation_start_contract",
-      "line": 660,
+      "line": 662,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -64076,7 +64535,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/generation_session_lifecycle/generation_session_validate_admit_restore_install.rs",
       "function": "Qwen3_5EngineState::empty_speculative_draft_key_value_states",
-      "line": 641,
+      "line": 643,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64454,7 +64913,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/memory_governance/memory_limit.rs",
       "function": "Qwen3_5EngineState::update_mlx_memory_limit",
-      "line": 33,
+      "line": 34,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
@@ -64463,7 +64922,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/memory_governance/memory_limit.rs",
       "function": "adaptive_ram_growth_ceiling_update_error",
-      "line": 26,
+      "line": 27,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64472,7 +64931,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/memory_governance/memory_limit.rs",
       "function": "safe_minimum_mlx_memory_ceiling_bytes",
-      "line": 13,
+      "line": 14,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64731,171 +65190,9 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "Qwen3_5EngineState::capture_persistent_prompt_cache_blocks",
-      "line": 44,
-      "cyclomatic": 12.0,
-      "coverage": null,
-      "crap": 156.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "Qwen3_5EngineState::publish_block_with_reclamation_retry",
-      "line": 156,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "apply_publication_outcome",
-      "line": 304,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "configured_memory_limit_bytes_u64",
-      "line": 346,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "extract_kv_block_tensors_with_measurement",
-      "line": 211,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "memory_snapshot_active_memory_bytes",
-      "line": 338,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "memory_snapshot_allocator_cache_bytes",
-      "line": 342,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "persistent_prompt_cache_publication_advances_parent_chain",
-      "line": 360,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "release_publication_workspace_if_needed",
-      "line": 252,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_capture.rs",
-      "function": "required_prompt_state_persistence_failure",
-      "line": 25,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_startup_logging.rs",
       "function": "log_persistent_prompt_cache_startup_cleanup",
       "line": 5,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture.rs",
-      "function": "Qwen3_5EngineState::capture_persistent_prompt_cache_partial_tail_block",
-      "line": 192,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture.rs",
-      "function": "Qwen3_5EngineState::publish_captured_tail_block",
-      "line": 270,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture.rs",
-      "function": "build_tail_block_key",
-      "line": 111,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture.rs",
-      "function": "extract_tail_kv_block_tensors",
-      "line": 131,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture.rs",
-      "function": "extract_tail_recurrent_snapshot_tensors",
-      "line": 164,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture.rs",
-      "function": "prompt_tail_capture_span",
-      "line": 54,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture.rs",
-      "function": "resolve_tail_block_causal_input",
-      "line": 93,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_tail_capture_tests.rs",
-      "function": "synthetic_tail_capture_contract",
-      "line": 178,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64914,6 +65211,15 @@
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/persistent_prompt_cache_visual_identity_tests.rs",
       "function": "processed_image_with_token_count_after_spatial_merge",
       "line": 13,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/persistent_prompt_cache/prompt_cache_capture_engine.rs",
+      "function": "Qwen3_5EngineState::reclaim_before_publication_retry",
+      "line": 18,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64940,7 +65246,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::active_memory_limit_prefill_failure",
-      "line": 308,
+      "line": 312,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64949,7 +65255,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::advance_prompt_prefill_if_pending",
-      "line": 44,
+      "line": 48,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -64958,7 +65264,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::demote_prefill_to_streaming_engine",
-      "line": 231,
+      "line": 235,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -64967,7 +65273,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::graphics_processor_memory_exhausted_prefill_failure",
-      "line": 347,
+      "line": 351,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -64976,7 +65282,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::handle_prompt_prefill_chunk_attempt_failure",
-      "line": 170,
+      "line": 174,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -64985,7 +65291,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::note_neural_engine_chunk_finished",
-      "line": 121,
+      "line": 125,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -64994,7 +65300,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::prefill_progress_token",
-      "line": 527,
+      "line": 533,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -65003,7 +65309,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::publish_and_advance_durable_prefill_state",
-      "line": 376,
+      "line": 380,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -65012,7 +65318,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::reclaim_allocator_cache_after_prefill_chunk",
-      "line": 424,
+      "line": 430,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65021,7 +65327,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::record_completed_forward_memory",
-      "line": 492,
+      "line": 498,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65030,7 +65336,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "Qwen3_5EngineState::resolve_next_prefill_chunk_span",
-      "line": 138,
+      "line": 142,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -65039,7 +65345,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_advance.rs",
       "function": "prefill_mlx_memory_telemetry_from_snapshot",
-      "line": 594,
+      "line": 600,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -65093,7 +65399,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_forward_dispatch.rs",
       "function": "dispatch_non_speculative_forward",
-      "line": 166,
+      "line": 169,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -65111,7 +65417,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_forward_dispatch.rs",
       "function": "dispatch_text_prefill",
-      "line": 283,
+      "line": 286,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -65120,7 +65426,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prefill_forward_dispatch.rs",
       "function": "dispatch_visual_prefill",
-      "line": 223,
+      "line": 226,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65232,15 +65538,6 @@
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/prompt_prefill_lifecycle/prompt_prefill_counters.rs",
-      "function": "record_persistent_prompt_cache_boundary_checkpoint",
-      "line": 6,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -65642,7 +65939,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/speculative_decode_lifecycle/speculative_decode_advance.rs",
       "function": "Qwen3_5EngineState::emit_one_speculative_token_id",
-      "line": 78,
+      "line": 86,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -65651,7 +65948,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/inference_execution/speculative_decode_lifecycle/speculative_decode_advance.rs",
       "function": "Qwen3_5EngineState::run_one_speculative_round",
-      "line": 121,
+      "line": 129,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
@@ -65802,24 +66099,6 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/adaptive_ram_growth_logging.rs",
-      "function": "log_adaptive_ram_growth_admission_decision",
-      "line": 5,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/adaptive_ram_growth_logging.rs",
-      "function": "log_adaptive_ram_growth_pressure",
-      "line": 50,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
       "file": "crates/model-serving/src/qwen3_5_resident/model/artifact_loading.rs",
       "function": "Qwen3_5ResidentModel::load",
       "line": 26,
@@ -65865,24 +66144,6 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/decoder_cache_dtype_flow.rs",
-      "function": "affine_contract",
-      "line": 138,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/decoder_cache_dtype_flow.rs",
-      "function": "derive_decoder_layer_cache_dtypes",
-      "line": 32,
-      "cyclomatic": 16.0,
-      "coverage": null,
-      "crap": 272.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
       "file": "crates/model-serving/src/qwen3_5_resident/model/decoder_layer_forward.rs",
       "function": "Qwen3_5ResidentModel::forward_decoder_layer_feed_forward",
       "line": 17,
@@ -65894,7 +66155,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/evaluation.rs",
       "function": "Qwen3_5ResidentModel::async_evaluate_generation",
-      "line": 114,
+      "line": 98,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65903,7 +66164,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/evaluation.rs",
       "function": "Qwen3_5ResidentModel::evaluate_decoder_state_with_performance_attribution",
-      "line": 66,
+      "line": 50,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -65912,7 +66173,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/evaluation.rs",
       "function": "Qwen3_5ResidentModel::evaluate_forward_state",
-      "line": 35,
+      "line": 19,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -65921,7 +66182,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/evaluation.rs",
       "function": "Qwen3_5ResidentModel::evaluate_forward_state_with_performance_attribution",
-      "line": 50,
+      "line": 34,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -65930,7 +66191,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/evaluation.rs",
       "function": "Qwen3_5ResidentModel::evaluate_terminal_prefill_state_with_performance_attribution",
-      "line": 91,
+      "line": 75,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -65943,24 +66204,6 @@
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/evaluation.rs",
-      "function": "Qwen3_5ResidentModel::highest_logit_token_ids",
-      "line": 19,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/evaluation.rs",
-      "function": "Qwen3_5ResidentModel::select_highest_logit_token",
-      "line": 27,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -66342,60 +66585,6 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/memory_breakdown.rs",
-      "function": "Qwen3_5ResidentModel::active_memory_breakdown",
-      "line": 10,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/memory_breakdown.rs",
-      "function": "Qwen3_5ResidentModel::active_memory_breakdown_with_context_state_payload_bytes",
-      "line": 177,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/memory_breakdown.rs",
-      "function": "Qwen3_5ResidentModel::between_request_memory_ceiling_utilization_for_breakdown",
-      "line": 79,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/memory_breakdown.rs",
-      "function": "Qwen3_5ResidentModel::finalized_active_memory_breakdown",
-      "line": 38,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/memory_breakdown.rs",
-      "function": "Qwen3_5ResidentModel::memory_ceiling_utilization_for_breakdown",
-      "line": 57,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/memory_breakdown.rs",
-      "function": "Qwen3_5ResidentModel::record_memory_ceiling_utilization",
-      "line": 107,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_execution.rs",
       "function": "Qwen3_5ResidentModel::combine_resident_sparse_and_shared_experts",
       "line": 277,
@@ -66461,7 +66650,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
       "function": "Qwen3_5ResidentModel::deref_mut",
-      "line": 41,
+      "line": 56,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -66470,96 +66659,6 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
       "function": "Qwen3_5ResidentModel::empty_request_decoder_state_matching_loaded_weights",
-      "line": 119,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::expert_memory_mode",
-      "line": 105,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::expert_residency_telemetry_for_breakdown",
-      "line": 210,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::expert_weight_memory_cache_statistics",
-      "line": 232,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::forward_chunk",
-      "line": 297,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::forward_decoder_layer",
-      "line": 314,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::materialize_complete_weights_matching_production",
-      "line": 196,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::materialize_target_weights",
-      "line": 96,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::prefill_chunk",
-      "line": 281,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::prefill_chunk_with_visual_embeddings",
-      "line": 259,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::prepare_neural_engine_prefill_matching_production",
       "line": 134,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -66568,7 +66667,115 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::prepare_neural_engine_prefill_with_token_count",
+      "function": "Qwen3_5ResidentModel::expert_memory_mode",
+      "line": 120,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::expert_residency_telemetry_for_breakdown",
+      "line": 225,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::expert_weight_memory_cache_statistics",
+      "line": 247,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::forward_chunk",
+      "line": 312,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::forward_decoder_layer",
+      "line": 329,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::held_expert_payload_bytes",
+      "line": 45,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::held_model_core_payload_bytes",
+      "line": 50,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::materialize_complete_weights_matching_production",
+      "line": 211,
+      "cyclomatic": 5.0,
+      "coverage": null,
+      "crap": 30.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::materialize_target_weights",
+      "line": 111,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::model_base",
+      "line": 41,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::prefill_chunk",
+      "line": 296,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::prefill_chunk_with_visual_embeddings",
+      "line": 274,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::prepare_neural_engine_prefill_matching_production",
       "line": 149,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -66577,7 +66784,7 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
-      "function": "Qwen3_5ResidentModel::release_neural_engine_mlp_prefill",
+      "function": "Qwen3_5ResidentModel::prepare_neural_engine_prefill_with_token_count",
       "line": 164,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -66586,8 +66793,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
+      "function": "Qwen3_5ResidentModel::release_neural_engine_mlp_prefill",
+      "line": 179,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
       "function": "Qwen3_5ResidentModel::set_neural_engine_mlp_prefill_paused",
-      "line": 172,
+      "line": 187,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -66596,7 +66812,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
       "function": "Qwen3_5ResidentModel::set_neural_engine_output_gate_paused",
-      "line": 180,
+      "line": 195,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -66605,7 +66821,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
       "function": "resident_expert_library_facts",
-      "line": 51,
+      "line": 66,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -66614,7 +66830,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_resident/model/resident_model.rs",
       "function": "resident_layer_seating",
-      "line": 72,
+      "line": 87,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -70043,7 +70259,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::advance_active_request",
-      "line": 84,
+      "line": 85,
       "cyclomatic": 23.0,
       "coverage": null,
       "crap": 552.0,
@@ -70052,7 +70268,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::advance_generation",
-      "line": 25,
+      "line": 26,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -70061,7 +70277,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::begin_generation_preparation",
-      "line": 203,
+      "line": 204,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -70070,7 +70286,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::build_forced_thinking_transition_token",
-      "line": 295,
+      "line": 296,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70079,7 +70295,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::complete_generation_if_terminal",
-      "line": 226,
+      "line": 227,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -70088,7 +70304,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::current_generated_token_for_decode",
-      "line": 257,
+      "line": 258,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -70097,7 +70313,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::decode_first_token_from_final_prompt",
-      "line": 327,
+      "line": 328,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -70106,7 +70322,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::decode_next_token_and_collect_memory",
-      "line": 468,
+      "line": 469,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -70115,7 +70331,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "Qwen3_5EngineState::warm_hot_experts_and_record_utilization",
-      "line": 412,
+      "line": 413,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70124,7 +70340,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/advance_generation.rs",
       "function": "adaptive_decode_ram_growth_context",
-      "line": 543,
+      "line": 544,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70294,107 +70510,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::advance_position",
-      "line": 190,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::build_generated_token",
-      "line": 125,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::is_forcing_thinking_transition",
-      "line": 233,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::is_inside_thinking",
-      "line": 204,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::measure_operation_with_request",
-      "line": 100,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::next_forced_thinking_transition_token_id",
-      "line": 208,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::observe_committed_thinking_token",
-      "line": 220,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::observe_penalized_token_id",
-      "line": 93,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
       "function": "Qwen3_5EngineRequest::request_context_extent",
-      "line": 178,
+      "line": 31,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "Qwen3_5EngineRequest::set_pending_generated_token",
-      "line": 237,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/engine_request.rs",
-      "function": "sample_generated_token",
-      "line": 249,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
       "crate": "astronomical-model-serving"
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generated_token_emission.rs",
       "function": "Qwen3_5EngineState::build_generated_token_emission",
-      "line": 26,
+      "line": 27,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -70403,7 +70529,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generated_token_emission.rs",
       "function": "Qwen3_5EngineState::generated_token_will_be_terminal",
-      "line": 16,
+      "line": 17,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -70412,7 +70538,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generated_token_emission.rs",
       "function": "decode_mlx_memory_telemetry_from_completed_forward",
-      "line": 109,
+      "line": 110,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -70421,7 +70547,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generated_token_emission.rs",
       "function": "synchronize_generated_token_id",
-      "line": 86,
+      "line": 87,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70430,7 +70556,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::collect_current_mlx_memory_telemetry",
-      "line": 43,
+      "line": 45,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -70439,7 +70565,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::collect_generation_finalization",
-      "line": 188,
+      "line": 193,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -70448,7 +70574,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::finalize_generation_request",
-      "line": 118,
+      "line": 123,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -70457,7 +70583,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::finalize_generation_request_after_error",
-      "line": 89,
+      "line": 94,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70466,7 +70592,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::keep_planned_dense_layers_at_finalization",
-      "line": 30,
+      "line": 32,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -70475,7 +70601,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::lift_prefill_memory_recovery_freeze_at_finalization",
-      "line": 18,
+      "line": 20,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -70484,7 +70610,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::persist_expert_usage_history",
-      "line": 285,
+      "line": 293,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70493,7 +70619,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/generation_finalization.rs",
       "function": "Qwen3_5EngineState::record_generation_performance_attribution",
-      "line": 303,
+      "line": 311,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70628,7 +70754,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "AdaptiveRamGrowthAdmissionBaseline::disabled_guard_sentinel",
-      "line": 93,
+      "line": 91,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70637,7 +70763,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "AdaptiveRamGrowthMemoryAdmissionError::from",
-      "line": 53,
+      "line": 51,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70646,7 +70772,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "InferenceEngineError::from",
-      "line": 59,
+      "line": 57,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70655,7 +70781,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "PagedForwardProjectionNumbers::from_projection",
-      "line": 649,
+      "line": 647,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70664,7 +70790,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "Qwen3_5EngineState::begin_adaptive_ram_growth",
-      "line": 161,
+      "line": 159,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -70673,7 +70799,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "Qwen3_5EngineState::capture_admission_ownership_snapshot",
-      "line": 228,
+      "line": 226,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -70682,7 +70808,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "Qwen3_5EngineState::limit_retention_and_reset_peak",
-      "line": 471,
+      "line": 469,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -70691,7 +70817,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "Qwen3_5EngineState::measure_adaptive_ram_growth_memory_admission",
-      "line": 107,
+      "line": 105,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -70700,7 +70826,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "Qwen3_5EngineState::project_initial_forward_growth",
-      "line": 286,
+      "line": 284,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -70709,7 +70835,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "Qwen3_5EngineState::reclaim_experts_and_reproject",
-      "line": 519,
+      "line": 517,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -70718,7 +70844,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "Qwen3_5EngineState::run_paged_expert_reclamation_loop",
-      "line": 359,
+      "line": 357,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
@@ -70727,7 +70853,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "exhausted_reclamation_error",
-      "line": 662,
+      "line": 660,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70736,7 +70862,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_admission.rs",
       "function": "paged_rejection_reason",
-      "line": 603,
+      "line": 601,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70772,7 +70898,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_limit.rs",
       "function": "Qwen3_5EngineState::current_mlx_memory_ceiling_bytes",
-      "line": 130,
+      "line": 132,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70781,7 +70907,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_limit.rs",
       "function": "Qwen3_5EngineState::require_no_resident_promotion",
-      "line": 107,
+      "line": 109,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -70790,7 +70916,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_limit.rs",
       "function": "Qwen3_5EngineState::update_mlx_memory_limit",
-      "line": 25,
+      "line": 27,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -70799,7 +70925,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_limit.rs",
       "function": "adjustment_telemetry",
-      "line": 166,
+      "line": 168,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70808,7 +70934,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_limit.rs",
       "function": "safe_minimum_mlx_memory_ceiling_bytes",
-      "line": 12,
+      "line": 14,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70817,7 +70943,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/memory_limit.rs",
       "function": "snapshot_memory_triple",
-      "line": 140,
+      "line": 142,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -70826,7 +70952,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "MlxInferenceEngine::new_with_effective_context_runtime_chunking_and_performance_attribution",
-      "line": 134,
+      "line": 131,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70835,7 +70961,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "MlxInferenceEngine::new_with_effective_context_runtime_chunking_performance_attribution_and_decode_cache_policy",
-      "line": 167,
+      "line": 164,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -70844,7 +70970,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "MlxInferenceEngine::new_with_prompt_processing_chunk_sizer",
-      "line": 76,
+      "line": 73,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70853,7 +70979,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "MlxInferenceEngine::new_with_runtime_chunking_and_performance_attribution",
-      "line": 102,
+      "line": 99,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70862,7 +70988,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5EngineState::cancel_generation",
-      "line": 388,
+      "line": 385,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -70871,7 +70997,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5EngineState::collect_persistent_prompt_cache_stats",
-      "line": 364,
+      "line": 361,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -70880,7 +71006,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::cancel_generation",
-      "line": 317,
+      "line": 314,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70889,7 +71015,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::clear_persistent_prompt_cache",
-      "line": 332,
+      "line": 329,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -70898,7 +71024,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::collect_mlx_memory_telemetry",
-      "line": 349,
+      "line": 346,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70907,7 +71033,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::collect_persistent_prompt_cache_stats",
-      "line": 324,
+      "line": 321,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70916,7 +71042,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::decode_next_token",
-      "line": 302,
+      "line": 299,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70925,7 +71051,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::inject_input_tokens",
-      "line": 309,
+      "line": 306,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70934,7 +71060,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::load",
-      "line": 291,
+      "line": 288,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70943,7 +71069,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::start_generation",
-      "line": 295,
+      "line": 292,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -70952,25 +71078,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
       "function": "Qwen3_5InferenceExecution::update_mlx_memory_limit",
-      "line": 355,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
-      "function": "fatal_engine_error",
-      "line": 412,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/mod.rs",
-      "function": "qwen3_5_runtime_error",
-      "line": 408,
+      "line": 352,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -71130,171 +71238,9 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "Qwen3_5EngineState::capture_persistent_prompt_cache_blocks",
-      "line": 44,
-      "cyclomatic": 12.0,
-      "coverage": null,
-      "crap": 156.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "Qwen3_5EngineState::publish_block_with_reclamation_retry",
-      "line": 152,
-      "cyclomatic": 5.0,
-      "coverage": null,
-      "crap": 30.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "apply_publication_outcome",
-      "line": 334,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "configured_memory_limit_bytes_u64",
-      "line": 376,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "extract_kv_block_tensors_with_measurement",
-      "line": 241,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "memory_snapshot_active_memory_bytes",
-      "line": 368,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "memory_snapshot_allocator_cache_bytes",
-      "line": 372,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "persistent_prompt_cache_publication_advances_parent_chain",
-      "line": 390,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "release_publication_workspace_if_needed",
-      "line": 282,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_capture.rs",
-      "function": "required_prompt_state_persistence_failure",
-      "line": 25,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_startup_logging.rs",
       "function": "log_persistent_prompt_cache_startup_cleanup",
       "line": 5,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture.rs",
-      "function": "Qwen3_5EngineState::capture_persistent_prompt_cache_partial_tail_block",
-      "line": 191,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture.rs",
-      "function": "Qwen3_5EngineState::publish_captured_tail_block",
-      "line": 269,
-      "cyclomatic": 6.0,
-      "coverage": null,
-      "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture.rs",
-      "function": "build_tail_block_key",
-      "line": 110,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture.rs",
-      "function": "extract_tail_kv_block_tensors",
-      "line": 130,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture.rs",
-      "function": "extract_tail_recurrent_snapshot_tensors",
-      "line": 163,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture.rs",
-      "function": "prompt_tail_capture_span",
-      "line": 53,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture.rs",
-      "function": "resolve_tail_block_causal_input",
-      "line": 92,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/persistent_prompt_cache_tail_capture_tests.rs",
-      "function": "synthetic_tail_capture_contract",
-      "line": 178,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -71312,7 +71258,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::advance_prompt_prefill_if_pending",
-      "line": 45,
+      "line": 49,
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
@@ -71321,7 +71267,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::handle_prefill_attempt_failure",
-      "line": 178,
+      "line": 182,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -71330,7 +71276,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::handle_prompt_prefill_chunk_attempt_failure",
-      "line": 335,
+      "line": 344,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -71339,7 +71285,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::open_expert_demand_window_for_prefill",
-      "line": 286,
+      "line": 290,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -71348,7 +71294,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::prefill_end_for_attempted_chunk",
-      "line": 321,
+      "line": 330,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -71357,7 +71303,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::prefill_progress_token",
-      "line": 561,
+      "line": 574,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -71366,7 +71312,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::publish_and_advance_durable_prefill_state",
-      "line": 414,
+      "line": 425,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -71375,7 +71321,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::reclaim_allocator_cache_after_prefill_chunk",
-      "line": 462,
+      "line": 475,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -71384,7 +71330,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::record_completed_forward_memory",
-      "line": 530,
+      "line": 543,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -71393,7 +71339,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::refresh_prefill_residency_plan",
-      "line": 264,
+      "line": 268,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -71402,7 +71348,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::resolve_next_prefill_attempt",
-      "line": 206,
+      "line": 210,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -71411,7 +71357,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "Qwen3_5EngineState::resolve_next_prefill_chunk_span",
-      "line": 232,
+      "line": 236,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -71420,7 +71366,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "log_prefill_attempt",
-      "line": 152,
+      "line": 156,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -71429,7 +71375,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_advance.rs",
       "function": "prefill_mlx_memory_telemetry_from_snapshot",
-      "line": 627,
+      "line": 640,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -71582,7 +71528,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_memory_recovery.rs",
       "function": "Qwen3_5EngineState::decline_layer_major_prefill_after_failure",
-      "line": 201,
+      "line": 206,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -71591,7 +71537,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_memory_recovery.rs",
       "function": "Qwen3_5EngineState::keep_planned_dense_layers_after_decline",
-      "line": 237,
+      "line": 244,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -71609,7 +71555,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prefill_memory_recovery.rs",
       "function": "layer_major_decline_for",
-      "line": 173,
+      "line": 178,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -71634,6 +71580,15 @@
       "crate": "astronomical-model-serving"
     },
     {
+      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prompt_cache_capture_engine.rs",
+      "function": "Qwen3_5EngineState::reclaim_before_publication_retry",
+      "line": 16,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prompt_prefill.rs",
       "function": "Qwen3_5EngineState::execute_prompt_prefill_chunk",
       "line": 34,
@@ -71649,15 +71604,6 @@
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/prompt_prefill_counters.rs",
-      "function": "record_persistent_prompt_cache_boundary_checkpoint",
-      "line": 6,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -71798,7 +71744,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/inference_execution/start_generation.rs",
       "function": "Qwen3_5EngineState::build_generation_start_contract",
-      "line": 592,
+      "line": 594,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72030,24 +71976,6 @@
       "crate": "astronomical-model-serving"
     },
     {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/adaptive_ram_growth_logging.rs",
-      "function": "log_adaptive_ram_growth_admission_decision",
-      "line": 4,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/adaptive_ram_growth_logging.rs",
-      "function": "log_adaptive_ram_growth_pressure",
-      "line": 49,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/artifact_loading.rs",
       "function": "Qwen3_5Model::load",
       "line": 32,
@@ -72216,33 +72144,6 @@
       "cyclomatic": 9.0,
       "coverage": null,
       "crap": 90.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/decoder_cache_dtype_flow.rs",
-      "function": "affine_contract",
-      "line": 145,
-      "cyclomatic": 4.0,
-      "coverage": null,
-      "crap": 20.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/decoder_cache_dtype_flow.rs",
-      "function": "derive_decoder_layer_cache_dtypes",
-      "line": 40,
-      "cyclomatic": 17.0,
-      "coverage": null,
-      "crap": 306.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/decoder_cache_dtype_flow.rs",
-      "function": "embedded_hidden_state_dtype",
-      "line": 30,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -72878,7 +72779,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/evaluation.rs",
       "function": "Qwen3_5Model::async_evaluate_generation",
-      "line": 103,
+      "line": 87,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -72887,7 +72788,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/evaluation.rs",
       "function": "Qwen3_5Model::evaluate_decoder_state_for_paged_route_resolution",
-      "line": 63,
+      "line": 47,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -72896,7 +72797,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/evaluation.rs",
       "function": "Qwen3_5Model::evaluate_forward_state",
-      "line": 36,
+      "line": 20,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72905,7 +72806,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/evaluation.rs",
       "function": "Qwen3_5Model::evaluate_forward_state_with_performance_attribution",
-      "line": 51,
+      "line": 35,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -72914,7 +72815,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/evaluation.rs",
       "function": "Qwen3_5Model::evaluate_terminal_prefill_state_with_performance_attribution",
-      "line": 84,
+      "line": 68,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -72927,24 +72828,6 @@
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/evaluation.rs",
-      "function": "Qwen3_5Model::highest_logit_token_ids",
-      "line": 20,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/evaluation.rs",
-      "function": "Qwen3_5Model::select_highest_logit_token",
-      "line": 28,
-      "cyclomatic": 2.0,
-      "coverage": null,
-      "crap": 6.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -73706,7 +73589,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "Qwen3_5Model::embed_layer_major_spans",
-      "line": 205,
+      "line": 207,
       "cyclomatic": 8.0,
       "coverage": null,
       "crap": 72.0,
@@ -73724,7 +73607,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "Qwen3_5Model::prefill_layer_major",
-      "line": 117,
+      "line": 119,
       "cyclomatic": 11.0,
       "coverage": null,
       "crap": 132.0,
@@ -73733,7 +73616,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "Qwen3_5Model::prefill_prompt_layer_major",
-      "line": 178,
+      "line": 180,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -73742,7 +73625,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "Qwen3_5Model::run_layer_over_spans",
-      "line": 242,
+      "line": 244,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -73751,7 +73634,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "Qwen3_5Model::run_span_through_layer",
-      "line": 306,
+      "line": 308,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -73769,7 +73652,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "completed_checkpoints",
-      "line": 432,
+      "line": 434,
       "cyclomatic": 7.0,
       "coverage": null,
       "crap": 56.0,
@@ -73778,7 +73661,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "even_layer_major_spans",
-      "line": 463,
+      "line": 465,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -73787,7 +73670,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "layer_snapshot_arrays",
-      "line": 363,
+      "line": 365,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -73796,7 +73679,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "record_end_state_snapshot",
-      "line": 398,
+      "line": 400,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -73805,7 +73688,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "span_collector",
-      "line": 376,
+      "line": 378,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -73814,7 +73697,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/layer_major_prefill.rs",
       "function": "validate_layer_major_spans",
-      "line": 481,
+      "line": 483,
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
@@ -74097,60 +73980,6 @@
       "cyclomatic": 6.0,
       "coverage": null,
       "crap": 42.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/memory_breakdown.rs",
-      "function": "Qwen3_5Model::active_memory_breakdown",
-      "line": 10,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/memory_breakdown.rs",
-      "function": "Qwen3_5Model::active_memory_breakdown_with_context_state_payload_bytes",
-      "line": 168,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/memory_breakdown.rs",
-      "function": "Qwen3_5Model::between_request_memory_ceiling_utilization_for_breakdown",
-      "line": 70,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/memory_breakdown.rs",
-      "function": "Qwen3_5Model::finalized_active_memory_breakdown",
-      "line": 28,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/memory_breakdown.rs",
-      "function": "Qwen3_5Model::memory_ceiling_utilization_for_breakdown",
-      "line": 46,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/memory_breakdown.rs",
-      "function": "Qwen3_5Model::record_memory_ceiling_utilization",
-      "line": 98,
-      "cyclomatic": 3.0,
-      "coverage": null,
-      "crap": 12.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -75110,7 +74939,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::build_forward_chunk_with_paged_execution_mode_and_performance_attribution",
-      "line": 281,
+      "line": 302,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -75128,7 +74957,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::deref_mut",
-      "line": 90,
+      "line": 111,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -75137,7 +74966,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::expert_page_reservation_bytes_for_forward",
-      "line": 141,
+      "line": 162,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -75146,7 +74975,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::expert_weight_memory_cache_statistics",
-      "line": 98,
+      "line": 119,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -75155,7 +74984,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::forward_chunk",
-      "line": 244,
+      "line": 265,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -75164,7 +74993,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::forward_chunk_with_paged_execution_mode_for_tests",
-      "line": 261,
+      "line": 282,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -75173,7 +75002,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::forward_decoder_layer",
-      "line": 321,
+      "line": 342,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -75181,8 +75010,35 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
+      "function": "Qwen3_5StreamingModel::held_expert_payload_bytes",
+      "line": 96,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
+      "function": "Qwen3_5StreamingModel::held_model_core_payload_bytes",
+      "line": 103,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::hot_expert_warm_slot_count",
-      "line": 129,
+      "line": 150,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
+      "function": "Qwen3_5StreamingModel::model_base",
+      "line": 92,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -75191,15 +75047,6 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::prefill_chunk",
-      "line": 207,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
-      "function": "Qwen3_5StreamingModel::prefill_chunk_with_attribution_for_tests",
       "line": 228,
       "cyclomatic": 1.0,
       "coverage": null,
@@ -75208,8 +75055,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
+      "function": "Qwen3_5StreamingModel::prefill_chunk_with_attribution_for_tests",
+      "line": 249,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::prefill_chunk_with_visual_embeddings",
-      "line": 185,
+      "line": 206,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -75218,7 +75074,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::remove_retained_expert_layer",
-      "line": 134,
+      "line": 155,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -75227,7 +75083,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::set_hot_expert_warm_slot_count",
-      "line": 124,
+      "line": 145,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -75236,7 +75092,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_streaming/model/streaming_model.rs",
       "function": "Qwen3_5StreamingModel::update_expert_pager_transient_high_water_bytes",
-      "line": 113,
+      "line": 134,
       "cyclomatic": 2.0,
       "coverage": null,
       "crap": 6.0,
@@ -104900,7 +104756,7 @@
     {
       "file": "verification/acceptance/tests/prompt_cache/engine/partial_tail_reuse.rs",
       "function": "extended_conversation_request",
-      "line": 171,
+      "line": 187,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -104909,7 +104765,7 @@
     {
       "file": "verification/acceptance/tests/prompt_cache/engine/partial_tail_reuse.rs",
       "function": "romeo_and_juliet_conversation_token_ids",
-      "line": 126,
+      "line": 142,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -104918,7 +104774,7 @@
     {
       "file": "verification/acceptance/tests/prompt_cache/engine/partial_tail_reuse.rs",
       "function": "run_partial_tail_reuse_acceptance",
-      "line": 36,
+      "line": 37,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -104927,7 +104783,7 @@
     {
       "file": "verification/acceptance/tests/prompt_cache/engine/partial_tail_reuse.rs",
       "function": "should_restore_the_previous_turns_partial_tail_block_on_an_extended_prompt",
-      "line": 31,
+      "line": 32,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
