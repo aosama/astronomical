@@ -235,3 +235,41 @@ fn should_saturate_rather_than_overflow_for_the_largest_span() {
         Some(u64::MAX.saturating_mul(1000).div_ceil(1000))
     );
 }
+
+#[test]
+fn should_not_be_due_while_neural_engine_programs_are_preparing() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
+
+    idle_clock.observe_background_preparation(true, started_at + Duration::from_secs(58));
+
+    assert!(!idle_clock.is_unload_due(started_at + Duration::from_secs(61)));
+}
+
+#[test]
+fn should_count_the_span_from_the_end_of_preparation() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
+    let preparation_ended_at = started_at + Duration::from_secs(58);
+    idle_clock.observe_background_preparation(true, preparation_ended_at);
+    idle_clock.observe_background_preparation(false, started_at + Duration::from_secs(59));
+
+    assert!(!idle_clock.is_unload_due(preparation_ended_at + Duration::from_secs(59)));
+    assert!(idle_clock.is_unload_due(preparation_ended_at + Duration::from_secs(60)));
+}
+
+#[test]
+fn should_leave_the_clock_alone_when_nothing_is_preparing() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(60);
+
+    idle_clock.observe_background_preparation(false, started_at + Duration::from_secs(58));
+
+    assert!(idle_clock.is_unload_due(started_at + Duration::from_secs(60)));
+}
+
+#[test]
+fn should_still_never_be_due_with_a_zero_span_after_preparation() {
+    let (mut idle_clock, _shared_setting, started_at) = idle_clock_with_span(0);
+
+    idle_clock.observe_background_preparation(true, started_at + Duration::from_secs(58));
+
+    assert!(!idle_clock.is_unload_due(started_at + Duration::from_secs(7 * 24 * 60 * 60)));
+}
