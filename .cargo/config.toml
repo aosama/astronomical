@@ -177,9 +177,12 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # may not grow, and a function the baseline does not list yet may not exceed
 # cyclomatic complexity 15 unless crap-admissions.json names it with a
 # reason. `cargo xtask crap-baseline --write` regenerates the baseline from
-# the current tree only after that check passes, so one commit cannot raise
-# a baseline entry and grow its function together. GitHub Actions runs no
-# code-shape enforcement at all.
+# the current tree only after that check passes, so a plain commit cannot
+# raise a baseline entry and grow its function together (an amend, rebase or
+# squash can; the module doc lists what the gate cannot see).
+# `cargo xtask crap-baseline --against origin/main`, run by the pre-push hook,
+# judges the tree against main's baseline instead, catching a branch built on
+# an older one. GitHub Actions runs no code-shape enforcement at all.
 #
 # `cargo xtask commit-identity --staged` (pre-commit) and
 # `cargo xtask commit-identity --pre-push` (pre-push, reads git's ref lines on

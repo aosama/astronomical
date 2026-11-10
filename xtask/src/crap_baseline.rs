@@ -11,21 +11,30 @@
 //!   cyclomatic cap in [`verdict`] unless `crap-admissions.json` names it;
 //! - `--write` regenerates the baseline only after that check passes.
 //!
-//! Both modes judge the tree against the baseline committed at `HEAD`, never
-//! the working-tree copy, so a commit cannot raise a baseline entry and grow
-//! its function together. What this gate cannot see, and why:
+//! Both modes judge the tree against a committed baseline, never the
+//! working-tree copy: `HEAD`'s by default, as the pre-commit hook runs it, or
+//! another ref's with `--against REF`, as the pre-push hook runs it against
+//! `origin/main` so a branch built on an older baseline is judged by the
+//! current one before it leaves this Mac. A plain commit therefore cannot
+//! raise a baseline entry and grow its function together. What this gate
+//! cannot see, and why:
 //!
 //! - growth split across two commits (a baseline-only commit made while the
-//!   grown code is set aside), a commit made with `--no-verify`, or a hand
-//!   edit merged without the hook: requiring the committed baseline to equal
-//!   a fresh report would also fail every merge that brings in `main`'s
-//!   regenerated baseline;
+//!   grown code is set aside), or folded into one afterwards with
+//!   `git commit --amend`, a rebase or a squash; a commit made with
+//!   `--no-verify`; or a hand edit merged without the hooks: requiring the
+//!   committed baseline to equal a fresh report would also fail every merge
+//!   that brings in `main`'s regenerated baseline;
+//! - two branches that each pass on their own but grow a function once both
+//!   are merged, when neither was pushed after the other landed: only a
+//!   check of the merged tree sees that, which is why the pre-push hook
+//!   judges against `origin/main`;
 //! - a function renamed while it grew: cargo-crap reports it as new, so it is
 //!   held only to the cap;
 //! - same-named functions in one file whose start lines shift: cargo-crap
 //!   then reports them as new and their baseline entries as removed, so they
-//!   too are held only to the cap. Every removed function is printed so a
-//!   reviewer can see either case.
+//!   too are held only to the cap. Every removed function is printed, in
+//!   both modes, so a reviewer can see either case.
 //!
 //! The gate scores the working tree, not the staged snapshot, as the
 //! cargo-crap gate it replaces did.
@@ -52,26 +61,60 @@ const BASELINE_REPORT_SCHEMA_SUFFIX: &str = "/schemas/report-v1.json";
 const MISSING_TOOL_HINT: &str =
     "cargo-crap is required: brew install cargo-binstall && cargo binstall cargo-crap";
 
+const DEFAULT_BASELINE_REF: &str = "HEAD";
+
 /// The parsed command line of `cargo xtask crap-baseline`.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub(crate) struct CrapBaselineInvocation {
     pub(crate) should_write_baseline: bool,
+    /// The git ref whose committed baseline the tree is judged against.
+    pub(crate) baseline_ref: String,
+}
+
+impl Default for CrapBaselineInvocation {
+    fn default() -> Self {
+        Self {
+            should_write_baseline: false,
+            baseline_ref: DEFAULT_BASELINE_REF.to_owned(),
+        }
+    }
 }
 
 impl CrapBaselineInvocation {
     pub(crate) fn parse(arguments: &[String]) -> Result<Self, String> {
         let mut invocation = Self::default();
-        for argument in arguments {
-            match argument.as_str() {
-                "--write" => invocation.should_write_baseline = true,
-                unknown_argument => {
-                    return Err(format!(
-                        "[crap-baseline] status=failed reason=unknown-argument argument={unknown_argument} hint=\"admit a function in {ADMISSIONS_RELATIVE_PATH}\""
-                    ));
-                }
-            }
+        let mut remaining_arguments = arguments.iter();
+        while let Some(argument) = remaining_arguments.next() {
+            invocation.apply_argument(argument, &mut remaining_arguments)?;
         }
         Ok(invocation)
+    }
+
+    /// Applies one argument, taking `--against`'s value from the arguments
+    /// that follow it. A value starting with `-` is another flag, not a ref.
+    fn apply_argument<'argument>(
+        &mut self,
+        argument: &str,
+        remaining_arguments: &mut impl Iterator<Item = &'argument String>,
+    ) -> Result<(), String> {
+        match argument {
+            "--write" => self.should_write_baseline = true,
+            "--against" => {
+                self.baseline_ref = remaining_arguments
+                    .next()
+                    .filter(|baseline_ref| !baseline_ref.starts_with('-'))
+                    .ok_or(
+                        "[crap-baseline] status=failed reason=missing-value-for argument=--against",
+                    )?
+                    .clone();
+            }
+            unknown_argument => {
+                return Err(format!(
+                    "[crap-baseline] status=failed reason=unknown-argument argument={unknown_argument} hint=\"the arguments are --write and --against REF\""
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -79,8 +122,9 @@ impl CrapBaselineInvocation {
 /// that nothing is written unless the check passes can be tested without
 /// running cargo-crap or git.
 pub(crate) trait CrapReportSource {
-    /// The delta report of the current tree against the committed baseline.
-    fn delta_against_committed_baseline(&self) -> Result<String, String>;
+    /// The delta report of the current tree against the baseline committed
+    /// at `baseline_ref`.
+    fn delta_against_committed_baseline(&self, baseline_ref: &str) -> Result<String, String>;
     /// A fresh `report-v1` report of the current tree.
     fn fresh_baseline_report(&self) -> Result<String, String>;
 }
@@ -114,28 +158,19 @@ pub(crate) fn run_with_source(
     } else {
         "check"
     };
-    println!("[crap-baseline] status=start mode={mode_name}");
+    println!(
+        "[crap-baseline] status=start mode={mode_name} against={}",
+        invocation.baseline_ref
+    );
     let admitted_function_labels = parse_admissions(admissions_text)?;
-    let fresh_baseline_text = if invocation.should_write_baseline {
-        println!("[crap-baseline] status=scoring step=fresh-baseline");
-        let fresh_baseline_text = report_source.fresh_baseline_report()?;
-        validate_fresh_baseline_report(&fresh_baseline_text)?;
-        Some(fresh_baseline_text)
-    } else {
-        None
-    };
+    let fresh_baseline_text = take_validated_fresh_baseline(invocation, report_source)?;
     println!("[crap-baseline] status=scoring step=delta-against-committed-baseline");
-    let delta_report_text = report_source.delta_against_committed_baseline()?;
+    let delta_report_text =
+        report_source.delta_against_committed_baseline(&invocation.baseline_ref)?;
     let verdict = judge_delta_report(&delta_report_text, &admitted_function_labels)?;
-    print_verdict(&verdict, invocation.should_write_baseline);
+    print_verdict(&verdict);
     if !verdict.passes() {
-        return Err(format!(
-            "[crap-baseline] status=failed grown={} over_cap_new={} stale_admissions={} ambiguous_admissions={}",
-            verdict.grown_functions.len(),
-            verdict.over_cap_new_functions.len(),
-            verdict.stale_admissions.len(),
-            verdict.ambiguous_admissions.len()
-        ));
+        return Err(verdict.failure_summary());
     }
     if let Some(fresh_baseline_text) = fresh_baseline_text {
         write_baseline_atomically(repository_root, &fresh_baseline_text)?;
@@ -150,6 +185,22 @@ pub(crate) fn run_with_source(
     Ok(())
 }
 
+/// In write mode, the fresh report the baseline would become, checked to be a
+/// baseline report before anything is judged; `None` in check mode, which
+/// never pays for the extra scan.
+fn take_validated_fresh_baseline(
+    invocation: &CrapBaselineInvocation,
+    report_source: &dyn CrapReportSource,
+) -> Result<Option<String>, String> {
+    if !invocation.should_write_baseline {
+        return Ok(None);
+    }
+    println!("[crap-baseline] status=scoring step=fresh-baseline");
+    let fresh_baseline_text = report_source.fresh_baseline_report()?;
+    validate_fresh_baseline_report(&fresh_baseline_text)?;
+    Ok(Some(fresh_baseline_text))
+}
+
 fn read_admissions_text(repository_root: &Path) -> Result<String, String> {
     std::fs::read_to_string(repository_root.join(ADMISSIONS_RELATIVE_PATH)).map_err(|error| {
         format!(
@@ -160,7 +211,7 @@ fn read_admissions_text(repository_root: &Path) -> Result<String, String> {
 
 /// Each violation kind gets its own hint: an admission can rescue a new
 /// function above the cap, never a baseline function that grew.
-fn print_verdict(verdict: &CrapBaselineVerdict, is_writing_baseline: bool) {
+fn print_verdict(verdict: &CrapBaselineVerdict) {
     for grown_function in &verdict.grown_functions {
         eprintln!(
             "[crap-baseline] violation=grown function={grown_function} hint=\"bring it back to its baseline score; an admission cannot cover growth\""
@@ -184,10 +235,8 @@ fn print_verdict(verdict: &CrapBaselineVerdict, is_writing_baseline: bool) {
     for admitted_function in &verdict.admitted_functions {
         println!("[crap-baseline] admitted function={admitted_function}");
     }
-    if is_writing_baseline {
-        for removed_function in &verdict.removed_functions {
-            println!("[crap-baseline] removed function={removed_function}");
-        }
+    for removed_function in &verdict.removed_functions {
+        println!("[crap-baseline] removed function={removed_function}");
     }
 }
 
@@ -220,7 +269,14 @@ fn write_baseline_atomically(
     let staging_path = repository_root.join(format!("{BASELINE_RELATIVE_PATH}.tmp"));
     std::fs::write(&staging_path, fresh_baseline_text)
         .and_then(|()| std::fs::rename(&staging_path, &baseline_path))
-        .map_err(|error| format!("[crap-baseline] status=failed reason=write error={error}"))
+        .map_err(|write_error| discard_staging_file(&staging_path, &write_error))
+}
+
+/// The staging file is ignored by git, but a stale copy would sit beside the
+/// baseline until someone noticed it, so a failed write removes it.
+fn discard_staging_file(staging_path: &Path, write_error: &std::io::Error) -> String {
+    let _ = std::fs::remove_file(staging_path);
+    format!("[crap-baseline] status=failed reason=write error={write_error}")
 }
 
 /// The real scans: git for the committed baseline, cargo-crap for scoring.
@@ -229,8 +285,8 @@ struct CargoCrapReportSource {
 }
 
 impl CrapReportSource for CargoCrapReportSource {
-    fn delta_against_committed_baseline(&self) -> Result<String, String> {
-        let committed_baseline_copy = self.copy_committed_baseline()?;
+    fn delta_against_committed_baseline(&self, baseline_ref: &str) -> Result<String, String> {
+        let committed_baseline_copy = self.copy_committed_baseline(baseline_ref)?;
         let committed_baseline_argument = committed_baseline_copy.to_string_lossy();
         self.run_cargo_crap(&["--baseline", committed_baseline_argument.as_ref()])
     }
@@ -241,9 +297,9 @@ impl CrapReportSource for CargoCrapReportSource {
 }
 
 impl CargoCrapReportSource {
-    fn copy_committed_baseline(&self) -> Result<PathBuf, String> {
+    fn copy_committed_baseline(&self, baseline_ref: &str) -> Result<PathBuf, String> {
         let git_show_output = Command::new("git")
-            .args(["show", &format!("HEAD:{BASELINE_RELATIVE_PATH}")])
+            .args(["show", &format!("{baseline_ref}:{BASELINE_RELATIVE_PATH}")])
             .current_dir(&self.repository_root)
             .output()
             .map_err(|error| {
@@ -251,7 +307,7 @@ impl CargoCrapReportSource {
             })?;
         if !git_show_output.status.success() {
             return Err(format!(
-                "[crap-baseline] status=failed reason=no-committed-baseline stderr={}",
+                "[crap-baseline] status=failed reason=no-committed-baseline against={baseline_ref} stderr={}",
                 String::from_utf8_lossy(&git_show_output.stderr).trim()
             ));
         }

@@ -28,6 +28,25 @@ if [ "${ASTRONOMICAL_SKIP_PRE_PUSH:-0}" = "1" ]; then
     exit 0
 fi
 
+# The pre-commit ratchet judges each commit against its own HEAD, so two
+# branches that pass on their own can still grow a function once both land
+# (#2000 and #2001 did exactly that). Judging the pushed tree against the
+# baseline on origin/main catches a branch built on an older baseline before
+# it costs a pull request; run `git fetch origin main` first so that ref is
+# current. A clone without origin/main skips the check rather than guess.
+if git rev-parse --verify --quiet origin/main >/dev/null; then
+    printf '%s\n' "[pre-push] status=start check=crap-complexity-against-main"
+    if cargo run --quiet --manifest-path "${REPOSITORY_ROOT}/xtask/Cargo.toml" -p xtask -- crap-baseline --against origin/main; then
+        printf '%s\n' "[pre-push] status=success check=crap-complexity-against-main"
+    else
+        printf '%s\n' "[pre-push] status=failed check=crap-complexity-against-main" >&2
+        printf '%s\n' '[pre-push] hint=merge origin/main into this branch, then bring each grown function back under its main baseline score' >&2
+        exit 1
+    fi
+else
+    printf '%s\n' '[pre-push] status=skipped check=crap-complexity-against-main reason=no-origin-main'
+fi
+
 printf '%s\n' "[pre-push] status=start check=cargo-verify root=${REPOSITORY_ROOT}"
 started_epoch_seconds="$(date +%s)"
 if (cd "${REPOSITORY_ROOT}" && cargo verify); then
