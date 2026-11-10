@@ -4,15 +4,21 @@ import { AstroHomeView } from "./AstroHomeView";
 import { AstroProfile } from "./AstroProfile";
 import { FirstFlightView } from "./FirstFlightView";
 import type { AstroStyle } from "./AstroStyle";
+import { applyAstroTrail } from "./AstroTrail";
+import type { AstroTrail } from "./AstroTrail";
+import { YourAstroView } from "./YourAstroView";
 import { SkillCardKind, skillCard, starterPromptFor } from "./SkillCard";
 import { AstroComposerChrome } from "./AstroComposerChrome";
 import { TranscriptPersona } from "../TranscriptPersona";
 
 /**
  * Astro's place in Thin Talk: loads what Astro remembers, opens the first
- * flight for a newcomer, shows Astro's home in empty conversations, answers
- * the View menu's "Show or Hide Astro" and "Meet Astro Again", and fills the
- * message field when a card or idea is picked.
+ * flight for a newcomer, shows Astro's home in empty conversations, opens
+ * Your Astro from Settings (⌘,), answers the View menu's "Show or Hide
+ * Astro", and fills the message field when a card or idea is picked.
+ *
+ * It is the one owner of the saved profile: every view asks it for changes,
+ * and it redraws all of them from the one copy.
  *
  * Chat itself is untouched: Astro only ever prepares a message, and the
  * controller sends it exactly as if it had been typed.
@@ -25,12 +31,20 @@ export class AstroCompanion {
   private readonly composerChrome: AstroComposerChrome;
   private readonly firstFlight: FirstFlightView;
   private readonly home: AstroHomeView;
+  private readonly yourAstro: YourAstroView;
+  /** The window's root, which carries the trail class for every Astro figure. */
+  private readonly trailOwner: HTMLElement;
   private profile = AstroProfile.newcomer();
+  /** False until start() has read the saved profile; see openYourAstro. */
+  private hasLoadedProfile = false;
 
   public constructor(init: {
     bridge: SessionBridge;
     library: AstroLibrary;
     firstFlightOverlay: HTMLElement;
+    yourAstroOverlay: HTMLElement;
+    /** An ancestor of every Astro figure; see applyAstroTrail. */
+    trailOwner: HTMLElement;
     emptyState: HTMLElement;
     composerField: HTMLTextAreaElement;
     skillLaunchers: HTMLElement;
@@ -46,6 +60,7 @@ export class AstroCompanion {
     this.library = init.library;
     this.composerField = init.composerField;
     this.applyPresentation = init.applyPresentation;
+    this.trailOwner = init.trailOwner;
     this.composerChrome = new AstroComposerChrome({
       launchers: init.skillLaunchers,
       listeningAstroImage: init.composerAstro,
@@ -59,8 +74,9 @@ export class AstroCompanion {
       overlay: init.firstFlightOverlay,
       library: init.library,
       callbacks: {
-        onNicknameChosen: (typedNickname) => this.remember(this.profile.withNickname(typedNickname)),
-        onStyleChosen: (style: AstroStyle) => this.remember(this.profile.withStyle(style)),
+        onNicknameChosen: (typedNickname) => void this.remember(this.profile.withNickname(typedNickname)),
+        onStyleChosen: (style: AstroStyle) => void this.remember(this.profile.withStyle(style)),
+        onTrailChosen: (trail) => void this.rememberTrail(trail),
         onFinished: (chosenSkill) => this.finishFirstFlight(chosenSkill),
       },
     });
@@ -68,7 +84,9 @@ export class AstroCompanion {
       emptyState: init.emptyState,
       library: init.library,
       onStarterPrompt: (prompt) => this.prepareMessage(prompt),
+      onTrailChosen: (trail) => void this.rememberTrail(trail),
     });
+    this.yourAstro = this.makeYourAstro(init.yourAstroOverlay, init.library);
     init.library.onModelInstalled(() => this.welcomeNewModel(init.onModelInstalled));
   }
 
@@ -79,6 +97,7 @@ export class AstroCompanion {
     if (this.profile.isAstroShown) {
       this.home.show(this.profile);
     }
+    this.yourAstro.refreshGifts();
   }
 
   /** Reads the saved profile; a newcomer starts the first flight. A profile
@@ -94,23 +113,56 @@ export class AstroCompanion {
     if (!this.profile.hasFinishedFirstFlight) {
       await this.openFirstFlight();
     }
+    // Only now: a newcomer's flight is open, so Settings stays ignored.
+    this.hasLoadedProfile = true;
   }
 
-  /** "Meet Astro Again": replays the welcome, keeping the saved name and style
-   * as the starting answers, and brings Astro back if it was hidden. */
-  public async meetAgain(): Promise<void> {
-    if (this.firstFlight.isOpen) {
+  /** Settings (⌘,). Ignored while the first flight is open, since the flight
+   * already asks every question the page would show, and before the saved
+   * profile is read, when the page would show a newcomer's blank answers and
+   * a newcomer's flight could then open underneath it. */
+  public openYourAstro(): void {
+    if (!this.hasLoadedProfile || this.firstFlight.isOpen || this.yourAstro.isOpen) {
       return;
     }
-    this.remember(this.profile.withAstroShown(true));
-    this.presentProfile();
+    this.yourAstro.open();
+  }
+
+  private makeYourAstro(overlay: HTMLElement, library: AstroLibrary): YourAstroView {
+    return new YourAstroView({
+      overlay,
+      library,
+      callbacks: {
+        currentProfile: () => this.profile,
+        saveNickname: (typedNickname) => this.remember(this.profile.withNickname(typedNickname)),
+        saveStyle: (style) => this.remember(this.profile.withStyle(style)),
+        saveTrail: (trail) => this.rememberTrail(trail),
+        toggleShown: () => this.rememberShown(!this.profile.isAstroShown),
+        retrySave: () => this.remember(this.profile),
+        replay: () => void this.replayFirstFlight(),
+        onClosed: () => this.composerField.focus(),
+      },
+    });
+  }
+
+  /** Your Astro's last row: the welcome from the start, with the saved name
+   * and style as the starting answers, and Astro brought back if hidden. */
+  private async replayFirstFlight(): Promise<void> {
+    void this.rememberShown(true);
     await this.openFirstFlight();
   }
 
   /** The Focus switch. */
   public toggleShown(): void {
-    this.remember(this.profile.withAstroShown(!this.profile.isAstroShown));
-    this.presentProfile();
+    void this.rememberShown(!this.profile.isAstroShown);
+  }
+
+  private rememberShown(isAstroShown: boolean): Promise<boolean> {
+    return this.remember(this.profile.withAstroShown(isAstroShown));
+  }
+
+  private rememberTrail(trail: AstroTrail): Promise<boolean> {
+    return this.remember(this.profile.withTrail(trail));
   }
 
   /** The sketchbook offer lives on Astro's home, which an empty chat shows. */
@@ -127,8 +179,7 @@ export class AstroCompanion {
   }
 
   private finishFirstFlight(chosenSkill: SkillCardKind | null): void {
-    this.remember(this.profile.withFirstFlightFinished());
-    this.presentProfile();
+    void this.remember(this.profile.withFirstFlightFinished());
     if (chosenSkill !== null) {
       const starterPrompt = starterPromptFor(skillCard(chosenSkill), this.profile.style);
       if (starterPrompt !== null) {
@@ -140,6 +191,8 @@ export class AstroCompanion {
   }
 
   private presentProfile(): void {
+    applyAstroTrail(this.trailOwner, this.profile.trail);
+    this.yourAstro.refresh();
     this.applyPresentation(
       new TranscriptPersona({ isAstroShown: this.profile.isAstroShown, style: this.profile.style, nickname: this.profile.nickname }),
     );
@@ -167,8 +220,17 @@ export class AstroCompanion {
     this.composerField.setSelectionRange(caretPosition, caretPosition);
   }
 
-  private remember(profile: AstroProfile): void {
+  /** Keeps a change and redraws every view from it at once, then answers
+   * whether it reached the disk. A failed save keeps the change on screen
+   * for this session; Your Astro says it was not kept and offers to retry. */
+  private async remember(profile: AstroProfile): Promise<boolean> {
     this.profile = profile;
-    void this.bridge.saveAstroProfile(profile.toPlain()).catch(() => undefined);
+    this.presentProfile();
+    try {
+      await this.bridge.saveAstroProfile(profile.toPlain());
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

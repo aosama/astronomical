@@ -14,6 +14,9 @@ export class FakeSessionHost {
   private preferences: unknown = null;
   /** Astro's saved profile, or null before the first save, like astro-profile.json. */
   public astroProfile: unknown = null;
+  /** While true, saving Astro's profile fails the way a full or read-only
+   * disk would, and the stored profile stays as it was. */
+  public failsAstroProfileSaves = false;
   private nextIdentifier = 1;
   public readonly receivedRequests: SessionBridgeRequest[] = [];
   /** Every `action` envelope the page posted (copy, openExternal), in order. */
@@ -93,6 +96,9 @@ export class FakeSessionHost {
       case "loadAstroProfile":
         return this.astroProfile;
       case "saveAstroProfile":
+        if (this.failsAstroProfileSaves) {
+          throw new Error("the disk refused astro-profile.json");
+        }
         this.astroProfile = payload;
         return null;
       case "storeGeneratedImage": {

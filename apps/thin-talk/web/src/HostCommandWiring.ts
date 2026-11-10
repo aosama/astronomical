@@ -59,7 +59,7 @@ export function hostCommandHandlers(targets: HostCommandTargets): HostCommandHan
       }
     },
     focusComposer: () => targets.composerField.focus(),
-    meetAstro: () => void targets.astro.meetAgain(),
+    openYourAstro: () => targets.astro.openYourAstro(),
     toggleAstro: () => targets.astro.toggleShown(),
     setTitlebarInset: (titlebarInsetPixels) => targets.windowChrome.applyTitlebarInset(titlebarInsetPixels),
   };

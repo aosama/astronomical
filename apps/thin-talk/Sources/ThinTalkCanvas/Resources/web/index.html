@@ -117,11 +117,14 @@
       </div>
       <!--
         Astro's first flight covers the whole window, sidebar included, for a
-        newcomer (and on View > Meet Astro Again). It sits inside #app so it
-        inherits the title bar inset. It is app-owned chrome built by
-        src/astro/FirstFlightView.ts; nothing in it comes from a model.
+        newcomer (and on Your Astro's "Replay"). Your Astro, opened from
+        Settings (⌘,), covers it the same way. Both sit inside #app so they
+        inherit the title bar inset. They are app-owned chrome built by
+        src/astro/FirstFlightView.ts and src/astro/YourAstroView.ts; nothing
+        in them comes from a model.
       -->
       <section id="first-flight" class="first-flight" role="dialog" aria-modal="true" aria-label="Meet Astro" data-testid="first-flight" hidden></section>
+      <section id="your-astro" class="your-astro" role="dialog" aria-modal="true" aria-label="Your Astro" data-testid="your-astro" hidden></section>
     </div>
     <!--
       KaTeX and mermaid stay as vendored globals because they are large, slow to

@@ -4,7 +4,9 @@ import AppKit
 /// conversation: the application menu, Edit, Window and Help.
 @MainActor
 enum ThinTalkStandardMenus {
-  static func applicationMenu(hostActions: ThinTalkHostMenuActions) -> NSMenu {
+  static func applicationMenu(
+    hostActions: ThinTalkHostMenuActions, conversationActions: ThinTalkConversationActions
+  ) -> NSMenu {
     let applicationName = hostActions.applicationName
     let applicationMenu = NSMenu(title: applicationName)
     applicationMenu.addItem(
@@ -13,6 +15,12 @@ enum ThinTalkStandardMenus {
     if let checkForUpdates = hostActions.checkForUpdates {
       applicationMenu.addItem(closureItem("Check for Updates…", "", checkForUpdates))
     }
+    applicationMenu.addItem(.separator())
+    // Settings opens Your Astro in the page, which holds every choice the
+    // window has: the welcome's answers and whether Astro is shown at all.
+    applicationMenu.addItem(
+      ThinTalkMainMenu.menuItem(
+        "Settings…", #selector(ThinTalkConversationActions.openYourAstro(_:)), ",", conversationActions))
     applicationMenu.addItem(.separator())
     if let openObservatory = hostActions.openObservatory {
       applicationMenu.addItem(closureItem("Open Observatory", "", openObservatory))

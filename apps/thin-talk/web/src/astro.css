@@ -139,6 +139,7 @@
 .astro-chip:focus-visible,
 .skill-card:focus-visible,
 .first-flight__choice:focus-visible,
+.your-astro__switch:focus-visible,
 .first-flight__name-field:focus-visible {
   outline: 3px solid var(--astro-star);
   outline-offset: 3px;
@@ -157,7 +158,8 @@
 
 /* ---------- The first flight ---------- */
 
-.first-flight {
+.first-flight,
+.your-astro {
   position: fixed;
   inset: 0;
   z-index: 50;
@@ -172,7 +174,8 @@
     var(--astro-space);
 }
 
-.first-flight[hidden] {
+.first-flight[hidden],
+.your-astro[hidden] {
   display: none;
 }
 
@@ -342,12 +345,14 @@
 }
 
 /* Pilot: the same journey, quieter and denser for teenagers. */
-.first-flight--pilot .first-flight__bubble {
+.first-flight--pilot .first-flight__bubble,
+.your-astro--pilot .first-flight__bubble {
   font-size: 16px;
   border-radius: 14px;
 }
 
-.first-flight--pilot .astro-button {
+.first-flight--pilot .astro-button,
+.your-astro--pilot .astro-button {
   font-size: 15px;
   padding: 13px 22px;
 }
@@ -616,6 +621,245 @@
   }
   .skill-card,
   .download-meter__fill {
+    transition: none;
+  }
+}
+
+/* ---------- Trail chips (brain download and Your Astro) ---------- */
+
+.astro-trail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- The style cards' "Now" mark and picked state ---------- */
+
+.first-flight__choices--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(640px, 100%);
+}
+
+.first-flight__choice-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.first-flight__choice-badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--astro-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.first-flight__choice[aria-pressed="true"] {
+  border-color: var(--astro-star);
+}
+
+/* ---------- Your Astro ---------- */
+
+/* The page scrolls inside the overlay rather than being cut off, so a short
+   window or a large zoom still reaches every row. */
+.your-astro {
+  overflow-y: auto;
+}
+
+.your-astro__page {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 24px 48px;
+  width: min(1100px, 100%);
+  margin: 0 auto;
+}
+
+.your-astro__intro {
+  flex: 0 1 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.your-astro__intro .first-flight__astro {
+  --astro-size: clamp(140px, 26vh, 220px);
+}
+
+.your-astro__title {
+  margin: 0;
+  font: 700 32px/1.1 var(--astro-display);
+}
+
+.your-astro__intro .first-flight__bubble {
+  margin: 0;
+  font-size: 17px;
+}
+
+/* Below Astro the bubble points up at it instead of sideways. */
+.your-astro__intro .first-flight__bubble::after {
+  left: 40px;
+  top: -9px;
+  border: 10px solid transparent;
+  border-bottom-color: #fff;
+  border-top: 0;
+}
+
+.your-astro__list {
+  flex: 999 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.your-astro__top-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.your-astro__answers {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.your-astro__alert {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-radius: 16px;
+  border: 2px solid #f27373;
+  background: #3a1630;
+  color: #ffd6d6;
+  font-size: 15px;
+}
+
+.your-astro__alert[hidden] {
+  display: none;
+}
+
+.your-astro__alert span {
+  flex-grow: 1;
+}
+
+.your-astro__section {
+  padding: 6px 22px;
+  border-radius: 18px;
+  background: var(--astro-panel);
+}
+
+.your-astro__section-title {
+  margin: 12px 0 4px;
+  font: 600 13px/1 -apple-system, system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  color: var(--astro-muted);
+}
+
+.your-astro__row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 52px;
+  padding: 6px 0;
+}
+
+/* Dividers go between rows only, so the gifts group's download area after
+   its last row never leaves a stray line. */
+.your-astro__row + .your-astro__row {
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.your-astro__row-label {
+  flex: 0 0 120px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.your-astro__row-value {
+  flex-grow: 1;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.your-astro__row-value--muted,
+.your-astro__row-value--empty {
+  color: var(--astro-muted);
+}
+
+.your-astro__row-value--ready {
+  color: #3be8b0;
+}
+
+.your-astro__row-value--wanted {
+  color: var(--astro-star);
+}
+
+.your-astro__row-button {
+  flex: none;
+  font-size: 14px;
+  padding: 11px 16px;
+}
+
+.your-astro__follow-up:not(:empty) {
+  padding: 4px 0 16px;
+}
+
+.your-astro__switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  background: rgb(255 255 255 / 20%);
+}
+
+.your-astro__switch[aria-checked="true"] {
+  background: var(--astro-violet);
+}
+
+.your-astro__switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fff;
+  transition: left 0.15s ease;
+}
+
+.your-astro__switch[aria-checked="true"] .your-astro__switch-knob {
+  left: 25px;
+}
+
+/* An answer screen: the same stage and controls as the first flight, with
+   the way back to the page where the flight has its skip button. */
+.your-astro__step {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 100%;
+}
+
+.your-astro__back {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--titlebar-inset, 0px) + 14px);
+  left: 20px;
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .your-astro__switch-knob {
     transition: none;
   }
 }
