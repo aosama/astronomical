@@ -213,6 +213,14 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # `cargo xtask check-test-channel-isolation` fails when a package test tree
 # reaches for Stable state, and `cargo xtask menu-contracts` runs the menu
 # app's Swift contract tests with the Git credential helper cleared.
+# `cargo xtask convert-laya --checkpoint DIRECTORY --output DIRECTORY` converts a
+# PyTorch Laya checkpoint (model.safetensors, rl_agent_config.json,
+# encoder/config.json, tokenizer/) into the MLX layout Astronomical serves:
+# linear layers of the encoder and decision head quantized to 8 bits in groups
+# of 32, temperatures moved into config.json, no local paths in any output file.
+# Convert a bundled checkpoint such as `multilingual/` into a matching
+# subfolder of the output, then run `cargo test-laya-reference-decisions` with
+# the output folder as `model_directory` to compare it with the reference.
 # `cargo xtask vendor-thin-talk-assets [--verify-only]` vendors and verifies the
 # Thin Talk canvas's pinned offline web assets.
 # `cargo xtask provision-bindgen-headers [--verify-headers]` extracts the
