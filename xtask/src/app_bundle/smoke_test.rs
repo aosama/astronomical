@@ -1,7 +1,9 @@
 //! `cargo xtask app smoke-test --app-bundle PATH [--real-model MODEL_ID]`:
 //! launches a built bundle's daemon and menu-bar agent in isolation, checks that
-//! they serve this build's identity, and shuts them down. Typed port of the
-//! launching half of the retired `validate-macos-app.sh`.
+//! they serve this build's identity, and shuts them down. It then starts the
+//! agent the way macOS does at login and requires the agent to bring the
+//! engine up by itself (`login_launch_check`). Typed port of the launching
+//! half of the retired `validate-macos-app.sh`.
 //!
 //! It never stops an instance it did not start: an occupied port fails the
 //! run. `--real-model` sends one Romeo and Juliet prompt through a model the
@@ -13,13 +15,14 @@ use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use super::channel_profile::AGENT_EXECUTABLE_NAME;
+use super::login_launch_check::check_login_launch_starts_engine;
 use super::tool_command::run_quiet_tool;
 
-const HEALTH_WAIT: Duration = Duration::from_secs(30);
+pub(super) const HEALTH_WAIT: Duration = Duration::from_secs(30);
 const AGENT_SURVIVAL_PERIOD: Duration = Duration::from_secs(2);
 const PROCESS_EXIT_WAIT: Duration = Duration::from_secs(30);
-const POLL_INTERVAL: Duration = Duration::from_millis(250);
-const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
+pub(super) const POLL_INTERVAL: Duration = Duration::from_millis(250);
+pub(super) const PROGRESS_INTERVAL: Duration = Duration::from_secs(5);
 const ROMEO_FIXTURE_PATH: &str =
     "verification/acceptance/tests/fixtures/model_metrics_5000_romeo_and_juliet_words.txt";
 
@@ -51,6 +54,39 @@ pub(crate) fn run_smoke_test(
         ));
     }
     let log_directory = smoke_test_log_directory()?;
+    check_directly_launched_instance(
+        repository_root,
+        smoke_test_request,
+        &instance_identity,
+        &daemon_base_url,
+        &log_directory,
+    )?;
+    // Runs only once the directly launched daemon has exited: the agent
+    // starts an engine only when the channel's endpoint is unoccupied.
+    check_login_launch_starts_engine(
+        &smoke_test_request.bundle_path,
+        &instance_identity,
+        &daemon_base_url,
+        &log_directory,
+    )?;
+    println!(
+        "[app-smoke-test] validated {} {} ({}) without replacing another instance",
+        instance_identity.application_version,
+        instance_identity.channel_name,
+        instance_identity.build_commit
+    );
+    Ok(())
+}
+
+/// Starts the bundle's daemon itself, exercises it and the agent beside it,
+/// and shuts the daemon down whether or not the exercise passed.
+fn check_directly_launched_instance(
+    repository_root: &Path,
+    smoke_test_request: &SmokeTestRequest,
+    instance_identity: &BundleInstanceIdentity,
+    daemon_base_url: &str,
+    log_directory: &Path,
+) -> Result<(), String> {
     let mut daemon_process = launch_bundled_executable(
         &smoke_test_request
             .bundle_path
@@ -61,20 +97,13 @@ pub(crate) fn run_smoke_test(
     let smoke_result = exercise_running_instance(
         repository_root,
         smoke_test_request,
-        &instance_identity,
-        &daemon_base_url,
-        &log_directory,
+        instance_identity,
+        daemon_base_url,
+        log_directory,
     );
-    let shutdown_result = shut_down_daemon(&mut daemon_process, &daemon_base_url);
+    let shutdown_result = shut_down_daemon(&mut daemon_process, daemon_base_url);
     smoke_result?;
-    shutdown_result?;
-    println!(
-        "[app-smoke-test] validated {} {} ({}) without replacing another instance",
-        instance_identity.application_version,
-        instance_identity.channel_name,
-        instance_identity.build_commit
-    );
-    Ok(())
+    shutdown_result
 }
 
 fn exercise_running_instance(
@@ -151,14 +180,23 @@ fn read_bundle_instance_identity(bundle_path: &Path) -> Result<BundleInstanceIde
     if !bundle_path.is_dir() {
         return Err(format!("app bundle not found: {}", bundle_path.display()));
     }
+    instance_identity_from_plist(&read_plist_document(
+        &bundle_path.join("Contents/Info.plist"),
+    )?)
+}
+
+pub(super) fn read_plist_document(plist_path: &Path) -> Result<serde_json::Value, String> {
     let plist_json_text = run_quiet_tool(
         Command::new("plutil")
             .args(["-convert", "json", "-o", "-"])
-            .arg(bundle_path.join("Contents/Info.plist")),
+            .arg(plist_path),
     )?;
     match serde_json::from_str(&plist_json_text) {
-        Ok(plist_document) => instance_identity_from_plist(&plist_document),
-        Err(parse_error) => Err(format!("Info.plist did not convert to JSON: {parse_error}")),
+        Ok(plist_document) => Ok(plist_document),
+        Err(parse_error) => Err(format!(
+            "{} did not convert to JSON: {parse_error}",
+            plist_path.display()
+        )),
     }
 }
 
@@ -311,7 +349,10 @@ fn wait_for_health(daemon_base_url: &str, log_directory: &Path) -> Result<(), St
     Ok(())
 }
 
-fn wait_for_child_exit(child_process: &mut Child, process_description: &str) -> Result<(), String> {
+pub(super) fn wait_for_child_exit(
+    child_process: &mut Child,
+    process_description: &str,
+) -> Result<(), String> {
     let wait_started_at = Instant::now();
     loop {
         match child_process.try_wait() {
@@ -341,14 +382,24 @@ fn launch_bundled_executable(
     launch_arguments: &[&str],
     log_path: &Path,
 ) -> Result<Child, String> {
+    let mut launch_command = Command::new(executable_path);
+    launch_command.args(launch_arguments);
+    spawn_with_logs(&mut launch_command, log_path)
+}
+
+/// Starts `launch_command` detached from this terminal, with its output kept
+/// in `log_path` and its sibling `.stderr.log` for the failure message.
+pub(super) fn spawn_with_logs(
+    launch_command: &mut Command,
+    log_path: &Path,
+) -> Result<Child, String> {
     let (Ok(standard_output_log), Ok(standard_error_log)) = (
         File::create(log_path),
         File::create(log_path.with_extension("stderr.log")),
     ) else {
         return Err(format!("could not create {}", log_path.display()));
     };
-    match Command::new(executable_path)
-        .args(launch_arguments)
+    match launch_command
         .stdin(Stdio::null())
         .stdout(standard_output_log)
         .stderr(standard_error_log)
@@ -357,7 +408,7 @@ fn launch_bundled_executable(
         Ok(launched_process) => Ok(launched_process),
         Err(spawn_error) => Err(format!(
             "could not launch {}: {spawn_error}",
-            executable_path.display()
+            launch_command.get_program().to_string_lossy()
         )),
     }
 }
@@ -374,7 +425,7 @@ fn smoke_test_log_directory() -> Result<PathBuf, String> {
     }
 }
 
-fn http_get(request_url: &str) -> Result<String, String> {
+pub(super) fn http_get(request_url: &str) -> Result<String, String> {
     run_quiet_tool(Command::new("curl").args([
         "--silent",
         "--show-error",
@@ -385,12 +436,15 @@ fn http_get(request_url: &str) -> Result<String, String> {
     ]))
 }
 
-fn http_get_json(request_url: &str) -> Result<serde_json::Value, String> {
+pub(super) fn http_get_json(request_url: &str) -> Result<serde_json::Value, String> {
     parse_json_response(request_url, &http_get(request_url)?)
 }
 
 /// A real-model probe can take a while on a cold model, hence two minutes.
-fn http_post_json(request_url: &str, request_body: &str) -> Result<serde_json::Value, String> {
+pub(super) fn http_post_json(
+    request_url: &str,
+    request_body: &str,
+) -> Result<serde_json::Value, String> {
     let response_text = run_quiet_tool(Command::new("curl").args([
         "--silent",
         "--show-error",

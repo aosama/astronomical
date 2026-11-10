@@ -18,6 +18,7 @@ mod dev_pipeline;
 mod icon_cache;
 mod info_plist;
 mod instance_control;
+mod login_launch_check;
 mod native_metallib;
 mod package_pipeline;
 mod release_build_steps;
@@ -29,6 +30,9 @@ mod tool_command;
 #[cfg(test)]
 #[path = "app_bundle_tests.rs"]
 mod app_bundle_tests;
+#[cfg(test)]
+#[path = "app_login_launch_check_tests.rs"]
+mod app_login_launch_check_tests;
 #[cfg(test)]
 #[path = "app_package_fixture_tests.rs"]
 mod app_package_fixture_tests;
