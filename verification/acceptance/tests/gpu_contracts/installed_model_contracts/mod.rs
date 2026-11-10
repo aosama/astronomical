@@ -22,6 +22,8 @@ mod neural_engine_mlp_prefill;
 mod neural_engine_program_memory;
 mod neural_engine_token_share_sweep;
 mod ornith_load;
+#[cfg(feature = "direct-mlx")]
+mod qwen_decision_readout;
 mod qwen_image_21_conditioning;
 #[cfg(feature = "direct-mlx")]
 mod qwen_image_21_engine;
