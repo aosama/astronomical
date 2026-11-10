@@ -144,6 +144,33 @@ impl Qwen3_5ResidentModel {
         >,
         performance_attribution: &mut PerformanceAttribution,
     ) -> Result<Qwen3_5TargetForwardOutput, Qwen3_5ExecutionError> {
+        let (token_indices, token_count) = self.validated_token_indices(
+            token_ids,
+            starting_position_tokens,
+            token_position_offsets,
+            request_decoder_state,
+        )?;
+        self.build_target_forward_graph_from_token_indices_with_position_offsets(
+            &token_indices,
+            token_count,
+            starting_position_tokens,
+            token_position_offsets,
+            request_decoder_state,
+            boundary_checkpoint_collector,
+            performance_attribution,
+            true,
+        )
+    }
+
+    /// Checks one forward's token ids against the model and the decoder state,
+    /// and returns them as the `[1, token_count]` index array the graph reads.
+    pub(super) fn validated_token_indices(
+        &self,
+        token_ids: &[u32],
+        starting_position_tokens: u32,
+        token_position_offsets: Option<&MlxArray>,
+        request_decoder_state: &RequestDecoderStateStack,
+    ) -> Result<(MlxArray, i32), Qwen3_5ExecutionError> {
         let token_count = super::forward_contract::validate_forward_input(
             token_ids,
             starting_position_tokens,
@@ -164,16 +191,7 @@ impl Qwen3_5ResidentModel {
         let token_indices = self
             .runtime
             .array_from_i32(&signed_token_ids, &[1, token_count])?;
-        self.build_target_forward_graph_from_token_indices_with_position_offsets(
-            &token_indices,
-            token_count,
-            starting_position_tokens,
-            token_position_offsets,
-            request_decoder_state,
-            boundary_checkpoint_collector,
-            performance_attribution,
-            true,
-        )
+        Ok((token_indices, token_count))
     }
 
     pub(crate) fn build_target_forward_graph_from_token_indices(
