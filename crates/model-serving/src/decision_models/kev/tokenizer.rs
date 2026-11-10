@@ -101,3 +101,7 @@ impl KevTokenizer {
 fn unusable_tokenizer(reason: &str) -> DecisionFailure {
     DecisionFailure::fatal_execution(&format!("Kev's tokenizer cannot be used: {reason}"))
 }
+
+#[cfg(test)]
+#[path = "tokenizer_tests.rs"]
+mod tests;

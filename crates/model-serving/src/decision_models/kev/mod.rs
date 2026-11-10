@@ -16,6 +16,8 @@ mod engine;
 mod pointer_head;
 mod sequence;
 mod settings;
+#[cfg(test)]
+mod test_tokenizer;
 mod tokenizer;
 
 pub use engine::KevDecisionEngine;

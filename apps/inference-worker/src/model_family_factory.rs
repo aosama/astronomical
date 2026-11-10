@@ -571,24 +571,23 @@ impl ModelFamilyFactory {
         model_directory_path: &std::path::Path,
         model_configuration: WorkerDecisionModelConfiguration,
     ) -> Result<ModelFamilyRuntime, String> {
-        let decision_engine: Result<Box<dyn DecisionEngine>, _> =
-            if decision_family == ModelFamily::Kev {
-                KevDecisionEngine::new(
-                    model_configuration.model_id,
-                    model_directory_path,
-                    self.effective_mlx_memory_ceiling_bytes,
-                    self.allocator_cache_memory_limit_bytes,
-                )
-                .map(|kev_engine| Box::new(kev_engine) as Box<dyn DecisionEngine>)
-            } else {
-                LayaDecisionEngine::new(
-                    model_configuration.model_id,
-                    model_directory_path,
-                    self.effective_mlx_memory_ceiling_bytes,
-                    self.allocator_cache_memory_limit_bytes,
-                )
-                .map(|laya_engine| Box::new(laya_engine) as Box<dyn DecisionEngine>)
-            };
+        let decision_engine = if decision_family == ModelFamily::Kev {
+            KevDecisionEngine::new(
+                model_configuration.model_id,
+                model_directory_path,
+                self.effective_mlx_memory_ceiling_bytes,
+                self.allocator_cache_memory_limit_bytes,
+            )
+            .map(boxed_decision_engine)
+        } else {
+            LayaDecisionEngine::new(
+                model_configuration.model_id,
+                model_directory_path,
+                self.effective_mlx_memory_ceiling_bytes,
+                self.allocator_cache_memory_limit_bytes,
+            )
+            .map(boxed_decision_engine)
+        };
         match decision_engine {
             Ok(decision_engine) => Ok(ModelFactoryRuntime::Decisions(decision_engine)),
             // The failure text is the engine's own bounded, path-free reason.
@@ -635,4 +634,11 @@ impl ModelFamilyFactory {
         })?;
         Ok(ModelFactoryRuntime::Embeddings(embedding_engine))
     }
+}
+
+/// One decision engine behind the trait object the worker serves from.
+fn boxed_decision_engine<Engine: DecisionEngine + 'static>(
+    decision_engine: Engine,
+) -> Box<dyn DecisionEngine> {
+    Box::new(decision_engine)
 }

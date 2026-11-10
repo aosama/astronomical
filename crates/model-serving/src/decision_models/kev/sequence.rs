@@ -45,6 +45,8 @@ impl KevQuestionRow {
 /// each question as one causal row records, so the two compare directly.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct KevRowLayout {
+    /// How many of the row's leading tokens are the state, its state token included.
+    pub state_token_count: usize,
     pub token_ids: Vec<u32>,
     pub option_closing_offsets: Vec<usize>,
 }
@@ -70,6 +72,7 @@ impl KevRequestSequence {
                 option_closing_offsets.push(state_length + option_closing_offset);
             }
             row_layouts.push(KevRowLayout {
+                state_token_count: state_length,
                 token_ids,
                 option_closing_offsets,
             });
@@ -136,3 +139,7 @@ fn build_question_row(
         distinguishable_option_count: distinct_option_tokens.len(),
     })
 }
+
+#[cfg(test)]
+#[path = "sequence_tests.rs"]
+mod tests;
