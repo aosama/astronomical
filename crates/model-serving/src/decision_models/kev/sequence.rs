@@ -40,11 +40,42 @@ impl KevQuestionRow {
     }
 }
 
+/// One question's whole row as the backbone reads it, state included, with
+/// absolute readout offsets: the shape a reference implementation that runs
+/// each question as one causal row records, so the two compare directly.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KevRowLayout {
+    pub token_ids: Vec<u32>,
+    pub option_closing_offsets: Vec<usize>,
+}
+
 /// One request's state and rows.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct KevRequestSequence {
     pub(crate) state_token_ids: Vec<u32>,
     pub(crate) question_rows: Vec<KevQuestionRow>,
+}
+
+impl KevRequestSequence {
+    /// Every question's row joined to the state.
+    pub(crate) fn row_layouts(&self) -> Vec<KevRowLayout> {
+        let state_length = self.state_token_ids.len();
+        let mut row_layouts = Vec::with_capacity(self.question_rows.len());
+        for question_row in &self.question_rows {
+            let mut token_ids = self.state_token_ids.clone();
+            token_ids.extend(&question_row.token_ids);
+            let mut option_closing_offsets =
+                Vec::with_capacity(question_row.option_closing_offsets.len());
+            for option_closing_offset in &question_row.option_closing_offsets {
+                option_closing_offsets.push(state_length + option_closing_offset);
+            }
+            row_layouts.push(KevRowLayout {
+                token_ids,
+                option_closing_offsets,
+            });
+        }
+        row_layouts
+    }
 }
 
 pub(crate) fn build_kev_sequence(

@@ -6,6 +6,7 @@ mod expert_atlas;
 mod family_classification;
 mod flux2_klein;
 mod flux2_klein_mlx_4bit;
+mod kev;
 mod laya;
 mod modernbert;
 mod prism_hadamard_qwen35;

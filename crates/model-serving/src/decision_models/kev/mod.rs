@@ -19,3 +19,4 @@ mod settings;
 mod tokenizer;
 
 pub use engine::KevDecisionEngine;
+pub use sequence::KevRowLayout;

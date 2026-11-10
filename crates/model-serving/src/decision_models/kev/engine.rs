@@ -16,7 +16,7 @@ use astronomical_decision_contract::{
 use astronomical_runtime_integration::MlxMemoryLimits;
 
 use super::pointer_head::{KevPointerHead, kev_probabilities};
-use super::sequence::{KEV_MAXIMUM_ROW_TOKENS, KevQuestionRow, build_kev_sequence};
+use super::sequence::{KEV_MAXIMUM_ROW_TOKENS, KevQuestionRow, KevRowLayout, build_kev_sequence};
 use super::settings::KevSettings;
 use super::tokenizer::KevTokenizer;
 use crate::RequestDecoderStateStack;
@@ -61,6 +61,20 @@ impl KevDecisionEngine {
             loaded_state: None,
             post_cleanup_memory_telemetry: None,
         })
+    }
+
+    /// Each question's row as the backbone would read it, without running it.
+    ///
+    /// Exposed so the layout on the real tokenizer can be compared with the
+    /// reference implementation's; serving does not call it.
+    #[doc(hidden)]
+    pub fn question_row_layouts(
+        &self,
+        state: &OrderedJsonValue,
+        questions: &[DecisionQuestion],
+    ) -> Result<Vec<KevRowLayout>, DecisionFailure> {
+        let loaded_state = self.loaded_state()?;
+        Ok(build_kev_sequence(&loaded_state.tokenizer, state, questions)?.row_layouts())
     }
 
     fn loaded_state(&self) -> Result<&LoadedKevState, DecisionFailure> {
