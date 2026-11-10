@@ -339,6 +339,7 @@
             "minimum_memory_bytes": 4484842240,
             "role": "coding",
             "public": true,
+            "retiring": true,
             "description": "A large, text-only model built for thinking-heavy work - complex reasoning, coding, and agentic tool use. It has a large memory window for long documents. This is the highest-precision MLX build of the 35B model, favoring quality over fitting smaller Macs.",
             "capabilities": {
                 "supports_reasoning": true,
