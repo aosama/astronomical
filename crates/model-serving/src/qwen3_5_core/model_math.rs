@@ -21,6 +21,8 @@ pub(crate) mod forward_contract;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_boundary_checkpoints;
 #[cfg(feature = "direct-mlx")]
+pub(crate) mod gated_delta_input_rules;
+#[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_pipelined_kernel;
 #[cfg(feature = "direct-mlx")]
 pub(crate) mod gated_delta_sequence;

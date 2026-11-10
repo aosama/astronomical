@@ -1,6 +1,9 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 use mlx_c_rust::{MlxArray, MlxDtype};
 
+use super::gated_delta_input_rules::{
+    GatedDeltaDtypeViolation, GatedDeltaHeadGeometry, check_gated_delta_dtypes,
+};
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
 
 const GATED_DELTA_STEP_OPERATION: &str = "apply one Qwen3.5 gated-delta recurrent step";
@@ -66,6 +69,8 @@ pub fn qwen3_5_gated_delta_step(
     Ok((output, next_recurrent_state))
 }
 
+/// Validates the step's inputs and returns how many value heads share each
+/// key head. Shapes are checked before dtypes, as before the shared rules.
 fn validate_gated_delta_shapes(
     queries: &MlxArray,
     keys: &MlxArray,
@@ -80,6 +85,52 @@ fn validate_gated_delta_shapes(
     let decay_shape = decays.shape();
     let update_rate_shape = update_rates.shape();
     let recurrent_state_shape = recurrent_state.shape();
+    let repeat_factor = repeat_factor_from_step_input_shapes(&GatedDeltaStepInputShapes {
+        query_shape: &query_shape,
+        key_shape: &key_shape,
+        value_shape: &value_shape,
+        decay_shape: &decay_shape,
+        update_rate_shape: &update_rate_shape,
+        recurrent_state_shape: &recurrent_state_shape,
+    })?;
+    validate_step_dtypes(
+        recurrent_state.dtype(),
+        [
+            queries.dtype(),
+            keys.dtype(),
+            values.dtype(),
+            decays.dtype(),
+            update_rates.dtype(),
+        ],
+    )?;
+    Ok(repeat_factor)
+}
+
+/// The shapes of the step's six inputs, read once from their arrays so the
+/// rules below are plain data a unit test can drive.
+struct GatedDeltaStepInputShapes<'shape> {
+    query_shape: &'shape [i32],
+    key_shape: &'shape [i32],
+    value_shape: &'shape [i32],
+    decay_shape: &'shape [i32],
+    update_rate_shape: &'shape [i32],
+    recurrent_state_shape: &'shape [i32],
+}
+
+/// The step has no token axis: queries and keys are `[batch, key heads, key
+/// dim]`, values `[batch, value heads, value dim]`, decays and update rates
+/// `[batch, value heads]`.
+fn repeat_factor_from_step_input_shapes(
+    input_shapes: &GatedDeltaStepInputShapes<'_>,
+) -> Result<i32, MlxRuntimeError> {
+    let GatedDeltaStepInputShapes {
+        query_shape,
+        key_shape,
+        value_shape,
+        decay_shape,
+        update_rate_shape,
+        recurrent_state_shape,
+    } = *input_shapes;
     if query_shape.len() != 3
         || value_shape.len() != 3
         || decay_shape.len() != 2
@@ -99,53 +150,43 @@ fn validate_gated_delta_shapes(
             "gated-delta update rates and decays must have identical shapes",
         ));
     }
-    let batch_size = query_shape[0];
-    let key_head_count = query_shape[1];
-    let key_dimension = query_shape[2];
-    let value_head_count = value_shape[1];
-    let value_dimension = value_shape[2];
-    if batch_size <= 0
-        || key_head_count <= 0
-        || key_dimension <= 0
-        || value_head_count <= 0
-        || value_dimension <= 0
-        || value_head_count % key_head_count != 0
-    {
+    let head_geometry = GatedDeltaHeadGeometry {
+        batch_size: query_shape[0],
+        key_head_count: query_shape[1],
+        key_head_dimension: query_shape[2],
+        value_head_count: value_shape[1],
+        value_head_dimension: value_shape[2],
+    };
+    if head_geometry.check().is_err() {
         return Err(gated_delta_error(
             "gated-delta dimensions must be positive and value heads must divide evenly by key heads",
         ));
     }
-    if value_shape[0] != batch_size
-        || decay_shape != [batch_size, value_head_count]
-        || recurrent_state_shape != [batch_size, value_head_count, value_dimension, key_dimension]
+    if value_shape[0] != head_geometry.batch_size
+        || decay_shape != [head_geometry.batch_size, head_geometry.value_head_count]
+        || recurrent_state_shape != head_geometry.expected_recurrent_state_shape()
     {
         return Err(gated_delta_error(
             "gated-delta value, decay, and recurrent-state dimensions are incompatible",
         ));
     }
-    if recurrent_state.dtype() != MlxDtype::Float32 {
-        return Err(gated_delta_error(
-            "gated-delta recurrent state must use float32",
-        ));
-    }
-    if !is_supported_activation_dtype(queries.dtype())
-        || !is_supported_activation_dtype(keys.dtype())
-        || !is_supported_activation_dtype(values.dtype())
-        || !is_supported_activation_dtype(decays.dtype())
-        || !is_supported_activation_dtype(update_rates.dtype())
-    {
-        return Err(gated_delta_error(
-            "gated-delta inputs must use float16, bfloat16, or float32",
-        ));
-    }
-    Ok(value_head_count / key_head_count)
+    Ok(head_geometry.value_head_count / head_geometry.key_head_count)
 }
 
-fn is_supported_activation_dtype(dtype: MlxDtype) -> bool {
-    matches!(
-        dtype,
-        MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-    )
+/// Applies the shared dtype rules with the step's error text.
+fn validate_step_dtypes(
+    recurrent_state_dtype: MlxDtype,
+    activation_dtypes: [MlxDtype; 5],
+) -> Result<(), MlxRuntimeError> {
+    match check_gated_delta_dtypes(recurrent_state_dtype, activation_dtypes) {
+        Ok(()) => Ok(()),
+        Err(GatedDeltaDtypeViolation::RecurrentStateNotFloat32) => Err(gated_delta_error(
+            "gated-delta recurrent state must use float32",
+        )),
+        Err(GatedDeltaDtypeViolation::UnsupportedActivationDtype) => Err(gated_delta_error(
+            "gated-delta inputs must use float16, bfloat16, or float32",
+        )),
+    }
 }
 
 pub(crate) fn gated_delta_error(description: &'static str) -> MlxRuntimeError {
@@ -154,3 +195,7 @@ pub(crate) fn gated_delta_error(description: &'static str) -> MlxRuntimeError {
         description: description.to_owned(),
     }
 }
+
+#[cfg(test)]
+#[path = "gated_delta_step_tests.rs"]
+mod gated_delta_step_tests;

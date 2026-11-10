@@ -8,11 +8,20 @@
 use astronomical_runtime_integration::MlxRuntimeError;
 use mlx_c_rust::{MlxArray, MlxDtype, MlxMetalKernelTemplateArgument};
 
+use super::gated_delta_input_rules::{
+    GatedDeltaDtypeViolation, GatedDeltaHeadGeometry, GatedDeltaHeadGeometryViolation,
+    check_gated_delta_dtypes,
+};
+
 const GATED_DELTA_SEQUENCE_OPERATION: &str = "apply fused Qwen3.5 gated-delta sequence";
 /// The blocked kernel is written for exactly this key head dimension.
 const PIPELINED_KEY_HEAD_DIMENSION: i32 = 128;
 /// The kernel partitions each value head into blocks of this many elements.
 const VALUE_DIMENSION_BLOCK: i32 = 16;
+/// One message for every non-positive dimension, token axis or head
+/// geometry alike, so the caller learns the rule rather than the axis.
+const NON_POSITIVE_DIMENSION_DESCRIPTION: &str =
+    "pipelined gated-delta dimensions must be positive";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct GatedDeltaSequenceShape {
@@ -153,26 +162,27 @@ fn sequence_shape_from_input_shapes(
 }
 
 impl GatedDeltaSequenceShape {
-    /// The blocked kernel's own limits, each reported on its own so a model
-    /// that breaks one learns which.
+    /// Positive dimensions and the shared head-geometry rules, then the
+    /// blocked kernel's own limits, each reported on its own so a model that
+    /// breaks one learns which.
     fn validate_kernel_geometry(&self) -> Result<(), MlxRuntimeError> {
-        let kernel_dimensions = [
-            self.batch_size,
-            self.token_count,
-            self.key_head_count,
-            self.value_head_count,
-            self.key_head_dimension,
-            self.value_head_dimension,
-        ];
-        if kernel_dimensions.into_iter().min() <= Some(0) {
+        if self.token_count <= 0 {
             return Err(gated_delta_sequence_error(
-                "pipelined gated-delta dimensions must be positive",
+                NON_POSITIVE_DIMENSION_DESCRIPTION,
             ));
         }
-        if self.value_head_count % self.key_head_count != 0 {
-            return Err(gated_delta_sequence_error(
-                "pipelined gated-delta value heads must be a multiple of key heads",
-            ));
+        match self.head_geometry().check() {
+            Ok(()) => {}
+            Err(GatedDeltaHeadGeometryViolation::NonPositiveDimension) => {
+                return Err(gated_delta_sequence_error(
+                    NON_POSITIVE_DIMENSION_DESCRIPTION,
+                ));
+            }
+            Err(GatedDeltaHeadGeometryViolation::ValueHeadsNotMultipleOfKeyHeads) => {
+                return Err(gated_delta_sequence_error(
+                    "pipelined gated-delta value heads must be a multiple of key heads",
+                ));
+            }
         }
         if self.key_head_dimension != PIPELINED_KEY_HEAD_DIMENSION {
             return Err(gated_delta_sequence_error(
@@ -191,47 +201,42 @@ impl GatedDeltaSequenceShape {
     /// rates are per value head; the state is one `[Dv, Dk]` matrix per head.
     fn matches_companion_shapes(&self, input_shapes: &GatedDeltaSequenceInputShapes<'_>) -> bool {
         let per_value_head_shape = [self.batch_size, self.token_count, self.value_head_count];
-        let recurrent_state_shape = [
-            self.batch_size,
-            self.value_head_count,
-            self.value_head_dimension,
-            self.key_head_dimension,
-        ];
+        let recurrent_state_shape = self.head_geometry().expected_recurrent_state_shape();
         input_shapes.value_shape[0] == self.batch_size
             && input_shapes.value_shape[1] == self.token_count
             && input_shapes.decay_shape == per_value_head_shape
             && input_shapes.update_rate_shape == per_value_head_shape
             && input_shapes.recurrent_state_shape == recurrent_state_shape
     }
+
+    /// The token-free part of the geometry, which the step path shares.
+    fn head_geometry(&self) -> GatedDeltaHeadGeometry {
+        GatedDeltaHeadGeometry {
+            batch_size: self.batch_size,
+            key_head_count: self.key_head_count,
+            key_head_dimension: self.key_head_dimension,
+            value_head_count: self.value_head_count,
+            value_head_dimension: self.value_head_dimension,
+        }
+    }
 }
 
-/// The state accumulates across tokens in float32 whatever the activation
-/// dtype, so a narrower state would drift over a long prompt.
+/// Applies the shared dtype rules with the fused kernels' error text.
 fn validate_sequence_dtypes(
     recurrent_state_dtype: MlxDtype,
     activation_dtypes: [MlxDtype; 5],
 ) -> Result<(), MlxRuntimeError> {
-    if recurrent_state_dtype != MlxDtype::Float32 {
-        return Err(gated_delta_sequence_error(
+    match check_gated_delta_dtypes(recurrent_state_dtype, activation_dtypes) {
+        Ok(()) => Ok(()),
+        Err(GatedDeltaDtypeViolation::RecurrentStateNotFloat32) => Err(gated_delta_sequence_error(
             "fused gated-delta recurrent state must use float32",
-        ));
+        )),
+        Err(GatedDeltaDtypeViolation::UnsupportedActivationDtype) => {
+            Err(gated_delta_sequence_error(
+                "fused gated-delta inputs must use float16, bfloat16, or float32",
+            ))
+        }
     }
-    if !activation_dtypes
-        .into_iter()
-        .all(is_supported_activation_dtype)
-    {
-        return Err(gated_delta_sequence_error(
-            "fused gated-delta inputs must use float16, bfloat16, or float32",
-        ));
-    }
-    Ok(())
-}
-
-fn is_supported_activation_dtype(dtype: MlxDtype) -> bool {
-    matches!(
-        dtype,
-        MlxDtype::Float16 | MlxDtype::BFloat16 | MlxDtype::Float32
-    )
 }
 
 pub(super) fn gated_delta_sequence_error(description: &'static str) -> MlxRuntimeError {
