@@ -1,6 +1,9 @@
 /* Astronomical Observatory console styling. The console follows the Mac's
-   appearance: a cool near-white ground in light mode, a blue-black ground in
-   dark mode, and one accent, the violet of the app icon, in both. Violet marks
+   appearance: a graphite ground that leans a hair warm toward the app icon's
+   silver, near-white in light mode and near-black in dark mode, and one accent,
+   the violet of the app icon, in both. No neutral carries blue: a navy-tinted
+   gray tints everything drawn on it. The chat window's tokens.css holds the
+   same palette under the same names. Violet marks
    the primary action and live work; it never marks a health state. Health
    states have their own colours and the words beside them carry the meaning.
    The layout is one macOS desktop window: a top bar with the brand, the
@@ -12,27 +15,27 @@
 :root {
     /* Light palette. Every text colour keeps at least 4.5:1 on --ground,
        --surface and --sunk; the dark palette below holds the same contract. */
-    --ground: #f3f4f9;
+    --ground: #f5f4f1;
     --surface: #ffffff;
-    --sunk: #e9ebf3;
-    --line: #d9dce8;
-    --line-strong: #b9bed2;
-    --ink: #15172b;
-    --ink-2: #43486a;
-    --ink-3: #5f6482;
-    --accent: #5a3bd6;
+    --sunk: #e8e6e1;
+    --line: #dedcd6;
+    --line-strong: #bebbb3;
+    --ink: #1c1b19;
+    --ink-2: #4a4843;
+    --ink-3: #6a6761;
+    --accent: #6a3fc4;
     --accent-ink: #ffffff;
-    --accent-soft: #ece8fc;
-    --accent-text: #4b2fc0;
-    --danger: #a8281e;
+    --accent-soft: #ede8fa;
+    --accent-text: #5a33b8;
+    --danger: #b3261e;
     --danger-soft: #fbedeb;
-    --data: #1f74c9;
+    --data: #185fa8;
     /* Context memory on Overview: a teal beside the data blue, never violet. */
-    --memory-context: #0e8f78;
-    --ok: #177a4d;
+    --memory-context: #0b7563;
+    --ok: #166a3f;
     --warn: #8a5a00;
-    --hover: rgba(21, 23, 43, 0.05);
-    --active: rgba(21, 23, 43, 0.08);
+    --hover: rgba(28, 27, 25, 0.05);
+    --active: rgba(28, 27, 25, 0.09);
     color-scheme: light;
 
     /* Names the per-view stylesheets were written against, kept as aliases so
@@ -80,50 +83,50 @@
    Mac in dark mode (unless the person chose Light), once for a chosen Dark. */
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-        --ground: #0d0e18;
-        --surface: #181a29;
-        --sunk: #11121d;
-        --line: #2c2f47;
-        --line-strong: #4a4e6e;
-        --ink: #f3f4fb;
-        --ink-2: #c6cadf;
-        --ink-3: #a2a7c2;
-        --accent: #a892ff;
-        --accent-ink: #14122b;
-        --accent-soft: #29244f;
-        --accent-text: #bba9ff;
-        --danger: #ff9d94;
-        --danger-soft: #3a1d22;
-        --data: #5fc8ff;
+        --ground: #181817;
+        --surface: #232321;
+        --sunk: #121211;
+        --line: #2f2f2c;
+        --line-strong: #55534e;
+        --ink: #eceae4;
+        --ink-2: #bdbab2;
+        --ink-3: #98958d;
+        --accent: #a68cff;
+        --accent-ink: #17122b;
+        --accent-soft: #2a2342;
+        --accent-text: #b9a4ff;
+        --danger: #ff9087;
+        --danger-soft: #3a1d1a;
+        --data: #6cb8f5;
         --memory-context: #5ee6c4;
-        --ok: #4ade9f;
-        --warn: #f0c674;
-        --hover: rgba(152, 170, 230, 0.08);
-        --active: rgba(152, 170, 230, 0.14);
+        --ok: #5fd39a;
+        --warn: #e8b85c;
+        --hover: rgba(236, 234, 228, 0.06);
+        --active: rgba(236, 234, 228, 0.11);
         color-scheme: dark;
     }
 }
 :root[data-theme="dark"] {
-    --ground: #0d0e18;
-    --surface: #181a29;
-    --sunk: #11121d;
-    --line: #2c2f47;
-    --line-strong: #4a4e6e;
-    --ink: #f3f4fb;
-    --ink-2: #c6cadf;
-    --ink-3: #a2a7c2;
-    --accent: #a892ff;
-    --accent-ink: #14122b;
-    --accent-soft: #29244f;
-    --accent-text: #bba9ff;
-    --danger: #ff9d94;
-    --danger-soft: #3a1d22;
-    --data: #5fc8ff;
+    --ground: #181817;
+    --surface: #232321;
+    --sunk: #121211;
+    --line: #2f2f2c;
+    --line-strong: #55534e;
+    --ink: #eceae4;
+    --ink-2: #bdbab2;
+    --ink-3: #98958d;
+    --accent: #a68cff;
+    --accent-ink: #17122b;
+    --accent-soft: #2a2342;
+    --accent-text: #b9a4ff;
+    --danger: #ff9087;
+    --danger-soft: #3a1d1a;
+    --data: #6cb8f5;
     --memory-context: #5ee6c4;
-    --ok: #4ade9f;
-    --warn: #f0c674;
-    --hover: rgba(152, 170, 230, 0.08);
-    --active: rgba(152, 170, 230, 0.14);
+    --ok: #5fd39a;
+    --warn: #e8b85c;
+    --hover: rgba(236, 234, 228, 0.06);
+    --active: rgba(236, 234, 228, 0.11);
     color-scheme: dark;
 }
 

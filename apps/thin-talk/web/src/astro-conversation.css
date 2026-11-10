@@ -6,8 +6,8 @@
  * classic Thin Talk look untouched.
  */
 :root {
-  --astro-search: #d46fd0;
-  --astro-maths: #4fc3ff;
+  --astro-search: #a8429f;
+  --astro-maths: #1479b0;
   /* White line icons for the skill moments, as data URIs: the page may load
      images only from its own bundle or data:, and a mask keeps one shape per
      skill whatever the colour behind it. */
@@ -89,7 +89,7 @@
 
 #app.app--astro .message__meta--astro .message__role {
   font: 800 17px/1 var(--astro-display);
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
 .astro-skill-tag {
@@ -104,7 +104,7 @@
 .astro-skill-tag--look { background: var(--astro-look); }
 .astro-skill-tag--read { background: var(--astro-read); }
 .astro-skill-tag--search { background: var(--astro-search); }
-.astro-skill-tag--maths { background: var(--astro-maths); color: #0d0f2e; }
+.astro-skill-tag--maths { background: var(--astro-maths); }
 
 #app.app--astro .message--assistant .message__answer {
   border-radius: 6px 20px 20px 20px;
@@ -112,8 +112,6 @@
 
 /* The person's own bubble, with their initial. */
 #app.app--astro .message--user .message__answer {
-  background: rgb(140 107 255 / 28%);
-  border-color: rgb(140 107 255 / 55%);
   border-radius: 20px 20px 6px 20px;
 }
 
@@ -137,12 +135,12 @@
 /* "How I worked it out" */
 #app.app--astro .reasoning {
   border-radius: 14px;
-  background: rgb(255 255 255 / 3%);
+  background: var(--fill);
 }
 
 #app.app--astro .reasoning > summary::before {
   content: "▸ ";
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 #app.app--astro .reasoning[open] > summary::before {
@@ -156,7 +154,7 @@
   --skill-icon: var(--astro-icon-star);
   border-radius: 16px;
   border: 1px solid color-mix(in srgb, var(--skill-colour) 45%, transparent);
-  background: color-mix(in srgb, var(--skill-colour) 16%, var(--panel));
+  background: color-mix(in srgb, var(--skill-colour) 16%, var(--ground));
 }
 
 #app.app--astro .tool-step[data-skill="pictures"] { --skill-colour: var(--astro-pictures); --skill-icon: var(--astro-icon-pictures); }
@@ -169,7 +167,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 12px;
-  color: var(--text-primary);
+  color: var(--ink);
   font: 700 16px/1.3 var(--astro-display);
 }
 
@@ -226,7 +224,7 @@
 }
 
 .skill-launcher:hover { background: var(--skill-colour); }
-.skill-launcher:focus-visible { outline: 3px solid var(--astro-star); outline-offset: 2px; }
+.skill-launcher:focus-visible { outline: 3px solid var(--astro-focus); outline-offset: 2px; }
 .skill-launcher--pictures { --skill-colour: var(--astro-pictures); }
 .skill-launcher--look { --skill-colour: var(--astro-look); }
 .skill-launcher--read { --skill-colour: var(--astro-read); }

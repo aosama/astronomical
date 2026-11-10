@@ -31,7 +31,7 @@ struct PopoverProgressRow: View {
         // The popover's capsule rather than a `ProgressView`: the system
         // linear bar is taller than a line of body text, so it would grow
         // the row whenever it appeared.
-        HorizontalUsageBar(usageFraction: statusDocument.progressBarFillFraction, fillColor: .cyan)
+        HorizontalUsageBar(usageFraction: statusDocument.progressBarFillFraction, fillColor: AstronomicalBrandPalette.accentColor)
           .frame(minWidth: 40)
       } else {
         Spacer()

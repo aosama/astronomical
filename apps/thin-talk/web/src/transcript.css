@@ -5,10 +5,13 @@
 }
 
 .message__answer {
-  padding: 18px 20px;
+  /* A reply is plain text on the window ground, as in Notes or Mail: a box
+     around every answer made the window read as a stack of cards. The
+     transparent border keeps the user bubble's geometry in one place. */
+  padding: 2px 4px;
   border-radius: 16px;
-  background: var(--panel);
-  border: 1px solid rgb(56 64 82 / 45%);
+  background: transparent;
+  border: 1px solid transparent;
 }
 
 .message--user {
@@ -16,8 +19,7 @@
 }
 
 .message--user .message__answer {
-  background: rgb(89 102 242 / 14%);
-  border-color: rgb(89 102 242 / 32%);
+  background: var(--bubble-user);
   border-radius: 18px 18px 4px 18px;
   padding: 14px 16px 12px;
   max-width: 78%;
@@ -30,7 +32,7 @@
 .message__answer--user .message__role {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   opacity: 0.85;
 }
 
@@ -39,18 +41,18 @@
   align-items: center;
   gap: 10px;
   padding-left: 4px;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-size: 16px;
   letter-spacing: 0.01em;
 }
 
 .message__role {
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 .message__state {
-  color: var(--text-secondary);
+  color: var(--ink-2);
   opacity: 0.75;
 }
 
@@ -82,15 +84,15 @@
 
 .reasoning {
   margin: 0 0 14px;
-  border: 1px solid rgb(56 64 82 / 55%);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgb(36 41 51 / 55%);
+  background: var(--fill);
 }
 
 .reasoning > summary {
   cursor: pointer;
   padding: 8px 14px;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-size: 16.5px;
   list-style: none;
   user-select: none;
@@ -101,12 +103,12 @@
 }
 
 .reasoning[open] > summary {
-  border-bottom: 1px solid rgb(56 64 82 / 45%);
+  border-bottom: 1px solid var(--line);
 }
 
 .reasoning__body {
   padding: 10px 14px;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-style: italic;
   white-space: pre-wrap;
 }
@@ -121,15 +123,15 @@
 }
 
 .tool-step {
-  border: 1px solid rgb(56 64 82 / 55%);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgb(36 41 51 / 55%);
+  background: var(--fill);
 }
 
 .tool-step > summary {
   cursor: pointer;
   padding: 6px 12px;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-size: 16.5px;
   list-style: none;
   user-select: none;
@@ -144,14 +146,14 @@
 }
 
 .tool-step[open] > summary {
-  border-bottom: 1px solid rgb(56 64 82 / 45%);
+  border-bottom: 1px solid var(--line);
 }
 
 .tool-step__body {
   display: grid;
   gap: 6px;
   padding: 8px 12px;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-size: 16.5px;
 }
 
@@ -164,7 +166,7 @@
   max-width: min(100%, 512px);
   height: auto;
   border-radius: 12px;
-  border: 1px solid rgb(56 64 82 / 55%);
+  border: 1px solid var(--line);
 }
 
 .tool-step__body pre {
@@ -222,11 +224,11 @@
 }
 
 .markdown-body li::marker {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 .markdown-body a {
-  color: var(--link);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -237,22 +239,21 @@
 .markdown-body blockquote {
   margin: 12px 0;
   padding: 2px 0 2px 14px;
-  border-left: 2px solid var(--border);
-  color: var(--text-secondary);
+  border-left: 2px solid var(--line);
+  color: var(--ink-2);
 }
 
 .markdown-body hr {
   margin: 18px 0;
   border: none;
-  border-top: 1px solid var(--border);
-  opacity: 0.55;
+  border-top: 1px solid var(--line);
 }
 
 .markdown-body code {
   padding: 1.5px 5px;
   border-radius: 5px;
-  background: var(--code-background);
-  border: 1px solid rgb(56 64 82 / 55%);
+  background: var(--sunk);
+  border: 1px solid var(--line);
   font-family: "SF Mono", ui-monospace, Menlo, monospace;
   font-size: 16.5px;
 }
@@ -262,8 +263,8 @@
   padding: 14px 16px;
   overflow-x: auto;
   border-radius: 12px;
-  background: var(--code-background);
-  border: 1px solid rgb(56 64 82 / 60%);
+  background: var(--sunk);
+  border: 1px solid var(--line);
 }
 
 .markdown-body pre code {
@@ -274,6 +275,52 @@
   line-height: 1.55;
 }
 
+/* Syntax colours come from the tokens, not from the vendored highlight theme:
+   that theme is dark-only, and its pale colours are unreadable on the light
+   code well. These rules load after the vendored sheet and repeat its class
+   groups, so they replace every colour it sets. */
+.markdown-body .hljs { color: var(--ink); background: transparent; }
+.markdown-body .hljs-doctag,
+.markdown-body .hljs-keyword,
+.markdown-body .hljs-meta .hljs-keyword,
+.markdown-body .hljs-template-tag,
+.markdown-body .hljs-template-variable,
+.markdown-body .hljs-type,
+.markdown-body .hljs-variable.language_ { color: var(--syntax-keyword); }
+.markdown-body .hljs-title,
+.markdown-body .hljs-title.class_,
+.markdown-body .hljs-title.class_.inherited__,
+.markdown-body .hljs-title.function_ { color: var(--syntax-title); }
+.markdown-body .hljs-attr,
+.markdown-body .hljs-attribute,
+.markdown-body .hljs-literal,
+.markdown-body .hljs-meta,
+.markdown-body .hljs-number,
+.markdown-body .hljs-operator,
+.markdown-body .hljs-selector-attr,
+.markdown-body .hljs-selector-class,
+.markdown-body .hljs-selector-id,
+.markdown-body .hljs-variable,
+.markdown-body .hljs-section { color: var(--syntax-attribute); }
+.markdown-body .hljs-meta .hljs-string,
+.markdown-body .hljs-regexp,
+.markdown-body .hljs-string { color: var(--syntax-string); }
+.markdown-body .hljs-built_in,
+.markdown-body .hljs-symbol { color: var(--syntax-built-in); }
+.markdown-body .hljs-code,
+.markdown-body .hljs-comment,
+.markdown-body .hljs-formula { color: var(--syntax-comment); }
+.markdown-body .hljs-name,
+.markdown-body .hljs-quote,
+.markdown-body .hljs-selector-pseudo,
+.markdown-body .hljs-selector-tag { color: var(--syntax-name); }
+.markdown-body .hljs-bullet { color: var(--syntax-bullet); }
+.markdown-body .hljs-subst,
+.markdown-body .hljs-emphasis,
+.markdown-body .hljs-strong { color: var(--ink); }
+.markdown-body .hljs-addition { color: var(--syntax-addition); background-color: var(--syntax-addition-ground); }
+.markdown-body .hljs-deletion { color: var(--syntax-deletion); background-color: var(--syntax-deletion-ground); }
+
 .code-block {
   position: relative;
   margin: 14px 0;
@@ -283,7 +330,7 @@
   position: absolute;
   top: 8px;
   right: 12px;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   opacity: 0.7;
   font-size: 15px;
   letter-spacing: 0.04em;
@@ -300,12 +347,12 @@
 .markdown-body th,
 .markdown-body td {
   padding: 7px 11px;
-  border: 1px solid rgb(56 64 82 / 65%);
+  border: 1px solid var(--line);
   text-align: left;
 }
 
 .markdown-body th {
-  background: var(--panel-alt);
+  background: var(--fill);
   font-weight: 600;
 }
 
@@ -323,15 +370,15 @@
   margin-top: 14px;
   padding: 10px;
   border-radius: 14px;
-  background: var(--panel-alt);
-  border: 1px solid rgb(56 64 82 / 60%);
+  background: var(--fill);
+  border: 1px solid var(--line);
 }
 
 .attachment-strip__item {
   display: block;
   overflow: hidden;
   border-radius: 10px;
-  background: var(--code-background);
+  background: var(--sunk);
 }
 
 .attachment-strip__item img {
@@ -347,9 +394,9 @@
   bottom: 10px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgb(15 18 26 / 88%);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--ground) 88%, transparent);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
   font-size: 15.5px;
 }
 
@@ -364,15 +411,15 @@
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font: inherit;
   font-size: 16px;
   cursor: default;
 }
 
 .message__action:hover {
-  border-color: var(--border);
-  color: var(--text-primary);
+  border-color: var(--line);
+  color: var(--ink);
 }
 
 /*
@@ -395,8 +442,8 @@
   justify-content: center;
   margin: 16px 0;
   padding: 12px;
-  background: rgba(89, 102, 242, 0.06);
-  border: 1px solid rgba(89, 102, 242, 0.25);
+  background: var(--fill);
+  border: 1px solid var(--line);
   border-radius: 12px;
   overflow-x: auto;
 }
@@ -412,5 +459,5 @@
    reader knows why it did not become a figure. */
 .code-block--diagram-failed .code-block__label::after {
   content: " (diagram could not render)";
-  color: #e06868;
+  color: var(--danger);
 }

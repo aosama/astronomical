@@ -1,6 +1,6 @@
 /*
  * Sidebar: the session list and the new-chat control. It reads as quiet chrome —
- * panel tones, no heavy borders — so the conversation stays the loudest thing on
+ * its own gray, a hairline edge — so the conversation stays the loudest thing on
  * screen.
  */
 #sidebar {
@@ -8,8 +8,8 @@
   flex-direction: column;
   flex: 0 0 var(--sidebar-width);
   min-width: 0;
-  background: var(--panel);
-  border-right: 1px solid rgb(56 64 82 / 55%);
+  background: var(--sidebar);
+  border-right: 1px solid var(--line);
   /* Anchors the resize handle on the right edge. */
   position: relative;
 }
@@ -47,7 +47,7 @@
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 /* "Thin Talk Development" does not fit on one line beside this button, so the
@@ -62,7 +62,7 @@
   border: none;
   border-radius: 999px;
   background: var(--accent);
-  color: #ffffff;
+  color: var(--accent-ink);
   font: inherit;
   font-size: 16.5px;
   cursor: default;
@@ -91,7 +91,7 @@
   border: none;
   border-radius: 9px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font: inherit;
   font-size: 16.5px;
   text-align: left;
@@ -110,21 +110,23 @@
   padding: 6px 9px;
   border: 1px solid var(--accent);
   border-radius: 9px;
-  background: var(--panel-alt);
-  color: var(--text-primary);
+  background: var(--surface);
+  color: var(--ink);
   font: inherit;
   font-size: 16.5px;
   outline: none;
 }
 
+/* Hover and selection are gray, as in Finder's sidebar: the accent is kept
+   for the one button that starts something. */
 .sidebar__session-item:hover {
-  background: rgb(89 102 242 / 12%);
-  color: var(--text-primary);
+  background: var(--hover);
+  color: var(--ink);
 }
 
 .sidebar__session-item--active {
-  background: rgb(89 102 242 / 20%);
-  color: var(--text-primary);
+  background: var(--active);
+  color: var(--ink);
 }
 
 .sidebar__session-title {
