@@ -456,7 +456,7 @@ fn streaming_dense_residency(
 
 fn dense_placement(residency: ExpertResidencySnapshot) -> ExpertPlacementCopy {
     expert_placement(
-        Some("Ornith-1.5-9B-MLX-6bit"),
+        Some("Ornith-1.5-9B-MLX-6bit-vision"),
         WorkerActivity::Idle,
         Some(ExpertMemoryMode::Resident),
         Some(residency),
@@ -538,7 +538,7 @@ fn should_leave_dense_layers_out_of_a_sparse_residency_document() {
 #[test]
 fn should_describe_the_dense_layers_even_before_a_memory_mode_is_reported() {
     let placement = expert_placement(
-        Some("Ornith-1.5-9B-MLX-6bit"),
+        Some("Ornith-1.5-9B-MLX-6bit-vision"),
         WorkerActivity::Idle,
         None,
         Some(streaming_dense_residency(7, 4_437_000_000)),
@@ -553,7 +553,7 @@ fn should_describe_the_dense_layers_even_before_a_memory_mode_is_reported() {
 #[test]
 fn should_keep_the_dense_sentence_while_a_reply_runs() {
     let placement = expert_placement(
-        Some("Ornith-1.5-9B-MLX-6bit"),
+        Some("Ornith-1.5-9B-MLX-6bit-vision"),
         WorkerActivity::Generating,
         Some(ExpertMemoryMode::Resident),
         Some(streaming_dense_residency(7, 4_437_000_000)),
