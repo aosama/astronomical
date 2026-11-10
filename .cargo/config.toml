@@ -172,9 +172,14 @@ test-quantization-acceptance = "run -p xtask -- test-run --package astronomical-
 # Function-length and complexity enforcement (issue #1637) is pre-commit
 # territory ONLY (policy, 2026-10-31): the hook's clippy pass denies
 # clippy::too_many_lines (the 100-line budget, #[expect]-tracked debt) and
-# `cargo crap --workspace --baseline crap-baseline.json --fail-regression`
-# ratchets complexity against the committed baseline as a hard failure.
-# GitHub Actions runs no code-shape enforcement at all.
+# `cargo xtask crap-baseline` ratchets complexity against the
+# crap-baseline.json committed at HEAD as a hard failure: a baseline function
+# may not grow, and a function the baseline does not list yet may not exceed
+# cyclomatic complexity 15 unless crap-admissions.json names it with a
+# reason. `cargo xtask crap-baseline --write` regenerates the baseline from
+# the current tree only after that check passes, so one commit cannot raise
+# a baseline entry and grow its function together. GitHub Actions runs no
+# code-shape enforcement at all.
 #
 # `cargo xtask commit-identity --staged` (pre-commit) and
 # `cargo xtask commit-identity --pre-push` (pre-push, reads git's ref lines on
