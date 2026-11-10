@@ -13,10 +13,9 @@
 pub(in crate::qwen3_5_resident::inference_execution) mod adopt_retained_live_prefix;
 pub(in crate::qwen3_5_resident::inference_execution) mod decoder_state_reuse;
 pub(in crate::qwen3_5_resident::inference_execution) mod in_memory_adoption_decision;
-pub(in crate::qwen3_5_resident::inference_execution) mod persistent_prompt_cache_capture;
 pub(in crate::qwen3_5_resident::inference_execution) mod persistent_prompt_cache_startup_logging;
-pub(in crate::qwen3_5_resident::inference_execution) mod persistent_prompt_cache_tail_capture;
 pub(in crate::qwen3_5_resident::inference_execution) mod persistent_prompt_cache_visual_identity;
+mod prompt_cache_capture_engine;
 pub(in crate::qwen3_5_resident::inference_execution) mod restore_transient_workspace;
 // One level wider than its siblings: the engine module re-exports the
 // retained-prefix owner across the whole resident engine, matching the

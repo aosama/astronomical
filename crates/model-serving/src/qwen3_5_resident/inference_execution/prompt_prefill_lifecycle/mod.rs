@@ -30,5 +30,4 @@ use super::completed_forward_memory;
 use super::engine_request;
 use super::fatal_engine_error;
 use super::memory_admission;
-use super::persistent_prompt_cache_capture;
 use super::qwen3_5_runtime_error;

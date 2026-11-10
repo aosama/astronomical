@@ -5,7 +5,7 @@ pub(in crate::qwen3_5_streaming) type Qwen3_5EngineRequest =
     crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest<StreamingRequestExtension>;
 
 /// Request state only the streaming engine reads.
-pub(in crate::qwen3_5_streaming) struct StreamingRequestExtension {
+pub(crate) struct StreamingRequestExtension {
     /// Whether this request's prefill has opened its demand window: the
     /// per-request prefill evidence stream starts empty while lifetime
     /// decode evidence persists. Earlier chunks record at weight one; the

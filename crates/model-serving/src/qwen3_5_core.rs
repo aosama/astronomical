@@ -29,6 +29,8 @@ pub(crate) mod engine_request;
 pub(crate) mod frozen_config_test_support;
 pub(crate) mod model;
 pub(crate) mod model_math;
+#[cfg(feature = "direct-mlx")]
+pub(crate) mod prompt_cache_capture;
 pub(crate) mod quantizations;
 pub(crate) mod route_observation;
 pub(crate) mod text;

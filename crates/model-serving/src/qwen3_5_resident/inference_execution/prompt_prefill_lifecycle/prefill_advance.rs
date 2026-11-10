@@ -19,6 +19,9 @@
 //! was tight; the configured chunk size is the only prefill chunk size.
 
 use crate::qwen3_5_core::model::memory_breakdown::Qwen3_5MemoryOwnership;
+use crate::qwen3_5_core::prompt_cache_capture::{
+    capture_persistent_prompt_cache_blocks, capture_persistent_prompt_cache_partial_tail_block,
+};
 use std::time::{Duration, Instant};
 
 use crate::{
@@ -391,7 +394,8 @@ impl Qwen3_5EngineState {
         // than continuing with an in-memory chain that restart cannot reproduce.
         if let Some(persistent_prompt_cache) = self.persistent_prompt_cache.as_ref() {
             if active_request.can_use_persistent_prompt_cache && !boundary_checkpoints.is_empty() {
-                self.capture_persistent_prompt_cache_blocks(
+                capture_persistent_prompt_cache_blocks(
+                    self,
                     persistent_prompt_cache,
                     model,
                     active_request,
@@ -400,7 +404,8 @@ impl Qwen3_5EngineState {
                     boundary_checkpoints,
                 )?;
             }
-            self.capture_persistent_prompt_cache_partial_tail_block(
+            capture_persistent_prompt_cache_partial_tail_block(
+                self,
                 persistent_prompt_cache,
                 model,
                 active_request,

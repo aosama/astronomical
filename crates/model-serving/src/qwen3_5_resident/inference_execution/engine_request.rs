@@ -5,7 +5,7 @@ pub(in crate::qwen3_5_resident) type Qwen3_5EngineRequest =
     crate::qwen3_5_core::engine_request::Qwen3_5EngineRequest<ResidentRequestExtension>;
 
 /// Request state only the resident engine reads.
-pub(in crate::qwen3_5_resident) struct ResidentRequestExtension {
+pub(crate) struct ResidentRequestExtension {
     /// Draft key-value states for the speculative session; present only
     /// while the session was admitted for draft-and-verify decoding.
     pub(in crate::qwen3_5_resident) speculative_draft_key_value_states: Option<

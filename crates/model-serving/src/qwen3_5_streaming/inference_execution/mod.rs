@@ -15,9 +15,7 @@ pub(in crate::qwen3_5_streaming) mod memory_admission;
 mod memory_limit;
 mod model_loading;
 mod model_loading_finalization;
-mod persistent_prompt_cache_capture;
 mod persistent_prompt_cache_startup_logging;
-mod persistent_prompt_cache_tail_capture;
 mod persistent_prompt_cache_visual_identity;
 mod prefill_advance;
 mod prefill_chunk_planning;
@@ -26,6 +24,7 @@ mod prefill_forward_dispatch;
 mod prefill_memory_admission;
 mod prefill_memory_recovery;
 mod prefill_staging_yield;
+mod prompt_cache_capture_engine;
 mod prompt_prefill;
 mod prompt_prefill_counters;
 mod prompt_prefill_errors;
@@ -57,8 +56,8 @@ use self::engine_request::Qwen3_5EngineRequest;
 use super::ValidatedQwen3_5Artifact;
 use super::model::Qwen3_5Model;
 
+pub use crate::qwen3_5_core::prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use memory_limit::safe_minimum_mlx_memory_ceiling_bytes;
-pub use persistent_prompt_cache_capture::persistent_prompt_cache_publication_advances_parent_chain;
 pub use prefill_execution_context::Qwen3_5PrefillExecutionContext;
 pub use prompt_processing_chunk_sizer::{
     Qwen3_5StreamingPromptProcessingChunkSizer, Qwen3_5StreamingPromptProcessingChunkSizerError,
