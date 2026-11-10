@@ -202,18 +202,7 @@ impl FluxReferenceOracle {
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
-    const LOWERCASE_HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let digest = Sha256::digest(bytes);
-    let mut digest_hex = String::with_capacity(digest.len() * 2);
-    for digest_byte in digest {
-        digest_hex.push(char::from(
-            LOWERCASE_HEX_DIGITS[usize::from(digest_byte >> 4)],
-        ));
-        digest_hex.push(char::from(
-            LOWERCASE_HEX_DIGITS[usize::from(digest_byte & 0x0f)],
-        ));
-    }
-    digest_hex
+    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }
 
 fn parse_reference_rgb(
@@ -343,11 +332,7 @@ fn require_pinned_source_revision(
     expected_revision: &str,
 ) -> Result<String, String> {
     let revision = require_string(object, field_name, "reference bundle")?;
-    if revision.len() != 40
-        || !revision
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
+    if !astronomical_lowercase_hex::is_lowercase_hex_of_length(revision, 40) {
         return Err(format!(
             "{field_name} must be a pinned lowercase 40-character commit hash"
         ));

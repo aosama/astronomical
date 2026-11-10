@@ -244,10 +244,10 @@ fn decode_content_digest(
     digest_text: &str,
     required_file_name: &str,
 ) -> Result<String, ArtifactValidationError> {
-    let is_lowercase_hexadecimal = digest_text.chars().all(|digest_character| {
-        digest_character.is_ascii_digit() || ('a'..='f').contains(&digest_character)
-    });
-    if digest_text.len() != SHA256_DIGEST_HEX_CHARACTERS || !is_lowercase_hexadecimal {
+    if !astronomical_lowercase_hex::is_lowercase_hex_of_length(
+        digest_text,
+        SHA256_DIGEST_HEX_CHARACTERS,
+    ) {
         return Err(unavailable_shared_blob_metadata(
             required_file_name,
             io::Error::new(

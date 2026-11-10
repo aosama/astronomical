@@ -206,10 +206,5 @@ fn should_never_leak_local_paths_into_completion_rows() {
 
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(bytes);
-    let mut hex = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        hex.push_str(&format!("{byte:02x}"));
-    }
-    hex
+    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }

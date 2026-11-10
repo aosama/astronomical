@@ -154,10 +154,8 @@ fn check_pinned_archives(
         .split_once("endfunction()")
         .expect("the archive verification function should be complete")
         .0;
-    let archive_digest = Sha256::digest(PINNED_ARCHIVE_CONTENTS)
-        .iter()
-        .map(|digest_byte| format!("{digest_byte:02x}"))
-        .collect::<String>();
+    let archive_digest =
+        astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(PINNED_ARCHIVE_CONTENTS));
     let mut check_script = format!(
         "set(ASTRONOMICAL_NATIVE_DEPENDENCY_CACHE_DIR \"{}\")\n{archive_function}endfunction()\n",
         dependency_cache_directory.display()

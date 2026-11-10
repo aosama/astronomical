@@ -17,10 +17,14 @@ impl DownloadFileDigest {
     #[must_use]
     pub fn is_valid(&self) -> bool {
         match self {
-            Self::Sha256(digest) => is_lowercase_hex(digest, SHA256_HEX_CHARACTER_COUNT),
-            Self::GitBlobSha1(digest) => {
-                is_lowercase_hex(digest, GIT_BLOB_SHA1_HEX_CHARACTER_COUNT)
-            }
+            Self::Sha256(digest) => astronomical_lowercase_hex::is_lowercase_hex_of_length(
+                digest,
+                SHA256_HEX_CHARACTER_COUNT,
+            ),
+            Self::GitBlobSha1(digest) => astronomical_lowercase_hex::is_lowercase_hex_of_length(
+                digest,
+                GIT_BLOB_SHA1_HEX_CHARACTER_COUNT,
+            ),
         }
     }
 
@@ -30,11 +34,4 @@ impl DownloadFileDigest {
             Self::Sha256(digest) | Self::GitBlobSha1(digest) => digest,
         }
     }
-}
-
-pub(crate) fn is_lowercase_hex(digest: &str, expected_character_count: usize) -> bool {
-    digest.len() == expected_character_count
-        && digest
-            .bytes()
-            .all(|character| character.is_ascii_digit() || (b'a'..=b'f').contains(&character))
 }

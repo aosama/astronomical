@@ -11,6 +11,7 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+astronomical-lowercase-hex = { path = "../lowercase-hex" }
 astronomical-rest-contract = { path = "../../crates/rest-contract" }
 base64.workspace = true
 bytes.workspace = true

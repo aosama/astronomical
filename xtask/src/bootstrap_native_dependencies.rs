@@ -261,11 +261,7 @@ fn file_digest_matches(file_path: &Path, expected_sha256: &str) -> bool {
             Err(_) => return false,
         }
     }
-    let digest_hex: String = digest_hasher
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
+    let digest_hex = astronomical_lowercase_hex::encode_lowercase_hex(&digest_hasher.finalize());
     digest_hex == expected_sha256
 }
 

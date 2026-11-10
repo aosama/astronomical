@@ -44,12 +44,12 @@ impl PersistentPromptCacheBlockManifest {
     ) -> Self {
         Self {
             format_version: PERSISTENT_PROMPT_CACHE_FORMAT_VERSION.to_owned(),
-            block_hash: super::hex_digest::encode_lowercase_hex_digest(
-                persistent_prompt_cache_block_key.block_hash(),
+            block_hash: astronomical_lowercase_hex::encode_lowercase_hex(
+                &persistent_prompt_cache_block_key.block_hash(),
             ),
             block_index: persistent_prompt_cache_block_key.block_index(),
             parent_block_hash: parent_persistent_prompt_cache_block_key.map(|parent_block_key| {
-                super::hex_digest::encode_lowercase_hex_digest(parent_block_key.block_hash())
+                astronomical_lowercase_hex::encode_lowercase_hex(&parent_block_key.block_hash())
             }),
             storage_contract_fingerprint: persistent_prompt_cache_model_contract
                 .storage_contract_fingerprint_hex(),
@@ -232,5 +232,5 @@ fn invalid_manifest(
 fn parse_block_hash_hex(block_hash_hex: &str) -> Option<[u8; 32]> {
     // The writer emits a canonical 64-character lowercase representation; a
     // manifest holding anything else is corrupt and its block is discarded.
-    super::hex_digest::decode_lowercase_hex_digest(block_hash_hex)
+    astronomical_lowercase_hex::decode_lowercase_hex::<32>(block_hash_hex)
 }

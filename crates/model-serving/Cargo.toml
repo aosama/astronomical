@@ -32,6 +32,7 @@ astronomical-memory-policy = { path = "../astronomical-memory-policy" }
 # `cargo xtask check-architecture`), and the Qwen3.5 streaming engine keeps
 # the serving integration (page loading, slot writes, dispatch) here.
 astronomical-jangtq2-qwen35 = { path = "../astronomical-jangtq2-qwen35" }
+astronomical-lowercase-hex = { path = "../lowercase-hex" }
 # The quantization crate's pure surface (probe trait, artifact schemas). Its
 # GPU world is never enabled from here: the Qwen3.5 sensitivity probe under
 # src/quantization_probe implements the trait with this crate's own engine

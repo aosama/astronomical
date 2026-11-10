@@ -45,7 +45,6 @@ pub(crate) mod disk_store_scan;
 mod disk_store_visual_embeddings;
 #[cfg(feature = "direct-mlx")]
 mod disk_store_write;
-pub(crate) mod hex_digest;
 mod model_contract;
 mod model_contract_error;
 mod model_contract_storage_geometry;

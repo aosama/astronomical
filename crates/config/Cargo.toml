@@ -12,6 +12,7 @@ workspace = true
 
 [dependencies]
 astronomical-expert-atlas = { path = "../expert-atlas" }
+astronomical-lowercase-hex = { path = "../lowercase-hex" }
 libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true

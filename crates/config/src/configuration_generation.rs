@@ -19,15 +19,5 @@ pub(crate) fn configuration_generation(
         }
     })?;
     let digest = Sha256::digest(canonical_config_bytes);
-    let mut generation = String::with_capacity(64);
-    const LOWERCASE_HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
-    for &digest_byte in &digest {
-        generation.push(char::from(
-            LOWERCASE_HEX_DIGITS[usize::from(digest_byte >> 4)],
-        ));
-        generation.push(char::from(
-            LOWERCASE_HEX_DIGITS[usize::from(digest_byte & 0x0f)],
-        ));
-    }
-    Ok(generation)
+    Ok(astronomical_lowercase_hex::encode_lowercase_hex(&digest))
 }

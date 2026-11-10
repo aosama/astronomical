@@ -20,7 +20,9 @@ fn should_accept_a_well_formed_bfloat16_visual_embedding_file() {
     );
     let visual_embedding_file_path = temporary_directory.path().join(format!(
         "{}.safetensors",
-        hex_encode(visual_embedding_key.visual_embedding_hash())
+        astronomical_lowercase_hex::encode_lowercase_hex(
+            &visual_embedding_key.visual_embedding_hash()
+        )
     ));
     write_visual_embedding_file(&visual_embedding_file_path, encoded_image_sha256, 2);
 
@@ -85,12 +87,14 @@ fn write_visual_embedding_file(
     visual_token_count: usize,
 ) {
     let expected_payload_byte_count = visual_token_count * 2_048 * 2;
+    let encoded_image_sha256_hex =
+        astronomical_lowercase_hex::encode_lowercase_hex(&encoded_image_sha256);
     let mut header_json = serde_json::to_vec(&json!({
         "__metadata__": {
             "format_version": PERSISTENT_VISUAL_EMBEDDING_FORMAT_VERSION,
             "model_id": ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID,
             "model_revision": ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
-            "encoded_image_sha256": hex_encode(encoded_image_sha256),
+            "encoded_image_sha256": encoded_image_sha256_hex,
             "visual_token_count": visual_token_count.to_string(),
         },
         "visual_embeddings": {
@@ -106,11 +110,4 @@ fn write_visual_embedding_file(
     visual_file_bytes.extend(std::iter::repeat_n(0_u8, expected_payload_byte_count));
     fs::write(visual_embedding_file_path, visual_file_bytes)
         .expect("the test visual file should be written");
-}
-
-fn hex_encode(digest_bytes: [u8; 32]) -> String {
-    digest_bytes
-        .iter()
-        .map(|digest_byte| format!("{digest_byte:02x}"))
-        .collect()
 }

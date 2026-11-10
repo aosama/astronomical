@@ -166,9 +166,5 @@ fn write_and_read_back(
 }
 
 pub(crate) fn hex_sha256(file_bytes: &[u8]) -> String {
-    let digest = Sha256::digest(file_bytes);
-    digest
-        .iter()
-        .map(|digest_byte| format!("{digest_byte:02x}"))
-        .collect()
+    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(file_bytes))
 }

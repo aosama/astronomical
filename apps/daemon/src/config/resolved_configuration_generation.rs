@@ -72,7 +72,9 @@ impl ResolvedConfigurationGeneration {
         for unmatched_model_id in unmatched_model_config_ids {
             update_text(&mut generation_digest, unmatched_model_id);
         }
-        Ok(lowercase_hex(&generation_digest.finalize()))
+        Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+            &generation_digest.finalize(),
+        ))
     }
 
     /// Identifies the exact live state produced when only memory applies from a larger candidate.
@@ -87,7 +89,7 @@ impl ResolvedConfigurationGeneration {
         );
         update_text(&mut generation_digest, prior_resolved_generation);
         update_optional_number(&mut generation_digest, maximum_mlx_memory_bytes);
-        lowercase_hex(&generation_digest.finalize())
+        astronomical_lowercase_hex::encode_lowercase_hex(&generation_digest.finalize())
     }
 }
 
@@ -130,16 +132,6 @@ fn update_model_capabilities(
             update_number(generation_digest, capabilities.max_input_tokens);
         }
     }
-}
-
-fn lowercase_hex(bytes: &[u8]) -> String {
-    const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let mut encoded = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        encoded.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
-        encoded.push(char::from(HEX_DIGITS[usize::from(byte & 0x0f)]));
-    }
-    encoded
 }
 
 fn update_text(generation_digest: &mut Sha256, text: &str) {

@@ -1,0 +1,15 @@
+[package]
+name = "astronomical-lowercase-hex"
+description = "The lowercase hexadecimal encoder, validator and decoder shared by the product crates for digests, revisions and cache identities."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+# Deliberately dependency-free, so no crate that depends on this leaf gains a
+# transitive dependency by doing so (issue #1998).
+
+[lints]
+workspace = true

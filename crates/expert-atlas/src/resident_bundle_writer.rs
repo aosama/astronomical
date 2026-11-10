@@ -177,12 +177,7 @@ impl HashingWriter {
             .into_inner()
             .map_err(std::io::IntoInnerError::into_error)?;
         bundle_file.sync_all()?;
-        let digest_hex = self
-            .digest
-            .finalize()
-            .iter()
-            .map(|digest_byte| format!("{digest_byte:02x}"))
-            .collect();
+        let digest_hex = astronomical_lowercase_hex::encode_lowercase_hex(&self.digest.finalize());
         Ok((self.written_byte_count, digest_hex))
     }
 }
@@ -198,9 +193,7 @@ fn hex_sha256_of_file(path: &Path) -> std::io::Result<String> {
         }
         digest.update(&read_piece[..read_byte_count]);
     }
-    Ok(digest
-        .finalize()
-        .iter()
-        .map(|digest_byte| format!("{digest_byte:02x}"))
-        .collect())
+    Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+        &digest.finalize(),
+    ))
 }

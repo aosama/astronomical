@@ -282,7 +282,7 @@ impl PersistentPromptCacheModelContract {
 
     #[must_use]
     pub fn storage_contract_fingerprint_hex(&self) -> String {
-        super::hex_digest::encode_lowercase_hex_digest(self.storage_contract_fingerprint)
+        astronomical_lowercase_hex::encode_lowercase_hex(&self.storage_contract_fingerprint)
     }
 }
 

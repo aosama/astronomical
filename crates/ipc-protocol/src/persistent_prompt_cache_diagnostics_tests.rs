@@ -131,3 +131,45 @@ fn startup_cleanup_evidence() -> WorkerPersistentPromptCacheStartupCleanupEviden
         },
     }
 }
+
+#[test]
+fn should_keep_the_first_eight_hash_bytes_as_sixteen_lowercase_digits() {
+    let ascending_block_hash: [u8; 32] =
+        core::array::from_fn(|byte_index| u8::try_from(byte_index).expect("index fits a byte"));
+    assert_eq!(
+        WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash(ascending_block_hash)
+            .as_str(),
+        "0001020304050607"
+    );
+    assert_eq!(
+        WorkerPersistentPromptCacheExpectedBlockHashPrefix::from_block_hash([0xab; 32]).as_str(),
+        "abababababababab"
+    );
+}
+
+#[test]
+fn should_refuse_a_hash_prefix_that_is_not_sixteen_lowercase_digits() {
+    for foreign_prefix in [
+        "0123456789ABCDEF",
+        "0123456789abcde",
+        "0123456789abcdef0",
+        "+123456789abcdef",
+        "",
+    ] {
+        let prefix_json = serde_json::to_string(foreign_prefix).expect("a string serializes");
+        assert!(
+            serde_json::from_str::<WorkerPersistentPromptCacheExpectedBlockHashPrefix>(
+                &prefix_json
+            )
+            .is_err(),
+            "{foreign_prefix}"
+        );
+    }
+}
+
+#[test]
+fn should_accept_a_hash_prefix_of_sixteen_lowercase_digits() {
+    let decoded_prefix: WorkerPersistentPromptCacheExpectedBlockHashPrefix =
+        serde_json::from_str("\"0123456789abcdef\"").expect("a valid prefix decodes");
+    assert_eq!(decoded_prefix.as_str(), "0123456789abcdef");
+}

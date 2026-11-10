@@ -18,6 +18,7 @@ test-fixtures = []
 flux-reference-oracle = ["dep:base64", "dep:image", "dep:sha2"]
 
 [dependencies]
+astronomical-lowercase-hex = { path = "../lowercase-hex" }
 base64 = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 serde.workspace = true

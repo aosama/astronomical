@@ -352,7 +352,7 @@ pub(crate) fn read_file_size_bytes(
 pub(super) fn parse_persistent_prompt_cache_file_hash_from_path(
     entry_path: &Path,
 ) -> Option<[u8; 32]> {
-    super::hex_digest::decode_lowercase_hex_digest(entry_path.file_stem()?.to_str()?)
+    astronomical_lowercase_hex::decode_lowercase_hex::<32>(entry_path.file_stem()?.to_str()?)
 }
 
 pub(crate) fn open_without_following_symlinks(path: &Path) -> Result<File, std::io::Error> {

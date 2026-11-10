@@ -115,6 +115,7 @@ astronomical-config = { path = "../../crates/config" }
 astronomical-daemon = { path = "../../apps/daemon" }
 astronomical-inference-worker = { path = "../../apps/inference-worker" }
 astronomical-ipc-protocol = { path = "../../crates/ipc-protocol" }
+astronomical-lowercase-hex = { path = "../../crates/lowercase-hex" }
 astronomical-memory-policy = { path = "../../crates/astronomical-memory-policy" }
 astronomical-neural-engine-research = { path = "../neural-engine" }
 astronomical-model-serving = { path = "../../crates/model-serving", features = ["direct-mlx"] }

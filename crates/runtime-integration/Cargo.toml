@@ -18,7 +18,7 @@ default = []
 # build-orchestration/) and enables every runtime module that touches it.
 # The two ungated modules (mlx_metallib_path, mlx_runtime_types) keep the
 # crate useful on machines without the native build.
-mlx = ["dep:mlx-c-rust", "dep:astronomical-mlx-c-fork", "dep:libc", "dep:sha2"]
+mlx = ["dep:mlx-c-rust", "dep:astronomical-mlx-c-fork", "dep:libc", "dep:sha2", "dep:astronomical-lowercase-hex"]
 # Adds the allocator memory-contract probe binary to the native profile;
 # see native/tests/mlx_memory_contract_probe.cpp.
 mlx-memory-contract-probe = ["mlx"]
@@ -44,6 +44,7 @@ all = { level = "warn", priority = -1 }
 too_many_lines = "deny"
 
 [dependencies]
+astronomical-lowercase-hex = { path = "../lowercase-hex", optional = true }
 # The published stock MLX-C bindings (operations, types, raw FFI surface).
 mlx-c-rust = { workspace = true, optional = true }
 # The Astronomical fork delta over the stock surface (the patched native
@@ -60,6 +61,7 @@ thiserror.workspace = true
 astronomical-native-build-orchestration = { path = "../native-build-orchestration" }
 
 [dev-dependencies]
+astronomical-lowercase-hex = { path = "../lowercase-hex" }
 astronomical-native-identity = { path = "../native-identity" }
 astronomical-test-harness = { path = "../../crates/test-harness" }
 sha2.workspace = true

@@ -21,6 +21,7 @@ path = "tests/integration_tests.rs"
 workspace = true
 
 [dependencies]
+astronomical-lowercase-hex = { path = "../lowercase-hex" }
 reqwest.workspace = true
 rustls.workspace = true
 serde.workspace = true

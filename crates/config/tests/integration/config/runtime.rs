@@ -329,14 +329,10 @@ fn should_keep_configuration_generation_stable_across_formatting_only_changes() 
             .expect("formatted configuration should load");
 
     assert_eq!(compact_config.generation(), formatted_config.generation());
-    assert_eq!(compact_config.generation().len(), 64);
-    assert!(
-        compact_config
-            .generation()
-            .bytes()
-            .all(|generation_byte| generation_byte.is_ascii_digit()
-                || (b'a'..=b'f').contains(&generation_byte))
-    );
+    assert!(astronomical_lowercase_hex::is_lowercase_hex_of_length(
+        compact_config.generation(),
+        64
+    ));
 }
 
 #[test]

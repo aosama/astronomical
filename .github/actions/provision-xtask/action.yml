@@ -20,7 +20,7 @@ runs:
         operation: restore
         owner: xtask-binary
         path: ~/.astronomical-ci/xtask-binary
-        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/native-identity/**', 'crates/test-harness/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}
+        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/native-identity/**', 'crates/test-harness/**', 'crates/lowercase-hex/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}
     - name: Build xtask when no usable binary was restored
       id: xtask-binary-build
       shell: bash
@@ -62,4 +62,4 @@ runs:
         operation: save
         owner: xtask-binary
         path: ~/.astronomical-ci/xtask-binary
-        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/native-identity/**', 'crates/test-harness/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}
+        key: astronomical-v2-xtask-binary-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('xtask/**', 'crates/native-identity/**', 'crates/test-harness/**', 'crates/lowercase-hex/**', 'Cargo.lock', 'Cargo.toml', 'rust-toolchain.toml', '.cargo/config.toml') }}

@@ -134,9 +134,6 @@ pub(super) fn assert_split_tensor_shapes_match(
 
 pub(super) mod hex {
     pub fn encode(block_hash_bytes: [u8; 32]) -> String {
-        block_hash_bytes
-            .iter()
-            .map(|block_hash_byte| format!("{block_hash_byte:02x}"))
-            .collect()
+        astronomical_lowercase_hex::encode_lowercase_hex(&block_hash_bytes)
     }
 }

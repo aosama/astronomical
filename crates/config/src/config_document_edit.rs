@@ -37,18 +37,7 @@ pub fn config_schema_bytes() -> &'static [u8] {
 }
 
 fn lowercase_hex_digest(bytes: &[u8]) -> String {
-    const LOWERCASE_HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let digest = Sha256::digest(bytes);
-    let mut digest_text = String::with_capacity(64);
-    for digest_byte in digest {
-        digest_text.push(char::from(
-            LOWERCASE_HEX_DIGITS[usize::from(digest_byte >> 4)],
-        ));
-        digest_text.push(char::from(
-            LOWERCASE_HEX_DIGITS[usize::from(digest_byte & 0x0f)],
-        ));
-    }
-    digest_text
+    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }
 
 /// Reads the document without migrating or rewriting anything.
