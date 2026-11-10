@@ -19,7 +19,7 @@ use crate::affine_quantized_linear::{
     AFFINE_QUANTIZATION_BITS, AFFINE_QUANTIZATION_GROUP_SIZE, AFFINE_QUANTIZED_VALUES_PER_WORD,
     AffineQuantizedLinear, AffineQuantizedLinearError,
 };
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 /// The artifact's affine quantization: 4-bit values in groups of 64 input
 /// channels, defined once in the shared quantized-linear module.

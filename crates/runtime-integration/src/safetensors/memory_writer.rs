@@ -28,7 +28,7 @@ use crate::mlx_runtime;
 use crate::safetensors::file_writer;
 use crate::safetensors::name_maps::{OwnedMetadataMap, OwnedTensorMap};
 use crate::{MlxRuntime, MlxRuntimeError};
-use mlx_c_rust::{MlxArray, raw};
+use mlx_bridge::{MlxArray, raw};
 
 /// Label MLX-C can surface for this writer in diagnostics.
 const MEMORY_WRITER_LABEL: &[u8] = b"bounded in-memory safetensors output\0";

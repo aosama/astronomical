@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use astronomical_model_serving::prism_hadamard_qwen35::artifacts::FoldedPackValidator;
 use astronomical_model_serving::prism_hadamard_qwen35::model::PrismHadamardTextModel;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 /// Wired and allocator limits for one roughly 8 GB pack plus activations and
 /// a 10,000-token key-value prefix, far under the wired ceiling of a

@@ -2,7 +2,7 @@
 //! pinned for the worker lifetime, and the actual claim it issues at startup.
 
 use astronomical_runtime_integration::maximum_recommended_gpu_working_set_size_bytes;
-use mlx_c_rust::set_wired_limit;
+use mlx_bridge::set_wired_limit;
 
 /// The largest wired-residency budget MLX will grant for the machine.
 ///

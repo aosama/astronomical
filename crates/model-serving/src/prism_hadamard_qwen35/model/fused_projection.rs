@@ -21,7 +21,7 @@
 //! small fraction of the prefill matmul itself.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxCError};
+use mlx_bridge::{MlxArray, MlxCError};
 
 use super::fwht::RotatedActivations;
 use super::weights::{PackedProjection, slice_last_dimension_raw};

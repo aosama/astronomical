@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::decoder_layer_weights::Qwen3_5DecoderLayerWeights;
 use super::error::Qwen3_5ExecutionError;

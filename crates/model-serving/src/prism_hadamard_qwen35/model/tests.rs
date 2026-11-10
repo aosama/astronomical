@@ -180,7 +180,7 @@ fn should_rotate_bit_identically_through_the_fused_kernel_and_the_composed_route
             .and_then(|float32_activations| {
                 model
                     .runtime
-                    .astype(&float32_activations, mlx_c_rust::MlxDtype::Float16)
+                    .astype(&float32_activations, mlx_bridge::MlxDtype::Float16)
             })
             .expect("the Romeo and Juliet activations should build");
         let fused = model
@@ -205,12 +205,12 @@ fn should_rotate_bit_identically_through_the_fused_kernel_and_the_composed_route
             .into_activations();
         let fused_values = model
             .runtime
-            .astype(&fused, mlx_c_rust::MlxDtype::Float32)
+            .astype(&fused, mlx_bridge::MlxDtype::Float32)
             .and_then(|array| array.to_vec_f32())
             .expect("the fused rotation should evaluate");
         let composed_values = model
             .runtime
-            .astype(&composed, mlx_c_rust::MlxDtype::Float32)
+            .astype(&composed, mlx_bridge::MlxDtype::Float32)
             .and_then(|array| array.to_vec_f32())
             .expect("the composed rotation should evaluate");
         assert_eq!(fused_values.len(), composed_values.len());

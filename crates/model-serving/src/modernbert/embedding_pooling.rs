@@ -7,7 +7,7 @@
 
 use astronomical_ipc_protocol::EmbeddingsFailureReason;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxCError};
+use mlx_bridge::{MlxArray, MlxCError};
 
 use crate::modernbert::token_batch::PaddedTokenBatch;
 use crate::modernbert::trunk::{ModernBertTrunk, ModernBertTrunkError};

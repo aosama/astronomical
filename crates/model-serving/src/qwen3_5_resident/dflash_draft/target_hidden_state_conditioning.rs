@@ -9,7 +9,7 @@
 //! synchronized with a forty-layer target.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::draft_weights::DFlashDraftWeights;
 

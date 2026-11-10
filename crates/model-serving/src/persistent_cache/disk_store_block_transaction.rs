@@ -35,7 +35,7 @@ use super::disk_store_index::{
     TrackedPersistentPromptCacheBlock, TrackedPersistentPromptCacheFile,
 };
 use super::retention_policy;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 impl PersistentPromptCacheDiskStore {
     pub(super) fn publish_new_block_transaction(

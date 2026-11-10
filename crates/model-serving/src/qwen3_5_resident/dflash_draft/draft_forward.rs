@@ -10,7 +10,7 @@
 //! them with the target's language-model head, which the draft does not ship.
 
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::attention::build_causal_sliding_window_mask;
 use crate::performance_attribution::PerformanceAttribution;

@@ -6,7 +6,7 @@
 //! entry points do exactly that work and nothing else; the measurement
 //! harness owns the clock and the cold file cache.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
 use crate::PerformanceAttribution;

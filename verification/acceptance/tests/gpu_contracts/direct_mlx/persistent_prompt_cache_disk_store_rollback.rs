@@ -7,7 +7,7 @@ use astronomical_model_serving::{
     ORNITH_1_0_35B_OPTIQ_4BIT_MODEL_ID, ORNITH_1_0_35B_OPTIQ_4BIT_REVISION,
     PersistentPromptCacheDiskStoreError, PersistentVisualEmbeddingKey,
 };
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 use super::persistent_prompt_cache_disk_store_support::*;
 

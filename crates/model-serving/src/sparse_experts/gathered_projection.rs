@@ -14,7 +14,7 @@
 use astronomical_runtime_integration::{MlxRuntime, MlxRuntimeError};
 
 use crate::performance_attribution::{PerformanceAttribution, PerformanceOperation};
-use mlx_c_rust::{MlxArray, MlxCError};
+use mlx_bridge::{MlxArray, MlxCError};
 
 /// Tells MLX whether the supplied expert-ID array is sorted in ascending order.
 ///

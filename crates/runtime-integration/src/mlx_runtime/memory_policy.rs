@@ -40,7 +40,7 @@ use crate::{
     MlxMemoryLimits, MlxMemorySnapshot, MlxRuntime, MlxRuntimeError,
     allocator_cache_exceeds_reclaim_threshold,
 };
-use mlx_c_rust::{
+use mlx_bridge::{
     clear_allocator_cache, reset_peak_memory, set_cache_limit, set_memory_limit, synchronize,
 };
 
@@ -124,7 +124,7 @@ impl MlxRuntime {
     /// graphics processor operates under, and telemetry built on this call
     /// will expose the disagreement instead of hiding it.
     pub fn configured_memory_limit_bytes(&self) -> Result<usize, MlxRuntimeError> {
-        mlx_c_rust::memory_limit_bytes().map_err(MlxRuntimeError::from)
+        mlx_bridge::memory_limit_bytes().map_err(MlxRuntimeError::from)
     }
 
     /// Samples process-local MLX allocator bytes.
@@ -134,11 +134,11 @@ impl MlxRuntime {
     /// reclamation event.
     pub fn memory_snapshot(&self) -> Result<MlxMemorySnapshot, MlxRuntimeError> {
         Ok(MlxMemorySnapshot {
-            active_memory_bytes: mlx_c_rust::active_memory_bytes()
+            active_memory_bytes: mlx_bridge::active_memory_bytes()
                 .map_err(MlxRuntimeError::from)?,
-            allocator_cache_memory_bytes: mlx_c_rust::cache_memory_bytes()
+            allocator_cache_memory_bytes: mlx_bridge::cache_memory_bytes()
                 .map_err(MlxRuntimeError::from)?,
-            peak_memory_bytes: mlx_c_rust::peak_memory_bytes().map_err(MlxRuntimeError::from)?,
+            peak_memory_bytes: mlx_bridge::peak_memory_bytes().map_err(MlxRuntimeError::from)?,
         })
     }
 

@@ -17,7 +17,7 @@ ignored = ["cc"]
 default = []
 # Passes data between MLX and a loaded program. Serving enables this; its own
 # graph already links the native MLX build this needs.
-mlx-hand-off = ["dep:mlx-c-rust"]
+mlx-hand-off = ["dep:mlx-bridge"]
 
 [lints.rust]
 # This crate exists to contain the Core ML and IOSurface foreign surface for the
@@ -31,7 +31,7 @@ all = { level = "warn", priority = -1 }
 too_many_lines = "deny"
 
 [dependencies]
-mlx-c-rust = { workspace = true, optional = true }
+mlx-bridge = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [build-dependencies]

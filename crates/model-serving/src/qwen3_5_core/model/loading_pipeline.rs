@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxDtype, MlxMetalKernel};
+use mlx_bridge::{MlxDtype, MlxMetalKernel};
 
 use crate::kernel_capability;
 use crate::kernel_capability::CustomMetalKernelFamily;
@@ -246,10 +246,10 @@ pub(crate) fn load_model_kernel_verdicts(
 /// The invariant linear-attention normalization scales both engines construct
 /// identically at load time.
 pub(crate) struct InvariantLinearScales {
-    pub inverse_linear_head_dimension_scale: mlx_c_rust::MlxArray,
-    pub inverse_square_root_linear_head_dimension_scale: mlx_c_rust::MlxArray,
-    pub query_normalization_scale_weight: mlx_c_rust::MlxArray,
-    pub key_normalization_scale_weight: mlx_c_rust::MlxArray,
+    pub inverse_linear_head_dimension_scale: mlx_bridge::MlxArray,
+    pub inverse_square_root_linear_head_dimension_scale: mlx_bridge::MlxArray,
+    pub query_normalization_scale_weight: mlx_bridge::MlxArray,
+    pub key_normalization_scale_weight: mlx_bridge::MlxArray,
 }
 
 /// Constructs the invariant linear-attention scales. Qwen3.5 config validation

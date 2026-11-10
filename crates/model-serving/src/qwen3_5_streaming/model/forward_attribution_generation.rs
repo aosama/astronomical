@@ -11,7 +11,7 @@ use crate::qwen3_5_streaming::{PagedRouteValidationOutcome, Qwen3_5MoEPagedExecu
 use super::Qwen3_5Model;
 use super::forward_contract;
 use super::{Qwen3_5ExecutionError, RequestDecoderStateStack};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 impl Qwen3_5Model {
     pub(crate) fn build_forward_chunk_with_performance_attribution(

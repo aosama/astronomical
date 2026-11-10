@@ -18,7 +18,7 @@ updates:
     # displaydoc -> syn 3.0.3); that re-resolves bindgen 0.73.2's `syn`
     # dependency from 3.0.3 to 2.0.119 and breaks its syn::parse_quote! macro
     # in the mlx-c native build (bindgen is a transitive build-dependency of
-    # mlx-c-rust). Ignore its minor/major bumps until bindgen is robust to the
+    # mlx-bridge). Ignore its minor/major bumps until bindgen is robust to the
     # ICU4X resolution; patch updates still flow.
     ignore:
       - dependency-name: idna_adapter

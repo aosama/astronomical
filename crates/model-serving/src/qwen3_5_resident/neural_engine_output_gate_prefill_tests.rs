@@ -69,7 +69,7 @@ fn should_refuse_a_chunk_that_would_pad_its_surface_rows() {
 
 #[test]
 fn should_not_blame_the_programs_for_an_mlx_error_however_it_arrives() {
-    let bare_error = mlx_c_rust::MlxCError {
+    let bare_error = mlx_bridge::MlxCError {
         operation: "evaluate",
         description: "out of memory".to_owned(),
     };

@@ -1,4 +1,4 @@
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 use super::{
     FusedProjectionDtypes, PackedRowGeometry, is_shared_activation_row, packed_row_geometry,

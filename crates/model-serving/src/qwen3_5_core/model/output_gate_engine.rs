@@ -6,7 +6,7 @@
 //! The core model does not know which engine this is, which keeps Core ML out of it.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 pub(crate) trait LinearAttentionOutputGateEngine: Send + std::fmt::Debug {
     /// Whether this chunk fits the engine's fixed-shape programs.

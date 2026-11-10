@@ -53,8 +53,8 @@ pub enum Flux2KleinTransformerError {
 }
 
 #[cfg(feature = "direct-mlx")]
-impl From<mlx_c_rust::MlxCError> for Flux2KleinTransformerError {
-    fn from(captured_error: mlx_c_rust::MlxCError) -> Self {
+impl From<mlx_bridge::MlxCError> for Flux2KleinTransformerError {
+    fn from(captured_error: mlx_bridge::MlxCError) -> Self {
         MlxRuntimeError::from(captured_error).into()
     }
 }

@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use astronomical_ipc_protocol::WorkerEvent;
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::persistent_cache::PersistentPromptCacheCounters;
 use crate::persistent_cache::prefix_lookup::PersistentPromptCachePrefixLookup;

@@ -15,7 +15,7 @@ use astronomical_quantization::sensitivity::{
     CalibrationForwardSample, ModuleRestoreToken, SensitivityProbeModel,
 };
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime, MlxSafetensors};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 use crate::qwen3_5_resident::Qwen3_5ResidentModel;

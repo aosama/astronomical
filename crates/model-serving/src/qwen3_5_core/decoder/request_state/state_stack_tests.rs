@@ -6,7 +6,7 @@ use crate::qwen3_5_core::decoder::cache_layout::{
 use crate::qwen3_5_core::frozen_config_test_support::frozen_ornith_1_0_config;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::{RequestDecoderStateStack, composite_first_use_bytes};

@@ -8,7 +8,7 @@
 //! shipped at all — the draft borrows both from its target model, which is
 //! what makes the token-id space match by construction.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::draft_configuration::DFlashDraftConfiguration;
 

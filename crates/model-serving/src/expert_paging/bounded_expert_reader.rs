@@ -32,7 +32,7 @@ use astronomical_runtime_integration::PositionalFileReadMetrics;
 use super::quantized_expert_manifest::{
     ExpertManifestError, QuantizedExpertPageManifest, QuantizedExpertShardManifest,
 };
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 /// Loads only the validated tensor ranges described by one expert-page manifest.
 ///

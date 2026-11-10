@@ -6,7 +6,7 @@ use crate::{
     Qwen3_5SamplingStrategy, Qwen3_5ThinkingBudgetState,
 };
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::engine_request::{Qwen3_5EngineRequest, ResidentRequestExtension};
 use super::persistent_prompt_cache_visual_identity::{

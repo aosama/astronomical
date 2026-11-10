@@ -24,7 +24,7 @@
 //! bit for bit, and the upstream parity journey is the end-to-end witness.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{
+use mlx_bridge::{
     MlxArray, MlxCError, MlxDtype, MlxMetalKernel, MlxMetalKernelOutput,
     MlxMetalKernelTemplateArgument,
 };

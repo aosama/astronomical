@@ -6,7 +6,7 @@ use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 
 use super::Flux2KleinVaeError;
 use super::convolution;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 const GROUP_NORM_EPSILON: f32 = 1e-6;
 const GROUP_COUNT: usize = 32;

@@ -1,7 +1,7 @@
 use astronomical_runtime_integration::MlxRuntime;
 
 use crate::common::runtime_test_support;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 const GROUP_SIZE: i32 = 64;
 const BITS: i32 = 4;

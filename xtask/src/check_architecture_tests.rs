@@ -27,12 +27,12 @@ fn metadata_document_for(packages: &[(&str, Vec<&str>, &str)]) -> String {
 fn should_pass_when_no_rule_crate_reaches_the_forbidden_crate() {
     let metadata_json_text = metadata_document_for(&[
         ("astronomical-memory-policy", vec!["serde_json"], "normal"),
-        ("mlx-c-rust", Vec::new(), "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
-        ("astronomical-model-serving", vec!["mlx-c-rust"], "normal"),
+        ("astronomical-model-serving", vec!["mlx-bridge"], "normal"),
         // The jangtq2 family crate clean of the serving crate: the one-way
         // edge the family-crate rule exists to hold.
-        ("astronomical-jangtq2-qwen35", vec!["mlx-c-rust"], "normal"),
+        ("astronomical-jangtq2-qwen35", vec!["mlx-bridge"], "normal"),
     ]);
     let violations = architecture_violations(&metadata_json_text).unwrap();
     assert!(violations.is_empty());
@@ -44,11 +44,11 @@ fn should_detect_a_direct_family_to_serving_dependency() {
     // serving crate on every family edit, defeating the extraction.
     let metadata_json_text = metadata_document_for(&[
         ("astronomical-memory-policy", vec!["serde_json"], "normal"),
-        ("mlx-c-rust", Vec::new(), "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         (
             "astronomical-model-serving",
-            vec!["mlx-c-rust", "astronomical-jangtq2-qwen35"],
+            vec!["mlx-bridge", "astronomical-jangtq2-qwen35"],
             "normal",
         ),
         (
@@ -76,7 +76,7 @@ fn should_detect_a_direct_forbidden_fork_dependency() {
             vec!["astronomical-mlx-c-fork"],
             "normal",
         ),
-        ("mlx-c-rust", Vec::new(), "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         ("astronomical-model-serving", Vec::new(), "normal"),
         ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
@@ -95,8 +95,8 @@ fn should_detect_a_direct_forbidden_dependency() {
     // Detector self-check carried over from the shell contract: a known MLX
     // declaration must be caught so the check can never pass vacuously.
     let metadata_json_text = metadata_document_for(&[
-        ("astronomical-memory-policy", vec!["mlx-c-rust"], "normal"),
-        ("mlx-c-rust", Vec::new(), "normal"),
+        ("astronomical-memory-policy", vec!["mlx-bridge"], "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         ("astronomical-model-serving", Vec::new(), "normal"),
         ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
@@ -105,7 +105,7 @@ fn should_detect_a_direct_forbidden_dependency() {
     assert_eq!(violations.len(), 1);
     assert_eq!(
         violations[0].dependency_chain,
-        vec!["astronomical-memory-policy", "mlx-c-rust"]
+        vec!["astronomical-memory-policy", "mlx-bridge"]
     );
 }
 
@@ -121,10 +121,10 @@ fn should_detect_a_transitive_forbidden_dependency() {
         ),
         (
             "astronomical-new-intermediate",
-            vec!["mlx-c-rust"],
+            vec!["mlx-bridge"],
             "normal",
         ),
-        ("mlx-c-rust", Vec::new(), "normal"),
+        ("mlx-bridge", Vec::new(), "normal"),
         ("astronomical-mlx-c-fork", Vec::new(), "normal"),
         ("astronomical-model-serving", Vec::new(), "normal"),
         ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
@@ -136,7 +136,7 @@ fn should_detect_a_transitive_forbidden_dependency() {
         vec![
             "astronomical-memory-policy",
             "astronomical-new-intermediate",
-            "mlx-c-rust"
+            "mlx-bridge"
         ]
     );
 }
@@ -147,10 +147,10 @@ fn should_count_dev_and_build_dependencies_as_reachability_edges() {
         let metadata_json_text = metadata_document_for(&[
             (
                 "astronomical-memory-policy",
-                vec!["mlx-c-rust"],
+                vec!["mlx-bridge"],
                 breach_kind,
             ),
-            ("mlx-c-rust", Vec::new(), "normal"),
+            ("mlx-bridge", Vec::new(), "normal"),
             ("astronomical-mlx-c-fork", Vec::new(), "normal"),
             ("astronomical-model-serving", Vec::new(), "normal"),
             ("astronomical-jangtq2-qwen35", Vec::new(), "normal"),
@@ -188,7 +188,7 @@ fn should_fail_closed_when_the_forbidden_crate_is_absent() {
     assert!(
         check_outcome
             .unwrap_err()
-            .contains("unknown forbidden crate mlx-c-rust")
+            .contains("unknown forbidden crate mlx-bridge")
     );
 }
 

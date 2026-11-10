@@ -16,7 +16,7 @@ use astronomical_quantization::sensitivity::{
     SensitivityMethod, SensitivityResult, SensitivityTable,
 };
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::parallel;
 
 use super::support::{contract_runtime, outlier_heavy_weights};

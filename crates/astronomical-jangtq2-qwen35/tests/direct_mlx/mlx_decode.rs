@@ -8,7 +8,7 @@ use astronomical_jangtq2_qwen35::hadamard32;
 use astronomical_jangtq2_qwen35::mlx_decode::{
     decode_expert_weight_rows, rotate_activations_hadamard32,
 };
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 
 use super::support::contract_runtime;
 

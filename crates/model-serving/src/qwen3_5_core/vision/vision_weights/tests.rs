@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 use crate::qwen3_5_core::quantizations::mlx_quantization::ModuleQuantizationProfile;

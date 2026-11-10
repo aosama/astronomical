@@ -34,7 +34,7 @@ cc = "1.2"
 astronomical-neural-engine = { path = "../../crates/neural-engine", features = ["mlx-hand-off"] }
 astronomical-runtime-integration = { path = "../../crates/runtime-integration", features = ["mlx"] }
 astronomical-test-harness = { path = "../../crates/test-harness" }
-mlx-c-rust.workspace = true
+mlx-bridge.workspace = true
 serde_json.workspace = true
 serial_test.workspace = true
 tempfile = "=3.27.0"

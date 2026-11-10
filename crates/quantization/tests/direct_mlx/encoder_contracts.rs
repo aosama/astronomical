@@ -43,7 +43,7 @@ fn should_match_the_reference_encoder_bit_for_bit_on_packed_codes_at_two_bits() 
         reference.packed_words
     );
     let gpu_scales = runtime
-        .astype(&gpu.scales, mlx_c_rust::MlxDtype::Float32)
+        .astype(&gpu.scales, mlx_bridge::MlxDtype::Float32)
         .expect("scales cast")
         .to_vec_f32()
         .expect("scales read back");
@@ -291,10 +291,10 @@ fn should_refuse_a_last_axis_that_does_not_divide_into_groups() {
 
 fn to_f32(
     runtime: &astronomical_runtime_integration::MlxRuntime,
-    array: &mlx_c_rust::MlxArray,
+    array: &mlx_bridge::MlxArray,
 ) -> Vec<f32> {
     runtime
-        .astype(array, mlx_c_rust::MlxDtype::Float32)
+        .astype(array, mlx_bridge::MlxDtype::Float32)
         .expect("cast")
         .to_vec_f32()
         .expect("read back")

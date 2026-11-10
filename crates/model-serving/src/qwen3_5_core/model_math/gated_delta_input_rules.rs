@@ -9,7 +9,7 @@
 //! that the key dimension must be 128, not that the recurrent state shape no
 //! longer fits, because it checks kernel limits before companion shapes.
 
-use mlx_c_rust::MlxDtype;
+use mlx_bridge::MlxDtype;
 
 /// The head geometry both paths read from their queries and values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

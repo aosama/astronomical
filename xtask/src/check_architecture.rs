@@ -31,7 +31,7 @@ const FORBIDDEN_DEPENDENCY_RULES: &[ForbiddenDependencyRule] = &[
     ForbiddenDependencyRule {
         rule_name: "policy-without-mlx-bindings",
         source_crate: "astronomical-memory-policy",
-        forbidden_crate: "mlx-c-rust",
+        forbidden_crate: "mlx-bridge",
         rationale: "the memory policy crate must build and test in the integration lane without ever pulling in the serving crate or its graphics-processor tests",
     },
     ForbiddenDependencyRule {

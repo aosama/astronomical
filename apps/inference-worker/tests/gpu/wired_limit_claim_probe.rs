@@ -37,7 +37,7 @@ use astronomical_runtime_integration::{
     MlxMemoryLimits, MlxRuntime, maximum_recommended_gpu_working_set_size_bytes,
 };
 use astronomical_test_harness::test_run::{TestRunConfiguration, TestRunContext};
-use mlx_c_rust::{MlxArray, MlxDtype, set_wired_limit};
+use mlx_bridge::{MlxArray, MlxDtype, set_wired_limit};
 use serial_test::serial;
 
 const SYSCTL_EXECUTABLE_PATH: &str = "/usr/sbin/sysctl";

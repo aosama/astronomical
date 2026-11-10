@@ -6,7 +6,7 @@
 //! the prefill chunk size it will serve, and reads MLX's peak: the transient
 //! beyond the layer's own weights and the decoder state it writes.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::Qwen3_5Model;
 use crate::PerformanceAttribution;

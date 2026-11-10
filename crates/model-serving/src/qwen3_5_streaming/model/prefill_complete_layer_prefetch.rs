@@ -21,7 +21,7 @@
 //! allocator cache) and booked a phantom full-layer source plan per streamed
 //! layer per chunk, which made every codebook layer look streamed twice.
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::feed_forward_weights::Qwen3_5MoEFeedForwardWeights;
 use crate::expert_paging::{

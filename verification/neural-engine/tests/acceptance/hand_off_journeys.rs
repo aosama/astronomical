@@ -26,7 +26,7 @@ use astronomical_neural_engine::mlx_hand_off::{
     write_prepared_input,
 };
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::{MlxArray, MlxDtype, raw};
+use mlx_bridge::{MlxArray, MlxDtype, raw};
 use serial_test::serial;
 
 use crate::support::engine_split::{

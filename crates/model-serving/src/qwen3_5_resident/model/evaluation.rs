@@ -1,4 +1,4 @@
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::{PerformanceAttribution, PerformanceOperation};
 

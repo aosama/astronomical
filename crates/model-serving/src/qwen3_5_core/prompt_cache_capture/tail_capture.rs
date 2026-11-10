@@ -13,7 +13,7 @@ use crate::persistent_cache::tail_capture_planning::{
 };
 use std::collections::HashMap;
 
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::persistent_cache::block_causal_input::PersistentPromptCacheBlockCausalInput;
 use crate::{

@@ -25,7 +25,7 @@
 use astronomical_jangtq2_qwen35::codebook;
 use astronomical_jangtq2_qwen35::mlx_decode;
 use astronomical_runtime_integration::{MlxMemoryLimits, MlxRuntime};
-use mlx_c_rust::{MlxArray, MlxDtype};
+use mlx_bridge::{MlxArray, MlxDtype};
 use serial_test::serial;
 
 /// Routed experts serving one decode token (Qwen3.5 `num_experts_per_tok`).

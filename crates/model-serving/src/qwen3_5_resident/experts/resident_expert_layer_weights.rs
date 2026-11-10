@@ -1,4 +1,4 @@
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::qwen3_5_core::model_math::decoder_layer_weights::Qwen3_5AffineWeights;
 

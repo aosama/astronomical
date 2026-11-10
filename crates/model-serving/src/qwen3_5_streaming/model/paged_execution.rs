@@ -1,7 +1,7 @@
 //! MLX gathered execution against one Rust-streamed expert layer.
 
 use astronomical_runtime_integration::MlxRuntime;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use crate::expert_paging::QuantizedExpertPageManifest;
 use crate::qwen3_5_core::model_math::error::Qwen3_5ExecutionError;

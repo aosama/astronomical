@@ -18,7 +18,7 @@ use astronomical_quantization::sensitivity::{
     CalibrationForwardSample, ModuleRestoreToken, SensitivityMethod, SensitivityProbeModel,
     SensitivityTable,
 };
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 use serial_test::serial;
 
 use super::served_generation::{generate_greedy_continuation, romeo_and_juliet_prompt};

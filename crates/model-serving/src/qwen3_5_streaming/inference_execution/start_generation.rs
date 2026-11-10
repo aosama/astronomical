@@ -5,7 +5,7 @@ use crate::{
 };
 
 use astronomical_ipc_protocol::WorkerPersistentPromptCacheRequestDiagnostics;
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 use super::engine_request::{Qwen3_5EngineRequest, StreamingRequestExtension};
 use super::persistent_prompt_cache_visual_identity::{

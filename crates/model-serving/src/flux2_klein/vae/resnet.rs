@@ -5,7 +5,7 @@ use astronomical_runtime_integration::MlxRuntime;
 use crate::flux2_klein::tensor_store::Flux2KleinTensorStore;
 
 use super::{Flux2KleinChannelLastConv2d, Flux2KleinGroupNorm, Flux2KleinVaeError};
-use mlx_c_rust::MlxArray;
+use mlx_bridge::MlxArray;
 
 #[derive(Debug)]
 pub(super) struct Flux2KleinVaeResnetBlock {
