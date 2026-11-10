@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 
 mod classified_artifacts;
+mod clef;
 mod expert_atlas;
 mod family_classification;
 mod flux2_klein;
