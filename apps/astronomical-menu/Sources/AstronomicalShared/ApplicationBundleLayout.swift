@@ -11,6 +11,26 @@ import Foundation
 public enum ApplicationBundleLayout {
   private static let loginItemsPathComponents = ["Contents", "Library", "LoginItems"]
 
+  /// The file this process runs from, or nil when macOS cannot say.
+  ///
+  /// The first launch argument is not that file: launchd starts a login item
+  /// with its service label there (`dev.astronomical.app.agent`), which read
+  /// as a path names a file in the working directory `/`. The agent then
+  /// looked for the engine beside that file and never started it after a
+  /// login. The bundle reports the path the kernel loaded, whichever way the
+  /// process was started, so it is asked first; the launch argument is used
+  /// only when it is an absolute path, which a label never is.
+  public static func runningExecutableURL(
+    bundleExecutableURL: URL? = Bundle.main.executableURL,
+    launchArguments: [String] = CommandLine.arguments
+  ) -> URL? {
+    if let bundleExecutableURL {
+      return bundleExecutableURL.standardizedFileURL.resolvingSymlinksInPath()
+    }
+    guard let launchedPath = launchArguments.first, launchedPath.hasPrefix("/") else { return nil }
+    return URL(fileURLWithPath: launchedPath).standardizedFileURL.resolvingSymlinksInPath()
+  }
+
   /// The directory holding the engine and the terminal command, for an
   /// executable at `executableURL`. The agent is nested four levels below the
   /// main bundle's Contents, so its own directory is not that directory. An
