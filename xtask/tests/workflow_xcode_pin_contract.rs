@@ -9,8 +9,8 @@
 mod contract_support;
 
 use contract_support::{
-    find_step_by_name, pinned_xcode_action_contract, required_field, required_job, required_text,
-    run_text_of, steps_of, workflow_contract,
+    MACOS_RUNNER_LABEL, every_workflow_contract, find_step_by_name, pinned_xcode_action_contract,
+    required_field, required_job, required_text, run_text_of, steps_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -45,7 +45,7 @@ fn macos_toolchain_identity_is_pinned_to_a_versioned_xcode() {
             && pinned_xcode_version
                 .chars()
                 .all(|character| character.is_ascii_digit() || character == '.'),
-        "the Xcode pin must be a bare version like 26.6, got {pinned_xcode_version}"
+        "the Xcode pin must be a bare version like 27.2, got {pinned_xcode_version}"
     );
     assert!(
         workflow_env.get("DEVELOPER_DIR").is_none(),
@@ -54,6 +54,45 @@ fn macos_toolchain_identity_is_pinned_to_a_versioned_xcode() {
     for job_id in MACOS_TOOLCHAIN_JOB_IDS {
         assert_job_resolves_xcode_through_the_shared_action(&workflow, job_id);
     }
+}
+
+/// One runner image for every macOS job in every workflow, and a pin whose
+/// major version is the one that image ships. A job on another macOS label
+/// would resolve no pinned Xcode at all (the assert action fails) or, where
+/// it never calls the action, quietly compile with that image's default.
+#[test]
+fn should_run_every_macos_job_on_the_image_that_ships_the_pinned_xcode() {
+    for (workflow_file_name, workflow) in every_workflow_contract() {
+        let workflow_jobs = required_field(&workflow, "jobs", &workflow_file_name)
+            .as_mapping()
+            .expect("a workflow's jobs must be a mapping");
+        for (job_id, job) in workflow_jobs {
+            // A job that calls a reusable workflow names no runner of its own.
+            let Some(runner_label) = job.get("runs-on").and_then(Value::as_str) else {
+                continue;
+            };
+            assert!(
+                runner_label == MACOS_RUNNER_LABEL || runner_label.starts_with("ubuntu-"),
+                "{workflow_file_name}: job {job_id:?} runs on {runner_label}; macOS jobs must all \
+                 run on {MACOS_RUNNER_LABEL}"
+            );
+        }
+    }
+    let workflow = workflow_contract();
+    let pinned_xcode_version = required_text(
+        required_field(&workflow, "env", "ci workflow"),
+        "ASTRONOMICAL_PINNED_XCODE_VERSION",
+        "workflow env",
+    );
+    let pinned_xcode_major = pinned_xcode_version
+        .split('.')
+        .next()
+        .expect("a version has a first component");
+    assert_eq!(
+        format!("xcode-{pinned_xcode_major}"),
+        MACOS_RUNNER_LABEL,
+        "the pinned Xcode {pinned_xcode_version} does not ship on the {MACOS_RUNNER_LABEL} image"
+    );
 }
 
 /// The job calls the shared action with the workflow-level pin, after the

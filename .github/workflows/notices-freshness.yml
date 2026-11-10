@@ -36,7 +36,7 @@ concurrency:
 jobs:
   check:
     name: Rust dependency notices freshness
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 10
     steps:
       - name: Checkout

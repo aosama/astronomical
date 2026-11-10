@@ -10,8 +10,8 @@
 mod contract_support;
 
 use contract_support::{
-    find_step_by_name, is_pinned_action_reference, required_field, required_job, required_text,
-    required_u64, run_text_of, steps_of, workflow_contract,
+    MACOS_RUNNER_LABEL, find_step_by_name, is_pinned_action_reference, required_field,
+    required_job, required_text, required_u64, run_text_of, steps_of, workflow_contract,
 };
 use serde_yaml::Value;
 
@@ -119,7 +119,7 @@ fn every_tier_lane_runs_its_own_archive_without_compiling() {
         );
         assert_eq!(
             required_text(lane, "runs-on", &format!("job {lane_id}")),
-            "macos-26",
+            MACOS_RUNNER_LABEL,
             "the {lane_id} lane runs the compiled macOS binaries"
         );
         assert!(

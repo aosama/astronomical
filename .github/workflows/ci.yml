@@ -29,7 +29,15 @@ env:
   # version, forcing that bump to be intentional instead of a surprise
   # five-minute native rebuild. Linux jobs inherit the variable and simply
   # never read it.
-  ASTRONOMICAL_PINNED_XCODE_VERSION: "26.6"
+  #
+  # The version follows the Xcode that builds releases on the release Mac,
+  # so these lanes test the compiler and SDK that ship: with 26.6 pinned
+  # here and 27.2 building releases, a test the release compiler accepted
+  # was refused by this one. Xcode 27 ships only on the xcode-27 runner
+  # image, which is why every macOS job runs on that label; the
+  # workflow_xcode_pin_contract test keeps the label and this version's
+  # major in step across all workflows.
+  ASTRONOMICAL_PINNED_XCODE_VERSION: "27.2"
 
 jobs:
   detect-changes:
@@ -94,7 +102,7 @@ jobs:
     # execution lives in the tier lanes below. The merge gate keys on the CI
     # verdict, so renaming this job no longer touches branch protection.
     name: macOS build
-    runs-on: macos-26
+    runs-on: xcode-27
     # Job permissions replace the workflow-level set: pruning surplus caches
     # needs actions:write while everything else stays read-only.
     permissions:
@@ -565,7 +573,7 @@ jobs:
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.swift_node_required == 'true') }}
     needs: detect-changes
     name: macOS Swift and Node contracts
-    runs-on: macos-26
+    runs-on: xcode-27
     concurrency:
       group: macos-swift-node-${{ github.event_name }}-${{ github.ref }}
       # Never cancel an in-flight contract check. A cancelled run leaves the
@@ -961,7 +969,7 @@ jobs:
   unit-tests:
     name: Unit tests
     needs: [detect-changes, rust-core]
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 10
     steps:
       - name: Check out source
@@ -1000,7 +1008,7 @@ jobs:
   integration-tests:
     name: Integration tests
     needs: [detect-changes, rust-core]
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 10
     steps:
       - name: Check out source
@@ -1027,7 +1035,7 @@ jobs:
   rest-contracts:
     name: REST contracts
     needs: [detect-changes, rust-core]
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 6
     steps:
       - name: Check out source
@@ -1059,7 +1067,7 @@ jobs:
   e2e-journeys:
     name: End-to-end journeys
     needs: [detect-changes, rust-core]
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 6
     steps:
       - name: Check out source
@@ -1108,7 +1116,7 @@ jobs:
     name: Neural Engine, xtask and standalone builds
     if: ${{ always() && (needs.detect-changes.result != 'success' || needs.detect-changes.outputs.macos_verification_required == 'true') }}
     needs: detect-changes
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 6
     env:
       SEGMENT_DOWNLOAD_TIMEOUT_MINS: 1
