@@ -58224,6 +58224,51 @@
       "crate": "astronomical-model-serving"
     },
     {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "GatedDeltaHeadGeometry::check",
+      "line": 36,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "GatedDeltaHeadGeometry::expected_recurrent_state_shape",
+      "line": 55,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "check_gated_delta_dtypes",
+      "line": 77,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules.rs",
+      "function": "is_supported_activation_dtype",
+      "line": 93,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_input_rules_tests.rs",
+      "function": "qwen3_5_head_geometry",
+      "line": 10,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_pipelined_kernel.rs",
       "function": "checkpoint_write_source_for_token",
       "line": 305,
@@ -58369,8 +58414,26 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
+      "function": "GatedDeltaSequenceShape::head_geometry",
+      "line": 207,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
+      "function": "GatedDeltaSequenceShape::head_geometry_violation",
+      "line": 199,
+      "cyclomatic": 2.0,
+      "coverage": null,
+      "crap": 6.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "GatedDeltaSequenceShape::matches_companion_shapes",
-      "line": 192,
+      "line": 186,
       "cyclomatic": 5.0,
       "coverage": null,
       "crap": 30.0,
@@ -58379,16 +58442,25 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "GatedDeltaSequenceShape::validate_kernel_geometry",
-      "line": 158,
-      "cyclomatic": 5.0,
+      "line": 168,
+      "cyclomatic": 4.0,
       "coverage": null,
-      "crap": 30.0,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
+      "function": "dtype_violation_error",
+      "line": 240,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
       "crate": "astronomical-model-serving"
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "gated_delta_sequence_error",
-      "line": 237,
+      "line": 251,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -58396,17 +58468,17 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
-      "function": "is_supported_activation_dtype",
-      "line": 230,
-      "cyclomatic": 1.0,
+      "function": "head_geometry_violation_error",
+      "line": 228,
+      "cyclomatic": 3.0,
       "coverage": null,
-      "crap": 2.0,
+      "crap": 12.0,
       "crate": "astronomical-model-serving"
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "sequence_shape_from_input_shapes",
-      "line": 119,
+      "line": 128,
       "cyclomatic": 10.0,
       "coverage": null,
       "crap": 110.0,
@@ -58415,7 +58487,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "template_arguments",
-      "line": 37,
+      "line": 46,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -58424,7 +58496,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "validate_gated_delta_sequence_shapes",
-      "line": 70,
+      "line": 79,
       "cyclomatic": 3.0,
       "coverage": null,
       "crap": 12.0,
@@ -58433,10 +58505,10 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_sequence_contract.rs",
       "function": "validate_sequence_dtypes",
-      "line": 210,
-      "cyclomatic": 3.0,
+      "line": 219,
+      "cyclomatic": 1.0,
       "coverage": null,
-      "crap": 12.0,
+      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
@@ -58469,7 +58541,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
       "function": "evaluate_linear_attention_section",
-      "line": 12,
+      "line": 15,
       "cyclomatic": 4.0,
       "coverage": null,
       "crap": 20.0,
@@ -58478,16 +58550,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
       "function": "gated_delta_error",
-      "line": 151,
-      "cyclomatic": 1.0,
-      "coverage": null,
-      "crap": 2.0,
-      "crate": "astronomical-model-serving"
-    },
-    {
-      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
-      "function": "is_supported_activation_dtype",
-      "line": 144,
+      "line": 192,
       "cyclomatic": 1.0,
       "coverage": null,
       "crap": 2.0,
@@ -58496,7 +58559,7 @@
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
       "function": "qwen3_5_gated_delta_step",
-      "line": 29,
+      "line": 32,
       "cyclomatic": 25.0,
       "coverage": null,
       "crap": 650.0,
@@ -58504,11 +58567,56 @@
     },
     {
       "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
-      "function": "validate_gated_delta_shapes",
-      "line": 69,
-      "cyclomatic": 22.0,
+      "function": "repeat_factor_from_step_input_shapes",
+      "line": 123,
+      "cyclomatic": 11.0,
       "coverage": null,
-      "crap": 506.0,
+      "crap": 132.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
+      "function": "validate_gated_delta_shapes",
+      "line": 74,
+      "cyclomatic": 3.0,
+      "coverage": null,
+      "crap": 12.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step.rs",
+      "function": "validate_step_dtypes",
+      "line": 177,
+      "cyclomatic": 4.0,
+      "coverage": null,
+      "crap": 20.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step_tests.rs",
+      "function": "StepShapes::qwen3_5_decode_token",
+      "line": 20,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step_tests.rs",
+      "function": "StepShapes::repeat_factor",
+      "line": 31,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
+      "crate": "astronomical-model-serving"
+    },
+    {
+      "file": "crates/model-serving/src/qwen3_5_core/model_math/gated_delta_step_tests.rs",
+      "function": "refusal_of",
+      "line": 44,
+      "cyclomatic": 1.0,
+      "coverage": null,
+      "crap": 2.0,
       "crate": "astronomical-model-serving"
     },
     {
