@@ -228,3 +228,22 @@ fn should_leave_a_linked_folder_s_contents_alone() {
 
     assert!(linked_target.join("mlp-v1-960-of-2048").exists());
 }
+
+#[test]
+fn should_fingerprint_a_shard_as_the_first_eight_digest_bytes_in_lowercase_hex() {
+    let model_folder = model_folder_with_shard(b"weights");
+    let shard_file = std::fs::File::options()
+        .write(true)
+        .open(model_folder.path().join("model.safetensors"))
+        .expect("the shard opens");
+    shard_file
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000))
+        .expect("the shard modification time sets");
+
+    // SHA-256 of "model.safetensors:7:1700000000", first eight bytes: the
+    // fingerprint names cache folders on disk, so its text must not drift.
+    assert_eq!(
+        super::model_weights_fingerprint(model_folder.path()).as_deref(),
+        Some("077b99e4651cfdbc")
+    );
+}

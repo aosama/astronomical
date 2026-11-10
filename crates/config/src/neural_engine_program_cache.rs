@@ -121,11 +121,9 @@ pub fn model_weights_fingerprint(model_directory: &Path) -> Option<String> {
     }
     shard_descriptions.sort_unstable();
     let digest = Sha256::digest(shard_descriptions.join("\n").as_bytes());
-    let mut fingerprint = String::with_capacity(WEIGHTS_FINGERPRINT_BYTES * 2);
-    for digest_byte in digest.iter().take(WEIGHTS_FINGERPRINT_BYTES) {
-        fingerprint.push_str(&format!("{digest_byte:02x}"));
-    }
-    Some(fingerprint)
+    Some(astronomical_lowercase_hex::encode_lowercase_hex(
+        &digest[..WEIGHTS_FINGERPRINT_BYTES],
+    ))
 }
 
 /// Describes one finished set, so a person can tell what a folder is without running

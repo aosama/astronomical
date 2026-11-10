@@ -607,11 +607,7 @@ fn git_blob_sha1_hex(payload: &[u8]) -> String {
     let mut digest = Sha1::new();
     digest.update(format!("blob {}\0", payload.len()).as_bytes());
     digest.update(payload);
-    let digest_bytes = digest.finalize();
-    digest_bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    astronomical_lowercase_hex::encode_lowercase_hex(&digest.finalize())
 }
 
 async fn response_json(response: axum::response::Response) -> serde_json::Value {

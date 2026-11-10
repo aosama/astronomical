@@ -200,12 +200,7 @@ fn sha256_reader_hex(source_reader: &mut impl Read) -> std::io::Result<String> {
         }
         digest.update(&digest_buffer[..bytes_read]);
     }
-    Ok(hex_digest_bytes(&digest.finalize()))
-}
-
-fn hex_digest_bytes(digest_bytes: &[u8]) -> String {
-    digest_bytes
-        .iter()
-        .map(|digest_byte| format!("{digest_byte:02x}"))
-        .collect()
+    Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+        &digest.finalize(),
+    ))
 }

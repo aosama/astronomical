@@ -295,16 +295,9 @@ async fn should_publish_every_shipped_catalog_entry_to_the_library_catalog_endpo
             let revision = published_entry["revision"]
                 .as_str()
                 .unwrap_or_else(|| panic!("published entry {published_entry_index} must carry a string revision"));
-            assert_eq!(
-                revision.len(),
-                40,
-                "published entry {published_entry_index} revision must be 40 characters"
-            );
             assert!(
-                revision
-                    .chars()
-                    .all(|revision_character| revision_character.is_ascii_hexdigit()),
-                "published entry {published_entry_index} revision must be hexadecimal"
+                astronomical_lowercase_hex::is_lowercase_hex_of_length(revision, 40),
+                "published entry {published_entry_index} revision must be 40 lowercase hex digits"
             );
             let display_name = published_entry["display_name"]
                 .as_str()

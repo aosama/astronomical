@@ -19,7 +19,7 @@ fn repository_root() -> std::path::PathBuf {
 }
 
 #[test]
-fn source_only_identity_is_stable_and_self_covering() {
+fn should_keep_source_only_identity_stable_and_self_covering() {
     let repository_root = repository_root();
     let first_identity = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,
@@ -45,7 +45,7 @@ fn source_only_identity_is_stable_and_self_covering() {
 }
 
 #[test]
-fn profile_choice_changes_the_identity() {
+fn should_change_identity_when_the_profile_changes() {
     let repository_root = repository_root();
     let core_identity = native_build_identity(&FingerprintRequest {
         repository_root: &repository_root,

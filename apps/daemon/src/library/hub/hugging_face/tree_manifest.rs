@@ -14,7 +14,6 @@ use super::{
     MAXIMUM_JAVASCRIPT_SAFE_INTEGER,
 };
 use crate::library::download::job::download_job::MAXIMUM_DOWNLOAD_JOB_BYTES;
-use crate::library::download::transfer::file_digest::is_lowercase_hex;
 use crate::library::hub::hugging_face_bounds::{
     estimated_durable_file_metadata_bytes, has_ancestor_path, has_descendant_path,
     is_canonical_ascii_path,
@@ -161,7 +160,14 @@ impl TreeManifestAccumulator {
 
 fn validated_file(tree_entry: TreeEntryDocument) -> Result<HubManifestFile, HuggingFaceHubError> {
     let xet_hash = match tree_entry.xet_hash {
-        Some(xet_hash) if is_lowercase_hex(&xet_hash, SHA256_HEX_CHARACTER_COUNT) => Some(xet_hash),
+        Some(xet_hash)
+            if astronomical_lowercase_hex::is_lowercase_hex_of_length(
+                &xet_hash,
+                SHA256_HEX_CHARACTER_COUNT,
+            ) =>
+        {
+            Some(xet_hash)
+        }
         Some(_) => return Err(HuggingFaceHubError::InvalidXetHash),
         None => None,
     };
@@ -169,12 +175,18 @@ fn validated_file(tree_entry: TreeEntryDocument) -> Result<HubManifestFile, Hugg
         if lfs.size != tree_entry.size
             || lfs.pointer_size == 0
             || lfs.pointer_size > MAXIMUM_JAVASCRIPT_SAFE_INTEGER
-            || !is_lowercase_hex(&lfs.oid, SHA256_HEX_CHARACTER_COUNT)
+            || !astronomical_lowercase_hex::is_lowercase_hex_of_length(
+                &lfs.oid,
+                SHA256_HEX_CHARACTER_COUNT,
+            )
         {
             return Err(HuggingFaceHubError::InvalidLfsMetadata);
         }
         if let Some(git_oid) = tree_entry.oid.as_deref()
-            && !is_lowercase_hex(git_oid, GIT_SHA1_HEX_CHARACTER_COUNT)
+            && !astronomical_lowercase_hex::is_lowercase_hex_of_length(
+                git_oid,
+                GIT_SHA1_HEX_CHARACTER_COUNT,
+            )
         {
             return Err(HuggingFaceHubError::InvalidGitBlobSha1);
         }
@@ -183,7 +195,10 @@ fn validated_file(tree_entry: TreeEntryDocument) -> Result<HubManifestFile, Hugg
         let git_oid = tree_entry
             .oid
             .ok_or(HuggingFaceHubError::MissingIndependentDigest)?;
-        if !is_lowercase_hex(&git_oid, GIT_SHA1_HEX_CHARACTER_COUNT) {
+        if !astronomical_lowercase_hex::is_lowercase_hex_of_length(
+            &git_oid,
+            GIT_SHA1_HEX_CHARACTER_COUNT,
+        ) {
             return Err(HuggingFaceHubError::InvalidGitBlobSha1);
         }
         DownloadFileDigest::GitBlobSha1(git_oid)
@@ -217,7 +232,10 @@ fn validate_directory_entry(tree_entry: &TreeEntryDocument) -> Result<(), Huggin
         return Err(HuggingFaceHubError::InvalidLfsMetadata);
     }
     if let Some(git_oid) = tree_entry.oid.as_deref()
-        && !is_lowercase_hex(git_oid, GIT_SHA1_HEX_CHARACTER_COUNT)
+        && !astronomical_lowercase_hex::is_lowercase_hex_of_length(
+            git_oid,
+            GIT_SHA1_HEX_CHARACTER_COUNT,
+        )
     {
         return Err(HuggingFaceHubError::InvalidGitBlobSha1);
     }

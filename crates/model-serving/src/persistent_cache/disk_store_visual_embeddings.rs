@@ -185,14 +185,14 @@ fn save_visual_embedding_safetensors_file(
     })?;
     let file_name = format!(
         "{}.safetensors",
-        super::hex_digest::encode_lowercase_hex_digest(visual_embedding_hash)
+        astronomical_lowercase_hex::encode_lowercase_hex(&visual_embedding_hash)
     );
     let file_path = visual_embeddings_directory.join(&file_name);
     let temp_file_path = visual_embeddings_directory.join(format!("{file_name}.tmp"));
     remove_cache_owned_file_or_confirm_absent(&temp_file_path)?;
     let named_array = ("visual_embeddings", visual_embeddings);
     let encoded_image_sha256_text =
-        super::hex_digest::encode_lowercase_hex_digest(encoded_image_sha256);
+        astronomical_lowercase_hex::encode_lowercase_hex(&encoded_image_sha256);
     let visual_token_count_text = visual_token_count.to_string();
     let metadata_entries: [(&str, &str); 5] = [
         (

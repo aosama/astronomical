@@ -149,11 +149,8 @@ pub(super) fn binary_digests(
                 last_report_at = Instant::now();
             }
         }
-        let executable_sha256 = digest
-            .finalize()
-            .iter()
-            .map(|digest_byte| format!("{digest_byte:02x}"))
-            .collect();
+        let executable_sha256 =
+            astronomical_lowercase_hex::encode_lowercase_hex(&digest.finalize());
         executable_digests.insert(binary_name.clone(), executable_sha256);
     }
     Ok(executable_digests)

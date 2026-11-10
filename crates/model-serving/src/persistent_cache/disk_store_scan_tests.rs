@@ -8,7 +8,6 @@ use super::{
 use crate::persistent_cache::block_key::PersistentPromptCacheBlockKey;
 use crate::persistent_cache::block_manifest::PersistentPromptCacheBlockManifest;
 use crate::persistent_cache::disk_store_index::PersistentPromptCacheDiskStoreIndex;
-use crate::persistent_cache::hex_digest::encode_lowercase_hex_digest;
 use crate::persistent_cache::restore_support_tests_support::test_model_contract;
 use crate::persistent_cache::startup_cleanup_evidence::PersistentPromptCacheStartupCleanupEvidence;
 
@@ -178,7 +177,7 @@ fn should_judge_a_directory_whose_manifest_names_its_own_hash_a_candidate() {
     let block_key = root_block_key();
     let block_directory_path = create_manifest_directory(
         blocks_directory.path(),
-        &encode_lowercase_hex_digest(block_key.block_hash()),
+        &astronomical_lowercase_hex::encode_lowercase_hex(&block_key.block_hash()),
         &block_key,
     );
     let verdict = classify_block_directory(&block_directory_path, &test_model_contract())
@@ -202,7 +201,7 @@ fn should_judge_a_manifest_naming_another_hash_corrupt() {
     let misnamed_directory =
         create_manifest_directory(blocks_directory.path(), BLOCK_HASH_HEX, &block_key);
     assert_ne!(
-        encode_lowercase_hex_digest(block_key.block_hash()),
+        astronomical_lowercase_hex::encode_lowercase_hex(&block_key.block_hash()),
         BLOCK_HASH_HEX
     );
     let verdict = classify_block_directory(&misnamed_directory, &test_model_contract())

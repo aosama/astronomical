@@ -17,6 +17,7 @@ workspace = true
 [dependencies]
 astronomical-native-identity = { path = "../crates/native-identity" }
 astronomical-test-harness = { path = "../crates/test-harness" }
+astronomical-lowercase-hex = { path = "../crates/lowercase-hex" }
 # Signal handlers, process-group signaling, access(2), and localtime_r for
 # the disposable-target lifecycle runner: the one sanctioned unsafe edge.
 libc.workspace = true

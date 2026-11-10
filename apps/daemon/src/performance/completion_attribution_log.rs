@@ -247,10 +247,5 @@ pub(crate) fn record_completion_at_now(
 
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    let digest = Sha256::digest(bytes);
-    let mut hex_string = String::with_capacity(digest.len() * 2);
-    for digest_byte in digest {
-        hex_string.push_str(&format!("{digest_byte:02x}"));
-    }
-    hex_string
+    astronomical_lowercase_hex::encode_lowercase_hex(&Sha256::digest(bytes))
 }

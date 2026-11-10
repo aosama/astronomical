@@ -23,19 +23,14 @@ fn should_pin_every_asset_once_with_a_lowercase_sha256() {
             pinned_asset.package_path
         );
         if let Some(pinned_digest) = pinned_asset.sha256 {
-            assert_eq!(pinned_digest.len(), 64, "{}", pinned_asset.vendored_name);
             assert!(
-                pinned_digest.bytes().all(is_lowercase_hex_byte),
+                astronomical_lowercase_hex::is_lowercase_hex_of_length(pinned_digest, 64),
                 "{}",
                 pinned_asset.vendored_name
             );
         }
     }
     assert_eq!(vendored_names.len(), 34);
-}
-
-fn is_lowercase_hex_byte(candidate_byte: u8) -> bool {
-    candidate_byte.is_ascii_digit() || (b'a'..=b'f').contains(&candidate_byte)
 }
 
 /// The committed vendor directory is the offline canvas's source of truth;

@@ -629,10 +629,10 @@ pub(crate) fn is_valid_huggingface_id(huggingface_id: &str) -> bool {
 }
 
 pub(crate) fn is_valid_immutable_revision(revision: &str) -> bool {
-    revision.len() == GIT_COMMIT_SHA_HEX_CHARACTER_COUNT
-        && revision
-            .bytes()
-            .all(|character| character.is_ascii_digit() || (b'a'..=b'f').contains(&character))
+    astronomical_lowercase_hex::is_lowercase_hex_of_length(
+        revision,
+        GIT_COMMIT_SHA_HEX_CHARACTER_COUNT,
+    )
 }
 
 fn is_valid_hugging_face_component(component: &str) -> bool {

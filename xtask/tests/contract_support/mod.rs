@@ -132,10 +132,7 @@ pub(crate) fn is_pinned_action_reference(uses_text: &str, action_name: &str) -> 
     let Some(pinned_digest) = after_action.strip_prefix('@') else {
         return false;
     };
-    pinned_digest.len() == 40
-        && pinned_digest
-            .bytes()
-            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    astronomical_lowercase_hex::is_lowercase_hex_of_length(pinned_digest, 40)
 }
 
 pub(crate) fn path_lines(path_text: &str) -> Vec<&str> {

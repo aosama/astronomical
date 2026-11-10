@@ -46,6 +46,7 @@ dependencies = [
  "astronomical-daemon",
  "astronomical-inference-worker",
  "astronomical-ipc-protocol",
+ "astronomical-lowercase-hex",
  "astronomical-memory-policy",
  "astronomical-mlx-c-fork",
  "astronomical-model-serving",
@@ -98,6 +99,7 @@ name = "astronomical-config"
 version = "0.2.96"
 dependencies = [
  "astronomical-expert-atlas",
+ "astronomical-lowercase-hex",
  "libc",
  "serde",
  "serde_json",
@@ -113,6 +115,7 @@ version = "0.2.96"
 dependencies = [
  "astronomical-config",
  "astronomical-ipc-protocol",
+ "astronomical-lowercase-hex",
  "astronomical-rest-contract",
  "axum",
  "base64 0.23.1",
@@ -159,6 +162,7 @@ dependencies = [
 name = "astronomical-expert-atlas"
 version = "0.2.96"
 dependencies = [
+ "astronomical-lowercase-hex",
  "libc",
  "serde",
  "serde_json",
@@ -192,6 +196,7 @@ dependencies = [
 name = "astronomical-ipc-protocol"
 version = "0.2.96"
 dependencies = [
+ "astronomical-lowercase-hex",
  "astronomical-rest-contract",
  "base64 0.23.1",
  "bytes",
@@ -219,6 +224,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "astronomical-lowercase-hex"
+version = "0.2.96"
+
+[[package]]
 name = "astronomical-memory-policy"
 version = "0.2.96"
 dependencies = [
@@ -243,6 +252,7 @@ dependencies = [
  "astronomical-expert-atlas",
  "astronomical-ipc-protocol",
  "astronomical-jangtq2-qwen35",
+ "astronomical-lowercase-hex",
  "astronomical-memory-policy",
  "astronomical-mlx-c-fork",
  "astronomical-neural-engine",
@@ -346,6 +356,7 @@ dependencies = [
 name = "astronomical-runtime-integration"
 version = "0.2.96"
 dependencies = [
+ "astronomical-lowercase-hex",
  "astronomical-mlx-c-fork",
  "astronomical-native-build-orchestration",
  "astronomical-native-identity",
@@ -361,6 +372,7 @@ dependencies = [
 name = "astronomical-test-harness"
 version = "0.2.96"
 dependencies = [
+ "astronomical-lowercase-hex",
  "base64 0.23.1",
  "image",
  "serde",
@@ -374,6 +386,7 @@ dependencies = [
 name = "astronomical-vision-tower"
 version = "0.2.96"
 dependencies = [
+ "astronomical-lowercase-hex",
  "reqwest",
  "rustls",
  "serde",
@@ -2833,6 +2846,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 name = "xtask"
 version = "0.2.96"
 dependencies = [
+ "astronomical-lowercase-hex",
  "astronomical-native-identity",
  "astronomical-test-harness",
  "libc",

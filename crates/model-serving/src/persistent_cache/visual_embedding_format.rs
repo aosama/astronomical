@@ -283,7 +283,7 @@ fn decode_lowercase_sha256(
     digest_text: &str,
     visual_embedding_file_path: &Path,
 ) -> Result<[u8; 32], PersistentVisualEmbeddingFileError> {
-    super::hex_digest::decode_lowercase_hex_digest(digest_text).ok_or_else(|| {
+    astronomical_lowercase_hex::decode_lowercase_hex::<32>(digest_text).ok_or_else(|| {
         PersistentVisualEmbeddingFileError::InvalidImageDigest {
             visual_embedding_file_path: visual_embedding_file_path.to_path_buf(),
         }
@@ -294,7 +294,7 @@ fn parse_digest_from_file_path(file_path: &Path) -> Option<[u8; 32]> {
     if file_path.extension()?.to_str()? != "safetensors" {
         return None;
     }
-    super::hex_digest::decode_lowercase_hex_digest(file_path.file_stem()?.to_str()?)
+    astronomical_lowercase_hex::decode_lowercase_hex::<32>(file_path.file_stem()?.to_str()?)
 }
 
 /// One visual embedding file did not satisfy the expected on-disk contract.

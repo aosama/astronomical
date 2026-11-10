@@ -72,13 +72,17 @@ fn hash_file(
         DownloadFileDigest::Sha256(_) => {
             let mut digest = Sha256::new();
             copy_into_digest(&mut reader, &mut read_bytes, &mut digest)?;
-            Ok(lowercase_hex(digest.finalize().as_ref()))
+            Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+                digest.finalize().as_ref(),
+            ))
         }
         DownloadFileDigest::GitBlobSha1(_) => {
             let mut digest = Sha1::new();
             digest.update(format!("blob {expected_bytes}\0").as_bytes());
             copy_into_digest(&mut reader, &mut read_bytes, &mut digest)?;
-            Ok(lowercase_hex(digest.finalize().as_ref()))
+            Ok(astronomical_lowercase_hex::encode_lowercase_hex(
+                digest.finalize().as_ref(),
+            ))
         }
     }
 }
@@ -97,14 +101,4 @@ fn copy_into_digest<DigestOwner: Digest>(
         }
         digest.update(&read_bytes[..read_byte_count]);
     }
-}
-
-fn lowercase_hex(digest_bytes: &[u8]) -> String {
-    const HEX_CHARACTERS: &[u8; 16] = b"0123456789abcdef";
-    let mut hexadecimal_digest = String::with_capacity(digest_bytes.len() * 2);
-    for digest_byte in digest_bytes {
-        hexadecimal_digest.push(HEX_CHARACTERS[(digest_byte >> 4) as usize] as char);
-        hexadecimal_digest.push(HEX_CHARACTERS[(digest_byte & 0x0f) as usize] as char);
-    }
-    hexadecimal_digest
 }

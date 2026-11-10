@@ -99,11 +99,10 @@ pub fn hash_file(file_path: &Path) -> Result<(String, u64), VisionTowerError> {
         hasher.update(&read_bytes[..read_count]);
         byte_count += read_count as u64;
     }
-    let mut hexadecimal_digest = String::with_capacity(64);
-    for digest_byte in hasher.finalize().as_slice() {
-        hexadecimal_digest.push_str(&format!("{digest_byte:02x}"));
-    }
-    Ok((hexadecimal_digest, byte_count))
+    Ok((
+        astronomical_lowercase_hex::encode_lowercase_hex(&hasher.finalize()),
+        byte_count,
+    ))
 }
 
 fn unreadable(path: &Path, read_error: &std::io::Error) -> VisionTowerError {
